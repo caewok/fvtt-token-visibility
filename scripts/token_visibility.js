@@ -344,7 +344,7 @@ const containsTestFn = function(poly, point) { return poly.contains(point.x, poi
  */
 const areaTestFn = function(poly, bounds_poly, percentArea) {
   const seen_area = sourceSeesPolygon(poly, bounds_poly);
-  return seen_area > percentArea;
+  return seen_area > percentArea || seen_area.almostEqual(percentArea);
 };
 
 /**

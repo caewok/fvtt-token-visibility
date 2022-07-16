@@ -38,7 +38,7 @@ function* iterateEdges({close = true} = {}) {
  * @returns {number}
  */
 function area() {
-  const path = this.toClipperPoints;
+  const path = this.toClipperPoints();
   return Math.abs(ClipperLib.Clipper.Area(path));
 }
 
