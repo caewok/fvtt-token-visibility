@@ -4,7 +4,6 @@ game
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { log } from "./util.js";
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 
 // Non-caching alt:
@@ -140,8 +139,6 @@ dnd5e: half, 3/4, full
 */
 
 export function registerSettings() {
-  log("Registering token visibility settings.");
-
   const RTYPES = SETTINGS.RANGE.TYPES;
   const LTYPES = SETTINGS.LOS.TYPES;
 
@@ -233,6 +230,4 @@ export function registerSettings() {
     default: false,
     type: Boolean
   });
-
-  log("Done registering settings.");
 }

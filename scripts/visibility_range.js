@@ -1,12 +1,10 @@
 /* globals
-Token,
-CONFIG
+Token
 */
 "use strict";
 
 import { SETTINGS, getSetting } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
-import { log } from "./util.js";
 
 /* Range Options
 
@@ -17,8 +15,6 @@ Algorithms (points):
 - 9-point (Foundry default)
 - 17-point (Token top and bottom)
 */
-
-
 
 /**
  * @param {object[]} tests                    Test object, containing point and los Map
@@ -57,8 +53,6 @@ export function elevatePoints(tests, object) {
   for ( let i = 1; i < ln; i += 1 ) {
     const test = tests[i];
     const { x, y } = test.point;
-    if ( test.los.size > 0 ) log("Test point has los mapping already.");
-
     tests3d.push(
       // Use the same map so that x,y contains tests are cached and not repeated.
       buildTestObject(x, y, top, test.los),
@@ -68,8 +62,6 @@ export function elevatePoints(tests, object) {
 
   return tests3d;
 }
-
-
 
 /**
  * Helper function to construct a test object for testVisiblity

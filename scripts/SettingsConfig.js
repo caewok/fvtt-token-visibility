@@ -5,7 +5,6 @@
 
 import { MODULE_ID } from "./const.js";
 import { SETTINGS, getSetting } from "./settings.js";
-import { log } from "./util.js";
 
 // Patches for the VisionSource class
 export const PATCHES = {};
@@ -65,8 +64,6 @@ function activateListenersSettingsConfig(app, html) {
 
 function losAlgorithmChanged(event) {
   const losAlgorithm = event.target.value;
-  log(`los algorithm changed to ${losAlgorithm}`, event, this);
-
   const displayArea = (losAlgorithm === SETTINGS.LOS.TYPES.AREA
     || losAlgorithm === SETTINGS.LOS.TYPES.AREA3D) ? "block" : "none";
 
@@ -77,8 +74,6 @@ function losAlgorithmChanged(event) {
 
 function coverAlgorithmChanged(event) {
   const coverAlgorithm = event.target.value;
-  log(`cover algorithm changed to ${coverAlgorithm}`, event, this);
-
   const [displayCoverTriggers, displayCenterCoverTrigger] = coverAlgorithm === SETTINGS.COVER.TYPES.CENTER_CENTER
     ? ["none", "block"] : ["block", "none"];
 

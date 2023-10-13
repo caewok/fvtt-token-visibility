@@ -12,21 +12,6 @@ import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 /**
- * Log message only when debug flag is enabled from DevMode module.
- * @param {Object[]} args  Arguments passed to console.log.
- */
-export function log(...args) {
-  try {
-    const isDebugging = game.modules.get("_dev-mode")?.api?.getPackageDebugValue(MODULE_ID);
-    if ( isDebugging ) {
-      console.log(MODULE_ID, "|", ...args);
-    }
-  } catch(e) {
-    // Empty
-  }
-}
-
-/**
  * Gets the actor object by the actor UUID
  * Comparable to DFred's version.
  * https://github.com/DFreds/dfreds-convenient-effects/blob/8feaede24d310a3fa231d320ae5d33ecb326897f/scripts/foundry-helpers.js#L41
