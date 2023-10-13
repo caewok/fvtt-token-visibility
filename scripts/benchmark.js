@@ -9,7 +9,6 @@ _token
 
 import { randomUniform } from "./random.js";
 import { SETTINGS, getSetting, setSetting } from "./settings.js";
-import { CoverCalculator } from "./CoverCalculator.js";
 
 /*
 Rectangle intersection vs just testing all four edges
@@ -62,7 +61,6 @@ await QBenchmarkLoopWithSetupFn(iterations, setupFn, intersectRectangle, "inters
 export async function benchAll(n = 100) {
   await benchTokenRange(n);
   await benchTokenLOS(n);
-  await benchCover(n);
 }
 
 export async function benchCurrent(n = 100) {
@@ -77,11 +75,9 @@ export async function benchCurrent(n = 100) {
   const tokens = canvas.tokens.placeables.filter(t => !t.controlled);
   console.log(`Benching current settings for ${tokens.length} tokens.`);
   console.log(`Range: ${getSetting(SETTINGS.RANGE.ALGORITHM)}
-LOS: ${getSetting(SETTINGS.LOS.ALGORITHM)} | Percent: ${getSetting(SETTINGS.LOS.PERCENT_AREA)*100}%
-Cover: ${getSetting(SETTINGS.COVER.ALGORITHM)}`);
+LOS: ${getSetting(SETTINGS.LOS.ALGORITHM)} | Percent: ${getSetting(SETTINGS.LOS.PERCENT_AREA)*100}%`);
 
   await QBenchmarkLoopFn(n, visibilityTestFn, "Visibility", tokens);
-  await QBenchmarkLoopFn(n, coverTestFn, "Cover", controlled, tokens);
 }
 
 
@@ -216,49 +212,6 @@ export async function benchTokenLOS(n = 100) {
   await setSetting(SETTINGS.LOS.PERCENT_AREA, default_settings.los_percent_area);
 }
 
-
-export async function benchCover(n = 100) {
-  game.modules.get("tokenvisibility").api.debug = false;
-
-  const default_settings = {
-    cover_algorithm: getSetting(SETTINGS.COVER.ALGORITHM)
-  };
-
-  const controlled = _token;
-  if ( !controlled ) {
-    console.error("Must select a single token to benchmark cover.");
-    return;
-  }
-
-  const tokens = canvas.tokens.placeables.filter(t => !t.controlled);
-  console.log(`\nBenching token cover for ${tokens.length} tokens.`);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CENTER_CENTER);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Center", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CENTER_CORNERS_TARGET);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Corners Target", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CORNER_CORNERS_TARGET);
-  await QBenchmarkLoopFn(n, coverTestFn, "Corner-->Corners Target", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CENTER_CORNERS_GRID);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Select Grid Corners Target", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CORNER_CORNERS_GRID);
-  await QBenchmarkLoopFn(n, coverTestFn, "Corners-->Select Grid Corners Target (dnd5e)", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.AREA);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Area", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.AREA3D);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Area 3d", controlled, tokens);
-
-  // Reset
-  await setSetting(SETTINGS.COVER.ALGORITHM, default_settings.cover_algorithm);
-}
-
-
 function visibilityTestFn(tokens) {
   const out = [];
 
@@ -275,19 +228,6 @@ function visibilityTestFn(tokens) {
     };
 
     out.push(canvas.effects.visibility.testVisibility(center, { tolerance, object: token }));
-  }
-  return out;
-}
-
-function coverTestFn(controlled, targets) {
-  const out = [];
-
-  // Avoid caching the constrained token shape
-  for ( const token of targets ) token._constrainedTokenShape = undefined;
-
-  for ( const target of targets ) {
-    const coverCalc = new CoverCalculator(controlled, target);
-    out.push(coverCalc.targetCover());
   }
   return out;
 }

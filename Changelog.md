@@ -1,21 +1,24 @@
-# 0.5.8
+## 0.6.0
+Split Alternative Token Visibility from Alternative Token Cover. This module handles token visibility only. All cover-related features moveed to Alternative Token Cover.
+
+## 0.5.8
 - Correctly ignore tokens if the token cover settings do not consider tokens to be cover. Closes issue #58.
 
-# 0.5.7
+## 0.5.7
 - Fix for midiqol workflow not triggering.
 - Fix for some "id not found" errors when deleting active effects.
 
-# 0.5.6
+## 0.5.6
 - Fix for Levels incompatibility error on startup. Closes issue #54.
 
-# 0.5.5
+## 0.5.5
 - Slightly inset the token shape to avoid triggering cover when the cover line hits only the exact corner of a token square. Closes issue #49.
 - Fix typo in `module.json` that prevented Starfinder cover items from loading. Closes issue #53.
 - Add checks for when `actor.statuses` is undefined. Closes issue #52.
 - Fix occasional error when tokens have limited angle vision. Closes issue #48.
 - Update geometry lib to v0.2.9.
 
-# 0.5.4
+## 0.5.4
 - Fixes to how cover status data id is handled. Switch from label to name to accommodate Foundry change. Migrate old cover status data objects.
 - Better tests to prevent multiple cover statuses on a single token.
 - Improve compatibility with DFred's Convenient Effects. Use DFred's total cover status.
@@ -27,26 +30,26 @@
 - Added support for Starfinder RPG. Cover is added using items from the Compendium. Items with the flag `tokenvisibility.cover` are assumed to be cover, and the item folder for the system is checked before pulling from the compendium. Closes issue #43.
 - Update geometry lib to v0.2.7.
 
-# 0.5.3
+## 0.5.3
 Fix the possibly borked v0.5.1 and v0.5.2. (Amazing what a stray ";" can do!)
 
-# 0.5.2
+## 0.5.2
 Update geometry lib to v0.2.2.
 
-# 0.5.1
+## 0.5.1
 Update geometry lib to v0.2.1. Handle token prone and token height using geometry lib elevation getters.
 
-# 0.5.0
+## 0.5.0
 Updated for Foundry v11. Update geometry lib to v0.2.0.
 
-# 0.4.6
+## 0.4.6
 - Fix how token height was calculated in some situations.
 
-# 0.4.5
+## 0.4.5
 - Fix for issue #40 (error with Area2d).
 - Fix for issue #39 (failure to detect token cover using center to center in PF2e)
 
-# 0.4.4
+## 0.4.4
 - Update to lib geometry v0.1.5.
 - Possible fix for issue #33 (null error reading "length").
 - Keep the high cover setting even when using DFred's (closes issue #31).
@@ -55,13 +58,13 @@ Updated for Foundry v11. Update geometry lib to v0.2.0.
 - Fix for Area3d algorithm when testing a wall that does not reach the height of the token.
 - Add changelog dialog on first load.
 
-# 0.4.3
+## 0.4.3
 Update to lib geometry v0.1.4.
 
-# 0.4.2
+## 0.4.2
 Update to lib geometry v0.1.3.
 
-# 0.4.1
+## 0.4.1
 Area2d algorithm improvements:
 - Fix area calculation when token shape is split in half by a wall
 - Handle holes in the area calculation
@@ -70,7 +73,7 @@ Area3d algorithm improvements:
 - Fix some errors in `constructFromWall` thrown when using Levels.
 - Possible fix for issue #33 (getting length from null object in `Area3d.visionPolygon`).
 
-# 0.4.0
+## 0.4.0
 Partial re-write of how the Area3d algorithm works, to better handle objects adjacent to the target. Might be a bit faster in some situations, as it devotes more effort to removing unneeded walls earlier.
 
 Additional fixes for measuring cover using 2d area calculation when tokens block (#27).
@@ -79,32 +82,32 @@ Better handling of terrain walls when they intersect a token shape for area3d.
 Incorporate changes to improve Perfect Vision compatibility (thanks @dev7355608!) (issues #9, #17, #18).
 Potential fix for `constrainedTokenBorder.toPolygon` error (issues #4 and #28).
 
-# 0.3.8
+## 0.3.8
 Add token shapes to the 3d area calculation (issue #27)
 Fixes for measuring cover using the 2d area calculation when tokens block.
 
-# 0.3.7
+## 0.3.7
 Use a shared geometry submodule (issue #20).
 Fix conflict with Force Client Settings (issue #23).
 Fix for Dfred's cover getting applied repeatedly on the same token (issue #26).
 
-# 0.3.6
+## 0.3.6
 Compatibility with DFred's Convenient Effects -- uses DFred 1/2 and 3/4 cover when that module is active. (Closes issue #12.)
 
-# 0.3.5
+## 0.3.5
 Compatibility with Levels v3.5.7 (Fixes issues #19 and 13).
 Light sources that grant visibility now respect the points algorithm setting for LOS. Fixes issue #16.
 Catch when the range is less or equal to zero for testing visibility. Fixes issue #15 and aligns with [Foundry issue #8505](https://github.com/foundryvtt/foundryvtt/issues/8505).
 
-# 0.3.4
+## 0.3.4
 Reset the settings cache when changing a setting value. Also fixes the welcome pop-up to avoid it repeating.
 
-# 0.3.3
+## 0.3.3
 - Change name of property to token.ignoresCoverType to avoid naming conflict with Simbul's Cover Calculator. Fixes issue #11.
 - Check if tests exist for testing range visibility. Possible fix to issue #10.
 - Catch when spell sniper or sharpshooter flags don't exist, to avoid an error being thrown.
 
-# 0.3.2
+## 0.3.2
 Use different technique to hide settings submenus when different algorithms are chosen, which should reduce weirdness in the settings menu.
 
 Fix error when getting average token elevation.
@@ -113,10 +116,10 @@ Use an IgnoreCover class that can be different for different systems, and split 
 
 Add handling of limited angle vision for Area3d algorithm (closes issue #4).
 
-# 0.3.1
+## 0.3.1
 Fix issue #7 (Welcome message).
 
-# 0.3.0
+## 0.3.0
 
 *New Features*
 - Use "move" wall restriction for cover, which more closely corresponds to typical physics for cover. Note that limited move walls (terrain walls) are possible, which would provide cover beyond the first wall.
@@ -150,10 +153,10 @@ Fix issue #7 (Welcome message).
 - Cache the LOS value for a given point as is done in base Foundry.
 - Cache settings
 
-# 0.2.1
+## 0.2.1
 Fix for `_hasLOS` not initialized error, which occurs sometimes with Levels installed.
 
-# 0.2.0
+## 0.2.0
 Revamp Range settings:
 - Choice of single point, 5 points, or 9 points (Foundry default)
 - Toggle to add additional "3d" points to measure token height and token elevation
@@ -174,16 +177,16 @@ Add Cover calculations with settings:
 
 Fixes to improve compatibility with Perfect Vision and Levels.
 
-# 0.1.3
+## 0.1.3
 Fix issue #1 (Area vision failing when area === 0).
 
-# 0.1.2
+## 0.1.2
 Updates for compatibility with Foundry v10.286.
 
-# 0.1.1
+## 0.1.1
 Update name to better distinguish from core Foundry functionality.
 
-# 0.1
+## 0.1
 Initial release.
 
 Calculate token visibility using actual token boundaries.
@@ -191,5 +194,5 @@ Settings to test visibility by percent area and to adjust the boundary size used
 
 Add API methods to allow testing for cover and testing for visibility.
 
-# 0.0.1-alpha1
+## 0.0.1-alpha1
 Initial release for testing.

@@ -33,7 +33,7 @@ Area:
 
 import { MODULE_ID, FLAGS, MODULES_ACTIVE, DEBUG } from "./const.js";
 import { getSetting, SETTINGS } from "./settings.js";
-import { log, buildTokenPoints } from "./util.js";
+import { buildTokenPoints } from "./util.js";
 import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
 
 import { Draw } from "./geometry/Draw.js"; // For debugging
@@ -438,16 +438,12 @@ export class Area3d {
   static visionPolygon(viewingPoint, target) {
     const border = target.constrainedTokenBorder;
     const keyPoints = border.viewablePoints(viewingPoint, { outermostOnly: false });
-    if ( !keyPoints ) {
-      log("visionPolygon: key points are null.");
-      return border.toPolygon();
-    }
+    if ( !keyPoints ) return border.toPolygon();
 
     let out;
     switch ( keyPoints.length ) {
       case 0:
       case 1:
-        log(`visionPolygon: only ${keyPoints.length} key points found.`);
         out = border.toPolygon();
         break;
       case 2: {
@@ -853,7 +849,7 @@ export class Area3d {
     blockingObjs.walls.forEach(w => {
       // Sometimes w can be WallPoints3d. See issue #48.
       if ( w instanceof WallPoints3d ) walls.add(w);
-      else walls.add(new WallPoints3d(w))
+      else walls.add(new WallPoints3d(w));
     });
 
     // Add Terrain Walls
