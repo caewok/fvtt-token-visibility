@@ -11,7 +11,6 @@ import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import {
   registerSettings,
-  updateConfigStatusEffects,
   getSetting,
   setSetting } from "./settings.js";
 
@@ -29,20 +28,11 @@ import { HorizontalPoints3d } from "./PlaceablesPoints/HorizontalPoints3d.js";
 
 import { Area3d } from "./Area3d.js";
 import { Area2d } from "./Area2d.js";
-import { CoverCalculator, SOCKETS } from "./CoverCalculator.js";
 import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
-import { CoverDialog } from "./CoverDialog.js";
 
 import { Area3dPopout, area3dPopoutData } from "./Area3dPopout.js";
 
 import * as los from "./visibility_los.js";
-
-// Ignores Cover
-import {
-  IgnoresCover,
-  IgnoresCoverSimbuls,
-  IgnoresCoverDND5e,
-  addDND5eCoverFeatFlags } from "./IgnoresCover.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -51,16 +41,12 @@ import "./migration.js";
 Hooks.once("init", function() {
   registerGeometry();
   initializePatching();
-  addDND5eCoverFeatFlags();
 
   game.modules.get(MODULE_ID).api = {
     bench,
     Area2d,
     Area3d,
     util,
-    CoverCalculator,
-    CoverDialog,
-    COVER,
     ConstrainedTokenBorder,
     los,
     PlanePoints3d,
@@ -70,16 +56,8 @@ Hooks.once("init", function() {
     TilePoints3d,
     VerticalPoints3d,
     HorizontalPoints3d,
-    setCoverIgnoreHandler,
-    SOCKETS,
     getSetting,
     setSetting,
-
-    IgnoresCoverClasses: {
-      IgnoresCover,
-      IgnoresCoverDND5e,
-      IgnoresCoverSimbuls
-    },
 
     Area3dPopout,
     area3dPopoutData,
@@ -88,15 +66,10 @@ Hooks.once("init", function() {
 
     debug: DEBUG
   };
-
-  if ( game.system.id === "dnd5e" ) {
-    setCoverIgnoreHandler(game.modules.get("simbuls-cover-calculator")?.active ? IgnoresCoverSimbuls : IgnoresCoverDND5e);
-  }
 });
 
 Hooks.once("setup", function() {
   registerSettings();
-  updateConfigStatusEffects();
 });
 
 
