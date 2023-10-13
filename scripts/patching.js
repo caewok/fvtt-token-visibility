@@ -21,9 +21,6 @@ import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
 
-// Midiqol
-import { PATCHES as PATCHES_Midiqol } from "./Midiqol.js";
-
 const PATCHES = {
   CanvasVisibility: PATCHES_CanvasVisibility,
   ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
@@ -35,8 +32,7 @@ const PATCHES = {
   SettingsConfig: PATCHES_SettingsConfig,
   Token: PATCHES_Token,
   VisionSource: PATCHES_VisionSource,
-  "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,
-  Midiqol: PATCHES_Midiqol
+  "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
 
 export const PATCHER = new Patcher(PATCHES);
