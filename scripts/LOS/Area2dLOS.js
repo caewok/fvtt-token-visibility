@@ -1,20 +1,21 @@
 /* globals
-foundry,
-PIXI,
-objectsEqual,
-Token,
+canvas,
 CONFIG,
+foundry,
 LimitedAnglePolygon,
-canvas
+objectsEqual,
+PIXI,
+PointSource,
+Token
 */
 "use strict";
 
-import { MODULES_ACTIVE, DEBUG } from "./const.js";
+import { MODULES_ACTIVE } from "./const.js";
 import { buildTokenPoints } from "./util.js";
 import { SETTINGS, getSetting } from "./settings.js";
-import { Area3d} from "./Area3d.js";
 import { CWSweepInfiniteWallsOnly } from "./CWSweepInfiniteWallsOnly.js";
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
+import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 
 import { Shadow } from "./geometry/Shadow.js";
 import { ClipperPaths } from "./geometry/ClipperPaths.js";
@@ -36,25 +37,23 @@ import { Draw } from "./geometry/Draw.js";
 
 */
 
-export class Area2d {
+export class Area2dLOS extends AlternativeLOS {
 
-  /** @type {VisionSource} */
-  visionSource;
-
-  /** @type {Token} */
-  target;
-
-  /** @type {boolean} */
-  debug = false;
+  /** @type {PointSource} */
+  viewerSource;
 
   /**
-   * @typedef Area2dConfig  Configuration settings for this class.
-   * @type {object}
-   * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of vision source
-   * @property {boolean} wallsBlock                   Do walls block vision?
-   * @property {boolean} tilesBlock                   Do tiles block vision?
-   * @property {boolean} deadTokensBlock              Do dead tokens block vision?
-   * @property {boolean} liveTokensBlock              Do live tokens block vision?
+   * @typedef {PointsLOSConfig}  Configuration settings for this class.
+   * @type {AlternativeLOSConfig}
+   * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of source (light, sight, etc.)
+   * @property {boolean} wallsBlock                   Can walls block in this test?
+   * @property {boolean} tilesBlock                   Can tiles block in this test?
+   * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
+   * @property {boolean} liveTokensBlock              Can live tokens block in this test?
+   * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
+   * @property {boolean} debug                        Enable debug visualizations.
+   *
+   * Added by this subclass:
    */
 
   /** @type {Area2dConfig} */
@@ -66,62 +65,40 @@ export class Area2d {
   static SCALING_FACTOR = 100;
 
   /**
-   * @param {VisionSource} visionSource
+   * @param {PointSource|Token} viewer
    * @param {Token} target
    */
-  constructor(visionSource, target, config = {}) {
-
-    this.visionSource = visionSource instanceof Token ? visionSource.vision : visionSource;
-    this.target = target;
-
-    // Configuration options
-    this.#configure(config);
-    this.debug = DEBUG.area;
+  constructor(viewer, target, config = {}) {
+    if ( viewer instanceof Token ) viewer = viewer.vision;
+    if ( !(viewer instanceof PointSource) ) console.error("Area2dLOS requires a point source for the viewer.");
+    const viewerSource = viewer;
+    viewer = Point3d.fromPointSource(viewer);
+    super(viewer, target, config);
+    this.viewerSource = viewerSource;
   }
 
   /**
-   * Initialize the configuration for this constructor.
-   * @param {object} config   Settings intended to override defaults.
-   */
-  #configure(config = {}) {
-    config.type ??= "sight";
-    config.wallsBlock ??= true;
-    config.tilesBlock ??= MODULES_ACTIVE.LEVELS || MODULES_ACTIVE.EV;
-    config.deadTokensBlock ??= false;
-    config.liveTokensBlock ??= false;
-    config.proneTokensBlock ??= true;
-
-    this.config = config;
-  }
-
-
-  /**
-   * Determine whether a visionSource has line-of-sight to a target based on the percent
-   * area of the target visible to the source.
-   * @param {boolean} centerPointIsVisible    Is the center of the token visible?
-   * @param {number} [thresholdArea]          Percent between 0 and 1 required for LOS.
-   *   0% means any line-of-sight counts.
-   *   100% means the entire token must be visible.
+   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
+   * @param {number} [threshold]    Threshold required to be met.
    * @returns {boolean}
    */
-  hasLOS(centerPointIsVisible, thresholdArea) {
-    thresholdArea ??= getSetting(SETTINGS.LOS.PERCENT_AREA);
+  hasLOS(threshold) {
+    const centerPointIsVisible = this._hasCollision(this.viewer, Point3d.fromTokenCenter(this.target));
 
     // If less than 50% of the token area is required to be viewable, then
     // if the center point is viewable, the token is viewable from that source.
-    if ( centerPointIsVisible && thresholdArea < 0.50 ) {
+    if ( centerPointIsVisible && threshold < 0.50 ) {
       if ( this.debug ) Draw.point(this.target.center, {
         alpha: 1,
         radius: 3,
         color: Draw.COLORS.green });
-
       return true;
     }
 
     // If more than 50% of the token area is required to be viewable, then
     // the center point must be viewable for the token to be viewable from that source.
     // (necessary but not sufficient)
-    if ( !centerPointIsVisible && thresholdArea >= 0.50 ) {
+    if ( !centerPointIsVisible && threshold >= 0.50 ) {
       if ( this.debug ) Draw.point(this.target.center, {
         alpha: 1,
         radius: 3,
@@ -130,10 +107,8 @@ export class Area2d {
     }
 
     const constrained = ConstrainedTokenBorder.get(this.target, this.config.type).constrainedBorder();
-
     const shadowLOS = this._buildShadowLOS();
-
-    if ( thresholdArea === 0 ) {
+    if ( threshold === 0 ) {
       // If percentArea equals zero, it might be possible to skip intersectConstrainedShapeWithLOS
       // and instead just measure if a token boundary has been breached.
 
@@ -149,7 +124,29 @@ export class Area2d {
     const percentVisible = this.percentAreaVisible(shadowLOS);
     if ( percentVisible.almostEqual(0) ) return false;
 
-    return (percentVisible > thresholdArea) || percentVisible.almostEqual(thresholdArea);
+    return (percentVisible > threshold) || percentVisible.almostEqual(threshold);
+  }
+
+  /**
+   * Determine a percent area visible for the target based on the target bottom area,
+   * target top area, or both. Varies based on relative position of visionSource to target.
+   * @param {object{top: {PIXI.Polygon|undefined}, bottom: {PIXI.Polygon|undefined}}} shadowLOS
+   * @returns {number}
+   */
+  percentVisible(shadowLOS) {
+    shadowLOS ??= this._buildShadowLOS();
+
+    const constrained = this.target.constrainedTokenBorder;
+    const targetPercentAreaBottom = shadowLOS.bottom ? this._calculatePercentSeen(shadowLOS.bottom, constrained) : 0;
+    const targetPercentAreaTop = shadowLOS.top ? this._calculatePercentSeen(shadowLOS.top, constrained) : 0;
+
+    if ( this.config.debug ) {
+      const viewerName = this.viewerSource?.object?.name ?? this.viewerSource.id;
+      const targetName = this.target.name;
+      if ( shadowLOS.bottom ) console.log(`${viewerName} sees ${targetPercentAreaBottom * 100}% of ${targetName}'s bottom (Area2d).`);
+      if ( shadowLOS.top ) console.log(`${viewerName} sees ${targetPercentAreaTop * 100}% of ${targetName}'s top (Area2d).`);
+    }
+    return Math.max(targetPercentAreaBottom, targetPercentAreaTop);
   }
 
   /**
@@ -162,8 +159,10 @@ export class Area2d {
     if ( los instanceof ClipperPaths ) return undefined;
 
     const hasLOS = this._sourceIntersectsPolygonBounds(los, tokenShape);
-    this.debug && Draw.drawShape(los, { color: Draw.COLORS.blue }); // eslint-disable-line no-unused-expressions
-    this.debug && Draw.drawShape(tokenShape, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red }); // eslint-disable-line no-unused-expressions
+    if ( this.debug ) {
+      Draw.drawShape(los, { color: Draw.COLORS.blue });
+      Draw.drawShape(tokenShape, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red });
+    }
     return hasLOS;
   }
 
@@ -200,25 +199,6 @@ export class Area2d {
   }
 
   /**
-   * Determine a percent area visible for the target based on the target bottom area,
-   * target top area, or both. Varies based on relative position of visionSource to target.
-   * @param {object{top: {PIXI.Polygon|undefined}, bottom: {PIXI.Polygon|undefined}}} shadowLOS
-   * @returns {number}
-   */
-  percentAreaVisible(shadowLOS) {
-    shadowLOS ??= this._buildShadowLOS();
-
-    const constrained = this.target.constrainedTokenBorder;
-    const targetPercentAreaBottom = shadowLOS.bottom ? this._calculatePercentSeen(shadowLOS.bottom, constrained) : 0;
-    const targetPercentAreaTop = shadowLOS.top ? this._calculatePercentSeen(shadowLOS.top, constrained) : 0;
-
-    if ( this.debug && shadowLOS.bottom ) console.log(`${this.visionSource.object.name} sees ${targetPercentAreaBottom * 100}% of ${this.target.name}'s bottom (Area2d).`);
-    if ( this.debug && shadowLOS.top ) console.log(`${this.visionSource.object.name} sees ${targetPercentAreaTop * 100}% of ${this.target.name}'s top (Area2d).`);
-
-    return Math.max(targetPercentAreaBottom, targetPercentAreaTop);
-  }
-
-  /**
    * Depending on location of visionSource versus target, build one or two
    * line-of-sight polygons with shadows set to the top or bottom elevations for the target.
    * Viewer looking up: bottom of target
@@ -228,23 +208,22 @@ export class Area2d {
    * @returns {object{top: {PIXI.Polygon|undefined}, bottom: {PIXI.Polygon|undefined}}}
    */
   _buildShadowLOS() {
-    const visionSource = this.visionSource;
-    const target = this.target;
-    const { topZ, bottomZ } = target;
+    const viewerZ = this.viewer.z;
+    const { topZ, bottomZ } = this.target;
 
     // Test top and bottom of target shape.
     let bottom;
     let top;
-    const inBetween = visionSource.elevationZ <= topZ && visionSource.elevationZ >= bottomZ;
+    const inBetween = (viewerZ <= topZ) && (viewerZ >= bottomZ);
 
     // If target has no height, return one shadowed LOS polygon based on target elevation.
     if ( !(topZ - bottomZ) ) return { top: this.shadowLOSForElevation(topZ) };
 
     // Looking up at bottom
-    if ( inBetween || visionSource.elevationZ < bottomZ ) bottom = this.shadowLOSForElevation(bottomZ);
+    if ( inBetween || (viewerZ < bottomZ) ) bottom = this.shadowLOSForElevation(bottomZ);
 
     // Looking down at top
-    if ( inBetween || visionSource.elevationZ > topZ ) top = this.shadowLOSForElevation(topZ);
+    if ( inBetween || (viewerZ > topZ) ) top = this.shadowLOSForElevation(topZ);
 
     return (top && bottom && objectsEqual(top.points, bottom.points)) ? { top } : { bottom, top };
   }
@@ -358,7 +337,7 @@ export class Area2d {
   _calculateSeenAreaForPolygon(visiblePolygon) {
     // If Levels is enabled, consider tiles and drawings; obscure the visible token shape.
     if ( MODULES_ACTIVE.LEVELS ) {
-      let tiles = Area3d.filterTilesByVisionPolygon(visiblePolygon);
+      let tiles = this.filterTilesByVisionPolygon(visiblePolygon);
 
       // Limit to tiles between viewer and target.
       const minEZ = Math.min(this.visionSource.elevationZ, this.target.bottomZ);
@@ -369,7 +348,7 @@ export class Area2d {
       });
 
       if ( tiles.size ) {
-        const drawings = Area3d.filterDrawingsByVisionPolygon(visiblePolygon);
+        const drawings = this.filterDrawingsByVisionPolygon(visiblePolygon);
         const combinedTiles = this._combineTilesWithDrawingHoles(tiles, drawings);
         visiblePolygon = combinedTiles.diffPolygon(visiblePolygon);
       }
@@ -438,7 +417,6 @@ export class Area2d {
    */
   shadowLOSForElevation(targetElevation = 0) {
     const visionSource = this.visionSource;
-    const origin = new Point3d(visionSource.x, visionSource.y, visionSource.elevationZ);
     const { type, liveTokensBlock, deadTokensBlock } = this.config;
 
     // Find the walls and, optionally, tokens, for the triangle between origin and target
@@ -448,9 +426,9 @@ export class Area2d {
       filterTokens: liveTokensBlock || deadTokensBlock,
       filterTiles: false,
       viewer: visionSource.object,
-      debug: this.debug
+      debug: this.config.debug
     };
-    const viewableObjs = Area3d.filterSceneObjectsByVisionPolygon(origin, this.target, filterConfig);
+    const viewableObjs = this.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, filterConfig);
 
 
     // Note: Wall Height removes walls from LOS calculation if
@@ -466,7 +444,7 @@ export class Area2d {
     // We need an LOS calc that removes all limited walls; use shadows instead.
     // 3. Tokens are potentially blocking -- construct shadows based on those tokens
     let redoLOS = viewableObjs.tokens.size;
-    const elevationZ = visionSource.elevationZ;
+    const elevationZ = this.viewerPoint.z;
     redoLOS ||= viewableObjs.walls.some(w => {
       const { topZ, bottomZ } = w;
       return (elevationZ < topZ && targetElevation > topZ)
@@ -530,6 +508,10 @@ export class Area2d {
     return combined;
   }
 }
+
+/** For backwards compatibility */
+export const Area2d = Area2dLOS;
+Area2dLOS.prototype.percentAreaVisible = Area2dLOS.prototype.percentVisible;
 
 function isConstrained(los) {
   const boundaryShapes = los.config.boundaryShapes;
