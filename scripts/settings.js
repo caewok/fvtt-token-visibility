@@ -54,7 +54,7 @@ export const SETTINGS = {
     FIVE: "points-five", // Corners + center
     EIGHT: "points-eight", // Nine without center
     NINE: "points-nine" // corners, midpoints, center
-  }
+  },
 
   RANGE: {
     ALGORITHM: "range-algorithm",
@@ -79,11 +79,10 @@ export const SETTINGS = {
     POINT_OPTIONS: {
       NUM_POINTS: "los-points-target",
       INSET: "los-inset-target",
-      POINTS3D: "los-points-3d"
-    },
-
-    GRID: "los-grid-target",
-  }
+      POINTS3D: "los-points-3d",
+      GRID: "los-grid-target"
+    }
+  },
 
   CHANGELOG: "changelog",
 
@@ -107,7 +106,7 @@ export function registerSettings() {
   const PT_TYPES = SETTINGS.POINT_TYPES;
   const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
   const rangeChoices = {};
-  RTYPES.forEach(type => rangeChoices[type] = localize(type));
+  Object.values(RTYPES).forEach(type => rangeChoices[type] = localize(type));
 
   game.settings.register(MODULE_ID, SETTINGS.RANGE.ALGORITHM, {
     name: localize(`${SETTINGS.RANGE.ALGORITHM}.Name`),
@@ -115,7 +114,7 @@ export function registerSettings() {
     scope: "world",
     config: true,
     type: String,
-    choices: rangeChoices
+    choices: rangeChoices,
     default: RTYPES.NINE
   });
 
@@ -140,7 +139,7 @@ export function registerSettings() {
   // ----- NOTE: Line-of-sight ----- //
   const LTYPES = SETTINGS.LOS.TYPES;
   const losChoices = {};
-  LTYPES.forEach(type => losChoices[type] = localize(type));
+  Object.values(LTYPES).forEach(type => losChoices[type] = localize(type));
 
   game.settings.register(MODULE_ID, SETTINGS.LOS.ALGORITHM, {
     name: localize(`${SETTINGS.LOS.ALGORITHM}.Name`),
@@ -149,12 +148,12 @@ export function registerSettings() {
     config: true,
     type: String,
     choices: losChoices,
-    default: LPOINTS.
+    default: LTYPES.NINE
   });
 
   game.settings.register(MODULE_ID, SETTINGS.LOS.PERCENT, {
-    name: localize(`${SETTINGS.LOS.PERCENT_AREA}.Name`),
-    hint: localize(`${SETTINGS.LOS.PERCENT_AREA}.Hint`),
+    name: localize(`${SETTINGS.LOS.PERCENT}.Name`),
+    hint: localize(`${SETTINGS.LOS.PERCENT}.Hint`),
     range: {
       max: 1,
       min: 0,
@@ -167,7 +166,7 @@ export function registerSettings() {
   });
 
   const ptChoices = {};
-  PT_TYPES.forEach(type => ptChoices[type] = localize(type));
+  Object.values(PT_TYPES).forEach(type => ptChoices[type] = localize(type));
 
   game.settings.register(MODULE_ID, SETTINGS.LOS.VIEWER.NUM_POINTS, {
     name: localize(`${SETTINGS.LOS.VIEWER.NUM_POINTS}.Name`),
@@ -179,7 +178,7 @@ export function registerSettings() {
     default: PT_TYPES.CENTER
   });
 
-  game.settings.register(MODULE_ID, PT_OPTS.VIEWER.INSET, {
+  game.settings.register(MODULE_ID, SETTINGS.LOS.VIEWER.INSET, {
     name: localize(`${SETTINGS.LOS.VIEWER.INSET}.Name`),
     hint: localize(`${SETTINGS.LOS.VIEWER.INSET}.Hint`),
     range: {
@@ -193,7 +192,7 @@ export function registerSettings() {
     type: Number
   });
 
-  PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
+  const PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
   game.settings.register(MODULE_ID, PT_OPTS.NUM_POINTS, {
     name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
     hint: localize(`${PT_OPTS.NUM_POINTS}.Hint`),
@@ -297,7 +296,7 @@ async function dnd5eDMGSettings() {
 
     // LOS
     setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.POINTS),
-    setSetting(SETTINGS.lOS)
+    setSetting(SETTINGS.LOS),
     setSetting(OPTS.VIEWER.NUM_POINTS, OPTS.TYPES.CENTER),
     setSetting(OPTS.VIEWER.INSET, 0),
     setSetting(OPTS.TARGET.NUM_POINTS, OPTS.TYPES.FOUR),

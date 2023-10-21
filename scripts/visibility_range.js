@@ -72,8 +72,8 @@ function elevatePoints(tests, token) {
   for ( let i = 1; i < ln; i += 1 ) {
     const test = tests[i];
     tests3d.push(
-      new Point3d(test.x, test.y, top);
-      new Point3d(test.x, test.y, bottom);
+      new Point3d(test.x, test.y, top),
+      new Point3d(test.x, test.y, bottom)
     );
   }
   return tests3d;

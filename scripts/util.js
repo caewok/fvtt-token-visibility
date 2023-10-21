@@ -4,7 +4,7 @@ getObjectProperty
 "use strict";
 
 import { EPSILON } from "./const.js";
-import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
+import { TokenPoints3d } from "./LOS/PlaceablesPoints/TokenPoints3d.js";
 import { getSetting, SETTINGS } from "./settings.js";
 
 
@@ -20,43 +20,22 @@ export function elementsByIndex(arr, indices) {
 }
 
 /**
- * @typedef buildTokenPointsConfig
- * @type {object}
- * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of vision source
- * @property {boolean} deadTokensBlock              Do dead tokens block vision?
- * @property {boolean} liveTokensBlock              Do live tokens block vision?
- * @property {PIXI.Graphics} graphics               Graphics to pass to the point constructor
+ * Boolean test for whether a line segment intersects a quadrilateral.
+ * Relies on Möller-Trumbore ray-triangle intersection.
+ * @param {Point3d} A     First endpoint of the segment
+ * @param {Point3d} B     Second endpoint of the segment
+ * @param {Point3d} r0          Quad vertex 0  Expected vertices in CW order.
+ * @param {Point3d} r1          Quad vertex 1
+ * @param {Point3d} r2          Quad vertex 2
+ * @param {Point3d} r3          Quad vertex 3
+ * @returns {boolean} True if intersection occurs.
  */
+export function lineSegmentIntersectsQuadrilateral3d(A, B, r0, r1, r2, r3, { EPSILON = 1e-08 } = {}) {
+  const rayVector = B.subtract(A);
+  const t = lineIntersectionQuadrilateral3d(A, rayVector, r0, r1, r2, r3);
+  if ( t === null ) return false;
 
-/**
- * Given config options, build TokenPoints3d from tokens.
- * The points will use either half- or full-height tokens, depending on config.
- * @param {Token[]|Set<Token>} tokens
- * @param {buildTokenPointsConfig} config
- * @returns {TokenPoints3d[]}
- */
-export function buildTokenPoints(tokens, config) {
-  if ( !tokens.length && !tokens.size ) return tokens;
-  const { liveTokensBlock, deadTokensBlock, proneTokensBlock } = config;
-  if ( !(liveTokensBlock || deadTokensBlock) ) return [];
-
-  const hpAttribute = getSetting(SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE);
-
-  // Filter live or dead tokens
-  if ( liveTokensBlock ^ deadTokensBlock ) tokens = tokens.filter(t => {
-    const hp = getObjectProperty(t.actor, hpAttribute);
-    if ( typeof hp !== "number" ) return true;
-
-    if ( liveTokensBlock && hp > 0 ) return true;
-    if ( deadTokensBlock && hp <= 0 ) return true;
-    return false;
-  });
-
-
-  if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
-
-  // Pad (inset) to avoid triggering cover at corners. See issue 49.
-  return tokens.map(t => new TokenPoints3d(t, { pad: -1 }));
+  return !(t < EPSILON || t > (1 + EPSILON));
 }
 
 
@@ -128,6 +107,16 @@ function lineTriangleIntersectionLocation(rayVector, edge1, edge2, s, f, h) {
   // if t < 1, t is between rayOrigin and B, where rayVector = B.subtract(A)
 }
 
+
+/**
+ * @typedef buildTokenPointsConfig
+ * @type {object}
+ * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of vision source
+ * @property {boolean} deadTokensBlock              Do dead tokens block vision?
+ * @property {boolean} liveTokensBlock              Do live tokens block vision?
+ * @property {PIXI.Graphics} graphics               Graphics to pass to the point constructor
+ */
+
 /**
  * Given config options, build TokenPoints3d from tokens.
  * The points will use either half- or full-height tokens, depending on config.
@@ -143,7 +132,7 @@ export function buildTokenPoints(tokens, config) {
   const hpAttribute = getSetting(SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE);
 
   // Filter live or dead tokens
-  if ( hpAttribute && (liveTokensBlock ^ deadTokensBlock) ) tokens = tokens.filter(t => {
+  if ( liveTokensBlock ^ deadTokensBlock ) tokens = tokens.filter(t => {
     const hp = getObjectProperty(t.actor, hpAttribute);
     if ( typeof hp !== "number" ) return true;
 
