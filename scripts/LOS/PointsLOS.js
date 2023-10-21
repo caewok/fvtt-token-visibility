@@ -7,25 +7,31 @@ VisionSource
 */
 "use strict";
 
-import { Point3d } from "./geometry/3d/Point3d.js";
-import { Draw } from "./geometry/Draw.js";
-import { ClipperPaths } from "./geometry/ClipperPaths.js";
+import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { AlternativeLOS } from "./AlternativeLOS.js";
-import { squaresUnderToken, hexesUnderToken } from "./LOS/shapes_under_token.js";
+
+// Base folder
+import { SETTINGS, getSetting } from "../settings.js";
+
+// Geometry folder
+import { Point3d } from "../geometry/3d/Point3d.js";
+import { Draw } from "../geometry/Draw.js";
+import { ClipperPaths } from "../geometry/ClipperPaths.js";
+
+
 
 /**
  * Estimate line-of-sight between a source and a token using different point-to-point methods.
  */
 export class PointsLOS extends AlternativeLOS {
-
   static ALGORITHM = {
-    CENTER_CENTER: "points_center_to_center",
-    CENTER_CORNERS: "points_center_to_corners",
-    CORNER_CORNERS: "points_corners_to_corners",
-    CENTER_CORNERS_GRID: "points_center_to_corners_grid",
-    CORNER_CORNERS_GRID: "points_corner_to_corners_grid",
-    CENTER_CUBE: "points_center_to_cube",
-    CUBE_CUBE: "points_cube_to_cube"
+    CENTER_CENTER: "los-center-to-center",
+    CENTER_CORNERS_TARGET: "los-center-to-target-corners",
+    CORNER_CORNERS_TARGET: "los-corner-to-target-corners",
+    CENTER_CORNERS_GRID: "los-center-to-target-grid-corners",
+    CORNER_CORNERS_GRID: "los-corner-to-target-grid-corners",
+    CENTER_CUBE: "los-points-center-to-cube",
+    CUBE_CUBE: "los-points-cube-to-cube",
   };
 
   static ALGORITHM_METHOD = {
@@ -39,12 +45,6 @@ export class PointsLOS extends AlternativeLOS {
   };
 
   /**
-   * Token that represents the viewer.
-   * @type {Token}
-   */
-  viewerToken;
-
-  /**
    * @typedef {PointsLOSConfig}  Configuration settings for this class.
    * @type {AlternativeLOSConfig}
    * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of source (light, sight, etc.)
@@ -56,7 +56,7 @@ export class PointsLOS extends AlternativeLOS {
    * @property {boolean} debug                        Enable debug visualizations.
    *
    * Added by this subclass:
-   * @property {PointsLOS.ALGORITHM}                  The type of point-based algorithm to apply.
+   * @property {LOS.ALGORITHM} pointAlgorithm         The type of point-based algorithm to apply.
    */
   config = {};
 
@@ -67,23 +67,16 @@ export class PointsLOS extends AlternativeLOS {
    * @param {AlternativeLOSConfig} config
    */
   constructor(viewer, target, config) {
-    let viewerToken;
-    if ( viewer instanceof Token ) {
-      viewerToken = viewer;
-      viewer = Point3d.fromTokenCenter(viewerToken);
-    }
-    if ( viewer instanceof VisionSource ) {
-      viewerToken = viewer.object;
-      viewer = Point3d.fromTokenCenter(viewerToken);
-    }
     super(viewer, target, config);
-    this.viewerToken = viewerToken;
     this.#configure(config);
   }
 
   #configure(config) {
     const cfg = this.config;
-    cfg.algorithm = config.algorithm ?? this.constructor.ALGORITHM.CENTER_CENTER;
+    cfg.pointAlgorithm = config.pointAlgorithm ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.NUM_POINTS);
+    cfg.inset = config.inset ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.INSET);
+    cfg.grid = config.grid ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.GRID);
+    cfg.points3d = config.points3d;
   }
 
   // ----- NOTE: Getters ----- //
@@ -123,106 +116,123 @@ export class PointsLOS extends AlternativeLOS {
   }
 
   applyPercentageTest() {
-    const fnName = this.constructor.ALGORITHM_METHOD[this.config.algorithm];
-    return this[fnName]();
-  }
-
-  // ----- NOTE: Algorithm methods ----- //
-
-  /**
-   * Test line-of-sight from viewer point to target center.
-   * @returns {number}    1 if visible, 0 if blocked.
-   */
-  centerToCenter() {
-    const targetPoints = [Point3d.fromTokenCenter(this.target)];
-    return this._testTokenTargetPoints([this.viewerCenter], [targetPoints]);
+    const cfg = this.config;
+    const targetPoints = this._constructTargetPoints();
+    return this._testTargetPoints(targetPoints);
   }
 
   /**
-   * Test line-of-sight from viewer point to the corners of the target.
-   * It is assumed that "center" is at the losHeight elevation, and corners are
-   * at the mean height of the token.
-   * @returns {number}
+   * Build the viewer points based on configuration settings.
+   * Essentially, we can use the viewer center, viewer corners, and/or viewer midpoints between corners.
+   * @param {Token} viewer
+   * @returns {Points3d[]}
    */
-  centerToTargetCorners() {
-    const { target, targetAvgElevationZ, viewerCenter } = this;
-    const targetPoints = this.constructor._getTokenCorners(target.constrainedTokenBorder, targetAvgElevationZ);
-    return this._testTokenTargetPoints([viewerCenter], [targetPoints]);
+  static constructViewerPoints(viewer, { pointAlgorithm, inset }) {
+    pointAlgorithm ??= getSetting(SETTINGS.LOS.VIEWER.NUM_POINTS);
+    inset ??= getSetting(SETTINGS.LOS.VIEWER.INSET);
+    return this.constructTokenPoints(
+      pointAlgorithm,
+      viewer.constrainedTokenBorder,
+      viewer.topZ,
+      inset,
+      viewer.center());
   }
 
   /**
-   * Test line-of-sight based on corner-to-corners test. This is a simpler version of the DMG dnd5e test for cover.
-   * Runs a collision test on all corners of the target, and takes the best one
-   * from the perspective of the viewer token.
-   * @returns {COVER_TYPE}
+   * Similar to _constructViewerPoints but with a complication:
+   * - Grid. When set, points are constructed per grid space covered by the token.
    */
-  cornerToTargetCorners() {
-    const tokenCorners = this._getCorners(this.viewer.constrainedTokenBorder, this.viewer.topZ);
-    const targetPoints = this._getCorners(this.target.constrainedTokenBorder, this.targetAvgElevationZ);
-    return this._testTokenTargetPoints(tokenCorners, [targetPoints]);
-  }
-
-  /**
-   * Test line-of-sight based on center-to-corners test. This is a simpler version of the DMG dnd5e test.
-   * If the token covers multiple squares, this version selects the token square with the least percent blocked.
-   * It is assumed that "center" is at the losHeight elevation, and corners are
-   * at the mean height of the token.
-   * @returns {COVER_TYPE}
-   */
-  centerToTargetGridCorners() {
-    const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.target);
+  _constructTargetPoints() {
     const targetElevation = this.targetAvgElevationZ;
-    const targetPointsArray = targetShapes.map(targetShape => this._getCorners(targetShape, targetElevation));
-    return this._testTokenTargetPoints([this.viewerCenter], targetPointsArray);
+    const cfg = this.config.target;
+
+    if ( cfg.grid ) {
+      // Construct points for each target subshape, defined by grid spaces under the target.
+      const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.target);
+      const targetPointsArray = targetShapes.map(targetShape => this._constructTokenPoints(
+        cfg.pointAlgorithm,
+        targetShape,
+        targetElevation,
+        cfg.inset));
+      return targetPointsArray;
+    }
+
+    // Construct points under this constrained token border.
+    const targetPoints = this.constructor.constructTokenPoints(
+      cfg.pointAlgorithm,
+      this.target.constrainedTokenBorder,
+      targetElevation,
+      cfg.target.inset);
+
+    return [targetPoints];
+  }
+
+  static constructTokenPoints(pointAlgorithm, tokenShape, tokenZ, insetPercentage, tokenCenter) {
+    const TYPES = SETTINGS.POINT_TYPES;
+    tokenCenter ??= tokenShape.center;
+    if ( !tokenShape.contains(tokenCenter) ) tokenCenter = tokenShape.center;
+
+    let tokenPoints = [];
+    if ( pointAlgorithm === TYPES.CENTER
+        || pointAlgorithm === TYPES.FIVE
+        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(tokenCenter);
+
+    if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
+
+    const cornerPoints = this._getCorners(tokenShape, tokenZ);
+
+    // Inset by 1 pixel or inset percentage;
+    this._insetPoints(cornerPoints, insetPercentage);
+    tokenPoints.push(...cornerPoints);
+    if ( pointAlgorithm === TYPES.FOUR || pointAlgorithm === TYPES.EIGHT ) return tokenPoints;
+
+    // Add in the midpoints between corners.
+    const ln = cornerPoints.length;
+    let prevPt = cornerPoints.at(-1);
+    for ( let i = 0; i < ln; i += 1 ) {
+      // Don't need to inset b/c the corners already are.
+      const currPt = cornerPoints[i];
+      tokenPoints.push(Point3d.midPoint(prevPt, currPt));
+      prevPt = currPt;
+    }
+    return tokenPoints;
+  }
+
+  _insetPoints(pts, insetPercentage) {
+    const delta = new Point3d();
+    if ( insetPercentage ) {
+      pts.forEach(pt => {
+        tokenCenter.subtract(pt, delta);
+        delta.multiplyScalar(insetPercentage, delta);
+        pt.add(delta, pt);
+      });
+    } else {
+      pts.forEach(pt => {
+        tokenCenter.subtract(pt, delta);
+        delta.x = Math.sign(delta.x); // 1 pixel
+        delta.y = Math.sign(delta.y); // 1 pixel
+        pt.add(delta, pt);
+      });
+    }
+    return pts;
   }
 
   /**
-   * Test cover based on corner-to-corners test. This is a simpler version of the DMG dnd5e test.
-   * Runs a collision test on all corners of the token, and takes the best one
-   * from the perspective of the token (the corner that provides least cover).
-   * @returns {COVER_TYPE}
+   * Adds points to the provided points array that represent the
+   * top and bottom of the token.
+   * If top and bottom are equal, it just returns the points.
    */
-  cornerToTargetGridCorners() {
-    const tokenCorners = this._getCorners(this.viewer.constrainedTokenBorder, this.viewer.topZ);
-    const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.target);
-    const targetElevation = this.targetAvgElevationZ;
-    const targetPointsArray = targetShapes.map(targetShape => this._getCorners(targetShape, targetElevation));
-    return this._testTokenTargetPoints(tokenCorners, targetPointsArray);
-  }
-
-  /**
-   * Test cover based on center to cube test.
-   * If target has a defined height, test the corners of the cube target.
-   * Otherwise, call coverCenterToCorners.
-   * @returns {COVER_TYPE}
-   */
-  centerToCube() {
-    if ( !this.targetHeight ) return this.centerToTargetCorners();
-
-    const targetShape = this.target.constrainedTokenBorder;
-    const targetPoints = [
-      ...this._getCorners(targetShape, this.target.topZ),
-      ...this._getCorners(targetShape, this.target.bottomZ)];
-
-    return this._testTokenTargetPoints([this.viewerCenter], [targetPoints]);
-  }
-
-  /**
-   * Test cover based on cube to cube test.
-   * If target has a defined height, test the corners of the cube target.
-   * Otherwise, call coverCornerToCorners.
-   * @returns {COVER_TYPE}
-   */
-  cubeToCube() {
-    if ( !this.targetHeight ) return this.centerToTargetCorners();
-
-    const tokenCorners = this._getCorners(this.viewer.constrainedTokenBorder, this.viewer.topZ);
-    const targetShape = this.target.constrainedTokenBorder;
-    const targetPoints = [
-      ...this._getCorners(targetShape, this.target.topZ),
-      ...this._getCorners(targetShape, this.target.bottomZ)];
-
-    return this._testTokenTargetPoints(tokenCorners, [targetPoints]);
+  _elevatePoints(token, pts) {
+    const { topZ, bottomZ } = token;
+    if ( topZ.almostEqual(bottomZ) ) return pts;
+    pts.forEach(pt => {
+      const topPt = pt.clone();
+      const bottomPt = pt.clone();
+      topPt.z = topZ;
+      bottomPt.z = bottomZ;
+      pts.push(topPt, bottomPt);
+    });
+    return pts;
   }
 
   /**
@@ -232,33 +242,29 @@ export class PointsLOS extends AlternativeLOS {
    * @param {Point3d[][]} targetPointsArray   Array of array of target points to test.
    * @returns {number} Minimum percent blocked for the token points
    */
-  _testTokenTargetPoints(tokenPoints, targetPointsArray) {
+  _testTargetPoints(targetPointsArray) {
     let minBlocked = 1;
-    const minPointData = { tokenPoint: undefined, targetPoints: undefined }; // Debugging
-    for ( const tokenPoint of tokenPoints ) {
-      for ( const targetPoints of targetPointsArray ) {
-        const percentBlocked = this._testPointToPoints(tokenPoint, targetPoints);
+    let minTargetPoints; // Debugging
+    for ( const targetPoints of targetPointsArray ) {
+      const percentBlocked = this._testPointToPoints(targetPoints);
 
-        // We can escape early if this is completely visible.
-        if ( !percentBlocked ) {
-          if ( this.debug ) this._drawPointToPoints(tokenPoint, targetPoints, { width: 2 });
-          return 0;
-        }
-
-        if ( this.debug ) {
-          this._drawPointToPoints(tokenPoint, targetPoints, { alpha: 0.1 });
-          if ( percentBlocked < minBlocked ) {
-            minPointData.tokenPoint = tokenPoint;
-            minPointData.targetPoints = targetPoints;
-          }
-        }
-
-        minBlocked = Math.min(minBlocked, percentBlocked);
-        if ( this.debug ) this._drawPointToPoints(tokenPoint, targetPoints, { alpha: 0.1 });
+      // We can escape early if this is completely visible.
+      if ( !percentBlocked ) {
+        if ( this.debug ) this._drawPointToPoints(targetPoints, { width: 2 });
+        return 0;
       }
+
+      if ( this.debug ) {
+        this._drawPointToPoints(targetPoints, { alpha: 0.1 });
+        if ( percentBlocked < minBlocked ) minTargetPoints = targetPoints;
+      }
+
+      minBlocked = Math.min(minBlocked, percentBlocked);
+      if ( this.debug ) this._drawPointToPoints(targetPoints, { alpha: 0.1 });
     }
 
-    if ( this.debug ) this._drawPointToPoints(minPointData.tokenPoint, minPointData.targetPoints, { width: 2 });
+
+    if ( this.debug ) this._drawPointToPoints(minTargetPoints, { width: 2 });
     return minBlocked;
   }
 
@@ -268,14 +274,15 @@ export class PointsLOS extends AlternativeLOS {
    * @param {Point3d[]} targetPoints    Array of points on the target to test
    * @returns {number} Percent points blocked
    */
-  _testPointToPoints(tokenPoint, targetPoints) {
+  _testPointToPoints(targetPoints) {
+    const viewerPoint = this.viewerPoint;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
-      numPointsBlocked += (this._hasTokenCollision(tokenPoint, targetPoint)
-        || this._hasWallCollision(tokenPoint, targetPoint)
-        || this._hasTileCollision(tokenPoint, targetPoint));
+      numPointsBlocked += (this._hasTokenCollision(viewerPoint, targetPoint)
+        || this._hasWallCollision(viewerPoint, targetPoint)
+        || this._hasTileCollision(viewerPoint, targetPoint));
     }
     return numPointsBlocked / ln;
   }
@@ -283,21 +290,21 @@ export class PointsLOS extends AlternativeLOS {
   /**
    * For debugging.
    * Color lines from point to points as yellow, red, or green depending on collisions.
-   * @param {Point3d} tokenPoint        Point on the token to use.
    * @param {Point3d[]} targetPoints    Array of points on the target to test
    */
-  _drawPointToPoints(tokenPoint, targetPoints, { alpha = 1, width = 1 } = {}) {
+  _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
+    const viewerPoint = this.viewerPoint;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
-      const tokenCollision = this._hasTokenCollision(tokenPoint, targetPoint);
-      const edgeCollision = this._hasWallCollision(tokenPoint, targetPoint)
-        || this._hasTileCollision(tokenPoint, targetPoint);
+      const tokenCollision = this._hasTokenCollision(viewerPoint, targetPoint);
+      const edgeCollision = this._hasWallCollision(viewerPoint, targetPoint)
+        || this._hasTileCollision(viewerPoint, targetPoint);
 
       const color = (tokenCollision && !edgeCollision) ? Draw.COLORS.yellow
         : edgeCollision ? Draw.COLORS.red : Draw.COLORS.green;
 
-      Draw.segment({ A: tokenPoint, B: targetPoint }, { alpha, width, color });
+      Draw.segment({ A: viewerPoint, B: targetPoint }, { alpha, width, color });
     }
   }
 

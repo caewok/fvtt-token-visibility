@@ -7,8 +7,10 @@ CONFIG
 "use strict";
 
 import { PlanePoints3d } from "./PlanePoints3d.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
-import { Draw } from "../geometry/Draw.js";
+
+// Geometry folder
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Draw } from "../../geometry/Draw.js";
 
 /**
  * 4 points oriented vertically on the canvas

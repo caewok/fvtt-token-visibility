@@ -10,17 +10,20 @@ Token
 */
 "use strict";
 
-import { MODULES_ACTIVE } from "./const.js";
-import { buildTokenPoints } from "./util.js";
-import { SETTINGS, getSetting } from "./settings.js";
-import { CWSweepInfiniteWallsOnly } from "./CWSweepInfiniteWallsOnly.js";
-import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
-import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
+import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { AlternativeLOS } from "./AlternativeLOS.js";
 
-import { Shadow } from "./geometry/Shadow.js";
-import { ClipperPaths } from "./geometry/ClipperPaths.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
-import { Draw } from "./geometry/Draw.js";
+// Base folder
+import { MODULES_ACTIVE } from "../const.js";
+import { buildTokenPoints } from "../util.js";
+import { SETTINGS, getSetting } from "../settings.js";
+import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
+
+// Geometry folder
+import { Shadow } from "../geometry/Shadow.js";
+import { ClipperPaths } from "../geometry/ClipperPaths.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
+import { Draw } from "../geometry/Draw.js";
 
 /* Area 2d
 1. Center point shortcut:
@@ -39,43 +42,10 @@ import { Draw } from "./geometry/Draw.js";
 
 export class Area2dLOS extends AlternativeLOS {
 
-  /** @type {PointSource} */
-  viewerSource;
-
-  /**
-   * @typedef {PointsLOSConfig}  Configuration settings for this class.
-   * @type {AlternativeLOSConfig}
-   * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of source (light, sight, etc.)
-   * @property {boolean} wallsBlock                   Can walls block in this test?
-   * @property {boolean} tilesBlock                   Can tiles block in this test?
-   * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
-   * @property {boolean} liveTokensBlock              Can live tokens block in this test?
-   * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
-   * @property {boolean} debug                        Enable debug visualizations.
-   *
-   * Added by this subclass:
-   */
-
-  /** @type {Area2dConfig} */
-  config = {};
-
   /**
    * Scaling factor used with Clipper
    */
   static SCALING_FACTOR = 100;
-
-  /**
-   * @param {PointSource|Token} viewer
-   * @param {Token} target
-   */
-  constructor(viewer, target, config = {}) {
-    if ( viewer instanceof Token ) viewer = viewer.vision;
-    if ( !(viewer instanceof PointSource) ) console.error("Area2dLOS requires a point source for the viewer.");
-    const viewerSource = viewer;
-    viewer = Point3d.fromPointSource(viewer);
-    super(viewer, target, config);
-    this.viewerSource = viewerSource;
-  }
 
   /**
    * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
@@ -83,7 +53,7 @@ export class Area2dLOS extends AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(threshold) {
-    const centerPointIsVisible = this._hasCollision(this.viewer, Point3d.fromTokenCenter(this.target));
+    const centerPointIsVisible = this._hasCollision(this.viewerPoint, Point3d.fromTokenCenter(this.target));
 
     // If less than 50% of the token area is required to be viewable, then
     // if the center point is viewable, the token is viewable from that source.
@@ -139,13 +109,6 @@ export class Area2dLOS extends AlternativeLOS {
     const constrained = this.target.constrainedTokenBorder;
     const targetPercentAreaBottom = shadowLOS.bottom ? this._calculatePercentSeen(shadowLOS.bottom, constrained) : 0;
     const targetPercentAreaTop = shadowLOS.top ? this._calculatePercentSeen(shadowLOS.top, constrained) : 0;
-
-    if ( this.config.debug ) {
-      const viewerName = this.viewerSource?.object?.name ?? this.viewerSource.id;
-      const targetName = this.target.name;
-      if ( shadowLOS.bottom ) console.log(`${viewerName} sees ${targetPercentAreaBottom * 100}% of ${targetName}'s bottom (Area2d).`);
-      if ( shadowLOS.top ) console.log(`${viewerName} sees ${targetPercentAreaTop * 100}% of ${targetName}'s top (Area2d).`);
-    }
     return Math.max(targetPercentAreaBottom, targetPercentAreaTop);
   }
 
@@ -208,7 +171,7 @@ export class Area2dLOS extends AlternativeLOS {
    * @returns {object{top: {PIXI.Polygon|undefined}, bottom: {PIXI.Polygon|undefined}}}
    */
   _buildShadowLOS() {
-    const viewerZ = this.viewer.z;
+    const viewerZ = this.viewerPoint.z;
     const { topZ, bottomZ } = this.target;
 
     // Test top and bottom of target shape.

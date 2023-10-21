@@ -15,7 +15,7 @@ PATCHES.BASIC = {};
 // ----- NOTE: Wraps ----- //
 
 /**
- * Mixed wrap CanvasVisibility.prototype.testVisibility
+ * Wrap CanvasVisibility.prototype.testVisibility
  * Set tolerance to zero, to cause only a single centerpoint to be tested, for RANGE.CENTER.
  * @param {Point} point                         The point in space to test, an object with coordinates x and y.
  * @param {object} [options]                    Additional options which modify visibility testing.
@@ -27,18 +27,7 @@ PATCHES.BASIC = {};
  */
 function testVisibility(wrapped, point, {tolerance=2, object=null}={}) {
   if ( !(object instanceof Token) ) return wrapped(point, { tolerance, object });
-
-  if ( MODULES_ACTIVE.LEVELS ) {
-    // Reset the tolerance
-    tolerance = Math.min(object.w, object.h) / 4;
-
-    // Prevent Levels from messing with the Sweep contains method during this visibility test.
-    CONFIG.Levels.visibilityTestObject = undefined;
-  }
-
-  if ( getSetting(SETTINGS.RANGE.ALGORITHM) === SETTINGS.RANGE.TYPES.CENTER ) tolerance = 0;
-
-  return wrapped(point, { tolerance, object });
+  return wrapped(point, { tolerance: 0, object });
 }
 
 PATCHES.BASIC.WRAPS = { testVisibility };

@@ -30,31 +30,28 @@ Area:
 - Wall shapes block and shadows block. Construct the blocked target shape and calc area.
 */
 
-import { DEBUG } from "./const.js";
-import { getSetting, SETTINGS } from "./settings.js";
-import { buildTokenPoints } from "./util.js";
-import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
-import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
+import { AlternativeLOS } from "./AlternativeLOS.js";
+import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { area3dPopoutData } from "./Area3dPopout.js"; // Debugging pop-up
 
-import { Draw } from "./geometry/Draw.js"; // For debugging
+// PlaceablePoints folder
+import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
+import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
+import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
+import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
-import { ClipperPaths } from "./geometry/ClipperPaths.js";
-import { Matrix } from "./geometry/Matrix.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
+// Base folder
+import { DEBUG } from "../const.js";
+import { getSetting, SETTINGS } from "../settings.js";
+import { buildTokenPoints } from "../util.js";
 
-import { DrawingPoints3d } from "./LOS/PlaceablesPoints/DrawingPoints3d.js";
-import { TokenPoints3d } from "./LOS/PlaceablesPoints/TokenPoints3d.js";
-import { TilePoints3d } from "./LOS/PlaceablesPoints/TilePoints3d.js";
-import { WallPoints3d } from "./LOS/PlaceablesPoints/WallPoints3d.js";
-
-// Debugging pop-up
-import { area3dPopoutData } from "./LOS/Area3dPopout.js";
+// Geometry folder
+import { Draw } from "../geometry/Draw.js"; // For debugging
+import { ClipperPaths } from "../geometry/ClipperPaths.js";
+import { Matrix } from "../geometry/Matrix.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 export class Area3dLOS extends AlternativeLOS {
-
-  /** @type {PointSource} */
-  viewerSource;
-
 
   /** @type {TokenPoints3d} */
   _targetTokenPoints3d;
@@ -180,19 +177,13 @@ export class Area3dLOS extends AlternativeLOS {
   static SCALING_FACTOR = 100;
 
   /**
-   * @param {PointSource|Token} viewer     Token, viewing from token.topZ.
-   * @param {Target} target   Target; token is looking at the target center.
+   * @param {PointSource|Token|VisionSource} viewer   Token, viewing from token.topZ.
+   * @param {Target} target                           Target; token is looking at the target center.
    */
   constructor(viewer, target, config = {}) {
-    if ( viewer instanceof Token ) viewer = viewer.vision;
-    if ( !(viewer instanceof PointSource) ) console.error("Area2dLOS requires a point source for the viewer.");
-    const viewerSource = viewer;
-    viewer = Point3d.fromPointSource(viewer);
     super(viewer, target, config);
-    this.viewerSource = viewerSource;
 
     this._targetPoints = new TokenPoints3d(target);
-    this.#configure(config);
 
     // Set debug only if the target is being targeted.
     // Avoids "double-vision" from multiple targets for area3d on scene.
@@ -213,22 +204,6 @@ export class Area3dLOS extends AlternativeLOS {
       this.drawTool = new Draw(area3dPopoutData.app.graphics);
       this.drawTool.clearDrawings();
     }
-  }
-
-  /**
-   * Initialize the configuration for this constructor.
-   * @param {object} config   Settings intended to override defaults.
-   */
-  #configure(config = {}) {
-    // Not user-facing. For debugging and benchmarking shadows
-    config.useShadows ??= getSetting(SETTINGS.AREA3D_USE_SHADOWS);
-
-    // Internal setting.
-    // If true, draws the _blockingObjectsPoints.
-    // If false, draws the _blockingPoints
-    this.config.debugDrawObjects ??= false;
-
-    this.config = config;
   }
 
 
@@ -279,14 +254,7 @@ export class Area3dLOS extends AlternativeLOS {
     let percentSeen = sidesArea ? obscuredSidesArea / sidesArea : 0;
     if ( percentSeen < 0.005 ) percentSeen = 0;
 
-    if ( this.debug ) {
-      this.#drawDebugShapes(objs, obscuredSides, sidePolys);
-
-      // Report the percent seen that is being returned.
-      const viewerName = this.viewerSource?.object?.name ?? this.viewerSource.id;
-      const targetName = this.target.name;
-      console.log(`${viewerName} sees ${percentSeen * 100}% of ${targetName} (Area3d).`);
-    }
+    if ( this.debug ) this.#drawDebugShapes(objs, obscuredSides, sidePolys);
 
     return percentSeen;
   }
@@ -383,11 +351,6 @@ export class Area3dLOS extends AlternativeLOS {
     return this._viewerCameraM;
   }
 
-  get viewerCenter() {
-    return this._viewerCenter
-      || (this._viewerCenter = new Point3d(this.viewer.x, this.viewer.y, this.viewer.elevationZ));
-  }
-
   get targetTop() {
     if ( typeof this._targetTop === "undefined" ) {
       const pts = Point3d.fromToken(this.target);
@@ -414,7 +377,7 @@ export class Area3dLOS extends AlternativeLOS {
 
   /** @type {PIXI.Polygon} */
   get visionPolygon() {
-    return this._visionPolygon || (this._visionPolygon = Area3d.visionPolygon(this.viewerCenter, this.target));
+    return this._visionPolygon || (this._visionPolygon = Area3d.visionPolygon(this.viewerPoint, this.target));
   }
 
   // NOTE ----- PRIMARY METHODS ----- //
@@ -427,8 +390,8 @@ export class Area3dLOS extends AlternativeLOS {
     this._calculateViewerCameraMatrix();
 
     // Set the matrix to look at the target from the viewer.
-    const { targetPoints, viewerCenter, viewerViewM } = this;
-    targetPoints.setViewingPoint(viewerCenter);
+    const { targetPoints, viewerPoint, viewerViewM } = this;
+    targetPoints.setViewingPoint(viewerPoint);
     targetPoints.setViewMatrix(viewerViewM);
 
     // Set the matrix to look at blocking point objects from the viewer.
@@ -468,7 +431,7 @@ export class Area3dLOS extends AlternativeLOS {
 
     // Combine terrain walls
     const combinedTerrainWalls = blockingPoints.terrainWalls.length > 1
-      ? WallPoints3d.combineTerrainWalls(blockingPoints.terrainWalls, this.viewerCenter, {
+      ? WallPoints3d.combineTerrainWalls(blockingPoints.terrainWalls, this.viewerPoint, {
         scalingFactor: Area3d.SCALING_FACTOR
       }) : undefined;
 
@@ -503,7 +466,7 @@ export class Area3dLOS extends AlternativeLOS {
    * Construct the transformation matrix to rotate the view around the center of the token.
    */
   _calculateViewerCameraMatrix() {
-    const cameraPosition = this.viewerCenter;
+    const cameraPosition = this.viewerPoint;
     const targetPosition = this.targetCenter;
     return Matrix.lookAt(cameraPosition, targetPosition, this.constructor.#upVector);
   }
@@ -526,7 +489,7 @@ export class Area3dLOS extends AlternativeLOS {
     terrainWalls.clear();
     walls.clear();
 
-    const objsFound = this.filterSceneObjectsByVisionPolygon(this.viewerCenter, this.target, {
+    const objsFound = this.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, {
       type,
       filterWalls: wallsBlock,
       filterTokens: liveTokensBlock || deadTokensBlock,
@@ -609,7 +572,7 @@ export class Area3dLOS extends AlternativeLOS {
     const { visionPolygon, target } = this;
     const edges = [...visionPolygon.iterateEdges()];
     const blockingPoints = this._blockingPoints;
-    const viewerLoc = this.viewerCenter;
+    const viewerLoc = this.viewerPoint;
 
     if ( this.debug ) Draw.shape(visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
 
@@ -810,11 +773,11 @@ export class Area3dLOS extends AlternativeLOS {
     if ( !wall.document.sight || wall.isOpen ) return false;
 
     // Ignore walls that are in line with the viewer and target
-    if ( !foundry.utils.orient2dFast(this.viewerCenter, wall.A, wall.B)
+    if ( !foundry.utils.orient2dFast(this.viewerPoint, wall.A, wall.B)
       && !foundry.utils.orient2dFast(this.targetCenter, wall.A, wall.B) ) return false;
 
     // Ignore one-directional walls facing away from the origin
-    const side = wall.orientPoint(this.viewerCenter);
+    const side = wall.orientPoint(this.viewerPoint);
     return !wall.document.dir || (side !== wall.document.dir);
   }
 
@@ -850,7 +813,7 @@ export class Area3dLOS extends AlternativeLOS {
    * Draw the line of sight from token to target.
    */
   _drawLineOfSight() {
-    Draw.segment({A: this.viewerCenter, B: this.targetCenter});
+    Draw.segment({A: this.viewerPoint, B: this.targetCenter});
   }
 }
 

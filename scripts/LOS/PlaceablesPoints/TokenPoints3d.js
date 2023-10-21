@@ -6,9 +6,10 @@ PIXI
 import { VerticalPoints3d } from "./VerticalPoints3d.js";
 import { HorizontalPoints3d } from "./HorizontalPoints3d.js";
 
-import { Point3d } from "../geometry/3d/Point3d.js";
+// Geometry folder
+import { Point3d } from "../../geometry/3d/Point3d.js";
 import { ConstrainedTokenBorder } from "../ConstrainedTokenBorder.js";
-import { Draw } from "../geometry/Draw.js";
+import { Draw } from "../../geometry/Draw.js";
 
 
 export class TokenPoints3d {

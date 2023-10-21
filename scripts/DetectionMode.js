@@ -1,15 +1,14 @@
 /* globals
-canvas,
 Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { DEBUG } from "./const.js";
-import { SETTINGS, getSetting } from "./settings.js";
-import { testLOSPoint, drawDebugPoint, testLOSCorners, testLOSArea, testLOSArea3d } from "./visibility_los.js";
-import { elevatePoints } from "./visibility_range.js";
+import { testLOS } from "./visibility_los.js";
+import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};
@@ -30,7 +29,10 @@ PATCHES.NO_LEVELS = {};
  */
 function testVisibility(wrapped, visionSource, mode, {object, tests}={}) {
   if ( !(object instanceof Token) ) return wrapped(visionSource, mode, { object, tests });
-  tests = elevatePoints(tests, object);
+
+  // Use only a single test. This typically should already occur, if called from
+  // CanvasVisibility.prototype.testVisibility.
+  tests = [tests[0]];
   return wrapped(visionSource, mode, { object, tests });
 }
 
@@ -46,32 +48,12 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
-  // If not constrained by walls or no walls present, line-of-sight is guaranteed.
-  if ( !this.walls || !canvas.walls.placeables.length ) return true;
-
   // Check the cached value; return if there.
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
 
-  const debug = DEBUG.los;
-  const algorithm = getSetting(SETTINGS.LOS.ALGORITHM);
-  const types = SETTINGS.LOS.TYPES;
-  switch ( algorithm ) {
-    case types.POINTS:
-      hasLOS = testLOSPoint(visionSource, target, test);
-      debug && drawDebugPoint(visionSource, test.point, hasLOS); // eslint-disable-line no-unused-expressions
-      break;
-    case types.CORNERS:
-      hasLOS = testLOSCorners(visionSource, target, test);
-      break;
-    case types.AREA:
-      hasLOS = testLOSArea(visionSource, target, test);
-      break;
-    case types.AREA3D:
-      hasLOS = testLOSArea3d(visionSource, target, test);
-      break;
-  }
-
+  // Test whether this vision source has line-of-sight to the target, cache, and return.
+  hasLOS = testLOS(visionSource, target);
   test.los.set(visionSource, hasLOS);
   return hasLOS;
 }
@@ -85,27 +67,33 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
  * @param {CanvasVisibilityTest} test           The test case being evaluated
  * @returns {boolean}                           Is the target within range?
  */
-function _testRange(wrapper, visionSource, mode, target, test) {
+function _testRange(wrapped, visionSource, mode, target, test) {
+  // Only apply this test to tokens
+  if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
+
   const debug = DEBUG.range;
-  let inRange = false;
 
-  if ( mode.range <= 0 ) {
-    // Empty; not in range
-    // See https://github.com/foundryvtt/foundryvtt/issues/8505
-  } if ( !getSetting(SETTINGS.RANGE.DISTANCE3D)
-    || !(target instanceof Token) ) {
-    inRange = wrapper(visionSource, mode, target, test);
-  } else {
-    const radius = visionSource.object.getLightRadius(mode.range);
-    const dx = test.point.x - visionSource.x;
-    const dy = test.point.y - visionSource.y;
-    const dz = test.point.z - visionSource.elevationZ;
-    inRange = ((dx * dx) + (dy * dy) + (dz * dz)) <= (radius * radius);
+  // Empty; not in range
+  // See https://github.com/foundryvtt/foundryvtt/issues/8505
+  if ( mode.range <= 0 ) return false;
+
+  const testPoints = rangeTestPointsForToken(target);
+  const visionOrigin = Point3d.fromPointSource(visionSource);
+  const radius = visionSource.object.getLightRadius(mode.range);
+  const radius2 = radius * radius;
+
+  if ( debug ) {
+    testPoints.forEach(pt => {
+      const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
+      const inRange = dist2 <= radius2;
+      Draw.point(pt, { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
+    });
   }
-  debug && Draw.point(test.point,  // eslint-disable-line no-unused-expressions
-    { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
 
-  return inRange;
+  return testPoints.some(pt => {
+    const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
+    return dist2 <= radius2;
+  });
 }
 
 PATCHES.BASIC.MIXES = { _testLOS };

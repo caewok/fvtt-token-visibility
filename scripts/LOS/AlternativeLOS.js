@@ -11,10 +11,13 @@ Ray
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "./const.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
-import { Draw } from "./geometry/Draw.js";
-import { lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
+// Base folder
+import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
+import { lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "../util.js";
+
+// Geometry folder
+import { Point3d } from "../geometry/3d/Point3d.js";
+import { Draw } from "../geometry/Draw.js";
 
 /**
  * Base class to estimate line-of-sight between a source and a token using different methods.
@@ -50,17 +53,19 @@ export class AlternativeLOS {
   config = {};
 
   /**
-   * @param {Point3d} viewer   Point or object with z, y, z|elevationZ properties
+   * @param {Point3d|Token|VisionSource} viewer   Point or object with z, y, z|elevationZ properties
    * @param {Token} target
    * @param {AlternativeLOSConfig} config
    */
-  constructor(viewerPoint, target, config) {
-    this.viewerPoint.x = viewerPoint.x;
-    this.viewerPoint.y = viewerPoint.y;
-    this.viewerPoint.z = viewerPoint.elevationZ ?? viewerPoint.z ?? 0;
+  constructor(viewer, target, config) {
+    if ( viewer instanceof VisionSource ) viewer = viewer.object;
+    if ( viewer instanceof Token ) viewer = Point3d.fromTokenCenter(viewer);
+
+    this.viewerPoint.x = viewer.x;
+    this.viewerPoint.y = viewer.y;
+    this.viewerPoint.z = viewer.elevationZ ?? viewer.z ?? 0;
     this.target = target;
     this.#configure(config);
-
   }
 
   /**

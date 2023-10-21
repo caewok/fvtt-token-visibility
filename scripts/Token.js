@@ -7,7 +7,7 @@ PIXI
 
 // Patches for the Token class
 
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { DEBUG } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
 

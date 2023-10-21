@@ -5,10 +5,11 @@ foundry
 "use strict";
 
 // Represent a Wall in as a set of 4 3d points.
-
-import { ClipperPaths } from "../geometry/ClipperPaths.js";
 import { VerticalPoints3d } from "./VerticalPoints3d.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
+
+// Geometry folder
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { ClipperPaths } from "../../geometry/ClipperPaths.js";
 
 export class WallPoints3d extends VerticalPoints3d {
   /**

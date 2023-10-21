@@ -18,19 +18,19 @@ import {
 import * as bench from "./benchmark.js";
 import * as util from "./util.js";
 
-import { PlanePoints3d } from "./PlaceablesPoints/PlanePoints3d.js";
-import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
-import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
-import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
-import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
-import { VerticalPoints3d } from "./PlaceablesPoints/VerticalPoints3d.js";
-import { HorizontalPoints3d } from "./PlaceablesPoints/HorizontalPoints3d.js";
+import { PlanePoints3d } from "./LOS/PlaceablesPoints/PlanePoints3d.js";
+import { TokenPoints3d } from "./LOS/PlaceablesPoints/TokenPoints3d.js";
+import { DrawingPoints3d } from "./LOS/PlaceablesPoints/DrawingPoints3d.js";
+import { WallPoints3d } from "./LOS/PlaceablesPoints/WallPoints3d.js";
+import { TilePoints3d } from "./LOS/PlaceablesPoints/TilePoints3d.js";
+import { VerticalPoints3d } from "./LOS/PlaceablesPoints/VerticalPoints3d.js";
+import { HorizontalPoints3d } from "./LOS/PlaceablesPoints/HorizontalPoints3d.js";
 
-import { Area3d } from "./Area3d.js";
-import { Area2d } from "./Area2d.js";
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { Area3d } from "./LOS/Area3dLOS.js";
+import { Area2d } from "./LOS/Area2dLOS.js";
+import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 
-import { Area3dPopout, area3dPopoutData } from "./Area3dPopout.js";
+import { Area3dPopout, area3dPopoutData } from "./LOS/Area3dPopout.js";
 
 import * as los from "./visibility_los.js";
 

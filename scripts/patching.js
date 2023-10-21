@@ -8,7 +8,7 @@ import { Patcher } from "./Patcher.js";
 import { MODULES_ACTIVE } from "./const.js";
 
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
-import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
 import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
