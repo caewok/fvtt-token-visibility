@@ -5,6 +5,7 @@ game
 "use strict";
 
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
+import { SettingsButton } from "./SettingsButton.js";
 
 // Non-caching alt:
 // export function getSetting(settingName) {
@@ -53,7 +54,7 @@ export const SETTINGS = {
     FOUR: "points-four", // Five without center
     FIVE: "points-five", // Corners + center
     EIGHT: "points-eight", // Nine without center
-    NINE: "points-nine" // corners, midpoints, center
+    NINE: "points-nine" // Corners, midpoints, center
   },
 
   RANGE: {
@@ -84,6 +85,12 @@ export const SETTINGS = {
     }
   },
 
+  BUTTONS: {
+    FOUNDRY_DEFAULT: "button-foundry-default",
+    DND_5E_DMG: "button-dnd5e-dmg",
+    THREE_D: "button-three-d"
+  },
+
   CHANGELOG: "changelog",
 
   WELCOME_DIALOG: {
@@ -99,8 +106,45 @@ export const SETTINGS = {
 };
 
 
+class FoundryDefaultButton extends SettingsButton {
+  static buttonFn = () => foundryDefaultSettings();
+}
+
+class DnD5eButton extends SettingsButton {
+  static buttonFn = () => dnd5eDMGSettings();
+}
+
+class ThreeDButton extends SettingsButton {
+  static buttonFn = () => threeDSettings();
+}
+
+
 export function registerSettings() {
   const localize = key => game.i18n.localize(`${MODULE_ID}.settings.${key}`);
+
+  game.settings.registerMenu(MODULE_ID, SETTINGS.BUTTONS.FOUNDRY_DEFAULT, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}.Name`),
+    label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}.Label`),
+    icon: "fas fa-shield-halved",
+    type: FoundryDefaultButton,
+    restricted: true
+  });
+
+  game.settings.registerMenu(MODULE_ID, SETTINGS.BUTTONS.DND_5E_DMG, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.DND_5E_DMG}.Name`),
+    label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.DND_5E_DMG}.Label`),
+    icon: "fas fa-shield-halved",
+    type: DnD5eButton,
+    restricted: true
+  });
+
+  game.settings.registerMenu(MODULE_ID, SETTINGS.BUTTONS.THREE_D, {
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.THREE_D}.Name`),
+    label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.THREE_D}.Label`),
+    icon: "fas fa-shield-halved",
+    type: ThreeDButton,
+    restricted: true
+  });
 
   // ----- NOTE: Range ----- //
   const PT_TYPES = SETTINGS.POINT_TYPES;
@@ -280,9 +324,9 @@ async function foundryDefaultSettings() {
     setSetting(OPTS.TARGET.NUM_POINTS, OPTS.TYPES.NINE),
     setSetting(OPTS.TARGET.INSET, 0.75),
     setSetting(OPTS.TARGET.GRID, false),
-    setSetting(OPTS.TARGET.POINTS3D, false),
+    setSetting(OPTS.TARGET.POINTS3D, false)
   );
-  return Promises.allSettled(promises);
+  return Promise.allSettled(promises);
 }
 
 async function dnd5eDMGSettings() {
@@ -302,9 +346,9 @@ async function dnd5eDMGSettings() {
     setSetting(OPTS.TARGET.NUM_POINTS, OPTS.TYPES.FOUR),
     setSetting(OPTS.TARGET.INSET, 0),
     setSetting(OPTS.TARGET.GRID, true),
-    setSetting(OPTS.TARGET.POINTS3D, false),
+    setSetting(OPTS.TARGET.POINTS3D, false)
   );
-  return Promises.allSettled(promises);
+  return Promise.allSettled(promises);
 }
 
 async function threeDSettings() {
@@ -317,7 +361,7 @@ async function threeDSettings() {
     setSetting(SETTINGS.RANGE.DISTANCE3D, true),
 
     // LOS
-    setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA3D),
+    setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA3D)
   );
-  return Promises.allSettled(promises);
+  return Promise.allSettled(promises);
 }

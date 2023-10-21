@@ -1,12 +1,8 @@
 /* globals
-CONFIG,
 Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
-
-import { MODULES_ACTIVE } from "./const.js";
-import { SETTINGS, getSetting } from "./settings.js";
 
 // Patches for the CanvasVisibility class
 export const PATCHES = {};

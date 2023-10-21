@@ -1,5 +1,4 @@
 /* globals
-Token
 */
 "use strict";
 
@@ -32,7 +31,7 @@ export function rangeTestPointsForToken(token) {
       [-t, t],
       [t, t],
       [t, -t]
-    )
+    );
 
     if ( rangeAlg === SETTINGS.RANGE.TYPES.NINE ) {
       offsets.push(
@@ -40,14 +39,14 @@ export function rangeTestPointsForToken(token) {
         [t, 0],
         [0, -t],
         [0, t]
-      )
+      );
     }
   }
 
   const tokenHeight = topZ - bottomZ;
   const avgElevation = bottomZ + (tokenHeight * 0.5);
   const tests = offsets.forEach(o => new Point3d(center.x + o[0], center.y + o[1], avgElevation));
-  return this.elevatePoints(tests, token);
+  return elevatePoints(tests, token);
 }
 
 
@@ -58,7 +57,7 @@ export function rangeTestPointsForToken(token) {
  */
 function elevatePoints(tests, token) {
   const { topZ, bottomZ } = token;
-  const tokenHeight =  topZ - bottomZ;
+  const tokenHeight = topZ - bottomZ;
 
   // If top/bottom equal or not doing 3d points, no need for extra test points
   if ( !tokenHeight || !getSetting(SETTINGS.RANGE.POINTS3D) ) return tests;

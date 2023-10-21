@@ -1,11 +1,10 @@
 /* globals
-Hooks,
 canvas,
-PIXI,
 ClockwiseSweepPolygon,
-PolygonEdge,
-game
+PIXI,
+PolygonEdge
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 export const PATCHES = {};
@@ -18,9 +17,9 @@ function canvasInit() { ConstrainedTokenBorder._wallsID++; }
 
 function createWall(wallD) { if ( wallD.rendered ) ConstrainedTokenBorder._wallsID++; }
 
-function updateWall(wallD) { if ( document.rendered ) ConstrainedTokenBorder._wallsID++; }
+function updateWall(_wallD) { if ( document.rendered ) ConstrainedTokenBorder._wallsID++; }
 
-function deleteWall(wallD) { if ( document.rendered ) ConstrainedTokenBorder._wallsID++; }
+function deleteWall(_wallD) { if ( document.rendered ) ConstrainedTokenBorder._wallsID++; }
 
 
 PATCHES.ConstrainedTokenBorder.HOOKS = {
@@ -47,9 +46,6 @@ PATCHES.ConstrainedTokenBorder.HOOKS = {
 //     if ( document.rendered ) ConstrainedTokenBorder._wallsID++;
 //   });
 // });
-
-
-
 
 /**
  * Generate a polygon of the token bounds with portions intersected by walls stripped out.
@@ -96,6 +92,7 @@ export class ConstrainedTokenBorder extends ClockwiseSweepPolygon {
   /** @type {Token} */
   _token;
 
+  // TODO: Change this to a boolean "dirty" flag
   /** @type {number} */
   _wallsID = -1;
 

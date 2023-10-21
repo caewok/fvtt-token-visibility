@@ -4,9 +4,7 @@ CONFIG,
 foundry,
 LimitedAnglePolygon,
 objectsEqual,
-PIXI,
-PointSource,
-Token
+PIXI
 */
 "use strict";
 

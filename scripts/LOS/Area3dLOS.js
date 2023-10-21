@@ -3,10 +3,8 @@ canvas,
 CONST,
 foundry,
 LimitedAnglePolygon,
-PIXI,
-PointSource
-Ray,
-Token,
+PIXI
+Ray
 */
 "use strict";
 
@@ -50,6 +48,7 @@ import { Draw } from "../geometry/Draw.js"; // For debugging
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
 import { Matrix } from "../geometry/Matrix.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+
 
 export class Area3dLOS extends AlternativeLOS {
 

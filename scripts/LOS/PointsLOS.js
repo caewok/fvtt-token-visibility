@@ -1,9 +1,7 @@
 /* globals
 canvas,
 CONST,
-PIXI,
-Token,
-VisionSource
+PIXI
 */
 "use strict";
 
@@ -12,13 +10,12 @@ import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
 import { SETTINGS, getSetting } from "../settings.js";
+import { insetPoints } from "../util.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
-
-
 
 /**
  * Estimate line-of-sight between a source and a token using different point-to-point methods.
@@ -31,7 +28,7 @@ export class PointsLOS extends AlternativeLOS {
     CENTER_CORNERS_GRID: "los-center-to-target-grid-corners",
     CORNER_CORNERS_GRID: "los-corner-to-target-grid-corners",
     CENTER_CUBE: "los-points-center-to-cube",
-    CUBE_CUBE: "los-points-cube-to-cube",
+    CUBE_CUBE: "los-points-cube-to-cube"
   };
 
   static ALGORITHM_METHOD = {
@@ -116,7 +113,6 @@ export class PointsLOS extends AlternativeLOS {
   }
 
   applyPercentageTest() {
-    const cfg = this.config;
     const targetPoints = this._constructTargetPoints();
     return this._testTargetPoints(targetPoints);
   }
@@ -182,7 +178,7 @@ export class PointsLOS extends AlternativeLOS {
     const cornerPoints = this._getCorners(tokenShape, tokenZ);
 
     // Inset by 1 pixel or inset percentage;
-    this._insetPoints(cornerPoints, insetPercentage);
+    insetPoints(cornerPoints, tokenCenter, insetPercentage);
     tokenPoints.push(...cornerPoints);
     if ( pointAlgorithm === TYPES.FOUR || pointAlgorithm === TYPES.EIGHT ) return tokenPoints;
 
@@ -196,25 +192,6 @@ export class PointsLOS extends AlternativeLOS {
       prevPt = currPt;
     }
     return tokenPoints;
-  }
-
-  _insetPoints(pts, insetPercentage) {
-    const delta = new Point3d();
-    if ( insetPercentage ) {
-      pts.forEach(pt => {
-        tokenCenter.subtract(pt, delta);
-        delta.multiplyScalar(insetPercentage, delta);
-        pt.add(delta, pt);
-      });
-    } else {
-      pts.forEach(pt => {
-        tokenCenter.subtract(pt, delta);
-        delta.x = Math.sign(delta.x); // 1 pixel
-        delta.y = Math.sign(delta.y); // 1 pixel
-        pt.add(delta, pt);
-      });
-    }
-    return pts;
   }
 
   /**

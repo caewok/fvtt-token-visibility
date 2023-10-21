@@ -4,7 +4,7 @@ renderTemplate
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, FLAGS, MODULES_ACTIVE } from "./const.js";
+import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 
 // Patches for the DrawingConfig class
 export const PATCHES = {};

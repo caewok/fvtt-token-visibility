@@ -1,12 +1,14 @@
 /* globals
 canvas,
-ClipperLib.
+ClipperLib,
 CONFIG,
 CONST,
 foundry,
 PIXI,
 PointSourcePolygon,
-Ray
+Ray,
+Token,
+VisionSource
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";

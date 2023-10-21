@@ -6,7 +6,33 @@ getObjectProperty
 import { EPSILON } from "./const.js";
 import { TokenPoints3d } from "./LOS/PlaceablesPoints/TokenPoints3d.js";
 import { getSetting, SETTINGS } from "./settings.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 
+/**
+ * Take an array of points and move them toward a center point by a specified percentage.
+ * @param {PIXI.Point[]|Point3d[]} pts        Array of points to adjust. These are adjusted in place.
+ * @param {PIXI.Point|Point3d} tokenCenter    Center point to move toward
+ * @param {number} insetPercentage            Percent between 0 and 1, where 1 would move the points to the center.
+ * @returns {PIXI.Point[]|Point3d[]} The points, for convenience.
+ */
+export function insetPoints(pts, tokenCenter, insetPercentage) {
+  const delta = new Point3d();
+  if ( insetPercentage ) {
+    pts.forEach(pt => {
+      tokenCenter.subtract(pt, delta);
+      delta.multiplyScalar(insetPercentage, delta);
+      pt.add(delta, pt);
+    });
+  } else {
+    pts.forEach(pt => {
+      tokenCenter.subtract(pt, delta);
+      delta.x = Math.sign(delta.x); // 1 pixel
+      delta.y = Math.sign(delta.y); // 1 pixel
+      pt.add(delta, pt);
+    });
+  }
+  return pts;
+}
 
 /**
  * Get elements of an array by a list of indices

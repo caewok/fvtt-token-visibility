@@ -42,6 +42,10 @@
     "tokenvisibility.settings.los-points-3d.Name": "Target 3d points",
     "tokenvisibility.settings.los-points-3d.Hint": "Test the top and bottom of the target token in addition to the points in the middle of the token vertically.",
 
+    "tokenvisibility.settings.button-foundry-default": "Foundry Defaults",
+    "tokenvisibility.settings.button-dnd5e-dmg": "DND5e DMG",
+
+
     "tokenvisibility.DrawingConfiguration.LegendTitle": "Alternative Token Visibility",
     "tokenvisibility.DrawingConfiguration.isHole.Name": "Drawing is Hole",
     "tokenvisibility.DrawingConfiguration.isHole.Hint": "For area algorithms, treat the space indicated by the drawing (including elevation) as a hole for tiles. Only applicable when Levels is active."
