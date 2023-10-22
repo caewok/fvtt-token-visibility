@@ -17,6 +17,45 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
 
+/* Testing
+Draw = CONFIG.GeometryLib.Draw
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+api = game.modules.get("tokenvisibility").api;
+PointsLOS = api.PointsLOS;
+rangeTestPointsForToken = api.range.rangeTestPointsForToken
+
+let [viewer] = canvas.tokens.controlled;
+let [target] = game.user.targets;
+
+
+
+// Range test
+
+testPoints = rangeTestPointsForToken(target);
+tests.forEach(pt => Draw.point(pt, { radius: 1 }))
+
+visionOrigin = Point3d.fromPointSource(viewer.vision);
+Draw.point(visionOrigin, { color: Draw.COLORS.blue })
+
+radius = viewer.getLightRadius(60); // mode.range
+radius2 = radius * radius;
+
+// Duplicate below so that the if test does not need to be inside the loop.
+testPoints.map(pt => {
+  const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
+  const inRange = dist2 <= radius2;
+  Draw.point(pt, { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
+  return inRange;
+});
+
+Draw.clearDrawings()
+
+// LOS test
+calc = new PointsLOS(viewer, target)
+
+
+*/
+
 /**
  * Estimate line-of-sight between a source and a token using different point-to-point methods.
  */
@@ -68,7 +107,7 @@ export class PointsLOS extends AlternativeLOS {
     this.#configure(config);
   }
 
-  #configure(config) {
+  #configure(config = {}) {
     const cfg = this.config;
     cfg.pointAlgorithm = config.pointAlgorithm ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS);
     cfg.inset = config.inset ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.INSET);

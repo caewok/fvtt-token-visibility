@@ -26,13 +26,14 @@ import { TilePoints3d } from "./LOS/PlaceablesPoints/TilePoints3d.js";
 import { VerticalPoints3d } from "./LOS/PlaceablesPoints/VerticalPoints3d.js";
 import { HorizontalPoints3d } from "./LOS/PlaceablesPoints/HorizontalPoints3d.js";
 
-import { Area3d } from "./LOS/Area3dLOS.js";
-import { Area2d } from "./LOS/Area2dLOS.js";
+import { PointsLOS } from "./LOS/PointsLOS.js";
+import { Area3d, Area3dLOS } from "./LOS/Area3dLOS.js";
+import { Area2d, Area2dLOS } from "./LOS/Area2dLOS.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
-
 import { Area3dPopout, area3dPopoutData } from "./LOS/Area3dPopout.js";
 
 import * as los from "./visibility_los.js";
+import * as range from "./visibility_range.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -44,11 +45,15 @@ Hooks.once("init", function() {
 
   game.modules.get(MODULE_ID).api = {
     bench,
+    PointsLOS,
+    Area2dLOS,
+    Area3dLOS,
     Area2d,
     Area3d,
     util,
     ConstrainedTokenBorder,
     los,
+    range,
     PlanePoints3d,
     TokenPoints3d,
     DrawingPoints3d,

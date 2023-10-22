@@ -25,7 +25,8 @@ export function rangeTestPointsForToken(token) {
   const t = Math.min(w, h) / 4;
   const offsets = [[0, 0]];
   const rangeAlg = getSetting(SETTINGS.RANGE.ALGORITHM);
-  if ( rangeAlg === SETTINGS.RANGE.TYPES.FIVE || rangeAlg === SETTINGS.RANGE.TYPES.NINE ) {
+  const { FIVE, NINE } = SETTINGS.POINT_TYPES;
+  if ( rangeAlg === FIVE || rangeAlg === NINE ) {
     offsets.push(
       [-t, -t],
       [-t, t],
@@ -33,7 +34,7 @@ export function rangeTestPointsForToken(token) {
       [t, -t]
     );
 
-    if ( rangeAlg === SETTINGS.RANGE.TYPES.NINE ) {
+    if ( rangeAlg === NINE ) {
       offsets.push(
         [-t, 0],
         [t, 0],
@@ -45,7 +46,7 @@ export function rangeTestPointsForToken(token) {
 
   const tokenHeight = topZ - bottomZ;
   const avgElevation = bottomZ + (tokenHeight * 0.5);
-  const tests = offsets.forEach(o => new Point3d(center.x + o[0], center.y + o[1], avgElevation));
+  const tests = offsets.map(o => new Point3d(center.x + o[0], center.y + o[1], avgElevation));
   return elevatePoints(tests, token);
 }
 
