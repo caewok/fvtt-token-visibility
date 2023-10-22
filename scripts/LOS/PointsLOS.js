@@ -72,7 +72,7 @@ export class PointsLOS extends AlternativeLOS {
     const cfg = this.config;
     cfg.pointAlgorithm = config.pointAlgorithm ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.NUM_POINTS);
     cfg.inset = config.inset ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.INSET);
-    cfg.grid = config.grid ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.GRID);
+    cfg.grid = config.grid ?? getSetting(SETTINGS.LOS.LARGE_TARGET);
     cfg.points3d = config.points3d;
   }
 

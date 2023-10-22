@@ -5,46 +5,58 @@
     "tokenvisibility.settings.points-eight": "Token midpoints and corners (8 points)",
     "tokenvisibility.settings.points-nine": "Token midpoints, corners, center (9 points)",
 
-    "tokenvisibility.settings.range-algorithm.Name": "Range Points",
+    "tokenvisibility.settings.range-algorithm.Name": "Range | Points",
     "tokenvisibility.settings.range-algorithm.Hint": "Number of points to use when testing whether a token is within range of another. See https://github.com/caewok/fvtt-token-visibility#settings for a full explanation.",
 
-    "tokenvisibility.settings.range-points-3d.Name": "Test Bottom and Top Points",
+    "tokenvisibility.settings.range-points-3d.Name": "Range | Test Bottom and Top Points",
     "tokenvisibility.settings.range-points-3d.Hint": "When applicable, use token elevation and token height to construct additional points for testing range. (Requires Wall Height module.)",
 
-    "tokenvisibility.settings.range-distance-3d.Name": "Measure Range Distance in 3d",
+    "tokenvisibility.settings.range-distance-3d.Name": "Range | Measure Distance in 3d",
     "tokenvisibility.settings.range-distance-3d.Hint": "Whether to measure token visibility range calculations in 3 dimensions, versus 2 (overhead view).",
 
-    "tokenvisibility.settings.los-algorithm.Name": "Line of Sight (LOS) Algorithm",
-    "tokenvisibility.settings.los-algorithm.Hint": "How to test a token's line-of-sight to another. See https://github.com/caewok/fvtt-token-visibility#settings for a full explanation.",
+    "tokenvisibility.settings.los-algorithm.Name": "LOS | Target Algorithm",
+    "tokenvisibility.settings.los-algorithm.Hint": "How to test a token's line-of-sight to another (target) token. See https://github.com/caewok/fvtt-token-visibility#settings for a full explanation.",
 
-    "tokenvisibility.settings.los-percent-area.Name": "LOS Percent Threshold",
-    "tokenvisibility.settings.los-percent-area.Hint": "Percentage of the token hit area that must be viewable to another token to be considered visible by that other token. For points, this is the percentage of target points that must be visible. If set to 0, then if any part of the token (or any point) is viewable, it is considered visible.",
+    "tokenvisibility.settings.los-percent.Name": "LOS | Target Percent Threshold",
+    "tokenvisibility.settings.los-percent.Hint": "Percentage of the token hit area that must be viewable to another token to be considered visible by that other token. For points, this is the percentage of target points that must be visible. If set to 0, then if any part of the token (or any point) is viewable, it is considered visible.",
 
-    "tokenvisibility.settings.los-grid-target.Name": "Large Target Subtargeting",
-    "tokenvisibility.settings.los-grid-target.Hint": "If the target token is larger than the grid square, consider the token visible if at least one grid square worth of token is visible.",
+    "tokenvisibility.settings.los-large-target.Name": "LOS | Large Target Subtargeting",
+    "tokenvisibility.settings.los-large-target.Hint": "If the target token is larger than the grid square, consider the token visible if at least one grid square worth of token is visible.",
 
-    "tokenvisibility.settings.los-points": "Viewer/Token points",
-    "tokenvisibility.settings.los-area-2d": "Token area 2d",
-    "tokenvisibility.settings.los-area-3d": "Token area 3d",
+    "tokenvisibility.settings.los-points": "Target points",
+    "tokenvisibility.settings.los-area-2d": "Target area 2d",
+    "tokenvisibility.settings.los-area-3d": "Target area 3d",
 
-    "tokenvisibility.settings.los-points-viewer.Name": "Viewer Points",
+    "tokenvisibility.settings.los-points-viewer.Name": "LOS | Viewer Points",
     "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Beware that this can dramatically increase the number of tests needed to determine visibility. Foundry default is 'Center' (one point)",
 
-    "tokenvisibility.settings.los-inset-viewer.Name": "Viewer Inset",
+    "tokenvisibility.settings.los-inset-viewer.Name": "LOS | Viewer Inset",
     "tokenvisibility.settings.los-inset-viewer.Hint": "For viewer points other than the center, what percentage to inset the point from the token border towards the token center.",
 
-    "tokenvisibility.settings.los-points-target.Name": "Target Points",
+    "tokenvisibility.settings.los-points-target.Name": "LOS | Target Points",
     "tokenvisibility.settings.los-points-target.Hint": "How many points on the target to test for the viewer's line-of-sight.",
 
-    "tokenvisibility.settings.los-inset-target.Name": "Target Inset",
+    "tokenvisibility.settings.los-inset-target.Name": "LOS | Target Inset",
     "tokenvisibility.settings.los-inset-target.Hint": "For target points other than the center, what percentage to inset the point from the token border towards the token center.",
 
-    "tokenvisibility.settings.los-points-3d.Name": "Target 3d points",
+    "tokenvisibility.settings.los-points-3d.Name": "LOS | Target 3d points",
     "tokenvisibility.settings.los-points-3d.Hint": "Test the top and bottom of the target token in addition to the points in the middle of the token vertically.",
 
-    "tokenvisibility.settings.button-foundry-default": "Foundry Defaults",
-    "tokenvisibility.settings.button-dnd5e-dmg": "DND5e DMG",
+    "tokenvisibility.settings.button-foundry-default.Name": "Change settings to",
+    "tokenvisibility.settings.button-foundry-default.Label": "Foundry Defaults",
+    "tokenvisibility.settings.button-foundry-default.Notification": "Settings changed to Foundry defaults",
 
+    "tokenvisibility.settings.button-dnd5e-dmg.Name": "",
+    "tokenvisibility.settings.button-dnd5e-dmg.Label": "DND5e DMG",
+    "tokenvisibility.settings.button-dnd5e-dmg.Notification": "Settings changed to D&D 5e DMG defaults",
+
+    "tokenvisibility.settings.button-pf2e.Name": "",
+    "tokenvisibility.settings.button-pf2e.Label": "PF2e",
+    "tokenvisibility.settings.button-pf2e.Notification": "Settings changed to Pathfinder 2e defaults",
+
+    "tokenvisibility.settings.button-three-d.Name": "",
+    "tokenvisibility.settings.button-three-d.Label": "3-D",
+    "tokenvisibility.settings.button-three-d.Notification": "Settings changed to 3D defaults",
 
     "tokenvisibility.DrawingConfiguration.LegendTitle": "Alternative Token Visibility",
     "tokenvisibility.DrawingConfiguration.isHole.Name": "Drawing is Hole",
