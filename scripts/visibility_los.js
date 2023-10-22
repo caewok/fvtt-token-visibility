@@ -175,7 +175,9 @@ const LOS_CLASSES = {
 
 export function testLOS(visionSource, target) {
   // Avoid errors when testing vision for tokens directly on top of one another
-  if ( visionSource.x === target.center.x && visionSource.y === target.center.y ) return false;
+  const targetCenter = target.center;
+
+  if ( visionSource.x === targetCenter.x && visionSource.y === targetCenter.y ) return false;
 
   const opts = {
     type: "sight",
@@ -186,8 +188,8 @@ export function testLOS(visionSource, target) {
     proneTokensBlock: false
   };
   const viewerToken = visionSource.object;
-  const viewerPoints = viewerToken
-    ? PointsLOS.constructViewerPoints(visionSource.object) : [Point3d.fromSource(visionSource)];
+  const viewerPoints = viewerToken ? PointsLOS.constructViewerPoints(viewerToken)
+    : [Point3d.fromSource(visionSource)];
   const threshold = getSetting(SETTINGS.LOS.PERCENT);
   const cl = LOS_CLASSES[getSetting(SETTINGS.LOS.ALGORITHM)];
 

@@ -273,6 +273,32 @@ export class AlternativeLOS {
   }
 
   /**
+   * Helper that constructs 3d points for the points of a token shape (rectangle or polygon).
+   * Uses the elevation provided as the z-value.
+   * @param {PIXI.Polygon|PIXI.Rectangle} tokenShape
+   * @parma {number} elevation
+   * @returns {Point3d[]} Array of corner points.
+   */
+  static getCorners(tokenShape, elevation) {
+    if ( tokenShape instanceof PIXI.Rectangle ) {
+      // Token unconstrained by walls.
+      // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
+      tokenShape.pad(-1);
+      return [
+        new Point3d(tokenShape.left, tokenShape.top, elevation),
+        new Point3d(tokenShape.right, tokenShape.top, elevation),
+        new Point3d(tokenShape.right, tokenShape.bottom, elevation),
+        new Point3d(tokenShape.left, tokenShape.bottom, elevation)
+      ];
+    }
+
+    // Constrained is polygon. Only use corners of polygon
+    // Scale down polygon to avoid adjacent walls.
+    const padShape = tokenShape.pad(-2, { scalingFactor: 100 });
+    return [...padShape.iteratePoints({close: false})].map(pt => new Point3d(pt.x, pt.y, elevation));
+  }
+
+  /**
    * @typedef {object} VisionPolygonFilterConfig
    * @property {CONST.WALL_RESTRICTION_TYPES} type  Used to filter walls.
    * @property {boolean} filterWalls                If true, find and filter walls

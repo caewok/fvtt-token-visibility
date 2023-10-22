@@ -70,8 +70,8 @@ export class PointsLOS extends AlternativeLOS {
 
   #configure(config) {
     const cfg = this.config;
-    cfg.pointAlgorithm = config.pointAlgorithm ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.NUM_POINTS);
-    cfg.inset = config.inset ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.TARGET.INSET);
+    cfg.pointAlgorithm = config.pointAlgorithm ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS);
+    cfg.inset = config.inset ?? getSetting(SETTINGS.LOS.POINT_OPTIONS.INSET);
     cfg.grid = config.grid ?? getSetting(SETTINGS.LOS.LARGE_TARGET);
     cfg.points3d = config.points3d;
   }
@@ -131,7 +131,7 @@ export class PointsLOS extends AlternativeLOS {
       viewer.constrainedTokenBorder,
       viewer.topZ,
       inset,
-      viewer.center());
+      viewer.center);
   }
 
   /**
@@ -140,12 +140,12 @@ export class PointsLOS extends AlternativeLOS {
    */
   _constructTargetPoints() {
     const targetElevation = this.targetAvgElevationZ;
-    const cfg = this.config.target;
+    const cfg = this.config;
 
     if ( cfg.grid ) {
       // Construct points for each target subshape, defined by grid spaces under the target.
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.target);
-      const targetPointsArray = targetShapes.map(targetShape => this._constructTokenPoints(
+      const targetPointsArray = targetShapes.map(targetShape => this.constructor.constructTokenPoints(
         cfg.pointAlgorithm,
         targetShape,
         targetElevation,
@@ -165,8 +165,9 @@ export class PointsLOS extends AlternativeLOS {
 
   static constructTokenPoints(pointAlgorithm, tokenShape, tokenZ, insetPercentage, tokenCenter) {
     const TYPES = SETTINGS.POINT_TYPES;
-    tokenCenter ??= tokenShape.center;
     if ( !tokenShape.contains(tokenCenter) ) tokenCenter = tokenShape.center;
+    const center = new Point3d();
+    center.copyFrom(tokenCenter ?? tokenShape.center);
 
     let tokenPoints = [];
     if ( pointAlgorithm === TYPES.CENTER
@@ -175,10 +176,10 @@ export class PointsLOS extends AlternativeLOS {
 
     if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
 
-    const cornerPoints = this._getCorners(tokenShape, tokenZ);
+    const cornerPoints = this.getCorners(tokenShape, tokenZ);
 
     // Inset by 1 pixel or inset percentage;
-    insetPoints(cornerPoints, tokenCenter, insetPercentage);
+    insetPoints(cornerPoints, center, insetPercentage);
     tokenPoints.push(...cornerPoints);
     if ( pointAlgorithm === TYPES.FOUR || pointAlgorithm === TYPES.EIGHT ) return tokenPoints;
 

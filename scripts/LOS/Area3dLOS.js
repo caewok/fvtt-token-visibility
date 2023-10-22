@@ -217,7 +217,7 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(thresholdArea) {
-    thresholdArea ??= getSetting(SETTINGS.LOS.PERCENT_AREA);
+    thresholdArea ??= getSetting(SETTINGS.LOS.PERCENT);
 
     // If center point is visible, then target is likely visible but not always.
     // e.g., walls slightly block the center point. Or walls block all but center.
