@@ -6,7 +6,6 @@ ui
 "use strict";
 
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
-import { SettingsButton } from "./SettingsButton.js";
 
 // Non-caching alt:
 // export function getSetting(settingName) {
@@ -93,6 +92,7 @@ export const SETTINGS = {
   },
 
   CHANGELOG: "changelog",
+  DEBUG: "debug",
 
   WELCOME_DIALOG: {
     v020: "welcome-dialog-v0-20",
@@ -106,70 +106,8 @@ export const SETTINGS = {
   }
 };
 
-//
-// class FoundryDefaultButton extends SettingsButton {
-//   async buttonFn() {
-//     await foundryDefaultSettings();
-//     ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.button-foundry-default.Notification`));
-//   }
-// }
-//
-// class DnD5eButton extends SettingsButton {
-//   async buttonFn() {
-//     await dnd5eDMGSettings();
-//     ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.button-dnd5e-dmg.Notification`));
-//   }
-// }
-//
-// class PF2eButton extends SettingsButton {
-//   async buttonFn() {
-//     await pf2eSettings();
-//     ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.button-pf2e.Notification`));
-//   }
-// }
-//
-// class ThreeDButton extends SettingsButton {
-//   async buttonFn() {
-//     await threeDSettings();
-//     ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.button-three-d.Notification`));
-//   }
-// }
-
-
 export function registerSettings() {
   const localize = key => game.i18n.localize(`${MODULE_ID}.settings.${key}`);
-
-//   game.settings.registerMenu(MODULE_ID, SETTINGS.BUTTONS.FOUNDRY_DEFAULT, {
-//     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}.Name`),
-//     label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}.Label`),
-//     icon: "fas fa-sliders",
-//     type: FoundryDefaultButton,
-//     restricted: true
-//   });
-//
-//   game.settings.registerMenu(MODULE_ID, SETTINGS.BUTTONS.DND_5E_DMG, {
-//     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.DND_5E_DMG}.Name`),
-//     label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.DND_5E_DMG}.Label`),
-//     icon: "fas fa-sliders",
-//     type: DnD5eButton,
-//     restricted: true
-//   });
-//
-//   game.settings.registerMenu(MODULE_ID, SETTINGS.BUTTONS.PF2E, {
-//     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.PF2E}.Name`),
-//     label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.PF2E}.Label`),
-//     icon: "fas fa-sliders",
-//     type: PF2eButton,
-//     restricted: true
-//   });
-//
-//   game.settings.registerMenu(MODULE_ID, SETTINGS.BUTTONS.THREE_D, {
-//     name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.THREE_D}.Name`),
-//     label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.THREE_D}.Label`),
-//     icon: "fas fa-sliders",
-//     type: ThreeDButton,
-//     restricted: true
-//   });
 
   // ----- NOTE: Range ----- //
   const PT_TYPES = SETTINGS.POINT_TYPES;
@@ -301,6 +239,15 @@ export function registerSettings() {
     config: true,
     type: Boolean,
     default: true
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.DEBUG, {
+    name: localize(`${SETTINGS.DEBUG}.Name`),
+    hint: localize(`${SETTINGS.DEBUG}.Hint`),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
   });
 
   game.settings.register(MODULE_ID, SETTINGS.AREA3D_USE_SHADOWS, {

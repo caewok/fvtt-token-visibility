@@ -138,7 +138,7 @@ function submitSettingUpdates(settings) {
   const targetPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}`);
   updatePointOptionDisplay(losAlgorithm);
   updateViewerInsetDisplay(viewerPoints);
-  updateTargetInsetDisplay(targetPoints, algorithm);
+  updateTargetInsetDisplay(targetPoints, losAlgorithm);
 
   // this.render(true);
 }

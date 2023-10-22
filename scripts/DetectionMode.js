@@ -4,11 +4,11 @@ Token
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { DEBUG } from "./const.js";
 import { testLOS } from "./visibility_los.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
+import { SETTINGS, getSetting } from "./settings.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};
@@ -71,7 +71,7 @@ function _testRange(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
-  const debug = DEBUG.range;
+  const debug = getSetting(SETTINGS.DEBUG);
 
   // Empty; not in range
   // See https://github.com/foundryvtt/foundryvtt/issues/8505
@@ -82,11 +82,13 @@ function _testRange(wrapped, visionSource, mode, target, test) {
   const radius = visionSource.object.getLightRadius(mode.range);
   const radius2 = radius * radius;
 
+  // Duplicate below so that the if test does not need to be inside the loop.
   if ( debug ) {
-    testPoints.forEach(pt => {
+    return testPoints.some(pt => {
       const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
       const inRange = dist2 <= radius2;
       Draw.point(pt, { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
+      return inRange;
     });
   }
 

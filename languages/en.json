@@ -42,6 +42,9 @@
     "tokenvisibility.settings.los-points-3d.Name": "LOS | Target 3d points",
     "tokenvisibility.settings.los-points-3d.Hint": "Test the top and bottom of the target token in addition to the points in the middle of the token vertically.",
 
+    "tokenvisibility.settings.debug.Name": "Debug",
+    "tokenvisibility.settings.debug.Hint": "If enabled, will draw representation on the canvas of the token vision.",
+
     "tokenvisibility.settings.button-foundry-default.Name": "Change settings to",
     "tokenvisibility.settings.button-foundry-default.Label": "Reset to Foundry Defaults",
     "tokenvisibility.settings.button-foundry-default.Notification": "Settings changed to Foundry defaults",

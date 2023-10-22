@@ -16,6 +16,7 @@ VisionSource
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
 import { lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "../util.js";
+import { SETTINGS, getSetting } from "../settings.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -82,7 +83,7 @@ export class AlternativeLOS {
     cfg.deadTokensBlock = config.deadTokensBlock || false;
     cfg.liveTokensBlock = config.liveTokensBlock || false;
     cfg.proneTokensBlock = config.proneTokensBlock || true;
-    cfg.debug = config.debug || false;
+    cfg.debug = config.debug || getSetting(SETTINGS.DEBUG);
   }
 
   // ------ NOTE: Primary methods to be overridden by subclass -----

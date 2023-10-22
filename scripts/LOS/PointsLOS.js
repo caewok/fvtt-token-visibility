@@ -223,26 +223,26 @@ export class PointsLOS extends AlternativeLOS {
   _testTargetPoints(targetPointsArray) {
     let minBlocked = 1;
     let minTargetPoints; // Debugging
+    const debug = this.config.debug;
     for ( const targetPoints of targetPointsArray ) {
       const percentBlocked = this._testPointToPoints(targetPoints);
 
       // We can escape early if this is completely visible.
       if ( !percentBlocked ) {
-        if ( this.debug ) this._drawPointToPoints(targetPoints, { width: 2 });
+        if ( debug ) this._drawPointToPoints(targetPoints, { width: 2 });
         return 0;
       }
 
-      if ( this.debug ) {
+      if ( debug ) {
         this._drawPointToPoints(targetPoints, { alpha: 0.1 });
         if ( percentBlocked < minBlocked ) minTargetPoints = targetPoints;
       }
 
       minBlocked = Math.min(minBlocked, percentBlocked);
-      if ( this.debug ) this._drawPointToPoints(targetPoints, { alpha: 0.1 });
     }
 
 
-    if ( this.debug ) this._drawPointToPoints(minTargetPoints, { width: 2 });
+    if ( debug ) this._drawPointToPoints(minTargetPoints, { width: 2 });
     return minBlocked;
   }
 
