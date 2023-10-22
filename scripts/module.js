@@ -12,7 +12,9 @@ import { initializePatching, PATCHER } from "./patching.js";
 import {
   registerSettings,
   getSetting,
-  setSetting } from "./settings.js";
+  setSetting,
+  DEBUG_GRAPHICS,
+  SETTINGS } from "./settings.js";
 
 // For API
 import * as bench from "./benchmark.js";
@@ -76,6 +78,11 @@ Hooks.once("init", function() {
 Hooks.once("setup", function() {
   registerSettings();
 });
+
+Hooks.once("ready", function() {
+  if ( getSetting(SETTINGS.DEBUG.RANGE ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
+  if ( getSetting(SETTINGS.DEBUG.LOS ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.LOS);
+})
 
 
 /**

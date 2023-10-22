@@ -9,6 +9,7 @@ import { MODULES_ACTIVE } from "./const.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
+import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
 import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
 import { PATCHES as PATCHES_Setting } from "./Setting.js";
@@ -23,6 +24,7 @@ const PATCHES = {
   CanvasVisibility: PATCHES_CanvasVisibility,
   ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
   DetectionMode: PATCHES_DetectionMode,
+  DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   DrawingConfig: PATCHES_DrawingConfig,
   PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,

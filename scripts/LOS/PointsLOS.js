@@ -9,7 +9,7 @@ import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
-import { SETTINGS, getSetting } from "../settings.js";
+import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "../settings.js";
 import { insetPoints } from "../util.js";
 
 // Geometry folder
@@ -52,9 +52,44 @@ Draw.clearDrawings()
 
 // LOS test
 calc = new PointsLOS(viewer, target)
+calc.hasLOS()
+
+targetPoints = calc._constructTargetPoints();
+targetPoints[0].forEach(pt => Draw.point(pt, { radius: 1 }))
+targetPointsArray = targetPoints
+
+
+let minBlocked = 1;
+let minTargetPoints; // Debugging
+debug = calc.config.debug;
+
+targetPoints = targetPointsArray[0]
+
+for ( const targetPoints of targetPointsArray ) {
+  const percentBlocked = calc._testPointToPoints(targetPoints);
+
+  // We can escape early if this is completely visible.
+  if ( !percentBlocked ) {
+    if ( debug ) calc._drawPointToPoints(targetPoints, { width: 2 });
+    return 0;
+  }
+
+  if ( debug ) {
+    calc._drawPointToPoints(targetPoints, { alpha: 0.1 });
+    if ( percentBlocked < minBlocked ) minTargetPoints = targetPoints;
+  }
+
+  minBlocked = Math.min(minBlocked, percentBlocked);
+}
+
+
+if ( debug ) calc._drawPointToPoints(minTargetPoints, { width: 2 });
+return minBlocked;
 
 
 */
+
+
 
 /**
  * Estimate line-of-sight between a source and a token using different point-to-point methods.
@@ -92,9 +127,11 @@ export class PointsLOS extends AlternativeLOS {
    * @property {boolean} debug                        Enable debug visualizations.
    *
    * Added by this subclass:
-   * @property {LOS.ALGORITHM} pointAlgorithm         The type of point-based algorithm to apply.
+   * @property {SETTINGS.POINT_TYPE} pointAlgorithm   The type of point-based algorithm to apply to target
+   * @property {number} inset                         How much to inset target points from target border
+   * @property {boolean} grid                         True if treating points separately for each grid space
+   * @property {boolean} points3d                     Use top/bottom target elevation when enabled
    */
-  config = {};
 
   /**
    * @param {Point3d|Token|VisionSource} viewer       Object from which to determine line-of-sight
@@ -140,7 +177,7 @@ export class PointsLOS extends AlternativeLOS {
   hasLOS(threshold) {
     const percentVisible = this.percentVisible();
     if ( percentVisible.almostEqual(0) ) return false;
-    return this.percentVisible > threshold || percentVisible.almostEqual(threshold);
+    return percentVisible > threshold || percentVisible.almostEqual(threshold);
   }
 
   /**
@@ -211,7 +248,7 @@ export class PointsLOS extends AlternativeLOS {
     let tokenPoints = [];
     if ( pointAlgorithm === TYPES.CENTER
         || pointAlgorithm === TYPES.FIVE
-        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(tokenCenter);
+        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(center);
 
     if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
 
@@ -293,13 +330,18 @@ export class PointsLOS extends AlternativeLOS {
    */
   _testPointToPoints(targetPoints) {
     const viewerPoint = this.viewerPoint;
+    const visibleTokenShape = this.config.visibleTokenShape;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
-      numPointsBlocked += (this._hasTokenCollision(viewerPoint, targetPoint)
+      const outsideVisibleShape = visibleTokenShape
+        && !visibleTokenShape.contains(targetPoint.x, targetPoint.y)
+
+      numPointsBlocked += ( outsideVisibleShape
+        || this._hasTokenCollision(viewerPoint, targetPoint)
         || this._hasWallCollision(viewerPoint, targetPoint)
-        || this._hasTileCollision(viewerPoint, targetPoint));
+        || this._hasTileCollision(viewerPoint, targetPoint) );
     }
     return numPointsBlocked / ln;
   }
@@ -310,6 +352,7 @@ export class PointsLOS extends AlternativeLOS {
    * @param {Point3d[]} targetPoints    Array of points on the target to test
    */
   _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
+    const draw = new Draw(DEBUG_GRAPHICS.LOS);
     const viewerPoint = this.viewerPoint;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
@@ -321,7 +364,7 @@ export class PointsLOS extends AlternativeLOS {
       const color = (tokenCollision && !edgeCollision) ? Draw.COLORS.yellow
         : edgeCollision ? Draw.COLORS.red : Draw.COLORS.green;
 
-      Draw.segment({ A: viewerPoint, B: targetPoint }, { alpha, width, color });
+      draw.segment({ A: viewerPoint, B: targetPoint }, { alpha, width, color });
     }
   }
 

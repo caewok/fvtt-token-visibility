@@ -1,11 +1,18 @@
 /* globals
+canvas,
 game,
-ui
+PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
+import { Draw } from "./geometry/Draw.js";
+
+export const DEBUG_GRAPHICS = {
+  LOS: new PIXI.Graphics(),
+  RANGE: new PIXI.Graphics()
+};
 
 // Non-caching alt:
 // export function getSetting(settingName) {
@@ -92,7 +99,10 @@ export const SETTINGS = {
   },
 
   CHANGELOG: "changelog",
-  DEBUG: "debug",
+  DEBUG: {
+    RANGE: "debug-range",
+    LOS: "debug-los"
+  },
 
   WELCOME_DIALOG: {
     v020: "welcome-dialog-v0-20",
@@ -241,13 +251,38 @@ export function registerSettings() {
     default: true
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.DEBUG, {
-    name: localize(`${SETTINGS.DEBUG}.Name`),
-    hint: localize(`${SETTINGS.DEBUG}.Hint`),
+  game.settings.register(MODULE_ID, SETTINGS.DEBUG.RANGE, {
+    name: localize(`${SETTINGS.DEBUG.RANGE}.Name`),
+    hint: localize(`${SETTINGS.DEBUG.RANGE}.Hint`),
     scope: "world",
     config: true,
     type: Boolean,
-    default: false
+    default: false,
+    onChange: value => {
+      if ( value ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
+      else {
+        const draw = new Draw(DEBUG_GRAPHICS.RANGE);
+        draw.clearDrawings();
+        canvas.tokens.removeChild(DEBUG_GRAPHICS.RANGE);
+      }
+    }
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.DEBUG.LOS, {
+    name: localize(`${SETTINGS.DEBUG.LOS}.Name`),
+    hint: localize(`${SETTINGS.DEBUG.LOS}.Hint`),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange: value => {
+      if ( value ) canvas.stage.addChild(DEBUG_GRAPHICS.LOS);
+      else {
+        const draw = new Draw(DEBUG_GRAPHICS.LOS);
+        draw.clearDrawings();
+        canvas.stage.removeChild(DEBUG_GRAPHICS.LOS);
+      }
+    }
   });
 
   game.settings.register(MODULE_ID, SETTINGS.AREA3D_USE_SHADOWS, {

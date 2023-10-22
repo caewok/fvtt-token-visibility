@@ -64,21 +64,6 @@ export class Area3dLOS extends AlternativeLOS {
   /** @type {Point3d} */
   _targetCenter;
 
-  /**
-   * @typedef Area3dConfig  Configuration settings for this class.
-   * @type {object}
-   * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of vision source
-   * @property {boolean} wallsBlock                   Do walls block vision?
-   * @property {boolean} tilesBlock                   Do tiles block vision?
-   * @property {boolean} deadTokensBlock              Do dead tokens block vision?
-   * @property {boolean} liveTokensBlock              Do live tokens block vision?
-   * @property {boolean} useShadows                   For benchmarking and debugging
-   * @property {boolean} debugDrawObjects             Draw blockingObjectPoints if true
-   */
-
-  /** @type object */
-  config = {};
-
   /** @type {boolean} */
   #debug = false;
 

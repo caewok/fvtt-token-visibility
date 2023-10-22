@@ -43,6 +43,9 @@ export class AlternativeLOS {
   target;
 
   /**
+   *
+
+  /**
    * @typedef AlternativeLOSConfig  Configuration settings for this class.
    * @type {object}
    * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of source (light, sight, etc.)
@@ -51,6 +54,7 @@ export class AlternativeLOS {
    * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
    * @property {boolean} liveTokensBlock              Can live tokens block in this test?
    * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
+   * @property {PIXI.Polygon} visibleTokenShape       Portion of the token shape that is visible.
    * @property {boolean} debug                        Enable debug visualizations.
    */
   config = {};
@@ -83,7 +87,8 @@ export class AlternativeLOS {
     cfg.deadTokensBlock = config.deadTokensBlock || false;
     cfg.liveTokensBlock = config.liveTokensBlock || false;
     cfg.proneTokensBlock = config.proneTokensBlock || true;
-    cfg.debug = config.debug || getSetting(SETTINGS.DEBUG);
+    cfg.debug = config.debug || getSetting(SETTINGS.DEBUG.LOS);
+    cfg.visibleTokenShape = config.visibleTokenShape ?? undefined;
   }
 
   // ------ NOTE: Primary methods to be overridden by subclass -----
