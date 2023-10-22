@@ -123,7 +123,7 @@ export class PointsLOS extends AlternativeLOS {
    * @param {Token} viewer
    * @returns {Points3d[]}
    */
-  static constructViewerPoints(viewer, { pointAlgorithm, inset }) {
+  static constructViewerPoints(viewer, { pointAlgorithm, inset } = {}) {
     pointAlgorithm ??= getSetting(SETTINGS.LOS.VIEWER.NUM_POINTS);
     inset ??= getSetting(SETTINGS.LOS.VIEWER.INSET);
     return this.constructTokenPoints(
