@@ -37,7 +37,7 @@ async function renderSettingsConfig(app, html, data) {
   if ( game.user.isGM ) {
     const template = `modules/${MODULE_ID}/templates/settings-buttons.html`;
     const myHTML = await renderTemplate(template, data);
-    atvSettings.first().before(myHTML);
+    atvSettings.last().after(myHTML);
     app.setPosition(app.position);
   }
 
