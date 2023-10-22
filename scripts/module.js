@@ -10,6 +10,7 @@ import { MODULE_ID, COVER, DEBUG, setCoverIgnoreHandler } from "./const.js";
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import {
+  SETTINGS,
   registerSettings,
   updateConfigStatusEffects,
   getSetting,
@@ -99,6 +100,19 @@ Hooks.once("setup", function() {
   updateConfigStatusEffects();
 });
 
+Hooks.on('createActiveEffect', refreshVisionOnActiveEffect);
+Hooks.on('deleteActiveEffect', refreshVisionOnActiveEffect);
+
+/**
+ * Refresh vision for relevant active effect creation/deletion
+ */
+function refreshVisionOnActiveEffect(activeEffect) {
+  const proneStatusId = CONFIG.GeometryLib.proneStatusId ?? getSetting(SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE);
+  const isProne = activeEffect?.statuses.some((status) => status === proneStatusId);
+  if ( !isProne ) return;
+
+  canvas.effects.visibility.refresh();
+}
 
 /**
  * Tell DevMode that we want a flag for debugging this module.
