@@ -70,7 +70,6 @@ function activateListenersSettingsConfig(app, html) {
   // Reset settings buttons
   html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}"]`).click(foundryDefaultSettings.bind(app));
   html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DND_5E_DMG}"]`).click(dnd5eDMGSettings.bind(app));
-  html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.PF2E}"]`).click(pf2eSettings.bind(app));
   html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.THREE_D}"]`).click(threeDSettings.bind(app));
 }
 
@@ -178,36 +177,6 @@ function dnd5eDMGSettings(event) {
   event.preventDefault();
   event.stopPropagation();
   ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.DND_5E_DMG}.Notification`));
-
-  const PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
-  const settings = {
-    // Range
-    [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
-    [SETTINGS.RANGE.POINTS3D]: false,
-    [SETTINGS.RANGE.DISTANCE3D]: false,
-
-    // LOS Viewer
-    [SETTINGS.LOS.VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
-    [SETTINGS.LOS.VIEWER.INSET]: 0,
-
-    // LOS Target
-    [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.POINTS,
-    [SETTINGS.LOS.PERCENT]: 0,
-    [SETTINGS.LOS.LARGE_TARGET]: true,
-
-    // LOS Point options
-    [PT_OPTS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
-    [PT_OPTS.INSET]: 0,
-    [PT_OPTS.POINTS3D]: false
-  };
-
-  submitSettingUpdates.call(this, settings);
-}
-
-function pf2eSettings(event) {
-  event.preventDefault();
-  event.stopPropagation();
-  ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.PF2E}.Notification`));
 
   const PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
   const settings = {

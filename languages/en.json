@@ -43,19 +43,15 @@
     "tokenvisibility.settings.los-points-3d.Hint": "Test the top and bottom of the target token in addition to the points in the middle of the token vertically.",
 
     "tokenvisibility.settings.button-foundry-default.Name": "Change settings to",
-    "tokenvisibility.settings.button-foundry-default.Label": "Foundry Defaults",
+    "tokenvisibility.settings.button-foundry-default.Label": "Reset to Foundry Defaults",
     "tokenvisibility.settings.button-foundry-default.Notification": "Settings changed to Foundry defaults",
 
     "tokenvisibility.settings.button-dnd5e-dmg.Name": "",
-    "tokenvisibility.settings.button-dnd5e-dmg.Label": "DND5e DMG",
+    "tokenvisibility.settings.button-dnd5e-dmg.Label": "Reset to DND5e DMG",
     "tokenvisibility.settings.button-dnd5e-dmg.Notification": "Settings changed to D&D 5e DMG defaults",
 
-    "tokenvisibility.settings.button-pf2e.Name": "",
-    "tokenvisibility.settings.button-pf2e.Label": "PF2e",
-    "tokenvisibility.settings.button-pf2e.Notification": "Settings changed to Pathfinder 2e defaults",
-
     "tokenvisibility.settings.button-three-d.Name": "",
-    "tokenvisibility.settings.button-three-d.Label": "3-D",
+    "tokenvisibility.settings.button-three-d.Label": "Reset to 3-D",
     "tokenvisibility.settings.button-three-d.Notification": "Settings changed to 3D defaults",
 
     "tokenvisibility.DrawingConfiguration.LegendTitle": "Alternative Token Visibility",
