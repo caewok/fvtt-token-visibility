@@ -5,7 +5,9 @@ PIXI
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
-import { MODULE_ID } from "./const.js";
+
+// Base folder
+import { MODULE_ID } from "../const.js";
 
 export const area3dPopoutData = {
   savedTop: null,

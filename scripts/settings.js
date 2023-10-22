@@ -1,10 +1,18 @@
 /* globals
-game
+canvas,
+game,
+PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
+import { Draw } from "./geometry/Draw.js";
+
+export const DEBUG_GRAPHICS = {
+  LOS: new PIXI.Graphics(),
+  RANGE: new PIXI.Graphics()
+};
 
 // Non-caching alt:
 // export function getSetting(settingName) {
@@ -48,30 +56,53 @@ export async function setSetting(settingName, value) {
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
 
+  POINT_TYPES: {
+    CENTER: "points-center",
+    FOUR: "points-four", // Five without center
+    FIVE: "points-five", // Corners + center
+    EIGHT: "points-eight", // Nine without center
+    NINE: "points-nine" // Corners, midpoints, center
+  },
+
   RANGE: {
     ALGORITHM: "range-algorithm",
-    TYPES: {
-      CENTER: "range-points-center",
-      FIVE: "range-points-five",
-      NINE: "range-points-nine"
-    },
     POINTS3D: "range-points-3d",
     DISTANCE3D: "range-distance-3d"
   },
 
   LOS: {
     ALGORITHM: "los-algorithm",
+    PERCENT: "los-percent",
+    LARGE_TARGET: "los-large-target",
     TYPES: {
       POINTS: "los-points",
-      CORNERS: "los-corners",
-      AREA: "los-area",
+      AREA2D: "los-area-2d",
       AREA3D: "los-area-3d"
     },
 
-    PERCENT_AREA: "los-percent-area"
+    VIEWER: {
+      NUM_POINTS: "los-points-viewer",
+      INSET: "los-inset-viewer"
+    },
+
+    POINT_OPTIONS: {
+      NUM_POINTS: "los-points-target",
+      INSET: "los-inset-target",
+      POINTS3D: "los-points-3d"
+    }
+  },
+
+  BUTTONS: {
+    FOUNDRY_DEFAULT: "button-foundry-default",
+    DND_5E_DMG: "button-dnd5e-dmg",
+    THREE_D: "button-three-d"
   },
 
   CHANGELOG: "changelog",
+  DEBUG: {
+    RANGE: "debug-range",
+    LOS: "debug-los"
+  },
 
   WELCOME_DIALOG: {
     v020: "welcome-dialog-v0-20",
@@ -80,85 +111,33 @@ export const SETTINGS = {
 
   MIGRATION: {
     v032: "migration-v032",
-    v054: "migration-v054"
+    v054: "migration-v054",
+    v060: "migration-v060"
   }
 };
 
-
-/* Range testing types:
-1. Center point -- Only test the center point of tokens.
-2. Foundry -- Use the Foundry 8 points.
-3. 3d Foundry -- Add additional points to top and bottom, 27 total
-
-For 3d, test points in 3 dimensions.
-*/
-
-/* LOS testing types:
-1. Points --- Use the same points from range, test if contained in LOS polygon.
-3. Area -- Use token area.
-
-For area, provide a slider for 0–100% of token area.
-Each token should have a setting for bounds scale for vision.
-
-For 3d points, don't test los contains for extra 3d Foundry points. (They would obv. be the same. )
-For 3d points, do test wall collisions for non-infinite walls.
-(Infinite walls included in LOS.)
-*/
-
-/* Cover testing types:
-1. Center to 4 Corners -- from the center point of the token to 4 corners
-Half trigger: 1 (hex: 1)
-3/4 trigger: 3 (hex: 4)
-2. Corner to Four Corner -- DMG rules; vision from each occupied grid point
-Half trigger: 1 (hex: 1)
-3/4 trigger: 3 (hex: 4)
-3. Center to Center -- PF2e version
-3/4 (standard)
-4. Area
-Half trigger: % area
-3/4 trigger: % area
-full trigger: % area
-
-3D versions ( same triggers )
-5. Center to cube corners
-6. Cube corner to cube corners
-7. 3d Area
-
-
-Other settings:
-GM can provide the name of an active effect to apply when covered. Applies to the token with cover.
-- low active effect
-- medium active effect
-- high active effect
-
-Cover Names:
-Generic: low, medium, high
-PF2e: lesser, standard, greater
-dnd5e: half, 3/4, full
-
-*/
-
 export function registerSettings() {
-  const RTYPES = SETTINGS.RANGE.TYPES;
-  const LTYPES = SETTINGS.LOS.TYPES;
+  const localize = key => game.i18n.localize(`${MODULE_ID}.settings.${key}`);
+
+  // ----- NOTE: Range ----- //
+  const PT_TYPES = SETTINGS.POINT_TYPES;
+  const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
+  const rangeChoices = {};
+  Object.values(RTYPES).forEach(type => rangeChoices[type] = localize(type));
 
   game.settings.register(MODULE_ID, SETTINGS.RANGE.ALGORITHM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.ALGORITHM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.ALGORITHM}.Hint`),
+    name: localize(`${SETTINGS.RANGE.ALGORITHM}.Name`),
+    hint: localize(`${SETTINGS.RANGE.ALGORITHM}.Hint`),
     scope: "world",
     config: true,
     type: String,
-    choices: {
-      [RTYPES.CENTER]: game.i18n.localize(`${MODULE_ID}.settings.${RTYPES.CENTER}`),
-      [RTYPES.FIVE]: game.i18n.localize(`${MODULE_ID}.settings.${RTYPES.FIVE}`),
-      [RTYPES.NINE]: game.i18n.localize(`${MODULE_ID}.settings.${RTYPES.NINE}`)
-    },
+    choices: rangeChoices,
     default: RTYPES.NINE
   });
 
   game.settings.register(MODULE_ID, SETTINGS.RANGE.POINTS3D, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.POINTS3D}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.POINTS3D}.Hint`),
+    name: localize(`${SETTINGS.RANGE.POINTS3D}.Name`),
+    hint: localize(`${SETTINGS.RANGE.POINTS3D}.Hint`),
     scope: "world",
     config: true,
     type: Boolean,
@@ -166,32 +145,59 @@ export function registerSettings() {
   });
 
   game.settings.register(MODULE_ID, SETTINGS.RANGE.DISTANCE3D, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.DISTANCE3D}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.DISTANCE3D}.Hint`),
+    name: localize(`${SETTINGS.RANGE.DISTANCE3D}.Name`),
+    hint: localize(`${SETTINGS.RANGE.DISTANCE3D}.Hint`),
     scope: "world",
     config: !MODULES_ACTIVE.LEVELS && !MODULES_ACTIVE.PERFECT_VISION,
     type: Boolean,
     default: true
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.LOS.ALGORITHM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.ALGORITHM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.ALGORITHM}.Hint`),
+  // ----- NOTE: Line-of-sight ----- //
+  const PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
+  const LTYPES = SETTINGS.LOS.TYPES;
+  const losChoices = {};
+  const ptChoices = {};
+  Object.values(LTYPES).forEach(type => losChoices[type] = localize(type));
+  Object.values(PT_TYPES).forEach(type => ptChoices[type] = localize(type));
+
+  game.settings.register(MODULE_ID, SETTINGS.LOS.VIEWER.NUM_POINTS, {
+    name: localize(`${SETTINGS.LOS.VIEWER.NUM_POINTS}.Name`),
+    hint: localize(`${SETTINGS.LOS.VIEWER.NUM_POINTS}.Hint`),
     scope: "world",
     config: true,
     type: String,
-    choices: {
-      [LTYPES.POINTS]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.POINTS}`),
-      [LTYPES.CORNERS]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.CORNERS}`),
-      [LTYPES.AREA]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.AREA}`),
-      [LTYPES.AREA3D]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.AREA3D}`)
-    },
-    default: LTYPES.POINTS
+    choices: ptChoices,
+    default: PT_TYPES.CENTER
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.LOS.PERCENT_AREA, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.PERCENT_AREA}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.PERCENT_AREA}.Hint`),
+  game.settings.register(MODULE_ID, SETTINGS.LOS.VIEWER.INSET, {
+    name: localize(`${SETTINGS.LOS.VIEWER.INSET}.Name`),
+    hint: localize(`${SETTINGS.LOS.VIEWER.INSET}.Hint`),
+    range: {
+      max: 0.99,
+      min: 0,
+      step: 0.01
+    },
+    scope: "world",
+    config: true, // () => getSetting(SETTINGS.LOS.ALGORITHM) !== LTYPES.POINTS,
+    default: 0.75,
+    type: Number
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.LOS.ALGORITHM, {
+    name: localize(`${SETTINGS.LOS.ALGORITHM}.Name`),
+    hint: localize(`${SETTINGS.LOS.ALGORITHM}.Hint`),
+    scope: "world",
+    config: true,
+    type: String,
+    choices: losChoices,
+    default: LTYPES.NINE
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.LOS.PERCENT, {
+    name: localize(`${SETTINGS.LOS.PERCENT}.Name`),
+    hint: localize(`${SETTINGS.LOS.PERCENT}.Hint`),
     range: {
       max: 1,
       min: 0,
@@ -201,6 +207,82 @@ export function registerSettings() {
     config: true, // () => getSetting(SETTINGS.LOS.ALGORITHM) !== LTYPES.POINTS,
     default: 0,
     type: Number
+  });
+
+  game.settings.register(MODULE_ID, PT_OPTS.NUM_POINTS, {
+    name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
+    hint: localize(`${PT_OPTS.NUM_POINTS}.Hint`),
+    scope: "world",
+    config: true,
+    type: String,
+    choices: ptChoices,
+    default: PT_TYPES.NINE
+  });
+
+  game.settings.register(MODULE_ID, PT_OPTS.INSET, {
+    name: localize(`${PT_OPTS.INSET}.Name`),
+    hint: localize(`${PT_OPTS.INSET}.Hint`),
+    range: {
+      max: 0.99,
+      min: 0,
+      step: 0.01
+    },
+    scope: "world",
+    config: true, // () => getSetting(SETTINGS.LOS.ALGORITHM) !== LTYPES.POINTS,
+    default: 0.75,
+    type: Number
+  });
+
+  game.settings.register(MODULE_ID, PT_OPTS.POINTS3D, {
+    name: localize(`${PT_OPTS.POINTS3D}.Name`),
+    hint: localize(`${PT_OPTS.POINTS3D}.Hint`),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.LOS.LARGE_TARGET, {
+    name: localize(`${SETTINGS.LOS.LARGE_TARGET}.Name`),
+    hint: localize(`${SETTINGS.LOS.LARGE_TARGET}.Hint`),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.DEBUG.RANGE, {
+    name: localize(`${SETTINGS.DEBUG.RANGE}.Name`),
+    hint: localize(`${SETTINGS.DEBUG.RANGE}.Hint`),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange: value => {
+      if ( value ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
+      else {
+        const draw = new Draw(DEBUG_GRAPHICS.RANGE);
+        draw.clearDrawings();
+        canvas.tokens.removeChild(DEBUG_GRAPHICS.RANGE);
+      }
+    }
+  });
+
+  game.settings.register(MODULE_ID, SETTINGS.DEBUG.LOS, {
+    name: localize(`${SETTINGS.DEBUG.LOS}.Name`),
+    hint: localize(`${SETTINGS.DEBUG.LOS}.Hint`),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange: value => {
+      if ( value ) canvas.stage.addChild(DEBUG_GRAPHICS.LOS);
+      else {
+        const draw = new Draw(DEBUG_GRAPHICS.LOS);
+        draw.clearDrawings();
+        canvas.stage.removeChild(DEBUG_GRAPHICS.LOS);
+      }
+    }
   });
 
   game.settings.register(MODULE_ID, SETTINGS.AREA3D_USE_SHADOWS, {
@@ -230,4 +312,12 @@ export function registerSettings() {
     default: false,
     type: Boolean
   });
+
+  game.settings.register(MODULE_ID, SETTINGS.MIGRATION.v060, {
+    scope: "world",
+    config: false,
+    default: false,
+    type: Boolean
+  });
 }
+

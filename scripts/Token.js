@@ -1,20 +1,27 @@
 /* globals
 canvas,
-CONFIG,
 PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 // Patches for the Token class
 
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
-import { DEBUG } from "./const.js";
-import { Draw } from "./geometry/Draw.js";
+import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
+import { DEBUG_GRAPHICS, getSetting, SETTINGS } from "./settings.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
 
 // ----- NOTE: Hooks ----- //
+
+/**
+ * Hook controlToken
+ * If the token is controlled or uncontrolled, clear debug drawings.
+ */
+function controlToken(_token, _controlled) {
+  if ( getSetting(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
+  if ( getSetting(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
+}
 
 /**
  * Hook: updateToken
@@ -32,24 +39,16 @@ function updateToken(tokenD, change, _options, _userId) {
   if ( (Object.hasOwn(change, "width") || Object.hasOwn(change, "height")) && token ) token._tokenShape = undefined;
 
   // Token moved; clear drawings.
-  if ( Object.hasOwn(change, "x")
-    || Object.hasOwn(change, "y")
-    || Object.hasOwn(change, "elevation") ) {
-
-    if ( DEBUG.once || DEBUG.range || DEBUG.area || DEBUG.los ) {
-      Draw.clearDrawings();
-
-      if ( DEBUG.once ) {
-        DEBUG.range = false;
-        DEBUG.area = false;
-        DEBUG.los = false;
-        DEBUG.once = false;
-      }
-    }
+  if ( (getSetting(SETTINGS.DEBUG.RANGE) || getSetting(SETTINGS.DEBUG.LOS))
+    && (Object.hasOwn(change, "x")
+      || Object.hasOwn(change, "y")
+      || Object.hasOwn(change, "elevation")) ) {
+    DEBUG_GRAPHICS.RANGE.clear();
+    DEBUG_GRAPHICS.LOS.clear();
   }
 }
 
-PATCHES.BASIC.HOOKS = { updateToken };
+PATCHES.BASIC.HOOKS = { controlToken, updateToken };
 
 // ----- NOTE: Wraps ----- //
 
@@ -58,17 +57,8 @@ PATCHES.BASIC.HOOKS = { updateToken };
  * Reset the debugging drawings.
  */
 function updateSource(wrapper, ...args) {
-  if ( DEBUG.once || DEBUG.range || DEBUG.area || DEBUG.los ) {
-    CONFIG.GeometryLib.Draw.clearDrawings();
-
-    if ( DEBUG.once ) {
-      DEBUG.range = false;
-      DEBUG.area = false;
-      DEBUG.los = false;
-      DEBUG.once = false;
-    }
-  }
-
+  if ( getSetting(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
+  if ( getSetting(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
   return wrapper(...args);
 }
 

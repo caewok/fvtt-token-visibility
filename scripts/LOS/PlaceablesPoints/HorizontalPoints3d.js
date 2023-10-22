@@ -6,9 +6,11 @@ CONFIG
 "use strict";
 
 import { PlanePoints3d } from "./PlanePoints3d.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
-import { Draw } from "../geometry/Draw.js";
-import { ClipperPaths } from "../geometry/ClipperPaths.js";
+
+// Geometry folder
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Draw } from "../../geometry/Draw.js";
+import { ClipperPaths } from "../../geometry/ClipperPaths.js";
 
 /**
  * Points oriented horizontally on the canvas.

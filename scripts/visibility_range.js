@@ -1,5 +1,4 @@
 /* globals
-Token
 */
 "use strict";
 
@@ -17,62 +16,65 @@ Algorithms (points):
 */
 
 /**
+ * Construct points within the token shape to test for visible range.
+ * @param {Token} token
+ * @returns {Point3d[]}
+ */
+export function rangeTestPointsForToken(token) {
+  const { topZ, bottomZ, center, w, h } = token;
+  const t = Math.min(w, h) / 4;
+  const offsets = [[0, 0]];
+  const rangeAlg = getSetting(SETTINGS.RANGE.ALGORITHM);
+  const { FIVE, NINE } = SETTINGS.POINT_TYPES;
+  if ( rangeAlg === FIVE || rangeAlg === NINE ) {
+    offsets.push(
+      [-t, -t],
+      [-t, t],
+      [t, t],
+      [t, -t]
+    );
+
+    if ( rangeAlg === NINE ) {
+      offsets.push(
+        [-t, 0],
+        [t, 0],
+        [0, -t],
+        [0, t]
+      );
+    }
+  }
+
+  const tokenHeight = topZ - bottomZ;
+  const avgElevation = bottomZ + (tokenHeight * 0.5);
+  const tests = offsets.map(o => new Point3d(center.x + o[0], center.y + o[1], avgElevation));
+  return elevatePoints(tests, token);
+}
+
+
+/**
  * @param {object[]} tests                    Test object, containing point and los Map
  * @param {PlaceableObject} object            The target placeable
  * @returns {object[]} tests, with elevation and possibly other tests added.
  */
-export function elevatePoints(tests, object) {
-  if ( !(object instanceof Token) || !tests.length ) return tests;
-
-  // We assume for the moment that test points are arranged as in default Foundry:
-  // center, 4 corners, 4 midpoints
-  // We deal with the center test in testVisibilityCanvasVisibility
-  const rangeAlg = getSetting(SETTINGS.RANGE.ALGORITHM);
-  if ( rangeAlg === SETTINGS.RANGE.TYPES.FIVE ) tests = tests.splice(0, 5);
-
-  // Create default elevations
-  const { topZ, bottomZ } = object;
-  const objectHeight = topZ - bottomZ;
-  const avgElevation = bottomZ + (objectHeight * 0.5);
-  for ( const test of tests ) {
-    test.point.z ??= avgElevation;
-    test.centerPoint = false;
-  }
-
-  // Identify the center point
-  tests[0].centerPoint = true;
+function elevatePoints(tests, token) {
+  const { topZ, bottomZ } = token;
+  const tokenHeight = topZ - bottomZ;
 
   // If top/bottom equal or not doing 3d points, no need for extra test points
-  if ( !objectHeight || !getSetting(SETTINGS.RANGE.POINTS3D) ) return tests;
+  if ( !tokenHeight || !getSetting(SETTINGS.RANGE.POINTS3D) ) return tests;
 
-  // Add points to the tests array representing top and bottom
-  const tests3d = [tests[0]];
+  // Add points to the tests array representing top and bottom.
+  // Don't keep the middle points, except for dead center.
   const ln = tests.length;
+  const tests3d = [tests[0]]; // Dead center test point. Useful to keep as first test.
   const top = topZ;
-  const bottom = bottomZ + (objectHeight * 0.1);
+  const bottom = bottomZ + (tokenHeight * 0.1);
   for ( let i = 1; i < ln; i += 1 ) {
     const test = tests[i];
-    const { x, y } = test.point;
     tests3d.push(
-      // Use the same map so that x,y contains tests are cached and not repeated.
-      buildTestObject(x, y, top, test.los),
-      buildTestObject(x, y, bottom, test.los)
+      new Point3d(test.x, test.y, top),
+      new Point3d(test.x, test.y, bottom)
     );
   }
-
   return tests3d;
 }
-
-/**
- * Helper function to construct a test object for testVisiblity
- * @param {number} x
- * @param {number} y
- * @param {number} z
- * @returns {object}  Object with { point, los }
- *  See CanvasVisibility.prototype.testVisibility
- */
-function buildTestObject(x, y, z = 0, los = new Map()) {
-  return { point: new Point3d(x, y, z), los, centerPoint: false };
-}
-
-

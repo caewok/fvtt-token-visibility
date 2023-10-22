@@ -3,6 +3,10 @@ PIXI
 */
 "use strict";
 
+// Geometry folder
+import { Draw } from "../../geometry/Draw.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
+
 /* Testing
 api = game.modules.get('tokenvisibility').api;
 Point3d = api.Point3d
@@ -61,8 +65,7 @@ newPoints.forEach(pt => Draw.point(pt, { color: Draw.COLORS.blue}))
 // Used for representing walls, tiles, drawings, token sides in 3d.
 // Can set a view matrix and transform points accordingly.
 
-import { Draw } from "../geometry/Draw.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
+
 
 /**
  * Represent a Foundry object as a set of 3d points

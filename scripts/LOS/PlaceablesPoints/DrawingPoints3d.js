@@ -6,7 +6,9 @@ CONFIG
 // Represent a Wall in as a set of 4 3d points.
 
 import { HorizontalPoints3d } from "./HorizontalPoints3d.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
+
+// Geometry folder
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 // Drawing points can be modified by setting the elevation.
 // Used by Area3d to construct holes in a tile based on a drawing at a given elevation.

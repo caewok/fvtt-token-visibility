@@ -1,15 +1,14 @@
 /* globals
-canvas,
 Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { DEBUG } from "./const.js";
-import { SETTINGS, getSetting } from "./settings.js";
-import { testLOSPoint, drawDebugPoint, testLOSCorners, testLOSArea, testLOSArea3d } from "./visibility_los.js";
-import { elevatePoints } from "./visibility_range.js";
+import { testLOS } from "./visibility_los.js";
+import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
+import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "./settings.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};
@@ -30,11 +29,14 @@ PATCHES.NO_LEVELS = {};
  */
 function testVisibility(wrapped, visionSource, mode, {object, tests}={}) {
   if ( !(object instanceof Token) ) return wrapped(visionSource, mode, { object, tests });
-  tests = elevatePoints(tests, object);
+
+  // Use only a single test. This typically should already occur, if called from
+  // CanvasVisibility.prototype.testVisibility.
+  tests = [tests[0]];
   return wrapped(visionSource, mode, { object, tests });
 }
 
-PATCHES.NO_LEVELS.WRAPS = { testVisibility };
+PATCHES.BASIC.WRAPS = { testVisibility };
 
 // ----- NOTE: Mixes ----- //
 
@@ -42,36 +44,22 @@ PATCHES.NO_LEVELS.WRAPS = { testVisibility };
  * Mixed wrap DetectionMode.prototype._testLOS
  * Handle different types of LOS visibility tests.
  */
-function _testLOS(wrapped, visionSource, mode, target, test) {
+function _testLOS(wrapped, visionSource, mode, target, test, visibleShape) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
-
-  // If not constrained by walls or no walls present, line-of-sight is guaranteed.
-  if ( !this.walls || !canvas.walls.placeables.length ) return true;
 
   // Check the cached value; return if there.
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
 
-  const debug = DEBUG.los;
-  const algorithm = getSetting(SETTINGS.LOS.ALGORITHM);
-  const types = SETTINGS.LOS.TYPES;
-  switch ( algorithm ) {
-    case types.POINTS:
-      hasLOS = testLOSPoint(visionSource, target, test);
-      debug && drawDebugPoint(visionSource, test.point, hasLOS); // eslint-disable-line no-unused-expressions
-      break;
-    case types.CORNERS:
-      hasLOS = testLOSCorners(visionSource, target, test);
-      break;
-    case types.AREA:
-      hasLOS = testLOSArea(visionSource, target, test);
-      break;
-    case types.AREA3D:
-      hasLOS = testLOSArea3d(visionSource, target, test);
-      break;
+  // Limit the visible shape to vision angle if necessary.
+  if ( this.angle && visionSource.data.angle < 360 ) {
+    visibleShape ??= target.constrainedTokenShape;
+    visibleShape = constrainByVisionAngle(visibleShape, visionSource);
   }
 
+  // Test whether this vision source has line-of-sight to the target, cache, and return.
+  hasLOS = testLOS(visionSource, target, visibleShape);
   test.los.set(visionSource, hasLOS);
   return hasLOS;
 }
@@ -85,28 +73,76 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
  * @param {CanvasVisibilityTest} test           The test case being evaluated
  * @returns {boolean}                           Is the target within range?
  */
-function _testRange(wrapper, visionSource, mode, target, test) {
-  const debug = DEBUG.range;
-  let inRange = false;
+function _testRange(wrapped, visionSource, mode, target, test) {
+  // Only apply this test to tokens
+  if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
-  if ( mode.range <= 0 ) {
-    // Empty; not in range
-    // See https://github.com/foundryvtt/foundryvtt/issues/8505
-  } if ( !getSetting(SETTINGS.RANGE.DISTANCE3D)
-    || !(target instanceof Token) ) {
-    inRange = wrapper(visionSource, mode, target, test);
-  } else {
-    const radius = visionSource.object.getLightRadius(mode.range);
-    const dx = test.point.x - visionSource.x;
-    const dy = test.point.y - visionSource.y;
-    const dz = test.point.z - visionSource.elevationZ;
-    inRange = ((dx * dx) + (dy * dy) + (dz * dz)) <= (radius * radius);
+  // Empty; not in range
+  // See https://github.com/foundryvtt/foundryvtt/issues/8505
+  if ( mode.range <= 0 ) return false;
+
+  const testPoints = rangeTestPointsForToken(target);
+  const visionOrigin = Point3d.fromPointSource(visionSource);
+  const radius = visionSource.object.getLightRadius(mode.range);
+  const radius2 = radius * radius;
+
+  // Duplicate below so that the if test does not need to be inside the loop.
+  if ( getSetting(SETTINGS.DEBUG.RANGE) ) {
+    const draw = new Draw(DEBUG_GRAPHICS.RANGE);
+    return testPoints.some(pt => {
+      const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
+      const inRange = dist2 <= radius2;
+      draw.point(pt, { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
+      return inRange;
+    });
   }
-  debug && Draw.point(test.point,  // eslint-disable-line no-unused-expressions
-    { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
 
-  return inRange;
+  return testPoints.some(pt => {
+    const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
+    return dist2 <= radius2;
+  });
 }
 
-PATCHES.BASIC.MIXES = { _testLOS };
-PATCHES.NO_LEVELS.MIXES = { _testRange };
+/**
+ * Mixed wrap DetectionMode.prototype._testAngle
+ * Test whether the target is within the vision angle.
+ * @param {VisionSource} visionSource       The vision source being tested
+ * @param {TokenDetectionMode} mode         The detection mode configuration
+ * @param {PlaceableObject} target          The target object being tested
+ * @param {CanvasVisibilityTest} test       The test case being evaluated
+ * @returns {boolean}                       Is the target within the vision angle?
+ */
+function _testAngle(wrapped, visionSource, mode, target, test) {
+  // Only apply this test to tokens
+  if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
+  return true; // Handled in visible Token
+}
+
+PATCHES.BASIC.MIXES = { _testLOS, _testRange, _testAngle };
+
+
+/**
+ * Take a token and intersects it with the vision angle.
+ * @param {PIXI.Rectangle|PIXI.Polygon|ClipperPaths} visibleShape
+ * @param {VisionSource} visionSource
+ * @param {number} detectionAngle       Angle
+ * @returns {PIXI.Polygon[]|PIXI.Rectangle[]|PIXI.Polygon}
+ */
+function constrainByVisionAngle(visibleShape, visionSource) {
+  const { angle, rotation, externalRadius } = visionSource.data;
+  if ( angle >= 360 ) return visibleShape;
+
+  // Build a limited angle for the vision source.
+  const radius = canvas.dimensions.maxR;
+  const limitedAnglePoly = new LimitedAnglePolygon(visionSource, { radius, angle, rotation, externalRadius });
+
+  // If the limited angle envelops the token shape, then we are done.
+  if ( limitedAnglePoly.envelops(visibleShape) ) return visibleShape;
+
+  // If the visible shape does not overlap, we are done.
+  if ( !visibleShape.overlaps(limitedAnglePoly) ) return null;
+
+  // Intersect the vision polygon with the visible token shape.
+  return visibleShape.intersectPolygon(limitedAnglePoly);
+}
+

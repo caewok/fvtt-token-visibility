@@ -1,5 +1,4 @@
 /* globals
-game,
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -8,10 +7,10 @@ import { Patcher } from "./Patcher.js";
 import { MODULES_ACTIVE } from "./const.js";
 
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
-import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
+import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
 import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
-import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
 import { PATCHES as PATCHES_Setting } from "./Setting.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
@@ -25,8 +24,8 @@ const PATCHES = {
   CanvasVisibility: PATCHES_CanvasVisibility,
   ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
   DetectionMode: PATCHES_DetectionMode,
+  DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   DrawingConfig: PATCHES_DrawingConfig,
-  LightSource: PATCHES_LightSource,
   PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,

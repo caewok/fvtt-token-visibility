@@ -4,7 +4,7 @@ renderTemplate
 
 "use strict";
 
-import { MODULE_ID, FLAGS, MODULES_ACTIVE } from "./const.js";
+import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 
 /**
  * Inject html to add controls to the drawing configuration.

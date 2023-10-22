@@ -1,13 +1,10 @@
 /* globals
-PIXI,
 canvas,
-foundry,
-Token,
 CONST,
-Ray,
+foundry,
 LimitedAnglePolygon,
-CONFIG,
-ClipperLib
+PIXI
+Ray
 */
 "use strict";
 
@@ -31,36 +28,29 @@ Area:
 - Wall shapes block and shadows block. Construct the blocked target shape and calc area.
 */
 
-import { MODULE_ID, FLAGS, MODULES_ACTIVE, DEBUG } from "./const.js";
-import { getSetting, SETTINGS } from "./settings.js";
-import { buildTokenPoints } from "./util.js";
+import { AlternativeLOS } from "./AlternativeLOS.js";
 import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { area3dPopoutData } from "./Area3dPopout.js"; // Debugging pop-up
 
-import { Draw } from "./geometry/Draw.js"; // For debugging
-
-import { ClipperPaths } from "./geometry/ClipperPaths.js";
-import { Matrix } from "./geometry/Matrix.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
-
+// PlaceablePoints folder
 import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
-// Debugging pop-up
-import { area3dPopoutData } from "./Area3dPopout.js";
+// Base folder
+import { DEBUG } from "../const.js";
+import { getSetting, SETTINGS } from "../settings.js";
+import { buildTokenPoints } from "../util.js";
+
+// Geometry folder
+import { Draw } from "../geometry/Draw.js"; // For debugging
+import { ClipperPaths } from "../geometry/ClipperPaths.js";
+import { Matrix } from "../geometry/Matrix.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 
-export class Area3d {
-
-  /** @type {VisionSource} */
-  viewer;
-
-  /** @type {Point3d} */
-  _viewerCenter;
-
-  /** @type {Token} */
-  target;
+export class Area3dLOS extends AlternativeLOS {
 
   /** @type {TokenPoints3d} */
   _targetTokenPoints3d;
@@ -73,21 +63,6 @@ export class Area3d {
 
   /** @type {Point3d} */
   _targetCenter;
-
-  /**
-   * @typedef Area3dConfig  Configuration settings for this class.
-   * @type {object}
-   * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of vision source
-   * @property {boolean} wallsBlock                   Do walls block vision?
-   * @property {boolean} tilesBlock                   Do tiles block vision?
-   * @property {boolean} deadTokensBlock              Do dead tokens block vision?
-   * @property {boolean} liveTokensBlock              Do live tokens block vision?
-   * @property {boolean} useShadows                   For benchmarking and debugging
-   * @property {boolean} debugDrawObjects             Draw blockingObjectPoints if true
-   */
-
-  /** @type object */
-  config = {};
 
   /** @type {boolean} */
   #debug = false;
@@ -162,23 +137,23 @@ export class Area3d {
   wallShadows = [];
 
   /** @type {boolean} */
-  _viewIsSet = false;
+  #viewIsSet = false;
 
   /** @type {boolean} */
-  _blockingObjectsAreSet = false;
+  #blockingObjectsAreSet = false;
 
   /** @type {boolean} */
-  _blockingObjectsPointsAreSet = false;
+  #blockingObjectsPointsAreSet = false;
 
   /** @type {boolean} */
-  _blockingPointsAreSet = false;
+  #blockingPointsAreSet = false;
 
   /**
    * Vector representing the up position on the canvas.
    * Used to construct the token camera and view matrices.
    * @type {Point3d}
    */
-  static _upVector = new Point3d(0, 0, -1);
+  static #upVector = new Point3d(0, 0, -1);
 
   /**
    * Scaling factor used with Clipper
@@ -186,17 +161,13 @@ export class Area3d {
   static SCALING_FACTOR = 100;
 
   /**
-   * @param {VisionSource|TOKEN} visionSource     Token, viewing from token.topZ.
-   * @param {Target} target   Target; token is looking at the target center.
+   * @param {PointSource|Token|VisionSource} viewer   Token, viewing from token.topZ.
+   * @param {Target} target                           Target; token is looking at the target center.
    */
   constructor(viewer, target, config = {}) {
+    super(viewer, target, config);
 
-    this.viewer = viewer instanceof Token ? viewer.vision : viewer;
-    this.target = target;
     this._targetPoints = new TokenPoints3d(target);
-
-    // Configuration options
-    this.#configure(config);
 
     // Set debug only if the target is being targeted.
     // Avoids "double-vision" from multiple targets for area3d on scene.
@@ -219,29 +190,6 @@ export class Area3d {
     }
   }
 
-  /**
-   * Initialize the configuration for this constructor.
-   * @param {object} config   Settings intended to override defaults.
-   */
-  #configure(config = {}) {
-    config.type ??= "sight";
-    config.wallsBlock ??= true;
-    config.tilesBlock ??= MODULES_ACTIVE.LEVELS || MODULES_ACTIVE.EV;
-    config.deadTokensBlock ??= false;
-    config.liveTokensBlock ??= false;
-    config.proneTokensBlock ??= true;
-
-    // Not user-facing. For debugging and benchmarking shadows
-    config.useShadows ??= getSetting(SETTINGS.AREA3D_USE_SHADOWS);
-
-    // Internal setting.
-    // If true, draws the _blockingObjectsPoints.
-    // If false, draws the _blockingPoints
-    this.config.debugDrawObjects ??= false;
-
-    this.config = config;
-  }
-
 
   // NOTE ----- USER-FACING METHODS -----
 
@@ -254,7 +202,7 @@ export class Area3d {
    * @returns {boolean}
    */
   hasLOS(thresholdArea) {
-    thresholdArea ??= getSetting(SETTINGS.LOS.PERCENT_AREA);
+    thresholdArea ??= getSetting(SETTINGS.LOS.PERCENT);
 
     // If center point is visible, then target is likely visible but not always.
     // e.g., walls slightly block the center point. Or walls block all but center.
@@ -280,64 +228,62 @@ export class Area3d {
       && objs.terrainWalls.size < 2 ) return 1;
 
     const { obscuredSides, sidePolys } = this._obscureSides();
-
     const sidesArea = sidePolys.reduce((area, poly) =>
       area += poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}), 0);
     const obscuredSidesArea = obscuredSides.reduce((area, poly) =>
       area += poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}), 0);
-    let percentSeen = sidesArea ? obscuredSidesArea / sidesArea : 0;
-
-    if ( this.debug ) {
-      const colors = Draw.COLORS;
-      this._drawLineOfSight();
-
-      // Draw the detected objects on the canvas
-      objs.walls.forEach(w => Draw.segment(w, { color: colors.blue }));
-      objs.tiles.forEach(t => Draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.5 }));
-      objs.terrainWalls.forEach(w => Draw.segment(w, { color: colors.lightgreen }));
-      objs.drawings.forEach(d => Draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.5 }));
-      objs.tokens.forEach(t => Draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
-
-      // Draw the target in 3d, centered on 0,0
-      this.targetPoints.drawTransformed({ drawTool: this.drawTool });
-
-      // Fill in the constrained border on canvas
-      Draw.shape(this.target.constrainedTokenBorder, { color: colors.red, fillAlpha: 0.5});
-
-      // Draw the detected objects in 3d, centered on 0,0
-      const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
-      const drawTool = this.drawTool;
-      pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, drawTool }));
-      pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, drawTool }));
-      pts.drawings.forEach(d => d.drawTransformed({ color: colors.gray, fillAlpha: 0.7, drawTool }));
-      pts.tokens.forEach(t => t.drawTransformed({ color: colors.orange, drawTool }));
-      pts.terrainWalls.forEach(w => w.drawTransformed({ color: colors.lightgreen, fillAlpha: 0.1, drawTool }));
-
-      // Calculate the areas of the target faces separately, along with the obscured side areas.
-      const target = this.target;
-      const { topZ, bottomZ } = target;
-      const height = topZ - bottomZ;
-      this.debugSideAreas = {
-        top: target.w * target.h,
-        ogSide1: target.w * height,
-        ogSide2: target.h * height,
-        sides: [],
-        obscuredSides: []
-      };
-      this.debugSideAreas.sides = sidePolys.map(poly =>
-        poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}));
-      this.debugSideAreas.obscuredSides = obscuredSides.map(poly =>
-        poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}));
-
-      // Report the percent seen that is being returned.
-      console.log(`${this.viewer.object.name} sees ${percentSeen * 100}% of ${this.target.name} (Area3d).`);
-    }
 
     // Round the percent seen so that near-zero areas are 0.
     // Because of trimming walls near the vision triangle, a small amount of token area can poke through
+    let percentSeen = sidesArea ? obscuredSidesArea / sidesArea : 0;
     if ( percentSeen < 0.005 ) percentSeen = 0;
 
+    if ( this.debug ) this.#drawDebugShapes(objs, obscuredSides, sidePolys);
+
     return percentSeen;
+  }
+
+  #drawDebugShapes(objs, obscuredSides, sidePolys) {
+    const colors = Draw.COLORS;
+    this._drawLineOfSight();
+
+    // Draw the detected objects on the canvas
+    objs.walls.forEach(w => Draw.segment(w, { color: colors.blue }));
+    objs.tiles.forEach(t => Draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.5 }));
+    objs.terrainWalls.forEach(w => Draw.segment(w, { color: colors.lightgreen }));
+    objs.drawings.forEach(d => Draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.5 }));
+    objs.tokens.forEach(t => Draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
+
+    // Draw the target in 3d, centered on 0,0
+    this.targetPoints.drawTransformed({ drawTool: this.drawTool });
+
+    // Fill in the constrained border on canvas
+    Draw.shape(this.target.constrainedTokenBorder, { color: colors.red, fillAlpha: 0.5});
+
+    // Draw the detected objects in 3d, centered on 0,0
+    const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
+    const drawTool = this.drawTool;
+    pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, drawTool }));
+    pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, drawTool }));
+    pts.drawings.forEach(d => d.drawTransformed({ color: colors.gray, fillAlpha: 0.7, drawTool }));
+    pts.tokens.forEach(t => t.drawTransformed({ color: colors.orange, drawTool }));
+    pts.terrainWalls.forEach(w => w.drawTransformed({ color: colors.lightgreen, fillAlpha: 0.1, drawTool }));
+
+    // Calculate the areas of the target faces separately, along with the obscured side areas.
+    const target = this.target;
+    const { topZ, bottomZ } = target;
+    const height = topZ - bottomZ;
+    this.debugSideAreas = {
+      top: target.w * target.h,
+      ogSide1: target.w * height,
+      ogSide2: target.h * height,
+      sides: [],
+      obscuredSides: []
+    };
+    this.debugSideAreas.sides = sidePolys.map(poly =>
+      poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}));
+    this.debugSideAreas.obscuredSides = obscuredSides.map(poly =>
+      poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}));
   }
 
   // NOTE ----- GETTERS / SETTERS ----- //
@@ -349,19 +295,19 @@ export class Area3d {
 
   /** @type {BlockingObjects} */
   get blockingObjects() {
-    if ( !this._blockingObjectsAreSet ) this._findBlockingObjects();
+    if ( !this.#blockingObjectsAreSet ) this._findBlockingObjects();
     return this._blockingObjects;
   }
 
   /** @type {BlockingObjectsPoints} */
   get blockingObjectsPoints() {
-    if ( !this._blockingObjectsPointsAreSet ) this._constructBlockingObjectsPoints();
+    if ( !this.#blockingObjectsPointsAreSet ) this._constructBlockingObjectsPoints();
     return this._blockingObjectsPoints;
   }
 
   /** @type {BlockingPoints} */
   get blockingPoints() {
-    if ( !this._blockingPointsAreSet ) this._constructBlockingPointsArray();
+    if ( !this.#blockingPointsAreSet ) this._constructBlockingPointsArray();
     return this._blockingPoints;
   }
 
@@ -387,11 +333,6 @@ export class Area3d {
     }
 
     return this._viewerCameraM;
-  }
-
-  get viewerCenter() {
-    return this._viewerCenter
-      || (this._viewerCenter = new Point3d(this.viewer.x, this.viewer.y, this.viewer.elevationZ));
   }
 
   get targetTop() {
@@ -420,262 +361,7 @@ export class Area3d {
 
   /** @type {PIXI.Polygon} */
   get visionPolygon() {
-    return this._visionPolygon || (this._visionPolygon = Area3d.visionPolygon(this.viewerCenter, this.target));
-  }
-
-  // NOTE ----- STATIC METHODS ----- //
-
-  /**
-   * Vision Polygon for the view point --> target.
-   * From the given token location, get the edge-most viewable points of the target.
-   * Construct a triangle between the two target points and the token center.
-   * If viewing head-on (only two key points), the portion of the target between
-   * viewer and target center (typically, a rectangle) is added on to the triangle.
-   * @param {PIXI.Point|Point3d} viewingPoint
-   * @param {Token} target
-   * @returns {PIXI.Polygon} Triangle between view point and target. Will be clockwise.
-   */
-  static visionPolygon(viewingPoint, target) {
-    const border = target.constrainedTokenBorder;
-    const keyPoints = border.viewablePoints(viewingPoint, { outermostOnly: false });
-    if ( !keyPoints ) return border.toPolygon();
-
-    let out;
-    switch ( keyPoints.length ) {
-      case 0:
-      case 1:
-        out = border.toPolygon();
-        break;
-      case 2: {
-        const k0 = keyPoints[0];
-        const k1 = keyPoints[1];
-        const center = target.center;
-
-        // Build a rectangle between center and key points.
-        // Intersect against the border
-        const X = Math.minMax(k0.x, k1.x, center.x);
-        const Y = Math.minMax(k0.y, k1.y, center.y);
-        const rect = new PIXI.Rectangle(X.min, Y.min, X.max - X.min, Y.max - Y.min);
-        const intersect = border instanceof PIXI.Rectangle ? rect : rect.intersectPolygon(border);
-
-        // Union the triangle with this border
-        const triangle = new PIXI.Polygon([viewingPoint, k0, k1]);
-
-        // WA requires a polygon with a positive orientation.
-        if ( !triangle.isPositive ) triangle.reverseOrientation();
-        out = intersect.intersectPolygon(triangle, { clipType: ClipperLib.ClipType.ctUnion });
-        break;
-      }
-      default:
-        out = new PIXI.Polygon([viewingPoint, keyPoints[0], keyPoints[keyPoints.length - 1]]);
-    }
-
-    if ( !out.isClockwise ) out.reverseOrientation();
-    return out;
-  }
-
-  /**
-   * Filter relevant objects in the scene using the vision triangle.
-   * For the z dimension, keeps objects that are between the lowest target point,
-   * highest target point, and the viewing point.
-   * @param {Point3d} viewingPoint    The 3d location of the "viewer" (vision/light source)
-   * @param {Token} target            The token being "viewed".
-   * @param {object} [options]        Options that affect what is filtered.
-   * @param {string} [options.type]           Wall restriction type: sight, light, move, sound. Used to filter walls.
-   * @param {boolean} [options.filterWalls]   If true, find and filter walls
-   * @param {boolean} [options.filterTokens]  If true, find and filter tokens
-   * @param {boolean} [options.filterTiles]   If true, find and filter tiles
-   * @param {Token} [options.viewer]          Viewer token to exclude from filtered token results
-   * @return {object} Object with walls, tokens, tiles, drawings as distinct sets or undefined.
-   */
-  static filterSceneObjectsByVisionPolygon(viewingPoint, target, {
-    visionPolygon,
-    type = "sight",
-    filterWalls = true,
-    filterTokens = true,
-    filterTiles = true,
-    debug = false,
-    viewer } = {}) {
-
-    visionPolygon ??= Area3d.visionPolygon(viewingPoint, target);
-    if ( debug ) Draw.shape(visionPolygon,
-      { color: Draw.COLORS.blue, fillAlpha: 0.2, fill: Draw.COLORS.blue });
-
-    const { topZ, bottomZ } = target;
-    const maxE = Math.max(viewingPoint.z ?? 0, topZ);
-    const minE = Math.min(viewingPoint.z ?? 0, bottomZ);
-
-    const out = { walls: new Set(), tokens: new Set(), tiles: new Set(), drawings: new Set() };
-    if ( filterWalls ) {
-      out.walls = Area3d.filterWallsByVisionPolygon(viewingPoint, visionPolygon, { type });
-
-      // Filter walls that are definitely too low or too high
-      out.walls = out.walls.filter(w => {
-        return w.topZ > minE && w.bottomZ < maxE;
-      });
-
-      if ( debug ) out.walls.forEach(w => Draw.segment(w, { color: Draw.COLORS.gray, alpha: 0.2 }));
-    }
-
-    if ( filterTokens ) {
-      out.tokens = Area3d.filterTokensByVisionPolygon(visionPolygon, { viewer, target });
-
-      // Filter tokens that are definitely too low or too high
-      out.tokens = out.tokens.filter(t => {
-        return t.topZ > minE && t.bottomZ < maxE;
-      });
-
-      if ( debug ) out.tokens.forEach(t => Draw.shape(t.bounds, { color: Draw.COLORS.gray }));
-    }
-
-    if ( filterTiles ) {
-      out.tiles = Area3d.filterTilesByVisionPolygon(visionPolygon);
-
-      // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
-      if ( MODULES_ACTIVE.LEVELS && type === "sight" ) {
-        out.tiles = out.tiles.filter(t => {
-          return !t.document?.flags?.levels?.noCollision;
-        });
-      }
-
-      // Filter tiles that are definitely too low or too high
-      out.tiles = out.tiles.filter(t => {
-        const tZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(t.document.elevation);
-        return tZ < maxE && tZ > minE;
-      });
-
-      // Check drawings if there are tiles
-      if ( out.tiles.size ) out.drawings = Area3d.filterDrawingsByVisionPolygon(visionPolygon);
-
-      if ( debug ) {
-        out.tiles.forEach(t => Draw.shape(t.bounds, { color: Draw.COLORS.gray }));
-        out.drawings.forEach(d => Draw.shape(d.bounds, { color: Draw.COLORS.gray }));
-      }
-    }
-
-    return out;
-  }
-
-  /**
-   * Filter drawings in the scene if they are flagged as holes.
-   * @param {PIXI.Polygon} visionPolygon
-   */
-  static filterDrawingsByVisionPolygon(visionPolygon) {
-    let drawings = canvas.drawings.quadtree.getObjects(visionPolygon.getBounds());
-
-    // Filter by holes
-    drawings = drawings.filter(d => d.document.getFlag(MODULE_ID, FLAGS.DRAWING.IS_HOLE)
-      && ( d.document.shape.type === CONST.DRAWING_TYPES.POLYGON
-      || d.document.shape.type === CONST.DRAWING_TYPES.ELLIPSE
-      || d.document.shape.type === CONST.DRAWING_TYPES.RECTANGLE));
-
-    if ( !drawings.size ) return drawings;
-
-    // Filter by the precise triangle cone
-    // Also convert to CenteredPolygon b/c it handles bounds better
-    const edges = [...visionPolygon.iterateEdges()];
-    drawings = drawings.filter(d => {
-      const shape = CONFIG.GeometryLib.utils.centeredPolygonFromDrawing(d);
-      const center = shape.center;
-      if ( visionPolygon.contains(center.x, center.y) ) return true;
-      const dBounds = shape.getBounds();
-      return edges.some(e => dBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
-    });
-    return drawings;
-  }
-
-  /**
-   * Filter tokens in the scene by a triangle representing the view from viewingPoint to
-   * token (or other two points). Only considers 2d top-down view.
-   * @param {PIXI.Polygon} visionPolygon
-   * @param {object} [options]
-   * @param {string|undefined} viewerId   Id of viewer token to exclude
-   * @param {string|undefined} targetId   Id of target token to exclude
-   * @return {Set<Token>}
-   */
-  static filterTokensByVisionPolygon(visionPolygon, { viewer, target } = {}) {
-    let tokens = canvas.tokens.quadtree.getObjects(visionPolygon.getBounds());
-
-    // Filter out the viewer and target token
-    tokens.delete(viewer);
-    tokens.delete(target);
-
-    if ( !tokens.size ) return tokens;
-
-    // Filter by the precise triangle cone
-    // For speed and simplicity, consider only token rectangular bounds
-    const edges = [...visionPolygon.iterateEdges()];
-    tokens = tokens.filter(t => {
-      const tCenter = t.center;
-      if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
-      const tBounds = t.bounds;
-      return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
-    });
-    return tokens;
-  }
-
-  /**
-   * Filter tiles in the scene by a triangle representing the view from viewingPoint to
-   * token (or other two points). Only considers 2d top-down view.
-   * @param {PIXI.Polygon} visionPolygon
-   * @return {Set<Tile>}
-   */
-  static filterTilesByVisionPolygon(visionPolygon) {
-    let tiles = canvas.tiles.quadtree.getObjects(visionPolygon.getBounds());
-    if ( !tiles.size ) return tiles;
-
-    // Filter by the precise triangle shape
-    // Also filter by overhead tiles
-    const edges = [...visionPolygon.iterateEdges()];
-    tiles = tiles.filter(t => {
-      // Only overhead tiles count for blocking vision
-      if ( !t.document.overhead ) return false;
-
-      // Check remainder against the vision polygon shape
-      const tBounds = t.bounds;
-      const tCenter = tBounds.center;
-      if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
-      return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
-    });
-    return tiles;
-  }
-
-  /**
-   * Filter walls in the scene by a triangle representing the view from viewingPoint to some
-   * token (or other two points). Only considers 2d top-down view.
-   * @param {Point3d} viewingPoint
-   * @param {PIXI.Polygon} visionPolygon
-   * @param {object} [options]
-   * @param {string} [type]     Wall restriction type: sight, light, move, sound
-   * @return {Set<Wall>}
-   */
-  static filterWallsByVisionPolygon(viewingPoint, visionPolygon, { type = "sight" } = {}) {
-    let walls = canvas.walls.quadtree.getObjects(visionPolygon.getBounds());
-    walls = walls.filter(w => Area3d._testWallInclusion(w, viewingPoint, { type }));
-
-    if ( !walls.size ) return walls;
-
-    // Filter by the precise triangle cone.
-    const edges = [...visionPolygon.iterateEdges()];
-    walls = walls.filter(w => {
-      if ( visionPolygon.contains(w.A.x, w.A.y) || visionPolygon.contains(w.B.x, w.B.y) ) return true;
-      return edges.some(e => foundry.utils.lineSegmentIntersects(w.A, w.B, e.A, e.B));
-    });
-    return walls;
-  }
-
-  /**
-   * Test whether a wall should be included as potentially blocking from point of view of
-   * token.
-   * Comparable to ClockwiseSweep.prototype._testWallInclusion but less thorough.
-   */
-  static _testWallInclusion(wall, viewingPoint, { type = "sight" } = {}) {
-    // Ignore walls that are not blocking for the type
-    if (!wall.document[type] || wall.isOpen ) return false;
-
-    // Ignore one-directional walls facing away
-    const side = wall.orientPoint(viewingPoint);
-    return !wall.document.dir || (side !== wall.document.dir);
+    return this._visionPolygon || (this._visionPolygon = Area3d.visionPolygon(this.viewerPoint, this.target));
   }
 
   // NOTE ----- PRIMARY METHODS ----- //
@@ -688,8 +374,8 @@ export class Area3d {
     this._calculateViewerCameraMatrix();
 
     // Set the matrix to look at the target from the viewer.
-    const { targetPoints, viewerCenter, viewerViewM } = this;
-    targetPoints.setViewingPoint(viewerCenter);
+    const { targetPoints, viewerPoint, viewerViewM } = this;
+    targetPoints.setViewingPoint(viewerPoint);
     targetPoints.setViewMatrix(viewerViewM);
 
     // Set the matrix to look at blocking point objects from the viewer.
@@ -710,7 +396,7 @@ export class Area3d {
       blockingObjectsPoints.terrainWalls.forEach(pts => pts.setViewMatrix(viewerViewM));
     }
 
-    this._viewIsSet = true;
+    this.#viewIsSet = true;
   }
 
   /**
@@ -724,12 +410,12 @@ export class Area3d {
    *   obscuredSides: The unobscured portions of the sidePolys
    */
   _obscureSides() {
-    if ( !this._viewIsSet ) this.calculateViewMatrix();
+    if ( !this.#viewIsSet ) this.calculateViewMatrix();
     const blockingPoints = this.blockingPoints;
 
     // Combine terrain walls
     const combinedTerrainWalls = blockingPoints.terrainWalls.length > 1
-      ? WallPoints3d.combineTerrainWalls(blockingPoints.terrainWalls, this.viewerCenter, {
+      ? WallPoints3d.combineTerrainWalls(blockingPoints.terrainWalls, this.viewerPoint, {
         scalingFactor: Area3d.SCALING_FACTOR
       }) : undefined;
 
@@ -764,9 +450,9 @@ export class Area3d {
    * Construct the transformation matrix to rotate the view around the center of the token.
    */
   _calculateViewerCameraMatrix() {
-    const cameraPosition = this.viewerCenter;
+    const cameraPosition = this.viewerPoint;
     const targetPosition = this.targetCenter;
-    return Matrix.lookAt(cameraPosition, targetPosition, Area3d._upVector);
+    return Matrix.lookAt(cameraPosition, targetPosition, this.constructor.#upVector);
   }
 
   /**
@@ -787,7 +473,7 @@ export class Area3d {
     terrainWalls.clear();
     walls.clear();
 
-    const objsFound = Area3d.filterSceneObjectsByVisionPolygon(this.viewerCenter, this.target, {
+    const objsFound = this.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, {
       type,
       filterWalls: wallsBlock,
       filterTokens: liveTokensBlock || deadTokensBlock,
@@ -812,10 +498,10 @@ export class Area3d {
       walls.add(limitedAngleWalls[1]);
     }
 
-    this._blockingObjectsAreSet = true;
-    this._blockingObjectsPointsAreSet = false;
-    this._blockingPointsAreSet = false;
-    this._viewIsSet = false;
+    this.#blockingObjectsAreSet = true;
+    this.#blockingObjectsPointsAreSet = false;
+    this.#blockingPointsAreSet = false;
+    this.#viewIsSet = false;
   }
 
   /**
@@ -855,9 +541,9 @@ export class Area3d {
     // Add Terrain Walls
     blockingObjs.terrainWalls.forEach(w => terrainWalls.add(new WallPoints3d(w)));
 
-    this._blockingObjectsPointsAreSet = true;
-    this._blockingPointsAreSet = false;
-    this._viewIsSet = false;
+    this.#blockingObjectsPointsAreSet = true;
+    this.#blockingPointsAreSet = false;
+    this.#viewIsSet = false;
   }
 
   /**
@@ -870,7 +556,7 @@ export class Area3d {
     const { visionPolygon, target } = this;
     const edges = [...visionPolygon.iterateEdges()];
     const blockingPoints = this._blockingPoints;
-    const viewerLoc = this.viewerCenter;
+    const viewerLoc = this.viewerPoint;
 
     if ( this.debug ) Draw.shape(visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
 
@@ -918,8 +604,8 @@ export class Area3d {
       });
     });
 
-    this._blockingPointsAreSet = true;
-    this._viewIsSet = false;
+    this.#blockingPointsAreSet = true;
+    this.#viewIsSet = false;
   }
 
   // NOTE ----- OTHER HELPER METHODS ----- //
@@ -933,7 +619,7 @@ export class Area3d {
     if ( !walls.length ) return undefined;
 
     const transformed = walls.map(w => new PIXI.Polygon(w.perspectiveTransform()));
-    const paths = ClipperPaths.fromPolygons(transformed, { scalingFactor: Area3d.SCALING_FACTOR });
+    const paths = ClipperPaths.fromPolygons(transformed, { scalingFactor: this.constructor.SCALING_FACTOR });
     const combined = paths.combine();
     combined.clean();
     return combined;
@@ -948,7 +634,7 @@ export class Area3d {
     if ( !tokens.length ) return undefined;
 
     const transformed = tokens.map(t => new PIXI.Polygon(t.perspectiveTransform()));
-    const paths = ClipperPaths.fromPolygons(transformed, { scalingFactor: Area3d.SCALING_FACTOR });
+    const paths = ClipperPaths.fromPolygons(transformed, { scalingFactor: this.constructor.SCALING_FACTOR });
     const combined = paths.combine();
     combined.clean();
     return combined;
@@ -966,7 +652,7 @@ export class Area3d {
 
     if ( !blockingPoints.drawings.length ) {
       let tiles = blockingPoints.tiles.map(w => new PIXI.Polygon(w.perspectiveTransform()));
-      tiles = ClipperPaths.fromPolygons(tiles, {scalingFactor: Area3d.SCALING_FACTOR});
+      tiles = ClipperPaths.fromPolygons(tiles, {scalingFactor: this.constructor.SCALING_FACTOR});
       tiles.combine().clean();
       return tiles;
     }
@@ -974,6 +660,7 @@ export class Area3d {
     // Check if any drawings might create a hole in one or more tiles
     const tilesUnholed = [];
     const tilesHoled = [];
+    const scalingFactor = this.constructor.SCALING_FACTOR;
     for ( const tile of blockingPoints.tiles ) {
       const drawingHoles = [];
       const tileE = tile.object.document.elevation;
@@ -994,14 +681,14 @@ export class Area3d {
 
       if ( drawingHoles.length ) {
         // Construct a hole at the tile's elevation from the drawing taking the difference.
-        const drawingHolesPaths = ClipperPaths.fromPolygons(drawingHoles, {scalingFactor: Area3d.SCALING_FACTOR});
+        const drawingHolesPaths = ClipperPaths.fromPolygons(drawingHoles, { scalingFactor });
         const tileHoled = drawingHolesPaths.diffPolygon(tilePoly);
         tilesHoled.push(tileHoled);
       } else tilesUnholed.push(tilePoly);
     }
 
     if ( tilesUnholed.length ) {
-      const unHoledPaths = ClipperPaths.fromPolygons(tilesUnholed, {scalingFactor: Area3d.SCALING_FACTOR});
+      const unHoledPaths = ClipperPaths.fromPolygons(tilesUnholed, { scalingFactor });
       unHoledPaths.combine().clean();
       tilesHoled.push(unHoledPaths);
     }
@@ -1070,11 +757,11 @@ export class Area3d {
     if ( !wall.document.sight || wall.isOpen ) return false;
 
     // Ignore walls that are in line with the viewer and target
-    if ( !foundry.utils.orient2dFast(this.viewerCenter, wall.A, wall.B)
+    if ( !foundry.utils.orient2dFast(this.viewerPoint, wall.A, wall.B)
       && !foundry.utils.orient2dFast(this.targetCenter, wall.A, wall.B) ) return false;
 
     // Ignore one-directional walls facing away from the origin
-    const side = wall.orientPoint(this.viewerCenter);
+    const side = wall.orientPoint(this.viewerPoint);
     return !wall.document.dir || (side !== wall.document.dir);
   }
 
@@ -1110,6 +797,10 @@ export class Area3d {
    * Draw the line of sight from token to target.
    */
   _drawLineOfSight() {
-    Draw.segment({A: this.viewerCenter, B: this.targetCenter});
+    Draw.segment({A: this.viewerPoint, B: this.targetCenter});
   }
 }
+
+/** For backwards compatibility */
+export const Area3d = Area3dLOS;
+

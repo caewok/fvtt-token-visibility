@@ -2,19 +2,19 @@
 canvas,
 CONFIG,
 LimitedAnglePolygon,
-PointSourcePolygon,
-Token
+PointSourcePolygon
 */
 "use strict";
 
-import { DEBUG, MODULES_ACTIVE, COVER } from "./const.js";
-import { SETTINGS } from "./settings.js";
+import { MODULES_ACTIVE } from "./const.js";
+import { SETTINGS, getSetting } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
-import { Area2d } from "./Area2d.js";
-import { Area3d } from "./Area3d.js";
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
+import { PointsLOS } from "./LOS/PointsLOS.js";
+import { Area2dLOS } from "./LOS/Area2dLOS.js";
+import { Area3dLOS } from "./LOS/Area3dLOS.js";
+import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Draw } from "./geometry/Draw.js";
-import { CoverCalculator } from "./CoverCalculator.js";
+
 
 /* Visibility algorithm
 Three tests, increasing in difficulty and stringency. User can select between 0% and 100%
@@ -161,113 +161,45 @@ export function testLOSPoint(visionSource, target, test) {
 }
 
 /**
- * Test a target token for line-of-sight using corners of the token and corners of the target.
- * (dnd5e DMG rule)
- * Tests all corners and returns true if at least one corner->corner is unblocked.
+ * Test a target token for line-of-sight using point(s) of the token and target.
+ * Returns true if the desired percentage of points between token and target are unblocked.
  * @param {VisionSource} visionSource
  * @param {Token} target
- * @param {object} test       Object containing Point to test
- * @returns {boolean} True if source has line-of-sight to point
+ * @returns {boolean} True if source has line-of-sight to target.
  */
-export function testLOSCorners(visionSource, target, test) {
-  if ( !(target instanceof Token) ) return testLOSPoint(visionSource, target, test);
+const LOS_CLASSES = {
+  "los-points": PointsLOS,
+  "los-area-2d": Area2dLOS,
+  "los-area-3d": Area3dLOS
+};
 
-  // If this is not the center point, do not test.
-  if ( !testIsCenterPoint(target, test) ) return false;
+export function testLOS(visionSource, target, visibleShape) {
+  // Avoid errors when testing vision for tokens directly on top of one another
+  const targetCenter = target.center;
 
-  const coverCalc = new CoverCalculator(visionSource, target, {
+  if ( visionSource.x === targetCenter.x && visionSource.y === targetCenter.y ) return false;
+
+  const opts = {
     type: "sight",
+    wallsBlock: true,
     deadTokensBlock: false,
     liveTokensBlock: false,
     liveForceHalfCover: false,
-    proneTokensBlock: false
-  });
-
-  coverCalc.debug = DEBUG.los;
-  const cover = coverCalc.targetCover(SETTINGS.COVER.TYPES.CORNER_CORNERS_GRID);
-  return cover < COVER.TYPES.HIGH;
-}
-
-/**
- * Test a target token for line-of-sight using top/bottom token areas.
- * @param {VisionSource} visionSource
- * @param {Token} target
- * @param {object} pt       Point to test
- * @returns {boolean} True if source has line-of-sight to point for center point, false otherwise.
- */
-export function testLOSArea(visionSource, target, test) {
-  // If this is not the center point, do not test.
-  if ( !testIsCenterPoint(target, test) ) return false;
-
-  // Avoid errors when testing vision for tokens directly on top of one another
-  if ( visionSource.x === target.center.x && visionSource.y === target.center.y ) return false;
-
-  const centerPointIsVisible = testLOSPoint(visionSource, target, test);
-
-  const config = {
-    type: "sight",
-    liveTokensBlock: false,
-    deadTokensBlock: false
+    proneTokensBlock: false,
+    visibleShape
   };
+  const viewerToken = visionSource.object;
+  const viewerPoints = viewerToken ? PointsLOS.constructViewerPoints(viewerToken)
+    : [Point3d.fromSource(visionSource)];
+  const threshold = getSetting(SETTINGS.LOS.PERCENT);
+  const cl = LOS_CLASSES[getSetting(SETTINGS.LOS.ALGORITHM)];
 
-  if ( DEBUG.forceLiveTokensBlock ) config.liveTokensBlock = true;
-  if ( DEBUG.forceDeadTokensBlock ) config.deadTokensBlock = true;
-
-  const area2d = new Area2d(visionSource, target, config);
-  area2d.debug = DEBUG.los;
-  return area2d.hasLOS(centerPointIsVisible);
-}
-
-/**
- * Test a target token for line-of-sight using top/bottom token areas.
- * @param {VisionSource} visionSource
- * @param {Token} target
- * @param {object} pt       Point to test
- * @returns {boolean} True if source has line-of-sight for center point, false otherwise
- */
-export function testLOSArea3d(visionSource, target, test) {
-  // If this is not the center point, do not test.
-  if ( !testIsCenterPoint(target, test) ) return false;
-
-  // Avoid errors when testing vision for tokens directly on top of one another
-  if ( visionSource.x === target.center.x && visionSource.y === target.center.y ) return false;
-
-  // TODO: Add debug to config, add a getter to check for targeted?
-  const config = {
-    type: "sight",
-    liveTokensBlock: false,
-    deadTokensBlock: false
-  };
-
-  if ( DEBUG.forceLiveTokensBlock ) config.liveTokensBlock = true;
-  if ( DEBUG.forceDeadTokensBlock ) config.deadTokensBlock = true;
-
-  const area3d = new Area3d(visionSource, target, config);
-
-  // Set debug only if the target is being targeted.
-  // Avoids "double-vision" from multiple targets for area3d on scene.
-  if ( DEBUG.los ) {
-    const targets = canvas.tokens.placeables.filter(t => t.isTargeted);
-    area3d.debug = targets.some(t => t === target);
+  for ( const viewerPoint of viewerPoints ) {
+    const calc = new cl(viewerPoint, target, opts);
+    const hasLOS = calc.hasLOS(threshold);
+    if ( hasLOS ) return true;
   }
-  return area3d.hasLOS();
-}
-
-/**
- * Helper to determine whether a test point is a center point.
- * Required b/c Levels obliterates the test object.
- * See https://github.com/theripper93/Levels/blob/d9a48ca21e353413d2d631fa03273a5a28a1dcf7/scripts/wrappers.js#L129-L174
- * @param {Token} target
- * @param {object} test
- * @returns {boolean}
- */
-function testIsCenterPoint(target, test) {
-  if ( typeof test.centerPoint !== "undefined" ) return test.centerPoint;
-
-  const { center, topZ, bottomZ } = target;
-  const avgZ = bottomZ + ((topZ - bottomZ) * 0.5);
-  const point = test.point;
-  return center.x.almostEqual(point.x) && center.y.almostEqual(point.y) && avgZ.almostEqual(point.z);
+  return false;
 }
 
 /**

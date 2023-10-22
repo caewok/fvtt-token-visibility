@@ -1,7 +1,6 @@
 /* globals
-Hooks,
 game,
-canvas
+Hooks
 */
 "use strict";
 
