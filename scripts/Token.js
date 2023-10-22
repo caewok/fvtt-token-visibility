@@ -19,10 +19,8 @@ PATCHES.BASIC = {};
  * If the token is controlled or uncontrolled, clear debug drawings.
  */
 function controlToken(_token, _controlled) {
-  if ( getSetting(SETTINGS.DEBUG.RANGE) || getSetting(SETTINGS.DEBUG.LOS) ) {
-    DEBUG_GRAPHICS.RANGE.clear();
-    DEBUG_GRAPHICS.LOS.clear();
-  }
+  if ( getSetting(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
+  if ( getSetting(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
 }
 
 /**
@@ -59,13 +57,8 @@ PATCHES.BASIC.HOOKS = { controlToken, updateToken };
  * Reset the debugging drawings.
  */
 function updateSource(wrapper, ...args) {
-  if ( getSetting(SETTINGS.DEBUG.RANGE) || getSetting(SETTINGS.DEBUG.LOS) ) {
-//     const drawRange = new Draw(DEBUG_GRAPHICS.RANGE);
-//     const drawLOS = new Draw(DEBUG_GRAPHICS.LOS);
-//     drawRange.clearDrawings();
-//     drawLOS.clearDrawings();
-  }
-
+  if ( getSetting(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
+  if ( getSetting(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
   return wrapper(...args);
 }
 

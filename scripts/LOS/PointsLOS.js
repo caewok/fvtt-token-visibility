@@ -298,7 +298,7 @@ export class PointsLOS extends AlternativeLOS {
    */
   _testTargetPoints(targetPointsArray) {
     let minBlocked = 1;
-    let minTargetPoints; // Debugging
+    let minTargetPoints = []; // Debugging
     const debug = this.config.debug;
     for ( const targetPoints of targetPointsArray ) {
       const percentBlocked = this._testPointToPoints(targetPoints);
