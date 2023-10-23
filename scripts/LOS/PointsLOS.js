@@ -358,15 +358,22 @@ export class PointsLOS extends AlternativeLOS {
   _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
     const draw = new Draw(DEBUG_GRAPHICS.LOS);
     const viewerPoint = this.viewerPoint;
+    const visibleTargetShape = this.config.visibleTargetShape;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
+      const outsideVisibleShape = visibleTargetShape
+        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y)
+
       const tokenCollision = this._hasTokenCollision(viewerPoint, targetPoint);
       const edgeCollision = this._hasWallCollision(viewerPoint, targetPoint)
         || this._hasTileCollision(viewerPoint, targetPoint);
 
-      const color = (tokenCollision && !edgeCollision) ? Draw.COLORS.yellow
-        : edgeCollision ? Draw.COLORS.red : Draw.COLORS.green;
+      let color;
+      if ( outsideVisibleShape ) color = Draw.COLORS.gray;
+      else if ( tokenCollision && !edgeCollision ) color = Draw.COLORS.yellow;
+      else if ( edgeCollision ) color = Draw.COLORS.red;
+      else color = Draw.COLORS.green;
 
       draw.segment({ A: viewerPoint, B: targetPoint }, { alpha, width, color });
     }
