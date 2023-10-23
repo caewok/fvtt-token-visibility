@@ -107,8 +107,7 @@ function losTargetPointsChanged(event) {
   const targetPoints = event.target.value;
 
   const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}`);
-  const losAlgorithm = elem.value;
-
+  const losAlgorithm = elem[0].value;
   updateTargetInsetDisplay(targetPoints, losAlgorithm);
 }
 
