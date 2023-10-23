@@ -180,7 +180,11 @@ export class Area2dLOS extends AlternativeLOS {
     if ( this.config.debug ) {
       const draw = new Draw(DEBUG_GRAPHICS.LOS);
       draw.shape(los, { color: Draw.COLORS.orange });
-      draw.shape(tokenShape, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red });
+
+      const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
+      const visibleShape = this.config.visibleTargetShape;
+      draw.shape(tokenShape, { color, fill: color, fillAlpha: 0.5});
+      if ( visibleShape ) draw.shape(visibleShape, { color: Draw.COLORS.yellow });
     }
     return hasLOS;
   }

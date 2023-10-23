@@ -52,7 +52,10 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 export class Area3dLOS extends AlternativeLOS {
 
   /** @type {TokenPoints3d} */
-  _targetTokenPoints3d;
+  targetPoints;
+
+  /** @type {TokenPoints3d} */
+  visibleTargetPoints;
 
   /** @type {Point3d} */
   _targetTop;
@@ -166,7 +169,8 @@ export class Area3dLOS extends AlternativeLOS {
   constructor(viewer, target, config = {}) {
     super(viewer, target, config);
     this.#configure(config);
-    this._targetPoints = new TokenPoints3d(target);
+    this.targetPoints = new TokenPoints3d(target);
+    this.visibleTargetPoints = new TokenPoints3d(target, { tokenBorder: this.config.visibleTargetShape });
 
     // Set debug only if the target is being targeted.
     // Avoids "double-vision" from multiple targets for area3d on scene.
@@ -213,8 +217,19 @@ export class Area3dLOS extends AlternativeLOS {
     // e.g., walls slightly block the center point. Or walls block all but center.
 
     const percentVisible = this.percentAreaVisible();
-    if ( percentVisible.almostEqual(0) ) return false;
-    return (percentVisible > thresholdArea) || percentVisible.almostEqual(thresholdArea);
+    const hasLOS = !percentVisible.almostEqual(0)
+      && ((percentVisible > thresholdArea)
+        || percentVisible.almostEqual(thresholdArea))
+
+    if ( this.config.debug ) {
+      // Fill in the constrained border on canvas
+      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
+      const visibleShape = this.config.visibleTargetShape;
+      draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.5});
+      if ( visibleShape ) draw.shape(visibleShape, { color: Draw.COLORS.yellow });
+    }
+    return hasLOS;
   }
 
   /**
@@ -260,11 +275,7 @@ export class Area3dLOS extends AlternativeLOS {
     objs.tokens.forEach(t => Draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
 
     // Draw the target in 3d, centered on 0,0
-    this.targetPoints.drawTransformed({ drawTool: this.drawTool });
-
-    // Fill in the constrained border on canvas
-    const draw = new Draw(DEBUG_GRAPHICS.LOS);
-    draw.shape(this.target.constrainedTokenBorder, { color: colors.red, fillAlpha: 0.5});
+    this.visibleTargetPoints.drawTransformed({ drawTool: this.drawTool });
 
     // Draw the detected objects in 3d, centered on 0,0
     const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
@@ -293,11 +304,6 @@ export class Area3dLOS extends AlternativeLOS {
   }
 
   // NOTE ----- GETTERS / SETTERS ----- //
-
-  /**
-   * @type {TokenPoints3d}
-   */
-  get targetPoints() { return this._targetPoints; }
 
   /** @type {BlockingObjects} */
   get blockingObjects() {
@@ -380,9 +386,11 @@ export class Area3dLOS extends AlternativeLOS {
     this._calculateViewerCameraMatrix();
 
     // Set the matrix to look at the target from the viewer.
-    const { targetPoints, viewerPoint, viewerViewM } = this;
+    const { visibleTargetPoints, targetPoints, viewerPoint, viewerViewM } = this;
     targetPoints.setViewingPoint(viewerPoint);
     targetPoints.setViewMatrix(viewerViewM);
+    visibleTargetPoints.setViewingPoint(viewerPoint);
+    visibleTargetPoints.setViewMatrix(viewerViewM);
 
     // Set the matrix to look at blocking point objects from the viewer.
     const blockingPoints = this.blockingPoints;
@@ -441,11 +449,15 @@ export class Area3dLOS extends AlternativeLOS {
     const blockingObject = ClipperPaths.combinePaths(blockingPaths);
 
     // For each side, union the blocking wall with any shadows and then take diff against the side
+    const tVisibleTarget = this.visibleTargetPoints.perspectiveTransform();
+    const visibleSidePolys = tVisibleTarget.map(side => new PIXI.Polygon(side));
+    const obscuredSides = blockingObject
+      ? visibleSidePolys.map(side => blockingObject.diffPolygon(side))
+      : visibleSidePolys;
+
+    // Calculate the non-obscured sides.
     const tTarget = this.targetPoints.perspectiveTransform();
     const sidePolys = tTarget.map(side => new PIXI.Polygon(side));
-    const obscuredSides = blockingObject
-      ? sidePolys.map(side => blockingObject.diffPolygon(side))
-      : sidePolys;
 
     return { obscuredSides, sidePolys };
   }
