@@ -216,7 +216,7 @@ function visibilityTestFn(tokens) {
   const out = [];
 
   // Avoid caching the constrained token shape
-  for ( const token of tokens ) token._constrainedTokenShape = undefined;
+  for ( const token of tokens ) token._constrainedTokenBorder = undefined;
 
   for ( const token of tokens ) {
     const tolerance = token.document.iconSize / 4;

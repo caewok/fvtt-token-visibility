@@ -54,7 +54,7 @@ function _testLOS(wrapped, visionSource, mode, target, test, visibleTargetShape)
 
   // Limit the visible shape to vision angle if necessary.
   if ( this.angle && visionSource.data.angle < 360 ) {
-    visibleTargetShape ??= target.constrainedTokenShape;
+    visibleTargetShape ??= target.constrainedTokenBorder;
     visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
   }
 
