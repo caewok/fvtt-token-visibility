@@ -104,52 +104,44 @@ export class Area2dLOS extends AlternativeLOS {
     const draw = debug ? (new Draw(DEBUG_GRAPHICS.LOS)) : undefined;
 
     // Start with easy cases, in which the center point is determinative.
-    if ( !this.config.visibleTokenShape || this.config.visibleTokenShape instanceof PIXI.Rectangle ) {
+    if ( !this.config.visibleTargetShape || this.config.visibleTargetShape instanceof PIXI.Rectangle ) {
       const targetCenter = Point3d.fromTokenCenter(this.target);
-      let centerPointIsVisible = false;
-      const visibleTokenShape = this.config.visibleTokenShape;
-      if ( !visibleTokenShape || visibleTokenShape.contains(targetCenter.x, targetCenter.y) ) {
-        centerPointIsVisible = this._hasCollision(this.viewerPoint, targetCenter);
-      }
+      const centerPointIsVisible = !this._hasCollision(this.viewerPoint, targetCenter);
 
       // If less than 50% of the token area is required to be viewable, then
       // if the center point is viewable, the token is viewable from that source.
-  //     if ( centerPointIsVisible && threshold < 0.50 ) {
-  //       if ( debug ) draw.point(this.target.center, {
-  //         alpha: 1,
-  //         radius: 3,
-  //         color: Draw.COLORS.green });
-  //       return true;
-  //     }
+      if ( centerPointIsVisible && threshold < 0.50 ) {
+        if ( debug ) draw.point(this.target.center, {
+          alpha: 1,
+          radius: 3,
+          color: Draw.COLORS.green });
+        return true;
+      }
 
       // If more than 50% of the token area is required to be viewable, then
       // the center point must be viewable for the token to be viewable from that source.
       // (necessary but not sufficient)
-//       if ( !centerPointIsVisible && threshold >= 0.50 ) {
-//         if ( debug ) draw.point(this.target.center, {
-//           alpha: 1,
-//           radius: 3,
-//           color: Draw.COLORS.red });
-//         return false;
-//       }
-
+      if ( !centerPointIsVisible && threshold >= 0.50 ) {
+        if ( debug ) draw.point(this.target.center, {
+          alpha: 1,
+          radius: 3,
+          color: Draw.COLORS.red });
+        return false;
+      }
     }
-
-
-
 
     const shadowLOS = this._buildShadowLOS();
-    if ( threshold === 0 ) {
-      // If percentArea equals zero, it might be possible to just measure if a token boundary has been breached.
-      const constrained = this.target.constrainedTokenBorder;
-      const bottomTest = shadowLOS.bottom ? this._targetBoundsTest(shadowLOS.bottom, constrained) : undefined;
-      if ( bottomTest ) return true;
-
-      const topTest = shadowLOS.top ? this._targetBoundsTest(shadowLOS.top, constrained) : undefined;
-      if ( topTest ) return true;
-
-      if ( typeof bottomTest !== "undefined" || typeof topTest !== "undefined" ) return false;
-    }
+//     if ( threshold === 0 ) {
+//       // If percentArea equals zero, it might be possible to just measure if a token boundary has been breached.
+//       const constrained = this.target.constrainedTokenBorder;
+//       const bottomTest = shadowLOS.bottom ? this._targetBoundsTest(shadowLOS.bottom, constrained) : undefined;
+//       if ( bottomTest ) return true;
+//
+//       const topTest = shadowLOS.top ? this._targetBoundsTest(shadowLOS.top, constrained) : undefined;
+//       if ( topTest ) return true;
+//
+//       if ( typeof bottomTest !== "undefined" || typeof topTest !== "undefined" ) return false;
+//     }
 
     const percentVisible = this.percentVisible(shadowLOS);
     if ( percentVisible.almostEqual(0) ) return false;
@@ -327,15 +319,15 @@ export class Area2dLOS extends AlternativeLOS {
    * @returns {number}
    */
   _calculatePercentSeen(los, tokenShape) {
-    const visibleTokenShape = this._intersectShapeWithLOS(this.config.visibleTokenShape ?? tokenShape, los);
-    if ( !visibleTokenShape.length ) return 0;
+    const visibleTargetShape = this._intersectShapeWithLOS(this.config.visibleTargetShape ?? tokenShape, los);
+    if ( !visibleTargetShape.length ) return 0;
 
     // The denominator is the token area before considering blocking objects.
     const tokenArea = tokenShape.scaledArea({scalingFactor: Area2d.SCALING_FACTOR});
     if ( !tokenArea || tokenArea.almostEqual(0) ) return 0;
 
     let seenArea = 0;
-    for ( const poly of visibleTokenShape ) {
+    for ( const poly of visibleTargetShape ) {
       if ( poly.isHole ) seenArea -= this._calculateSeenAreaForPolygon(poly) ?? 0;
       else seenArea += this._calculateSeenAreaForPolygon(poly) ?? 0;
     }
@@ -348,7 +340,7 @@ export class Area2dLOS extends AlternativeLOS {
       const percentArea = getSetting(SETTINGS.LOS.PERCENT);
       const hasLOS = (percentSeen > percentArea) || percentSeen.almostEqual(percentArea);
       this._drawLOS(los);
-      visibleTokenShape.forEach(poly => this._drawTokenShape(poly, hasLOS));
+      visibleTargetShape.forEach(poly => this._drawTokenShape(poly, hasLOS));
     }
 
     return percentSeen;

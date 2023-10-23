@@ -333,13 +333,13 @@ export class PointsLOS extends AlternativeLOS {
    */
   _testPointToPoints(targetPoints) {
     const viewerPoint = this.viewerPoint;
-    const visibleTokenShape = this.config.visibleTokenShape;
+    const visibleTargetShape = this.config.visibleTargetShape;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
-      const outsideVisibleShape = visibleTokenShape
-        && !visibleTokenShape.contains(targetPoint.x, targetPoint.y)
+      const outsideVisibleShape = visibleTargetShape
+        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y)
 
       numPointsBlocked += ( outsideVisibleShape
         || this._hasTokenCollision(viewerPoint, targetPoint)

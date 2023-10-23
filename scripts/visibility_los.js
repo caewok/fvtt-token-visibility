@@ -173,7 +173,7 @@ const LOS_CLASSES = {
   "los-area-3d": Area3dLOS
 };
 
-export function testLOS(visionSource, target, visibleShape) {
+export function testLOS(visionSource, target, visibleTargetShape) {
   // Avoid errors when testing vision for tokens directly on top of one another
   const targetCenter = target.center;
 
@@ -186,7 +186,7 @@ export function testLOS(visionSource, target, visibleShape) {
     liveTokensBlock: false,
     liveForceHalfCover: false,
     proneTokensBlock: false,
-    visibleShape,
+    visibleTargetShape,
     visionSource
   };
   const viewerToken = visionSource.object;

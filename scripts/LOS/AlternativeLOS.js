@@ -54,7 +54,7 @@ export class AlternativeLOS {
    * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
    * @property {boolean} liveTokensBlock              Can live tokens block in this test?
    * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
-   * @property {PIXI.Polygon} visibleTokenShape       Portion of the token shape that is visible.
+   * @property {PIXI.Polygon} visibleTargetShape       Portion of the token shape that is visible.
    * @property {boolean} debug                        Enable debug visualizations.
    */
   config = {};
@@ -88,7 +88,7 @@ export class AlternativeLOS {
     cfg.liveTokensBlock = config.liveTokensBlock || false;
     cfg.proneTokensBlock = config.proneTokensBlock || true;
     cfg.debug = config.debug || getSetting(SETTINGS.DEBUG.LOS);
-    cfg.visibleTokenShape = config.visibleTokenShape ?? undefined;
+    cfg.visibleTargetShape = config.visibleTargetShape ?? undefined;
   }
 
   // ------ NOTE: Primary methods to be overridden by subclass -----
