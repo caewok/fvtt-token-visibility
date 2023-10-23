@@ -131,6 +131,8 @@ export class Area2dLOS extends AlternativeLOS {
     }
 
     const shadowLOS = this._buildShadowLOS();
+
+    // TODO: Can this be fixed?
 //     if ( threshold === 0 ) {
 //       // If percentArea equals zero, it might be possible to just measure if a token boundary has been breached.
 //       const constrained = this.target.constrainedTokenBorder;
