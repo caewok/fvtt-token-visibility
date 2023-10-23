@@ -8,13 +8,12 @@ PIXI
 */
 "use strict";
 
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
 import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
 import { MODULES_ACTIVE } from "../const.js";
 import { buildTokenPoints } from "../util.js";
-import { SETTINGS, getSetting } from "../settings.js";
+import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "../settings.js";
 import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
 
 // Geometry folder
@@ -38,6 +37,22 @@ import { Draw } from "../geometry/Draw.js";
 
 */
 
+/* Testing
+Draw = CONFIG.GeometryLib.Draw
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+api = game.modules.get("tokenvisibility").api;
+Area2dLOS = api.Area2dLOS;
+
+let [viewer] = canvas.tokens.controlled;
+let [target] = game.user.targets;
+
+calc = new Area2dLOS(viewer, target)
+calc.hasLOS()
+calc.percentVisible()
+
+*/
+
+
 export class Area2dLOS extends AlternativeLOS {
 
   /**
@@ -46,39 +61,82 @@ export class Area2dLOS extends AlternativeLOS {
   static SCALING_FACTOR = 100;
 
   /**
+   * @typedef {Area2dLOSConfig}  Configuration settings for this class.
+   * @type {AlternativeLOSConfig}
+   * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of source (light, sight, etc.)
+   * @property {boolean} wallsBlock                   Can walls block in this test?
+   * @property {boolean} tilesBlock                   Can tiles block in this test?
+   * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
+   * @property {boolean} liveTokensBlock              Can live tokens block in this test?
+   * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
+   * @property {boolean} debug                        Enable debug visualizations.
+   *
+   * Added by this subclass:
+   * @property {VisionSource} visionSource            The vision source of the viewer. Required.
+   */
+
+  /**
+   * @param {Point3d|Token|VisionSource} viewer       Object from which to determine line-of-sight
+   *   If more than token center is required, then this must be a Token or VisionSource
+   * @param {Token} target                            Object to test for visibility
+   * @param {AlternativeLOSConfig} [config]
+   */
+  constructor(viewer, target, config) {
+    super(viewer, target, config);
+    this.#configure(config);
+  }
+
+  #configure(config = {}) {
+    if ( !config.visionSource ) { console.error("Area2dLOS requires a visionSource."); }
+    const cfg = this.config;
+    cfg.visionSource = config.visionSource ?? canvas.tokens.controlled[0] ?? [...canvas.tokens.placeables][0];
+  }
+
+  /**
    * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * @param {number} [threshold]    Threshold required to be met.
+   * LOS is based on the percent area of the 2d (overhead) token shape is visible from the
+   * viewer point.
+   * @param {number} [threshold]    Percentage area required
    * @returns {boolean}
    */
   hasLOS(threshold) {
-    const centerPointIsVisible = this._hasCollision(this.viewerPoint, Point3d.fromTokenCenter(this.target));
+    const debug = this.config.debug;
+    const draw = debug ? (new Draw(DEBUG_GRAPHICS.LOS)) : undefined;
+
+    // Start with easy cases, in which the center point is determinative.
+    const targetCenter = Point3d.fromTokenCenter(this.target);
+    let centerPointIsVisible = false;
+    const visibleTokenShape = this.config.visibleTokenShape;
+    if ( !visibleTokenShape || visibleTokenShape.contains(targetCenter.x, targetCenter.y) ) {
+      centerPointIsVisible = this._hasCollision(this.viewerPoint, targetCenter);
+    }
 
     // If less than 50% of the token area is required to be viewable, then
     // if the center point is viewable, the token is viewable from that source.
-    if ( centerPointIsVisible && threshold < 0.50 ) {
-      if ( this.debug ) Draw.point(this.target.center, {
-        alpha: 1,
-        radius: 3,
-        color: Draw.COLORS.green });
-      return true;
-    }
+//     if ( centerPointIsVisible && threshold < 0.50 ) {
+//       if ( debug ) draw.point(this.target.center, {
+//         alpha: 1,
+//         radius: 3,
+//         color: Draw.COLORS.green });
+//       return true;
+//     }
 
     // If more than 50% of the token area is required to be viewable, then
     // the center point must be viewable for the token to be viewable from that source.
     // (necessary but not sufficient)
-    if ( !centerPointIsVisible && threshold >= 0.50 ) {
-      if ( this.debug ) Draw.point(this.target.center, {
-        alpha: 1,
-        radius: 3,
-        color: Draw.COLORS.red });
-      return false;
-    }
+//     if ( !centerPointIsVisible && threshold >= 0.50 ) {
+//       if ( debug ) draw.point(this.target.center, {
+//         alpha: 1,
+//         radius: 3,
+//         color: Draw.COLORS.red });
+//       return false;
+//     }
 
-    const constrained = ConstrainedTokenBorder.get(this.target, this.config.type).constrainedBorder();
+
+    const constrained = this.target.constrainedTokenBorder;
     const shadowLOS = this._buildShadowLOS();
     if ( threshold === 0 ) {
-      // If percentArea equals zero, it might be possible to skip intersectConstrainedShapeWithLOS
-      // and instead just measure if a token boundary has been breached.
+      // If percentArea equals zero, it might be possible to just measure if a token boundary has been breached.
 
       const bottomTest = shadowLOS.bottom ? this._targetBoundsTest(shadowLOS.bottom, constrained) : undefined;
       if ( bottomTest ) return true;
@@ -89,7 +147,7 @@ export class Area2dLOS extends AlternativeLOS {
       if ( typeof bottomTest !== "undefined" || typeof topTest !== "undefined" ) return false;
     }
 
-    const percentVisible = this.percentAreaVisible(shadowLOS);
+    const percentVisible = this.percentVisible(shadowLOS);
     if ( percentVisible.almostEqual(0) ) return false;
 
     return (percentVisible > threshold) || percentVisible.almostEqual(threshold);
@@ -103,11 +161,12 @@ export class Area2dLOS extends AlternativeLOS {
    */
   percentVisible(shadowLOS) {
     shadowLOS ??= this._buildShadowLOS();
-
     const constrained = this.target.constrainedTokenBorder;
     const targetPercentAreaBottom = shadowLOS.bottom ? this._calculatePercentSeen(shadowLOS.bottom, constrained) : 0;
     const targetPercentAreaTop = shadowLOS.top ? this._calculatePercentSeen(shadowLOS.top, constrained) : 0;
-    return Math.max(targetPercentAreaBottom, targetPercentAreaTop);
+    const percent = Math.max(targetPercentAreaBottom, targetPercentAreaTop);
+    if ( this.config.debug ) console.debug(`Area2dLOS|${this.target.name} is ${Math.round(percent * 100)}% visible from ${this.config.visionSource?.object?.name}`);
+    return percent;
   }
 
   /**
@@ -120,9 +179,10 @@ export class Area2dLOS extends AlternativeLOS {
     if ( los instanceof ClipperPaths ) return undefined;
 
     const hasLOS = this._sourceIntersectsPolygonBounds(los, tokenShape);
-    if ( this.debug ) {
-      Draw.drawShape(los, { color: Draw.COLORS.blue });
-      Draw.drawShape(tokenShape, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red });
+    if ( this.config.debug ) {
+      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      draw.shape(los, { color: Draw.COLORS.blue });
+      draw.shape(tokenShape, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red });
     }
     return hasLOS;
   }
@@ -280,7 +340,7 @@ export class Area2dLOS extends AlternativeLOS {
 
     const percentSeen = seenArea / tokenArea;
 
-    if ( this.debug ) {
+    if ( this.config.debug ) {
       const percentArea = getSetting(SETTINGS.LOS.PERCENT);
       const hasLOS = (percentSeen > percentArea) || percentSeen.almostEqual(percentArea);
       this._drawLOS(los);
@@ -324,7 +384,8 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {boolean} hasLOS
    */
   _drawTokenShape(polygon, hasLOS) {
-    Draw.shape(polygon, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red });
+    const draw = new Draw(DEBUG_GRAPHICS.LOS);
+    draw.shape(polygon, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red });
   }
 
   /**
@@ -332,14 +393,15 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {PIXI.Polygon|ClipperPaths} los
    */
   _drawLOS(los) {
+    const draw = new Draw(DEBUG_GRAPHICS.LOS);
     if ( los instanceof ClipperPaths ) los = los.simplify();
     if ( los instanceof ClipperPaths ) {
       const polys = los.toPolygons();
       for ( const poly of polys ) {
-        Draw.shape(poly, { color: Draw.COLORS.blue, width: poly.isHole ? 1 : 2 });
+        draw.shape(poly, { color: Draw.COLORS.blue, width: poly.isHole ? 1 : 2 });
       }
     } else {
-      Draw.shape(los, { color: Draw.COLORS.blue, width: 2 });
+      draw.shape(los, { color: Draw.COLORS.blue, width: 2 });
     }
   }
 
@@ -377,7 +439,7 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {number} targetElevation
    */
   shadowLOSForElevation(targetElevation = 0) {
-    const visionSource = this.visionSource;
+    const visionSource = this.config.visionSource;
     const { type, liveTokensBlock, deadTokensBlock } = this.config;
 
     // Find the walls and, optionally, tokens, for the triangle between origin and target
@@ -389,7 +451,7 @@ export class Area2dLOS extends AlternativeLOS {
       viewer: visionSource.object,
       debug: this.config.debug
     };
-    const viewableObjs = this.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, filterConfig);
+    const viewableObjs = this.constructor.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, filterConfig);
 
 
     // Note: Wall Height removes walls from LOS calculation if
@@ -412,32 +474,19 @@ export class Area2dLOS extends AlternativeLOS {
       || (elevationZ > bottomZ && targetElevation < bottomZ);
     });
 
-    let losConfig;
-    if ( MODULES_ACTIVE.PERFECT_VISION ) {
-      redoLOS ||= this.config.type !== visionSource.los.config.type || isConstrained(visionSource.los);
-      if ( !redoLOS ) {
-        return visionSource.los;
-      }
-      losConfig = {
-        source: visionSource,
-        type: this.config.type,
-        angle: visionSource.data.angle,
-        rotation: visionSource.data.rotation,
-        externalRadius: visionSource.data.externalRadius
-      };
-    } else {
-      losConfig = visionSource._getPolygonConfiguration();
-      if ( !redoLOS ) {
-        return visionSource._createPolygon(losConfig);
-      }
+    const losConfig = visionSource._getPolygonConfiguration();
+    if ( visionSource.disabled ) losConfig.radius = 0;
+    if ( !redoLOS ) {
+      const polygonClass = CONFIG.Canvas.polygonBackends[visionSource.constructor.sourceType];
+      return polygonClass.create(this.viewerPoint, losConfig);
     }
 
     // Rerun the LOS with infinite walls only
-    const los = CWSweepInfiniteWallsOnly.create(origin, losConfig);
+    const los = CWSweepInfiniteWallsOnly.create(this.viewerPoint, losConfig);
 
     const shadows = [];
     for ( const wall of viewableObjs.walls ) {
-      const shadow = Shadow.constructFromWall(wall, origin, targetElevation);
+      const shadow = Shadow.constructFromWall(wall, this.viewerPoint, targetElevation);
       if ( shadow ) shadows.push(shadow);
     }
 
@@ -462,7 +511,14 @@ export class Area2dLOS extends AlternativeLOS {
       });
     }
 
-    if ( this.debug ) shadows.forEach(shadow => shadow.draw());
+    if ( this.config.debug ) {
+     const color = Draw.COLORS.gray;
+     const width = 1;
+     const fill = Draw.COLORS.gray;
+     const fillAlpha = .5;
+     const draw = new Draw(DEBUG_GRAPHICS.LOS);
+     shadows.forEach(shadow => draw.shape(shadow, { color, width, fill, fillAlpha }));
+    }
 
     const combined = Shadow.combinePolygonWithShadows(los, shadows);
     // TODO: Caching visionSource._losShadows.set(targetElevation, combined);

@@ -14,8 +14,7 @@ import {
   registerSettings,
   getSetting,
   setSetting,
-  DEBUG_GRAPHICS,
-  SETTINGS } from "./settings.js";
+  DEBUG_GRAPHICS } from "./settings.js";
 
 // For API
 import * as bench from "./benchmark.js";

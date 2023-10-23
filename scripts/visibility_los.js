@@ -186,7 +186,8 @@ export function testLOS(visionSource, target, visibleShape) {
     liveTokensBlock: false,
     liveForceHalfCover: false,
     proneTokensBlock: false,
-    visibleShape
+    visibleShape,
+    visionSource
   };
   const viewerToken = visionSource.object;
   const viewerPoints = viewerToken ? PointsLOS.constructViewerPoints(viewerToken)
