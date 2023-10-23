@@ -132,12 +132,10 @@ export class Area2dLOS extends AlternativeLOS {
 //       return false;
 //     }
 
-
-    const constrained = this.target.constrainedTokenBorder;
     const shadowLOS = this._buildShadowLOS();
     if ( threshold === 0 ) {
       // If percentArea equals zero, it might be possible to just measure if a token boundary has been breached.
-
+      const constrained = this.target.constrainedTokenBorder;
       const bottomTest = shadowLOS.bottom ? this._targetBoundsTest(shadowLOS.bottom, constrained) : undefined;
       if ( bottomTest ) return true;
 
@@ -178,10 +176,10 @@ export class Area2dLOS extends AlternativeLOS {
     if ( los instanceof ClipperPaths ) los.simplify();
     if ( los instanceof ClipperPaths ) return undefined;
 
-    const hasLOS = this._sourceIntersectsPolygonBounds(los, tokenShape);
+    const hasLOS = !this._sourceIntersectsPolygonBounds(los, tokenShape);
     if ( this.config.debug ) {
       const draw = new Draw(DEBUG_GRAPHICS.LOS);
-      draw.shape(los, { color: Draw.COLORS.blue });
+      draw.shape(los, { color: Draw.COLORS.orange });
       draw.shape(tokenShape, { color: hasLOS ? Draw.COLORS.green : Draw.COLORS.red });
     }
     return hasLOS;
@@ -344,7 +342,7 @@ export class Area2dLOS extends AlternativeLOS {
       const percentArea = getSetting(SETTINGS.LOS.PERCENT);
       const hasLOS = (percentSeen > percentArea) || percentSeen.almostEqual(percentArea);
       this._drawLOS(los);
-      visibleTokenShape.forEach(poly => this._drawTokenShape(poly, los, hasLOS));
+      visibleTokenShape.forEach(poly => this._drawTokenShape(poly, hasLOS));
     }
 
     return percentSeen;
@@ -398,10 +396,10 @@ export class Area2dLOS extends AlternativeLOS {
     if ( los instanceof ClipperPaths ) {
       const polys = los.toPolygons();
       for ( const poly of polys ) {
-        draw.shape(poly, { color: Draw.COLORS.blue, width: poly.isHole ? 1 : 2 });
+        draw.shape(poly, { color: Draw.COLORS.orange, width: poly.isHole ? 1 : 2 });
       }
     } else {
-      draw.shape(los, { color: Draw.COLORS.blue, width: 2 });
+      draw.shape(los, { color: Draw.COLORS.orange, width: 2 });
     }
   }
 
