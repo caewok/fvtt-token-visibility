@@ -104,33 +104,39 @@ export class Area2dLOS extends AlternativeLOS {
     const draw = debug ? (new Draw(DEBUG_GRAPHICS.LOS)) : undefined;
 
     // Start with easy cases, in which the center point is determinative.
-    const targetCenter = Point3d.fromTokenCenter(this.target);
-    let centerPointIsVisible = false;
-    const visibleTokenShape = this.config.visibleTokenShape;
-    if ( !visibleTokenShape || visibleTokenShape.contains(targetCenter.x, targetCenter.y) ) {
-      centerPointIsVisible = this._hasCollision(this.viewerPoint, targetCenter);
+    if ( !this.config.visibleTokenShape || this.config.visibleTokenShape instanceof PIXI.Rectangle ) {
+      const targetCenter = Point3d.fromTokenCenter(this.target);
+      let centerPointIsVisible = false;
+      const visibleTokenShape = this.config.visibleTokenShape;
+      if ( !visibleTokenShape || visibleTokenShape.contains(targetCenter.x, targetCenter.y) ) {
+        centerPointIsVisible = this._hasCollision(this.viewerPoint, targetCenter);
+      }
+
+      // If less than 50% of the token area is required to be viewable, then
+      // if the center point is viewable, the token is viewable from that source.
+  //     if ( centerPointIsVisible && threshold < 0.50 ) {
+  //       if ( debug ) draw.point(this.target.center, {
+  //         alpha: 1,
+  //         radius: 3,
+  //         color: Draw.COLORS.green });
+  //       return true;
+  //     }
+
+      // If more than 50% of the token area is required to be viewable, then
+      // the center point must be viewable for the token to be viewable from that source.
+      // (necessary but not sufficient)
+//       if ( !centerPointIsVisible && threshold >= 0.50 ) {
+//         if ( debug ) draw.point(this.target.center, {
+//           alpha: 1,
+//           radius: 3,
+//           color: Draw.COLORS.red });
+//         return false;
+//       }
+
     }
 
-    // If less than 50% of the token area is required to be viewable, then
-    // if the center point is viewable, the token is viewable from that source.
-//     if ( centerPointIsVisible && threshold < 0.50 ) {
-//       if ( debug ) draw.point(this.target.center, {
-//         alpha: 1,
-//         radius: 3,
-//         color: Draw.COLORS.green });
-//       return true;
-//     }
 
-    // If more than 50% of the token area is required to be viewable, then
-    // the center point must be viewable for the token to be viewable from that source.
-    // (necessary but not sufficient)
-//     if ( !centerPointIsVisible && threshold >= 0.50 ) {
-//       if ( debug ) draw.point(this.target.center, {
-//         alpha: 1,
-//         radius: 3,
-//         color: Draw.COLORS.red });
-//       return false;
-//     }
+
 
     const shadowLOS = this._buildShadowLOS();
     if ( threshold === 0 ) {
@@ -321,7 +327,7 @@ export class Area2dLOS extends AlternativeLOS {
    * @returns {number}
    */
   _calculatePercentSeen(los, tokenShape) {
-    let visibleTokenShape = this._intersectShapeWithLOS(tokenShape, los);
+    const visibleTokenShape = this._intersectShapeWithLOS(this.config.visibleTokenShape ?? tokenShape, los);
     if ( !visibleTokenShape.length ) return 0;
 
     // The denominator is the token area before considering blocking objects.
