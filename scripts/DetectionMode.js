@@ -1,4 +1,8 @@
 /* globals
+canvas,
+foundry,
+LimitedAnglePolygon,
+Ray,
 Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -52,8 +56,14 @@ function _testLOS(wrapped, visionSource, mode, target, test, visibleTargetShape)
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
 
-  // Limit the visible shape to vision angle if necessary.
+  // Check if limited angle interferes with view of this target.
   if ( this.angle && visionSource.data.angle < 360 ) {
+    if ( !this._testAngle(visionSource, mode, target, test) ) {
+      test.los.set(visionSource, false);
+      return false;
+    }
+
+    // Limit the visible shape to vision angle.
     visibleTargetShape ??= target.constrainedTokenBorder;
     visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
   }
@@ -115,11 +125,52 @@ function _testRange(wrapped, visionSource, mode, target, test) {
 function _testAngle(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
-  return true; // Handled in visible Token
+
+  // If completely outside the angle, we can return false.
+  // Otherwise, handled in visible Token
+  return targetWithinLimitedAngleVision(visionSource, target);
 }
 
 PATCHES.BASIC.MIXES = { _testLOS, _testRange, _testAngle };
 
+
+/* Benchmark limited vision testing
+api = game.modules.get("tokenvisibility").api
+QBenchmarkLoopFn = api.bench.QBenchmarkLoopFn
+let [viewer] = canvas.tokens.controlled;
+let [target] = game.user.targets;
+visionSource = viewer.vision
+
+function overlapLimitedAngle(target, visionSource) {
+  const constrainedTokenBorder = target.constrainedTokenBorder;
+  const { angle, rotation, externalRadius } = visionSource.data;
+  const radius = canvas.dimensions.maxR;
+  const limitedAnglePoly = new LimitedAnglePolygon(visionSource, { radius, angle, rotation, externalRadius });
+  return constrainedTokenBorder.overlaps(limitedAnglePoly)
+}
+
+function testLimitedAngle(target, visionSource) {
+  return targetWithinLimitedAngleVision(visionSource, target)
+}
+
+function envelopsLimitedAngle(target, visionSource) {
+  const constrainedTokenBorder = target.constrainedTokenBorder;
+  const { angle, rotation, externalRadius } = visionSource.data;
+  const radius = canvas.dimensions.maxR;
+  const limitedAnglePoly = new LimitedAnglePolygon(visionSource, { radius, angle, rotation, externalRadius });
+  return limitedAnglePoly.envelops(constrainedTokenBorder);
+}
+
+N = 10000
+await QBenchmarkLoopFn(N, overlapLimitedAngle, "Overlaps limited angle", target, visionSource);
+await QBenchmarkLoopFn(N, testLimitedAngle, "Test limited angle", target, visionSource);
+await QBenchmarkLoopFn(N, envelopsLimitedAngle, "Envelops limited angle", target, visionSource);
+
+Overlaps limited angle | 10000 iterations | 223.5ms | 0.0223ms per | 10/50/90: 0 / 0 / 0.1
+Test limited angle | 10000 iterations | 30.2ms | 0.003ms per | 10/50/90: 0 / 0 / 0
+Envelops limited angle | 10000 iterations | 190ms | 0.019ms per | 10/50/90: 0 / 0 / 0.1
+
+*/
 
 /**
  * Take a token and intersects it with the vision angle.
@@ -140,9 +191,54 @@ function constrainByVisionAngle(visibleShape, visionSource) {
   if ( limitedAnglePoly.envelops(visibleShape) ) return visibleShape;
 
   // If the visible shape does not overlap, we are done.
-  if ( !visibleShape.overlaps(limitedAnglePoly) ) return null;
+  // if ( !visibleShape.overlaps(limitedAnglePoly) ) return null;
 
   // Intersect the vision polygon with the visible token shape.
   return visibleShape.intersectPolygon(limitedAnglePoly);
 }
 
+
+/**
+ * Test if any part of the target is within the limited angle vision of the token.
+ * @returns {boolean}
+ */
+function targetWithinLimitedAngleVision(visionSource, target) {
+  const angle = visionSource.data.angle;
+  if ( angle === 360 ) return true;
+
+  // Does the target intersect the two rays from viewer center?
+  // Does the target fall between the two rays?
+  const { x, y, rotation } = visionSource.data;
+
+  // The angle of the left (counter-clockwise) edge of the emitted cone in radians.
+  // See LimitedAnglePolygon
+  const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
+
+  // The angle of the right (clockwise) edge of the emitted cone in radians.
+  const aMax = aMin + Math.toRadians(angle);
+
+  const constrainedTokenBorder = target.constrainedTokenBorder;
+
+  // For each edge:
+  // If it intersects a ray, target is within.
+  // If an endpoint is within the limited angle, target is within
+  const rMin = Ray.fromAngle(x, y, aMin, canvas.dimensions.maxR);
+  const rMax = Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
+
+  // Probably worth checking the target center first
+  const center = target.center;
+  if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return true;
+  if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return true;
+
+  // TODO: Would it be more performant to assign an angle to each target point?
+  // Or maybe just check orientation of ray to each point?
+  const edges = constrainedTokenBorder.toPolygon().iterateEdges();
+  for ( const edge of edges ) {
+    if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return true;
+    if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return true;
+    if ( LimitedAnglePolygon.pointBetweenRays(edge.A, rMin, rMax, angle) ) return true;
+    if ( LimitedAnglePolygon.pointBetweenRays(edge.B, rMin, rMax, angle) ) return true;
+  }
+
+  return false;
+}
