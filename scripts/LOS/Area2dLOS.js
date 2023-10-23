@@ -133,17 +133,17 @@ export class Area2dLOS extends AlternativeLOS {
     const shadowLOS = this._buildShadowLOS();
 
     // TODO: Can this be fixed?
-//     if ( threshold === 0 ) {
-//       // If percentArea equals zero, it might be possible to just measure if a token boundary has been breached.
-//       const constrained = this.target.constrainedTokenBorder;
-//       const bottomTest = shadowLOS.bottom ? this._targetBoundsTest(shadowLOS.bottom, constrained) : undefined;
-//       if ( bottomTest ) return true;
-//
-//       const topTest = shadowLOS.top ? this._targetBoundsTest(shadowLOS.top, constrained) : undefined;
-//       if ( topTest ) return true;
-//
-//       if ( typeof bottomTest !== "undefined" || typeof topTest !== "undefined" ) return false;
-//     }
+    //     if ( threshold === 0 ) {
+    //       // If percentArea equals zero, it might be possible to just measure if a token boundary has been breached.
+    //       const constrained = this.target.constrainedTokenBorder;
+    //       const bottomTest = shadowLOS.bottom ? this._targetBoundsTest(shadowLOS.bottom, constrained) : undefined;
+    //       if ( bottomTest ) return true;
+    //
+    //       const topTest = shadowLOS.top ? this._targetBoundsTest(shadowLOS.top, constrained) : undefined;
+    //       if ( topTest ) return true;
+    //
+    //       if ( typeof bottomTest !== "undefined" || typeof topTest !== "undefined" ) return false;
+    //     }
 
     const percentVisible = this.percentVisible(shadowLOS);
     if ( percentVisible.almostEqual(0) ) return false;
@@ -441,8 +441,8 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {number} targetElevation
    */
   shadowLOSForElevation(targetElevation = 0) {
-    const visionSource = this.config.visionSource;
-    const { type, liveTokensBlock, deadTokensBlock } = this.config;
+    const viewerPoint = this.viewerPoint;
+    const { type, liveTokensBlock, deadTokensBlock, visionSource } = this.config;
 
     // Find the walls and, optionally, tokens, for the triangle between origin and target
     const filterConfig = {
@@ -453,7 +453,7 @@ export class Area2dLOS extends AlternativeLOS {
       viewer: visionSource.object,
       debug: this.config.debug
     };
-    const viewableObjs = this.constructor.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, filterConfig);
+    const viewableObjs = this.constructor.filterSceneObjectsByVisionPolygon(viewerPoint, this.target, filterConfig);
 
 
     // Note: Wall Height removes walls from LOS calculation if
@@ -480,15 +480,15 @@ export class Area2dLOS extends AlternativeLOS {
     if ( visionSource.disabled ) losConfig.radius = 0;
     if ( !redoLOS ) {
       const polygonClass = CONFIG.Canvas.polygonBackends[visionSource.constructor.sourceType];
-      return polygonClass.create(this.viewerPoint, losConfig);
+      return polygonClass.create(viewerPoint, losConfig);
     }
 
     // Rerun the LOS with infinite walls only
-    const los = CWSweepInfiniteWallsOnly.create(this.viewerPoint, losConfig);
+    const los = CWSweepInfiniteWallsOnly.create(viewerPoint, losConfig);
 
     const shadows = [];
     for ( const wall of viewableObjs.walls ) {
-      const shadow = Shadow.constructFromWall(wall, this.viewerPoint, targetElevation);
+      const shadow = Shadow.constructFromWall(wall, viewerPoint, targetElevation);
       if ( shadow ) shadows.push(shadow);
     }
 
@@ -514,12 +514,12 @@ export class Area2dLOS extends AlternativeLOS {
     }
 
     if ( this.config.debug ) {
-     const color = Draw.COLORS.gray;
-     const width = 1;
-     const fill = Draw.COLORS.gray;
-     const fillAlpha = .5;
-     const draw = new Draw(DEBUG_GRAPHICS.LOS);
-     shadows.forEach(shadow => draw.shape(shadow, { color, width, fill, fillAlpha }));
+      const color = Draw.COLORS.gray;
+      const width = 1;
+      const fill = Draw.COLORS.gray;
+      const fillAlpha = .5;
+      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      shadows.forEach(shadow => draw.shape(shadow, { color, width, fill, fillAlpha }));
     }
 
     const combined = Shadow.combinePolygonWithShadows(los, shadows);
@@ -531,14 +531,3 @@ export class Area2dLOS extends AlternativeLOS {
 /** For backwards compatibility */
 export const Area2d = Area2dLOS;
 Area2dLOS.prototype.percentAreaVisible = Area2dLOS.prototype.percentVisible;
-
-function isConstrained(los) {
-  const boundaryShapes = los.config.boundaryShapes;
-  if ( boundaryShapes.length === 0 ) return false;
-  if ( boundaryShapes.length >= 2 ) return true;
-
-  const boundaryShape = boundaryShapes[0];
-  if ( !(boundaryShape instanceof LimitedAnglePolygon) ) return true;
-
-  return boundaryShape.radius < canvas.dimensions.maxR;
-}

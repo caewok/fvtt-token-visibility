@@ -2,7 +2,6 @@
 canvas,
 CONST,
 foundry,
-LimitedAnglePolygon,
 PIXI
 Ray
 */
@@ -29,7 +28,6 @@ Area:
 */
 
 import { AlternativeLOS } from "./AlternativeLOS.js";
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
 import { area3dPopoutData } from "./Area3dPopout.js"; // Debugging pop-up
 
 // PlaceablePoints folder
@@ -219,7 +217,7 @@ export class Area3dLOS extends AlternativeLOS {
     const percentVisible = this.percentAreaVisible();
     const hasLOS = !percentVisible.almostEqual(0)
       && ((percentVisible > thresholdArea)
-        || percentVisible.almostEqual(thresholdArea))
+        || percentVisible.almostEqual(thresholdArea));
 
     if ( this.config.debug ) {
       // Fill in the constrained border on canvas
@@ -238,8 +236,6 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {number}
    */
   percentAreaVisible() {
-    if ( !this._targetWithinLimitedAngleVision() ) return 0;
-
     const objs = this.blockingObjects;
     if ( !this.debug
       && !objs.walls.size
@@ -721,51 +717,6 @@ export class Area3dLOS extends AlternativeLOS {
     const tiles = ClipperPaths.combinePaths(tilesHoled);
     tiles.combine().clean();
     return tiles;
-  }
-
-  /**
-   * Test if any part of the target is within the limited angle vision of the token.
-   * @returns {boolean}
-   */
-  _targetWithinLimitedAngleVision() {
-    const angle = this.config.visionSource.data.angle;
-    if ( angle === 360 ) return true;
-
-    // Does the target intersect the two rays from viewer center?
-    // Does the target fall between the two rays?
-    const { x, y, rotation } = this.config.visionSource.data;
-
-    // The angle of the left (counter-clockwise) edge of the emitted cone in radians.
-    // See LimitedAnglePolygon
-    const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
-
-    // The angle of the right (clockwise) edge of the emitted cone in radians.
-    const aMax = aMin + Math.toRadians(angle);
-
-    const constrainedTokenBorder = ConstrainedTokenBorder.get(this.target).constrainedBorder();
-
-    // For each edge:
-    // If it intersects a ray, target is within.
-    // If an endpoint is within the limited angle, target is within
-    const rMin = Ray.fromAngle(x, y, aMin, canvas.dimensions.maxR);
-    const rMax = Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
-
-    // Probably worth checking the target center first
-    const center = this.target.center;
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return true;
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return true;
-
-    // TODO: Would it be more performant to assign an angle to each target point?
-    // Or maybe just check orientation of ray to each point?
-    const edges = constrainedTokenBorder.toPolygon().iterateEdges();
-    for ( const edge of edges ) {
-      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return true;
-      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return true;
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.A, rMin, rMax, angle) ) return true;
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.B, rMin, rMax, angle) ) return true;
-    }
-
-    return false;
   }
 
   /**
