@@ -88,8 +88,9 @@ function _testPoint(wrapped, visionSource, mode, target, test) {
     && this._testLOS(visionSource, mode, target, test) ) return true;
 
   // Outside of vision range, token is visible if the lit portions are visible.
-  const visibleShape = constrainTokenShapeWithLights(target);
-  return this._testLOS(visionSource, mode, target, test, visibleShape);
+  const visibleTargetShape = constrainTokenShapeWithLights(target);
+  if ( visibleTargetShape === null ) return false;
+  return this._testLOS(visionSource, mode, target, test, visibleTargetShape);
 }
 
 
@@ -105,30 +106,30 @@ function constrainTokenShapeWithLights(token) {
   const tokenBorder = token.constrainedTokenBorder;
 
   // If the global light source is present, then we can use the whole token.
-  if ( canvas.effects.illumination.globalLight ) return tokenBorder;
+  if ( canvas.effects.illumination.globalLight ) return undefined;
 
   // Cannot really use quadtree b/c it doesn't contain all light sources.
-  const lightShapes = [...canvas.effects.lightSources];
+  const lightShapes = [];
   for ( const light of canvas.effects.lightSources.values() ) {
     const lightShape = light.shape;
     if ( !light.active || lightShape.points < 6 ) continue; // Avoid disabled or broken lights.
 
     // If a light envelops the token shape, then we can use the entire token shape.
-    if ( lightShape.envelops.tokenBorder ) return tokenBorder;
+    if ( lightShape.envelops(tokenBorder) ) return undefined;
 
     // If the token overlaps the light, then we may need to intersect the shape.
     if ( tokenBorder.overlaps(lightShape) ) lightShapes.push(lightShape);
   }
+  if ( !lightShapes.length ) return null;
 
   const paths = ClipperPaths.fromPolygons(lightShapes);
   const tokenPath = ClipperPaths.fromPolygons(tokenBorder instanceof PIXI.Rectangle
-    ? tokenBorder.toPolygon() : tokenBorder);
+    ? [tokenBorder.toPolygon()] : [tokenBorder]);
   const combined = paths
     .combine()
     .intersectPaths(tokenPath)
-    .clean();
-
-  if ( combined.paths.length === 1 ) return combined.simplify();
+    .clean()
+    .simplify();
   return combined;
 }
 

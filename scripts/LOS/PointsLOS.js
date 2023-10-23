@@ -137,7 +137,7 @@ export class PointsLOS extends AlternativeLOS {
    * @param {Point3d|Token|VisionSource} viewer       Object from which to determine line-of-sight
    *   If more than token center is required, then this must be a Token or VisionSource
    * @param {Token} target                            Object to test for visibility
-   * @param {AlternativeLOSConfig} config
+   * @param {AlternativeLOSConfig} [config]
    */
   constructor(viewer, target, config) {
     super(viewer, target, config);
@@ -171,7 +171,8 @@ export class PointsLOS extends AlternativeLOS {
 
   /**
    * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * @param {number} [threshold]    Percentage to be met to be considered visible
+   * LOS is based on the number of points visible from the viewer position.
+   * @param {number} [threshold]    Percentage visible points required
    * @returns {boolean}
    */
   hasLOS(threshold) {
@@ -185,7 +186,9 @@ export class PointsLOS extends AlternativeLOS {
    * @returns {number}
    */
   percentVisible() {
-    return (1 - this.applyPercentageTest());
+    const percent = 1 - this.applyPercentageTest();
+    if ( this.config.debug ) console.debug(`PointsLOS|${this.target.name} is ${Math.round(percent * 100)}% visible.`);
+    return percent;
   }
 
   applyPercentageTest() {
@@ -330,13 +333,13 @@ export class PointsLOS extends AlternativeLOS {
    */
   _testPointToPoints(targetPoints) {
     const viewerPoint = this.viewerPoint;
-    const visibleTokenShape = this.config.visibleTokenShape;
+    const visibleTargetShape = this.config.visibleTargetShape;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
-      const outsideVisibleShape = visibleTokenShape
-        && !visibleTokenShape.contains(targetPoint.x, targetPoint.y)
+      const outsideVisibleShape = visibleTargetShape
+        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y)
 
       numPointsBlocked += ( outsideVisibleShape
         || this._hasTokenCollision(viewerPoint, targetPoint)

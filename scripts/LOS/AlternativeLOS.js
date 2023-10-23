@@ -16,7 +16,7 @@ VisionSource
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
 import { lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "../util.js";
-import { SETTINGS, getSetting } from "../settings.js";
+import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "../settings.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -54,7 +54,7 @@ export class AlternativeLOS {
    * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
    * @property {boolean} liveTokensBlock              Can live tokens block in this test?
    * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
-   * @property {PIXI.Polygon} visibleTokenShape       Portion of the token shape that is visible.
+   * @property {PIXI.Polygon} visibleTargetShape       Portion of the token shape that is visible.
    * @property {boolean} debug                        Enable debug visualizations.
    */
   config = {};
@@ -88,7 +88,7 @@ export class AlternativeLOS {
     cfg.liveTokensBlock = config.liveTokensBlock || false;
     cfg.proneTokensBlock = config.proneTokensBlock || true;
     cfg.debug = config.debug || getSetting(SETTINGS.DEBUG.LOS);
-    cfg.visibleTokenShape = config.visibleTokenShape ?? undefined;
+    cfg.visibleTargetShape = config.visibleTargetShape ?? undefined;
   }
 
   // ------ NOTE: Primary methods to be overridden by subclass -----
@@ -330,8 +330,9 @@ export class AlternativeLOS {
     debug = false,
     viewer } = {}) {
 
+    const draw = debug ? (new Draw(DEBUG_GRAPHICS.LOS)) : undefined;
     visionPolygon ??= this.visionPolygon(viewingPoint, target);
-    if ( debug ) Draw.shape(visionPolygon,
+    if ( debug ) draw.shape(visionPolygon,
       { color: Draw.COLORS.blue, fillAlpha: 0.2, fill: Draw.COLORS.blue });
 
     const { topZ, bottomZ } = target;
@@ -343,14 +344,14 @@ export class AlternativeLOS {
       out.walls = this
         .filterWallsByVisionPolygon(viewingPoint, visionPolygon, { type })
         .filter(w => (w.topZ > minE) && (w.bottomZ < maxE)); // Filter walls too low or too high.
-      if ( debug ) out.walls.forEach(w => Draw.segment(w, { color: Draw.COLORS.gray, alpha: 0.2 }));
+      if ( debug ) out.walls.forEach(w => draw.segment(w, { color: Draw.COLORS.gray, alpha: 0.2 }));
     }
 
     if ( filterTokens ) {
       out.tokens = this
         .filterTokensByVisionPolygon(visionPolygon, { viewer, target })
         .filter(t => (t.topZ > minE) && (t.bottomZ < maxE)); // Filter tokens too low or too high.
-      if ( debug ) out.tokens.forEach(t => Draw.shape(t.bounds, { color: Draw.COLORS.gray }));
+      if ( debug ) out.tokens.forEach(t => draw.shape(t.bounds, { color: Draw.COLORS.gray }));
     }
 
     if ( filterTiles ) {
@@ -371,8 +372,8 @@ export class AlternativeLOS {
       if ( out.tiles.size ) out.drawings = this.filterDrawingsByVisionPolygon(visionPolygon);
 
       if ( debug ) {
-        out.tiles.forEach(t => Draw.shape(t.bounds, { color: Draw.COLORS.gray }));
-        out.drawings.forEach(d => Draw.shape(d.bounds, { color: Draw.COLORS.gray }));
+        out.tiles.forEach(t => draw.shape(t.bounds, { color: Draw.COLORS.gray }));
+        out.drawings.forEach(d => draw.shape(d.bounds, { color: Draw.COLORS.gray }));
       }
     }
 

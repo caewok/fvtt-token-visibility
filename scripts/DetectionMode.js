@@ -44,7 +44,7 @@ PATCHES.BASIC.WRAPS = { testVisibility };
  * Mixed wrap DetectionMode.prototype._testLOS
  * Handle different types of LOS visibility tests.
  */
-function _testLOS(wrapped, visionSource, mode, target, test, visibleShape) {
+function _testLOS(wrapped, visionSource, mode, target, test, visibleTargetShape) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
@@ -54,12 +54,12 @@ function _testLOS(wrapped, visionSource, mode, target, test, visibleShape) {
 
   // Limit the visible shape to vision angle if necessary.
   if ( this.angle && visionSource.data.angle < 360 ) {
-    visibleShape ??= target.constrainedTokenShape;
-    visibleShape = constrainByVisionAngle(visibleShape, visionSource);
+    visibleTargetShape ??= target.constrainedTokenShape;
+    visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
   }
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-  hasLOS = testLOS(visionSource, target, visibleShape);
+  hasLOS = testLOS(visionSource, target, visibleTargetShape);
   test.los.set(visionSource, hasLOS);
   return hasLOS;
 }
