@@ -39,8 +39,7 @@ import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
 // Base folder
-import { DEBUG } from "../const.js";
-import { getSetting, SETTINGS } from "../settings.js";
+import { getSetting, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
 import { buildTokenPoints } from "../util.js";
 
 // Geometry folder
@@ -53,7 +52,10 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 export class Area3dLOS extends AlternativeLOS {
 
   /** @type {TokenPoints3d} */
-  _targetTokenPoints3d;
+  targetPoints;
+
+  /** @type {TokenPoints3d} */
+  visibleTargetPoints;
 
   /** @type {Point3d} */
   _targetTop;
@@ -166,15 +168,22 @@ export class Area3dLOS extends AlternativeLOS {
    */
   constructor(viewer, target, config = {}) {
     super(viewer, target, config);
-
-    this._targetPoints = new TokenPoints3d(target);
+    this.#configure(config);
+    this.targetPoints = new TokenPoints3d(target);
+    this.visibleTargetPoints = new TokenPoints3d(target, { tokenBorder: this.config.visibleTargetShape });
 
     // Set debug only if the target is being targeted.
     // Avoids "double-vision" from multiple targets for area3d on scene.
-    if ( DEBUG.area ) {
+    if ( this.config.debug ) {
       const targets = canvas.tokens.placeables.filter(t => t.isTargeted);
       this.debug = targets.some(t => t === target);
     }
+  }
+
+  #configure(config = {}) {
+    if ( !config.visionSource ) { console.error("Area3dLOS requires a visionSource."); }
+    const cfg = this.config;
+    cfg.visionSource = config.visionSource ?? canvas.tokens.controlled[0] ?? [...canvas.tokens.placeables][0];
   }
 
   get debug() { return this.#debug; }
@@ -208,8 +217,19 @@ export class Area3dLOS extends AlternativeLOS {
     // e.g., walls slightly block the center point. Or walls block all but center.
 
     const percentVisible = this.percentAreaVisible();
-    if ( percentVisible.almostEqual(0) ) return false;
-    return (percentVisible > thresholdArea) || percentVisible.almostEqual(thresholdArea);
+    const hasLOS = !percentVisible.almostEqual(0)
+      && ((percentVisible > thresholdArea)
+        || percentVisible.almostEqual(thresholdArea))
+
+    if ( this.config.debug ) {
+      // Fill in the constrained border on canvas
+      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
+      const visibleShape = this.config.visibleTargetShape;
+      draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.5});
+      if ( visibleShape ) draw.shape(visibleShape, { color: Draw.COLORS.yellow });
+    }
+    return hasLOS;
   }
 
   /**
@@ -255,10 +275,7 @@ export class Area3dLOS extends AlternativeLOS {
     objs.tokens.forEach(t => Draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
 
     // Draw the target in 3d, centered on 0,0
-    this.targetPoints.drawTransformed({ drawTool: this.drawTool });
-
-    // Fill in the constrained border on canvas
-    Draw.shape(this.target.constrainedTokenBorder, { color: colors.red, fillAlpha: 0.5});
+    this.visibleTargetPoints.drawTransformed({ drawTool: this.drawTool });
 
     // Draw the detected objects in 3d, centered on 0,0
     const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
@@ -287,11 +304,6 @@ export class Area3dLOS extends AlternativeLOS {
   }
 
   // NOTE ----- GETTERS / SETTERS ----- //
-
-  /**
-   * @type {TokenPoints3d}
-   */
-  get targetPoints() { return this._targetPoints; }
 
   /** @type {BlockingObjects} */
   get blockingObjects() {
@@ -374,9 +386,11 @@ export class Area3dLOS extends AlternativeLOS {
     this._calculateViewerCameraMatrix();
 
     // Set the matrix to look at the target from the viewer.
-    const { targetPoints, viewerPoint, viewerViewM } = this;
+    const { visibleTargetPoints, targetPoints, viewerPoint, viewerViewM } = this;
     targetPoints.setViewingPoint(viewerPoint);
     targetPoints.setViewMatrix(viewerViewM);
+    visibleTargetPoints.setViewingPoint(viewerPoint);
+    visibleTargetPoints.setViewMatrix(viewerViewM);
 
     // Set the matrix to look at blocking point objects from the viewer.
     const blockingPoints = this.blockingPoints;
@@ -435,11 +449,15 @@ export class Area3dLOS extends AlternativeLOS {
     const blockingObject = ClipperPaths.combinePaths(blockingPaths);
 
     // For each side, union the blocking wall with any shadows and then take diff against the side
+    const tVisibleTarget = this.visibleTargetPoints.perspectiveTransform();
+    const visibleSidePolys = tVisibleTarget.map(side => new PIXI.Polygon(side));
+    const obscuredSides = blockingObject
+      ? visibleSidePolys.map(side => blockingObject.diffPolygon(side))
+      : visibleSidePolys;
+
+    // Calculate the non-obscured sides.
     const tTarget = this.targetPoints.perspectiveTransform();
     const sidePolys = tTarget.map(side => new PIXI.Polygon(side));
-    const obscuredSides = blockingObject
-      ? sidePolys.map(side => blockingObject.diffPolygon(side))
-      : sidePolys;
 
     return { obscuredSides, sidePolys };
   }
@@ -466,20 +484,23 @@ export class Area3dLOS extends AlternativeLOS {
       wallsBlock,
       liveTokensBlock,
       deadTokensBlock,
-      tilesBlock } = this.config;
+      tilesBlock,
+      visionSource } = this.config;
 
     // Clear any prior objects from the respective sets
     const { terrainWalls, walls } = this._blockingObjects;
     terrainWalls.clear();
     walls.clear();
 
-    const objsFound = this.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, {
+    const filterConfig = {
       type,
       filterWalls: wallsBlock,
       filterTokens: liveTokensBlock || deadTokensBlock,
       filterTiles: tilesBlock,
       debug: this.debug,
-      viewer: this.viewer.object });
+      viewer: visionSource.object
+    };
+    const objsFound = this.constructor.filterSceneObjectsByVisionPolygon(this.viewerPoint, this.target, filterConfig);
 
     this._blockingObjects.drawings = objsFound.drawings;
     this._blockingObjects.tokens = objsFound.tokens;
@@ -558,7 +579,10 @@ export class Area3dLOS extends AlternativeLOS {
     const blockingPoints = this._blockingPoints;
     const viewerLoc = this.viewerPoint;
 
-    if ( this.debug ) Draw.shape(visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
+    if ( this.config.debug ) {
+      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      draw.shape(visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
+    }
 
     // Clear the existing arrays.
     tiles.length = 0;
@@ -704,12 +728,12 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {boolean}
    */
   _targetWithinLimitedAngleVision() {
-    const angle = this.viewer.data.angle;
+    const angle = this.config.visionSource.data.angle;
     if ( angle === 360 ) return true;
 
     // Does the target intersect the two rays from viewer center?
     // Does the target fall between the two rays?
-    const { x, y, rotation } = this.viewer.data;
+    const { x, y, rotation } = this.config.visionSource.data;
 
     // The angle of the left (counter-clockwise) edge of the emitted cone in radians.
     // See LimitedAnglePolygon
@@ -771,10 +795,10 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {null|WallPoints3d[2]}
    */
   _constructLimitedAngleWallPoints3d() {
-    const angle = this.viewer.data.angle;
+    const angle = this.config.visionSource.data.angle;
     if ( angle === 360 ) return null;
 
-    const { x, y, rotation } = this.viewer.data;
+    const { x, y, rotation } = this.config.visionSource.data;
     const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
     const aMax = aMin + Math.toRadians(angle);
 
@@ -797,7 +821,8 @@ export class Area3dLOS extends AlternativeLOS {
    * Draw the line of sight from token to target.
    */
   _drawLineOfSight() {
-    Draw.segment({A: this.viewerPoint, B: this.targetCenter});
+    const draw = new Draw(DEBUG_GRAPHICS.LOS);
+    draw.segment({A: this.viewerPoint, B: this.targetCenter});
   }
 }
 

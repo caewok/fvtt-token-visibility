@@ -47,24 +47,24 @@ export class TokenPoints3d {
    *                                        constrained token shape
    * @param {number} [options.pad]          How many pixels to add to (or subtract from)
    *                                        the token shape. See issue #49.
+   * @param {PIXI.Polygon} [options.tokenBorder] The border of the token, if not the constrained token border
    */
-  constructor(token, { type = "sight", pad = 0 } = {}) {
+  constructor(token, { type = "sight", pad = 0, tokenBorder } = {}) {
     this.token = token;
     this.config.type = type;
     this.config.pad = pad;
-
-    this._setTokenBorder();
+    this._setTokenBorder(tokenBorder);
     this._setTopBottomPoints();
   }
 
   /**
    * Determine the polygon representation of the token border.
+   * @param {PIXI.Polygon} [tokenBorder] The border of the token, if not the constrained token border
    */
-  _setTokenBorder() {
-    const constrainedTokenBorder = ConstrainedTokenBorder.get(this.token, this.config.type).constrainedBorder();
-    this.borderPolygon = constrainedTokenBorder instanceof PIXI.Rectangle
-      ? constrainedTokenBorder.toPolygon() : constrainedTokenBorder;
-
+  _setTokenBorder(tokenBorder) {
+    tokenBorder ??= this.token.constrainedTokenBorder;
+    this.borderPolygon = tokenBorder instanceof PIXI.Rectangle
+      ? tokenBorder.toPolygon() : tokenBorder;
     if ( this.config.pad ) this.borderPolygon = this.borderPolygon.pad(this.config.pad);
   }
 
