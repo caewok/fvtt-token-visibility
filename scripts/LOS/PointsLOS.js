@@ -260,7 +260,8 @@ export class PointsLOS extends AlternativeLOS {
     // Inset by 1 pixel or inset percentage;
     insetPoints(cornerPoints, center, insetPercentage);
     tokenPoints.push(...cornerPoints);
-    if ( pointAlgorithm === TYPES.FOUR || pointAlgorithm === TYPES.EIGHT ) return tokenPoints;
+    if ( pointAlgorithm === TYPES.FOUR
+      || pointAlgorithm === TYPES.FIVE ) return tokenPoints;
 
     // Add in the midpoints between corners.
     const ln = cornerPoints.length;
