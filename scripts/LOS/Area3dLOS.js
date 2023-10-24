@@ -37,7 +37,7 @@ Area3dLOS = api.Area3dLOS;
 let [viewer] = canvas.tokens.controlled;
 let [target] = game.user.targets;
 
-calc = new Area3dLOS(viewer, target, { visionSource: viewer})
+calc = new Area3dLOS(viewer, target)
 calc.hasLOS()
 calc.percentVisible()
 
@@ -804,10 +804,10 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {null|WallPoints3d[2]}
    */
   _constructLimitedAngleWallPoints3d() {
-    const angle = this.config.visionSource.angle;
+    const angle = this.config.visionSource.data.angle;
     if ( angle === 360 ) return null;
 
-    const { x, y, rotation } = this.config.visionSource;
+    const { x, y, rotation } = this.config.visionSource.data;
     const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
     const aMax = aMin + Math.toRadians(angle);
 
