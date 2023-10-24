@@ -38,7 +38,7 @@ import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
 // Base folder
 import { getSetting, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
-import { buildTokenPoints } from "../util.js";
+import { buildTokenPoints } from "./util.js";
 
 // Geometry folder
 import { Draw } from "../geometry/Draw.js"; // For debugging

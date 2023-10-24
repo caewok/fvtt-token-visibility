@@ -12,7 +12,7 @@ import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
 import { MODULES_ACTIVE } from "../const.js";
-import { buildTokenPoints } from "../util.js";
+import { buildTokenPoints } from "./util.js";
 import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "../settings.js";
 import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
 

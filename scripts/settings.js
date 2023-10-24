@@ -15,22 +15,22 @@ export const DEBUG_GRAPHICS = {
 };
 
 // Non-caching alt:
-export function getSetting(settingName) {
-  return game.settings.get(MODULE_ID, settingName);
-}
+// export function getSetting(settingName) {
+//   return game.settings.get(MODULE_ID, settingName);
+// }
 
 // For caching to work, need to clean the cache whenever a setting below changes.
 // Need function for onChange.
 export const settingsCache = new Map();
-// export function getSetting(settingName) {
-//   const cached = settingsCache.get(settingName);
-//   if ( cached === undefined ) {
-//     const value = game.settings.get(MODULE_ID, settingName);
-//     settingsCache.set(settingName, value);
-//     return value;
-//   }
-//   return cached;
-// }
+export function getSetting(settingName) {
+  const cached = settingsCache.get(settingName);
+  if ( cached === undefined ) {
+    const value = game.settings.get(MODULE_ID, settingName);
+    settingsCache.set(settingName, value);
+    return value;
+  }
+  return cached;
+}
 
 /* Testing cached settings
 function fnDefault(settingName) {
@@ -180,7 +180,7 @@ export function registerSettings() {
       step: 0.01
     },
     scope: "world",
-    config: true, // () => getSetting(SETTINGS.LOS.ALGORITHM) !== LTYPES.POINTS,
+    config: true,
     default: 0.75,
     type: Number
   });
