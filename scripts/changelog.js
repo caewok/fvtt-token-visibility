@@ -6,7 +6,7 @@ Dialog
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, DOCUMENTATION_URL } from "./const.js";
 import { SETTINGS, getSetting, setSetting } from "./settings.js";
 const CHANGELOG = SETTINGS.CHANGELOG;
 
@@ -128,7 +128,7 @@ class ChangelogBuilder {
         view_documentation: {
           icon: `<i class="fas fa-book"></i>`,
           label: "View documentation",
-          callback: () => window.open("https://github.com/caewok/fvtt-token-visibility/blob/master/README.md")
+          callback: () => window.open(DOCUMENTATION_URL)
         },
         dont_show_again: {
           icon: `<i class="fas fa-times"></i>`,

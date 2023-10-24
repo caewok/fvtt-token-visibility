@@ -95,7 +95,8 @@ export const SETTINGS = {
   BUTTONS: {
     FOUNDRY_DEFAULT: "button-foundry-default",
     DND_5E_DMG: "button-dnd5e-dmg",
-    THREE_D: "button-three-d"
+    THREE_D: "button-three-d",
+    DOCUMENTATION: "button-documentation"
   },
 
   CHANGELOG: "changelog",

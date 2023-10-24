@@ -7,7 +7,8 @@ ui
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { SETTINGS, getSetting, setSetting } from "./settings.js";
+import { SETTINGS, getSetting } from "./settings.js";
+import { DOCUMENTATION_URL } from "./const.js";
 
 // Patches for the VisionSource class
 export const PATCHES = {};
@@ -15,13 +16,6 @@ PATCHES.BASIC = {};
 
 
 // ----- NOTE: Hooks ----- //
-
-const TMP_SETTINGS = {
-  [SETTINGS.LOS.ALGORITHM]: undefined,
-  [SETTINGS.LOS.VIEWER.NUM_POINTS]: undefined,
-  [SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS]: undefined
-};
-
 
 /**
  * Settings manipulations to hide unneeded settings
@@ -31,15 +25,15 @@ const TMP_SETTINGS = {
  * @param {object} data                 The object of data used when rendering the application
  */
 async function renderSettingsConfig(app, html, data) {
-  const atvSettings = html.find(`section[data-tab="${MODULE_ID}"]`);
-  if ( !atvSettings || !atvSettings.length ) return;
+  if ( !game.user.isGM ) return;
 
-  if ( game.user.isGM ) {
-    const template = `modules/${MODULE_ID}/templates/settings-buttons.html`;
-    const myHTML = await renderTemplate(template, data);
-    atvSettings.last().after(myHTML);
-    app.setPosition(app.position);
-  }
+  const settings = html.find(`section[data-tab="${MODULE_ID}"]`);
+  if ( !settings || !settings.length ) return;
+
+  const template = `modules/${MODULE_ID}/templates/settings-buttons.html`;
+  const myHTML = await renderTemplate(template, data);
+  settings.last().after(myHTML);
+  app.setPosition(app.position);
 
   activateListenersSettingsConfig(app, html);
 
@@ -51,11 +45,6 @@ async function renderSettingsConfig(app, html, data) {
   updatePointOptionDisplay(algorithm);
   updateViewerInsetDisplay(viewerPoints);
   updateTargetInsetDisplay(targetPoints, algorithm);
-
-//   const displayArea = losAlgorithm === SETTINGS.LOS.TYPES.POINTS ? "none" : "block";
-//   const inputLOSArea = atvSettings.find(`input[name="${MODULE_ID}.${SETTINGS.LOS.PERCENT}"]`);
-//   const divLOSArea = inputLOSArea.parent().parent();
-//   divLOSArea[0].style.display = displayArea;
 }
 
 PATCHES.BASIC.HOOKS = { renderSettingsConfig };
@@ -71,6 +60,9 @@ function activateListenersSettingsConfig(app, html) {
   html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}"]`).click(foundryDefaultSettings.bind(app));
   html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DND_5E_DMG}"]`).click(dnd5eDMGSettings.bind(app));
   html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.THREE_D}"]`).click(threeDSettings.bind(app));
+
+  // Documentation button
+  html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DOCUMENTATION}"]`).click(documentation.bind(app));
 }
 
 function losViewerPointsChanged(event) {
@@ -138,8 +130,6 @@ function submitSettingUpdates(settings) {
   updatePointOptionDisplay(losAlgorithm);
   updateViewerInsetDisplay(viewerPoints);
   updateTargetInsetDisplay(targetPoints, losAlgorithm);
-
-  // this.render(true);
 }
 
 function foundryDefaultSettings(event) {
@@ -207,7 +197,6 @@ function threeDSettings(event) {
   event.stopPropagation();
   ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.BUTTONS.THREE_D}.Notification`));
 
-  const PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
   const settings = {
     // Range
     [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
@@ -221,7 +210,7 @@ function threeDSettings(event) {
     // LOS Target
     [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.AREA3D,
     [SETTINGS.LOS.PERCENT]: 0.2,
-    [SETTINGS.LOS.LARGE_TARGET]: true,
+    [SETTINGS.LOS.LARGE_TARGET]: true
 
     // LOS Point options
     // Unused: [PT_OPTS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
@@ -230,4 +219,8 @@ function threeDSettings(event) {
   };
 
   submitSettingUpdates.call(this, settings);
+}
+
+function documentation(event) {
+  window.open(DOCUMENTATION_URL, "_blank");
 }
