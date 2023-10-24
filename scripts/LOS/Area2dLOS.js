@@ -81,6 +81,8 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {AlternativeLOSConfig} [config]
    */
   constructor(viewer, target, config) {
+    if ( viewer instanceof Token ) viewer = viewer.vision;
+    if ( viewer instanceof VisionSource ) config.visionSource ??= viewer;
     super(viewer, target, config);
     this.#configure(config);
   }

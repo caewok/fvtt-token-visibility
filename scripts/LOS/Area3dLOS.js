@@ -27,6 +27,23 @@ Area:
 - Wall shapes block and shadows block. Construct the blocked target shape and calc area.
 */
 
+
+/* Testing
+Draw = CONFIG.GeometryLib.Draw
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+api = game.modules.get("tokenvisibility").api;
+Area3dLOS = api.Area3dLOS;
+
+let [viewer] = canvas.tokens.controlled;
+let [target] = game.user.targets;
+
+calc = new Area3dLOS(viewer, target, { visionSource: viewer})
+calc.hasLOS()
+calc.percentVisible()
+
+*/
+
+
 import { AlternativeLOS } from "./AlternativeLOS.js";
 import { area3dPopoutData } from "./Area3dPopout.js"; // Debugging pop-up
 
@@ -54,6 +71,9 @@ export class Area3dLOS extends AlternativeLOS {
 
   /** @type {TokenPoints3d} */
   visibleTargetPoints;
+
+  /** @type {TokenPoints3d} */
+  gridPoints;
 
   /** @type {Point3d} */
   _targetTop;
@@ -165,6 +185,8 @@ export class Area3dLOS extends AlternativeLOS {
    * @param {Target} target                           Target; token is looking at the target center.
    */
   constructor(viewer, target, config = {}) {
+    if ( viewer instanceof Token ) viewer = viewer.vision;
+    if ( viewer instanceof VisionSource ) config.visionSource ??= viewer;
     super(viewer, target, config);
     this.#configure(config);
     this.targetPoints = new TokenPoints3d(target);
@@ -176,6 +198,8 @@ export class Area3dLOS extends AlternativeLOS {
       const targets = canvas.tokens.placeables.filter(t => t.isTargeted);
       this.debug = targets.some(t => t === target);
     }
+
+    if ( this.config.largeTarget ) this.gridPoints = this._buildGridShape();
   }
 
   #configure(config = {}) {
@@ -198,10 +222,10 @@ export class Area3dLOS extends AlternativeLOS {
   }
 
   /**
-   * Area of a basic grid square to use for the area estimate when dealing with large tokens.
-   * @returns {number}
+   * Build generic grid shape
+   * @returns {TokenPoints3d}
    */
-  _gridSquareArea() {
+  _buildGridShape() {
     const size = canvas.scene.dimensions.size;
     const center = this.target.center;
     const tokenBorder = canvas.grid.isHex
@@ -211,16 +235,19 @@ export class Area3dLOS extends AlternativeLOS {
     // Transform to TokenPoints3d and calculate viewable area.
     // Really only an estimate b/c the view will shift depending on where on the large token
     // we are looking.
-    const gridPoints = new TokenPoints3d(this.target, { tokenBorder });
-    const { viewerPoint, viewerViewM } = this;
-    gridPoints.setViewingPoint(viewerPoint);
-    gridPoints.setViewMatrix(viewerViewM);
-    const tGrid = gridPoints.perspectiveTransform();
+    return new TokenPoints3d(this.target, { tokenBorder });
+  }
+
+  /**
+   * Area of a basic grid square to use for the area estimate when dealing with large tokens.
+   * @returns {number}
+   */
+  _gridSquareArea() {
+    const tGrid = this.gridPoints.perspectiveTransform();
     const sidePolys = tGrid.map(side => new PIXI.Polygon(side));
     return sidePolys.reduce((area, poly) =>
       area += poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}), 0);
   }
-
 
   // NOTE ----- USER-FACING METHODS -----
 
@@ -238,7 +265,7 @@ export class Area3dLOS extends AlternativeLOS {
     // If center point is visible, then target is likely visible but not always.
     // e.g., walls slightly block the center point. Or walls block all but center.
 
-    const percentVisible = this.percentAreaVisible();
+    const percentVisible = this.percentVisible();
     const hasLOS = !percentVisible.almostEqual(0)
       && ((percentVisible > thresholdArea)
         || percentVisible.almostEqual(thresholdArea));
@@ -259,7 +286,7 @@ export class Area3dLOS extends AlternativeLOS {
    * Measured by projecting the 3d token to a 2d canvas representing the viewer's perspective.
    * @returns {number}
    */
-  percentAreaVisible() {
+  percentVisible() {
     const objs = this.blockingObjects;
     if ( !this.debug
       && !objs.walls.size
@@ -281,20 +308,21 @@ export class Area3dLOS extends AlternativeLOS {
     if ( percentSeen < 0.005 ) percentSeen = 0;
 
     if ( this.debug ) this.#drawDebugShapes(objs, obscuredSides, sidePolys);
-
+    if ( this.config.debug ) console.debug(`Area3dLOS|${this.target.name} is ${Math.round(percentSeen * 100)}% visible from ${this.config.visionSource?.object?.name}`);
     return percentSeen;
   }
 
   #drawDebugShapes(objs, obscuredSides, sidePolys) {
     const colors = Draw.COLORS;
+    const draw = new Draw(DEBUG_GRAPHICS.LOS);
     this._drawLineOfSight();
 
     // Draw the detected objects on the canvas
-    objs.walls.forEach(w => Draw.segment(w, { color: colors.blue }));
-    objs.tiles.forEach(t => Draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.5 }));
-    objs.terrainWalls.forEach(w => Draw.segment(w, { color: colors.lightgreen }));
-    objs.drawings.forEach(d => Draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.5 }));
-    objs.tokens.forEach(t => Draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
+    objs.walls.forEach(w => draw.segment(w, { color: colors.blue }));
+    objs.tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.5 }));
+    objs.terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
+    objs.drawings.forEach(d => draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.5 }));
+    objs.tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ drawTool: this.drawTool });
@@ -408,11 +436,15 @@ export class Area3dLOS extends AlternativeLOS {
     this._calculateViewerCameraMatrix();
 
     // Set the matrix to look at the target from the viewer.
-    const { visibleTargetPoints, targetPoints, viewerPoint, viewerViewM } = this;
+    const { visibleTargetPoints, targetPoints, gridPoints, viewerPoint, viewerViewM } = this;
     targetPoints.setViewingPoint(viewerPoint);
     targetPoints.setViewMatrix(viewerViewM);
     visibleTargetPoints.setViewingPoint(viewerPoint);
     visibleTargetPoints.setViewMatrix(viewerViewM);
+    if ( gridPoints ) {
+      gridPoints.setViewingPoint(viewerPoint);
+      gridPoints.setViewMatrix(viewerViewM);
+    }
 
     // Set the matrix to look at blocking point objects from the viewer.
     const blockingPoints = this.blockingPoints;
@@ -772,10 +804,10 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {null|WallPoints3d[2]}
    */
   _constructLimitedAngleWallPoints3d() {
-    const angle = this.config.visionSource.data.angle;
+    const angle = this.config.visionSource.angle;
     if ( angle === 360 ) return null;
 
-    const { x, y, rotation } = this.config.visionSource.data;
+    const { x, y, rotation } = this.config.visionSource;
     const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
     const aMax = aMin + Math.toRadians(angle);
 
