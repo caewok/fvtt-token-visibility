@@ -25,38 +25,11 @@
         "compatibility": {
           "verified": "1.12.8"
         }
-      },
-
-      {
-        "id": "socketlib",
-        "type": "module",
-        "manifest": "https://raw.githubusercontent.com/manuelVo/foundryvtt-socketlib/master/module.json",
-        "compatibility": {
-          "verified": "1.0.12"
-        }
       }
     ]
   },
   "esmodules": [
     "scripts/module.js"
-  ],
-  "packs": [
-    {
-      "name": "tokenvision_macros",
-      "label": "ATV Macros",
-      "path": "packs/macros",
-      "type": "Macro",
-      "private": false
-    },
-    {
-      "name": "tokenvision_items_sfrpg",
-      "label": "ATV Items",
-      "path": "packs/items/sfrpg",
-      "type": "Item",
-      "private": false,
-      "system": "sfrpg"
-    }
-
   ],
   "languages": [
     {
