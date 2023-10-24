@@ -233,7 +233,7 @@ export class PointsLOS extends AlternativeLOS {
       cfg.pointAlgorithm,
       this.target.constrainedTokenBorder,
       targetElevation,
-      cfg.target.inset);
+      cfg.inset);
 
     return [targetPoints];
   }
