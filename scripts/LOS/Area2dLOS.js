@@ -2,7 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-LimitedAnglePolygon,
 objectsEqual,
 PIXI
 */
@@ -90,6 +89,19 @@ export class Area2dLOS extends AlternativeLOS {
     if ( !config.visionSource ) { console.error("Area2dLOS requires a visionSource."); }
     const cfg = this.config;
     cfg.visionSource = config.visionSource ?? canvas.tokens.controlled[0] ?? [...canvas.tokens.placeables][0];
+  }
+
+  /**
+   * Determine the grid square area for use when dealing with large tokens.
+   * @returns {number}
+   */
+  static get gridSquareArea() {
+    const size = canvas.scene.dimensions.size;
+    if ( canvas.grid.isHex ) {
+      // https://en.wikipedia.org/wiki/Hexagon
+      const radius = size * 0.5;
+      return 1.5 * Math.SQRT3 * radius * radius;
+    } else return size * size;
   }
 
   /**
@@ -313,7 +325,6 @@ export class Area2dLOS extends AlternativeLOS {
     return tiles;
   }
 
-
   /**
    * Determine the percent area visible of a token shape given a los polygon.
    * @param {PIXI.Polygon} los
@@ -325,7 +336,8 @@ export class Area2dLOS extends AlternativeLOS {
     if ( !visibleTargetShape.length ) return 0;
 
     // The denominator is the token area before considering blocking objects.
-    const tokenArea = tokenShape.scaledArea({scalingFactor: Area2d.SCALING_FACTOR});
+    let tokenArea = tokenShape.scaledArea({scalingFactor: Area2d.SCALING_FACTOR});
+    if ( this.config.largeTarget ) tokenArea = Math.min(this.constructor.gridSquareArea, tokenArea);
     if ( !tokenArea || tokenArea.almostEqual(0) ) return 0;
 
     let seenArea = 0;
@@ -531,3 +543,5 @@ export class Area2dLOS extends AlternativeLOS {
 /** For backwards compatibility */
 export const Area2d = Area2dLOS;
 Area2dLOS.prototype.percentAreaVisible = Area2dLOS.prototype.percentVisible;
+
+

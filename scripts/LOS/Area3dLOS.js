@@ -197,6 +197,30 @@ export class Area3dLOS extends AlternativeLOS {
     }
   }
 
+  /**
+   * Area of a basic grid square to use for the area estimate when dealing with large tokens.
+   * @returns {number}
+   */
+  _gridSquareArea() {
+    const size = canvas.scene.dimensions.size;
+    const center = this.target.center;
+    const tokenBorder = canvas.grid.isHex
+      ? canvas.grid.grid.getBorderPolygon(1, 1, 0) : new PIXI.Rectangle(0, 0, size, size);
+    tokenBorder.translate(center.x, center.y);
+
+    // Transform to TokenPoints3d and calculate viewable area.
+    // Really only an estimate b/c the view will shift depending on where on the large token
+    // we are looking.
+    const gridPoints = new TokenPoints3d(this.target, { tokenBorder });
+    const { viewerPoint, viewerViewM } = this;
+    gridPoints.setViewingPoint(viewerPoint);
+    gridPoints.setViewMatrix(viewerViewM);
+    const tGrid = gridPoints.perspectiveTransform();
+    const sidePolys = tGrid.map(side => new PIXI.Polygon(side));
+    return sidePolys.reduce((area, poly) =>
+      area += poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}), 0);
+  }
+
 
   // NOTE ----- USER-FACING METHODS -----
 
@@ -244,10 +268,12 @@ export class Area3dLOS extends AlternativeLOS {
       && objs.terrainWalls.size < 2 ) return 1;
 
     const { obscuredSides, sidePolys } = this._obscureSides();
-    const sidesArea = sidePolys.reduce((area, poly) =>
-      area += poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}), 0);
     const obscuredSidesArea = obscuredSides.reduce((area, poly) =>
       area += poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}), 0);
+    let sidesArea = sidePolys.reduce((area, poly) =>
+      area += poly.scaledArea({scalingFactor: Area3d.SCALING_FACTOR}), 0);
+
+    if ( this.config.largeTarget ) sidesArea = Math.min(this._gridSquareArea(), sidesArea);
 
     // Round the percent seen so that near-zero areas are 0.
     // Because of trimming walls near the vision triangle, a small amount of token area can poke through
