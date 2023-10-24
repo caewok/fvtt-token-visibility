@@ -199,11 +199,10 @@ export class AlternativeLOS {
     const { liveTokensBlock, deadTokensBlock } = this.config;
     if ( !(liveTokensBlock || deadTokensBlock) ) return false;
 
-    const ray = new Ray(startPt, endPt);
-    let tokens = canvas.tokens.quadtree.getObjects(ray.bounds);
-
     // Filter out the viewer and target token
-    this._filterTokensForCollisionTesting(tokens);
+    const collisionTest = o => !(o.t.bounds.contains(startPt.x, startPt.y) || o.t.bounds.contains(endPt.x, endPt.y));
+    const ray = new Ray(startPt, endPt);
+    let tokens = canvas.tokens.quadtree.getObjects(ray.bounds, { collisionTest });
 
     // Build full- or half-height startPts3d from tokens
     const tokenPts = buildTokenPoints(tokens, this.config);
@@ -220,14 +219,6 @@ export class AlternativeLOS {
       }
     }
     return false;
-  }
-
-  /**
-   * Filter out tokens from potential collision testing.
-   * @param {Set<Token>} tokens      Array of tokens to be tested for collisions
-   */
-  _filterTokensForCollisionTesting(tokens) {
-    tokens.delete(this.target);
   }
 
   /**
