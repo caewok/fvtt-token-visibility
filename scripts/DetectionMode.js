@@ -11,7 +11,7 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "./settings.js";
-import { AlternativeLOS } from "./AlternativeLOS.js";
+import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};

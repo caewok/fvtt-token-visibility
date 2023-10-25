@@ -79,10 +79,23 @@ Hooks.once("setup", function() {
   registerSettings();
 });
 
-Hooks.once("ready", function() {
+Hooks.on("canvasReady", function() {
+  console.debug("tokenvisibility|canvasReady")
+  DEBUG_GRAPHICS.RANGE = new PIXI.Graphics();
+  DEBUG_GRAPHICS.LOS = new PIXI.Graphics();
+
   if ( getSetting(SETTINGS.DEBUG.RANGE ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
   if ( getSetting(SETTINGS.DEBUG.LOS ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.LOS);
-})
+});
+
+Hooks.on("canvasTearDown", function() {
+  console.debug("tokenvisibility|canvasTearDown");
+  canvas.tokens.removeChild(DEBUG_GRAPHICS.RANGE);
+  canvas.tokens.removeChild(DEBUG_GRAPHICS.LOS);
+  DEBUG_GRAPHICS.RANGE.destroy();
+  DEBUG_GRAPHICS.LOS.destroy();
+});
+
 Hooks.on('createActiveEffect', refreshVisionOnActiveEffect);
 Hooks.on('deleteActiveEffect', refreshVisionOnActiveEffect);
 
