@@ -10,8 +10,8 @@ import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
 
 export const DEBUG_GRAPHICS = {
-  LOS: new PIXI.Graphics(),
-  RANGE: new PIXI.Graphics()
+  LOS: undefined,
+  RANGE: undefined
 };
 
 // Non-caching alt:

@@ -3,7 +3,9 @@ canvas,
 CONST,
 foundry,
 PIXI
-Ray
+Ray,
+Token,
+VisionSource
 */
 "use strict";
 
@@ -227,10 +229,11 @@ export class Area3dLOS extends AlternativeLOS {
    */
   _buildGridShape() {
     const size = canvas.scene.dimensions.size;
-    const center = this.target.center;
-    const tokenBorder = canvas.grid.isHex
-      ? canvas.grid.grid.getBorderPolygon(1, 1, 0) : new PIXI.Rectangle(0, 0, size, size);
-    tokenBorder.translate(center.x, center.y);
+    let tokenBorder = canvas.grid.isHex
+      ? new PIXI.Polygon(canvas.grid.grid.getBorderPolygon(1, 1, 0))
+      : new PIXI.Rectangle(0, 0, size, size);
+    const { x, y } = this.target.center;
+    tokenBorder = tokenBorder.translate(x - (size * 0.5), y - (size * 0.5));
 
     // Transform to TokenPoints3d and calculate viewable area.
     // Really only an estimate b/c the view will shift depending on where on the large token
@@ -314,7 +317,8 @@ export class Area3dLOS extends AlternativeLOS {
 
   #drawDebugShapes(objs, obscuredSides, sidePolys) {
     const colors = Draw.COLORS;
-    const draw = new Draw(DEBUG_GRAPHICS.LOS);
+    const draw = new Draw(DEBUG_GRAPHICS.LOS); // Draw on the canvas.
+    const drawTool = this.drawTool; // Draw in the pop-up box.
     this._drawLineOfSight();
 
     // Draw the detected objects on the canvas
@@ -325,11 +329,11 @@ export class Area3dLOS extends AlternativeLOS {
     objs.tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
 
     // Draw the target in 3d, centered on 0,0
-    this.visibleTargetPoints.drawTransformed({ drawTool: this.drawTool });
+    this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
+    if ( this.gridPoints ) this.gridPoints.drawTransformed({ color: colors.lightred, drawTool });
 
     // Draw the detected objects in 3d, centered on 0,0
     const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
-    const drawTool = this.drawTool;
     pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, drawTool }));
     pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, drawTool }));
     pts.drawings.forEach(d => d.drawTransformed({ color: colors.gray, fillAlpha: 0.7, drawTool }));
