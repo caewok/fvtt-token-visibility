@@ -104,9 +104,9 @@ export class SettingsSubmenu extends FormApplication {
     html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}"]`).change(this.losTargetPointsChanged.bind(this));
 
     // Buttons to reset settings to defaults.
-    html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}"]`).click(this.submitSettingUpdates.bind(this, "button-foundry-default", DefaultSettings.foundry));
-    html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DND_5E_DMG}"]`).click(this.submitSettingUpdates.bind(this, "button-dnd5e-dmg", DefaultSettings.dnd5e));
-    html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.THREE_D}"]`).click(this.submitSettingUpdates.bind(this, "button-three-d", DefaultSettings.threeD));
+    html.find(`[name="${MODULE_ID}-button-foundry"]`).click(this.submitSettingUpdates.bind(this, "foundry"));
+    html.find(`[name="${MODULE_ID}-button-dnd5e"]`).click(this.submitSettingUpdates.bind(this, "dnd5e"));
+    html.find(`[name="${MODULE_ID}-button-threeD"]`).click(this.submitSettingUpdates.bind(this, "threeD"));
   }
 
   /**
@@ -234,10 +234,12 @@ export class SettingsSubmenu extends FormApplication {
    * Modify the settings in the form based on some predetermined settings values.
    * For example, change range and LOS to match Foundry defaults.
    */
-  submitSettingUpdates(defaultSettingName, settings) {
+  submitSettingUpdates(defaultSettingName) {
     event.preventDefault();
     event.stopPropagation();
-    ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.${defaultSettingName}.Notification`));
+    const settings = DefaultSettings[defaultSettingName];
+
+    ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.button-${defaultSettingName}.Notification`));
     const formElements = [...this.form.elements];
     for ( const [settingName, settingValue] of Object.entries(settings) ) {
       const key = `${MODULE_ID}.${settingName}`;

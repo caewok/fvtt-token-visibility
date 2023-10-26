@@ -93,14 +93,6 @@ export const SETTINGS = {
     }
   },
 
-  BUTTONS: {
-    FOUNDRY_DEFAULT: "button-foundry-default",
-    DND_5E_DMG: "button-dnd5e-dmg",
-    THREE_D: "button-three-d",
-    DOCUMENTATION: "button-documentation",
-    ISSUES: "button-issues"
-  },
-
   CHANGELOG: "changelog",
   DEBUG: {
     RANGE: "debug-range",

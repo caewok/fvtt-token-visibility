@@ -44,14 +44,18 @@ PATCHES.BASIC.HOOKS = { renderSettingsConfig };
 
 function activateListenersSettingsConfig(app, html) {
   // Documentation button
-  html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DOCUMENTATION}"]`).click(openDocumentation.bind(app));
-  html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.ISSUE}"]`).click(openIssue.bind(app));
+  html.find(`[name="${MODULE_ID}-button-documentation"]`).click(openDocumentation.bind(app));
+  html.find(`[name="${MODULE_ID}-button-issue"]`).click(openIssue.bind(app));
 }
 
 function openDocumentation(event) {
+  event.preventDefault();
+  event.stopPropagation();
   window.open(DOCUMENTATION_URL, "_blank");
 }
 
 function openIssue(event) {
+  event.preventDefault();
+  event.stopPropagation();
   window.open(ISSUE_URL, "_blank");
 }
