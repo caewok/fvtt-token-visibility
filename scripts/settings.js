@@ -128,9 +128,8 @@ export function registerSettings() {
   // ----- Main Settings Menu ----- //
   game.settings.registerMenu(MODULE_ID, SETTINGS.SUBMENU, {
     name: localize(`${SETTINGS.SUBMENU}.Name`),
-    hint: localize(`${SETTINGS.SUBMENU}.Hint`),
     label: localize(`${SETTINGS.SUBMENU}.Label`),
-    icon: "fas fa-shield",
+    icon: "fas fa-user-gear",
     type: SettingsSubmenu,
     restricted: true
   });
