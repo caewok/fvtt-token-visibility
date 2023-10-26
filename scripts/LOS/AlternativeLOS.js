@@ -90,7 +90,7 @@ export class AlternativeLOS {
     cfg.proneTokensBlock = config.proneTokensBlock || true;
     cfg.debug = config.debug || getSetting(SETTINGS.DEBUG.LOS);
     cfg.visibleTargetShape = config.visibleTargetShape ?? undefined;
-    cfg.largeTarget = config.largeTarget || getSetting(SETTINGS.LOS.LARGE_TARGET);
+    cfg.largeTarget = config.largeTarget || getSetting(SETTINGS.LOS.TARGET.LARGE);
   }
 
   // ------ NOTE: Primary methods to be overridden by subclass -----

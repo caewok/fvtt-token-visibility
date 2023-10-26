@@ -353,7 +353,7 @@ export class Area2dLOS extends AlternativeLOS {
     const percentSeen = seenArea / tokenArea;
 
     if ( this.config.debug ) {
-      const percentArea = getSetting(SETTINGS.LOS.PERCENT);
+      const percentArea = getSetting(SETTINGS.LOS.TARGET.PERCENT);
       const hasLOS = (percentSeen > percentArea) || percentSeen.almostEqual(percentArea);
       this._drawLOS(los);
       visibleTargetShape.forEach(poly => this._drawTokenShape(poly, hasLOS));

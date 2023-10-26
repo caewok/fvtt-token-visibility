@@ -1,0 +1,184 @@
+<form class="flexcol">
+  <nav class="sheet-tabs tabs" data-group="sections">
+    <a class="item" data-tab="range">
+      {{localize "tokenvisibility.template.settings-config.tabs.range"}}
+    </a>
+
+    <a class="item" data-tab="los_viewer">
+      {{localize "tokenvisibility.template.settings-config.tabs.los_viewer"}}
+    </a>
+
+    <a class="item" data-tab="los_target">
+      {{localize "tokenvisibility.template.settings-config.tabs.los_target"}}
+    </a>
+  </nav
+
+  <section class="content">
+    <div class="tab" data-tab="range" data-group="sections">
+      <h2>{{ localize "tokenvisibility.template.settings-config.range"}}</h2>
+      <p><em>{{ localize "tokenvisibility.template.settings-config.rangeDescription"}}</em></p>
+
+      {{#each settings}}
+      {{#if (eq this.tab "range")}}
+
+      <div class="form-group" data-setting-id="{{this.id}}">
+          <label>{{this.name}}</label>
+          <div class="form-fields">
+
+              {{#if this.isCheckbox}}
+              <input type="checkbox" name="{{this.id}}" data-dtype="Boolean" {{checked this.value}}/>
+
+              {{else if this.isSelect}}
+              <select name="{{this.id}}" data-dtype="{{this.type}}">
+                  {{#select this.value}}
+                  {{#each this.choices as |name k|}}
+                  <option value="{{k}}">{{localize name}}</option>
+                  {{/each}}
+                  {{/select}}
+              </select>
+
+              {{else if this.isRange}}
+              <input type="range" name="{{this.id}}" data-dtype="Number" value="{{ this.value }}"
+                     min="{{ this.range.min }}" max="{{ this.range.max }}" step="{{ this.range.step }}"/>
+              <span class="range-value">{{this.value}}</span>
+
+              {{else if this.filePicker}}
+              {{filePicker target=this.id type=this.filePickerType}}
+              <input type="text" name="{{this.id}}" value="{{this.value}}" data-dtype="{{this.type}}"/>
+
+              {{else if this.isNumber}}
+              {{numberInput this.value name=this.id}}
+
+              {{else}}
+              <input type="text" name="{{this.id}}" value="{{this.value}}" data-dtype="{{this.type}}"/>
+              {{/if}}
+          </div>
+
+          <p class="notes">{{this.hint}}</p>
+      </div>
+      {{/if}}
+      {{/each}}
+    </div>
+
+    <div class="tab" data-tab="los_viewer" data-group="sections">
+      <h2>{{ localize "tokenvisibility.template.settings-config.viewer"}}</h2>
+      <p><em>{{ localize "tokenvisibility.template.settings-config.viewerDescription"}}</em></p>
+
+      {{#each settings}}
+      {{#if (eq this.tab "losViewer")}}
+      <div class="form-group" data-setting-id="{{this.id}}">
+          <label>{{this.name}}</label>
+          <div class="form-fields">
+
+              {{#if this.isCheckbox}}
+              <input type="checkbox" name="{{this.id}}" data-dtype="Boolean" {{checked this.value}}/>
+
+              {{else if this.isSelect}}
+              <select name="{{this.id}}" data-dtype="{{this.type}}">
+                  {{#select this.value}}
+                  {{#each this.choices as |name k|}}
+                  <option value="{{k}}">{{localize name}}</option>
+                  {{/each}}
+                  {{/select}}
+              </select>
+
+              {{else if this.isRange}}
+              <input type="range" name="{{this.id}}" data-dtype="Number" value="{{ this.value }}"
+                     min="{{ this.range.min }}" max="{{ this.range.max }}" step="{{ this.range.step }}"/>
+              <span class="range-value">{{this.value}}</span>
+
+              {{else if this.filePicker}}
+              {{filePicker target=this.id type=this.filePickerType}}
+              <input type="text" name="{{this.id}}" value="{{this.value}}" data-dtype="{{this.type}}"/>
+
+              {{else if this.isNumber}}
+              {{numberInput this.value name=this.id}}
+
+              {{else}}
+              <input type="text" name="{{this.id}}" value="{{this.value}}" data-dtype="{{this.type}}"/>
+              {{/if}}
+          </div>
+
+          <p class="notes">{{this.hint}}</p>
+      </div>
+      {{/if}}
+      {{/each}}
+    </div>
+
+    <div class="tab" data-tab="los_target" data-group="sections">
+      <h2>{{ localize "tokenvisibility.template.settings-config.target"}}</h2>
+      <p><em>{{ localize "tokenvisibility.template.settings-config.targetDescription"}}</em></p>
+
+      {{#each settings}}
+      {{#if (eq this.tab "losTarget")}}
+      <div class="form-group" data-setting-id="{{this.id}}">
+          <label>{{this.name}}</label>
+          <div class="form-fields">
+
+              {{#if this.isCheckbox}}
+              <input type="checkbox" name="{{this.id}}" data-dtype="Boolean" {{checked this.value}}/>
+
+              {{else if this.isSelect}}
+              <select name="{{this.id}}" data-dtype="{{this.type}}">
+                  {{#select this.value}}
+                  {{#each this.choices as |name k|}}
+                  <option value="{{k}}">{{localize name}}</option>
+                  {{/each}}
+                  {{/select}}
+              </select>
+
+              {{else if this.isRange}}
+              <input type="range" name="{{this.id}}" data-dtype="Number" value="{{ this.value }}"
+                     min="{{ this.range.min }}" max="{{ this.range.max }}" step="{{ this.range.step }}"/>
+              <span class="range-value">{{this.value}}</span>
+
+              {{else if this.filePicker}}
+              {{filePicker target=this.id type=this.filePickerType}}
+              <input type="text" name="{{this.id}}" value="{{this.value}}" data-dtype="{{this.type}}"/>
+
+              {{else if this.isNumber}}
+              {{numberInput this.value name=this.id}}
+
+              {{else}}
+              <input type="text" name="{{this.id}}" value="{{this.value}}" data-dtype="{{this.type}}"/>
+              {{/if}}
+          </div>
+
+          <p class="notes">{{this.hint}}</p>
+      </div>
+      {{/if}}
+      {{/each}}
+    </div>
+
+  </section>
+
+  <footer class="sheet-footer flextable">
+    <hr>
+    <div class="flexrow">
+    <div class="form-group flexcol">
+      <button name="tokenvisibility-button-foundry">
+        <i class="fas fa-sliders"></i>
+        {{localize "tokenvisibility.settings.button-foundry.Label"}}
+      </button>
+    </div>
+
+    <div class="form-group flexcol">
+      <button name="tokenvisibility-button-dnd5e">
+        <i class="fas fa-sliders"></i>
+        {{localize "tokenvisibility.settings.button-dnd5e.Label"}}
+      </button>
+    </div>
+
+    <div class = "form-group flexcol">
+      <button name="tokenvisibility-button-threeD">
+        <i class="fas fa-sliders"></i>
+        {{localize "tokenvisibility.settings.button-threeD.Label"}}
+      </button>
+    </div>
+    </div>
+  <div class="flexrow">
+  <button type='submit' name='submit' value='1'><i class='far fa-floppy-disk'></i>{{localize "Save Changes"}}</button>
+  </div>
+  </footer>
+
+</form>
