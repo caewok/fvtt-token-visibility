@@ -12,7 +12,7 @@ import { AlternativeLOS } from "./AlternativeLOS.js";
 // Base folder
 import { MODULES_ACTIVE } from "../const.js";
 import { buildTokenPoints } from "./util.js";
-import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "../settings.js";
+import { Settings, SETTINGS, DEBUG_GRAPHICS } from "../Settings.js";
 import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
 
 // Geometry folder
@@ -353,7 +353,7 @@ export class Area2dLOS extends AlternativeLOS {
     const percentSeen = seenArea / tokenArea;
 
     if ( this.config.debug ) {
-      const percentArea = getSetting(SETTINGS.LOS.TARGET.PERCENT);
+      const percentArea = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
       const hasLOS = (percentSeen > percentArea) || percentSeen.almostEqual(percentArea);
       this._drawLOS(los);
       visibleTargetShape.forEach(poly => this._drawTokenShape(poly, hasLOS));

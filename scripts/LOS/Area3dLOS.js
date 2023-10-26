@@ -56,7 +56,7 @@ import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
 // Base folder
-import { getSetting, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
+import { Settings, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
 import { buildTokenPoints } from "./util.js";
 
 // Geometry folder
@@ -263,7 +263,7 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(thresholdArea) {
-    thresholdArea ??= getSetting(SETTINGS.LOS.TARGET.PERCENT);
+    thresholdArea ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
 
     // If center point is visible, then target is likely visible but not always.
     // e.g., walls slightly block the center point. Or walls block all but center.

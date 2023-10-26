@@ -1,14 +1,11 @@
 /* globals
 game,
-renderTemplate,
-ui
+renderTemplate
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { SETTINGS, getSetting } from "./settings.js";
-import { DOCUMENTATION_URL, ISSUE_URL } from "./const.js";
+import { MODULE_ID, DOCUMENTATION_URL, ISSUE_URL } from "./const.js";
 
 // Patches for the VisionSource class
 export const PATCHES = {};

@@ -5,7 +5,7 @@ getObjectProperty
 
 import { EPSILON } from "../const.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
-import { getSetting, SETTINGS } from "../settings.js";
+import { Settings, SETTINGS } from "../settings.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 /**
@@ -144,7 +144,7 @@ export function buildTokenPoints(tokens, config) {
   const { liveTokensBlock, deadTokensBlock, proneTokensBlock } = config;
   if ( !(liveTokensBlock || deadTokensBlock) ) return [];
 
-  const hpAttribute = getSetting(SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE);
+  const hpAttribute = Settings.get(SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE);
 
   // Filter live or dead tokens
   if ( liveTokensBlock ^ deadTokensBlock ) tokens = tokens.filter(t => {

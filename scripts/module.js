@@ -9,12 +9,7 @@ import { MODULE_ID, DEBUG } from "./const.js";
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
-import {
-  SETTINGS,
-  registerSettings,
-  getSetting,
-  setSetting,
-  DEBUG_GRAPHICS } from "./settings.js";
+import { Settings, SETTINGS, DEBUG_GRAPHICS } from "./settings.js";
 
 // For API
 import * as bench from "./benchmark.js";
@@ -63,8 +58,7 @@ Hooks.once("init", function() {
     TilePoints3d,
     VerticalPoints3d,
     HorizontalPoints3d,
-    getSetting,
-    setSetting,
+    Settings,
 
     Area3dPopout,
     area3dPopoutData,
@@ -76,7 +70,7 @@ Hooks.once("init", function() {
 });
 
 Hooks.once("setup", function() {
-  registerSettings();
+  Settings.registerAll();
 });
 
 Hooks.on("canvasReady", function() {
@@ -84,8 +78,8 @@ Hooks.on("canvasReady", function() {
   DEBUG_GRAPHICS.RANGE = new PIXI.Graphics();
   DEBUG_GRAPHICS.LOS = new PIXI.Graphics();
 
-  if ( getSetting(SETTINGS.DEBUG.RANGE ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
-  if ( getSetting(SETTINGS.DEBUG.LOS ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.LOS);
+  if ( Settings.get(SETTINGS.DEBUG.RANGE ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
+  if ( Settings.get(SETTINGS.DEBUG.LOS ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.LOS);
 });
 
 Hooks.on("canvasTearDown", function() {
@@ -104,7 +98,7 @@ Hooks.on('deleteActiveEffect', refreshVisionOnActiveEffect);
  * Refresh vision for relevant active effect creation/deletion
  */
 function refreshVisionOnActiveEffect(activeEffect) {
-  const proneStatusId = CONFIG.GeometryLib.proneStatusId ?? getSetting(SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE);
+  const proneStatusId = CONFIG.GeometryLib.proneStatusId ?? Settings.get(SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE);
   const isProne = activeEffect?.statuses.some((status) => status === proneStatusId);
   if ( !isProne ) return;
 

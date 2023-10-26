@@ -7,7 +7,7 @@ PIXI
 // Patches for the Token class
 
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
-import { DEBUG_GRAPHICS, getSetting, SETTINGS } from "./settings.js";
+import { DEBUG_GRAPHICS, Settings, SETTINGS } from "./settings.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -19,8 +19,8 @@ PATCHES.BASIC = {};
  * If the token is controlled or uncontrolled, clear debug drawings.
  */
 function controlToken(_token, _controlled) {
-  if ( getSetting(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
-  if ( getSetting(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
+  if ( Settings.get(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
+  if ( Settings.get(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
 }
 
 /**
@@ -39,7 +39,7 @@ function updateToken(tokenD, change, _options, _userId) {
   if ( (Object.hasOwn(change, "width") || Object.hasOwn(change, "height")) && token ) token._tokenShape = undefined;
 
   // Token moved; clear drawings.
-  if ( (getSetting(SETTINGS.DEBUG.RANGE) || getSetting(SETTINGS.DEBUG.LOS))
+  if ( (Settings.get(SETTINGS.DEBUG.RANGE) || Settings.get(SETTINGS.DEBUG.LOS))
     && (Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
       || Object.hasOwn(change, "elevation")) ) {
@@ -57,8 +57,8 @@ PATCHES.BASIC.HOOKS = { controlToken, updateToken };
  * Reset the debugging drawings.
  */
 function updateSource(wrapper, ...args) {
-  if ( getSetting(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
-  if ( getSetting(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
+  if ( Settings.get(SETTINGS.DEBUG.RANGE) ) DEBUG_GRAPHICS.RANGE.clear();
+  if ( Settings.get(SETTINGS.DEBUG.LOS) ) DEBUG_GRAPHICS.LOS.clear();
   return wrapper(...args);
 }
 
