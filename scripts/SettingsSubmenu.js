@@ -8,65 +8,71 @@ import { SETTINGS, getSetting, setSetting } from "./settings.js";
 
 class DefaultSettings {
   static get foundry() {
+    const { RANGE, LOS } = SETTINGS;
+    const { VIEWER, TARGET } = LOS;
     return {
       // Range
-      [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
-      [SETTINGS.RANGE.POINTS3D]: false,
-      [SETTINGS.RANGE.DISTANCE3D]: false,
+      [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+      [RANGE.POINTS3D]: false,
+      [RANGE.DISTANCE3D]: false,
 
       // LOS Viewer
-      [SETTINGS.LOS.VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
+      [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
       // Unused: [SETTINGS.LOS.VIEWER.INSET]: 0
 
       // LOS Target
-      [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.POINTS,
-      [SETTINGS.LOS.PERCENT]: 0,
-      [SETTINGS.LOS.LARGE_TARGET]: false,
+      [TARGET.ALGORITHM]: TARGET.TYPES.POINTS,
+      [TARGET.PERCENT]: 0,
+      [TARGET.LARGE]: false,
 
       // LOS Point options
-      [SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.NINE,
-      [SETTINGS.LOS.POINT_OPTIONS.INSET]: 0.75,
-      [SETTINGS.LOS.POINT_OPTIONS.POINTS3D]: false
+      [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.NINE,
+      [TARGET.POINT_OPTIONS.INSET]: 0.75,
+      [TARGET.POINT_OPTIONS.POINTS3D]: false
     };
   }
 
   static get dnd5e() {
+    const { RANGE, LOS } = SETTINGS;
+    const { VIEWER, TARGET } = LOS;
     return {
       // Range
-      [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
-      [SETTINGS.RANGE.POINTS3D]: false,
-      [SETTINGS.RANGE.DISTANCE3D]: false,
+      [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+      [RANGE.POINTS3D]: false,
+      [RANGE.DISTANCE3D]: false,
 
       // LOS Viewer
-      [SETTINGS.LOS.VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
-      [SETTINGS.LOS.VIEWER.INSET]: 0,
+      [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
+      [VIEWER.INSET]: 0,
 
       // LOS Target
-      [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.POINTS,
-      [SETTINGS.LOS.PERCENT]: 0,
-      [SETTINGS.LOS.LARGE_TARGET]: true,
+      [TARGET.ALGORITHM]: TARGET.TYPES.POINTS,
+      [TARGET.PERCENT]: 0,
+      [TARGET.LARGE]: true,
 
       // LOS Point options
-      [SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
-      [SETTINGS.LOS.POINT_OPTIONS.INSET]: 0,
-      [SETTINGS.LOS.POINT_OPTIONS.POINTS3D]: false
+      [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
+      [TARGET.POINT_OPTIONS.INSET]: 0,
+      [TARGET.POINT_OPTIONS.POINTS3D]: false
     };
   }
 
   static get threeD() {
+    const { RANGE, LOS } = SETTINGS;
+    const { VIEWER, TARGET } = LOS;
     return {
       // Range
-      [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
-      [SETTINGS.RANGE.POINTS3D]: true,
-      [SETTINGS.RANGE.DISTANCE3D]: true,
+      [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+      [RANGE.POINTS3D]: true,
+      [RANGE.DISTANCE3D]: true,
 
       // LOS Viewer
-      [SETTINGS.LOS.VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
+      [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
 
       // LOS Target
-      [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.AREA3D,
-      [SETTINGS.LOS.PERCENT]: 0.2,
-      [SETTINGS.LOS.LARGE_TARGET]: true
+      [TARGET.ALGORITHM]: TARGET.TYPES.AREA3D,
+      [TARGET.PERCENT]: 0.2,
+      [TARGET.LARGE]: true
     };
   }
 }
@@ -99,9 +105,9 @@ export class SettingsSubmenu extends FormApplication {
     super.activateListeners(html);
 
     // Hide certain settings depending on options selected.
-    html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}"]`).change(this.losAlgorithmChanged.bind(this));
+    html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.ALGORITHM}"]`).change(this.losAlgorithmChanged.bind(this));
     html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}"]`).change(this.losViewerPointsChanged.bind(this));
-    html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}"]`).change(this.losTargetPointsChanged.bind(this));
+    html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS}"]`).change(this.losTargetPointsChanged.bind(this));
 
     // Buttons to reset settings to defaults.
     html.find(`[name="${MODULE_ID}-button-foundry"]`).click(this.submitSettingUpdates.bind(this, "foundry"));
@@ -122,7 +128,7 @@ export class SettingsSubmenu extends FormApplication {
       if ( v === current ) continue;
       requiresClientReload ||= (s.scope === "client") && s.requiresReload;
       requiresWorldReload ||= (s.scope === "world") && s.requiresReload;
-      promises.add(game.settings.set(s.namespace, s.key, v));
+      promises.push(game.settings.set(s.namespace, s.key, v));
     }
     await Promise.allSettled(promises);
     if ( requiresClientReload || requiresWorldReload ) SettingsConfig.reloadConfirm({world: requiresWorldReload});
@@ -161,9 +167,9 @@ export class SettingsSubmenu extends FormApplication {
 
   _initializeDisplayOptions() {
     const LOS = SETTINGS.LOS;
-    const algorithm = getSetting(LOS.ALGORITHM);
+    const algorithm = getSetting(LOS.TARGET.ALGORITHM);
     const viewerPoints = getSetting(LOS.VIEWER.NUM_POINTS);
-    const targetPoints = getSetting(LOS.POINT_OPTIONS.NUM_POINTS);
+    const targetPoints = getSetting(LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
     this.#updatePointOptionDisplay(algorithm);
     this.#updateViewerInsetDisplay(viewerPoints);
     this.#updateTargetInsetDisplay(targetPoints, algorithm);
@@ -171,9 +177,9 @@ export class SettingsSubmenu extends FormApplication {
   }
 
   _updateDisplayOptions() {
-    const algorithm = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}`).value;
+    const algorithm = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.TARGET.ALGORITHM}`).value;
     const viewerPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}`).value;
-    const targetPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}`).value;
+    const targetPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS}`).value;
     this.#updatePointOptionDisplay(algorithm);
     this.#updateViewerInsetDisplay(viewerPoints);
     this.#updateTargetInsetDisplay(targetPoints, algorithm);
@@ -200,32 +206,32 @@ export class SettingsSubmenu extends FormApplication {
   }
 
   #updatePointOptionDisplay(losAlgorithm) {
-    const displayPointOpts = losAlgorithm === SETTINGS.LOS.TYPES.POINTS ? "block" : "none";
-    const PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
+    const displayPointOpts = losAlgorithm === SETTINGS.LOS.TARGET.TYPES.POINTS ? "block" : "none";
+    const PT_OPTS = SETTINGS.LOS.TARGET.POINT_OPTIONS;
     for ( const opt of Object.values(PT_OPTS) ) {
       const elem = document.getElementsByName(`${MODULE_ID}.${opt}`);
       const div = elem[0].parentElement.parentElement;
       div.style.display = displayPointOpts;
     }
 
-    const numPointsTarget = getSetting(SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS);
+    const numPointsTarget = getSetting(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
     this.#updateTargetInsetDisplay(numPointsTarget, losAlgorithm);
   }
 
   losTargetPointsChanged(event) {
     const targetPoints = event.target.value;
 
-    const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}`);
+    const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.TARGET.ALGORITHM}`);
     const losAlgorithm = elem[0].value;
     this.#updateTargetInsetDisplay(targetPoints, losAlgorithm);
     this.setPosition(this.position);
   }
 
   #updateTargetInsetDisplay(numPoints, losAlgorithm) {
-    const hasMultiplePoints = losAlgorithm === SETTINGS.LOS.TYPES.POINTS
+    const hasMultiplePoints = losAlgorithm === SETTINGS.LOS.TARGET.TYPES.POINTS
       && numPoints !== SETTINGS.POINT_TYPES.CENTER;
     const displayInsetOpts = hasMultiplePoints ? "block" : "none";
-    const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.INSET}`);
+    const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET}`);
     const div = elem[0].parentElement.parentElement;
     div.style.display = displayInsetOpts;
   }

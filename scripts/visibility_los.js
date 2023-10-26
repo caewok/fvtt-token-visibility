@@ -192,8 +192,8 @@ export function testLOS(visionSource, target, visibleTargetShape) {
   const viewerToken = visionSource.object;
   const viewerPoints = viewerToken ? PointsLOS.constructViewerPoints(viewerToken)
     : [Point3d.fromSource(visionSource)];
-  const threshold = getSetting(SETTINGS.LOS.PERCENT);
-  const cl = LOS_CLASSES[getSetting(SETTINGS.LOS.ALGORITHM)];
+  const threshold = getSetting(SETTINGS.LOS.TARGET.PERCENT);
+  const cl = LOS_CLASSES[getSetting(SETTINGS.LOS.TARGET.ALGORITHM)];
 
   for ( const viewerPoint of viewerPoints ) {
     const calc = new cl(viewerPoint, target, opts);

@@ -72,24 +72,25 @@ export const SETTINGS = {
   },
 
   LOS: {
-    ALGORITHM: "los-algorithm",
-    PERCENT: "los-percent",
-    LARGE_TARGET: "los-large-target",
-    TYPES: {
-      POINTS: "los-points",
-      AREA2D: "los-area-2d",
-      AREA3D: "los-area-3d"
-    },
-
     VIEWER: {
       NUM_POINTS: "los-points-viewer",
       INSET: "los-inset-viewer"
     },
 
-    POINT_OPTIONS: {
-      NUM_POINTS: "los-points-target",
-      INSET: "los-inset-target",
-      POINTS3D: "los-points-3d"
+    TARGET: {
+      ALGORITHM: "los-algorithm",
+      PERCENT: "los-percent",
+      LARGE: "los-large-target",
+      TYPES: {
+        POINTS: "los-points",
+        AREA2D: "los-area-2d",
+        AREA3D: "los-area-3d"
+      },
+      POINT_OPTIONS: {
+        NUM_POINTS: "los-points-target",
+        INSET: "los-inset-target",
+        POINTS3D: "los-points-3d"
+      }
     }
   },
 
@@ -115,8 +116,8 @@ export function registerSettings() {
   const localize = key => game.i18n.localize(`${MODULE_ID}.settings.${key}`);
   const PT_TYPES = SETTINGS.POINT_TYPES;
   const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
-  const PT_OPTS = SETTINGS.LOS.POINT_OPTIONS;
-  const LTYPES = SETTINGS.LOS.TYPES;
+  const PT_OPTS = SETTINGS.LOS.TARGET.POINT_OPTIONS;
+  const LTYPES = SETTINGS.LOS.TARGET.TYPES;
   const losChoices = {};
   const ptChoices = {};
   const rangeChoices = {};
@@ -205,10 +206,10 @@ export function registerSettings() {
   });
 
   // ----- NOTE: Line-of-sight viewer tab ----- //
-
-  game.settings.register(MODULE_ID, SETTINGS.LOS.VIEWER.NUM_POINTS, {
-    name: localize(`${SETTINGS.LOS.VIEWER.NUM_POINTS}.Name`),
-    hint: localize(`${SETTINGS.LOS.VIEWER.NUM_POINTS}.Hint`),
+  const VIEWER = SETTINGS.LOS.VIEWER
+  game.settings.register(MODULE_ID, VIEWER.NUM_POINTS, {
+    name: localize(`${VIEWER.NUM_POINTS}.Name`),
+    hint: localize(`${VIEWER.NUM_POINTS}.Hint`),
     scope: "world",
     config: false,
     type: String,
@@ -217,9 +218,9 @@ export function registerSettings() {
     tab: "losViewer"
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.LOS.VIEWER.INSET, {
-    name: localize(`${SETTINGS.LOS.VIEWER.INSET}.Name`),
-    hint: localize(`${SETTINGS.LOS.VIEWER.INSET}.Hint`),
+  game.settings.register(MODULE_ID, VIEWER.INSET, {
+    name: localize(`${VIEWER.INSET}.Name`),
+    hint: localize(`${VIEWER.INSET}.Hint`),
     range: {
       max: 0.99,
       min: 0,
@@ -233,10 +234,10 @@ export function registerSettings() {
   });
 
   // ----- NOTE: Line-of-sight target tab ----- //
-
-  game.settings.register(MODULE_ID, SETTINGS.LOS.LARGE_TARGET, {
-    name: localize(`${SETTINGS.LOS.LARGE_TARGET}.Name`),
-    hint: localize(`${SETTINGS.LOS.LARGE_TARGET}.Hint`),
+  const TARGET = SETTINGS.LOS.TARGET;
+  game.settings.register(MODULE_ID, TARGET.LARGE, {
+    name: localize(`${TARGET.LARGE}.Name`),
+    hint: localize(`${TARGET.LARGE}.Hint`),
     scope: "world",
     config: false,
     type: Boolean,
@@ -244,9 +245,9 @@ export function registerSettings() {
     tab: "losTarget"
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.LOS.ALGORITHM, {
-    name: localize(`${SETTINGS.LOS.ALGORITHM}.Name`),
-    hint: localize(`${SETTINGS.LOS.ALGORITHM}.Hint`),
+  game.settings.register(MODULE_ID, TARGET.ALGORITHM, {
+    name: localize(`${TARGET.ALGORITHM}.Name`),
+    hint: localize(`${TARGET.ALGORITHM}.Hint`),
     scope: "world",
     config: false,
     type: String,
@@ -255,9 +256,9 @@ export function registerSettings() {
     tab: "losTarget"
   });
 
-  game.settings.register(MODULE_ID, SETTINGS.LOS.PERCENT, {
-    name: localize(`${SETTINGS.LOS.PERCENT}.Name`),
-    hint: localize(`${SETTINGS.LOS.PERCENT}.Hint`),
+  game.settings.register(MODULE_ID, TARGET.PERCENT, {
+    name: localize(`${TARGET.PERCENT}.Name`),
+    hint: localize(`${TARGET.PERCENT}.Hint`),
     range: {
       max: 1,
       min: 0,
