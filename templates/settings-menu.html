@@ -152,8 +152,33 @@
 
   </section>
 
-  <footer class="sheet-footer flexrow">
+  <footer class="sheet-footer flextable">
+    <hr>
+    <div class="flexrow">
+    <div class="form-group flexcol">
+      <button name="tokenvisibility-button-foundry-default">
+        <i class="fas fa-sliders"></i>
+        {{localize "tokenvisibility.settings.button-foundry-default.Label"}}
+      </button>
+    </div>
+
+    <div class="form-group flexcol">
+      <button name="tokenvisibility-button-dnd5e-dmg">
+        <i class="fas fa-sliders"></i>
+        {{localize "tokenvisibility.settings.button-dnd5e-dmg.Label"}}
+      </button>
+    </div>
+
+    <div class = "form-group flexcol">
+      <button name="tokenvisibility-button-three-d">
+        <i class="fas fa-sliders"></i>
+        {{localize "tokenvisibility.settings.button-three-d.Label"}}
+      </button>
+    </div>
+    </div>
+  <div class="flexrow">
   <button type='submit' name='submit' value='1'><i class='far fa-floppy-disk'></i>{{submitText}}</button>
+  </div>
   </footer>
 
 </form>

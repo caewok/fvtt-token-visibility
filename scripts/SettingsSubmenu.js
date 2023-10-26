@@ -6,6 +6,71 @@
 import { MODULE_ID } from "./const.js";
 import { SETTINGS, getSetting, setSetting } from "./settings.js";
 
+class DefaultSettings {
+  static get foundry() {
+    return {
+      // Range
+      [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+      [SETTINGS.RANGE.POINTS3D]: false,
+      [SETTINGS.RANGE.DISTANCE3D]: false,
+
+      // LOS Viewer
+      [SETTINGS.LOS.VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
+      // Unused: [SETTINGS.LOS.VIEWER.INSET]: 0
+
+      // LOS Target
+      [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.POINTS,
+      [SETTINGS.LOS.PERCENT]: 0,
+      [SETTINGS.LOS.LARGE_TARGET]: false,
+
+      // LOS Point options
+      [SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.NINE,
+      [SETTINGS.LOS.POINT_OPTIONS.INSET]: 0.75,
+      [SETTINGS.LOS.POINT_OPTIONS.POINTS3D]: false
+    };
+  }
+
+  static get dnd5e() {
+    return {
+      // Range
+      [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+      [SETTINGS.RANGE.POINTS3D]: false,
+      [SETTINGS.RANGE.DISTANCE3D]: false,
+
+      // LOS Viewer
+      [SETTINGS.LOS.VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
+      [SETTINGS.LOS.VIEWER.INSET]: 0,
+
+      // LOS Target
+      [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.POINTS,
+      [SETTINGS.LOS.PERCENT]: 0,
+      [SETTINGS.LOS.LARGE_TARGET]: true,
+
+      // LOS Point options
+      [SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
+      [SETTINGS.LOS.POINT_OPTIONS.INSET]: 0,
+      [SETTINGS.LOS.POINT_OPTIONS.POINTS3D]: false
+    };
+  }
+
+  static get threeD() {
+    return {
+      // Range
+      [SETTINGS.RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+      [SETTINGS.RANGE.POINTS3D]: true,
+      [SETTINGS.RANGE.DISTANCE3D]: true,
+
+      // LOS Viewer
+      [SETTINGS.LOS.VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
+
+      // LOS Target
+      [SETTINGS.LOS.ALGORITHM]: SETTINGS.LOS.TYPES.AREA3D,
+      [SETTINGS.LOS.PERCENT]: 0.2,
+      [SETTINGS.LOS.LARGE_TARGET]: true
+    };
+  }
+}
+
 export class SettingsSubmenu extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
@@ -32,9 +97,16 @@ export class SettingsSubmenu extends FormApplication {
   activateListeners(html) {
     this._initializeDisplayOptions();
     super.activateListeners(html);
+
+    // Hide certain settings depending on options selected.
     html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}"]`).change(this.losAlgorithmChanged.bind(this));
     html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}"]`).change(this.losViewerPointsChanged.bind(this));
     html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}"]`).change(this.losTargetPointsChanged.bind(this));
+
+    // Buttons to reset settings to defaults.
+    html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}"]`).click(this.submitSettingUpdates.bind(this, "button-foundry-default", DefaultSettings.foundry));
+    html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DND_5E_DMG}"]`).click(this.submitSettingUpdates.bind(this, "button-dnd5e-dmg", DefaultSettings.dnd5e));
+    html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.THREE_D}"]`).click(this.submitSettingUpdates.bind(this, "button-three-d", DefaultSettings.threeD));
   }
 
   async _updateObject(event, formData) {
@@ -77,6 +149,15 @@ export class SettingsSubmenu extends FormApplication {
     const algorithm = getSetting(LOS.ALGORITHM);
     const viewerPoints = getSetting(LOS.VIEWER.NUM_POINTS);
     const targetPoints = getSetting(LOS.POINT_OPTIONS.NUM_POINTS);
+    this.#updatePointOptionDisplay(algorithm);
+    this.#updateViewerInsetDisplay(viewerPoints);
+    this.#updateTargetInsetDisplay(targetPoints, algorithm);
+  }
+
+  _updateDisplayOptions() {
+    const algorithm = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}`);
+    const viewerPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}`);
+    const targetPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}`);
     this.#updatePointOptionDisplay(algorithm);
     this.#updateViewerInsetDisplay(viewerPoints);
     this.#updateTargetInsetDisplay(targetPoints, algorithm);
@@ -132,5 +213,26 @@ export class SettingsSubmenu extends FormApplication {
     this.setPosition(this.position);
   }
 
+  /**
+   * Modify the settings in the form based on some predetermined settings values.
+   * For example, change range and LOS to match Foundry defaults.
+   */
+  submitSettingUpdates(defaultSettingName, settings) {
+    event.preventDefault();
+    event.stopPropagation();
+    ui.notifications.notify(game.i18n.localize(`${MODULE_ID}.settings.${defaultSettingName}.Notification`));
+    const formElements = [...this.form.elements];
+    for ( const [settingName, settingValue] of Object.entries(settings) ) {
+      const key = `${MODULE_ID}.${settingName}`;
+      // The following does not work alone but is useful for updating the display options..
+      const elem = document.getElementsByName(key);
+      elem.value = settingValue;
 
+      const formElem = formElements.find(elem => elem.name === key);
+      formElem.value = settingValue;
+    }
+
+    this._updateDisplayOptions();
+    this.setPosition(this.position);
+  }
 }
