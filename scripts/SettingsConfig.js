@@ -8,7 +8,7 @@ ui
 
 import { MODULE_ID } from "./const.js";
 import { SETTINGS, getSetting } from "./settings.js";
-import { DOCUMENTATION_URL } from "./const.js";
+import { DOCUMENTATION_URL, ISSUE_URL } from "./const.js";
 
 // Patches for the VisionSource class
 export const PATCHES = {};
@@ -44,9 +44,14 @@ PATCHES.BASIC.HOOKS = { renderSettingsConfig };
 
 function activateListenersSettingsConfig(app, html) {
   // Documentation button
-  html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DOCUMENTATION}"]`).click(documentation.bind(app));
+  html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.DOCUMENTATION}"]`).click(openDocumentation.bind(app));
+  html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.ISSUE}"]`).click(openIssue.bind(app));
 }
 
-function documentation(event) {
+function openDocumentation(event) {
   window.open(DOCUMENTATION_URL, "_blank");
+}
+
+function openIssue(event) {
+  window.open(ISSUE_URL, "_blank");
 }

@@ -15,7 +15,7 @@
     "tokenvisibility.settings.range-distance-3d.Hint": "Whether to measure token visibility range calculations in 3 dimensions, versus 2 (overhead view).",
 
     "tokenvisibility.settings.los-algorithm.Name": "Algorithm",
-    "tokenvisibility.settings.los-algorithm.Hint": "How to test a token's line-of-sight to another (target) token. See https://github.com/caewok/fvtt-token-visibility#settings for a full explanation.",
+    "tokenvisibility.settings.los-algorithm.Hint": "How to test a token's line-of-sight to another (target) token.",
 
     "tokenvisibility.settings.los-percent.Name": "Percent Threshold",
     "tokenvisibility.settings.los-percent.Hint": "Percentage of the token hit area that must be viewable to another token to be considered visible by that other token. For points, this is the percentage of target points that must be visible. If set to 0, then if any part of the token (or any point) is viewable, it is considered visible.",
@@ -60,7 +60,8 @@
     "tokenvisibility.settings.button-three-d.Label": "Reset to 3-D",
     "tokenvisibility.settings.button-three-d.Notification": "Alt. Token Visibility settings changed to 3D defaults",
 
-    "tokenvisibility.settings.button-documentation.Label": "Open Documenttion",
+    "tokenvisibility.settings.button-documentation.Label": "Open Documentation",
+    "tokenvisibility.settings.button-issue.Label": "Report an Issue",
 
     "tokenvisibility.DrawingConfiguration.LegendTitle": "Alternative Token Visibility",
     "tokenvisibility.DrawingConfiguration.isHole.Name": "Drawing is Hole",

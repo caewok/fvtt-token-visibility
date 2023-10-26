@@ -109,8 +109,23 @@ export class SettingsSubmenu extends FormApplication {
     html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.THREE_D}"]`).click(this.submitSettingUpdates.bind(this, "button-three-d", DefaultSettings.threeD));
   }
 
+  /**
+   * Comparable to SettingsConfig.prototype._updateObject
+   */
   async _updateObject(event, formData) {
-    await game.settings._sheet._updateObject(event, formData);
+    let requiresClientReload = false;
+    let requiresWorldReload = false;
+    const promises = [];
+    for ( let [k, v] of Object.entries(foundry.utils.flattenObject(formData)) ) {
+      let s = game.settings.settings.get(k);
+      let current = game.settings.get(s.namespace, s.key);
+      if ( v === current ) continue;
+      requiresClientReload ||= (s.scope === "client") && s.requiresReload;
+      requiresWorldReload ||= (s.scope === "world") && s.requiresReload;
+      promises.add(game.settings.set(s.namespace, s.key, v));
+    }
+    await Promise.allSettled(promises);
+    if ( requiresClientReload || requiresWorldReload ) SettingsConfig.reloadConfirm({world: requiresWorldReload});
   }
 
   /**
@@ -152,20 +167,23 @@ export class SettingsSubmenu extends FormApplication {
     this.#updatePointOptionDisplay(algorithm);
     this.#updateViewerInsetDisplay(viewerPoints);
     this.#updateTargetInsetDisplay(targetPoints, algorithm);
+    this.setPosition(this.position);
   }
 
   _updateDisplayOptions() {
-    const algorithm = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}`);
-    const viewerPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}`);
-    const targetPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}`);
+    const algorithm = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}`).value;
+    const viewerPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}`).value;
+    const targetPoints = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}`).value;
     this.#updatePointOptionDisplay(algorithm);
     this.#updateViewerInsetDisplay(viewerPoints);
     this.#updateTargetInsetDisplay(targetPoints, algorithm);
+    this.setPosition(this.position);
   }
 
   losViewerPointsChanged(event) {
     const viewerPoints = event.target.value;
     this.#updateViewerInsetDisplay(viewerPoints);
+    this.setPosition(this.position);
   }
 
   #updateViewerInsetDisplay(numPoints) {
@@ -173,12 +191,12 @@ export class SettingsSubmenu extends FormApplication {
     const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.VIEWER.INSET}`);
     const div = elem[0].parentElement.parentElement;
     div.style.display = displayInsetOpts;
-    this.setPosition(this.position);
   }
 
   losAlgorithmChanged(event) {
     const losAlgorithm = event.target.value;
     this.#updatePointOptionDisplay(losAlgorithm);
+    this.setPosition(this.position);
   }
 
   #updatePointOptionDisplay(losAlgorithm) {
@@ -192,7 +210,6 @@ export class SettingsSubmenu extends FormApplication {
 
     const numPointsTarget = getSetting(SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS);
     this.#updateTargetInsetDisplay(numPointsTarget, losAlgorithm);
-    this.setPosition(this.position);
   }
 
   losTargetPointsChanged(event) {
@@ -201,6 +218,7 @@ export class SettingsSubmenu extends FormApplication {
     const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}`);
     const losAlgorithm = elem[0].value;
     this.#updateTargetInsetDisplay(targetPoints, losAlgorithm);
+    this.setPosition(this.position);
   }
 
   #updateTargetInsetDisplay(numPoints, losAlgorithm) {
@@ -210,7 +228,6 @@ export class SettingsSubmenu extends FormApplication {
     const elem = document.getElementsByName(`${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.INSET}`);
     const div = elem[0].parentElement.parentElement;
     div.style.display = displayInsetOpts;
-    this.setPosition(this.position);
   }
 
   /**
@@ -233,6 +250,5 @@ export class SettingsSubmenu extends FormApplication {
     }
 
     this._updateDisplayOptions();
-    this.setPosition(this.position);
   }
 }
