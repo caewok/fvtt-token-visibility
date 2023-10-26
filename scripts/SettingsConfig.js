@@ -42,9 +42,9 @@ async function renderSettingsConfig(app, html, data) {
   const viewerPoints = getSetting(LOS.VIEWER.NUM_POINTS);
   const targetPoints = getSetting(LOS.POINT_OPTIONS.NUM_POINTS);
 
-  updatePointOptionDisplay(algorithm);
-  updateViewerInsetDisplay(viewerPoints);
-  updateTargetInsetDisplay(targetPoints, algorithm);
+//   updatePointOptionDisplay(algorithm);
+//   updateViewerInsetDisplay(viewerPoints);
+//   updateTargetInsetDisplay(targetPoints, algorithm);
 }
 
 PATCHES.BASIC.HOOKS = { renderSettingsConfig };
@@ -52,9 +52,9 @@ PATCHES.BASIC.HOOKS = { renderSettingsConfig };
 // ----- NOTE: Helper functions ----- //
 
 function activateListenersSettingsConfig(app, html) {
-  html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}"]`).change(losAlgorithmChanged.bind(app));
-  html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}"]`).change(losViewerPointsChanged.bind(app));
-  html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}"]`).change(losTargetPointsChanged.bind(app));
+//   html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.ALGORITHM}"]`).change(losAlgorithmChanged.bind(app));
+//   html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.VIEWER.NUM_POINTS}"]`).change(losViewerPointsChanged.bind(app));
+//   html.find(`[name="${MODULE_ID}.${SETTINGS.LOS.POINT_OPTIONS.NUM_POINTS}"]`).change(losTargetPointsChanged.bind(app));
 
   // Reset settings buttons
   html.find(`[name="${MODULE_ID}-${SETTINGS.BUTTONS.FOUNDRY_DEFAULT}"]`).click(foundryDefaultSettings.bind(app));

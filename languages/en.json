@@ -5,41 +5,41 @@
     "tokenvisibility.settings.points-eight": "Token midpoints and corners (8 points)",
     "tokenvisibility.settings.points-nine": "Token midpoints, corners, center (9 points)",
 
-    "tokenvisibility.settings.range-algorithm.Name": "Range | Points",
-    "tokenvisibility.settings.range-algorithm.Hint": "Number of points to use when testing whether a token is within range of another. See https://github.com/caewok/fvtt-token-visibility#settings for a full explanation.",
+    "tokenvisibility.settings.range-algorithm.Name": "Points",
+    "tokenvisibility.settings.range-algorithm.Hint": "Number of points to use when testing whether a token is within range of another.",
 
-    "tokenvisibility.settings.range-points-3d.Name": "Range | Test Bottom and Top Points",
+    "tokenvisibility.settings.range-points-3d.Name": "Test Bottom and Top Points",
     "tokenvisibility.settings.range-points-3d.Hint": "When applicable, use token elevation and token height to construct additional points for testing range. (Requires Wall Height module.)",
 
-    "tokenvisibility.settings.range-distance-3d.Name": "Range | Measure Distance in 3d",
+    "tokenvisibility.settings.range-distance-3d.Name": "Measure Distance in 3d",
     "tokenvisibility.settings.range-distance-3d.Hint": "Whether to measure token visibility range calculations in 3 dimensions, versus 2 (overhead view).",
 
-    "tokenvisibility.settings.los-algorithm.Name": "LOS | Target Algorithm",
+    "tokenvisibility.settings.los-algorithm.Name": "Algorithm",
     "tokenvisibility.settings.los-algorithm.Hint": "How to test a token's line-of-sight to another (target) token. See https://github.com/caewok/fvtt-token-visibility#settings for a full explanation.",
 
-    "tokenvisibility.settings.los-percent.Name": "LOS | Target Percent Threshold",
+    "tokenvisibility.settings.los-percent.Name": "Percent Threshold",
     "tokenvisibility.settings.los-percent.Hint": "Percentage of the token hit area that must be viewable to another token to be considered visible by that other token. For points, this is the percentage of target points that must be visible. If set to 0, then if any part of the token (or any point) is viewable, it is considered visible.",
 
-    "tokenvisibility.settings.los-large-target.Name": "LOS | Large Target Subtargeting",
+    "tokenvisibility.settings.los-large-target.Name": "Large Token Subtargeting",
     "tokenvisibility.settings.los-large-target.Hint": "If the target token is larger than the grid square, consider the token visible if at least one grid square worth of token is visible.",
 
     "tokenvisibility.settings.los-points": "Target points",
     "tokenvisibility.settings.los-area-2d": "Target area 2d",
     "tokenvisibility.settings.los-area-3d": "Target area 3d",
 
-    "tokenvisibility.settings.los-points-viewer.Name": "LOS | Viewer Points",
+    "tokenvisibility.settings.los-points-viewer.Name": "Points",
     "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Beware that this can dramatically increase the number of tests needed to determine visibility. Foundry default is 'Center' (one point)",
 
-    "tokenvisibility.settings.los-inset-viewer.Name": "LOS | Viewer Inset",
+    "tokenvisibility.settings.los-inset-viewer.Name": "Inset",
     "tokenvisibility.settings.los-inset-viewer.Hint": "For viewer points other than the center, what percentage to inset the point from the token border towards the token center.",
 
-    "tokenvisibility.settings.los-points-target.Name": "LOS | Target Points",
+    "tokenvisibility.settings.los-points-target.Name": "Points",
     "tokenvisibility.settings.los-points-target.Hint": "How many points on the target to test for the viewer's line-of-sight.",
 
-    "tokenvisibility.settings.los-inset-target.Name": "LOS | Target Inset",
+    "tokenvisibility.settings.los-inset-target.Name": "Inset",
     "tokenvisibility.settings.los-inset-target.Hint": "For target points other than the center, what percentage to inset the point from the token border towards the token center.",
 
-    "tokenvisibility.settings.los-points-3d.Name": "LOS | Target 3d points",
+    "tokenvisibility.settings.los-points-3d.Name": "3d points",
     "tokenvisibility.settings.los-points-3d.Hint": "Test the top and bottom of the target token in addition to the points in the middle of the token vertically.",
 
     "tokenvisibility.settings.debug-range.Name": "Debug Range",
@@ -64,5 +64,22 @@
 
     "tokenvisibility.DrawingConfiguration.LegendTitle": "Alternative Token Visibility",
     "tokenvisibility.DrawingConfiguration.isHole.Name": "Drawing is Hole",
-    "tokenvisibility.DrawingConfiguration.isHole.Hint": "For area algorithms, treat the space indicated by the drawing (including elevation) as a hole for tiles. Only applicable when Levels is active."
+    "tokenvisibility.DrawingConfiguration.isHole.Hint": "For area algorithms, treat the space indicated by the drawing (including elevation) as a hole for tiles. Only applicable when Levels is active.",
+
+    "tokenvisibility.template.settings-config.tabs.range": "Range",
+    "tokenvisibility.template.settings-config.tabs.los_viewer": "Viewer LOS",
+    "tokenvisibility.template.settings-config.tabs.los_target": "Target LOS",
+
+    "tokenvisibility.template.settings-config.range": "Range",
+    "tokenvisibility.template.settings-config.rangeDescription": "How distance between the viewer token and the target token is measured.",
+    "tokenvisibility.template.settings-config.viewer": "Viewer Line-of-Sight (LOS)",
+    "tokenvisibility.template.settings-config.viewerDescription": "The viewer is the token with the vision. These settings adjust how the viewer's line-of-sight is treated.",
+
+    "tokenvisibility.template.settings-config.target": "Target Line-of-Sight (LOS)",
+    "tokenvisibility.template.settings-config.targetDescription": "The target is the token being perceived. These settings adjust how the target shape is considered programatically.",
+
+    "tokenvisibility.settings.submenu.title": "Alternative Token Visibility Settings",
+    "tokenvisibility.settings.submenu.Name": "ATV Settings",
+    "tokenvisibility.settings.submenu.Label": "Configure",
+    "tokenvisibility.settings.submenu.Hint": "Hint"
  }
