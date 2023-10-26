@@ -4,7 +4,7 @@ CONFIG
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { SETTINGS, getSetting } from "./settings.js";
+import { Settings, SETTINGS } from "./settings.js";
 
 // Patches for the CONFIG.Levels.handlers.SightHandler class
 export const PATCHES = {};
@@ -22,7 +22,7 @@ PATCHES.LEVELS = {};
  * (targetElevation = token.document.elevation + (targetLOSH - token.document.elevation) * 0.1)
  */
 function getTestPoints(token, tol = 4) {
-  const rangeAlg = getSetting(SETTINGS.RANGE.ALGORITHM);
+  const rangeAlg = Settings.get(SETTINGS.RANGE.ALGORITHM);
 
   // Convert back to elevation units b/c that is what Levels expects.
   const { topZ, bottomZ, center, w, h } = token;
@@ -61,7 +61,7 @@ function getTestPoints(token, tol = 4) {
     );
   }
 
-  if ( !(height && getSetting(SETTINGS.RANGE.POINTS3D)) ) return tests;
+  if ( !(height && Settings.get(SETTINGS.RANGE.POINTS3D)) ) return tests;
 
   // Add an additional center point for testing center top/bottom
   tests.push({ x, y, z: avgE });

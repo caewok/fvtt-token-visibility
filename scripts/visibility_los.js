@@ -7,7 +7,7 @@ PointSourcePolygon
 "use strict";
 
 import { MODULES_ACTIVE } from "./const.js";
-import { SETTINGS, getSetting } from "./settings.js";
+import { Settings, SETTINGS } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { PointsLOS } from "./LOS/PointsLOS.js";
 import { Area2dLOS } from "./LOS/Area2dLOS.js";
@@ -192,8 +192,8 @@ export function testLOS(visionSource, target, visibleTargetShape) {
   const viewerToken = visionSource.object;
   const viewerPoints = viewerToken ? PointsLOS.constructViewerPoints(viewerToken)
     : [Point3d.fromSource(visionSource)];
-  const threshold = getSetting(SETTINGS.LOS.TARGET.PERCENT);
-  const cl = LOS_CLASSES[getSetting(SETTINGS.LOS.TARGET.ALGORITHM)];
+  const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
+  const cl = LOS_CLASSES[Settings.get(SETTINGS.LOS.TARGET.ALGORITHM)];
 
   for ( const viewerPoint of viewerPoints ) {
     const calc = new cl(viewerPoint, target, opts);

@@ -15,23 +15,23 @@ export const DEBUG_GRAPHICS = {
   RANGE: undefined
 };
 
-// Non-caching alt:
-// export function getSetting(settingName) {
-//   return game.settings.get(MODULE_ID, settingName);
-// }
+// Patches for the Setting class
+export const PATCHES = {};
+PATCHES.BASIC = {};
 
-// For caching to work, need to clean the cache whenever a setting below changes.
-// Need function for onChange.
-export const settingsCache = new Map();
-export function getSetting(settingName) {
-  const cached = settingsCache.get(settingName);
-  if ( cached === undefined ) {
-    const value = game.settings.get(MODULE_ID, settingName);
-    settingsCache.set(settingName, value);
-    return value;
-  }
-  return cached;
+// ----- NOTE: Hooks ----- //
+
+/**
+ * Wipe the settings cache on update
+ */
+function updateSetting(document, change, options, userId) {  // eslint-disable-line no-unused-vars
+  const [module, ...arr] = document.key.split(".");
+  const key = arr.join("."); // If the key has periods, multiple will be returned by split.
+  if ( module === MODULE_ID && Settings.cache.has(key) ) Settings.cache.delete(key);
 }
+
+PATCHES.BASIC.HOOKS = { updateSetting };
+
 
 /* Testing cached settings
 function fnDefault(settingName) {
@@ -48,11 +48,6 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-dead")
 await api.bench.QBenchmarkLoopFn(N, getSetting, "cached","cover-token-live")
 await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 */
-
-export async function setSetting(settingName, value) {
-  settingsCache.delete(settingName);
-  return game.settings.set(MODULE_ID, settingName, value);
-}
 
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
@@ -112,235 +107,294 @@ export const SETTINGS = {
   }
 };
 
+export class Settings {
+  /** @type {Map<string, *>} */
+  static cache = new Map();
+
+  /** @type {object} */
+  static KEYS = SETTINGS;
+
+  /**
+   * Retrive a specific setting.
+   * Cache the setting.  For caching to work, need to clean the cache whenever a setting below changes.
+   * @param {string} key
+   * @returns {*}
+   */
+  static get(key) {
+    const cached = this.cache.get(key);
+    if ( typeof cached !== "undefined" ) return cached;
+    const value = game.settings.get(MODULE_ID, key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  /**
+   * Set a specific setting.
+   * @param {string} key
+   * @param {*} value
+   * @returns {Promise<boolean>}
+   */
+  static async set(key, value) {
+    this.cache.delete(key);
+    return game.settings.set(MODULE_ID, key, value);
+  }
+
+  /**
+   * Register a specific setting.
+   * @param {string} key        Passed to registerMenu
+   * @param {object} options    Passed to registerMenu
+   */
+  static register(key, options) { game.settings.register(MODULE_ID, key, options); }
+
+  /**
+   * Register a submenu.
+   * @param {string} key        Passed to registerMenu
+   * @param {object} options    Passed to registerMenu
+   */
+  static registerMenu(key, options) { game.settings.registerMenu(MODULE_ID, key, options); }
+
+  /**
+   * Register all settings
+   */
+  static registerAll() {
+    const { KEYS, register, registerMenu } = this;
+    const localize = key => game.i18n.localize(`${MODULE_ID}.settings.${key}`);
+    const PT_TYPES = KEYS.POINT_TYPES;
+    const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
+    const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
+    const LTYPES = KEYS.LOS.TARGET.TYPES;
+    const losChoices = {};
+    const ptChoices = {};
+    const rangeChoices = {};
+    Object.values(RTYPES).forEach(type => rangeChoices[type] = localize(type));
+    Object.values(LTYPES).forEach(type => losChoices[type] = localize(type));
+    Object.values(PT_TYPES).forEach(type => ptChoices[type] = localize(type));
+
+    // ----- Main Settings Menu ----- //
+    registerMenu(KEYS.SUBMENU, {
+      name: localize(`${KEYS.SUBMENU}.Name`),
+      label: localize(`${KEYS.SUBMENU}.Label`),
+      icon: "fas fa-user-gear",
+      type: SettingsSubmenu,
+      restricted: true
+    });
+
+    register(KEYS.DEBUG.RANGE, {
+      name: localize(`${KEYS.DEBUG.RANGE}.Name`),
+      hint: localize(`${KEYS.DEBUG.RANGE}.Hint`),
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: false,
+      onChange: value => {
+        if ( value ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
+        else {
+          const draw = new Draw(DEBUG_GRAPHICS.RANGE);
+          draw.clearDrawings();
+          canvas.tokens.removeChild(DEBUG_GRAPHICS.RANGE);
+        }
+      }
+    });
+
+    register(KEYS.DEBUG.LOS, {
+      name: localize(`${KEYS.DEBUG.LOS}.Name`),
+      hint: localize(`${KEYS.DEBUG.LOS}.Hint`),
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: false,
+      onChange: value => {
+        if ( value ) canvas.stage.addChild(DEBUG_GRAPHICS.LOS);
+        else {
+          const draw = new Draw(DEBUG_GRAPHICS.LOS);
+          draw.clearDrawings();
+          canvas.stage.removeChild(DEBUG_GRAPHICS.LOS);
+        }
+      }
+    });
+
+    // ----- NOTE: Submenu ---- //
+
+    // ----- NOTE: Range tab ----- //
+
+    register(KEYS.RANGE.ALGORITHM, {
+      name: localize(`${KEYS.RANGE.ALGORITHM}.Name`),
+      hint: localize(`${KEYS.RANGE.ALGORITHM}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: rangeChoices,
+      default: RTYPES.NINE,
+      tab: "range"
+    });
+
+    register(KEYS.RANGE.POINTS3D, {
+      name: localize(`${KEYS.RANGE.POINTS3D}.Name`),
+      hint: localize(`${KEYS.RANGE.POINTS3D}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "range"
+    });
+
+    register(KEYS.RANGE.DISTANCE3D, {
+      name: localize(`${KEYS.RANGE.DISTANCE3D}.Name`),
+      hint: localize(`${KEYS.RANGE.DISTANCE3D}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "range"
+    });
+
+    // ----- NOTE: Line-of-sight viewer tab ----- //
+    const VIEWER = KEYS.LOS.VIEWER
+    register(VIEWER.NUM_POINTS, {
+      name: localize(`${VIEWER.NUM_POINTS}.Name`),
+      hint: localize(`${VIEWER.NUM_POINTS}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: ptChoices,
+      default: PT_TYPES.CENTER,
+      tab: "losViewer"
+    });
+
+    register(VIEWER.INSET, {
+      name: localize(`${VIEWER.INSET}.Name`),
+      hint: localize(`${VIEWER.INSET}.Hint`),
+      range: {
+        max: 0.99,
+        min: 0,
+        step: 0.01
+      },
+      scope: "world",
+      config: false,
+      default: 0.75,
+      type: Number,
+      tab: "losViewer"
+    });
+
+    // ----- NOTE: Line-of-sight target tab ----- //
+    const TARGET = KEYS.LOS.TARGET;
+    register(TARGET.LARGE, {
+      name: localize(`${TARGET.LARGE}.Name`),
+      hint: localize(`${TARGET.LARGE}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "losTarget"
+    });
+
+    register(TARGET.ALGORITHM, {
+      name: localize(`${TARGET.ALGORITHM}.Name`),
+      hint: localize(`${TARGET.ALGORITHM}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: losChoices,
+      default: LTYPES.NINE,
+      tab: "losTarget"
+    });
+
+    register(TARGET.PERCENT, {
+      name: localize(`${TARGET.PERCENT}.Name`),
+      hint: localize(`${TARGET.PERCENT}.Hint`),
+      range: {
+        max: 1,
+        min: 0,
+        step: 0.05
+      },
+      scope: "world",
+      config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
+      default: 0,
+      type: Number,
+      tab: "losTarget"
+    });
+
+    register(PT_OPTS.NUM_POINTS, {
+      name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
+      hint: localize(`${PT_OPTS.NUM_POINTS}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: ptChoices,
+      default: PT_TYPES.NINE,
+      tab: "losTarget"
+    });
+
+    register(PT_OPTS.INSET, {
+      name: localize(`${PT_OPTS.INSET}.Name`),
+      hint: localize(`${PT_OPTS.INSET}.Hint`),
+      range: {
+        max: 0.99,
+        min: 0,
+        step: 0.01
+      },
+      scope: "world",
+      config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
+      default: 0.75,
+      type: Number,
+      tab: "losTarget"
+    });
+
+    register(PT_OPTS.POINTS3D, {
+      name: localize(`${PT_OPTS.POINTS3D}.Name`),
+      hint: localize(`${PT_OPTS.POINTS3D}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "losTarget"
+    });
+
+    // ----- NOTE: Hidden settings ----- //
+
+    register(KEYS.AREA3D_USE_SHADOWS, {
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false
+    });
+
+    register(KEYS.WELCOME_DIALOG.v030, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+    register(KEYS.MIGRATION.v032, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+    register(KEYS.MIGRATION.v054, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+    register(KEYS.MIGRATION.v060, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+
+  }
+
+
+}
+
+
+
 export function registerSettings() {
-  const localize = key => game.i18n.localize(`${MODULE_ID}.settings.${key}`);
-  const PT_TYPES = SETTINGS.POINT_TYPES;
-  const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
-  const PT_OPTS = SETTINGS.LOS.TARGET.POINT_OPTIONS;
-  const LTYPES = SETTINGS.LOS.TARGET.TYPES;
-  const losChoices = {};
-  const ptChoices = {};
-  const rangeChoices = {};
-  Object.values(RTYPES).forEach(type => rangeChoices[type] = localize(type));
-  Object.values(LTYPES).forEach(type => losChoices[type] = localize(type));
-  Object.values(PT_TYPES).forEach(type => ptChoices[type] = localize(type));
-
-  // ----- Main Settings Menu ----- //
-  game.settings.registerMenu(MODULE_ID, SETTINGS.SUBMENU, {
-    name: localize(`${SETTINGS.SUBMENU}.Name`),
-    label: localize(`${SETTINGS.SUBMENU}.Label`),
-    icon: "fas fa-user-gear",
-    type: SettingsSubmenu,
-    restricted: true
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.DEBUG.RANGE, {
-    name: localize(`${SETTINGS.DEBUG.RANGE}.Name`),
-    hint: localize(`${SETTINGS.DEBUG.RANGE}.Hint`),
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-    onChange: value => {
-      if ( value ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
-      else {
-        const draw = new Draw(DEBUG_GRAPHICS.RANGE);
-        draw.clearDrawings();
-        canvas.tokens.removeChild(DEBUG_GRAPHICS.RANGE);
-      }
-    }
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.DEBUG.LOS, {
-    name: localize(`${SETTINGS.DEBUG.LOS}.Name`),
-    hint: localize(`${SETTINGS.DEBUG.LOS}.Hint`),
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-    onChange: value => {
-      if ( value ) canvas.stage.addChild(DEBUG_GRAPHICS.LOS);
-      else {
-        const draw = new Draw(DEBUG_GRAPHICS.LOS);
-        draw.clearDrawings();
-        canvas.stage.removeChild(DEBUG_GRAPHICS.LOS);
-      }
-    }
-  });
-
-  // ----- NOTE: Submenu ---- //
-
-  // ----- NOTE: Range tab ----- //
-
-
-  game.settings.register(MODULE_ID, SETTINGS.RANGE.ALGORITHM, {
-    name: localize(`${SETTINGS.RANGE.ALGORITHM}.Name`),
-    hint: localize(`${SETTINGS.RANGE.ALGORITHM}.Hint`),
-    scope: "world",
-    config: false,
-    type: String,
-    choices: rangeChoices,
-    default: RTYPES.NINE,
-    tab: "range"
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.RANGE.POINTS3D, {
-    name: localize(`${SETTINGS.RANGE.POINTS3D}.Name`),
-    hint: localize(`${SETTINGS.RANGE.POINTS3D}.Hint`),
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: true,
-    tab: "range"
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.RANGE.DISTANCE3D, {
-    name: localize(`${SETTINGS.RANGE.DISTANCE3D}.Name`),
-    hint: localize(`${SETTINGS.RANGE.DISTANCE3D}.Hint`),
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: true,
-    tab: "range"
-  });
-
-  // ----- NOTE: Line-of-sight viewer tab ----- //
-  const VIEWER = SETTINGS.LOS.VIEWER
-  game.settings.register(MODULE_ID, VIEWER.NUM_POINTS, {
-    name: localize(`${VIEWER.NUM_POINTS}.Name`),
-    hint: localize(`${VIEWER.NUM_POINTS}.Hint`),
-    scope: "world",
-    config: false,
-    type: String,
-    choices: ptChoices,
-    default: PT_TYPES.CENTER,
-    tab: "losViewer"
-  });
-
-  game.settings.register(MODULE_ID, VIEWER.INSET, {
-    name: localize(`${VIEWER.INSET}.Name`),
-    hint: localize(`${VIEWER.INSET}.Hint`),
-    range: {
-      max: 0.99,
-      min: 0,
-      step: 0.01
-    },
-    scope: "world",
-    config: false,
-    default: 0.75,
-    type: Number,
-    tab: "losViewer"
-  });
-
-  // ----- NOTE: Line-of-sight target tab ----- //
-  const TARGET = SETTINGS.LOS.TARGET;
-  game.settings.register(MODULE_ID, TARGET.LARGE, {
-    name: localize(`${TARGET.LARGE}.Name`),
-    hint: localize(`${TARGET.LARGE}.Hint`),
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: true,
-    tab: "losTarget"
-  });
-
-  game.settings.register(MODULE_ID, TARGET.ALGORITHM, {
-    name: localize(`${TARGET.ALGORITHM}.Name`),
-    hint: localize(`${TARGET.ALGORITHM}.Hint`),
-    scope: "world",
-    config: false,
-    type: String,
-    choices: losChoices,
-    default: LTYPES.NINE,
-    tab: "losTarget"
-  });
-
-  game.settings.register(MODULE_ID, TARGET.PERCENT, {
-    name: localize(`${TARGET.PERCENT}.Name`),
-    hint: localize(`${TARGET.PERCENT}.Hint`),
-    range: {
-      max: 1,
-      min: 0,
-      step: 0.05
-    },
-    scope: "world",
-    config: false, // () => getSetting(SETTINGS.LOS.ALGORITHM) !== LTYPES.POINTS,
-    default: 0,
-    type: Number,
-    tab: "losTarget"
-  });
-
-  game.settings.register(MODULE_ID, PT_OPTS.NUM_POINTS, {
-    name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
-    hint: localize(`${PT_OPTS.NUM_POINTS}.Hint`),
-    scope: "world",
-    config: false,
-    type: String,
-    choices: ptChoices,
-    default: PT_TYPES.NINE,
-    tab: "losTarget"
-  });
-
-  game.settings.register(MODULE_ID, PT_OPTS.INSET, {
-    name: localize(`${PT_OPTS.INSET}.Name`),
-    hint: localize(`${PT_OPTS.INSET}.Hint`),
-    range: {
-      max: 0.99,
-      min: 0,
-      step: 0.01
-    },
-    scope: "world",
-    config: false, // () => getSetting(SETTINGS.LOS.ALGORITHM) !== LTYPES.POINTS,
-    default: 0.75,
-    type: Number,
-    tab: "losTarget"
-  });
-
-  game.settings.register(MODULE_ID, PT_OPTS.POINTS3D, {
-    name: localize(`${PT_OPTS.POINTS3D}.Name`),
-    hint: localize(`${PT_OPTS.POINTS3D}.Hint`),
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: true,
-    tab: "losTarget"
-  });
-
-  // ----- NOTE: Hidden settings ----- //
-
-  game.settings.register(MODULE_ID, SETTINGS.AREA3D_USE_SHADOWS, {
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: false
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.WELCOME_DIALOG.v030, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.MIGRATION.v032, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.MIGRATION.v054, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.MIGRATION.v060, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
 }
 

@@ -9,7 +9,7 @@ import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
-import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "../settings.js";
+import { Settings, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
 import { insetPoints } from "./util.js";
 
 // Geometry folder
@@ -142,8 +142,8 @@ export class PointsLOS extends AlternativeLOS {
 
   #configure(config = {}) {
     const cfg = this.config;
-    cfg.pointAlgorithm = config.pointAlgorithm ?? getSetting(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
-    cfg.inset = config.inset ?? getSetting(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
+    cfg.pointAlgorithm = config.pointAlgorithm ?? Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
+    cfg.inset = config.inset ?? Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
     cfg.points3d = config.points3d;
   }
 
@@ -198,8 +198,8 @@ export class PointsLOS extends AlternativeLOS {
    * @returns {Points3d[]}
    */
   static constructViewerPoints(viewer, { pointAlgorithm, inset } = {}) {
-    pointAlgorithm ??= getSetting(SETTINGS.LOS.VIEWER.NUM_POINTS);
-    inset ??= getSetting(SETTINGS.LOS.VIEWER.INSET);
+    pointAlgorithm ??= Settings.get(SETTINGS.LOS.VIEWER.NUM_POINTS);
+    inset ??= Settings.get(SETTINGS.LOS.VIEWER.INSET);
     return this.constructTokenPoints(
       pointAlgorithm,
       viewer.constrainedTokenBorder,

@@ -12,7 +12,7 @@ import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
 import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
-import { PATCHES as PATCHES_Setting } from "./Setting.js";
+import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";

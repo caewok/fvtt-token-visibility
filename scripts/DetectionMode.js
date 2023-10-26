@@ -10,7 +10,7 @@ import { testLOS } from "./visibility_los.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
-import { SETTINGS, getSetting, DEBUG_GRAPHICS } from "./settings.js";
+import { SETTINGS, Settings, DEBUG_GRAPHICS } from "./settings.js";
 import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 
 // Patches for the DetectionMode class
@@ -96,7 +96,7 @@ function _testRange(wrapped, visionSource, mode, target, test) {
   const radius2 = radius * radius;
 
   // Duplicate below so that the if test does not need to be inside the loop.
-  if ( getSetting(SETTINGS.DEBUG.RANGE) ) {
+  if ( Settings.get(SETTINGS.DEBUG.RANGE) ) {
     const draw = new Draw(DEBUG_GRAPHICS.RANGE);
     return testPoints.some(pt => {
       const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);

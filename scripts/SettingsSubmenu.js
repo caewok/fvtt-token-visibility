@@ -1,12 +1,38 @@
 /* globals
+FormApplication
+foundry,
+game,
+SettingsConfig,
+ui
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { SETTINGS, getSetting, setSetting } from "./settings.js";
+import { Settings, SETTINGS } from "./settings.js";
 
-class DefaultSettings {
+export class DefaultSettings {
+  static get changeableSettings() {
+    const { RANGE, LOS } = SETTINGS;
+    const { VIEWER, TARGET } = LOS;
+    return [
+      RANGE.ALGORITHM,
+      RANGE.POINTS3D,
+      RANGE.DISTANCE3D,
+
+      VIEWER.NUM_POINTS,
+      VIEWER.INSET,
+
+      TARGET.ALGORITHM,
+      TARGET.PERCENT,
+      TARGET.LARGE,
+
+      TARGET.POINT_OPTIONS.NUM_POINTS,
+      TARGET.POINT_OPTIONS.INSET,
+      TARGET.POINT_OPTIONS.POINTS3D
+    ];
+  }
+
   static get foundry() {
     const { RANGE, LOS } = SETTINGS;
     const { VIEWER, TARGET } = LOS;
@@ -167,9 +193,9 @@ export class SettingsSubmenu extends FormApplication {
 
   _initializeDisplayOptions() {
     const LOS = SETTINGS.LOS;
-    const algorithm = getSetting(LOS.TARGET.ALGORITHM);
-    const viewerPoints = getSetting(LOS.VIEWER.NUM_POINTS);
-    const targetPoints = getSetting(LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
+    const algorithm = Settings.get(LOS.TARGET.ALGORITHM);
+    const viewerPoints = Settings.get(LOS.VIEWER.NUM_POINTS);
+    const targetPoints = Settings.get(LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
     this.#updatePointOptionDisplay(algorithm);
     this.#updateViewerInsetDisplay(viewerPoints);
     this.#updateTargetInsetDisplay(targetPoints, algorithm);
@@ -214,7 +240,7 @@ export class SettingsSubmenu extends FormApplication {
       div.style.display = displayPointOpts;
     }
 
-    const numPointsTarget = getSetting(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
+    const numPointsTarget = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
     this.#updateTargetInsetDisplay(numPointsTarget, losAlgorithm);
   }
 
