@@ -386,15 +386,5 @@ export class Settings {
       default: false,
       type: Boolean
     });
-
-
   }
-
-
 }
-
-
-
-export function registerSettings() {
-}
-
