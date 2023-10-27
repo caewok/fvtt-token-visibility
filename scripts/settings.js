@@ -6,14 +6,9 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
+import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-
-export const DEBUG_GRAPHICS = {
-  LOS: undefined,
-  RANGE: undefined
-};
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -114,6 +109,36 @@ export class Settings {
   /** @type {object} */
   static KEYS = SETTINGS;
 
+  /** @type {PIXI.Graphics} */
+  static #DEBUG_LOS;
+
+  /** @type {PIXI.Graphics} */
+  static #DEBUG_RANGE;
+
+  static get DEBUG_LOS() { return canvas.tokens.children.find(c => c[`${MODULE_ID}_losDebug`]); }
+
+  static get DEBUG_RANGE() { return canvas.tokens.children.find(c => c[`${MODULE_ID}_rangeDebug`]); }
+
+  static initializeDebugGraphics() {
+    this.#DEBUG_LOS = new PIXI.Graphics();
+    this.#DEBUG_RANGE = new PIXI.Graphics();
+    this.#DEBUG_LOS[`${MODULE_ID}_losDebug`] = true;
+    this.#DEBUG_RANGE[`${MODULE_ID}_rangeDebug`] = true;
+    canvas.tokens.addChild(this.#DEBUG_LOS);
+    canvas.tokens.addChild(this.#DEBUG_RANGE);
+  }
+
+  // Don't need to destroy b/c they are destroyed as part of canvas.tokens.
+  //   static destroyDebugGraphics() {
+  //     if ( !this.#DEBUG_LOS.destroyed() ) this.#DEBUG_LOS.destroy();
+  //     if ( !this.#DEBUG_RANGE.destroyed() ) this.#DEBUG_RANGE.destroy();
+  //   }
+
+  static clearDebugGraphics() {
+    this.DEBUG_LOS.clear();
+    this.DEBUG_RANGE.clear();
+  }
+
   /**
    * Retrive a specific setting.
    * Cache the setting.  For caching to work, need to clean the cache whenever a setting below changes.
@@ -122,7 +147,16 @@ export class Settings {
    */
   static get(key) {
     const cached = this.cache.get(key);
-    if ( typeof cached !== "undefined" ) return cached;
+    if ( typeof cached !== "undefined" ) {
+      const origValue = game.settings.get(MODULE_ID, key);
+      if ( origValue !== cached ) {
+        console.debug(`Settings cache fail: ${origValue} !== ${cached} for key ${key}`);
+        return origValue;
+      }
+
+      return cached;
+
+    }
     const value = game.settings.get(MODULE_ID, key);
     this.cache.set(key, value);
     return value;
@@ -186,14 +220,7 @@ export class Settings {
       config: true,
       type: Boolean,
       default: false,
-      onChange: value => {
-        if ( value ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
-        else {
-          const draw = new Draw(DEBUG_GRAPHICS.RANGE);
-          draw.clearDrawings();
-          canvas.tokens.removeChild(DEBUG_GRAPHICS.RANGE);
-        }
-      }
+      onChange: _value => this.clearDebugGraphics()
     });
 
     register(KEYS.DEBUG.LOS, {
@@ -203,14 +230,7 @@ export class Settings {
       config: true,
       type: Boolean,
       default: false,
-      onChange: value => {
-        if ( value ) canvas.stage.addChild(DEBUG_GRAPHICS.LOS);
-        else {
-          const draw = new Draw(DEBUG_GRAPHICS.LOS);
-          draw.clearDrawings();
-          canvas.stage.removeChild(DEBUG_GRAPHICS.LOS);
-        }
-      }
+      onChange: _value => this.clearDebugGraphics()
     });
 
     // ----- NOTE: Submenu ---- //
@@ -249,7 +269,7 @@ export class Settings {
     });
 
     // ----- NOTE: Line-of-sight viewer tab ----- //
-    const VIEWER = KEYS.LOS.VIEWER
+    const VIEWER = KEYS.LOS.VIEWER;
     register(VIEWER.NUM_POINTS, {
       name: localize(`${VIEWER.NUM_POINTS}.Name`),
       hint: localize(`${VIEWER.NUM_POINTS}.Hint`),

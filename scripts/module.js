@@ -9,7 +9,7 @@ import { MODULE_ID, DEBUG } from "./const.js";
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
-import { Settings, SETTINGS, DEBUG_GRAPHICS } from "./settings.js";
+import { Settings, SETTINGS } from "./settings.js";
 
 // For API
 import * as bench from "./benchmark.js";
@@ -75,19 +75,7 @@ Hooks.once("setup", function() {
 
 Hooks.on("canvasReady", function() {
   console.debug("tokenvisibility|canvasReady")
-  DEBUG_GRAPHICS.RANGE = new PIXI.Graphics();
-  DEBUG_GRAPHICS.LOS = new PIXI.Graphics();
-
-  if ( Settings.get(SETTINGS.DEBUG.RANGE ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.RANGE);
-  if ( Settings.get(SETTINGS.DEBUG.LOS ) ) canvas.tokens.addChild(DEBUG_GRAPHICS.LOS);
-});
-
-Hooks.on("canvasTearDown", function() {
-  console.debug("tokenvisibility|canvasTearDown");
-  canvas.tokens.removeChild(DEBUG_GRAPHICS.RANGE);
-  canvas.tokens.removeChild(DEBUG_GRAPHICS.LOS);
-  DEBUG_GRAPHICS.RANGE.destroy();
-  DEBUG_GRAPHICS.LOS.destroy();
+  Settings.initializeDebugGraphics();
 });
 
 Hooks.on('createActiveEffect', refreshVisionOnActiveEffect);
