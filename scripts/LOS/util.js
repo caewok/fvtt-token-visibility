@@ -1,5 +1,4 @@
 /* globals
-getObjectProperty
 */
 "use strict";
 
@@ -7,6 +6,20 @@ import { EPSILON } from "../const.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { Settings, SETTINGS } from "../settings.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+
+/**
+ * Retrieve an embedded property from an object using a string.
+ * @param {object} obj
+ * @param {string} str
+ * @returns {object}
+ */
+export function getObjectProperty(obj, str) {
+  return str
+    .replace(/\[([^\[\]]*)\]/g, ".$1.") // eslint-disable-line no-useless-escape
+    .split(".")
+    .filter(t => t !== "")
+    .reduce((prev, cur) => prev && prev[cur], obj);
+}
 
 /**
  * Take an array of points and move them toward a center point by a specified percentage.
