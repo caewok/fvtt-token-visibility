@@ -183,7 +183,7 @@ export class AlternativeLOS {
       if ( t === null || t < zeroMin || t > oneMax ) continue;
       const ix = new Point3d();
       startPt.add(rayVector.multiplyScalar(t, ix), ix);
-      if ( !tile.containsPixel(ix.x, ix.y, 0.99) ) continue; // Transparent, so no collision.
+      if ( !tile.mesh?.containsPixel(ix.x, ix.y, 0.99) ) continue; // Transparent, so no collision.
 
       return true;
     }
