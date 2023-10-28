@@ -239,9 +239,8 @@ export class PointsLOS extends AlternativeLOS {
 
   static constructTokenPoints(pointAlgorithm, tokenShape, tokenZ, insetPercentage, tokenCenter) {
     const TYPES = SETTINGS.POINT_TYPES;
-    if ( !tokenShape.contains(tokenCenter) ) tokenCenter = tokenShape.center;
-    const center = new Point3d();
-    center.copyFrom(tokenCenter ?? tokenShape.center);
+    if ( !tokenCenter || !tokenShape.contains(tokenCenter) ) tokenCenter = tokenShape.center;
+    const center = new Point3d(tokenCenter.x, tokenCenter.y, tokenZ);
 
     let tokenPoints = [];
     if ( pointAlgorithm === TYPES.CENTER
