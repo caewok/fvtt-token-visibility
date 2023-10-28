@@ -40,6 +40,6 @@ export function initializePatching() {
   PATCHER.registerGroup("BASIC");
   PATCHER.registerGroup("ConstrainedTokenBorder");
 
-  if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
-  else PATCHER.registerGroup("NO_LEVELS");
+  // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
+  PATCHER.registerGroup("NO_LEVELS");
 }

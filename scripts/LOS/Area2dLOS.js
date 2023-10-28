@@ -271,29 +271,30 @@ export class Area2dLOS extends AlternativeLOS {
   _combineTilesWithDrawingHoles(tiles, drawings) {
     if ( !tiles.size ) return undefined;
 
-    tiles.forEach(t => {
-      const { x, y, width, height } = t.document;
+    const tilePolygons = tiles.map(tile => {
+      const { x, y, width, height } = tile.document;
       const pts = [
         x, y,
         x + width, y,
         x + width, y + width,
         x, y + height
       ];
-      t._polygon = new PIXI.Polygon(pts);
+      const poly = new PIXI.Polygon(pts);
+      poly._elevation = tile.elevationE;
+      return poly;
     });
 
     if ( !drawings.size ) {
-      tiles = ClipperPaths.fromPolygons(tiles, {scalingFactor: Area2d.SCALING_FACTOR});
-      tiles.combine().clean();
-      return tiles;
+      const paths = ClipperPaths.fromPolygons(tilePolygons, {scalingFactor: Area2d.SCALING_FACTOR});
+      paths.combine().clean();
+      return paths;
     }
 
     // Check if any drawings might create a hole in one or more tiles
     const tilesUnholed = [];
     const tilesHoled = [];
-    for ( const tile of tiles ) {
+    for ( const tilePoly of tilePolygons ) {
       const drawingHoles = [];
-      const tileE = tile.document.elevation;
 
       for ( const drawing of drawings ) {
         const minE = drawing.document.getFlag("levels", "rangeTop");
@@ -301,7 +302,7 @@ export class Area2dLOS extends AlternativeLOS {
         if ( minE == null && maxE == null ) continue; // Intended to test null, undefined
         else if ( minE == null && tileE !== maxE ) continue;
         else if ( maxE == null && tileE !== minE ) continue;
-        else if ( !tileE.between(minE, maxE) ) continue;
+        else if ( !tilePoly._elevation.between(minE, maxE) ) continue;
 
         const shape = CONFIG.GeometryLib.utils.centeredPolygonFromDrawing(drawing);
         drawingHoles.push(shape.toPolygon());
@@ -310,15 +311,15 @@ export class Area2dLOS extends AlternativeLOS {
       if ( drawingHoles.length ) {
         // Construct a hole at the tile's elevation from the drawing taking the difference.
         const drawingHolesPaths = ClipperPaths.fromPolygons(drawingHoles, {scalingFactor: Area2d.SCALING_FACTOR});
-        const tileHoled = drawingHolesPaths.diffPolygon(tile._polygon);
+        const tileHoled = drawingHolesPaths.diffPolygon(tilePoly);
         tilesHoled.push(tileHoled);
-      } else tilesUnholed.push(tile);
+      } else tilesUnholed.push(tilePoly);
     }
 
     if ( tilesUnholed.length ) {
       const unHoledPaths = ClipperPaths.fromPolygons(tilesUnholed, {scalingFactor: Area2d.SCALING_FACTOR});
-      unHoledPaths.combine().clean();
-      tilesHoled.push(...unHoledPaths);
+      // unHoledPaths.combine().clean();
+      tilesHoled.push(unHoledPaths);
     }
 
     // Combine all the tiles, holed and unholed
@@ -370,18 +371,18 @@ export class Area2dLOS extends AlternativeLOS {
   _calculateSeenAreaForPolygon(visiblePolygon) {
     // If Levels is enabled, consider tiles and drawings; obscure the visible token shape.
     if ( MODULES_ACTIVE.LEVELS ) {
-      let tiles = this.filterTilesByVisionPolygon(visiblePolygon);
+      let tiles = this.constructor.filterTilesByVisionPolygon(visiblePolygon);
 
       // Limit to tiles between viewer and target.
-      const minEZ = Math.min(this.visionSource.elevationZ, this.target.bottomZ);
-      const maxEZ = Math.max(this.visionSource.elevationZ, this.target.topZ);
+      const minEZ = Math.min(this.viewerPoint.z, this.target.bottomZ);
+      const maxEZ = Math.max(this.viewerPoint.z, this.target.topZ);
       tiles = tiles.filter(tile => {
         const tileEZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(tile.document.elevation);
         return tileEZ.between(minEZ, maxEZ);
       });
 
       if ( tiles.size ) {
-        const drawings = this.filterDrawingsByVisionPolygon(visiblePolygon);
+        const drawings = this.constructor.filterDrawingsByVisionPolygon(visiblePolygon);
         const combinedTiles = this._combineTilesWithDrawingHoles(tiles, drawings);
         visiblePolygon = combinedTiles.diffPolygon(visiblePolygon);
       }

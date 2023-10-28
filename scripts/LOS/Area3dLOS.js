@@ -43,6 +43,41 @@ calc = new Area3dLOS(viewer, target)
 calc.hasLOS()
 calc.percentVisible()
 
+objs = calc.blockingObjects
+[tile] = objs.tiles
+Draw.shape(tile.bounds, { color: Draw.COLORS.orange })
+
+objPts = calc.blockingObjectsPoints
+[tilePts] = objPts.tiles
+
+blockingPts = calc.blockingPoints
+
+let { obscuredSides, sidePolys } = calc._obscureSides();
+
+for ( const poly of sidePolys ) {
+   Draw.shape(poly, { color: Draw.COLORS.lightgreen})
+}
+
+for ( const obscuredSide of obscuredSides ) {
+  const polys = obscuredSide.toPolygons()
+  for ( const poly of polys ) {
+    Draw.shape(poly, { color: Draw.COLORS.red})
+  }
+}
+
+// _constructBlockingPointsArray
+visionPolygon = calc.visionPolygon;
+edges = [...visionPolygon.iterateEdges()];
+viewerLoc = calc.viewerPoint
+pts = tilePts
+Draw.shape(visionPolygon, { color: Draw.COLORS.blue })
+
+
+targetShape = new PIXI.Rectangle(3600, 2500, 300, 300)
+thisShape = new PIXI.Rectangle(2000, 3400, 2300, 900)
+Draw.shape(thisShape, { color: Draw.COLORS.orange });
+Draw.shape(targetShape, { color: Draw.COLORS.red })
+
 */
 
 
@@ -278,7 +313,7 @@ export class Area3dLOS extends AlternativeLOS {
       const draw = new Draw(Settings.DEBUG_LOS);
       const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
       const visibleShape = this.config.visibleTargetShape;
-      draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.5});
+      draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
       if ( visibleShape ) draw.shape(visibleShape, { color: Draw.COLORS.yellow });
     }
     return hasLOS;
@@ -322,11 +357,11 @@ export class Area3dLOS extends AlternativeLOS {
     this._drawLineOfSight();
 
     // Draw the detected objects on the canvas
-    objs.walls.forEach(w => draw.segment(w, { color: colors.blue }));
-    objs.tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.5 }));
+    objs.walls.forEach(w => draw.segment(w, { color: colors.blue, fillAlpha: 0.3 }));
+    objs.tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
     objs.terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
-    objs.drawings.forEach(d => draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.5 }));
-    objs.tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.5 }));
+    objs.drawings.forEach(d => draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.3 }));
+    objs.tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
@@ -334,9 +369,9 @@ export class Area3dLOS extends AlternativeLOS {
 
     // Draw the detected objects in 3d, centered on 0,0
     const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
-    pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, drawTool }));
-    pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, drawTool }));
-    pts.drawings.forEach(d => d.drawTransformed({ color: colors.gray, fillAlpha: 0.7, drawTool }));
+    pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, fillAlpha: 0.5, drawTool }));
+    pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, fillAlpha: 0.3, drawTool }));
+    pts.drawings.forEach(d => d.drawTransformed({ color: colors.gray, fillAlpha: 0.3, drawTool }));
     pts.tokens.forEach(t => t.drawTransformed({ color: colors.orange, drawTool }));
     pts.terrainWalls.forEach(w => w.drawTransformed({ color: colors.lightgreen, fillAlpha: 0.1, drawTool }));
 
@@ -668,7 +703,10 @@ export class Area3dLOS extends AlternativeLOS {
 
     blockingObjectsPoints.drawings.forEach(pts => {
       const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
-      if ( res.length ) blockingPoints.drawings.push(...res);
+      if ( res.length ) {
+        res.forEach(x => x.object = pts.object); // Copy the underlying drawing object.
+        blockingPoints.drawings.push(...res);
+      }
     });
 
     // Tokens have both horizontal and vertical.
@@ -733,32 +771,32 @@ export class Area3dLOS extends AlternativeLOS {
     if ( !blockingPoints.tiles.length ) return undefined;
 
     if ( !blockingPoints.drawings.length ) {
-      let tiles = blockingPoints.tiles.map(w => new PIXI.Polygon(w.perspectiveTransform()));
-      tiles = ClipperPaths.fromPolygons(tiles, {scalingFactor: this.constructor.SCALING_FACTOR});
-      tiles.combine().clean();
-      return tiles;
+      const tilePolys = blockingPoints.tiles.map(w => new PIXI.Polygon(w.perspectiveTransform()));
+      const paths = ClipperPaths.fromPolygons(tilePolys, {scalingFactor: this.constructor.SCALING_FACTOR});
+      paths.combine().clean();
+      return paths;
     }
 
     // Check if any drawings might create a hole in one or more tiles
     const tilesUnholed = [];
     const tilesHoled = [];
     const scalingFactor = this.constructor.SCALING_FACTOR;
-    for ( const tile of blockingPoints.tiles ) {
+    const pixelsToGridUnits = CONFIG.GeometryLib.utils.pixelsToGridUnits;
+    for ( const tilePts of blockingPoints.tiles ) {
       const drawingHoles = [];
-      const tileE = tile.object.document.elevation;
-      const tilePoly = new PIXI.Polygon(tile.perspectiveTransform());
-
-      for ( const drawing of blockingPoints.drawings ) {
-        const minE = drawing.object.document.getFlag("levels", "rangeTop");
-        const maxE = drawing.object.document.getFlag("levels", "rangeBottom");
+      const tileE = pixelsToGridUnits(tilePts.z);
+      const tilePoly = new PIXI.Polygon(tilePts.perspectiveTransform());
+      for ( const drawingPts of blockingPoints.drawings ) {
+        const minE = drawingPts.object.document.getFlag("levels", "rangeTop");
+        const maxE = drawingPts.object.document.getFlag("levels", "rangeBottom");
         if ( minE == null && maxE == null ) continue; // Intended to test null, undefined
         else if ( minE == null && tileE !== maxE ) continue;
         else if ( maxE == null && tileE !== minE ) continue;
         else if ( !tileE.between(minE, maxE) ) continue;
 
         // We know the tile is within the drawing elevation range.
-        drawing.elevation = tileE; // Temporarily change the drawing elevation to match tile.
-        drawingHoles.push(new PIXI.Polygon(drawing.perspectiveTransform()));
+        drawingPts.elevation = tileE; // Temporarily change the drawing elevation to match tile.
+        drawingHoles.push(new PIXI.Polygon(drawingPts.perspectiveTransform()));
       }
 
       if ( drawingHoles.length ) {
@@ -776,9 +814,9 @@ export class Area3dLOS extends AlternativeLOS {
     }
 
     // Combine all the tiles, holed and unholed
-    const tiles = ClipperPaths.combinePaths(tilesHoled);
-    tiles.combine().clean();
-    return tiles;
+    const paths = ClipperPaths.combinePaths(tilesHoled);
+    paths.combine().clean();
+    return paths;
   }
 
   /**

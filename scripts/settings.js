@@ -122,6 +122,9 @@ export class Settings {
   static initializeDebugGraphics() {
     this.#DEBUG_LOS = new PIXI.Graphics();
     this.#DEBUG_RANGE = new PIXI.Graphics();
+    this.#DEBUG_LOS.eventMode = "passive"; // Allow targeting, selection to pass through.
+    this.#DEBUG_RANGE.eventMode = "passive";
+
     this.#DEBUG_LOS[`${MODULE_ID}_losDebug`] = true;
     this.#DEBUG_RANGE[`${MODULE_ID}_rangeDebug`] = true;
     canvas.tokens.addChild(this.#DEBUG_LOS);
