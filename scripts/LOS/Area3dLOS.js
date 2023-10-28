@@ -278,7 +278,7 @@ export class Area3dLOS extends AlternativeLOS {
       const draw = new Draw(Settings.DEBUG_LOS);
       const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
       const visibleShape = this.config.visibleTargetShape;
-      draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.5});
+      draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
       if ( visibleShape ) draw.shape(visibleShape, { color: Draw.COLORS.yellow });
     }
     return hasLOS;
@@ -322,7 +322,7 @@ export class Area3dLOS extends AlternativeLOS {
     this._drawLineOfSight();
 
     // Draw the detected objects on the canvas
-    objs.walls.forEach(w => draw.segment(w, { color: colors.blue }));
+    objs.walls.forEach(w => draw.segment(w, { color: colors.blue, fillAlpha: 0.5 }));
     objs.tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.5 }));
     objs.terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
     objs.drawings.forEach(d => draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.5 }));
