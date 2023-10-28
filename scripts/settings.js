@@ -146,6 +146,8 @@ export class Settings {
    * @returns {*}
    */
   static get(key) {
+    // TODO: Bring back a working cache.
+
     const cached = this.cache.get(key);
     if ( typeof cached !== "undefined" ) {
       const origValue = game.settings.get(MODULE_ID, key);
