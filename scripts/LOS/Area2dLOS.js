@@ -272,7 +272,7 @@ export class Area2dLOS extends AlternativeLOS {
     if ( !tiles.size ) return undefined;
 
     const tilePolygons = tiles.map(tile => {
-      const { x, y, width, height, elevation } = tile.document;
+      const { x, y, width, height } = tile.document;
       const pts = [
         x, y,
         x + width, y,
@@ -280,7 +280,7 @@ export class Area2dLOS extends AlternativeLOS {
         x, y + height
       ];
       const poly = new PIXI.Polygon(pts);
-      poly._elevation = elevation;
+      poly._elevation = tile.elevationE;
       return poly;
     });
 

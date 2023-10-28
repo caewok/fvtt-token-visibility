@@ -249,14 +249,14 @@ export class HorizontalPoints3d extends PlanePoints3d {
     // We can shortcut the calculation if both are PIXI.Rectangles
     if ( thisShape instanceof PIXI.Rectangle && targetShape instanceof PIXI.Rectangle ) {
       splits.inside = thisShape.intersection(targetShape);
-      splits.inside = splits.inside.toPolygon();
       if ( !splits.inside.width || !splits.inside.height ) {
         splits.outside = [this];
         splits.inside = null;
         return splits;
       }
-      splits.outside = thisShape.difference(targetShape).thisDiff;
-      splits.outside = splits.outside.map(rect => rect.toPolygon());
+      splits.inside = splits.inside.toPolygon();
+      const outside =  thisShape.difference(targetShape)?.thisDiff; // Can be null
+      if ( outside ) splits.outside = splits.outside.map(rect => rect.toPolygon());
 
     } else {
       // Determine which token vertices are inside the horizontal shape.
@@ -265,7 +265,7 @@ export class HorizontalPoints3d extends PlanePoints3d {
       splits.inside = res.intersect;
     }
 
-    if ( splits.inside && splits.inside.points.length > 6 ) {
+    if ( splits.inside && splits.inside.points.length >= 6 ) {
       splits.inside = HorizontalPoints3d.fromPolygon(splits.inside, { elevation });
     } else splits.inside = null;
 

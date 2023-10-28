@@ -357,7 +357,7 @@ export class AlternativeLOS {
 
       // Filter tiles that are definitely too low or too high
       out.tiles = out.tiles.filter(t => {
-        const tZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(t.document.elevation);
+        const tZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(t.elevationE);
         return (tZ < maxE) && (tZ > minE);
       });
 
