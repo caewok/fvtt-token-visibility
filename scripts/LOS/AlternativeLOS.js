@@ -17,7 +17,7 @@ VisionSource
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
 import { lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
-import { Settings, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
+import { Settings, SETTINGS } from "../settings.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -323,7 +323,7 @@ export class AlternativeLOS {
     debug = false,
     viewer } = {}) {
 
-    const draw = debug ? (new Draw(DEBUG_GRAPHICS.LOS)) : undefined;
+    const draw = debug ? (new Draw(Settings.DEBUG_LOS)) : undefined;
     visionPolygon ??= this.visionPolygon(viewingPoint, target);
     if ( debug ) draw.shape(visionPolygon,
       { color: Draw.COLORS.blue, fillAlpha: 0.2, fill: Draw.COLORS.blue });

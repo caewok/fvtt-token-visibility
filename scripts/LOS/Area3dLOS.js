@@ -56,7 +56,7 @@ import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
 // Base folder
-import { Settings, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
+import { Settings, SETTINGS } from "../settings.js";
 import { buildTokenPoints } from "./util.js";
 
 // Geometry folder
@@ -275,7 +275,7 @@ export class Area3dLOS extends AlternativeLOS {
 
     if ( this.config.debug ) {
       // Fill in the constrained border on canvas
-      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      const draw = new Draw(Settings.DEBUG_LOS);
       const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
       const visibleShape = this.config.visibleTargetShape;
       draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.5});
@@ -317,7 +317,7 @@ export class Area3dLOS extends AlternativeLOS {
 
   #drawDebugShapes(objs, obscuredSides, sidePolys) {
     const colors = Draw.COLORS;
-    const draw = new Draw(DEBUG_GRAPHICS.LOS); // Draw on the canvas.
+    const draw = new Draw(Settings.DEBUG_LOS); // Draw on the canvas.
     const drawTool = this.drawTool; // Draw in the pop-up box.
     this._drawLineOfSight();
 
@@ -638,7 +638,7 @@ export class Area3dLOS extends AlternativeLOS {
     const viewerLoc = this.viewerPoint;
 
     if ( this.config.debug ) {
-      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      const draw = new Draw(Settings.DEBUG_LOS);
       draw.shape(visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
     }
 
@@ -834,7 +834,7 @@ export class Area3dLOS extends AlternativeLOS {
    * Draw the line of sight from token to target.
    */
   _drawLineOfSight() {
-    const draw = new Draw(DEBUG_GRAPHICS.LOS);
+    const draw = new Draw(Settings.DEBUG_LOS);
     draw.segment({A: this.viewerPoint, B: this.targetCenter});
   }
 }

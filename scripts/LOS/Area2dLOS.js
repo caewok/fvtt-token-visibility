@@ -12,7 +12,7 @@ import { AlternativeLOS } from "./AlternativeLOS.js";
 // Base folder
 import { MODULES_ACTIVE } from "../const.js";
 import { buildTokenPoints } from "./util.js";
-import { Settings, SETTINGS, DEBUG_GRAPHICS } from "../Settings.js";
+import { Settings, SETTINGS } from "../Settings.js";
 import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
 
 // Geometry folder
@@ -115,7 +115,7 @@ export class Area2dLOS extends AlternativeLOS {
    */
   hasLOS(threshold) {
     const debug = this.config.debug;
-    const draw = debug ? (new Draw(DEBUG_GRAPHICS.LOS)) : undefined;
+    const draw = debug ? new Draw(Settings.DEBUG_LOS) : undefined;
 
     // Start with easy cases, in which the center point is determinative.
     if ( !this.config.visibleTargetShape || this.config.visibleTargetShape instanceof PIXI.Rectangle ) {
@@ -192,7 +192,7 @@ export class Area2dLOS extends AlternativeLOS {
 
     const hasLOS = !this._sourceIntersectsPolygonBounds(los, tokenShape);
     if ( this.config.debug ) {
-      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      const draw = new Draw(Settings.DEBUG_LOS);
       draw.shape(los, { color: Draw.COLORS.orange });
       this._drawTokenShape(tokenShape, hasLOS);
     }
@@ -396,7 +396,7 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {boolean} hasLOS
    */
   _drawTokenShape(polygon, hasLOS) {
-    const draw = new Draw(DEBUG_GRAPHICS.LOS);
+    const draw = new Draw(Settings.DEBUG_LOS);
     const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
     const visibleShape = this.config.visibleTargetShape;
     draw.shape(this.target.constrainedTokenBorder, { color });
@@ -409,7 +409,7 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {PIXI.Polygon|ClipperPaths} los
    */
   _drawLOS(los) {
-    const draw = new Draw(DEBUG_GRAPHICS.LOS);
+    const draw = new Draw(Settings.DEBUG_LOS);
     if ( los instanceof ClipperPaths ) los = los.simplify();
     if ( los instanceof ClipperPaths ) {
       const polys = los.toPolygons();
@@ -532,7 +532,7 @@ export class Area2dLOS extends AlternativeLOS {
       const width = 1;
       const fill = Draw.COLORS.gray;
       const fillAlpha = .5;
-      const draw = new Draw(DEBUG_GRAPHICS.LOS);
+      const draw = new Draw(Settings.DEBUG_LOS);
       shadows.forEach(shadow => draw.shape(shadow, { color, width, fill, fillAlpha }));
     }
 

@@ -6,6 +6,7 @@ renderTemplate
 "use strict";
 
 import { MODULE_ID, DOCUMENTATION_URL, ISSUE_URL } from "./const.js";
+import { Settings } from "./settings.js";
 
 // Patches for the VisionSource class
 export const PATCHES = {};
@@ -35,7 +36,16 @@ async function renderSettingsConfig(app, html, data) {
   activateListenersSettingsConfig(app, html);
 }
 
-PATCHES.BASIC.HOOKS = { renderSettingsConfig };
+/**
+ * Update setting hook.
+ * Wipe cache on update.
+ */
+function updateSetting(setting, _changes, _options, _userId) {
+  const [module, key] = setting.key.split(".");
+  if ( module === MODULE_ID ) Settings.cache.delete(key);
+}
+
+PATCHES.BASIC.HOOKS = { renderSettingsConfig, updateSetting };
 
 // ----- NOTE: Helper functions ----- //
 

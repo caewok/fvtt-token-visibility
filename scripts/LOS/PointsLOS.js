@@ -9,7 +9,7 @@ import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
-import { Settings, SETTINGS, DEBUG_GRAPHICS } from "../settings.js";
+import { Settings, SETTINGS } from "../settings.js";
 import { insetPoints } from "./util.js";
 
 // Geometry folder
@@ -351,7 +351,7 @@ export class PointsLOS extends AlternativeLOS {
    * @param {Point3d[]} targetPoints    Array of points on the target to test
    */
   _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
-    const draw = new Draw(DEBUG_GRAPHICS.LOS);
+    const draw = new Draw(Settings.DEBUG_LOS);
     const viewerPoint = this.viewerPoint;
     const visibleTargetShape = this.config.visibleTargetShape;
     const ln = targetPoints.length;

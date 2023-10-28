@@ -157,6 +157,7 @@ export class SettingsSubmenu extends FormApplication {
       promises.push(game.settings.set(s.namespace, s.key, v));
     }
     await Promise.allSettled(promises);
+    Settings.cache.clear();
     if ( requiresClientReload || requiresWorldReload ) SettingsConfig.reloadConfirm({world: requiresWorldReload});
   }
 
