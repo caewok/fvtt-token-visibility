@@ -83,14 +83,14 @@ export class AlternativeLOS {
   #configure(config = {}) {
     const cfg = this.config;
     cfg.type = config.type ?? "sight";
-    cfg.wallsBlock = config.wallsBlock || true;
-    cfg.tilesBlock = config.tilesBlock || MODULES_ACTIVE.LEVELS || MODULES_ACTIVE.EV;
-    cfg.deadTokensBlock = config.deadTokensBlock || false;
-    cfg.liveTokensBlock = config.liveTokensBlock || false;
-    cfg.proneTokensBlock = config.proneTokensBlock || true;
-    cfg.debug = config.debug || Settings.get(SETTINGS.DEBUG.LOS);
+    cfg.wallsBlock = config.wallsBlock ?? true;
+    cfg.tilesBlock = config.tilesBlock ?? (MODULES_ACTIVE.LEVELS || MODULES_ACTIVE.EV);
+    cfg.deadTokensBlock = config.deadTokensBlock ?? false;
+    cfg.liveTokensBlock = config.liveTokensBlock ?? false;
+    cfg.proneTokensBlock = config.proneTokensBlock ?? true;
+    cfg.debug = config.debug ?? Settings.get(SETTINGS.DEBUG.LOS);
     cfg.visibleTargetShape = config.visibleTargetShape ?? undefined;
-    cfg.largeTarget = config.largeTarget || Settings.get(SETTINGS.LOS.TARGET.LARGE);
+    cfg.largeTarget = config.largeTarget ?? Settings.get(SETTINGS.LOS.TARGET.LARGE);
   }
 
   // ------ NOTE: Primary methods to be overridden by subclass -----
