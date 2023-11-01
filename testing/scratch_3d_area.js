@@ -635,4 +635,53 @@ trW = tilePts.tPoints[]
 scaleTexM = Matrix.scale(tile.bounds.width, tile.bounds.height, 1)
 
 
+// Do it in the shader...
+
+let [tilePts] = calc.blockingObjectsPoints.tiles
+points = {
+  tl: tilePts.points[0],
+  tr: tilePts.points[1],
+  br: tilePts.points[2],
+  bl: tilePts.points[3]
+}
+
+points = {
+  tl: tilePts.tPoints[0],
+  tr: tilePts.tPoints[1],
+  br: tilePts.tPoints[2],
+  bl: tilePts.tPoints[3]
+}
+
+
+tileGeom = new QuadProjectionGeometry(points);
+
+targetPoint = Point3d.fromTokenCenter(calc.target)
+tileShader = TileProjectionShader.create(tile, {
+  uMultiplier: 1000,
+  uViewerPosition: [calc.viewerPoint.x, calc.viewerPoint.y, calc.viewerPoint.z],
+  uTargetPosition: [targetPoint.x, targetPoint.y, targetPoint.z]
+})
+tilePlane = new PIXI.Mesh(tileGeom, tileShader)
+canvas.stage.addChild(tilePlane)
+canvas.stage.removeChild(tilePlane)
+
+
+poly = new PIXI.Polygon(tilePts.tPoints.flatMap(pt => [pt.x, pt.y]))
+Draw.shape(poly, { color: Draw.COLORS.blue, fill: Draw.COLORS.blue, fillAlpha: 0.5})
+
+
+poly = new PIXI.Polygon(tilePts.tPoints.flatMap(pt => {
+  const ptT = tilePts.constructor.perspectiveTransform(pt, -1);
+  return [ptT.x, ptT.y];
+}))
+Draw.shape(poly, { color: Draw.COLORS.red, fill: Draw.COLORS.red, fillAlpha: 0.2})
+
+poly = new PIXI.Polygon(tilePts.tPoints.flatMap(pt => {
+  const ptT = tilePts.constructor.perspectiveTransform(pt, -1000);
+  return [ptT.x, ptT.y];
+}))
+Draw.shape(poly, { color: Draw.COLORS.red, fill: Draw.COLORS.red, fillAlpha: 0.2})
+
+
+
 

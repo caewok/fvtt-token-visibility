@@ -185,32 +185,13 @@ uniform vec3 uTargetPosition;
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 
-// https://forum.derivative.ca/t/look-at-vertex-shader-for-instancing-glsl/299286
-mat4 lookAtPoint(in vec3 viewerPosition, in vec3 targetPosition) {
-  vec3 up = vec3(0.0, -1.0, 1.0);
-  vec3 zAxis = viewerPosition - targetPosition;
-  if ( length(zAxis) != 0.0 ) zAxis = normalize(zAxis);
-
-  vec3 xAxis = vec3(1.0, 0.0, 0.0);
-  vec3 yAxis = vec3(0.0, 1.0, 0.0);
-  xAxis = cross(up, zAxis);
-  if ( length(xAxis) != 0.0 ) xAxis = normalize(xAxis);
-  yAxis = cross(zAxis, xAxis);
-
-  return mat4(
-    xAxis.x, xAxis.y, xAxis.z, 0.0,
-    yAxis.x, yAxis.y, yAxis.z, 0.0,
-    zAxis.x, zAxis.y, zAxis.z, 0.0,
-    viewerPosition.x, viewerPosition.y, viewerPosition.z, 1.0
-  );
-}
-
 void main() {
-  mat4 lookM = lookAtPoint(uViewerPosition, uTargetPosition);
-  vec4 vertexPosition = lookM * vec4(aVertexPosition, 1.0);
-
   // vec3 vertexPosition = aVertexPosition * vec3(uMultiplier, uMultiplier, 1.0);
-  gl_Position = vec4(projectionMatrix * translationMatrix * vertexPosition.xyz, 1.0);
+  vec3 vertexPosition = aVertexPosition;
+  // vertexPosition.xy *= 1000.0;
+  // vertexPosition.z *= -1.0;
+
+  gl_Position = vec4(projectionMatrix * translationMatrix * vec3(vertexPosition.xy / vertexPosition.z, 1.0), 1.0);
   vTextureCoord = aTextureCoord.xy;
   vertexNum = float(gl_VertexID);
 }`;
@@ -228,9 +209,9 @@ uniform sampler2D aTileSampler;
 
 void main() {
   // Terrain is sized to the scene.
-  // vec4 texPixel = texture(aTileSampler, vTextureCoord);
-  // fragColor = texPixel;
-  fragColor = vec4(vertexNum / 2.0, 0.0, 0.0, 1.0);
+  vec4 texPixel = texture(aTileSampler, vTextureCoord);
+  fragColor = texPixel;
+  //fragColor = vec4(vertexNum / 2.0, 0.0, 0.0, 1.0);
 }`;
 
   /**
