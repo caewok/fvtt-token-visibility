@@ -178,6 +178,7 @@ in vec3 aTextureCoord;
 
 out float vertexNum;
 out vec2 vTextureCoord;
+out vec3 vVertexPosition;
 
 uniform vec3 uViewerPosition;
 uniform vec3 uTargetPosition;
@@ -186,12 +187,16 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 
 void main() {
-  // vec3 vertexPosition = aVertexPosition * vec3(uMultiplier, uMultiplier, 1.0);
   vec3 vertexPosition = aVertexPosition;
-  // vertexPosition.xy *= 1000.0;
+  // vertexPosition.xy *= uMultiplier;
   // vertexPosition.z *= -1.0;
 
+  // gl_Position.xyw = projectionMatrix * translationMatrix * vec3(vertexPosition.xy, 1.0);
+  // gl_Position.z = 0.0;
+
   gl_Position = vec4(projectionMatrix * translationMatrix * vec3(vertexPosition.xy / vertexPosition.z, 1.0), 1.0);
+  vVertexPosition = vertexPosition;
+
   vTextureCoord = aTextureCoord.xy;
   vertexNum = float(gl_VertexID);
 }`;
@@ -204,14 +209,35 @@ precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
 in vec2 vTextureCoord;
 in float vertexNum;
+in vec3 vVertexPosition;
 out vec4 fragColor;
 uniform sampler2D aTileSampler;
 
 void main() {
-  // Terrain is sized to the scene.
+  // fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  // fragColor = vec4(vertexNum / 2.0, 0.0, 0.0, 1.0);
+  // fragColor = vec4(vTextureCoord.x, vTextureCoord.y, 0.0, 1.0);
+  // return;
+
   vec4 texPixel = texture(aTileSampler, vTextureCoord);
+
+
+  /*
+  mat4 transMat = mat4(1.0);
+  transMat[3][0] = 0.5;
+  transMat[3][1] = 0.5;
+
+  mat4 scaleMat = mat4(1.0);
+  scaleMat[0][0] = 0.5;
+  scaleMat[1][1] = 0.5;
+
+  vec4 texPosition = scaleMat * transMat * vec4(vVertexPosition, 1.0);
+  vec4 texPixel = texture(aTileSampler, texPosition.xy / texPosition.z);
+  */
+
+  // vec4 texPixel = texture(aTileSampler, vTextureCoord);
   fragColor = texPixel;
-  //fragColor = vec4(vertexNum / 2.0, 0.0, 0.0, 1.0);
+
 }`;
 
   /**

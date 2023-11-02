@@ -562,6 +562,7 @@ https://registry.khronos.org/OpenGL-Refpages/gl4/html/texture.xhtml
 https://registry.khronos.org/OpenGL-Refpages/gl4/html/textureProj.xhtml
 https://forum.openframeworks.cc/t/projective-texture-mapping-glsl/23677
 https://paroj.github.io/gltut/Texturing/Tut17%20Projective%20Texture.html
+https://forum.openframeworks.cc/t/projective-texture-mapping-glsl/23677
 
 
 let [tilePts] = calc.blockingObjectsPoints.tiles
@@ -683,5 +684,27 @@ poly = new PIXI.Polygon(tilePts.tPoints.flatMap(pt => {
 Draw.shape(poly, { color: Draw.COLORS.red, fill: Draw.COLORS.red, fillAlpha: 0.2})
 
 
+
+
+translationMatrix = tileShader.uniforms.translationMatrix;
+projectionMatrix = tileShader.uniforms.globals.uniforms.projectionMatrix.toArray();
+
+translationMatrix = Matrix.fromFlatArray(translationMatrix, 3, 3);
+projectionMatrix = Matrix.fromFlatArray(projectionMatrix, 3, 3);
+
+// 2d
+projectionMatrix.multiplyPoint2d(translationMatrix.multiplyPoint2d(points.tl))
+
+// 3d
+ptMat = new Matrix([[points.tl.x], [points.tl.y], [points.tl.z]])
+projectionMatrix.multiply(translationMatrix.multiply(ptMat))
+
+
+// 3d alt
+pt2d = new PIXI.Point()
+pt2d.copyFrom(points.tl)
+pt2d.multiplyScalar(1/points.tl.z, pt2d)
+
+projectionMatrix.multiplyPoint2d(translationMatrix.multiplyPoint2d(pt2d))
 
 
