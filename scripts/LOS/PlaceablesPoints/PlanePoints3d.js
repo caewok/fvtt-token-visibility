@@ -255,13 +255,11 @@ export class PlanePoints3d {
   /**
    * Draw the transformed shape.
    */
-  drawTransformed({perspective = true, color = Draw.COLORS.blue, width = 1, fill, fillAlpha = 0.2, drawTool } = {}) {
+  drawTransformed({ drawTool, perspective = true, ...drawOpts } = {} ) {
     drawTool ??= new Draw();
-    fill ??= color;
-
+    drawOpts.fill ??= drawOpts.color ?? Draw.COLORS.blue;
     const pts = perspective ? this.perspectiveTransform() : this.tPoints;
-    const poly = new PIXI.Polygon(pts);
-    drawTool.shape(poly, { color, width, fill, fillAlpha });
+    drawTool.shape(poly, drawOpts);
   }
 
   /**
