@@ -107,7 +107,7 @@ void main(void) {
 }
 `;
 
-  constructor(alphaCutoff = 0.75, color = new PIXI.Color(0x0000FF)) {
+  constructor(alphaCutoff = 0.75, color = new Color(0x0000FF)) {
     super(TileAlphaCutoffFilter.vertexShader, TileAlphaCutoffFilter.fragmentShader);
     this.uniforms.color = new Float32Array(3);
     this.color = color;

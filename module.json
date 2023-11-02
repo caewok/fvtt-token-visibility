@@ -30,7 +30,7 @@
   },
 
   "scripts": [
-    "pixi-projection.js"
+    "scripts/LOS/pixi_projection/pixi-projection.js"
   ],
 
   "esmodules": [
