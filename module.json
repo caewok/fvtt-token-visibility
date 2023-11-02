@@ -28,6 +28,11 @@
       }
     ]
   },
+
+  "scripts": [
+    "pixi-projection.js"
+  ],
+
   "esmodules": [
     "scripts/module.js"
   ],
