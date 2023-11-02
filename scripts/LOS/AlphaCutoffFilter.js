@@ -24,7 +24,7 @@ tileSprite = new PIXI.Sprite(tile.texture);
 canvas.stage.addChild(tileSprite)
 canvas.stage.removeChild(tileSprite)
 
-filter = new TileAlphaCutoffFilter(0.75);
+filter = new AlphaCutoffFilter(0.75);
 tileSprite.filters = [filter]
 
 
@@ -77,7 +77,7 @@ filter._loadMatrix(matrix, false)
  * Use a variation on the color overlay filter.
  * https://github.com/pixijs/filters/blob/main/filters/color-overlay/src/colorOverlay.frag
  */
-export class TileAlphaCutoffFilter extends PIXI.Filter {
+export class AlphaCutoffFilter extends PIXI.Filter {
   // https://github.com/pixijs/filters/blob/main/tools/fragments/default.vert
   static vertexShader = `
 attribute vec2 aVertexPosition;
@@ -108,7 +108,7 @@ void main(void) {
 `;
 
   constructor(alphaCutoff = 0.75, color = new Color(0x0000FF)) {
-    super(TileAlphaCutoffFilter.vertexShader, TileAlphaCutoffFilter.fragmentShader);
+    super(AlphaCutoffFilter.vertexShader, AlphaCutoffFilter.fragmentShader);
     this.uniforms.color = new Float32Array(3);
     this.color = color;
     this.alphaCutoff = alphaCutoff;
