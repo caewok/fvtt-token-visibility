@@ -259,6 +259,7 @@ export class PlanePoints3d {
     drawTool ??= new Draw();
     drawOpts.fill ??= drawOpts.color ?? Draw.COLORS.blue;
     const pts = perspective ? this.perspectiveTransform() : this.tPoints;
+    const poly = new PIXI.Polygon(pts);
     drawTool.shape(poly, drawOpts);
   }
 
