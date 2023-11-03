@@ -29,7 +29,7 @@ import { Area2d, Area2dLOS } from "./LOS/Area2dLOS.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Area3dPopout, area3dPopoutData } from "./LOS/Area3dPopout.js";
 
-import { TileAlphaCutoffFilter } from "./LOS/TileAlphaCutoffFilter.js";
+import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 
 import * as los from "./visibility_los.js";
 import * as range from "./visibility_range.js";
@@ -61,7 +61,7 @@ Hooks.once("init", function() {
     VerticalPoints3d,
     HorizontalPoints3d,
     Settings,
-    TileAlphaCutoffFilter,
+    AlphaCutoffFilter,
 
     Area3dPopout,
     area3dPopoutData,
