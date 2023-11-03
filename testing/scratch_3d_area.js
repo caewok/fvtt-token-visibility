@@ -189,7 +189,7 @@ buffer.data[3] = txPts[3].y
 buffer.update()
 
 
-// Draw token shape to render texture and calculate its area using pixels
+// NOTE: Draw token shape to render texture and calculate its area using pixels
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d;
 api = game.modules.get("tokenvisibility").api;
@@ -252,7 +252,7 @@ sidesArea = sidePolys.reduce((area, poly) =>
 
 console.log(`Geometric area is ${sidesArea} versus pixel area of ${sum}`)
 
-// Draw token shape and blocking wall and calculate visible area using pixels
+// NOTE: Draw token shape and blocking wall and calculate visible area using pixels
 targetG.position = new PIXI.Point(0, 0);
 wallsG = new PIXI.Graphics();
 
@@ -285,7 +285,7 @@ calcNoTiles.percentVisible()
 console.log(`Pixel percent visible: ${sumWalls / sum}; geometric percent visible: ${calcNoTiles.percentVisible()}`)
 
 
-// Draw token shape and blocking tile and calculate visible area using pixels
+// NOTE: Draw token shape and blocking tile and calculate visible area using pixels
 targetG.position = new PIXI.Point(0, 0);
 tilesG = new PIXI.Container()
 let [tile] = calc.blockingObjects.tiles
@@ -707,4 +707,107 @@ pt2d.multiplyScalar(1/points.tl.z, pt2d)
 
 projectionMatrix.multiplyPoint2d(translationMatrix.multiplyPoint2d(pt2d))
 
+
+// ------ NOTE: Full tile, tokens, wall implementation ----- //
+Draw = CONFIG.GeometryLib.Draw
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+api = game.modules.get("tokenvisibility").api;
+Area3dLOS = api.Area3dLOS;
+PixelCache = api.PixelCache
+AlphaCutoffFilter = api.AlphaCutoffFilter
+
+let [viewer] = canvas.tokens.controlled;
+let [target] = game.user.targets;
+
+calc = new Area3dLOS(viewer, target)
+calc.percentVisible()
+
+// Draw the target shape.
+targetG = new PIXI.Graphics();
+drawTool = new Draw(targetG);
+
+// Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+// and that causes a lighter-color border to appear outside the shape.
+calc.targetPoints.drawTransformed({ color: Draw.COLORS.red, width: 0, fill: Draw.COLORS.red, fillAlpha: 1, drawTool })
+
+// Draw walls
+blockingGraphics = new PIXI.Graphics();
+drawTool = new Draw(blockingGraphics)
+wallPts = calc.blockingPoints.walls;
+wallPts.forEach(w => w.drawTransformed({ color: Draw.COLORS.blue, width: 0, fill: Draw.COLORS.blue, fillAlpha: 1, drawTool }));
+
+// Draw token obstacles
+tokens = calc.blockingPoints.tokens;
+tokens.forEach(t => t.drawTransformed({ color: Draw.COLORS.blue, width: 0, fill: Draw.COLORS.blue, fillAlpha: 1, drawTool }));
+
+// Draw terrain walls
+// Use a separate container with an AlphaCutoffFilter.
+// For an additive blend, can set each terrain to alpha 0.4. Any overlap will be over 0.5.
+terrainGraphics = new PIXI.Graphics();
+drawTool = new Draw(terrainGraphics);
+terrainWallPts = calc.blockingPoints.terrainWalls;
+terrainWallPts.forEach(w => w.drawTransformed({ color: Draw.COLORS.green, width: 0, fill: Draw.COLORS.green, fillAlpha: 0.4, drawTool }));
+terrainFilter = new AlphaCutoffFilter(0.5);
+terrainGraphics.filters = [terrainFilter];
+
+// Draw tiles
+// Each requires its own container.
+tileContainer = new PIXI.Container();
+tileFilter = new AlphaCutoffFilter(0.75);
+for ( const tilePts of calc.blockingPoints.tiles ) {
+  // TODO: Need to cutoff tiles at the z=0 point. And need to have the uv coordinates reflect this.
+  // Any chance mapSprite will do this?
+  const tile = tilePts.object;
+  const containerSprite = tileContainer.addChild(new Sprite2d(tile.texture));
+  const perspectivePoints = tilePts.perspectiveTransform();
+  containerSprite.proj.mapSprite(containerSprite, perspectivePoints);
+  containerSprite.filters = [tileFilter];
+}
+
+// Draw everything. Need to first draw the red target token, then draw all the blue obstacles on top.
+blockingContainer = new PIXI.Container();
+blockingContainer.addChild(blockingGraphics);
+blockingContainer.addChild(terrainGraphics);
+blockingContainer.addChild(tileContainer);
+
+// Translate the points to fit in the render texture.
+txPtsArray = calc.targetPoints.faces.map(face => face.perspectiveTransform())
+xValues = [];
+yValues = [];
+for ( const ptArray of txPtsArray ) {
+  for ( const pt of ptArray ) {
+    xValues.push(pt.x);
+    yValues.push(pt.y);
+  }
+}
+xMinMax = Math.minMax(...xValues);
+yMinMax = Math.minMax(...yValues);
+
+targetG.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+blockingContainer.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
+
+texConfig = {
+  resolution: 1,
+  width: xMinMax.max - xMinMax.min,
+  height: yMinMax.max - yMinMax.min,
+  scaleMode: PIXI.SCALE_MODES.NEAREST
+}
+
+rt =  PIXI.RenderTexture.create(texConfig);
+canvas.app.renderer.render(targetG, { renderTexture: rt, clear: true });
+cacheTarget = PixelCache.fromTexture(rt);
+cacheTarget.pixels.reduce((acc, curr) => acc += Boolean(curr), 0)
+sumTarget = cacheTarget.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+canvas.app.renderer.render(wallsG, { renderTexture: rt, clear: false });
+s = new PIXI.Sprite(rt)
+canvas.stage.addChild(s)
+canvas.stage.removeChild(s)
+
+cacheBlocked = PixelCache.fromTexture(rt)
+cacheBlocked.pixels.reduce((acc, curr) => acc += Boolean(curr), 0)
+sumWithObstacles = cacheBlocked.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+console.log(`Pixel percent visible: ${sumWithObstacles / sumTarget}; geometric percent visible: ${calc.percentVisible()}`)
 
