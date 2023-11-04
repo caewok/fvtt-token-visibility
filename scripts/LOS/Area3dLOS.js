@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 CONST,
 foundry,
 PIXI
@@ -89,6 +90,8 @@ import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
+import { PixelCache } from "./PixelCache.js";
+import { AlphaCutoffFilter } from "./AlphaCutoffFilter.js";
 
 // Base folder
 import { Settings, SETTINGS } from "../settings.js";
@@ -99,7 +102,6 @@ import { Draw } from "../geometry/Draw.js"; // For debugging
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
 import { Matrix } from "../geometry/Matrix.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-
 
 export class Area3dLOS extends AlternativeLOS {
 
@@ -243,6 +245,7 @@ export class Area3dLOS extends AlternativeLOS {
     if ( !config.visionSource ) { console.error("Area3dLOS requires a visionSource."); }
     const cfg = this.config;
     cfg.visionSource = config.visionSource ?? canvas.tokens.controlled[0] ?? [...canvas.tokens.placeables][0];
+    cfg.useWebGL = config.useWebGL ?? false;
   }
 
   get debug() { return this.#debug; }
@@ -256,6 +259,13 @@ export class Area3dLOS extends AlternativeLOS {
       this.drawTool = new Draw(area3dPopoutData.app.graphics);
       this.drawTool.clearDrawings();
     }
+  }
+
+  _clearCache() {
+    this.#viewIsSet = false;
+    this.#blockingObjectsAreSet = false;
+    this.#blockingObjectsPointsAreSet = false;
+    this.#blockingPointsAreSet = false;
   }
 
   /**
@@ -325,6 +335,23 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {number}
    */
   percentVisible() {
+    if ( this.config.useWebGL ) {
+      try {
+        const percent = this._percentVisibleWebGL();
+        return percent;
+      } catch( error ) {
+        console.error(error);
+      }
+    }
+    return this._percentVisibleGeometric();
+  }
+
+  /**
+   * Determine percentage area by estimating the blocking shapes geometrically.
+   * Uses drawings for tile holes; cannot handle transparent tile pixels.
+   * @returns {number}
+   */
+  _percentVisibleGeometric() {
     const objs = this.blockingObjects;
     if ( !this.debug
       && !objs.walls.size
@@ -348,6 +375,160 @@ export class Area3dLOS extends AlternativeLOS {
     if ( this.debug ) this.#drawDebugShapes(objs, obscuredSides, sidePolys);
     if ( this.config.debug ) console.debug(`Area3dLOS|${this.target.name} is ${Math.round(percentSeen * 100)}% visible from ${this.config.visionSource?.object?.name}`);
     return percentSeen;
+  }
+
+  // Pixel cache for measuring percentage visible using WebGL
+  targetCache;
+
+  obstacleCache;
+
+  // For now, store the graphics containers for debugging.
+  targetGraphics = new PIXI.Graphics();
+
+  blockingGraphics = new PIXI.Graphics();
+
+  terrainGraphics = new PIXI.Graphics();
+
+  tileContainer = new PIXI.Container();
+
+  targetRT;
+
+  /**
+   * Determine percentage area by estimating the blocking shapes using PIXI.Graphics and WebGL.
+   * Constructs a render texture to estimate the percentage.
+   * @returns {number}
+   */
+  _percentVisibleWebGL() {
+    if ( !this.#viewIsSet ) this.calculateViewMatrix();
+    const TARGET_COLOR = Draw.COLORS.red;
+    const OBSTACLE_COLOR = Draw.COLORS.red;
+    const TERRAIN_COLOR = Draw.COLORS.green;
+    const blockingPoints = this.blockingPoints;
+
+    // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+    // and that causes a lighter-color border to appear outside the shape.
+    const drawOpts = {
+      color: TARGET_COLOR,
+      width: 0,
+      fill: TARGET_COLOR,
+      fillAlpha: 1,
+      drawTool: undefined
+    };
+
+    // Clear everything
+    this.targetGraphics.clear();
+    this.blockingGraphics.clear();
+    this.terrainGraphics.clear();
+    const children = this.tileContainer.removeChildren();
+    children.forEach(c => c.destroy());
+    if ( this.targetRT ) { this.targetRT.destroy(); }
+
+    // Draw the target shape.
+    const targetGraphics = this.targetGraphics;
+    drawOpts.drawTool = new Draw(targetGraphics);
+    this.targetPoints.drawTransformed(drawOpts);
+
+    // TODO: Can we draw these using WebGL shader so that if they are behind the target,
+    // they are not drawn or otherwise ignored? Could then use _blockingObjectsPoints, which is simpler.
+    // Draw walls.
+    const blockingGraphics = this.blockingGraphics;
+    drawOpts.drawTool = new Draw(blockingGraphics);
+    drawOpts.color = OBSTACLE_COLOR;
+    drawOpts.fill = OBSTACLE_COLOR;
+    blockingPoints.walls.forEach(w => w.drawTransformed(drawOpts));
+
+    // Draw token obstacles
+    blockingPoints.tokens.forEach(t => t.drawTransformed(drawOpts));
+
+    // Draw terrain walls.
+    // Use a separate container with an AlphaCutoffFilter.
+    // For an additive blend, can set each terrain to alpha 0.4. Any overlap will be over 0.5.
+    const terrainGraphics = this.terrainGraphics;
+    if ( blockingPoints.terrainWalls.size ) {
+      if ( !terrainGraphics.filter
+        || !terrainGraphics.filter.length ) terrainGraphics.filters = [new AlphaCutoffFilter(0.5)];
+      drawOpts.drawTool = new Draw(terrainGraphics);
+      drawOpts.color = TERRAIN_COLOR;
+      drawOpts.fill = TERRAIN_COLOR;
+      drawOpts.fillAlpha = 0.4;
+      blockingPoints.terrainWalls.forEach(w => w.drawTransformed(drawOpts));
+    }
+
+    // Draw tiles.
+    // Each requires its own container.
+    const tileContainer = this.tileContainer;
+    const tileFilter = new AlphaCutoffFilter(0.75);
+    const Sprite2d = PIXI.projection.Sprite2d;
+
+    // TODO: Does _blockingObjectsPoints even for tiles under a target token?
+    for ( const tilePts of this._blockingObjectsPoints.tiles ) {
+      // TODO: Need to cutoff tiles at the z=0 point. And need to have the uv coordinates reflect this.
+      // Any chance mapSprite will do this?
+      const containerSprite = new Sprite2d(tilePts.object.texture);
+      containerSprite.filters = [tileFilter];
+      tileContainer.addChild(containerSprite);
+      const perspectivePoints = tilePts.perspectiveTransform();
+      containerSprite.proj.mapSprite(containerSprite, perspectivePoints);
+
+      // Adjust the uvs points if the tile is cutoff behind the viewer.
+      containerSprite.calculateVertices(); // Force uvs to be calculated.
+      const tileUVs = tilePts.uvs;
+      for ( let i = 0; i < 8; i += 1 ) containerSprite.uvs[i] = tileUVs[i];
+
+    }
+
+    // Draw everything. Need to first draw the red target token, then draw all the blue obstacles on top.
+    const blockingContainer = new PIXI.Container();
+    blockingContainer.addChild(blockingGraphics);
+    blockingContainer.addChild(terrainGraphics);
+    blockingContainer.addChild(tileContainer);
+
+    // Translate the points to fit in the render texture.
+    const txPtsArray = this.targetPoints.faces.map(face => face.perspectiveTransform());
+    const xValues = [];
+    const yValues = [];
+    for ( const ptArray of txPtsArray ) {
+      for ( const pt of ptArray ) {
+        xValues.push(pt.x);
+        yValues.push(pt.y);
+      }
+    }
+    const xMinMax = Math.minMax(...xValues);
+    const yMinMax = Math.minMax(...yValues);
+
+    targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+    blockingContainer.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+    blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
+
+    const texConfig = {
+      resolution: 1,
+      width: xMinMax.max - xMinMax.min,
+      height: yMinMax.max - yMinMax.min,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    };
+    // TODO: Keep and clear instead of destroying the render texture.
+    const renderTexture = this.targetRT = PIXI.RenderTexture.create(texConfig);
+
+    // Render only the target shape and calculate its rendered visible area.
+    canvas.app.renderer.render(targetGraphics, { renderTexture, clear: true });
+    const targetCache = this.targetCache = PixelCache.fromTexture(renderTexture, { resolution: 0.25 } );
+    const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+    // Render all the obstacles and calculate the remaining area.
+    canvas.app.renderer.render(blockingContainer, { renderTexture, clear: false });
+    const obstacleCache = this.obstacleCache = PixelCache.fromTexture(renderTexture, { resolution: 0.25 });
+    const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+    blockingContainer.destroy();
+
+
+    /* Testing
+    s = new PIXI.Sprite(renderTexture)
+    canvas.stage.addChild(s)
+    canvas.stage.removeChild(s)
+    */
+
+    return sumWithObstacles / sumTarget;
   }
 
   #drawDebugShapes(objs, obscuredSides, sidePolys) {
@@ -635,7 +816,7 @@ export class Area3dLOS extends AlternativeLOS {
     walls.clear();
 
     // Add Tiles
-    blockingObjs.tiles.forEach(t => tiles.add(new TilePoints3d(t)));
+    blockingObjs.tiles.forEach(t => tiles.add(new TilePoints3d(t, { viewerElevationZ: this.viewerPoint.z })));
 
     // Add Drawings
     if ( blockingObjs.tiles.size

@@ -143,13 +143,16 @@ export class PlanePoints3d {
   setViewMatrix(M) {
     this.M = M;
     this._transform(M); // Sets _tPoints.
+    this._truncatePlanePoints();
+    this.viewIsSet = true;
+  }
 
+  _truncatePlanePoints() {
     // Truncate the points to be strictly less than 0 in the z direction.
     // (In front of, as opposed to behind, the viewer.)
     // Use -0.1 instead of 0 to avoid floating point errors near 0.
     const cmp = (a, b) => a < b;
     this._tPoints = PlanePoints3d.truncatePlanePoints(this._tPoints, -0.1, "z", cmp);
-    this.viewIsSet = true;
   }
 
   /**
@@ -236,8 +239,8 @@ export class PlanePoints3d {
    * Transform the shape to a 2d perspective.
    * @returns {Point2d[]}
    */
-  perspectiveTransform({ forceClockwise = true } = {}) {
-    const out = this.tPoints.map(pt => PlanePoints3d.perspectiveTransform(pt));
+  perspectiveTransform({ forceClockwise = true, multiplier = 1000 } = {}) {
+    const out = this.tPoints.map(pt => PlanePoints3d.perspectiveTransform(pt, multiplier));
     if ( forceClockwise && PlanePoints3d.pointsArea2d(out) < 0 ) out.reverse();
     return out;
   }

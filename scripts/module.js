@@ -13,6 +13,7 @@ import { Settings, SETTINGS } from "./settings.js";
 
 // For API
 import * as bench from "./benchmark.js";
+import * as benchFunctions from "./benchmark_functions.js";
 import * as util from "./util.js";
 
 import { PlanePoints3d } from "./LOS/PlaceablesPoints/PlanePoints3d.js";
@@ -44,6 +45,7 @@ Hooks.once("init", function() {
 
   game.modules.get(MODULE_ID).api = {
     bench,
+    benchFunctions,
     PointsLOS,
     Area2dLOS,
     Area3dLOS,

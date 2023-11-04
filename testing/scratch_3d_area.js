@@ -754,15 +754,35 @@ terrainGraphics.filters = [terrainFilter];
 // Each requires its own container.
 tileContainer = new PIXI.Container();
 tileFilter = new AlphaCutoffFilter(0.75);
-for ( const tilePts of calc.blockingPoints.tiles ) {
+Sprite2d = PIXI.projection.Sprite2d
+
+
+for ( const tilePts of calc._blockingObjectsPoints.tiles ) {
   // TODO: Need to cutoff tiles at the z=0 point. And need to have the uv coordinates reflect this.
   // Any chance mapSprite will do this?
-  const tile = tilePts.object;
-  const containerSprite = tileContainer.addChild(new Sprite2d(tile.texture));
+  const containerSprite = new Sprite2d(tilePts.object.texture);
+  tileContainer.addChild(containerSprite);
   const perspectivePoints = tilePts.perspectiveTransform();
   containerSprite.proj.mapSprite(containerSprite, perspectivePoints);
+
+  // Adjust the uvs points if the tile is cutoff behind the viewer.
+  containerSprite.calculateVertices(); // Force uvs to be calculated.
+  const tileUVs = tilePts.uvs;
+  for ( let i = 0; i < 8; i += 1 ) containerSprite.uvs[i] = tileUVs[i];
+
   containerSprite.filters = [tileFilter];
+
+  // Compare with full tile perspective
+//   tilePts._transform(tilePts.M)
+//   perspectivePoints2 = tilePts.perspectiveTransform({forceClockwise: false});
+//   containerSprite.proj.mapSprite(containerSprite, perspectivePoints2);
+
+  // This one might be correct...
+//   perspectivePoints3 = tilePts.tPoints.map(pt => PlanePoints3d.perspectiveTransform(pt, -1000));
+//   containerSprite.proj.mapSprite(containerSprite, perspectivePoints3);
 }
+
+
 
 // Draw everything. Need to first draw the red target token, then draw all the blue obstacles on top.
 blockingContainer = new PIXI.Container();
@@ -810,4 +830,95 @@ cacheBlocked.pixels.reduce((acc, curr) => acc += Boolean(curr), 0)
 sumWithObstacles = cacheBlocked.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
 
 console.log(`Pixel percent visible: ${sumWithObstacles / sumTarget}; geometric percent visible: ${calc.percentVisible()}`)
+
+
+
+
+Draw = CONFIG.GeometryLib.Draw
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+api = game.modules.get("tokenvisibility").api;
+Area3dLOS = api.Area3dLOS;
+PixelCache = api.PixelCache
+AlphaCutoffFilter = api.AlphaCutoffFilter
+
+let [viewer] = canvas.tokens.controlled;
+let [target] = game.user.targets;
+
+calc = new Area3dLOS(viewer, target)
+calc.percentVisible()
+
+
+function geomVisibility(viewer, target) {
+  const calc = new Area3dLOS(viewer, target);
+  return calc._percentVisibleGeometric();
+}
+
+function geomWebGL(viewer, target) {
+  const calc = new Area3dLOS(viewer, target);
+  return calc._percentVisibleWebGL();
+}
+
+function renderObstacles(calc) {
+  const blockingContainer = new PIXI.Container();
+  blockingContainer.addChild(calc.blockingGraphics);
+  blockingContainer.addChild(calc.terrainGraphics);
+  blockingContainer.addChild(calc.tileContainer);
+
+  // Translate the points to fit in the render texture.
+  const txPtsArray = calc.targetPoints.faces.map(face => face.perspectiveTransform());
+  const xValues = [];
+  const yValues = [];
+  for ( const ptArray of txPtsArray ) {
+    for ( const pt of ptArray ) {
+      xValues.push(pt.x);
+      yValues.push(pt.y);
+    }
+  }
+  const xMinMax = Math.minMax(...xValues);
+  const yMinMax = Math.minMax(...yValues);
+
+  calc.targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+  blockingContainer.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+  blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
+
+  const texConfig = {
+    resolution: 1,
+    width: xMinMax.max - xMinMax.min,
+    height: yMinMax.max - yMinMax.min,
+    scaleMode: PIXI.SCALE_MODES.NEAREST
+  };
+  const renderTexture = PIXI.RenderTexture.create(texConfig);
+
+  // Render only the target shape and calculate its rendered visible area.
+  canvas.app.renderer.render(calc.targetGraphics, { renderTexture, clear: true });
+
+  // Render all the obstacles and calculate the remaining area.
+  canvas.app.renderer.render(blockingContainer, { renderTexture, clear: false });
+
+  renderTexture.destroy();
+  blockingContainer.destroy();
+}
+
+// Takes 90 ms to count. 241 x 263 = 63383. Could get it smaller.
+// Using 1/4 resolution for the pixel cache, it is down to 6.7 ms.
+// And 2.5 ms total instead of 6 ms.
+function countPixels(calc) {
+  return calc.obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+}
+
+
+QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
+
+N = 100
+await QBenchmarkLoopFn(N, geomVisibility, "geomVisibility", viewer, target);
+await QBenchmarkLoopFn(N, geomWebGL, "geomWebGL", viewer, target);
+
+calc = new Area3dLOS(viewer, target)
+calc._percentVisibleWebGL()
+await QBenchmarkLoopFn(N, renderObstacles, "renderObstacles", calc);
+await QBenchmarkLoopFn(N, countPixels, "countPixels", calc);
+
+
+
+
 
