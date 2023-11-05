@@ -137,7 +137,9 @@ export const SETTINGS = {
       }
     },
 
-    PRONE: "cover-prone"
+    PRONE: "cover-prone",
+	
+	RIDEABLE: "cover-token-rideable"
   },
 
   CHANGELOG: "changelog",
@@ -463,6 +465,15 @@ export function registerSettings() {
     config: true,
     type: Boolean,
     default: true
+  });
+  
+  game.settings.register(MODULE_ID, SETTINGS.COVER.RIDEABLE, { //for RIDEABLE include connected tokens for cover
+    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.RIDEABLE}.Name`),
+    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.RIDEABLE}.Hint`),
+    scope: "world",
+    config: game.modules.get("Rideable")?.active,
+    type: Boolean,
+    default: false
   });
 
   game.settings.register(MODULE_ID, SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE, {

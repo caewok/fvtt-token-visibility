@@ -300,6 +300,7 @@ export class CoverCalculator {
     config.liveTokensBlock ??= liveTokenAlg !== liveTypes.NONE;
     config.liveForceHalfCover ??= liveTokenAlg === liveTypes.HALF;
     config.proneTokensBlock ??= getSetting(SETTINGS.COVER.PRONE);
+	config.rideableconnectedTokenBlock ??= getSetting(SETTINGS.COVER.RIDEABLE); //setting for RIDEABLE cover compatibility
 
     this.config = config;
   }
@@ -548,7 +549,7 @@ export class CoverCalculator {
   }
 
   _hasTokenCollision(tokenPoint, targetPoint) {
-    const { liveTokensBlock, deadTokensBlock } = this.config;
+    const { liveTokensBlock, deadTokensBlock, rideableconnectedTokenBlock } = this.config;
     if ( !(liveTokensBlock || deadTokensBlock) ) return false;
 
     const ray = new Ray(tokenPoint, targetPoint);
@@ -558,6 +559,12 @@ export class CoverCalculator {
     tokens.delete(this.viewer);
     tokens.delete(this.target);
 
+	//RIDEABLE COMPATIBILITY
+	//-Filter out all mounts and riders of both this.viewer and this.target if rideableconnectedTokenBlock
+	if (!rideableconnectedTokenBlock && game.modules.get("Rideable").active) {
+		tokens = tokens.filter(token => !game.modules.get("Rideable")?.api?.RidingConnection(token, this.viewer) && !game.modules.get("Rideable")?.api?.RidingConnection(token, this.target))
+	}
+	
     // Build full- or half-height tokenPoints3d from tokens
     const tokenPoints = buildTokenPoints(tokens, this.config);
 

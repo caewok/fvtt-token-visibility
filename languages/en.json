@@ -81,6 +81,9 @@
 
     "tokenvisibility.settings.cover-prone.Name": "Prone Tokens Grant Cover",
     "tokenvisibility.settings.cover-prone.Hint": "If the dead/live token is prone and could otherwise be cover, should it be considered cover?",
+	
+    "tokenvisibility.settings.cover-token-rideable.Name": "Mounts and Riders Grant Cover",
+    "tokenvisibility.settings.cover-token-rideable.Hint": "If the Mounts and Riders of token (as per Rideable) should be considered as cover",
 
     "tokenvisibility.settings.cover-token-live.Name": "Live Tokens Grant Cover",
     "tokenvisibility.settings.cover-token-live.Hint": "'Cover': Token shape contributes to cover. 'Forced': Flat low cover for tokens; token shape not otherwise considered (dnd5e/pf2e). No cover: Tokens do not contribute to cover.",
