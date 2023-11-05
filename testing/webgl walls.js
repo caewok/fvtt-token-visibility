@@ -335,7 +335,16 @@ shader = PrismShader.create();
 mesh = new PIXI.Mesh(geom, shader);
 
 canvas.stage.addChild(mesh);
+
+// Activate culling to not draw opposite faces.
+mesh.state.culling = true
+mesh.state.clockwiseFrontFace = true
+
+// Move it around
+shader.offset = {x: .2, y: -.2} // Note how negative y shifts down.
+
 canvas.stage.removeChild(mesh);
+
 
 
 
