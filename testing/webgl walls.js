@@ -250,17 +250,29 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 in vec4 aVertex;
 in vec4 aColor;
 
-out float vVertexNum;
 out vec4 vColor;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
-uniform vec2 uOffset;
+uniform vec3 uOffset;
+uniform float uZNear;
+uniform float uZFar;
+uniform float uFrustrumScale;
 
 void main() {
   vColor = aColor;
-  vVertexNum = float(gl_VertexID);
-  gl_Position = aVertex + vec4(uOffset.x, uOffset.y, 0.0, 0.0);
+  vec4 cameraPosition = aVertex + vec4(uOffset.x, uOffset.y, uOffset.z, 0.0);
+
+  // Perspective
+  vec4 clipPosition;
+  clipPosition.xy = cameraPosition.xy * uFrustrumScale;
+  clipPosition.z = (cameraPosition.z * (uZNear + uZFar)) / (uZNear - uZFar);
+  clipPosition.z += ((2.0 * uZNear * uZFar) / (uZNear - uZFar));
+  clipPosition.w = -cameraPosition.z;
+
+  gl_Position = clipPosition;
+
+  // gl_Position = cameraPosition;
 
   // gl_Position = vec4(projectionMatrix * translationMatrix * vec3(vertexPosition.xy / vertexPosition.z, 1.0), 1.0);
 }`;
@@ -271,15 +283,11 @@ void main() {
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
-in float vertexNum;
-out vec4 fragColor;
-
-in float vVertexNum;
 in vec4 vColor;
+out vec4 fragColor;
 
 void main() {
   fragColor = vColor;
-  // fragColor = vec4(vVertexNum / 2.0, 0.0, 0.0, 1.0);
 }`;
 
   /**
@@ -290,7 +298,10 @@ void main() {
    * uMaxNormalizedElevation: Maximum elevation, normalized units
    */
   static defaultUniforms = {
-    uOffset: [0, 0]
+    uOffset: [0, 0, 0],
+    uZNear: 1.0,
+    uZFar: 3.0,
+    uFrustrumScale: 1.0
   };
 
   static create(defaultUniforms = {}) {
@@ -298,9 +309,16 @@ void main() {
   }
 
   set offset(value) {
-    if ( value.x ) this.uniforms.uOffset[0] = value.x;
-    if ( value.y ) this.uniforms.uOffset[1] = value.y;
+    if ( Object.hasOwn(value, "x") ) this.uniforms.uOffset[0] = value.x;
+    if ( Object.hasOwn(value, "y") ) this.uniforms.uOffset[1] = value.y;
+    if ( Object.hasOwn(value, "z") ) this.uniforms.uOffset[2] = value.z;
   }
+
+  set zNear(value) { this.uniforms.uZNear = value; }
+
+  set zFar(value) { this.uniforms.uZFar = value; }
+
+  set frustrumScale(value) { this.uniforms.uFrustrumScale = value; }
 }
 
 Draw = CONFIG.GeometryLib.Draw
@@ -334,6 +352,9 @@ geom = new PrismGeometry();
 shader = PrismShader.create();
 mesh = new PIXI.Mesh(geom, shader);
 
+// For perspective, shift from z = 0 to z = -2 (center of the zNear, zFar)
+shader.offset = { z: -2 }
+
 canvas.stage.addChild(mesh);
 
 // Activate culling to not draw opposite faces.
@@ -346,7 +367,41 @@ shader.offset = {x: .2, y: -.2} // Note how negative y shifts down.
 canvas.stage.removeChild(mesh);
 
 
+// Do the math in JS to see where it is failing for the perspective.
+function generateVertexPoints(verticesArray) {
+  const pts = [];
+  for ( let i = 0; i < verticesArray.length; i += 4 ) {
+    // ignore the fourth as it is always 1
+    pts.push(new Point3d(verticesArray[i], verticesArray[i+1], verticesArray[i+2]))
+  }
+  return pts
+}
 
+function cameraPosition(aVertex, uOffset) { return aVertex.add(uOffset) }
+
+function clipPosition(v, uZNear, uZFar, uFrustrumScale) {
+  const pos = {x: 0, y: 0, z: 0, w: 0};
+  pos.x = v.x * uFrustrumScale;
+  pos.y = v.y * uFrustrumScale;
+  pos.z = (v.z * (uZNear + uZFar)) / (uZNear - uZFar);
+  pos.z += ((2.0 * uZNear * uZFar) / (uZNear - uZFar));
+  pos.w = -v.z;
+  return pos;
+}
+
+function perspectiveDivide(v) {
+  const wInv = 1 / v.w;
+  return new Point3d(v.x * wInv, v.y * wInv, v.z * wInv);
+}
+
+vertices = generateVertexPoints(geom.buffers[0].data);
+uOffset = new Point3d(shader.uniforms.uOffset[0], shader.uniforms.uOffset[1], shader.uniforms.uOffset[2])
+uZNear = shader.uniforms.uZNear;
+uZFar = shader.uniforms.uZFar;
+uFrustrumScale = shader.uniforms.uFrustrumScale;
+cameraPositions = vertices.map(v => cameraPosition(v, uOffset))
+clipPositions = cameraPositions.map(v => clipPosition(v, uZNear, uZFar, uFrustrumScale))
+perspectivePositions = clipPositions.map(v => perspectiveDivide(v))
 
 
 
