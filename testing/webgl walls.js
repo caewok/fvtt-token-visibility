@@ -230,7 +230,7 @@ class PrismGeometry extends PIXI.Geometry {
    * Indices
    */
   addIndices() {
-    const indices = Array.fromRange(12);
+    const indices = Array.fromRange(36);
     this.addIndex(indices);
   }
 }
@@ -254,6 +254,8 @@ out vec4 vColor;
 
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
+
+uniform mat4 uPerspectiveMatrix;
 uniform vec3 uOffset;
 uniform float uZNear;
 uniform float uZFar;
@@ -262,6 +264,8 @@ uniform float uFrustrumScale;
 void main() {
   vColor = aColor;
   vec4 cameraPosition = aVertex + vec4(uOffset.x, uOffset.y, uOffset.z, 0.0);
+
+//   gl_Position = uPerspectiveMatrix * cameraPosition;
 
   // Perspective
   vec4 clipPosition;
@@ -301,11 +305,19 @@ void main() {
     uOffset: [0, 0, 0],
     uZNear: 1.0,
     uZFar: 3.0,
-    uFrustrumScale: 1.0
+    uFrustrumScale: 1.0,
+    uPerspectiveMatrix: [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    ]
   };
 
   static create(defaultUniforms = {}) {
-    return super.create(defaultUniforms);
+    const res = super.create(defaultUniforms);
+    res.calculatePerspectiveMatrix();
+    return res;
   }
 
   set offset(value) {
@@ -314,15 +326,81 @@ void main() {
     if ( Object.hasOwn(value, "z") ) this.uniforms.uOffset[2] = value.z;
   }
 
-  set zNear(value) { this.uniforms.uZNear = value; }
+  set zNear(value) {
+    this.uniforms.uZNear = value;
+    this.calculatePerspectiveMatrix();
+  }
 
-  set zFar(value) { this.uniforms.uZFar = value; }
+  set zFar(value) {
+    this.uniforms.uZFar = value;
+    this.calculatePerspectiveMatrix();
+  }
 
-  set frustrumScale(value) { this.uniforms.uFrustrumScale = value; }
+  set frustrumScale(value) {
+    this.uniforms.uFrustrumScale = value;
+    this.calculatePerspectiveMatrix();
+  }
+
+  get perspectiveMatrix() { return this.uniforms.uPerspectiveMatrix; }
+
+  calculatePerspectiveMatrix() {
+    const { uZFar, uZNear, uFrustrumScale } = this.uniforms;
+//     this.uniforms.uPerspectiveMatrix = Matrix.perspective(90, 1, uZNear, uZFar)
+//       .transpose()
+//       .toFlatArray();
+
+    const uPerspectiveMatrix = this.uniforms;
+    uPerspectiveMatrix[0] = uFrustrumScale;
+    uPerspectiveMatrix[5] = uFrustrumScale;
+    uPerspectiveMatrix[10] = (uZFar + uZNear) / (uZNear - uZFar);
+    uPerspectiveMatrix[14] = (2.0 * uZFar * uZNear) / (uZNear - uZFar);
+    uPerspectiveMatrix[11] = -1.0;
+  }
+}
+
+class TriangleGeometry extends PIXI.Geometry {
+  constructor() {
+    super();
+    this.addVertices();
+    this.addColors()
+    this.addIndices();
+  }
+
+  /**
+   * Prism endpoints
+   */
+  addVertices() {
+    const aVertices = [
+      -1.0,   -1.0,   0.0,
+       1.0,   -1.0,   0.0,
+       0.0,    1.0,   0.0,
+    ]
+
+    this.addAttribute("aVertex", aVertices, 3);
+  }
+
+  addColors() {
+    const aColors = [
+      1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0,
+    ];
+
+    this.addAttribute("aColor", aColors, 4);
+  }
+
+  /**
+   * Indices
+   */
+  addIndices() {
+    const indices =
+    this.addIndex(indices);
+  }
 }
 
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d;
+Matrix = CONFIG.GeometryLib.Matrix
 api = game.modules.get("tokenvisibility").api;
 Area3dLOS = api.Area3dLOS;
 PixelCache = api.PixelCache
@@ -366,7 +444,6 @@ shader.offset = {x: .2, y: -.2} // Note how negative y shifts down.
 
 canvas.stage.removeChild(mesh);
 
-
 // Do the math in JS to see where it is failing for the perspective.
 function generateVertexPoints(verticesArray) {
   const pts = [];
@@ -394,6 +471,12 @@ function perspectiveDivide(v) {
   return new Point3d(v.x * wInv, v.y * wInv, v.z * wInv);
 }
 
+function constructPerspectiveMatrix(arr) {
+  // Arr is column-major; convert to Matrix row-major format.
+  const mat = Matrix.fromFlatArray(arr, 4, 4);
+  return mat.transpose();
+}
+
 vertices = generateVertexPoints(geom.buffers[0].data);
 uOffset = new Point3d(shader.uniforms.uOffset[0], shader.uniforms.uOffset[1], shader.uniforms.uOffset[2])
 uZNear = shader.uniforms.uZNear;
@@ -402,6 +485,13 @@ uFrustrumScale = shader.uniforms.uFrustrumScale;
 cameraPositions = vertices.map(v => cameraPosition(v, uOffset))
 clipPositions = cameraPositions.map(v => clipPosition(v, uZNear, uZFar, uFrustrumScale))
 perspectivePositions = clipPositions.map(v => perspectiveDivide(v))
+
+// Using matrix
+perspectiveMatrix = constructPerspectiveMatrix(shader.uniforms.uPerspectiveMatrix);
+perspectivePositionsM = cameraPositions.map(v => perspectiveMatrix.multiplyPoint3d(v)); // Does the w divide
+
+
+
 
 
 
