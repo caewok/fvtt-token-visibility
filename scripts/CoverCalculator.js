@@ -560,7 +560,7 @@ export class CoverCalculator {
     tokens.delete(this.target);
 
 	//RIDEABLE COMPATIBILITY
-	//-Filter out all mounts and riders of both this.viewer and this.target if rideableconnectedTokenBlock
+	//-Filter out all mounts and riders of both this.viewer and this.target if  not rideableconnectedTokenBlock
 	if (!rideableconnectedTokenBlock && game.modules.get("Rideable").active) {
 		tokens = tokens.filter(token => !game.modules.get("Rideable")?.api?.RidingConnection(token, this.viewer) && !game.modules.get("Rideable")?.api?.RidingConnection(token, this.target))
 	}
