@@ -265,16 +265,16 @@ void main() {
   vColor = aColor;
   vec4 cameraPosition = aVertex + vec4(uOffset.x, uOffset.y, uOffset.z, 0.0);
 
-//   gl_Position = uPerspectiveMatrix * cameraPosition;
+  gl_Position = uPerspectiveMatrix * cameraPosition;
 
   // Perspective
-  vec4 clipPosition;
-  clipPosition.xy = cameraPosition.xy * uFrustrumScale;
-  clipPosition.z = (cameraPosition.z * (uZNear + uZFar)) / (uZNear - uZFar);
-  clipPosition.z += ((2.0 * uZNear * uZFar) / (uZNear - uZFar));
-  clipPosition.w = -cameraPosition.z;
-
-  gl_Position = clipPosition;
+//   vec4 clipPosition;
+//   clipPosition.xy = cameraPosition.xy * uFrustrumScale;
+//   clipPosition.z = (cameraPosition.z * (uZNear + uZFar)) / (uZNear - uZFar);
+//   clipPosition.z += ((2.0 * uZNear * uZFar) / (uZNear - uZFar));
+//   clipPosition.w = -cameraPosition.z;
+//
+//   gl_Position = clipPosition;
 
   // gl_Position = cameraPosition;
 
@@ -345,16 +345,16 @@ void main() {
 
   calculatePerspectiveMatrix() {
     const { uZFar, uZNear, uFrustrumScale } = this.uniforms;
-//     this.uniforms.uPerspectiveMatrix = Matrix.perspective(90, 1, uZNear, uZFar)
-//       .transpose()
-//       .toFlatArray();
+    this.uniforms.uPerspectiveMatrix = Matrix.perspective(90, 1, uZNear, uZFar)
+      .transpose()
+      .toFlatArray();
 
-    const uPerspectiveMatrix = this.uniforms;
-    uPerspectiveMatrix[0] = uFrustrumScale;
-    uPerspectiveMatrix[5] = uFrustrumScale;
-    uPerspectiveMatrix[10] = (uZFar + uZNear) / (uZNear - uZFar);
-    uPerspectiveMatrix[14] = (2.0 * uZFar * uZNear) / (uZNear - uZFar);
-    uPerspectiveMatrix[11] = -1.0;
+//     const uPerspectiveMatrix = this.uniforms;
+//     uPerspectiveMatrix[0] = uFrustrumScale;
+//     uPerspectiveMatrix[5] = uFrustrumScale;
+//     uPerspectiveMatrix[10] = (uZFar + uZNear) / (uZNear - uZFar);
+//     uPerspectiveMatrix[14] = (2.0 * uZFar * uZNear) / (uZNear - uZFar);
+//     uPerspectiveMatrix[11] = -1.0;
   }
 }
 
