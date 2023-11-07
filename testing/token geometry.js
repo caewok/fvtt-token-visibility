@@ -1,3 +1,7 @@
+Draw = CONFIG.GeometryLib.Draw;
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+Matrix = CONFIG.GeometryLib.Matrix;
+
 // Create a token model that we can scale, rotate, translate for given tokens.
 // For now, this is a square token model.
 // Token is a 1 unit cube.
@@ -14,6 +18,9 @@ class UnitCubeGeometry extends PIXI.Geometry  {
    */
   addVertices() {
     // 8 distinct points on a cube
+    // https://learnopengl.com/Getting-started/Coordinate-Systems
+    // +Y goes up; -z goes back
+
     const aVertices = [
       // Top, looking down
       -0.50,  0.50, 0.50,  // TL
@@ -44,7 +51,7 @@ class UnitCubeGeometry extends PIXI.Geometry  {
       0.0, 0.00, 1.0,
       0.0, 0.25, 1.0,
       0.0, 0.75, 1.0,
-      0.0, 1.00, 1.0
+      0.0, 1.00, 1.0,
     ];
     this.addAttribute("aColor", aColors, 3);
   }
@@ -67,29 +74,27 @@ class UnitCubeGeometry extends PIXI.Geometry  {
     */
     const indices = [
       // Top
-      0, 1, 2,
-      0, 2, 3,
+      0, 1, 2, // TL - TR - BR
+      0, 2, 3, // TL - BR - BL
 
       // Bottom
-//       4, 5, 6,
-//       4, 6, 7,
+      4, 7, 6, // TL - BL - BR
+      4, 6, 5, // TL - BR - TR
 
       // Sides (from top)
-      // TR - TL
-      1, 0, 4,
-      1, 4, 5,
+      0, 3, 7, // TL (top) - BL (top) - BL (bottom)
+      0, 7, 4, // TL (top) - BL (bottom) - TL (bottom)
 
-      // BR - TR
-//       2, 1, 5,
-//       2, 5, 6,
+      1, 0, 4, // TR (top) - TL (top) - TL (bottom)
+      1, 4, 5, // TR (top) - TL (bottom) - TR (bottom)
 
-      // BL - BR
-//       3, 2, 6,
-//       3, 6, 7,
+      2, 1, 5, // BR (top) - TR (top) - TR (bottom)
+      2, 5, 6, // BR (top) - TR (bottom) - BR (bottom)
 
-      // TL - BL
-//       0, 3, 7,
-//       0, 7, 4
+      3, 2, 6, // BL (top) - BR (top) - BR (bottom)
+      3, 6, 7, // BL (top) - BR (bottom) - BL (bottom)
+
+
     ];
     this.addIndex(indices);
   }
@@ -114,12 +119,36 @@ uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 
 uniform mat4 uPerspectiveMatrix;
+uniform mat4 uModelWorldMatrix;
 uniform vec3 uOffset;
 
 void main() {
   vColor = vec4(aColor, 1.0);
-  vec4 cameraPosition = vec4(aVertex, 1.0) + vec4(uOffset.x, uOffset.y, uOffset.z, 0.0);
+
+//   mat4 trMat;
+//   trMat[0][0] = 1.0;
+//   trMat[1][1] = 1.0;
+//   trMat[2][2] = 1.0;
+//   trMat[3][3] = 1.0;
+//   trMat[3][0] = 0.5;
+//   trMat[3][2] = 1.0;
+//   mat4 trMat = mat4(
+//     1.0, 0.0, 0.0, 0.5,
+//     0.0, 1.0, 1.0, 0.0,
+//     0.0, 0.0, 1.0, -2.0,
+//     0.0, 0.0, 0.0, 1.0
+//   );
+
+  // vec4 worldPosition = vec4(aVertex, 1.0) + vec4(uOffset, 0.0);
+
+  // worldPosition = uModelWorldMatrix * worldPosition;
+
+  vec4 worldPosition = uModelWorldMatrix * vec4(aVertex, 1.0);
+  // vec4 worldPosition = trMat * vec4(aVertex, 1.0);
+
+  vec4 cameraPosition = worldPosition; // For now
   gl_Position = uPerspectiveMatrix * cameraPosition;
+
 
   // gl_Position = vec4(projectionMatrix * translationMatrix * vec3(vertexPosition.xy / vertexPosition.z, 1.0), 1.0);
 }`;
@@ -149,6 +178,25 @@ void main() {
   /** @type {number} */
   #zFar = 3.0;
 
+  /** @type {Point3d} */
+  #translation = new Point3d();
+
+  /** @type {Point3d} */
+  #rotation = new Point3d();
+
+  /** @type {Point3d} */
+  #scale = new Point3d(1, 1, 1);
+
+  // Store each piece of the world matrix for varying terms. All start as identity.
+  /** @type {Matrix} */
+  #rotationMatrix = Matrix.rotationXYZ(0, 0, 0);
+
+  /** @type {Matrix} */
+  #scaleMatrix = Matrix.scale(1, 1, 1);
+
+  /** @type {Matrix} */
+  #translationMatrix = Matrix.translation(0, 0, 0);
+
   /**
    * Uniforms added to the shader.
    * TODO: Replace offset with translation matrix.
@@ -156,18 +204,15 @@ void main() {
    * {number[16]} uPerspectiveMatrix    Matrix to set the perspective.
    */
   static defaultUniforms = {
-    uOffset: [0, 0, 0],
-    uPerspectiveMatrix: [
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1
-    ]
+    uPerspectiveMatrix: Matrix.identity(4, 4).toGLSLArray(),
+    uModelWorldMatrix: Matrix.identity(4, 4).toGLSLArray(),
+    uOffset: [0, 0, 0]
   };
 
   static create(defaultUniforms = {}) {
     const res = super.create(defaultUniforms);
     res.calculatePerspectiveMatrix();
+    res.calculateModelWorldMatrix();
     return res;
   }
 
@@ -175,6 +220,36 @@ void main() {
     if ( Object.hasOwn(value, "x") ) this.uniforms.uOffset[0] = value.x;
     if ( Object.hasOwn(value, "y") ) this.uniforms.uOffset[1] = value.y;
     if ( Object.hasOwn(value, "z") ) this.uniforms.uOffset[2] = value.z;
+  }
+
+  get scale() { return this.#scale; }
+
+  get scaleMatrix() { return this.#scaleMatrix; }
+
+  set scale(scalePoint) {
+    this.#scale.copyFrom(scalePoint);
+    this.#scaleMatrix = Matrix.scale(this.#scale.x, this.#scale.y, this.#scale.z);
+    this.calculateModelWorldMatrix();
+  }
+
+  get rotation() { return this.#rotation; }
+
+  get rotationMatrix() { return this.#rotationMatrix; }
+
+  set rotation(rotationPoint) {
+    this.#rotation.copyFrom(rotationPoint);
+    this.#rotationMatrix = Matrix.rotationXYZ(this.#rotation.x, this.#rotation.y, this.#rotation.z);
+    this.calculateModelWorldMatrix();
+  }
+
+  get translation() { return this.#translation; }
+
+  get translationMatrix() { return this.#translationMatrix; }
+
+  set translation(translationPoint) {
+    this.#translation.copyFrom(translationPoint);
+    this.#translationMatrix = Matrix.translation(this.#translation.x, this.#translation.y, this.#translation.z);
+    this.calculateModelWorldMatrix();
   }
 
   set fieldOfView(value) {
@@ -211,20 +286,75 @@ void main() {
 
   get perspectiveMatrix() { return this.uniforms.uPerspectiveMatrix; }
 
-  calculatePerspectiveMatrix(fovy, aspect, zNear, zFar) {
-    fovy ??= this.#fieldOfView;
-    aspect ??= this.#aspectRatio;
-    zNear ??= this.#zNear;
-    zFar ??= this.#zFar;
-    this.uniforms.uPerspectiveMatrix = Matrix.perspective(fovy, aspect, zNear, zFar)
-      .transpose()
-      .toFlatArray();
+  get worldMatrix() { return this.uniforms.uModelWorldMatrix; }
+
+  calculatePerspectiveMatrix() {
+    const fovy = this.#fieldOfView;
+    const aspect = this.#aspectRatio;
+    const zNear = this.#zNear;
+    const zFar = this.#zFar;
+    this.uniforms.uPerspectiveMatrix = Matrix.perspectiveDegrees(fovy, aspect, zNear, zFar).toGLSLArray();
+  }
+
+  calculateModelWorldMatrix() {
+    const fullMat = Matrix.empty(4, 4);
+    // Do rotation first, assuming the models are centered at 0,0,0.
+    // Then scale, and finally translate.
+    this.#rotationMatrix.multiply4x4(this.#scaleMatrix, fullMat);
+    fullMat.multiply4x4(this.#translationMatrix, fullMat);
+    this.uniforms.uModelWorldMatrix = fullMat.toGLSLArray();
   }
 }
+
+// See https://austinmorlan.com/posts/opengl_matrices/
+
+async function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Rotate around an axis
+async function rotate(axis = "x") {
+  for ( let i = 0; i < 360; i += 1 ) {
+    const change = Math.toRadians(1);
+    const rot = shader.rotation;
+    const changePt = new Point3d(rot.x, rot.y, rot.z);
+    changePt[axis] += change;
+    shader.rotation = changePt;
+    await sleep(50)
+  }
+}
+
 
 geom = new UnitCubeGeometry();
 shader = UnitCubeShader.create();
 mesh = new PIXI.Mesh(geom, shader);
+canvas.stage.addChild(mesh);
+
+// Activate culling to not draw opposite faces.
+mesh.state.culling = true
+mesh.state.clockwiseFrontFace = true
+
+
+
+shader.translation = new Point3d(0, 0, -2)
+shader.rotation = new Point3d(Math.toRadians(30), 0, 0);
+shader.aspectRatio = window.outerWidth / window.outerHeight
+
+await rotate("y")
+
+
+shader.translation = new Point3d(.5, 0, 1)
+shader.rotation = new Point3d(0, 0, Math.toRadians(45))
+
+
+
+
+
+
+shader.rotation = new Point3d(0, 0, Math.toRadians(45))
+shader.rotation = new Point3d(Math.toRadians(30), 0, Math.toRadians(45))
+
+
 
 // For perspective, shift from z = 0 to z = -2 (center of the zNear, zFar)
 shader.offset = { z: -2 }
@@ -232,13 +362,15 @@ shader.fieldOfView = 45
 
 canvas.stage.addChild(mesh);
 
-// Activate culling to not draw opposite faces.
-mesh.state.culling = true
-mesh.state.clockwiseFrontFace = true
 
 // Move it around
 shader.offset = {x: .2, y: -.2} // Note how negative y shifts down.
-shader.offset = {x: -.8, y: -2}
+shader.offset = {x: -.8, y: -.8}
 
 canvas.stage.removeChild(mesh);
+
+
+
+
+
 
