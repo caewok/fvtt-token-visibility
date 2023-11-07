@@ -55,7 +55,7 @@ class AbstractEVShader extends PIXI.Shader {
    */
   static create(defaultUniforms) {
     const program = PIXI.Program.from(this.vertexShader, this.fragmentShader);
-    const uniforms = mergeObject(this.defaultUniforms, defaultUniforms, {inplace: false, insertKeys: false});
+    const uniforms = mergeObject(this.defaultUniforms, defaultUniforms, {inplace: false, insertKeys: true});
     return new this(program, uniforms);
   }
 

@@ -5,7 +5,7 @@ Matrix = CONFIG.GeometryLib.Matrix;
 // Create a token model that we can scale, rotate, translate for given tokens.
 // For now, this is a square token model.
 // Token is a 1 unit cube.
-class UnitCubeGeometry extends PIXI.Geometry  {
+class UnitCubeGeometry extends PIXI.Geometry {
   constructor() {
     super();
     this.addVertices();
@@ -93,14 +93,12 @@ class UnitCubeGeometry extends PIXI.Geometry  {
 
       3, 2, 6, // BL (top) - BR (top) - BR (bottom)
       3, 6, 7, // BL (top) - BR (bottom) - BL (bottom)
-
-
     ];
     this.addIndex(indices);
   }
 }
 
-class UnitCubeShader extends AbstractEVShader {
+class UnitPlaceableShader extends AbstractEVShader {
   /**
    * Vertex shader constructs a quad and calculates the canvas coordinate and texture coordinate varyings.
    * @type {string}
@@ -326,7 +324,7 @@ async function rotate(axis = "x") {
 
 
 geom = new UnitCubeGeometry();
-shader = UnitCubeShader.create();
+shader = UnitPlaceableShader.create();
 mesh = new PIXI.Mesh(geom, shader);
 canvas.stage.addChild(mesh);
 
@@ -341,33 +339,31 @@ shader.rotation = new Point3d(Math.toRadians(30), 0, 0);
 shader.aspectRatio = window.outerWidth / window.outerHeight
 
 await rotate("y")
+canvas.stage.removeChild(mesh);
 
+// Wall
+geom = new WallGeometry();
+shader = UnitPlaceableShader.create();
+mesh = new PIXI.Mesh(geom, shader);
+canvas.stage.addChild(mesh);
 
-shader.translation = new Point3d(.5, 0, 1)
-shader.rotation = new Point3d(0, 0, Math.toRadians(45))
+// Directional Wall
+geom = new DirectionalWallGeometry();
+shader = UnitPlaceableShader.create();
+mesh = new PIXI.Mesh(geom, shader);
+canvas.stage.addChild(mesh);
 
+// Tile
+tile = canvas.tiles.controlled[0]
 
-
-
-
-
-shader.rotation = new Point3d(0, 0, Math.toRadians(45))
-shader.rotation = new Point3d(Math.toRadians(30), 0, Math.toRadians(45))
-
-
-
-// For perspective, shift from z = 0 to z = -2 (center of the zNear, zFar)
-shader.offset = { z: -2 }
-shader.fieldOfView = 45
-
+geom = new TileGeometry();
+shader = TileShader.create(tile);
+mesh = new PIXI.Mesh(geom, shader);
 canvas.stage.addChild(mesh);
 
 
-// Move it around
-shader.offset = {x: .2, y: -.2} // Note how negative y shifts down.
-shader.offset = {x: -.8, y: -.8}
 
-canvas.stage.removeChild(mesh);
+
 
 
 
