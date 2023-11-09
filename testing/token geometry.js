@@ -362,9 +362,195 @@ mesh = new PIXI.Mesh(geom, shader);
 canvas.stage.addChild(mesh);
 
 
+let SPEED_FACTOR = 1
+function rotateTicker(delta) {
+  const axis = "x";
+  const change = Math.toRadians(delta * SPEED_FACTOR);
+  const rot = shader.rotation;
+  const changePt = new Point3d(rot.x, rot.y, rot.z);
+  changePt[axis] += change;
+  shader.rotation = changePt;
+}
+
+canvas.app.ticker.add(rotateTicker)
+
+
+// Instancing.
+// https://pixijs.com/examples/mesh-and-shaders/instanced-geometry
+geometry = new PIXI.Geometry()
+    .addAttribute('aVertexPosition', [-100, -50, 100, -50, 0, 100]);
+
+shader = PIXI.Shader.from(`
+
+    precision mediump float;
+    attribute vec2 aVertexPosition;
+
+    uniform mat3 translationMatrix;
+    uniform mat3 projectionMatrix;
+
+    void main() {
+        gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+    }`,
+
+`precision mediump float;
+
+    void main() {
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    }
+
+`);
+
+triangle = new PIXI.Mesh(geometry, shader);
+
+triangle.position.set(400, 300);
+
+canvas.stage.addChild(triangle);
+
+fn = function(delta) { triangle.rotation += 0.01; }
+canvas.app.ticker.add(fn);
 
 
 
+
+
+geometry = new PIXI.Geometry()
+    .addAttribute('aVPos', [-100, 0, 100, 0, 0, -150]);
+
+geometry.instanced = true;
+geometry.instanceCount = 5;
+
+positionSize = 2;
+colorSize = 3;
+buffer = new PIXI.Buffer(new Float32Array(geometry.instanceCount * (positionSize + colorSize)));
+
+geometry.addAttribute(
+    'aIPos',
+    buffer,
+    positionSize,
+    false,
+    PIXI.TYPES.FLOAT,
+    4 * (positionSize + colorSize),
+    0,
+    true
+);
+geometry.addAttribute(
+    'aICol',
+    buffer,
+    colorSize,
+    false,
+    PIXI.TYPES.FLOAT,
+    4 * (positionSize + colorSize),
+    4 * positionSize,
+    true
+);
+
+for (let i = 0; i < geometry.instanceCount; i++)
+{
+    const instanceOffset = i * (positionSize + colorSize);
+
+    buffer.data[instanceOffset + 0] = i * 80;
+    buffer.data[instanceOffset + 2] = Math.random();
+    buffer.data[instanceOffset + 3] = Math.random();
+    buffer.data[instanceOffset + 4] = Math.random();
+}
+
+shader = PIXI.Shader.from(`
+    precision mediump float;
+    attribute vec2 aVPos;
+    attribute vec2 aIPos;
+    attribute vec3 aICol;
+
+    uniform mat3 translationMatrix;
+    uniform mat3 projectionMatrix;
+
+    varying vec3 vCol;
+
+    void main() {
+        vCol = aICol;
+
+        gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVPos + aIPos, 1.0)).xy, 0.0, 1.0);
+    }`,
+
+`precision mediump float;
+
+    varying vec3 vCol;
+
+    void main() {
+        gl_FragColor = vec4(vCol, 1.0);
+    }
+
+`);
+
+triangles = new PIXI.Mesh(geometry, shader);
+
+triangles.position.set(400, 300);
+
+canvas.stage.addChild(triangles);
+canvas.stage.removeChild(triangles);
+
+
+fn = function(delta) { triangles.rotation += 0.01; }
+canvas.app.ticker.add(fn);
+canvas.app.ticker.remove(fn);
+
+
+
+// Options for displaying walls/tokens/tiles in front of a target:
+
+- Planes (walls, tiles) cannot be simultaneously in front and behind of a token. So we can
+  draw a red token target first, and then draw all shapes in front if needed.
+- This assumption might fail for transparent tiles. To draw the full tile requires depth checking.
+
+
+Option: Store full geometry, rotate camera.
+No instancing:
+- Walls: 4 vertices per wall, 3 coordinates = 12 times number walls.
+- Tokens: 8 vertices per token, 3 coordinates = 24 times number tokens
+- Tiles: 4 vertices per wall, 3 coordinates = 12 + 1 texture times number tiles
+- JS: Precalculate each vertex location.
+  --> This will cause the geometry to be updated with token movement, which is less than ideal.
+  --> But if not precalculated, would require a matrix for each, at which point we are back to instancing.
+
+
+Instancing:
+- Walls: 4 vertices, 3 coordinates = 12.
+  - ModelToWorld mat4 per wall (so, 4 vec4s). Equivalent to 16?
+- Tokens: 8 vertices, 3 coordinates = 24
+  - ModelToWorld mat4 per token. So 16.
+- Tiles: same as walls, plus texture.
+
+Instancing with coordinates instead of matrices
+- Walls: 4 vertices, 3 coordinates = 12.
+  - Each wall: center x, center y, center z, 1/2 length, 1/2 height. So 5 per wall. (no depth)
+
+- Tokens: 8 vertices, 3 coordinates = 24
+  - Each token: center x, center y, center z, 1/2 width, 1/2 height, 1/2 depth. So 6 per token
+
+- Tiles: Same as walls + texture
+
+- Would require calculating the matrix for each vertex.
+- Would have to do this anyway in JS, but would not be repeated for each wall vertex, etc. if
+- just changing token space or camera point.
+
+--> Points to likely better to only construct the shader for pieces we need.
+--> Or hybrid approach where tokens constructed differently than walls, etc.
+
+1. Instanced, multiple shaders
+
+Shader for tokens
+Shader(s) for tiles
+Shader for walls
+
+2. Not instanced, single shader
+
+
+3. Precalculate vs matrices.
+
+Could precalculate in JS.
+- JS: filter shapes to only those within viewing triangle.
+- JS: Use modelToWorld matrix to go from unit geometry to specific geometry.
+- WebGL: Take vertices of each object, along with color.
+Tokens: 8 vertices
 
 
 
