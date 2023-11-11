@@ -29,10 +29,10 @@ class WallGeometry extends PIXI.Geometry {
   addVertices() {
     const aVertices = [
       // Top, looking down
-      -0.50,  0.50, 0.0,  // TL
-       0.50,  0.50, 0.0,  // TR
-       0.50, -0.50, 0.0,  // BR
-      -0.50, -0.50, 0.0,  // BL
+      -0.50,  -0.50, 0.0,  // TL
+       0.50,  -0.50, 0.0,  // TR
+       0.50,  0.50, 0.0,  // BR
+      -0.50,  0.50, 0.0,  // BL
     ];
 
     this.addAttribute("aVertex", aVertices, 3);
@@ -80,6 +80,12 @@ class WallGeometry extends PIXI.Geometry {
   }
 }
 
+let ROTATION_MATRICES = {
+  x: "_rotationXMatrix",
+  y: "_rotationYMatrix",
+  z: "_rotationZMatrix"
+};
+
 class UnitPlaceableShader extends AbstractEVShader {
   /**
    * Vertex shader constructs a quad and calculates the canvas coordinate and texture coordinate varyings.
@@ -98,6 +104,7 @@ out vec4 vColor;
 uniform mat3 translationMatrix;
 uniform mat3 projectionMatrix;
 
+uniform mat4 uOffsetMatrix;
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uModelWorldMatrix;
 uniform mat4 uCameraMatrix;
@@ -113,6 +120,8 @@ void main() {
   // vec4 worldPosition = trMat * vec4(aVertex, 1.0);
 
   vec4 cameraPosition = uCameraMatrix * worldPosition; // For now
+  cameraPosition = uOffsetMatrix * cameraPosition;
+
   gl_Position = uPerspectiveMatrix * cameraPosition;
 
   // gl_Position = worldPosition;
@@ -152,9 +161,17 @@ void main() {
   /** @type {Point3d} */
   #scale = new Point3d(1, 1, 1);
 
-  // Store each piece of the world matrix for varying terms. All start as identity.
-  /** @type {Matrix} */
-  #rotationMatrix = Matrix.rotationXYZ(0, 0, 0);
+    /** @param {Matrix 4x4} */
+  _rotationXMatrix = Matrix.rotationX(0);
+
+  /** @param {Matrix 4x4} */
+  _rotationYMatrix = Matrix.rotationY(0);
+
+  /** @param {Matrix 4x4} */
+  _rotationZMatrix = Matrix.rotationZ(0);
+
+  rotationOrder = ["x", "y", "z"];
+
 
   /** @type {Matrix} */
   #scaleMatrix = Matrix.scale(1, 1, 1);
@@ -172,8 +189,19 @@ void main() {
     uPerspectiveMatrix: Matrix.identity(4, 4).toGLSLArray(),
     uModelWorldMatrix: Matrix.identity(4, 4).toGLSLArray(),
     uCameraMatrix: Matrix.identity(4, 4).toGLSLArray(),
+    uOffsetMatrix: Matrix.identity(4, 4).toGLSLArray(),
     uOffset: [0, 0, 0]
   };
+
+
+  #offsetMatrix;
+
+  get offsetMatrix() { return this.#offsetMatrix; }
+
+  set offsetMatrix(value) {
+    this.#offsetMatrix = value;
+    this.uniforms.uOffsetMatrix = value.toGLSLArray();
+  }
 
   /** @type {Point3d} */
   #viewerPosition = new Point3d();
@@ -187,7 +215,7 @@ void main() {
     res.targetPosition = targetPosition;
 
     res.calculatePerspectiveMatrix();
-    res.calculateModelWorldMatrix();
+    //res.calculateModelWorldMatrix();
     return res;
   }
 
@@ -219,11 +247,11 @@ void main() {
 
   get rotation() { return this.#rotation; }
 
-  get rotationMatrix() { return this.#rotationMatrix; }
-
   set rotation(rotationPoint) {
     this.#rotation.copyFrom(rotationPoint);
-    this.#rotationMatrix = Matrix.rotationXYZ(this.#rotation.x, this.#rotation.y, this.#rotation.z);
+    this._rotationXMatrix = Matrix.rotationX(this.#rotation.x);
+    this._rotationYMatrix = Matrix.rotationY(this.#rotation.y);
+    this._rotationZMatrix = Matrix.rotationZ(this.#rotation.z);
     this.calculateModelWorldMatrix();
   }
 
@@ -269,25 +297,29 @@ void main() {
     this.calculatePerspectiveMatrix();
   }
 
-  get perspectiveMatrix() { return this.uniforms.uPerspectiveMatrix; }
-
-  get worldMatrix() { return this.uniforms.uModelWorldMatrix; }
-
   calculatePerspectiveMatrix() {
     const fovy = this.#fieldOfView;
     const aspect = this.#aspectRatio;
     const zNear = this.#zNear;
     const zFar = this.#zFar;
-    this.uniforms.uPerspectiveMatrix = Matrix.perspectiveDegrees(fovy, aspect, zNear, zFar).toGLSLArray();
+    this.perspectiveMatrix = Matrix.perspectiveDegrees(fovy, aspect, zNear, zFar);
+    this.uniforms.uPerspectiveMatrix = this.perspectiveMatrix.toGLSLArray();
   }
 
   calculateModelWorldMatrix() {
-    const fullMat = Matrix.empty(4, 4);
     // Do rotation first, assuming the models are centered at 0,0,0.
     // Then scale, and finally translate.
-    this.#rotationMatrix.multiply4x4(this.#scaleMatrix, fullMat);
-    fullMat.multiply4x4(this.#translationMatrix, fullMat);
-    this.uniforms.uModelWorldMatrix = fullMat.toGLSLArray();
+    const newMat = Matrix.empty(4, 4);
+    const rot0 = this[ROTATION_MATRICES[this.rotationOrder[0]]];
+    const rot1 = this[ROTATION_MATRICES[this.rotationOrder[1]]];
+    const rot2 = this[ROTATION_MATRICES[this.rotationOrder[2]]];
+
+    this.#scaleMatrix.multiply4x4(rot0, newMat);
+    newMat.multiply4x4(rot1, newMat);
+    newMat.multiply4x4(rot2, newMat);
+    newMat.multiply4x4(this.#translationMatrix, newMat);
+    this.modelWorldMatrix = newMat;
+    this.uniforms.uModelWorldMatrix = this.modelWorldMatrix.toGLSLArray();
   }
 
   calculateCameraMatrix() {
@@ -327,9 +359,38 @@ shader = UnitPlaceableShader.create(viewerPt, targetPt);
 mesh = new PIXI.Mesh(geom, shader);
 canvas.stage.addChild(mesh);
 
+// translation matrix
+offsetMatrix = Matrix.translation(0, 0, -2)
+shader.uniforms.uOffsetMatrix = offsetMatrix.toGLSLArray();
+
 // Identity matrix for world and camera for testing
 shader.uniforms.uCameraMatrix = Matrix.identity(4, 4).toGLSLArray();
 shader.uniforms.uModelWorldMatrix = Matrix.identity(4, 4).toGLSLArray();
+
+// Calculate a proper model-world matrix
+shader.translation = new Point3d();
+shader.rotation = new Point3d();
+shader.scale = new Point3d(1, 1, 1);
+
+wall = canvas.walls.placeables[0]
+let { A, B } = Point3d.fromWall(wall, { finite: true });
+midpoint = Point3d.midPoint(A.top, B.bottom);
+shader.translation = midpoint;
+
+width = PIXI.Point.distanceBetween(A.top, B.top);
+height = A.top.z - A.bottom.z;
+shader.scale = new Point3d(width, height, 1);
+
+angle = Math.acos(Math.abs(A.top.x - B.top.x) / width);
+if ( A.top.y < B.top.y ) angle *= -1;
+shader.rotationOrder = ["x", "y", "z"]
+shader.rotation = new Point3d(-RADIANS_90, 0, -angle);
+
+
+// Invert the world matrix for testing
+worldMatrix = Matrix.fromFlatArray(shader.worldMatrix, 4, 4);
+shader.uniforms.uModelWorldMatrix = worldMatrix.toGLSLArray();
+shader.uniforms.uCameraMatrix = worldMatrix.invert().toGLSLArray();
 
 
 // Activate culling to not draw opposite faces.
@@ -337,6 +398,9 @@ mesh.state.culling = true
 mesh.state.clockwiseFrontFace = true
 
 
+offsetMatrix = Matrix.rotationX(Math.toRadians(30))
+  .multiply(Matrix.translation(0, 0, -2))
+shader.uniforms.uOffsetMatrix = offsetMatrix.toGLSLArray()
 
 shader.translation = new Point3d(0, 0, -2)
 shader.rotation = new Point3d(Math.toRadians(30), 0, 0);
@@ -344,3 +408,31 @@ shader.aspectRatio = window.outerWidth / window.outerHeight
 
 await rotate("y")
 canvas.stage.removeChild(mesh);
+
+
+// Check the world matrix against wall position
+worldMatrix = Matrix.fromFlatArray(shader.worldMatrix, 4, 4);
+buffer = geom.getBuffer("aVertex").data
+vertices = [];
+for ( let i = 0; i < buffer.length; i += 3 ) {
+  vertices.push(new Point3d(buffer[i], buffer[i+1], buffer[i+2]))
+}
+vertices.map(pt => worldMatrix.multiplyPoint3d(pt))
+actualPts = Point3d.fromWall(wall, { finite: true })
+tmp = [actualPts.A.top, actualPts.B.top, actualPts.B.bottom, actualPts.A.bottom]
+
+
+
+scaledPts = vertices.map(pt => shader.scaleMatrix.multiplyPoint3d(pt))
+rot0Pts = scaledPts.map(pt => shader._rotationXMatrix.multiplyPoint3d(pt))
+rot1Pts = rot0Pts.map(pt => shader._rotationYMatrix.multiplyPoint3d(pt))
+rot2Pts = rot1Pts.map(pt => shader._rotationZMatrix.multiplyPoint3d(pt))
+trPts = rot2Pts.map(pt => shader.translationMatrix.multiplyPoint3d(pt))
+
+// Camera matrix
+cameraPts = trPts.map(pt => shader.lookAtM.Minv.multiplyPoint3d(pt))
+
+// Perspective matrix
+perspectivePts = cameraPts.map(pt => shader.perspectiveMatrix.multiplyPoint3d(pt))
+
+

@@ -65,6 +65,12 @@ class AbstractEVShader extends PIXI.Shader {
   }
 }
 
+let ROTATION_MATRICES = {
+  x: "_rotationXMatrix",
+  y: "_rotationYMatrix",
+  z: "_rotationZMatrix"
+};
+
 // Display walls from point of view of the viewer looking at a target.
 class PlaceableUnitVertices {
   /** @type {PlaceableObject} */
@@ -80,7 +86,15 @@ class PlaceableUnitVertices {
   _scaleMatrix = Matrix.scale(1, 1, 1);
 
   /** @param {Matrix 4x4} */
-  _rotationMatrix = Matrix.rotationXYZ(0, 0, 0);
+  _rotationXMatrix = Matrix.rotationX(0);
+
+  /** @param {Matrix 4x4} */
+  _rotationYMatrix = Matrix.rotationY(0);
+
+  /** @param {Matrix 4x4} */
+  _rotationZMatrix = Matrix.rotationZ(0);
+
+  _rotationOrder = ["z", "y", "x"];
 
   constructor(object) {
     this.object = object;
@@ -92,8 +106,16 @@ class PlaceableUnitVertices {
    */
   updateModelMatrix() {
     // Combine the matrices.
-    this._rotationMatrix.multiply4x4(this._scaleMatrix, this.modelMatrix);
-    this.modelMatrix.multiply4x4(this._translationMatrix, this.modelMatrix);
+    const newMat = Matrix.identity(4, 4);
+    const rot0 = ROTATION_MATRICES[this._rotationOrder[0]];
+    const rot1 = ROTATION_MATRICES[this._rotationOrder[1]];
+    const rot2 = ROTATION_MATRICES[this._rotationOrder[2]];
+
+    rot0.multiply4x4(this._scaleMatrix, newMat);
+    newMat.multiply4x4(rot1, newMat);
+    newMat.multiply4x4(rot2, newMat);
+    newMat.mutiply4x4(this._translationMatrix, newMat);
+    this.modelMatrix = newMat;
   }
 
   static verticesToGLSLArray(vertices) {
@@ -101,7 +123,6 @@ class PlaceableUnitVertices {
     vertices.forEach(pt => arr.push(pt.x, pt.y, pt.z));
     return arr;
   }
-
 
   /**
    * Get the set of vertices in world space.
@@ -140,6 +161,12 @@ class WallPlaceableUnitVertices {
     0, 2, 3, // TL - BR - BL
   ];
 
+  static verticesToGLSLArray(vertices) {
+    const arr = [];
+    vertices.forEach(pt => arr.push(pt.x, pt.y, pt.z));
+    return arr;
+  }
+
   constructor(wall) {
     this.object = wall;
   }
@@ -177,109 +204,7 @@ class TilePlaceableUnitVertices extends WallPlaceableUnitVertices {
 
 
 
-class WallPlaceableUnitVertices extends PlaceableUnitVertices {
 
-  /** @type {Point3d[4]} */
-  static vertices = [
-    // Top, looking down
-    new Point3d(-0.50,  0.50, 0.0), // TL
-    new Point3d( 0.50,  0.50, 0.0), // TR
-    new Point3d( 0.50, -0.50, 0.0), // BR
-    new Point3d(-0.50, -0.50, 0.0), // BL
-  ];
-
-  /** @type {number[12]} */
-  static indices = [
-    // Top
-    0, 1, 2, // TL - TR - BR
-    0, 2, 3, // TL - BR - BL
-
-    // Bottom
-    0, 3, 2,
-    0, 2, 1,
-  ];
-
-  static colors = [
-    // Top: Shades of green
-    0.0, 1.00, 0.0,
-    0.0, 1.00, 0.25,
-    0.0, 1.00, 0.75,
-    0.0, 1.00, 1.0,
-  ];
-
-  // TODO: Add indices getter; use directional indices if wall is one-way for the viewer type.
-  static directionalIndices = [
-    // Top
-    0, 1, 2, // TL - TR - BR
-    0, 2, 3, // TL - BR - BL
-  ];
-
-  // Simpler to build directly, no need for model matrix.
-  constructor(wall) {
-    this.object = wall;
-
-  }
-
-  /**
-   * Construct a 4x4 scale, rotate, transform matrix based on the wall.
-   */
-  updateModelMatrix() {
-    const { A, B } = Point3d.fromWall(this.object, { finite: true });
-
-    // Walls are rectangles, so center is always halfway between.
-    const midpoint = Point3d.midPoint(A.top, B.bottom);
-    this._translationMatrix = Matrix.translation(midpoint.x, midpoint.y, midpoint.z);
-
-    // Scale is the width and height
-    // Over x, y b/c the wall is currently on its side
-    const width = PIXI.Point.distanceBetween(A.top, B.top);
-    const height = A.top.z - A.bottom.z;
-    this._scaleMatrix = Matrix.scale(width, height, 1);
-
-    // Angle of the wall.
-    // Rotate along z axis to the correct orientation.
-    // Angle is negative if B is below A in y
-    // Rotate along the y axis 90º to make it vertical.
-    // We already calculated the distance between A and B, so we can use that to get the angle.
-    // https://www.britannica.com/science/trigonometry
-    let angle = Math.acos(Math.abs(A.top.x - B.top.x) / width);
-    if ( A.top.y < B.top.y ) angle *= -1;
-    this._rotationMatrix = Matrix.rotationXYZ(RADIANS_90, 0, angle);
-
-    // Combine the matrices.
-    super.updateModelMatrix();
-  }
-}
-
-class TilePlaceableUnitVertices extends WallPlaceableUnitVertices {
-  static uvs = [
-    // Top, looking down
-    0, 0, // TL
-    1, 0, // TR
-    1, 1, // BR
-    0, 1, // BL
-  ];
-
-  /**
-   * Construct a 4x4 scale, rotate, transform matrix based on the tile.
-   */
-  updateModelMatrix() {
-    // Just like wall except no rotation.
-    const bounds = this.object.bounds;
-
-    // Determine the center of the tile.
-    const center = bounds.center;
-    const midpoint = new Point3d(center.x, center.y, this.object.elevationZ);
-    this._translationMatrix = Matrix.translation(midpoint.x, midpoint.y, midpoint.z);
-
-    // Scale is the width and height
-    this._scaleMatrix = Matrix.scale(bounds.width, bounds.height);
-
-    // No rotation.
-    // Combine the matrices.
-    super.updateModelMatrix();
-  }
-}
 
 class TokenPlaceableUnitVertices extends PlaceableUnitVertices {
 
@@ -373,11 +298,11 @@ class TokenPlaceableUnitVertices extends PlaceableUnitVertices {
 
 class PlaceablesGeometry extends PIXI.Geometry {
   /** @type {PlaceableUnitVertices} */
-  vertices;
+  #placeableVertices;
 
   constructor(vertices) {
     super();
-    this.vertices = vertices;
+    this.#placeableVertices = vertices;
     this.initializeVertices();
   }
 
@@ -388,12 +313,13 @@ class PlaceablesGeometry extends PIXI.Geometry {
 
     // Offset the indices of each object so the indices point to the correct vertices.
     let offset = 0;
-    for ( const v of this.vertices ) {
+    for ( const v of this.#placeableVertices ) {
       const cl = v.constructor;
-      aVertices.push(...cl.verticesToGLSLArray(v.transformedVertices()));
+      const vertices = cl.verticesToGLSLArray(v.transformedVertices());
+      aVertices.push(...vertices);
       aColors.push(...cl.colors);
       indices.push(...cl.indices.map(i => i + offset));
-      offset += cl.vertices.length;
+      offset += vertices.length;
     }
 
     this.addAttribute("aVertex", aVertices, 3);
@@ -403,6 +329,7 @@ class PlaceablesGeometry extends PIXI.Geometry {
 }
 
 class PlaceablesShader extends AbstractEVShader {
+
   static vertexShader =
   // eslint-disable-next-line indent
 `#version 300 es
@@ -410,17 +337,26 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aVertex;
 in vec3 aColor;
+in vec4 aTestVertex;
 
-out vec3 vColor;
+out vec4 vColor;
+
+uniform mat3 translationMatrix;
+uniform mat3 projectionMatrix;
 
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uCameraMatrix;
+uniform vec3 uOffset;
 
 void main() {
-  vColor = aColor;
+  vColor = vec4(aColor, 1.0);
+
   vec4 worldPosition = vec4(aVertex, 1.0);
+
   vec4 cameraPosition = uCameraMatrix * worldPosition;
   gl_Position = uPerspectiveMatrix * cameraPosition;
+
+  gl_Position = vec4(aTestVertex.x, aTestVertex.y, -aTestVertex.z, aTestVertex.w);
 }`;
 
   static fragmentShader =
@@ -429,11 +365,11 @@ void main() {
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
-in vec3 vColor;
+in vec4 vColor;
 out vec4 fragColor;
 
 void main() {
-  fragColor = vec4(vColor, 1.0);
+  fragColor = vColor;
 }`;
 
   /** @type {number} Degrees */
@@ -530,7 +466,7 @@ void main() {
   calculateCameraMatrix() {
     const res = Matrix.lookAt(this.#viewerPosition, this.#targetPosition);
     this.lookAtM = res; // For debugging
-    this.uniforms.uCameraMatrix = res.M.toGLSLArray();
+    this.uniforms.uCameraMatrix = res.Minv.toGLSLArray();
   }
 }
 
@@ -540,12 +476,20 @@ let [target] = game.user.targets;
 
 // Pull walls from the scene for testing
 wallVertices = canvas.walls.placeables.map(w => new WallPlaceableUnitVertices(w))
+shader = PlaceablesShader.create(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target));
+
+// Testing: set up test vertices.
+testVertices = WallPlaceableUnitVertices.verticesToGLSLArray(perspectivePts)
+
 
 geom = new PlaceablesGeometry([wallVertices[0]]);
-shader = PlaceablesShader.create(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target));
+geom.addAttribute("aTestVertex", testVertices, 3);
+
+
+
 mesh = new PIXI.Mesh(geom, shader);
 canvas.stage.addChild(mesh)
-
+canvas.stage.removeChild(mesh)
 
 Vs = wallVertices[0].transformedVertices()
 
@@ -568,3 +512,16 @@ tilePts.forEach(pts => Draw.connectPoints(Object.values(pts)))
 
 pts = tilePts[0]
 
+// Test the camera matrix
+wV0 = wallVertices[0].transformedVertices()
+Draw.connectPoints(wV0)
+cameraPts = wV0.map(pt => shader.lookAtM.Minv.multiplyPoint3d(pt))
+perspectivePts = cameraPts.map(pt => shader.perspectiveM.multiplyPoint3d(pt))
+
+// versus the straight divide that is done in PlanePoints3d
+cameraPts.map(pt => new PIXI.Point(pt.x / -pt.z, pt.y / -pt.z))
+
+// Using 4-D
+cameraPts4 = wV0.map(pt => shader.lookAtM.Minv.multiply(Matrix.fromPoint3d(pt).transpose()))
+
+cameraPts4.map(pt => shader.perspectiveM.multiply(pt));
