@@ -363,3 +363,28 @@ meshTarget.state.depthTest = true
 meshWall0.state.depthTest = true
 meshWall1.state.depthTest = true
 meshWall2.state.depthTest = true
+
+api = game.modules.get("tokenvisibility").api
+QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
+
+function geometryCreation(wall) {
+  const res = new WallGeometry(wall);
+  res.destroy();
+}
+
+function meshCreation(geom, shader) {
+  const res = new PIXI.Mesh(geom, shader);
+  res.destroy();
+}
+
+function shaderCreation(viewerPt, targetPt) {
+  const res = Placeable3dShader.create(viewerPt, targetPt);
+  res.destroy();
+}
+
+N = 10000
+await QBenchmarkLoopFn(N, geometryCreation, "geometryCreation", walls[0]);
+await QBenchmarkLoopFn(N, geometryCreation, "geometryCreation", walls[1]);
+await QBenchmarkLoopFn(N, geometryCreation, "geometryCreation", walls[2]);
+await QBenchmarkLoopFn(N, meshCreation, "meshCreation", geomWall0, meshWall0);
+await QBenchmarkLoopFn(N, shaderCreation, "shaderCreation", viewerPt, targetPt);
