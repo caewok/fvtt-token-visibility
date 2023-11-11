@@ -358,6 +358,7 @@ geom = new WallGeometry();
 shader = UnitPlaceableShader.create(viewerPt, targetPt);
 mesh = new PIXI.Mesh(geom, shader);
 canvas.stage.addChild(mesh);
+canvas.stage.removeChild(mesh);
 
 // translation matrix
 offsetMatrix = Matrix.translation(0, 0, -2)
@@ -434,5 +435,17 @@ cameraPts = trPts.map(pt => shader.lookAtM.Minv.multiplyPoint3d(pt))
 
 // Perspective matrix
 perspectivePts = cameraPts.map(pt => shader.perspectiveMatrix.multiplyPoint3d(pt))
+
+
+targetMat = glMatrix.mat4.create()
+eye = glMatrix.vec3.fromValues(viewerPt.x, viewerPt.y, viewerPt.z)
+center = glMatrix.vec3.fromValues(targetPt.x, targetPt.y, targetPt.z)
+up = glMatrix.vec3.fromValues(0, 0, 1)
+glMatrix.mat4.targetTo(targetMat, eye, center, up)
+
+lookAtMat = glMatrix.mat4.create()
+glMatrix.mat4.lookAt(lookAtMat, eye, center, up)
+
+
 
 
