@@ -31,7 +31,7 @@
 
   "scripts": [
     "scripts/LOS/pixi_projection/pixi-projection.js",
-    "scripts/LOS/gl_matrix/gl-matrix.js"
+    "scripts/LOS/gl_matrix/gl-matrix.js "
   ],
 
   "esmodules": [

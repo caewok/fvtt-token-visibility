@@ -6,11 +6,14 @@ PIXI
 
 // Patches for the Token class
 
+import { MODULE_ID } from "./const.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Settings } from "./settings.js";
+import { Token3dGeometry } from "./LOS/Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
+PATCHES.AREA3D = {};
 
 // ----- NOTE: Hooks ----- //
 
@@ -46,6 +49,49 @@ function updateToken(tokenD, change, _options, _userId) {
 }
 
 PATCHES.BASIC.HOOKS = { controlToken, updateToken };
+
+
+// ----- NOTE: Area3d Hooks ----- //
+
+/**
+ * Hook: drawToken
+ * Create the geometry used by Area3d
+ * @param {PlaceableObject} object    The object instance being drawn
+ */
+function drawTokenArea3d(token) {
+  const obj = token[MODULE_ID] ??= {};
+  obj.geometry = new Token3dGeometry(token);
+}
+
+/**
+ * Hook: refreshToken
+ * @param {PlaceableObject} object    The object instance being refreshed
+ * @param {RenderFlags} flags         Flags being refreshed
+ */
+function refreshTokenArea3d(token, flags) {
+  // TODO: What other updates affect the view?
+  //       Need to hook updateTokenDocument as well or instead?
+  if ( !(flags.refreshPosition || flags.refreshElevation) ) return;
+
+  const geometry = token[MODULE_ID]?.geometry;
+  if ( !geometry ) return;
+  geometry.updateVertices();
+}
+
+/**
+ * Hook: destroyToken
+ * @param {PlaceableObject} object    The object instance being destroyed
+ */
+function destroyTokenArea3d(token) {
+  const geometry = token[MODULE_ID]?.geometry;
+  if ( geometry ) geometry.destroy();
+}
+
+PATCHES.AREA3D.HOOKS = {
+  drawToken: drawTokenArea3d,
+  refreshToken: refreshTokenArea3d,
+  destroyToken: destroyTokenArea3d
+};
 
 // ----- NOTE: Wraps ----- //
 
