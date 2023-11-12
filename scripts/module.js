@@ -73,6 +73,7 @@ Hooks.once("init", function() {
 
     Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry,
     Placeable3dShader, Tile3dShader,
+    Placeable3dDebugShader, Tile3dDebugShader,
 
     PATCHER,
 

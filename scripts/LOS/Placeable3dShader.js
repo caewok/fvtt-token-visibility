@@ -21,15 +21,11 @@ export class Placeable3dShader extends AbstractShader {
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aVertex;
-in vec3 aColor;
-
-out vec4 vColor;
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uLookAtMatrix;
 uniform mat4 uOffsetMatrix;
 
 void main() {
-  vColor = vec4(aColor, 1.0);
   vec4 cameraPosition = uLookAtMatrix * vec4(aVertex, 1.0);
   gl_Position = uOffsetMatrix * uPerspectiveMatrix * cameraPosition;
 }`;
@@ -40,17 +36,18 @@ void main() {
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
 precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
-in vec4 vColor;
 out vec4 fragColor;
+uniform vec4 uColor;
 
 void main() {
-  fragColor = vColor;
+  fragColor = uColor;
 }`;
 
   static defaultUniforms = {
     uPerspectiveMatrix: mat4.create(),
     uLookAtMatrix: mat4.create(),
-    uOffsetMatrix: mat4.create()
+    uOffsetMatrix: mat4.create(),
+    uColor: [0, 0, 1, 1]
   };
 
   static create(viewerPt, targetPt, defaultUniforms = {}) {
@@ -70,6 +67,8 @@ void main() {
   #near = 0.1;
 
   #far = 1000;
+
+  setColor(r = 0, g = 0, b = 1, a = 1) { this.uniforms.uColor = [r, g, b, a]; }
 
   set fovy(value) {
     this.#fovy = value;
@@ -101,6 +100,7 @@ void main() {
 
   _calculatePerspectiveMatrix() {
     mat4.perspective(this.uniforms.uPerspectiveMatrix, this.#fovy, this.#aspect, this.#near, this.#far);
+    this.uniforms.uPerspectiveMatrix = this.uniforms.uPerspectiveMatrix; // Trigger update.
   }
 
   // ----- LookAt Matrix ----- //
@@ -133,10 +133,100 @@ void main() {
 
   _calculateLookAtMatrix() {
     mat4.lookAt(this.uniforms.uLookAtMatrix, this.#eye, this.#center, this.#up);
+    this.uniforms.uLookAtMatrix = this.uniforms.uLookAtMatrix;
   }
 }
 
+// TODO: Change tile to color blue for non-transparent areas.
 export class Tile3dShader extends Placeable3dShader {
+  /**
+   * Vertex shader constructs a quad and calculates the canvas coordinate and texture coordinate varyings.
+   * @type {string}
+   */
+  static vertexShader =
+  // eslint-disable-next-line indent
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+in vec3 aVertex;
+in vec2 aTextureCoord;
+
+uniform mat4 uPerspectiveMatrix;
+uniform mat4 uLookAtMatrix;
+uniform mat4 uOffsetMatrix;
+
+void main() {
+  vTextureCoord = aTextureCoord;
+  vec4 cameraPosition = uLookAtMatrix * vec4(aVertex, 1.0);
+  gl_Position = uOffsetMatrix * uPerspectiveMatrix * cameraPosition;
+}`;
+
+  static fragmentShader =
+  // eslint-disable-next-line indent
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
+
+in vec2 vTextureCoord;
+out vec4 fragColor;
+uniform uAlphaThreshold;
+uniform uColor;
+
+void main() {
+  vec4 texPixel = texture(uTileTexture, vTextureCoord);
+  fragColor = texPixel.a > uAlphaThreshold ? uColor : vec4(0.0);
+}`;
+
+  static defaultUniforms = {
+    uPerspectiveMatrix: mat4.create(),
+    uLookAtMatrix: mat4.create(),
+    uOffsetMatrix: mat4.create(),
+    uColor: [0, 0, 1, 1],
+    uAlphaThreshold: 0.7
+  };
+
+}
+
+export class Placeable3dDebugShader extends Placeable3dShader {
+  /**
+   * Vertex shader constructs a quad and calculates the canvas coordinate and texture coordinate varyings.
+   * @type {string}
+   */
+  static vertexShader =
+  // eslint-disable-next-line indent
+`#version 300 es
+precision ${PIXI.settings.PRECISION_VERTEX} float;
+
+in vec3 aVertex;
+in vec3 aColor;
+
+out vec4 vColor;
+
+uniform mat4 uPerspectiveMatrix;
+uniform mat4 uLookAtMatrix;
+uniform mat4 uOffsetMatrix;
+
+void main() {
+  vColor = vec4(aColor, 1.0);
+  vec4 cameraPosition = uLookAtMatrix * vec4(aVertex, 1.0);
+  gl_Position = uOffsetMatrix * uPerspectiveMatrix * cameraPosition;
+}`;
+
+  static fragmentShader =
+  // eslint-disable-next-line indent
+`#version 300 es
+precision ${PIXI.settings.PRECISION_FRAGMENT} float;
+precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
+
+in vec4 vColor;
+out vec4 fragColor;
+
+void main() {
+  fragColor = vColor;
+}`;
+}
+
+export class Tile3dDebugShader extends Tile3dShader {
   /**
    * Vertex shader constructs a quad and calculates the canvas coordinate and texture coordinate varyings.
    * @type {string}
@@ -173,3 +263,4 @@ void main() {
   fragColor = texPixel;
 }`;
 }
+

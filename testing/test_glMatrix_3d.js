@@ -447,17 +447,29 @@ diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5
 dist = Point3d.distanceBetween(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target)) + diagDist;
 far = Math.ceil(dist)
 
-// Create the shader
+// Create the shaders, 1 for the target and 1 for the walls.
 // Add a buffer in the fov so we capture the entire token.
-shader = Placeable3dShader.create(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target))
-shader._initializePerspectiveMatrix(angleRad + Math.toRadians(1), 1, near, far)
-mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+targetShader = Placeable3dShader.create(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target))
+targetShader._initializePerspectiveMatrix(angleRad + Math.toRadians(1), 1, near, far)
+targetShader.uniforms.uPerspectiveMatrix = targetShader.uniforms.uPerspectiveMatrix
+
+
+mat4.fromScaling(targetShader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+targetShader.setColor(1, 0, 0, 1);
 
 // For debugging, adjust aspect ratio
-shader.aspect = window.outerWidth / window.outerHeight;
+targetShader.aspect = window.outerWidth / window.outerHeight;
 
-// Draw the target
-buildMesh = obj => {
+
+wallShader = Placeable3dShader.create(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target));
+wallShader._initializePerspectiveMatrix(angleRad + Math.toRadians(1), 1, near, far)
+wallShader.uniforms.uPerspectiveMatrix = wallShader.uniforms.uPerspectiveMatrix
+
+mat4.fromScaling(wallShader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+wallShader.aspect = window.outerWidth / window.outerHeight;
+
+// Draw the target and walls
+buildMesh = (obj, shader) => {
   const mesh = new PIXI.Mesh(obj.tokenvisibility.geometry, shader);
   mesh.state.depthTest = true;
   mesh.state.culling = true;
@@ -465,12 +477,12 @@ buildMesh = obj => {
   return mesh;
 }
 
-targetMesh = buildMesh(target);
+targetMesh = buildMesh(target, targetShader);
 canvas.stage.addChild(targetMesh)
 canvas.stage.removeChild(targetMesh)
 
 // Draw each wall
-wallMeshes = blockingWalls.map(wall => buildMesh(wall))
+wallMeshes = blockingWalls.map(wall => buildMesh(wall, wallShader))
 wallMeshes.forEach(wallMesh => canvas.stage.addChild(wallMesh));
 wallMeshes.forEach(wallMesh => canvas.stage.removeChild(wallMesh));
 
