@@ -388,3 +388,92 @@ await QBenchmarkLoopFn(N, geometryCreation, "geometryCreation", walls[1]);
 await QBenchmarkLoopFn(N, geometryCreation, "geometryCreation", walls[2]);
 await QBenchmarkLoopFn(N, meshCreation, "meshCreation", geomWall0, meshWall0);
 await QBenchmarkLoopFn(N, shaderCreation, "shaderCreation", viewerPt, targetPt);
+
+
+
+// NOTE: Test using the Placeable3dGeometry and Placeable3dShader
+Draw = CONFIG.GeometryLib.Draw;
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+Matrix = CONFIG.GeometryLib.Matrix;
+let { mat4, vec3, vec4 } = glMatrix;
+
+api = game.modules.get("tokenvisibility").api
+Placeable3dShader = api.Placeable3dShader
+Tile3dShader = api.Tile3dShader
+Area3d = api.Area3d
+
+// Use Area3d to determine blocking obstacles
+viewer = canvas.tokens.controlled[0]
+let [target] = game.user.targets;
+
+calc = new Area3d(viewer, target)
+calc.percentVisible()
+
+// Switch to array just for debugging
+blockingWalls = [...calc.blockingObjects.walls];
+
+/* Determine frustrum size
+Forms isosceles triangle.
+   ø     Where ø is the fov.
+  /\
+ /  \
+/A   \
+------
+Angle at A is 90 - (ø * 0.5).
+If length of near is 1, then
+half the base is a / tan(A)
+*/
+
+function frustrumBase(fov, dist) {
+  const A = 90 - (fov * 0.5);
+  return (dist / Math.tan(Math.toRadians(A))) * 2;
+}
+
+// We want the target token to be within the viewable frustrum.
+// Use the full token shape, not constrained shape, so that the angle captures the whole token.
+boundaryPts = target.bounds.viewablePoints(viewer.center);
+
+// Angle is between the two segments from the origin.
+center = new PIXI.Point(viewer.center.x, viewer.center.y)
+angleRad = PIXI.Point.angleBetween(boundaryPts[0], center, boundaryPts[1])
+
+// Near distance has to be close to the viewer.
+// We can assume we don't want to view anything within 1/2 grid unit?
+near = canvas.dimensions.size * 0.5;
+
+// Far distance is distance to the center of the target plus 1/2 the diagonal.
+let { w, h } = target
+diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5
+dist = Point3d.distanceBetween(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target)) + diagDist;
+far = Math.ceil(dist)
+
+// Create the shader
+// Add a buffer in the fov so we capture the entire token.
+shader = Placeable3dShader.create(Point3d.fromTokenCenter(viewer), Point3d.fromTokenCenter(target))
+shader._initializePerspectiveMatrix(angleRad + Math.toRadians(1), 1, near, far)
+mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+
+// For debugging, adjust aspect ratio
+shader.aspect = window.outerWidth / window.outerHeight;
+
+// Draw the target
+buildMesh = obj => {
+  const mesh = new PIXI.Mesh(obj.tokenvisibility.geometry, shader);
+  mesh.state.depthTest = true;
+  mesh.state.culling = true;
+  mesh.state.clockwiseFrontFace = true;
+  return mesh;
+}
+
+targetMesh = buildMesh(target);
+canvas.stage.addChild(targetMesh)
+canvas.stage.removeChild(targetMesh)
+
+// Draw each wall
+wallMeshes = blockingWalls.map(wall => buildMesh(wall))
+wallMeshes.forEach(wallMesh => canvas.stage.addChild(wallMesh));
+wallMeshes.forEach(wallMesh => canvas.stage.removeChild(wallMesh));
+
+
+
+
