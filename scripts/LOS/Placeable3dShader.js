@@ -137,7 +137,6 @@ void main() {
   }
 }
 
-// TODO: Change tile to color blue for non-transparent areas.
 export class Tile3dShader extends Placeable3dShader {
   /**
    * Vertex shader constructs a quad and calculates the canvas coordinate and texture coordinate varyings.
@@ -169,8 +168,9 @@ precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
 in vec2 vTextureCoord;
 out vec4 fragColor;
-uniform uAlphaThreshold;
-uniform uColor;
+uniform float uAlphaThreshold;
+uniform vec4 uColor;
+uniform sampler2D uTileTexture;
 
 void main() {
   vec4 texPixel = texture(uTileTexture, vTextureCoord);
@@ -182,9 +182,9 @@ void main() {
     uLookAtMatrix: mat4.create(),
     uOffsetMatrix: mat4.create(),
     uColor: [0, 0, 1, 1],
-    uAlphaThreshold: 0.7
+    uAlphaThreshold: 0.7,
+    uTileTexture: -1
   };
-
 }
 
 export class Placeable3dDebugShader extends Placeable3dShader {
@@ -216,7 +216,6 @@ void main() {
   // eslint-disable-next-line indent
 `#version 300 es
 precision ${PIXI.settings.PRECISION_FRAGMENT} float;
-precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
 in vec4 vColor;
 out vec4 fragColor;
@@ -257,6 +256,7 @@ precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
 
 in vec2 vTextureCoord;
 out vec4 fragColor;
+uniform sampler2D uTileTexture;
 
 void main() {
   vec4 texPixel = texture(uTileTexture, vTextureCoord);

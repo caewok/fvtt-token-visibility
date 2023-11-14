@@ -487,5 +487,78 @@ wallMeshes.forEach(wallMesh => canvas.stage.addChild(wallMesh));
 wallMeshes.forEach(wallMesh => canvas.stage.removeChild(wallMesh));
 
 
+// ----- NOTE: Test using Area3d
+Draw = CONFIG.GeometryLib.Draw;
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
+api = game.modules.get("tokenvisibility").api
+QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
+Area3d = api.Area3d
+AREA3D_POPOUTS = api.AREA3D_POPOUTS
 
 
+viewer = canvas.tokens.controlled[0]
+let [target] = game.user.targets;
+
+calc = new Area3d(viewer, target, { algorithm: "webGL2", largeTarget: false })
+calc.percentVisible();
+
+calc.config.algorithm = "webGL";
+calc.percentVisible();
+
+calc.config.algorithm = "geometric";
+calc.percentVisible();
+
+calc.debug = true
+
+calc._percentVisibleGeometric();
+calc._percentVisibleWebGL();
+calc._percentVisibleWebGL2();
+
+
+
+// Timing
+geometricBenchFn = function(viewer, target) {
+  const calc = new Area3d(viewer, target, { largeTarget: false, debug: false })
+  return calc._percentVisibleGeometric();
+}
+
+webGLBenchFn = function(viewer, target) {
+  const calc = new Area3d(viewer, target, { largeTarget: false, debug: false })
+  return calc._percentVisibleWebGL();
+}
+
+webGL2BenchFn = function(viewer, target) {
+  const calc = new Area3d(viewer, target, { largeTarget: false, debug: false })
+  return calc._percentVisibleWebGL2();
+}
+
+N = 1000
+await QBenchmarkLoopFn(N, geometricBenchFn, "geometric", viewer, target);
+await QBenchmarkLoopFn(N, webGLBenchFn, "webGL", viewer, target);
+await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
+
+
+
+total = performance.measure("total", "Start_webGL2", "end_webGL2")
+a = performance.measure("start", "Start_webGL2", "create_renderTexture")
+b = performance.measure("create render texture", "create_renderTexture", "targetmesh")
+c = performance.measure("create target mesh", "targetmesh", "renderTargetMesh")
+d = performance.measure("render target mesh", "renderTargetMesh", "targetCache_start")
+e = performance.measure("target cache", "targetCache_start", "obstaclemesh")
+f = performance.measure("obstacle mesh", "obstaclemesh", "obstacleCache")
+g = performance.measure("obstacle cache", "obstacleCache", "end_webGL2")
+
+res = {
+  [a.name]: a.duration,
+  [b.name]: b.duration,
+  [c.name]: c.duration,
+  [d.name]: d.duration,
+  [e.name]: e.duration,
+  [f.name]: f.duration,
+  [g.name]: g.duration,
+  [total.name]: total.duration
+}
+
+
+console.table(res)

@@ -28,12 +28,13 @@ import { PointsLOS } from "./LOS/PointsLOS.js";
 import { Area3d, Area3dLOS } from "./LOS/Area3dLOS.js";
 import { Area2d, Area2dLOS } from "./LOS/Area2dLOS.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
-import { Area3dPopout, area3dPopoutData } from "./LOS/Area3dPopout.js";
+
+import { AREA3D_POPOUTS } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 
 import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry } from "./LOS/Placeable3dGeometry.js";
-import { Placeable3dShader, Tile3dShader } from "./LOS/Placeable3dShader.js";
+import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
 import * as los from "./visibility_los.js";
 import * as range from "./visibility_range.js";
@@ -68,8 +69,7 @@ Hooks.once("init", function() {
     Settings,
     AlphaCutoffFilter,
 
-    Area3dPopout,
-    area3dPopoutData,
+    AREA3D_POPOUTS,
 
     Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry,
     Placeable3dShader, Tile3dShader,

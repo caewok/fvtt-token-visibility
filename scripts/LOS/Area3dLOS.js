@@ -3,6 +3,7 @@ canvas,
 CONFIG,
 CONST,
 foundry,
+glMatrix,
 PIXI
 Ray,
 Token,
@@ -83,7 +84,11 @@ Draw.shape(targetShape, { color: Draw.COLORS.red })
 
 
 import { AlternativeLOS } from "./AlternativeLOS.js";
-import { area3dPopoutData } from "./Area3dPopout.js"; // Debugging pop-up
+import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
+
+// webGL2
+import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
+
 
 // PlaceablePoints folder
 import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
@@ -102,6 +107,10 @@ import { Draw } from "../geometry/Draw.js"; // For debugging
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
 import { Matrix } from "../geometry/Matrix.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+
+const RADIANS_90 = Math.toRadians(90);
+const RADIANS_1 = Math.toRadians(1);
+const mat4 = glMatrix.mat4;
 
 export class Area3dLOS extends AlternativeLOS {
 
@@ -127,7 +136,11 @@ export class Area3dLOS extends AlternativeLOS {
   #debug = false;
 
   /** @type {Draw} **/
-  drawTool = new Draw();
+  debugDrawTools = {
+    geometric: new Draw(),
+    webGL: new Draw(),
+    webGL2: new Draw()
+  };
 
   /**
    * Holds Foundry objects that are within the vision triangle.
@@ -245,20 +258,21 @@ export class Area3dLOS extends AlternativeLOS {
     if ( !config.visionSource ) { console.error("Area3dLOS requires a visionSource."); }
     const cfg = this.config;
     cfg.visionSource = config.visionSource ?? canvas.tokens.controlled[0] ?? [...canvas.tokens.placeables][0];
-    cfg.useWebGL = config.useWebGL ?? false;
+    cfg.algorithm = config.algorithm ?? "geometric"; // Options: webGL, webGL2
   }
 
   get debug() { return this.#debug; }
 
   set debug(value) {
     this.#debug = Boolean(value);
+    // this.popoutDebug(this.config.algorithm);
+  }
 
-    // Turn on popout for the debug
-    if ( this.#debug ) {
-      if ( !area3dPopoutData.shown ) area3dPopoutData.app.render(true);
-      this.drawTool = new Draw(area3dPopoutData.app.graphics);
-      this.drawTool.clearDrawings();
-    }
+  async popoutDebug(algorithm) {
+    const popout = AREA3D_POPOUTS[algorithm];
+    if ( !popout.shown ) await popout.app._render(true);
+    const drawTool = this.debugDrawTools[algorithm] = new Draw(popout.app.graphics);
+    drawTool.clearDrawings();
   }
 
   _clearCache() {
@@ -335,9 +349,16 @@ export class Area3dLOS extends AlternativeLOS {
    * @returns {number}
    */
   percentVisible() {
-    if ( this.config.useWebGL ) {
+    if ( this.config.algorithm === "webGL" ) {
       try {
         const percent = this._percentVisibleWebGL();
+        return percent;
+      } catch( error ) {
+        console.error(error);
+      }
+    } else if ( this.config.algorithm === "webGL2" ) {
+      try {
+        const percent = this._percentVisibleWebGL2();
         return percent;
       } catch( error ) {
         console.error(error);
@@ -521,6 +542,8 @@ export class Area3dLOS extends AlternativeLOS {
 
     blockingContainer.destroy();
 
+    if ( this.debug ) this.drawWebGLDebug();
+
 
     /* Testing
     s = new PIXI.Sprite(renderTexture)
@@ -531,10 +554,329 @@ export class Area3dLOS extends AlternativeLOS {
     return sumWithObstacles / sumTarget;
   }
 
-  #drawDebugShapes(objs, obscuredSides, sidePolys) {
+  async drawWebGLDebug() {
+    // TODO: Make removing and adding less stupid.
+    await this.popoutDebug("webGL");
+    const stage = AREA3D_POPOUTS.webGL.app.pixiApp.stage;
+
+    // For now, remove sprite and add new one.
+    const sprites = stage.children.filter(c => c instanceof PIXI.Sprite);
+    sprites.forEach(s => stage.removeChild(s));
+    sprites.forEach(s => s.destroy());
+
+    // Add the new sprite
+    const s = new PIXI.Sprite(this.targetRT);
+    stage.addChild(s);
+  }
+
+  static frustrumBase(fov, dist) {
+    const A = RADIANS_90 - (fov * 0.5);
+    return (dist / Math.tan(A)) * 2;
+  }
+
+  static buildMesh(obj, shader) {
+    const mesh = new PIXI.Mesh(obj.tokenvisibility.geometry, shader);
+    mesh.state.depthTest = true;
+    mesh.state.culling = true;
+    mesh.state.clockwiseFrontFace = true;
+    return mesh;
+  }
+
+  _buildShader(fov, near, far, color) {
+    const shader = Placeable3dShader.create(this.viewerPoint, this.targetCenter);
+    shader._initializePerspectiveMatrix(fov, 1, near, far);
+    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+    shader.setColor(color.r, color.g, color.b, color.a);
+    return shader;
+  }
+
+  _buildTileShader(fov, near, far, color, tile) {
+    const shader = Tile3dShader.create(this.viewerPoint, this.targetCenter,
+      { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
+    shader._initializePerspectiveMatrix(fov, 1, near, far);
+    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+    shader.setColor(color.r, color.g, color.b, color.a);
+    return shader;
+  }
+
+  _buildDebugShader(fov, near, far, color) {
+    const shader = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
+    shader._initializePerspectiveMatrix(fov, 1, near, far);
+    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+    shader.setColor(color.r, color.g, color.b, color.a);
+    return shader;
+  }
+
+  _buildTileDebugShader(fov, near, far, color, tile) {
+    const shader = Tile3dDebugShader.create(this.viewerPoint, this.targetCenter,
+      { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
+    shader._initializePerspectiveMatrix(fov, 1, near, far);
+    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+    shader.setColor(color.r, color.g, color.b, color.a);
+    return shader;
+  }
+
+  _percentVisibleWebGL2() {
+    // If no blocking objects, line-of-sight is assumed true.
+    performance.mark("Start_webGL2");
+    const target = this.target;
+    const blockingObjects = this.blockingObjects;
+    if ( !(blockingObjects.tokens.size
+        || blockingObjects.walls.size
+        || blockingObjects.tiles.size
+        || blockingObjects.terrainWalls.size > 1) ) return 1;
+
+    // We want the target token to be within the viewable frustrum.
+    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
+    const targetBoundaryPts = target.bounds.viewablePoints(this.viewerPoint);
+
+    // Angle is between the two segments from the origin.
+    // TODO: Handle limited angle vision.
+    const angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], this.viewerPoint, targetBoundaryPts[1]);
+    const fov = angleRad + RADIANS_1;
+
+    // Near distance has to be close to the viewer.
+    // We can assume we don't want to view anything within 1/2 grid unit?
+    const near = canvas.dimensions.size * 0.5;
+
+    // Far distance is distance to the center of the target plus 1/2 the diagonal.
+    const { w, h } = target;
+    const diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5;
+    const dist = Point3d.distanceBetween(this.viewerPoint, this.targetCenter) + diagDist;
+    const far = Math.ceil(dist);
+
+    // Create texture
+    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, far));
+    const texConfig = {
+      resolution: 1,
+      width: frustrumBase,
+      height: frustrumBase,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    };
+
+    // TODO: Keep and clear instead of destroying the render texture.
+    performance.mark("create_renderTexture");
+    const renderTexture = this.renderTexture = PIXI.RenderTexture.create(texConfig);
+    performance.mark("targetmesh");
+
+    // Create shaders, mesh, draw to texture.
+    const buildMesh = this.constructor.buildMesh;
+    const CACHE_RESOLUTION = 1.0;
+
+    // 1 for the target, in red
+    const targetShader = this._buildShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
+    const targetMesh = buildMesh(target, targetShader);
+
+    // Render target and calculate its visible area alone.
+    // TODO: This will always calculate the full area, even if a wall intersects the target.
+    performance.mark("renderTargetMesh");
+    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+
+    performance.mark("targetCache_start")
+    const targetCache = this.targetCache = PixelCache.fromTexture(renderTexture,
+      { resolution: CACHE_RESOLUTION, channel: 0 });
+    const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+    performance.mark("obstaclemesh")
+
+    // TODO: Fix garbage handling; destroy the shaders and meshes.
+
+    // 1 for the terrain walls
+    if ( blockingObjects.terrainWalls.size ) {
+      // Can we set alpha to 0.5 and add overlapping walls to get to 1.0 blue?
+      // Or multiply, so 0.7 * 0.7 = 0.49?
+      // Or set to green and then process with pixel cache?
+      // Then process the pixel cache to ignore blue alpha?
+      // For the moment, draw with blue alpha
+      const terrainWallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
+      for ( const terrainWall of blockingObjects.terrainWalls ) {
+        const mesh = buildMesh(terrainWall, terrainWallShader);
+        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+      }
+    }
+
+    // 1 for the walls/tokens, in blue
+    const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
+    if ( otherBlocking.size ) {
+      const wallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
+      for ( const obj of otherBlocking ) {
+        const mesh = buildMesh(obj, wallShader);
+        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+      }
+    }
+
+    // 1 for the tiles
+    if ( blockingObjects.tiles.size ) {
+      for ( const tile of blockingObjects.tiles ) {
+        const tileShader = this._buildTileShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 }, tile);
+        const mesh = buildMesh(tile, tileShader);
+        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+      }
+    }
+
+    // Calculate area remaining.
+    // TODO: Handle terrain walls.
+    performance.mark("obstacleCache")
+    const obstacleCache = this.obstacleCache = PixelCache.fromTexture(renderTexture,
+      { resolution: CACHE_RESOLUTION, channel: 0 });
+    const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+    performance.mark("end_webGL2")
+
+    if ( this.debug ) this.drawWebGL2Debug();
+
+    return sumWithObstacles / sumTarget;
+  }
+
+  async drawWebGL2Debug() {
+    // For the moment, repeat webGL2 percent visible process so that shaders with
+    // colors to differentiate sides can be used.
+    // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
+
+
+
+
+    // For now, remove render texture and add new one.
+    const sprites = stage.children.filter(c => c instanceof PIXI.Sprite);
+    sprites.forEach(s => stage.removeChild(s));
+    sprites.forEach(s => s.destroy());
+
+    // If no blocking objects, line-of-sight is assumed true.
+    const target = this.target;
+    const blockingObjects = this.blockingObjects;
+    if ( !(blockingObjects.tokens.size
+        || blockingObjects.walls.size
+        || blockingObjects.tiles.size
+        || blockingObjects.terrainWalls.size > 1) ) return 1;
+
+    // We want the target token to be within the viewable frustrum.
+    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
+    const targetBoundaryPts = target.bounds.viewablePoints(this.viewerPoint);
+
+    // Angle is between the two segments from the origin.
+    // TODO: Handle limited angle vision.
+    const angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], this.viewerPoint, targetBoundaryPts[1]);
+    const fov = angleRad + RADIANS_1;
+
+    // Near distance has to be close to the viewer.
+    // We can assume we don't want to view anything within 1/2 grid unit?
+    const near = canvas.dimensions.size * 0.5;
+
+    // Far distance is distance to the center of the target plus 1/2 the diagonal.
+    const { w, h } = target;
+    const diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5;
+    const dist = Point3d.distanceBetween(this.viewerPoint, this.targetCenter) + diagDist;
+    const far = Math.ceil(dist);
+
+    // Create texture
+    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, far));
+    const texConfig = {
+      resolution: 1,
+      width: frustrumBase,
+      height: frustrumBase,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    };
+
+    // For the moment, create the texture and container
+    await this.popoutDebug("webGL2");
+    const stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
+    const popoutApp = AREA3D_POPOUTS.webGL2.app.pixiApp
+    const meshContainer = new PIXI.Container();
+
+    // Test different rendererrs
+    const rtAuto = PIXI.RenderTexture.create(texConfig);
+    const rtCanvas = PIXI.RenderTexture.create(texConfig);
+    const rtPopout = PIXI.RenderTexture.create(texConfig);
+
+
+
+
+
+
+
+
+    // TODO: Keep and clear instead of destroying the render texture.
+    const renderTexture = this.renderTextureDebug = PIXI.RenderTexture.create(texConfig);
+
+    // Create shaders, mesh, draw to texture.
+    const buildMesh = this.constructor.buildMesh;
+
+    // Unused:
+    // const CACHE_RESOLUTION = 1.0;
+
+    // 1 for the target, in red
+    const targetShader = this._buildDebugShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
+    const targetMesh = buildMesh(target, targetShader);
+    meshContainer.addChild(targetMesh);
+
+    // Render target and calculate its visible area alone.
+    // TODO: This will always calculate the full area, even if a wall intersects the target.
+    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+
+    // Unused:
+    // const targetCache = this.targetCache = PixelCache.fromTexture(renderTexture,
+    //   { resolution: CACHE_RESOLUTION, channel: 0 });
+    // const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+    // TODO: Fix garbage handling; destroy the shaders and meshes.
+
+    // 1 for the terrain walls
+    if ( blockingObjects.terrainWalls.size ) {
+      // Can we set alpha to 0.5 and add overlapping walls to get to 1.0 blue?
+      // Or multiply, so 0.7 * 0.7 = 0.49?
+      // Or set to green and then process with pixel cache?
+      // Then process the pixel cache to ignore blue alpha?
+      // For the moment, draw with blue alpha
+      const terrainWallShader = this._buildDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
+      for ( const terrainWall of blockingObjects.terrainWalls ) {
+        const mesh = buildMesh(terrainWall, terrainWallShader);
+        meshContainer.addChild(mesh);
+      }
+    }
+
+    // 1 for the walls/tokens, in blue
+    const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
+    if ( otherBlocking.size ) {
+      const wallShader = this._buildDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
+      for ( const obj of otherBlocking ) {
+        const mesh = buildMesh(obj, wallShader);
+        meshContainer.addChild(mesh);
+      }
+    }
+
+    // 1 for the tiles
+    if ( blockingObjects.tiles.size ) {
+      for ( const tile of blockingObjects.tiles ) {
+        const tileShader = this._buildTileDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 }, tile);
+        const mesh = buildMesh(tile, tileShader);
+        meshContainer.addChild(mesh);
+      }
+    }
+
+
+    const renderer = PIXI.autoDetectRenderer();
+    renderer.render(meshContainer, { renderTexture: rtAuto, clear: true });
+    canvas.app.renderer.render(meshContainer, { renderTexture: rtCanvas, clear: true });
+    popoutApp.render(meshContainer, { renderTexture: rtPopout, clear: true });
+
+
+
+    const s = new PIXI.Sprite(renderTexture);
+    stage.addChild(s);
+
+    // Calculate area remaining.
+    // TODO: Handle terrain walls.
+    // Unused:
+    //     const obstacleCache = this.obstacleCache = PixelCache.fromTexture(renderTexture,
+    //       { resolution: CACHE_RESOLUTION, channel: 0 });
+    //     const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+    //     return sumWithObstacles / sumTarget;
+  }
+
+  async #drawDebugShapes(objs, obscuredSides, sidePolys) {
+    await this.popoutDebug("geometric");
+
     const colors = Draw.COLORS;
     const draw = new Draw(Settings.DEBUG_LOS); // Draw on the canvas.
-    const drawTool = this.drawTool; // Draw in the pop-up box.
+    const drawTool = this.debugDrawTools.geometric; // Draw in the pop-up box.
     this._drawLineOfSight();
 
     // Draw the detected objects on the canvas
