@@ -730,9 +730,9 @@ export class Area3dLOS extends AlternativeLOS {
     // For the moment, repeat webGL2 percent visible process so that shaders with
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
-
-
-
+    await this.popoutDebug("webGL2");
+    const stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
+    const popoutApp = AREA3D_POPOUTS.webGL2.app.pixiApp
 
     // For now, remove render texture and add new one.
     const sprites = stage.children.filter(c => c instanceof PIXI.Sprite);
@@ -775,24 +775,6 @@ export class Area3dLOS extends AlternativeLOS {
       scaleMode: PIXI.SCALE_MODES.NEAREST
     };
 
-    // For the moment, create the texture and container
-    await this.popoutDebug("webGL2");
-    const stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
-    const popoutApp = AREA3D_POPOUTS.webGL2.app.pixiApp
-    const meshContainer = new PIXI.Container();
-
-    // Test different rendererrs
-    const rtAuto = PIXI.RenderTexture.create(texConfig);
-    const rtCanvas = PIXI.RenderTexture.create(texConfig);
-    const rtPopout = PIXI.RenderTexture.create(texConfig);
-
-
-
-
-
-
-
-
     // TODO: Keep and clear instead of destroying the render texture.
     const renderTexture = this.renderTextureDebug = PIXI.RenderTexture.create(texConfig);
 
@@ -805,7 +787,6 @@ export class Area3dLOS extends AlternativeLOS {
     // 1 for the target, in red
     const targetShader = this._buildDebugShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
     const targetMesh = buildMesh(target, targetShader);
-    meshContainer.addChild(targetMesh);
 
     // Render target and calculate its visible area alone.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
@@ -828,7 +809,7 @@ export class Area3dLOS extends AlternativeLOS {
       const terrainWallShader = this._buildDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
-        meshContainer.addChild(mesh);
+        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
       }
     }
 
@@ -838,7 +819,7 @@ export class Area3dLOS extends AlternativeLOS {
       const wallShader = this._buildDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
       for ( const obj of otherBlocking ) {
         const mesh = buildMesh(obj, wallShader);
-        meshContainer.addChild(mesh);
+        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
       }
     }
 
@@ -847,17 +828,9 @@ export class Area3dLOS extends AlternativeLOS {
       for ( const tile of blockingObjects.tiles ) {
         const tileShader = this._buildTileDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 }, tile);
         const mesh = buildMesh(tile, tileShader);
-        meshContainer.addChild(mesh);
+        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
       }
     }
-
-
-    const renderer = PIXI.autoDetectRenderer();
-    renderer.render(meshContainer, { renderTexture: rtAuto, clear: true });
-    canvas.app.renderer.render(meshContainer, { renderTexture: rtCanvas, clear: true });
-    popoutApp.render(meshContainer, { renderTexture: rtPopout, clear: true });
-
-
 
     const s = new PIXI.Sprite(renderTexture);
     stage.addChild(s);
