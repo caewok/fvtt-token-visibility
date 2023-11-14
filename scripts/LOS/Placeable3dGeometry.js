@@ -123,8 +123,8 @@ export class Token3dGeometry extends Placeable3dGeometry {
     const { width, height } = token.document;
     const w = width * canvas.dimensions.size;
     const h = height * canvas.dimensions.size;
-    const w_1_2 = w * 0.5;
-    const h_1_2 = h * 0.5;
+    const w_1_2 = (w * 0.5) - 1;  // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
+    const h_1_2 = (h * 0.5) - 1;  // (common with square grids)
 
     return [
       centerPts.top.add(new Point3d(-w_1_2, -h_1_2, 0)),
