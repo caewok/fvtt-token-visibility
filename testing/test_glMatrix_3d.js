@@ -522,6 +522,21 @@ calcArea3dWebGL1.percentVisible();
 calcArea3dWebGL2.percentVisible();
 
 
+calcDefault._drawCanvasDebug()
+calcDefault._clearCanvasDebug();
+
+calcPoints._drawCanvasDebug()
+calcArea2d._drawCanvasDebug()
+
+
+calcArea3dGeometric._enableDebugPopout()
+calcArea3dGeometric._draw3dDebug()
+
+calcArea3dWebGL1._enableDebugPopout()
+calcArea3dWebGL1._draw3dDebug()
+
+calcArea3dWebGL2._enableDebugPopout()
+calcArea3dWebGL2._draw3dDebug()
 
 
 

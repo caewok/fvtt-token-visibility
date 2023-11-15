@@ -117,7 +117,7 @@ export class AlternativeLOS {
    */
   set target(target) {
     this._clearCache();
-    this.__initializeTarget(target);
+    this._initializeTarget(target);
   }
 
   /**
@@ -722,6 +722,11 @@ export class AlternativeLOS {
     this._drawVisionTriangle();
     this._drawVisibleTokenBorder(hasLOS);
     this._drawDetectedObjects();
+  }
+
+  _clearCanvasDebug() {
+    const draw = new Draw(Settings.DEBUG_LOS);
+    draw.clearDrawings();
   }
 
   /**
