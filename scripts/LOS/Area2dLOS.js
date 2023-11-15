@@ -87,12 +87,6 @@ export class Area2dLOS extends AlternativeLOS {
     } else return size * size;
   }
 
-  _clearCache() {
-    super._clearCache();
-    this.los = undefined;
-    this.shadows = undefined;
-  }
-
   /**
    * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
    * LOS is based on the percent area of the 2d (overhead) token shape is visible from the
@@ -101,12 +95,12 @@ export class Area2dLOS extends AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(threshold) {
+    this._clearCache();
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
 
     // Start with easy cases, in which the center point is determinative.
     if ( !this.config.visibleTargetShape || this.config.visibleTargetShape instanceof PIXI.Rectangle ) {
-      const targetCenter = Point3d.fromTokenCenter(this.target);
-      const centerPointIsVisible = !this._hasCollision(this.viewerPoint, targetCenter);
+      const centerPointIsVisible = !this._hasCollision(this.viewerPoint, this.targetCenter);
 
       // If less than 50% of the token area is required to be viewable, then
       // if the center point is viewable, the token is viewable from that source.
@@ -403,7 +397,8 @@ export class Area2dLOS extends AlternativeLOS {
    */
   shadowLOSForElevation(targetElevation = 0) {
     const viewerPoint = this.viewerPoint;
-    const { type, liveTokensBlock, deadTokensBlock, visionSource } = this.config;
+    const { type, liveTokensBlock, deadTokensBlock } = this.config;
+    const visionSource = this.viewer.vision;
 
     // Find the walls and, optionally, tokens, for the triangle between origin and target
     const viewableObjs = this.blockingObjects;

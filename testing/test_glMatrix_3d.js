@@ -718,4 +718,52 @@ console.table(res)
 
 
 
+// Test creating new Point3d values
+Draw = CONFIG.GeometryLib.Draw;
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
+api = game.modules.get("tokenvisibility").api
+QBenchmarkLoop = api.benchFunctions.QBenchmarkLoop
+
+token = _token
+
+tmpPoint = new Point3d();
+
+
+N = 100_000
+await QBenchmarkLoop(N, Point3d, "fromTokenCenter", token);            // ~ .0021 ms
+await QBenchmarkLoop(N, Point3d, "fromTokenCenter2", token);           // ~ .0018 ms
+await QBenchmarkLoop(N, Point3d, "fromTokenCenter2", token, tmpPoint); // ~ .0017 ms
+
+fn1 = function(token, n = 100) {
+  let pt;
+  for ( let i = 1; i < n; i += 1 ) {
+    pt = Point3d.fromTokenCenter(token);
+    pt.x + Math.random(); // Break the cache.
+  }
+  return pt;
+}
+
+fn2 = function(token, n = 100) {
+  let pt;
+  for ( let i = 1; i < n; i += 1 ) {
+    pt = Point3d.fromTokenCenter2(token);
+    pt.x + Math.random(); // Break the cache.
+  }
+  return pt;
+}
+
+fn3 = function(token, n = 100) {
+  const tmpPoint = new Point3d();
+  let pt;
+  for ( let i = 1; i < n; i += 1 ) {
+    pt = Point3d.fromTokenCenter2(token, tmpPoint);
+    pt.x + Math.random(); // Break the cache.
+  }
+  return pt;
+}
+
+
+
+
 

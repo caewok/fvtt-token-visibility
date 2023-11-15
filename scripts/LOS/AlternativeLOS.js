@@ -25,6 +25,20 @@ import { Draw } from "../geometry/Draw.js";
 
 /**
  * Base class to estimate line-of-sight between a source and a token using different methods.
+ * The expectation is that the class will be initialized with a viewer token and target token,
+ * and that these tokens may change position or other characteristics.
+ *
+ * Configuration allows a point other than viewer center to be used. This point is relative
+ * to the viewer shape and will be updated as the viewer moves.
+ *
+ * It is permitted to change the viewer or the target token. Any cached values
+ * would be reset accordingly.
+ *
+ * Measured values assume a single vision point on the viewer, perceiving the given token target.
+ *
+ * Generally, calling `hasLOS` or `percentVisible` will reset to the current viewer/target data.
+ * Data may be cached otherwise.
+ *
  */
 export class AlternativeLOS {
 
@@ -37,6 +51,7 @@ export class AlternativeLOS {
    * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
    * @property {boolean} liveTokensBlock              Can live tokens block in this test?
    * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
+   * @property {Point3d} visionOffset                 Offset delta from the viewer center for vision point.
    * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible.
    * @property {VisionSource} visionSource            Vision source of the viewer.
    * @property {boolean} debug                        Enable debug visualizations.
@@ -44,22 +59,40 @@ export class AlternativeLOS {
   config = {};
 
   /**
+   * The token that is considered the "viewer" of the target.
+   * By default, the viewer is assumed to view from its center point, although this can
+   * be changed by setting config.visionOffset.
+   * @type {Token}
+   */
+  viewer;
+
+  /**
+   * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
+   * Typically viewable by a light ray but could be other rays (such as whether an arrow could hit it).
+   * Typically based on sight but could be other physical characteristics.
+   * The border shape of the token is separately controlled by configuration.
+   * Subclasses might measure points on the token or the token shape itself for visibility.
+   * @type {Token}
+   */
+  target;
+
+  /**
    * @param {Point3d|Token|VisionSource} viewer   Point or object with z, y, z|elevationZ properties
    * @param {Token} target
    * @param {AlternativeLOSConfig} config
    */
   constructor(viewer, target, config) {
-    this._initializeViewerPoint(viewer);
-    config.visionSource ??= this.config.visionSource; // Possibly set by the viewerPoint initialization.
-    this.#configure(config);
-    this._initializeTarget(target); // Must go after config.
+    if ( viewer instanceof VisionSource ) viewer = viewer.object;
+    this.viewer = viewer;
+    this.target = target;
+    this._configure(config);
   }
 
   /**
-   * Configure the constructor.
-   * @param {object} config   Properties intended to override defaults.
+   * Initialize settings that will stick even as the viewer and target are modified.
+   * @param {object} config   Properties intended to override defaults
    */
-  #configure(config = {}) {
+  _configure(config = {}) {
     const cfg = this.config;
     cfg.type = config.type ?? "sight";
     cfg.wallsBlock = config.wallsBlock ?? true;
@@ -67,72 +100,60 @@ export class AlternativeLOS {
     cfg.deadTokensBlock = config.deadTokensBlock ?? false;
     cfg.liveTokensBlock = config.liveTokensBlock ?? false;
     cfg.proneTokensBlock = config.proneTokensBlock ?? true;
-    cfg.debug = config.debug ?? Settings.get(SETTINGS.DEBUG.LOS);
-    cfg.visibleTargetShape = config.visibleTargetShape ?? undefined;
+    cfg.useLitTargetShape = config.useLitTargetShape ?? false;
     cfg.largeTarget = config.largeTarget ?? Settings.get(SETTINGS.LOS.TARGET.LARGE);
-    cfg.visionSource = config.visionSource ?? undefined;
+    cfg.visionOffset = config.visionOffset ?? new Point3d();
   }
 
   _clearCache() {
+    // Viewer
+    this.#viewerPoint = undefined;
+
+    // Target
+    this.#targetCenter = undefined;
+    this.#visibleTargetShape = undefined;
+
+    // Other
     this.#visionPolygon = undefined;
     this.#blockingObjects.initialized = false;
   }
 
   // ----- NOTE: Viewer properties ----- //
 
+  #viewerPoint;
+
   /**
-   * An object that has x, y, and elevationZ or z properties.
    * The line-of-sight is calculated from this point.
-   * @type {object}
+   * @type {Point3d}
    */
-  #viewerPoint = new Point3d();
-
-  get viewerPoint() { return this.#viewerPoint; }
-
-  set viewerPoint(viewer) {
-    this._clearCache();
-    this._initializeViewerPoint(viewer);
+  get viewerPoint() {
+    return this.#viewerPoint
+      || (this.#viewerPoint = Point3d.fromTokenCenter(this.viewer).add(this.config.visionOffset));
   }
 
-  _initializeViewerPoint(viewer) {
-    if ( viewer instanceof Token ) viewer = viewer.vision;
-    if ( viewer instanceof VisionSource ) this.config.visionSource = viewer;
-    this.#viewerPoint.set(viewer.x, viewer.y, viewer.elevationZ ?? viewer.z ?? 0);
+  /** @type {Point3d} */
+  set visionOffset(value) {
+    this.config.visionOffset.copyPartial(value);
   }
 
   // ----- NOTE: Target properties ----- //
 
-  /**
-   * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
-   * Typically viewable by a light ray but could be other rays (such as whether an arrow could hit it).
-   * Typically based on sight but could be other physical characteristics.
-   * @type {Token}
-   */
-  #target;
+  /** @type {Point3d} */
+  #targetCenter;
 
-  get target() { return this.#target; }
-
-  /**
-   * Allows the target to be changed without reconstructing the class.
-   */
-  set target(target) {
-    this._clearCache();
-    this._initializeTarget(target);
+  get targetCenter() {
+    return this.#targetCenter
+      || (this.#targetCenter = Point3d.fromTokenCenter(this.target))
   }
 
-  /**
-   * Stores basic point properties specific to the target token.
-   * These should be easily calculated and dependent only on the token target.
-   * @property {Point3d} targetCenter
-   * @property {PIXI.Polygon|PIXI.Rectangle} visibleTargetShape
-   */
-  _initializeTarget(target) {
-    this.#target = target;
-    this.targetCenter = Point3d.fromTokenCenter(target);
-    this.visibleTargetShape = this.config.visibleTargetShape || target.constrainedTokenBorder;
+  #visibleTargetShape;
+
+  get visibleTargetShape() {
+    if ( this.config.useLitTargetShape ) return this.constructor.constrainTargetShapeWithLights(this.target);
+    return this.target.constrainedTokenBorder;
   }
 
-  // ----- NOTE: Getters / Setters -----
+  // ----- NOTE: Other getters / setters ----- //
 
   /**
    * The viewable area between viewer and target.
@@ -185,6 +206,8 @@ export class AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(threshold) {
+    this._clearCache();
+
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const percentVisible = this.percentVisible();
     if ( typeof percentVisible === "undefined" ) return true; // Defaults to visible.
@@ -207,20 +230,58 @@ export class AlternativeLOS {
    * @returns {0|1|undefined} Undefined if obstacles present or target intersects the vision rays.
    */
   _simpleVisibilityTest() {
+    this._clearCache();
     const visionSource = this.config.visionSource;
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
     if ( !targetWithin ) return 0;
-    if ( !this.potentialObstaclesFound && targetWithin === this.constructor.TARGET_WITHIN_ANGLE.INSIDE ) return 1;
+    if ( !this.hasPotentialObstacles && targetWithin === this.constructor.TARGET_WITHIN_ANGLE.INSIDE ) return 1;
     return undefined;  // Must be extended by subclass.
   }
 
   /**
    * @returns {boolean} True if some blocking placeable within the vision triangle.
    */
-  potentialObstaclesFound() {
+  hasPotentialObstacles() {
     const objs = this.#blockingObjects;
     return objs.walls.size || objs.tokens.size || objs.tiles.size;
   }
+
+  /**
+   * Take a token and intersects it with a set of lights.
+   * @param {Token} token
+   * @returns {PIXI.Polygon|PIXI.Rectangle|ClipperPaths}
+   */
+  static constrainTargetShapeWithLights(token) {
+    const tokenBorder = token.constrainedTokenBorder;
+
+    // If the global light source is present, then we can use the whole token.
+    if ( canvas.effects.illumination.globalLight ) return tokenBorder;
+
+    // Cannot really use quadtree b/c it doesn't contain all light sources.
+    const lightShapes = [];
+    for ( const light of canvas.effects.lightSources.values() ) {
+      const lightShape = light.shape;
+      if ( !light.active || lightShape.points < 6 ) continue; // Avoid disabled or broken lights.
+
+      // If a light envelops the token shape, then we can use the entire token shape.
+      if ( lightShape.envelops(tokenBorder) ) return tokenBorder;
+
+      // If the token overlaps the light, then we may need to intersect the shape.
+      if ( tokenBorder.overlaps(lightShape) ) lightShapes.push(lightShape);
+    }
+    if ( !lightShapes.length ) return tokenBorder;
+
+    const paths = ClipperPaths.fromPolygons(lightShapes);
+    const tokenPath = ClipperPaths.fromPolygons(tokenBorder instanceof PIXI.Rectangle
+      ? [tokenBorder.toPolygon()] : [tokenBorder]);
+    const combined = paths
+      .combine()
+      .intersectPaths(tokenPath)
+      .clean()
+      .simplify();
+    return combined;
+  }
+
 
   // ----- NOTE: Collision tests ----- //
 

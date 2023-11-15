@@ -103,29 +103,39 @@ export class Area3dLOSGeometric extends Area3dLOS {
   /** @type {Shadow[]} */
   wallShadows = [];
 
-  /** @type {boolean} */
-  #viewIsSet = false;
-
-  get viewIsSet() { return this.#viewIsSet; }
-
   /**
    * Scaling factor used with Clipper
    */
   static SCALING_FACTOR = 100;
 
+  _clearCache() {
+    super._clearCache();
+    this.#targetPoints = undefined;
+    this.#visibleTargetPoints = undefined;
+    this.#boundaryTargetPoints = undefined;
+    this.#gridPoints = undefined;
+    this.#viewIsSet = false;
+    this.#lookAtMatrices.initialized = false;
+    this.#blockingObjectsPoints.initialized = false;
+    this.#blockingPoints.initialized = false;
+  }
+
   // ----- NOTE: Target properties ----- //
 
-  /**
-   * Stores basic point properties specific to the target token.
-   * These should be easily calculated and dependent only on the token target.
-   * @property {Point3d} targetCenter
-   * @property {PIXI.Polygon|PIXI.Rectangle} visibleTargetShape
-   * @property {Point3d[]} targetViewableBoundaryPts
-   */
-  _initializeTarget(target) {
-    super._initializeTarget(target);
-    this.targetPoints = new TokenPoints3d(target);
-    this.visibleTargetPoints = new TokenPoints3d(target, { tokenBorder: this.config.visibleTargetShape });
+  /** @type {Point3d} */
+  #targetPoints;
+
+  get targetPoints() {
+    return this.#targetPoints
+      || (this.#targetPoints = new TokenPoints3d(this.target));
+  }
+
+  /** @type {Point3d} */
+  #visibleTargetPoints;
+
+  get visibleTargetPoints() {
+    return this.#visibleTargetPoints
+      || (this.#visibleTargetPoints =  new TokenPoints3d(target, { tokenBorder: this.config.visibleTargetShape }));
   }
 
   #boundaryTargetPoints;
@@ -135,22 +145,19 @@ export class Area3dLOSGeometric extends Area3dLOS {
       || (this.#boundaryTargetPoints = this.target.bounds.viewablePoints(this.viewerPoint));
   }
 
+  // ----- NOTE: Other getters / setters ----- //
+
+  /** @type {boolean} */
+  #viewIsSet = false;
+
+  get viewIsSet() { return this.#viewIsSet; }
+
   /** @type {TokenPoints3d} */
   #gridPoints;
 
   get gridPoints() {
     return this.#gridPoints
       || (this.#gridPoints = this._buildGridShape());
-  }
-
-  _clearCache() {
-    super._clearCache();
-    this.#boundaryTargetPoints = undefined;
-    this.#gridPoints = undefined;
-    this.#viewIsSet = false;
-    this.#lookAtMatrices.initialized = false;
-    this.#blockingObjectsPoints.initialized = false;
-    this.#blockingPoints.initialized = false;
   }
 
   /**
@@ -192,12 +199,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
   percentVisible() {
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
-
-    const objs = this.blockingObjects;
-    if ( objs.terrainWalls.size < 2
-      && !(objs.walls.size
-        || objs.tokens.size
-        || objs.tiles.size) ) return 1;
 
     const { obscuredSides, sidePolys } = this._obscureSides();
     const obscuredSidesArea = obscuredSides.reduce((area, poly) =>

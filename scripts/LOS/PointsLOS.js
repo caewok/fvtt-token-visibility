@@ -129,18 +129,10 @@ export class PointsLOS extends AlternativeLOS {
    * @property {boolean} points3d                     Use top/bottom target elevation when enabled
    */
 
-  /**
-   * @param {Point3d|Token|VisionSource} viewer       Object from which to determine line-of-sight
-   *   If more than token center is required, then this must be a Token or VisionSource
-   * @param {Token} target                            Object to test for visibility
-   * @param {AlternativeLOSConfig} [config]
-   */
-  constructor(viewer, target, config) {
-    super(viewer, target, config);
-    this.#configure(config);
-  }
 
-  #configure(config = {}) {
+  _configure(config = {}) {
+    super._configure(config);
+
     if ( config.pointAlgorithm ) this.#pointAlgorithm = config.pointAlgorithm;
     if ( config.inset ) this.#inset = config.inset;
     if ( config.points3d ) this.#points3d = config.points3d;
@@ -192,23 +184,19 @@ export class PointsLOS extends AlternativeLOS {
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
    */
-  percentVisible() { return this._simpleVisibilityTest() ?? (1 - this.applyPercentageTest()); }
+  percentVisible() { return this._simpleVisibilityTest() ?? (1 - this._applyPercentageTest()); }
 
-  applyPercentageTest() {
+  _applyPercentageTest() {
     return this._testTargetPoints(this.targetPoints);
   }
 
   /**
    * Convenience method that uses settings of this calculator to construct viewer points.
-   * @param {Token} viewer    Will be taken from config.visionSource; otherwise must be provided
    * @returns {Points3d[]|undefined} Undefined if viewer cannot be ascertained
    */
-  constructViewerPoints(viewer) {
-    viewer ??= this.config.visionSource?.object;
-    if ( !viewer ) return undefined;
-
+  constructViewerPoints() {
     const { pointAlgorithm, inset } = this;
-    return this.constructor.constructTokenPoints(viewer, { pointAlgorithm, inset });
+    return this.constructor.constructTokenPoints(this.viewer, { pointAlgorithm, inset });
   }
 
   /**

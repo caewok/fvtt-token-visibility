@@ -90,6 +90,8 @@ function _testPoint(wrapped, visionSource, mode, target, test) {
   // Outside of vision range, token is visible if the lit portions are visible.
   const visibleTargetShape = constrainTokenShapeWithLights(target);
   if ( visibleTargetShape === null ) return false;
+
+
   return this._testLOS(visionSource, mode, target, test, visibleTargetShape);
 }
 
