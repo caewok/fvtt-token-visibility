@@ -569,22 +569,40 @@ stage.addChild(sTile)
 
 
 // Timing
+defaultBenchFn = function(viewer, target) {
+  const calc = new DefaultLOS(viewer, target, { largeTarget: false })
+  return calc.percentVisible();
+}
+
+pointsBenchFn = function(viewer, target) {
+  const calc = new PointsLOS(viewer, target, { largeTarget: false })
+  return calc.percentVisible();
+}
+
+area2dBenchFn = function(viewer, target) {
+  const calc = new Area2dLOS(viewer, target, { largeTarget: false })
+  return calc.percentVisible();
+}
+
 geometricBenchFn = function(viewer, target) {
-  const calc = new Area3d(viewer, target, { largeTarget: false, debug: false })
-  return calc._percentVisibleGeometric();
+  const calc = new Area3dLOSGeometric(viewer, target, { largeTarget: false })
+  return calc.percentVisible();
 }
 
 webGLBenchFn = function(viewer, target) {
-  const calc = new Area3d(viewer, target, { largeTarget: false, debug: false })
-  return calc._percentVisibleWebGL();
+  const calc = new Area3dLOSWebGL(viewer, target, { largeTarget: false })
+  return calc.percentVisible();
 }
 
 webGL2BenchFn = function(viewer, target) {
-  const calc = new Area3d(viewer, target, { largeTarget: false, debug: false })
-  return calc._percentVisibleWebGL2();
+  const calc = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
+  return calc.percentVisible();
 }
 
 N = 1000
+await QBenchmarkLoopFn(N, defaultBenchFn, "default", viewer, target);
+await QBenchmarkLoopFn(N, pointsBenchFn, "points", viewer, target);
+await QBenchmarkLoopFn(N, area2dBenchFn, "area2d", viewer, target);
 await QBenchmarkLoopFn(N, geometricBenchFn, "geometric", viewer, target);
 await QBenchmarkLoopFn(N, webGLBenchFn, "webGL", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
@@ -724,6 +742,7 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d;
 
 api = game.modules.get("tokenvisibility").api
 QBenchmarkLoop = api.benchFunctions.QBenchmarkLoop
+QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
 
 token = _token
 
@@ -739,7 +758,7 @@ fn1 = function(token, n = 100) {
   let pt;
   for ( let i = 1; i < n; i += 1 ) {
     pt = Point3d.fromTokenCenter(token);
-    pt.x + Math.random(); // Break the cache.
+    pt.x += Math.random(); // Break the cache.
   }
   return pt;
 }
@@ -748,7 +767,7 @@ fn2 = function(token, n = 100) {
   let pt;
   for ( let i = 1; i < n; i += 1 ) {
     pt = Point3d.fromTokenCenter2(token);
-    pt.x + Math.random(); // Break the cache.
+    pt.x += Math.random(); // Break the cache.
   }
   return pt;
 }
@@ -757,13 +776,14 @@ fn3 = function(token, n = 100) {
   const tmpPoint = new Point3d();
   let pt;
   for ( let i = 1; i < n; i += 1 ) {
-    pt = Point3d.fromTokenCenter2(token, tmpPoint);
-    pt.x + Math.random(); // Break the cache.
+    Point3d.fromTokenCenter2(token, tmpPoint);
+    tmpPoint.x += Math.random(); // Break the cache.
   }
-  return pt;
+  return tmpPoint;
 }
 
-
-
-
+N = 10000
+await QBenchmarkLoopFn(N, fn1, "fromTokenCenter", token);            // ~ .0021 ms
+await QBenchmarkLoopFn(N, fn2, "fromTokenCenter2", token);           // ~ .0018 ms
+await QBenchmarkLoopFn(N, fn3, "fromTokenCenter2 with tmpPoint", token); // ~ .0017 ms
 

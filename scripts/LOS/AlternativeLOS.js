@@ -779,6 +779,7 @@ export class AlternativeLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawCanvasDebug(hasLOS = true) {
+    this._clearCanvasDebug();
     this._drawLineOfSight();
     this._drawVisionTriangle();
     this._drawVisibleTokenBorder(hasLOS);
