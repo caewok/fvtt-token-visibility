@@ -29,24 +29,6 @@ import { Draw } from "../geometry/Draw.js";
 export class AlternativeLOS {
 
   /**
-   * An object that has x, y, and elevationZ or z properties.
-   * The line-of-sight is calculated from this point.
-   * @type {object}
-   */
-  viewerPoint = new Point3d();
-
-  /**
-   * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
-   * Typically viewable by a light ray but could be other rays (such as whether an arrow could hit it).
-   * Typically based on sight but could be other physical characteristics.
-   * @type {Token}
-   */
-  target;
-
-  /**
-   *
-
-  /**
    * @typedef AlternativeLOSConfig  Configuration settings for this class.
    * @type {object}
    * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of source (light, sight, etc.)
@@ -55,7 +37,8 @@ export class AlternativeLOS {
    * @property {boolean} deadTokensBlock              Can dead tokens block in this test?
    * @property {boolean} liveTokensBlock              Can live tokens block in this test?
    * @property {boolean} proneTokensBlock             Can prone tokens block in this test?
-   * @property {PIXI.Polygon} visibleTargetShape       Portion of the token shape that is visible.
+   * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible.
+   * @property {VisionSource} visionSource            Vision source of the viewer.
    * @property {boolean} debug                        Enable debug visualizations.
    */
   config = {};
@@ -66,14 +49,10 @@ export class AlternativeLOS {
    * @param {AlternativeLOSConfig} config
    */
   constructor(viewer, target, config) {
-    if ( viewer instanceof VisionSource ) viewer = viewer.object;
-    if ( viewer instanceof Token ) viewer = Point3d.fromTokenCenter(viewer);
-
-    this.viewerPoint.x = viewer.x;
-    this.viewerPoint.y = viewer.y;
-    this.viewerPoint.z = viewer.elevationZ ?? viewer.z ?? 0;
-    this.target = target;
+    this._initializeViewerPoint(viewer);
+    config.visionSource ??= this.config.visionSource; // Possibly set by the viewerPoint initialization.
     this.#configure(config);
+    this._initializeTarget(target); // Must go after config.
   }
 
   /**
@@ -91,6 +70,111 @@ export class AlternativeLOS {
     cfg.debug = config.debug ?? Settings.get(SETTINGS.DEBUG.LOS);
     cfg.visibleTargetShape = config.visibleTargetShape ?? undefined;
     cfg.largeTarget = config.largeTarget ?? Settings.get(SETTINGS.LOS.TARGET.LARGE);
+    cfg.visionSource = config.visionSource ?? undefined;
+  }
+
+  _clearCache() {
+    this.#visionPolygon = undefined;
+    this.#blockingObjects.initialized = false;
+  }
+
+  // ----- NOTE: Viewer properties ----- //
+
+  /**
+   * An object that has x, y, and elevationZ or z properties.
+   * The line-of-sight is calculated from this point.
+   * @type {object}
+   */
+  #viewerPoint = new Point3d();
+
+  get viewerPoint() { return this.#viewerPoint; }
+
+  set viewerPoint(viewer) {
+    this._clearCache();
+    this._initializeViewerPoint(viewer);
+  }
+
+  _initializeViewerPoint(viewer) {
+    if ( viewer instanceof Token ) viewer = viewer.vision;
+    if ( viewer instanceof VisionSource ) this.config.visionSource = viewer;
+    this.#viewerPoint.set(viewer.x, viewer.y, viewer.elevationZ ?? viewer.z ?? 0);
+  }
+
+  // ----- NOTE: Target properties ----- //
+
+  /**
+   * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
+   * Typically viewable by a light ray but could be other rays (such as whether an arrow could hit it).
+   * Typically based on sight but could be other physical characteristics.
+   * @type {Token}
+   */
+  #target;
+
+  get target() { return this.#target; }
+
+  /**
+   * Allows the target to be changed without reconstructing the class.
+   */
+  set target(target) {
+    this._clearCache();
+    this.__initializeTarget(target);
+  }
+
+  /**
+   * Stores basic point properties specific to the target token.
+   * These should be easily calculated and dependent only on the token target.
+   * @property {Point3d} targetCenter
+   * @property {PIXI.Polygon|PIXI.Rectangle} visibleTargetShape
+   */
+  _initializeTarget(target) {
+    this.#target = target;
+    this.targetCenter = Point3d.fromTokenCenter(target);
+    this.visibleTargetShape = this.config.visibleTargetShape || target.constrainedTokenBorder;
+  }
+
+  // ----- NOTE: Getters / Setters -----
+
+  /**
+   * The viewable area between viewer and target.
+   * Typically, this is a triangle, but if viewed head-on, it will be a triangle
+   * with the portion of the target between viewer and target center added on.
+   * @typedef {PIXI.Polygon} visionPolygon
+   * @property {Segment[]} edges
+   * @property {PIXI.Rectangle} bounds
+   */
+  #visionPolygon;
+
+  get visionPolygon() {
+    if ( !this.#visionPolygon ) {
+      this.#visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target);
+      this.#visionPolygon._edges = [...this.#visionPolygon.iterateEdges()];
+      this.#visionPolygon._bounds = this.#visionPolygon.getBounds();
+    }
+    return this.#visionPolygon;
+  }
+
+  /**
+   * Holds Foundry objects that are within the vision triangle.
+   * @typedef BlockingObjects
+   * @type {object}
+   * @property {Set<Drawing>} drawing
+   * @property {Set<Wall>}    terrainWalls
+   * @property {Set<Tile>}    tiles
+   * @property {Set<Token>}   tokens
+   * @property {Set<Wall>}    walls
+   */
+  #blockingObjects = {
+    drawings: new Set(),
+    terrainWalls: new Set(),
+    tiles: new Set(),
+    tokens: new Set(),
+    walls: new Set(),
+    initialized: false
+  };
+
+  get blockingObjects() {
+    if ( !this.#blockingObjects.initialized ) this._findBlockingObjects();
+    return this.#blockingObjects;
   }
 
   // ------ NOTE: Primary methods to be overridden by subclass -----
@@ -101,20 +185,85 @@ export class AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(threshold) {
+    threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const percentVisible = this.percentVisible();
+    if ( typeof percentVisible === "undefined" ) return true; // Defaults to visible.
     if ( percentVisible.almostEqual(0) ) return false;
     return this.percentVisible > threshold || percentVisible.almostEqual(threshold);
   }
 
   /**
    * Determine percentage of the token visible using the class methodology.
+   * Should be extended by subclass.
    * @returns {number}
    */
   percentVisible() {
-    console.error("AlternativeLOS.prototype.percentVisible must be defined by the subclass.");
+    // Simple case: target is within the vision angle of the viewer and no obstacles present.
+    return this._simpleVisibilityTest();
+  }
+
+  /**
+   * Test for whether target is within the vision angle of the viewer and no obstacles present.
+   * @returns {0|1|undefined} Undefined if obstacles present or target intersects the vision rays.
+   */
+  _simpleVisibilityTest() {
+    const visionSource = this.config.visionSource;
+    const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
+    if ( !targetWithin ) return 0;
+    if ( !this.potentialObstaclesFound && targetWithin === this.constructor.TARGET_WITHIN_ANGLE.INSIDE ) return 1;
+    return undefined;  // Must be extended by subclass.
+  }
+
+  /**
+   * @returns {boolean} True if some blocking placeable within the vision triangle.
+   */
+  potentialObstaclesFound() {
+    const objs = this.#blockingObjects;
+    return objs.walls.size || objs.tokens.size || objs.tiles.size;
   }
 
   // ----- NOTE: Collision tests ----- //
+
+  /**
+   * Find objects that are within the vision triangle between viewer and target.
+   * Sets this._blockingObjects for drawings, tiles, tokens, walls, and terrainWalls.
+   * Sets _blockingObjectsAreSet
+   */
+  _findBlockingObjects() {
+    // Locate blocking objects for the vision triangle
+    const type = this.config.type;
+    const blockingObjs = this.#blockingObjects;
+    const objsFound = this._filterSceneObjectsByVisionPolygon();
+
+    // Separate the terrain walls.
+    const { terrainWalls, walls } = blockingObjs;
+    terrainWalls.clear();
+    walls.clear();
+    objsFound.walls.forEach(w => {
+      const s = w.document[type] === CONST.WALL_SENSE_TYPES.LIMITED ? terrainWalls : walls;
+      s.add(w);
+    });
+
+    // Add walls for limited angle sight, if necessary.
+    const limitedAngleWalls = this._constructLimitedAngleWallPoints3d();
+    if ( limitedAngleWalls ) {
+      walls.add(limitedAngleWalls[0]);
+      walls.add(limitedAngleWalls[1]);
+    }
+
+    // Add tokens, tiles, drawings
+    if ( objsFound.tokens ) blockingObjs.tokens = objsFound.tokens;
+    else blockingObjs.tokens.clear();
+
+    if ( objsFound.tiles ) blockingObjs.tiles = objsFound.tiles;
+    else blockingObjs.tiles.clear();
+
+    if ( objsFound.drawings ) blockingObjs.drawings = objsFound.drawings;
+    else blockingObjs.drawings.clear();
+
+    blockingObjs.initialized = true;
+  }
+
 
   /**
    * Does the ray between two points collide with an object?
@@ -222,6 +371,8 @@ export class AlternativeLOS {
     return false;
   }
 
+  // ----- NOTE: Static methods ----- //
+
   /**
    * Vision Polygon for the view point --> target.
    * From the given token location, get the edge-most viewable points of the target.
@@ -310,64 +461,52 @@ export class AlternativeLOS {
    * Filter relevant objects in the scene using the vision triangle.
    * For the z dimension, keeps objects that are between the lowest target point,
    * highest target point, and the viewing point.
-   * @param {Point3d} viewingPoint    The 3d location of the "viewer" (vision/light source)
-   * @param {Token} target            The token being "viewed".
-   * @param {VisionPolygonFilterConfig} [opts]     Options that affect what is filtered.
+   * @returns {object} Object with possible properties:
+   *   - @property {Set<Wall>} walls
+   *   - @property {Set<Tile>} tiles
+   *   - @property {Set<Token>} tokens
+   *   - @property {Set<Drawings>} drawings
    */
-  static filterSceneObjectsByVisionPolygon(viewingPoint, target, {
-    visionPolygon,
-    type = "sight",
-    filterWalls = true,
-    filterTokens = true,
-    filterTiles = true,
-    debug = false,
-    viewer } = {}) {
+  _filterSceneObjectsByVisionPolygon() {
+    const {
+      type,
+      wallsBlock,
+      liveTokensBlock,
+      deadTokensBlock,
+      tilesBlock } = this.config;
 
-    const draw = debug ? (new Draw(Settings.DEBUG_LOS)) : undefined;
-    visionPolygon ??= this.visionPolygon(viewingPoint, target);
-    if ( debug ) draw.shape(visionPolygon,
-      { color: Draw.COLORS.blue, fillAlpha: 0.2, fill: Draw.COLORS.blue });
-
+    const { target, viewerPoint } = this;
     const { topZ, bottomZ } = target;
-    const maxE = Math.max(viewingPoint.z ?? 0, topZ);
-    const minE = Math.min(viewingPoint.z ?? 0, bottomZ);
-
-    const out = { walls: new Set(), tokens: new Set(), tiles: new Set(), drawings: new Set() };
-    if ( filterWalls ) {
+    const maxE = Math.max(viewerPoint.z, topZ);
+    const minE = Math.min(viewerPoint.z, bottomZ);
+    const out = {};
+    if ( wallsBlock ) {
       out.walls = this
-        .filterWallsByVisionPolygon(viewingPoint, visionPolygon, { type })
+        ._filterWallsByVisionPolygon()
         .filter(w => (w.topZ > minE) && (w.bottomZ < maxE)); // Filter walls too low or too high.
-      if ( debug ) out.walls.forEach(w => draw.segment(w, { color: Draw.COLORS.gray, alpha: 0.2 }));
     }
 
-    if ( filterTokens ) {
-      out.tokens = this
-        .filterTokensByVisionPolygon(visionPolygon, { viewer, target })
-        .filter(t => (t.topZ > minE) && (t.bottomZ < maxE)); // Filter tokens too low or too high.
-      if ( debug ) out.tokens.forEach(t => draw.shape(t.bounds, { color: Draw.COLORS.gray }));
-    }
-
-    if ( filterTiles ) {
-      out.tiles = this.filterTilesByVisionPolygon(visionPolygon);
+    if ( tilesBlock ) {
+      out.tiles = this
+        ._filterTilesByVisionPolygon()
+        .filter(t => { // Filter tiles that are definitely too low or too high
+          const tZ = t.elevationZ;
+          return (tZ < maxE) && (tZ > minE);
+        });
 
       // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
       if ( MODULES_ACTIVE.LEVELS && type === "sight" ) {
         out.tiles = out.tiles.filter(t => !t.document?.flags?.levels?.noCollision);
       }
 
-      // Filter tiles that are definitely too low or too high
-      out.tiles = out.tiles.filter(t => {
-        const tZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(t.elevationE);
-        return (tZ < maxE) && (tZ > minE);
-      });
-
       // Check drawings if there are tiles
-      if ( out.tiles.size ) out.drawings = this.filterDrawingsByVisionPolygon(visionPolygon);
+      if ( out.tiles.size ) out.drawings = this._filterDrawingsByVisionPolygon();
+    }
 
-      if ( debug ) {
-        out.tiles.forEach(t => draw.shape(t.bounds, { color: Draw.COLORS.gray }));
-        out.drawings.forEach(d => draw.shape(d.bounds, { color: Draw.COLORS.gray }));
-      }
+    if ( liveTokensBlock || deadTokensBlock ) {
+      out.tokens = this
+        ._filterTokensByVisionPolygon()
+        .filter(t => (t.topZ > minE) && (t.bottomZ < maxE)); // Filter tokens too low or too high.
     }
 
     return out;
@@ -375,10 +514,11 @@ export class AlternativeLOS {
 
   /**
    * Filter drawings in the scene if they are flagged as holes.
-   * @param {PIXI.Polygon} visionPolygon
+   * @return {Set<Drawings>}
    */
-  static filterDrawingsByVisionPolygon(visionPolygon) {
-    let drawings = canvas.drawings.quadtree.getObjects(visionPolygon.getBounds());
+  _filterDrawingsByVisionPolygon(visionPolygon) {
+    visionPolygon ??= this.visionPolygon;
+    let drawings = canvas.drawings.quadtree.getObjects(visionPolygon._bounds);
 
     // Filter by holes
     drawings = drawings.filter(d => d.document.getFlag(MODULE_ID, FLAGS.DRAWING.IS_HOLE)
@@ -386,65 +526,59 @@ export class AlternativeLOS {
       || d.document.shape.type === CONST.DRAWING_TYPES.ELLIPSE
       || d.document.shape.type === CONST.DRAWING_TYPES.RECTANGLE));
 
-    if ( !drawings.size ) return drawings;
-
     // Filter by the precise triangle cone
     // Also convert to CenteredPolygon b/c it handles bounds better
-    const edges = [...visionPolygon.iterateEdges()];
-    drawings = drawings.filter(d => {
+    const edges = visionPolygon._edges;
+    return drawings.filter(d => {
       const shape = CONFIG.GeometryLib.utils.centeredPolygonFromDrawing(d);
       const center = shape.center;
       if ( visionPolygon.contains(center.x, center.y) ) return true;
       const dBounds = shape.getBounds();
       return edges.some(e => dBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
     });
-    return drawings;
   }
 
   /**
    * Filter tokens in the scene by a triangle representing the view from viewingPoint to
    * token (or other two points). Only considers 2d top-down view.
-   * @param {PIXI.Polygon} visionPolygon
-   * @param {object} [options]
-   * @param {string|undefined} viewerId   Id of viewer token to exclude
-   * @param {string|undefined} targetId   Id of target token to exclude
+   * Excludes the target and the visionSource token. If no visionSource, excludes any
+   * token under the viewer point.
    * @return {Set<Token>}
    */
-  static filterTokensByVisionPolygon(visionPolygon, { viewer, target } = {}) {
-    let tokens = canvas.tokens.quadtree.getObjects(visionPolygon.getBounds());
+  _filterTokensByVisionPolygon() {
+    const { visionPolygon, target, viewerPoint, config } = this;
+    const viewer = config.visionSource?.object;
 
-    // Filter out the viewer and target token
-    tokens.delete(viewer);
-    tokens.delete(target);
-
-    if ( !tokens.size ) return tokens;
+    // Filter out the viewer and target from the token set.
+    const collisionTest = viewer
+      ? o => !(o.t === target || o.t === viewer)
+      : o => !(o.t === target || o.t.bounds.contains(viewerPoint.x, viewerPoint.y));
+    const tokens = canvas.tokens.quadtree.getObjects(visionPolygon._bounds, { collisionTest });
 
     // Filter by the precise triangle cone
     // For speed and simplicity, consider only token rectangular bounds
-    const edges = [...visionPolygon.iterateEdges()];
-    tokens = tokens.filter(t => {
+    const edges = visionPolygon._edges;
+    return tokens.filter(t => {
       const tCenter = t.center;
       if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
       const tBounds = t.bounds;
       return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
     });
-    return tokens;
   }
 
   /**
    * Filter tiles in the scene by a triangle representing the view from viewingPoint to
    * token (or other two points). Only considers 2d top-down view.
-   * @param {PIXI.Polygon} visionPolygon
    * @return {Set<Tile>}
    */
-  static filterTilesByVisionPolygon(visionPolygon) {
-    let tiles = canvas.tiles.quadtree.getObjects(visionPolygon.getBounds());
-    if ( !tiles.size ) return tiles;
+  _filterTilesByVisionPolygon(visionPolygon) {
+    visionPolygon ??= this.visionPolygon;
+    const tiles = canvas.tiles.quadtree.getObjects(visionPolygon._bounds);
 
     // Filter by the precise triangle shape
     // Also filter by overhead tiles
-    const edges = [...visionPolygon.iterateEdges()];
-    tiles = tiles.filter(t => {
+    const edges = visionPolygon._edges;
+    return tiles.filter(t => {
       // Only overhead tiles count for blocking vision
       if ( !t.document.overhead ) return false;
 
@@ -454,31 +588,24 @@ export class AlternativeLOS {
       if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
       return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
     });
-    return tiles;
   }
 
   /**
    * Filter walls in the scene by a triangle representing the view from viewingPoint to some
    * token (or other two points). Only considers 2d top-down view.
-   * @param {Point3d} viewingPoint
-   * @param {PIXI.Polygon} visionPolygon
-   * @param {object} [options]
-   * @param {string} [type]     Wall restriction type: sight, light, move, sound
    * @return {Set<Wall>}
    */
-  static filterWallsByVisionPolygon(viewingPoint, visionPolygon, { type = "sight" } = {}) {
-    let walls = canvas.walls.quadtree.getObjects(visionPolygon.getBounds());
-    walls = walls.filter(w => this._testWallInclusion(w, viewingPoint, { type }));
-
-    if ( !walls.size ) return walls;
+  _filterWallsByVisionPolygon() {
+    const { visionPolygon, config } = this;
+    let walls = canvas.walls.quadtree.getObjects(visionPolygon._bounds);
+    walls = walls.filter(w => this._testWallInclusion(w));
 
     // Filter by the precise triangle cone.
-    const edges = [...visionPolygon.iterateEdges()];
-    walls = walls.filter(w => {
+    const edges = visionPolygon._edges;
+    return walls.filter(w => {
       if ( visionPolygon.contains(w.A.x, w.A.y) || visionPolygon.contains(w.B.x, w.B.y) ) return true;
       return edges.some(e => foundry.utils.lineSegmentIntersects(w.A, w.B, e.A, e.B));
     });
-    return walls;
   }
 
   /**
@@ -486,22 +613,29 @@ export class AlternativeLOS {
    * token.
    * Comparable to ClockwiseSweep.prototype._testWallInclusion but less thorough.
    */
-  static _testWallInclusion(wall, viewingPoint, { type = "sight" } = {}) {
+  _testWallInclusion(wall) {
     // Ignore walls that are not blocking for the type
-    if (!wall.document[type] || wall.isOpen ) return false;
+    if (!wall.document[this.config.type] || wall.isOpen ) return false;
 
     // Ignore one-directional walls facing away
-    const side = wall.orientPoint(viewingPoint);
+    const side = wall.orientPoint(this.viewerPoint);
     return !wall.document.dir || (side !== wall.document.dir);
   }
+
+  /** @type {enum} */
+  static TARGET_WITHIN_ANGLE = {
+    OUTSIDE: 0,
+    INSIDE: 1,
+    INTERSECTS: 2
+  };
 
   /**
    * Test if any part of the target is within the limited angle vision of the token.
    * @param {VisionSource} visionSource
-   * @param {Token} target
+   * @param {PIXI.Rectangle|PIXI.Polygon} targetShape
    * @returns {boolean}
    */
-  static targetWithinLimitedAngleVision(visionSource, target) {
+  static targetWithinLimitedAngleVision(visionSource, targetShape) {
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return true;
 
@@ -516,29 +650,127 @@ export class AlternativeLOS {
     // The angle of the right (clockwise) edge of the emitted cone in radians.
     const aMax = aMin + Math.toRadians(angle);
 
-    const constrainedTokenBorder = target.constrainedTokenBorder;
-
     // For each edge:
     // If it intersects a ray, target is within.
     // If an endpoint is within the limited angle, target is within
     const rMin = Ray.fromAngle(x, y, aMin, canvas.dimensions.maxR);
     const rMax = Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
 
+    const targetWithin = () => {
+      const inside = true;
+      const ixFn = targetShape.lineSegmentIntersects;
+      const hasIx = ixFn(rMin.A, rMin.B, { inside }) || ixFn(rMax.A, rMax.B, { inside });
+      return hasIx + 1; // 1 if inside (no intersection); 2 if intersects.
+    };
+
     // Probably worth checking the target center first
-    const center = target.center;
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return true;
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return true;
+    const center = this.targetCenter;
+    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
 
     // TODO: Would it be more performant to assign an angle to each target point?
     // Or maybe just check orientation of ray to each point?
-    const edges = constrainedTokenBorder.toPolygon().iterateEdges();
+    const edges = this.visibleTargetShape.toPolygon().iterateEdges();
     for ( const edge of edges ) {
-      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return true;
-      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return true;
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.A, rMin, rMax, angle) ) return true;
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.B, rMin, rMax, angle) ) return true;
+      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return 2;
+      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return 2;
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.A, rMin, rMax, angle) ) return targetWithin();
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.B, rMin, rMax, angle) ) return targetWithin();
     }
 
-    return false;
+    return 0;
+  }
+
+  /**
+   * Construct walls based on limited angle rays
+   * Start 1 pixel behind the origin
+   * @returns {null|WallPoints3d[2]}
+   */
+  _constructLimitedAngleWallPoints3d() {
+    const visionSource = this.config.visionSource ;
+    if ( !visionSource ) return;
+    const angle = visionSource.data.angle;
+    if ( angle === 360 ) return null;
+
+    const { x, y, rotation } = visionSource.data;
+    const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
+    const aMax = aMin + Math.toRadians(angle);
+
+    // 0 faces south; 270 faces east
+    const aMed = (aMax + aMin) * 0.5;
+    const rMed = Ray.fromAngle(x, y, aMed, -1);
+    const rMin = Ray.fromAngle(rMed.B.x, rMed.B.y, aMin, canvas.dimensions.maxR);
+    const rMax = Ray.fromAngle(rMed.B.x, rMed.B.y, aMax, canvas.dimensions.maxR);
+
+    // Use the ray as the wall
+    rMin.topZ = canvas.dimensions.maxR;
+    rMin.bottomZ = -canvas.dimensions.maxR;
+    rMax.topZ = canvas.dimensions.maxR;
+    rMax.bottomZ = -canvas.dimensions.maxR;
+    return [new WallPoints3d(rMin), new WallPoints3d(rMax)];
+  }
+
+  // ----- NOTE: Debugging methods ----- //
+
+  /**
+   * For debugging.
+   * Draw debugging objects on the main canvas.
+   * @param {boolean} hasLOS    Is there line-of-sight to this target?
+   */
+  _drawCanvasDebug(hasLOS = true) {
+    this._drawLineOfSight();
+    this._drawVisionTriangle();
+    this._drawVisibleTokenBorder(hasLOS);
+    this._drawDetectedObjects();
+  }
+
+  /**
+   * For debugging.
+   * Draw the line of sight from token to target.
+   */
+  _drawLineOfSight() {
+    const draw = new Draw(Settings.DEBUG_LOS);
+    draw.segment({A: this.viewerPoint, B: this.targetCenter});
+  }
+
+  /**
+   * For debugging.
+   * Draw the constrained token border and visible shape, if any.
+   * @param {boolean} hasLOS    Is there line-of-sight to this target?
+   */
+  _drawVisibleTokenBorder(hasLOS = true) {
+    const draw = new Draw(Settings.DEBUG_LOS);
+    const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
+
+    // Fill in the constrained border on canvas
+    draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
+
+    // Separately fill in the visibile target shape
+    const visibleTargetShape = this.config.visibleTargetShape;
+    if ( visibleTargetShape ) draw.shape(visibleTargetShape, { color: Draw.COLORS.yellow });
+  }
+
+  /**
+   * For debugging.
+   * Draw outlines for the various objects that can be detected on the canvas.
+   */
+  _drawDetectedObjects() {
+    const draw = new Draw(Settings.DEBUG_LOS);
+    const colors = Draw.COLORS;
+    const { walls, tiles, terrainWalls, tokens, drawings } = this.blockingObjects;
+    walls.forEach(w => draw.segment(w, { color: colors.blue, fillAlpha: 0.3 }));
+    tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
+    terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
+    drawings.forEach(d => draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.3 }));
+    tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
+  }
+
+  /**
+   * For debugging.
+   * Draw the vision triangle between viewer point and target.
+   */
+  _drawVisionTriangle() {
+    const draw = new Draw(Settings.DEBUG_LOS);
+    draw.shape(this.visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
   }
 }

@@ -493,12 +493,37 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d;
 
 api = game.modules.get("tokenvisibility").api
 QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
-Area3d = api.Area3d
+
 AREA3D_POPOUTS = api.AREA3D_POPOUTS
+DefaultLOS = api.AlternativeLOS
+PointsLOS = api.PointsLOS
+Area2dLOS = api.Area2dLOS
+Area3dLOSGeometric = api.Area3dLOSGeometric
+Area3dLOSWebGL = api.Area3dLOSWebGL
+Area3dLOSWebGL2 = api.Area3dLOSWebGL2
+
 
 
 viewer = canvas.tokens.controlled[0]
 let [target] = game.user.targets;
+
+calcDefault = new DefaultLOS(viewer, target, { largeTarget: false })
+calcPoints = new PointsLOS(viewer, target, { largeTarget: false })
+calcArea2d = new Area2dLOS(viewer, target, { largeTarget: false })
+calcArea3dGeometric = new Area3dLOSGeometric(viewer, target, { largeTarget: false })
+calcArea3dWebGL1 = new Area3dLOSWebGL(viewer, target, { largeTarget: false })
+calcArea3dWebGL2 = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
+
+calcDefault.percentVisible();
+calcPoints.percentVisible();
+calcArea2d.percentVisible();
+calcArea3dGeometric.percentVisible();
+calcArea3dWebGL1.percentVisible();
+calcArea3dWebGL2.percentVisible();
+
+
+
+
 
 calc = new Area3d(viewer, target, { algorithm: "webGL2", largeTarget: false })
 calc.percentVisible();
@@ -515,6 +540,17 @@ calc._percentVisibleGeometric();
 calc._percentVisibleWebGL();
 calc._percentVisibleWebGL2();
 
+
+stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage
+s = new PIXI.Sprite(calc.renderTexture);
+s = PIXI.Sprite.from(calc.renderTexture)
+stage.addChild(s); // Does not display or is not rendered on screen
+stage.removeChild(s);
+canvas.stage.addChild(s); // But does display on canvas
+
+[tile] = canvas.tiles.placeables;
+sTile = new PIXI.Sprite(tile)
+stage.addChild(sTile)
 
 
 // Timing
@@ -562,3 +598,109 @@ res = {
 
 
 console.table(res)
+
+
+// ------ NOTE: Testing render texture
+
+     RADIANS_90 = Math.toRadians(90);
+     RADIANS_1 = Math.toRadians(1);
+     mat4 = glMatrix.mat4;
+    target = calc.target;
+    blockingObjects = calc.blockingObjects;
+
+    // We want the target token to be within the viewable frustrum.
+    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
+    targetBoundaryPts = target.bounds.viewablePoints(calc.viewerPoint);
+
+    // Angle is between the two segments from the origin.
+    // TODO: Handle limited angle vision.
+    angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], calc.viewerPoint, targetBoundaryPts[1]);
+    fov = angleRad + RADIANS_1;
+
+    // Near distance has to be close to the viewer.
+    // We can assume we don't want to view anything within 1/2 grid unit?
+    near = canvas.dimensions.size * 0.5;
+
+    // Far distance is distance to the center of the target plus 1/2 the diagonal.
+    let { w, h } = target;
+    diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5;
+    dist = Point3d.distanceBetween(calc.viewerPoint, calc.targetCenter) + diagDist;
+    far = Math.ceil(dist);
+
+    // Create texture
+    frustrumBase = Math.ceil(calc.constructor.frustrumBase(fov, far));
+    texConfig = {
+      resolution: 1,
+      width: frustrumBase,
+      height: frustrumBase,
+      scaleMode: PIXI.SCALE_MODES.NEAREST
+    };
+
+    // For the moment, create the texture and container
+    await calc.popoutDebug("webGL2");
+    stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
+    popoutApp = AREA3D_POPOUTS.webGL2.app.pixiApp
+
+
+    // Test different rendererrs
+    rtAuto = PIXI.RenderTexture.create(texConfig);
+    rtCanvas = PIXI.RenderTexture.create(texConfig);
+    rtPopout = PIXI.RenderTexture.create(texConfig);
+
+
+
+
+
+
+    meshContainer = new PIXI.Container();
+
+    // TODO: Keep and clear instead of destroying the render texture.
+    renderTexture = PIXI.RenderTexture.create(texConfig);
+
+    // Create shaders, mesh, draw to texture.
+    buildMesh = calc.constructor.buildMesh;
+
+    // Unused:
+    // const CACHE_RESOLUTION = 1.0;
+
+    // 1 for the target, in red
+    targetShader = calc._buildDebugShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
+    targetMesh = buildMesh(target, targetShader);
+    meshContainer.addChild(targetMesh);
+
+
+    pixels = canvas.app.renderer.extract.pixels(meshContainer)
+
+    // Render target and calculate its visible area alone.
+    // TODO: This will always calculate the full area, even if a wall intersects the target.
+    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+
+    renderer = PIXI.autoDetectRenderer();
+    renderer.render(meshContainer, { renderTexture: rtAuto, clear: true });
+    canvas.app.renderer.render(meshContainer, { renderTexture: rtCanvas, clear: true });
+    popoutApp.render(meshContainer, { renderTexture: rtPopout, clear: true });
+
+
+    sTex = PIXI.Sprite.from(renderTexture)
+    sAuto = PIXI.Sprite.from(rtAuto)
+    sCanvas = PIXI.Sprite.from(rtCanvas)
+    sPopout = PIXI.Sprite.from(rtPopout)
+
+    canvas.stage.addChild(sTex)    // Works, wrong orientation
+    canvas.stage.removeChild(sTex)
+
+    canvas.stage.addChild(sAuto)  // Doesn't work
+    canvas.stage.removeChild(sAuto)
+
+    canvas.stage.addChild(sCanvas)  // Works, wrong orientation
+    canvas.stage.removeChild(sCanvas)
+
+    popoutApp.stage.addChild(sPopout)  // Doesn't work (at all)
+    popoutApp.stage.removeChild(sPopout)
+
+    popoutApp.stage.addChild(meshContainer) // Works
+
+
+
+
+

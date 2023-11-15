@@ -147,44 +147,11 @@ export class PointsLOS extends AlternativeLOS {
     cfg.points3d = config.points3d;
   }
 
-  // ----- NOTE: Getters ----- //
-
-  /** @type {Point3d} */
-  get viewerCenter() { return this.viewer; } // Alias
-
-  /**
-   * Point halfway between target bottom and target top.
-   * @type {number}
-   */
-  get targetAvgElevationZ() {
-    const { bottomZ, topZ } = this.target;
-    const height = (topZ - bottomZ) || 1; // So token always has a minimum height.
-    return bottomZ + (height * 0.5);
-  }
-
-  // ------ NOTE: Primary methods to be overridden by subclass ----- //
-
-  /**
-   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * LOS is based on the number of points visible from the viewer position.
-   * @param {number} [threshold]    Percentage visible points required
-   * @returns {boolean}
-   */
-  hasLOS(threshold) {
-    const percentVisible = this.percentVisible();
-    if ( percentVisible.almostEqual(0) ) return false;
-    return percentVisible > threshold || percentVisible.almostEqual(threshold);
-  }
-
   /**
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
    */
-  percentVisible() {
-    const percent = 1 - this.applyPercentageTest();
-    if ( this.config.debug ) console.debug(`PointsLOS|${this.target.name} is ${Math.round(percent * 100)}% visible.`);
-    return percent;
-  }
+  percentVisible() { return this._simpleVisibilityTest() ?? (1 - this.applyPercentageTest()); }
 
   applyPercentageTest() {
     const targetPoints = this._constructTargetPoints();
@@ -213,7 +180,7 @@ export class PointsLOS extends AlternativeLOS {
    * - Grid. When set, points are constructed per grid space covered by the token.
    */
   _constructTargetPoints() {
-    const targetElevation = this.targetAvgElevationZ;
+    const targetElevation = this.targetCenter.z;
     const cfg = this.config;
 
     if ( cfg.largeTarget ) {

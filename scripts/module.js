@@ -1,4 +1,6 @@
 /* globals
+canvas,
+CONFIG,
 game,
 Hooks
 */
@@ -24,9 +26,13 @@ import { TilePoints3d } from "./LOS/PlaceablesPoints/TilePoints3d.js";
 import { VerticalPoints3d } from "./LOS/PlaceablesPoints/VerticalPoints3d.js";
 import { HorizontalPoints3d } from "./LOS/PlaceablesPoints/HorizontalPoints3d.js";
 
+import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 import { PointsLOS } from "./LOS/PointsLOS.js";
-import { Area3d, Area3dLOS } from "./LOS/Area3dLOS.js";
-import { Area2d, Area2dLOS } from "./LOS/Area2dLOS.js";
+import { Area2dLOS } from "./LOS/Area2dLOS.js";
+import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
+import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
+import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
+
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 
 import { AREA3D_POPOUTS } from "./LOS/Area3dPopout.js";
@@ -50,11 +56,14 @@ Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
     bench,
     benchFunctions,
+
+    AlternativeLOS,
     PointsLOS,
     Area2dLOS,
-    Area3dLOS,
-    Area2d,
-    Area3d,
+    Area3dLOSGeometric,
+    Area3dLOSWebGL,
+    Area3dLOSWebGL2,
+
     util,
     ConstrainedTokenBorder,
     los,
@@ -86,12 +95,12 @@ Hooks.once("setup", function() {
 });
 
 Hooks.on("canvasReady", function() {
-  console.debug("tokenvisibility|canvasReady")
+  console.debug("tokenvisibility|canvasReady");
   Settings.initializeDebugGraphics();
 });
 
-Hooks.on('createActiveEffect', refreshVisionOnActiveEffect);
-Hooks.on('deleteActiveEffect', refreshVisionOnActiveEffect);
+Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
+Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
 
 
 /**
@@ -99,7 +108,7 @@ Hooks.on('deleteActiveEffect', refreshVisionOnActiveEffect);
  */
 function refreshVisionOnActiveEffect(activeEffect) {
   const proneStatusId = CONFIG.GeometryLib.proneStatusId ?? Settings.get(SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE);
-  const isProne = activeEffect?.statuses.some((status) => status === proneStatusId);
+  const isProne = activeEffect?.statuses.some(status => status === proneStatusId);
   if ( !isProne ) return;
 
   canvas.effects.visibility.refresh();
