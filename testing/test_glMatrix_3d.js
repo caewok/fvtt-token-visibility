@@ -568,7 +568,7 @@ sTile = new PIXI.Sprite(tile)
 stage.addChild(sTile)
 
 
-// Timing
+// NOTE: Timing
 defaultBenchFn = function(viewer, target) {
   const calc = new DefaultLOS(viewer, target, { largeTarget: false })
   return calc.percentVisible();
@@ -609,25 +609,27 @@ await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
 
 
 
-total = performance.measure("total", "Start_webGL2", "end_webGL2")
-a = performance.measure("start", "Start_webGL2", "targetmesh")
-c = performance.measure("create target mesh", "targetmesh", "renderTargetMesh")
-d = performance.measure("render target mesh", "renderTargetMesh", "targetCache_start")
-e = performance.measure("target cache", "targetCache_start", "obstaclemesh")
-f = performance.measure("render obstacle mesh", "obstaclemesh", "renderObstacleMesh")
-g = performance.measure("obstacle mesh", "renderObstacleMesh", "obstacleCache")
-h = performance.measure("obstacle cache", "obstacleCache", "end_webGL2")
 
-res = {
-  [a.name]: a.duration,
-  [c.name]: c.duration,
-  [d.name]: d.duration,
-  [e.name]: e.duration,
-  [f.name]: f.duration,
-  [g.name]: g.duration,
-  [h.name]: h.duration,
-  [total.name]: total.duration
+// NOTE: Peformance measures
+measures = [
+  "startWebGL2",
+  "targetMesh",
+  "obstacleMesh",
+  "renderTargetMesh",
+  "targetCache",
+  "renderObstacleMesh",
+  "obstacleCache",
+  "endWebGL2"
+];
+total = performance.measure("total", measures[0], measures.at(-1))
+
+res = {};
+for ( let i = 0; i < measures.length - 1; i += 1 ) {
+  startName = measures[i];
+  endName = measures[i + 1];
+  res[startName] = performance.measure(startName, startName, endName);
 }
+res.total = total.duration;
 
 
 console.table(res)
@@ -735,7 +737,7 @@ if ( blockingObjects.tiles.size ) {
   }
 }
 
-// Calculate area remaining.
+// NOTE Test Calculate area remaining.
 // TODO: Handle terrain walls.
 canvas.app.renderer.render(meshContainer, { renderTexture, clear: false });
 obstacleCache = PixelCache.fromTexture(renderTexture,
@@ -848,3 +850,135 @@ N = 100
 await QBenchmarkLoopFn(N, foundryExtract, "foundryExtract");                // 92 ms; RED: 79 ms
 
 
+
+// NOTE: Test webGL1
+AlphaCutoffFilter = api.AlphaCutoffFilter
+AREA3D_POPOUTS = api.AREA3D_POPOUTS
+PixelCache = api.PixelCache;
+extractPixels = api.extractPixels
+calc = calcArea3dWebGL1
+
+percentVisible = calc._simpleVisibilityTest();
+if ( typeof percentVisible !== "undefined" ) console.log(percentVisible);
+
+if ( !calc.viewIsSet ) calc.calculateViewMatrix();
+TARGET_COLOR = Draw.COLORS.red;
+OBSTACLE_COLOR = Draw.COLORS.blue;
+TERRAIN_COLOR = Draw.COLORS.green;
+blockingPoints = calc.blockingPoints;
+
+// Set width = 0 to avoid drawing a border line. The border line will use antialiasing
+// and that causes a lighter-color border to appear outside the shape.
+drawOpts = {
+  color: TARGET_COLOR,
+  width: 0,
+  fill: TARGET_COLOR,
+  fillAlpha: 1,
+  drawTool: undefined
+};
+
+// Clear everything
+calc.targetGraphics.clear();
+calc.blockingGraphics.clear();
+calc.terrainGraphics.clear();
+children = calc.tileContainer.removeChildren();
+children.forEach(c => c.destroy());
+if ( calc.targetRT ) { calc.targetRT.destroy(); }
+
+// Draw the target shape.
+targetGraphics = calc.targetGraphics;
+drawOpts.drawTool = new Draw(targetGraphics);
+calc.targetPoints.drawTransformed(drawOpts);
+
+// TODO: Can we draw these using WebGL shader so that if they are behind the target,
+// they are not drawn or otherwise ignored? Could then use _blockingObjectsPoints, which is simpler.
+// Draw walls.
+blockingGraphics = calc.blockingGraphics;
+drawOpts.drawTool = new Draw(blockingGraphics);
+drawOpts.color = OBSTACLE_COLOR;
+drawOpts.fill = OBSTACLE_COLOR;
+blockingPoints.walls.forEach(w => w.drawTransformed(drawOpts));
+
+// Draw token obstacles
+blockingPoints.tokens.forEach(t => t.drawTransformed(drawOpts));
+
+// Draw terrain walls.
+// Use a separate container with an AlphaCutoffFilter.
+// For an additive blend, can set each terrain to alpha 0.4. Any overlap will be over 0.5.
+terrainGraphics = calc.terrainGraphics;
+if ( blockingPoints.terrainWalls.size ) {
+  if ( !terrainGraphics.filter
+    || !terrainGraphics.filter.length ) terrainGraphics.filters = [new AlphaCutoffFilter(0.5)];
+  drawOpts.drawTool = new Draw(terrainGraphics);
+  drawOpts.color = TERRAIN_COLOR;
+  drawOpts.fill = TERRAIN_COLOR;
+  drawOpts.fillAlpha = 0.4;
+  blockingPoints.terrainWalls.forEach(w => w.drawTransformed(drawOpts));
+}
+
+// Draw tiles.
+// Each requires its own container.
+tileContainer = calc.tileContainer;
+tileFilter = new AlphaCutoffFilter(0.75);
+Sprite2d = PIXI.projection.Sprite2d;
+
+// TODO: Does _blockingObjectsPoints even for tiles under a target token?
+for ( const tilePts of calc.blockingObjectsPoints.tiles ) {
+  // TODO: Need to cutoff tiles at the z=0 point. And need to have the uv coordinates reflect this.
+  // Any chance mapSprite will do this?
+  containerSprite = new Sprite2d(tilePts.object.texture);
+  containerSprite.filters = [tileFilter];
+  tileContainer.addChild(containerSprite);
+  perspectivePoints = tilePts.perspectiveTransform();
+  containerSprite.proj.mapSprite(containerSprite, perspectivePoints);
+
+  // Adjust the uvs points if the tile is cutoff behind the viewer.
+  containerSprite.calculateVertices(); // Force uvs to be calculated.
+  tileUVs = tilePts.uvs;
+  for ( let i = 0; i < 8; i += 1 ) containerSprite.uvs[i] = tileUVs[i];
+
+}
+
+// Draw everything. Need to first draw the red target token, then draw all the blue obstacles on top.
+blockingContainer = new PIXI.Container();
+blockingContainer.addChild(blockingGraphics);
+blockingContainer.addChild(terrainGraphics);
+blockingContainer.addChild(tileContainer);
+
+// Translate the points to fit in the render texture.
+txPtsArray = calc.targetPoints.faces.map(face => face.perspectiveTransform());
+xValues = [];
+yValues = [];
+for ( const ptArray of txPtsArray ) {
+  for ( const pt of ptArray ) {
+    xValues.push(pt.x);
+    yValues.push(pt.y);
+  }
+}
+xMinMax = Math.minMax(...xValues);
+yMinMax = Math.minMax(...yValues);
+
+targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+blockingContainer.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
+
+texConfig = {
+  resolution: 1,
+  width: xMinMax.max - xMinMax.min,
+  height: yMinMax.max - yMinMax.min,
+  scaleMode: PIXI.SCALE_MODES.NEAREST
+};
+// TODO: Keep and clear instead of destroying the render texture.
+renderTexture = calc.targetRT = PIXI.RenderTexture.create(texConfig);
+
+// Render only the target shape and calculate its rendered visible area.
+canvas.app.renderer.render(targetGraphics, { renderTexture, clear: true });
+targetCache = calc.targetCache = PixelCache.fromTexture(renderTexture, { resolution: 1 } );
+sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+// Render all the obstacles and calculate the remaining area.
+canvas.app.renderer.render(blockingContainer, { renderTexture, clear: false });
+obstacleCache = calc.obstacleCache = PixelCache.fromTexture(renderTexture, { resolution: 1 });
+sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+blockingContainer.destroy();

@@ -126,7 +126,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   // Textures and containers used by webGL2 method.
-  _meshContainer = new PIXI.Container();
+  _obstacleContainer = new PIXI.Container();
 
   _renderTexture = PIXI.RenderTexture.create({
     resolution: 1,
@@ -139,7 +139,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
   destroy() {
     if ( this.#destroyed ) return;
-    this._meshContainer.destroy(true);
+    this._obstacleContainer.destroy(true);
     this._renderTexture.destroy();
     this.#destroyed = true;
   }
@@ -148,12 +148,12 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
-    performance.mark("Start_webGL2");
-    const meshContainer = this._meshContainer;
+    performance.mark("startWebGL2");
+    const obstacleContainer = this._obstacleContainer;
     const renderTexture = this._renderTexture;
 
     // TODO: Don't destroy shaders
-    const children = meshContainer.removeChildren();
+    const children = obstacleContainer.removeChildren();
     children.forEach(c => {
       c.destroy();
       // Keep the geometry.
@@ -168,7 +168,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     renderTexture.resize(frame.width, frame.height, true);
 
-    performance.mark("targetmesh");
+    performance.mark("targetMesh");
 
     // Create shaders, mesh, draw to texture.
     // TODO: Store and update shaders instead of creating.
@@ -177,32 +177,13 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the target, in red
     const targetShader = this._buildShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
     const targetMesh = buildMesh(target, targetShader);
-    //meshContainer.addChild(targetMesh);
+    //obstacleContainer.addChild(targetMesh);
 
     // Render target and calculate its visible area alone.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
 
-    performance.mark("renderTargetMesh");
-    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
 
-    performance.mark("targetCache_start");
-
-    const sumRedPixels = function(targetCache) {
-      const pixels = targetCache.pixels;
-      const nPixels = pixels.length
-      let sumTarget = 0;
-      for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
-      return sumTarget;
-    }
-    const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-    const sumTarget = sumRedPixels(targetCache)
-
-
-//     const targetCache = PixelCache.fromTexture(renderTexture,
-//       { channel: 0, arrayClass: Uint8Array });
-//     const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
-
-    performance.mark("obstaclemesh");
+    performance.mark("obstacleMesh");
 
     // TODO: Fix garbage handling; destroy the shaders and meshes.
 
@@ -216,7 +197,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       const terrainWallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
-        meshContainer.addChild(mesh);
+        obstacleContainer.addChild(mesh);
       }
     }
 
@@ -226,7 +207,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       const wallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
       for ( const obj of otherBlocking ) {
         const mesh = buildMesh(obj, wallShader);
-        meshContainer.addChild(mesh);
+        obstacleContainer.addChild(mesh);
       }
     }
 
@@ -235,12 +216,32 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       for ( const tile of blockingObjects.tiles ) {
         const tileShader = this._buildTileShader(fov, near, far, tile, { r: 0, g: 0, b: 1, a: 1 });
         const mesh = buildMesh(tile, tileShader);
-        meshContainer.addChild(mesh);
+        obstacleContainer.addChild(mesh);
       }
     }
 
+    const sumRedPixels = function(targetCache) {
+      const pixels = targetCache.pixels;
+      const nPixels = pixels.length
+      let sumTarget = 0;
+      for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+      return sumTarget;
+    }
+
+    performance.mark("renderTargetMesh");
+    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+
+    performance.mark("targetCache");
+    const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+    const sumTarget = sumRedPixels(targetCache)
+
+//     const targetCache = PixelCache.fromTexture(renderTexture,
+//       { channel: 0, arrayClass: Uint8Array });
+//     const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+
     performance.mark("renderObstacleMesh");
-    canvas.app.renderer.render(meshContainer, { renderTexture, clear: false });
+    canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
 
     // Calculate area remaining.
     // TODO: Handle terrain walls.
@@ -252,7 +253,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumWithObstacles = sumRedPixels(obstacleCache);
 
-    performance.mark("end_webGL2");
+    performance.mark("endWebGL2");
 
     return sumWithObstacles / sumTarget;
   }

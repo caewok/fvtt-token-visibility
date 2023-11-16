@@ -118,7 +118,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     if ( !this.viewIsSet ) this.calculateViewMatrix();
     const TARGET_COLOR = Draw.COLORS.red;
-    const OBSTACLE_COLOR = Draw.COLORS.red;
+    const OBSTACLE_COLOR = Draw.COLORS.blue;
     const TERRAIN_COLOR = Draw.COLORS.green;
     const blockingPoints = this.blockingPoints;
 
@@ -228,12 +228,12 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     // Render only the target shape and calculate its rendered visible area.
     canvas.app.renderer.render(targetGraphics, { renderTexture, clear: true });
-    const targetCache = this.targetCache = PixelCache.fromTexture(renderTexture, { resolution: 0.25 } );
+    const targetCache = this.targetCache = PixelCache.fromTexture(renderTexture, { resolution: 1 } );
     const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
 
     // Render all the obstacles and calculate the remaining area.
     canvas.app.renderer.render(blockingContainer, { renderTexture, clear: false });
-    const obstacleCache = this.obstacleCache = PixelCache.fromTexture(renderTexture, { resolution: 0.25 });
+    const obstacleCache = this.obstacleCache = PixelCache.fromTexture(renderTexture, { resolution: 1 });
     const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
 
     blockingContainer.destroy();
