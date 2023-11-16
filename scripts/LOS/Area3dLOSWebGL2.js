@@ -211,11 +211,6 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const renderTexture = this._renderTexture;
     const targetShader = this._targetShader;
 
-
-    // TODO: Don't destroy shaders
-    const children = obstacleContainer.removeChildren();
-    children.forEach(c => c.destroy());
-
     // If no blocking objects, line-of-sight is assumed true.
 
     const target = this.target;
@@ -313,6 +308,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     performance.mark("endWebGL2");
 
+    const children = obstacleContainer.removeChildren();
+    children.forEach(c => c.destroy());
+
     return sumWithObstacles / sumTarget;
   }
 
@@ -337,11 +335,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
 
     const children = stage.removeChildren();
-    children.forEach(c => {
-      c.shader.destroy();
-      c.destroy();
-      // Keep the geometry.
-    });
+    children.forEach(c => c.destroy());
 
     // If no blocking objects, line-of-sight is assumed true.
     const target = this.target;
