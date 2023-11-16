@@ -137,8 +137,25 @@ export class Area3dLOS extends AlternativeLOS {
    * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
    * Must be extended by subclasses. This version pops up a blank window.
    */
-  async _draw3dDebug() {
-    await this._enableDebugPopout();
+  _draw3dDebug() {
+
+  }
+
+  /**
+   * For debugging.
+   * Clear existing debug.
+   * Must be extended by subclasses.
+   */
+  _clear3dDebug() {
+
+  }
+
+  /**
+   * For debugging.
+   * Close the popout window.
+   */
+  async _closeDebugPopout() {
+    return this.popout.app.close()
   }
 
   /**
@@ -149,8 +166,6 @@ export class Area3dLOS extends AlternativeLOS {
    */
   async _enableDebugPopout() {
     const popout = this.popout;
-    if ( !popout.shown ) await popout.app._render(true);
-    const children = popout.app.pixiApp.stage.removeChildren();
-    children.forEach(c => c.destroy());
+    if ( popout.app._state < 1 ) await popout.app._render(true);
   }
 }

@@ -97,8 +97,7 @@ import { Matrix } from "../geometry/Matrix.js";
 export class Area3dLOSGeometric extends Area3dLOS {
 
 
-  /** @type {Draw} **/
-  debugDrawTool = new Draw(new PIXI.Graphics());
+
 
   /** @type {Shadow[]} */
   wallShadows = [];
@@ -611,6 +610,21 @@ export class Area3dLOSGeometric extends Area3dLOS {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.geometric; }
 
+  get debugDrawTool() {
+    // If popout is active, use the popout graphics.
+    // If not active, use default draw graphics.
+    const draw = new Draw();
+    const popout = this.popout;
+    if ( !popout.app.rendered ) return draw;
+
+    const stage = popout.app.pixiApp.stage;
+    if ( !stage.children[0] ) {
+      popout.app.pixiApp.stage.addChild(new PIXI.Graphics());
+    }
+    draw.g = stage.children[0];
+    return draw;
+  }
+
   /**
    * For debugging.
    * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
@@ -629,8 +643,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
    */
   async enableDebugPopout() {
     await super._enableDebugPopout();
-    this.debugDrawTool.clearDrawings();
-    this.popout.app.pixiApp.stage.addChild(this.debugDrawTool.g);
   }
 
   /**
@@ -640,6 +652,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
   _drawDebug3dShapes() {
     const drawTool = this.debugDrawTool; // Draw in the pop-up box.
     const colors = Draw.COLORS;
+    drawTool.clearDrawings();
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });

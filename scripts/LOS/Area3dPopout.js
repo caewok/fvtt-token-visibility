@@ -88,9 +88,10 @@ export class Area3dPopout extends Application {
     savedData.savedLeft = this.position.left;
 
     const children = savedData.app.pixiApp.stage.removeChildren();
-    children.forEach(c => c.destroy());
 
     super.close();
+    this.pixiApp.destroy();
+    children.forEach(c => c.destroy());
   }
 }
 
@@ -102,11 +103,11 @@ Hooks.on("canvasReady", function() {
 
 Hooks.on("renderArea3dPopout", function(app, _html, _data) {
   const id = `${app.options.id}_canvas`;
-  app.pixiApp = new PIXI.Application({width: 1000, height: 1000, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
+  app.pixiApp = new PIXI.Application({width: 400, height: 400, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
 
   // Center of window should be 0,0
-  app.pixiApp.stage.position.x = 500;  // 200 for width 400
-  app.pixiApp.stage.position.y = 500;  // 200 for height 400
+  app.pixiApp.stage.position.x = 200;  // 200 for width 400
+  app.pixiApp.stage.position.y = 200;  // 200 for height 400
 
   // Scale to give a bit more room in the popout
   app.pixiApp.stage.scale.x = 0.5;
