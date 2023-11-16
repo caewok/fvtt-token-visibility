@@ -599,14 +599,33 @@ webGL2BenchFn = function(viewer, target) {
   return calc.percentVisible();
 }
 
+webGL2BenchFnDestroy = function(viewer, target) {
+  const calc = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
+  const res = calc.percentVisible();
+  calc.destroy();
+  return res;
+}
+
+calcWebGL1 = new Area3dLOSWebGL(viewer, target, { largeTarget: false });
+webGLBenchFn2 = function(viewer, target) {
+  return calcWebGL1.percentVisible();
+}
+
+calcWebGL2 = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
+webGL2BenchFn2 = function(viewer, target) {
+  return calcWebGL2.percentVisible();
+}
+
 N = 1000
 await QBenchmarkLoopFn(N, defaultBenchFn, "default", viewer, target);
 await QBenchmarkLoopFn(N, pointsBenchFn, "points", viewer, target);
 await QBenchmarkLoopFn(N, area2dBenchFn, "area2d", viewer, target);
 await QBenchmarkLoopFn(N, geometricBenchFn, "geometric", viewer, target);
 await QBenchmarkLoopFn(N, webGLBenchFn, "webGL", viewer, target);
+await QBenchmarkLoopFn(N, webGLBenchFn2, "webGL single", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
-
+await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
+await QBenchmarkLoopFn(N, webGL2BenchFnDestroy, "webGL2 destroy", viewer, target);
 
 
 
@@ -630,12 +649,10 @@ for ( let i = 0; i < measures.length - 1; i += 1 ) {
   res[startName] = performance.measure(startName, startName, endName);
 }
 res.total = total.duration;
-
-
 console.table(res)
 
 
-// ------ NOTE: Testing render texture
+// ------ NOTE: Testing WebGL2
 
 AREA3D_POPOUTS = api.AREA3D_POPOUTS
 PixelCache = api.PixelCache;
@@ -645,16 +662,13 @@ calc = calcArea3dWebGL2
 percentVisible = calc._simpleVisibilityTest();
 if ( typeof percentVisible !== "undefined" ) console.log(percentVisible);
 
-meshContainer = calc._meshContainer
+obstacleContainer = calc._obstacleContainer
 renderTexture = calc._renderTexture
+targetShader = calc._targetShader;
 
 // TODO: Don't destroy shaders
-children = meshContainer.removeChildren();
-children.forEach(c => {
-  c.destroy();
-  // Keep the geometry.
-  // Shader?
-});
+children = obstacleContainer.removeChildren();
+children.forEach(c => c.destroy());
 
 // If no blocking objects, line-of-sight is assumed true.
 
@@ -672,10 +686,10 @@ buildMesh = calc.constructor.buildMesh;
 
 
 // 1 for the target, in red
-targetShader = calc._buildShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
+targetShader._initializePerspectiveMatrix(fov, 1, near, far);
 targetMesh = buildMesh(target, targetShader);
 // meshContainer.addChild(targetMesh);
-
+// canvas.stage.addChild(targetMesh)
 
 
 // Render target and calculate its visible area alone.
@@ -714,7 +728,7 @@ if ( blockingObjects.terrainWalls.size ) {
   const terrainWallShader = calc._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
   for ( terrainWall of blockingObjects.terrainWalls ) {
     const mesh = buildMesh(terrainWall, terrainWallShader);
-    meshContainer.addChild(mesh);
+    obstacleContainer.addChild(mesh);
   }
 }
 
@@ -724,7 +738,7 @@ if ( otherBlocking.size ) {
   const wallShader = calc._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
   for ( obj of otherBlocking ) {
     const mesh = buildMesh(obj, wallShader);
-    meshContainer.addChild(mesh);
+    obstacleContainer.addChild(mesh);
   }
 }
 
@@ -733,13 +747,13 @@ if ( blockingObjects.tiles.size ) {
   for ( tile of blockingObjects.tiles ) {
     const tileShader = calc._buildTileShader(fov, near, far, tile, { r: 0, g: 0, b: 1, a: 1 });
     const mesh = buildMesh(tile, tileShader);
-    meshContainer.addChild(mesh);
+    obstacleContainer.addChild(mesh);
   }
 }
 
 // NOTE Test Calculate area remaining.
 // TODO: Handle terrain walls.
-canvas.app.renderer.render(meshContainer, { renderTexture, clear: false });
+canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
 obstacleCache = PixelCache.fromTexture(renderTexture,
       { frame, channel: 0, arrayClass: Uint8Array });
 sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
@@ -852,6 +866,7 @@ await QBenchmarkLoopFn(N, foundryExtract, "foundryExtract");                // 9
 
 
 // NOTE: Test webGL1
+
 AlphaCutoffFilter = api.AlphaCutoffFilter
 AREA3D_POPOUTS = api.AREA3D_POPOUTS
 PixelCache = api.PixelCache;

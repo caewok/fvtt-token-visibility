@@ -100,7 +100,7 @@ void main() {
 
   _calculatePerspectiveMatrix() {
     mat4.perspective(this.uniforms.uPerspectiveMatrix, this.#fovy, this.#aspect, this.#near, this.#far);
-    this.uniforms.uPerspectiveMatrix = this.uniforms.uPerspectiveMatrix; // Trigger update.
+    this.uniformGroup.update();
   }
 
   // ----- LookAt Matrix ----- //
@@ -133,7 +133,7 @@ void main() {
 
   _calculateLookAtMatrix() {
     mat4.lookAt(this.uniforms.uLookAtMatrix, this.#eye, this.#center, this.#up);
-    this.uniforms.uLookAtMatrix = this.uniforms.uLookAtMatrix;
+    this.uniformGroup.update();
   }
 }
 

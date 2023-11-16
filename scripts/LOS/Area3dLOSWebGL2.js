@@ -13,7 +13,7 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 
 
 // PlaceablePoints folder
-import { PixelCache } from "./PixelCache.js";
+// import { PixelCache } from "./PixelCache.js";
 
 
 // Geometry folder
@@ -25,9 +25,62 @@ const mat4 = glMatrix.mat4;
 
 export class Area3dLOSWebGL2 extends Area3dLOS {
 
+  _targetShader;
+
+  _targetDebugShader;
+
+  _obstacleShader;
+
+  _obstacleDebugShader;
+
+  _terrainWallShader;
+
+  _terrainWallDebugShader;
+
+  _tileShaders = new Map();
+
+  _tileDebugShaders = new Map();
+
+  constructor(viewer, target, config) {
+    super(viewer, target, config);
+    this._initializeShaders();
+  }
+
   _clearCache() {
     super._clearCache();
     this.#frustrum.initialized = false;
+  }
+
+  _initializeShaders() {
+    const shaders = [
+      "_targetShader",
+      "_obstacleShader",
+      "_terrainWallShader"
+    ];
+
+    const debugShaders = [
+      "_targetDebugShader",
+      "_obstacleDebugShader",
+      "_terrainWallDebugShader"
+    ];
+
+    for ( const shaderName of shaders ) {
+      this[shaderName] = Placeable3dShader.create(this.viewerPoint, this.targetCenter);
+    }
+
+    for ( const shaderName of debugShaders ) {
+      this[shaderName] = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
+    }
+
+    const axes = [-1, 1, 1];  // Mirror along the y axis.
+    for ( const shaderName of [...shaders, ...debugShaders] ) {
+      mat4.fromScaling(this[shaderName].uniforms.uOffsetMatrix, axes);
+    }
+
+    // Set color for each shader.
+    this._targetShader.setColor(1, 0, 0, 1); // Red
+    this._obstacleShader.setColor(0, 0, 1, 1);  // Blue
+    this._terrainWallShader.setColor(0, 0, 1, 0.5); // Blue, half-alpha
   }
 
   /**
@@ -93,35 +146,30 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     return mesh;
   }
 
-  _buildShader(fov, near, far, color) {
-    const shader = Placeable3dShader.create(this.viewerPoint, this.targetCenter);
-    shader._initializePerspectiveMatrix(fov, 1, near, far);
-    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
-    shader.setColor(color.r, color.g, color.b, color.a);
-    return shader;
-  }
-
-  _buildTileShader(fov, near, far, tile, color) {
-    const shader = Tile3dShader.create(this.viewerPoint, this.targetCenter,
+  _buildTileShader(fov, near, far, tile) {
+    if ( !this._tileShaders.has(tile) ) {
+      const shader = Tile3dShader.create(this.viewerPoint, this.targetCenter,
       { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
-    shader._initializePerspectiveMatrix(fov, 1, near, far);
-    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
-    shader.setColor(color.r, color.g, color.b, color.a);
-    return shader;
-  }
+      mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+      shader.setColor(0, 0, 1, 1); // Blue
+      this._tileShaders.set(tile, shader);
+    }
 
-  _buildDebugShader(fov, near, far) {
-    const shader = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
+    const shader = this._tileShaders.get(tile);
     shader._initializePerspectiveMatrix(fov, 1, near, far);
-    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
     return shader;
   }
 
   _buildTileDebugShader(fov, near, far, tile) {
-    const shader = Tile3dDebugShader.create(this.viewerPoint, this.targetCenter,
-      { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
+    if ( !this._tileDebugShaders.has(tile) ) {
+      const shader = Tile3dDebugShader.create(this.viewerPoint, this.targetCenter,
+        { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
+      mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+      this._tileDebugShaders.set(tile, shader);
+    }
+
+    const shader = this._tileDebugShaders.get(tile);
     shader._initializePerspectiveMatrix(fov, 1, near, far);
-    mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
     return shader;
   }
 
@@ -141,6 +189,16 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( this.#destroyed ) return;
     this._obstacleContainer.destroy(true);
     this._renderTexture.destroy();
+    this._targetShader.destroy();
+    this._targetDebugShader.destroy();
+    this._obstacleShader.destroy();
+    this._obstacleDebugShader.destroy();
+    this._terrainWallShader.destroy();
+    this._terrainWallDebugShader.destroy();
+    this._tileShaders.forEach(s => s.destroy());
+    this._tileDebugShaders.forEach(s => s.destroy());
+    this._tileShaders.clear();
+    this._tileDebugShaders.clear();
     this.#destroyed = true;
   }
 
@@ -151,14 +209,12 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     performance.mark("startWebGL2");
     const obstacleContainer = this._obstacleContainer;
     const renderTexture = this._renderTexture;
+    const targetShader = this._targetShader;
+
 
     // TODO: Don't destroy shaders
     const children = obstacleContainer.removeChildren();
-    children.forEach(c => {
-      c.destroy();
-      // Keep the geometry.
-      // Shader?
-    });
+    children.forEach(c => c.destroy());
 
     // If no blocking objects, line-of-sight is assumed true.
 
@@ -175,9 +231,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const buildMesh = this.constructor.buildMesh;
 
     // 1 for the target, in red
-    const targetShader = this._buildShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
+    targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     const targetMesh = buildMesh(target, targetShader);
-    //obstacleContainer.addChild(targetMesh);
+    // obstacleContainer.addChild(targetMesh);
 
     // Render target and calculate its visible area alone.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
@@ -194,7 +250,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       // Or set to green and then process with pixel cache?
       // Then process the pixel cache to ignore blue alpha?
       // For the moment, draw with blue alpha
-      const terrainWallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
+      const terrainWallShader = this._terrainWallShader;
+      terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
         obstacleContainer.addChild(mesh);
@@ -204,9 +261,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the walls/tokens, in blue
     const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
     if ( otherBlocking.size ) {
-      const wallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
+      const obstacleShader = this._obstacleShader;
+      obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const obj of otherBlocking ) {
-        const mesh = buildMesh(obj, wallShader);
+        const mesh = buildMesh(obj, obstacleShader);
         obstacleContainer.addChild(mesh);
       }
     }
@@ -214,7 +272,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the tiles
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
-        const tileShader = this._buildTileShader(fov, near, far, tile, { r: 0, g: 0, b: 1, a: 1 });
+        const tileShader = this._buildTileShader(fov, near, far, tile);
         const mesh = buildMesh(tile, tileShader);
         obstacleContainer.addChild(mesh);
       }
@@ -222,18 +280,18 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     const sumRedPixels = function(targetCache) {
       const pixels = targetCache.pixels;
-      const nPixels = pixels.length
+      const nPixels = pixels.length;
       let sumTarget = 0;
       for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
       return sumTarget;
-    }
+    };
 
     performance.mark("renderTargetMesh");
     canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
 
     performance.mark("targetCache");
     const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-    const sumTarget = sumRedPixels(targetCache)
+    const sumTarget = sumRedPixels(targetCache);
 
 //     const targetCache = PixelCache.fromTexture(renderTexture,
 //       { channel: 0, arrayClass: Uint8Array });
@@ -294,7 +352,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const buildMesh = this.constructor.buildMesh;
 
     // 1 for the target, in red
-    const targetShader = this._buildDebugShader(fov, near, far);
+    const targetShader = this._targetDebugShader;
+    targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     const targetMesh = buildMesh(target, targetShader);
     stage.addChild(targetMesh);
 
@@ -315,7 +374,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       // Or set to green and then process with pixel cache?
       // Then process the pixel cache to ignore blue alpha?
       // For the moment, draw with blue alpha
-      const terrainWallShader = this._buildDebugShader(fov, near, far);
+      const terrainWallShader = this._terrainWallDebugShader;
+      terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
         stage.addChild(mesh);
@@ -325,9 +385,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the walls/tokens, in blue
     const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
     if ( otherBlocking.size ) {
-      const wallShader = this._buildDebugShader(fov, near, far);
+      const obstacleShader = this._obstacleDebugShader;
+      obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const obj of otherBlocking ) {
-        const mesh = buildMesh(obj, wallShader);
+        const mesh = buildMesh(obj, obstacleShader);
         stage.addChild(mesh);
       }
     }
@@ -335,7 +396,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the tiles
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
-        const tileShader = this._buildTileDebugShader(fov, near, far, tile);
+        const tileShader = this._buildDebugTileShader(fov, near, far, tile);
         const mesh = buildMesh(tile, tileShader);
         stage.addChild(mesh);
       }
