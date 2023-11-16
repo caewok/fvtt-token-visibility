@@ -535,7 +535,7 @@ calcArea3dGeometric._draw3dDebug()
 calcArea3dWebGL1._enableDebugPopout()
 calcArea3dWebGL1._draw3dDebug()
 
-calcArea3dWebGL2._enableDebugPopout()
+await calcArea3dWebGL2._enableDebugPopout()
 calcArea3dWebGL2._draw3dDebug()
 
 
@@ -610,22 +610,22 @@ await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
 
 
 total = performance.measure("total", "Start_webGL2", "end_webGL2")
-a = performance.measure("start", "Start_webGL2", "create_renderTexture")
-b = performance.measure("create render texture", "create_renderTexture", "targetmesh")
+a = performance.measure("start", "Start_webGL2", "targetmesh")
 c = performance.measure("create target mesh", "targetmesh", "renderTargetMesh")
 d = performance.measure("render target mesh", "renderTargetMesh", "targetCache_start")
 e = performance.measure("target cache", "targetCache_start", "obstaclemesh")
-f = performance.measure("obstacle mesh", "obstaclemesh", "obstacleCache")
-g = performance.measure("obstacle cache", "obstacleCache", "end_webGL2")
+f = performance.measure("render obstacle mesh", "obstaclemesh", "renderObstacleMesh")
+g = performance.measure("obstacle mesh", "renderObstacleMesh", "obstacleCache")
+h = performance.measure("obstacle cache", "obstacleCache", "end_webGL2")
 
 res = {
   [a.name]: a.duration,
-  [b.name]: b.duration,
   [c.name]: c.duration,
   [d.name]: d.duration,
   [e.name]: e.duration,
   [f.name]: f.duration,
   [g.name]: g.duration,
+  [h.name]: h.duration,
   [total.name]: total.duration
 }
 
@@ -634,4 +634,217 @@ console.table(res)
 
 
 // ------ NOTE: Testing render texture
+
+AREA3D_POPOUTS = api.AREA3D_POPOUTS
+PixelCache = api.PixelCache;
+extractPixels = api.extractPixels
+calc = calcArea3dWebGL2
+
+percentVisible = calc._simpleVisibilityTest();
+if ( typeof percentVisible !== "undefined" ) console.log(percentVisible);
+
+meshContainer = calc._meshContainer
+renderTexture = calc._renderTexture
+
+// TODO: Don't destroy shaders
+children = meshContainer.removeChildren();
+children.forEach(c => {
+  c.destroy();
+  // Keep the geometry.
+  // Shader?
+});
+
+// If no blocking objects, line-of-sight is assumed true.
+
+target = calc.target;
+blockingObjects = calc.blockingObjects;
+let { near, far, fov, frame } = calc.frustrum;
+
+
+// Create shaders, mesh, draw to texture.
+// TODO: Store and update shaders instead of creating.
+renderTexture.resize(frame.width, frame.height, true);
+buildMesh = calc.constructor.buildMesh;
+
+// canvas.stage.addChild(meshContainer)
+
+
+// 1 for the target, in red
+targetShader = calc._buildShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
+targetMesh = buildMesh(target, targetShader);
+// meshContainer.addChild(targetMesh);
+
+
+
+// Render target and calculate its visible area alone.
+// TODO: This will always calculate the full area, even if a wall intersects the target.
+canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+
+
+targetCache = PixelCache.fromTexture(renderTexture,
+      { channel: 0, arrayClass: Uint8Array });
+sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+s = PIXI.Sprite.from(renderTexture)
+
+/* Using extract._rawPixels:
+
+sumRedPixels = function(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+  return sumTarget;
+}
+targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+sumRedPixels(targetCache)
+*/
+
+// TODO: Fix garbage handling; destroy the shaders and meshes.
+
+// 1 for the terrain walls
+if ( blockingObjects.terrainWalls.size ) {
+  // Can we set alpha to 0.5 and add overlapping walls to get to 1.0 blue?
+  // Or multiply, so 0.7 * 0.7 = 0.49?
+  // Or set to green and then process with pixel cache?
+  // Then process the pixel cache to ignore blue alpha?
+  // For the moment, draw with blue alpha
+  const terrainWallShader = calc._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
+  for ( terrainWall of blockingObjects.terrainWalls ) {
+    const mesh = buildMesh(terrainWall, terrainWallShader);
+    meshContainer.addChild(mesh);
+  }
+}
+
+// 1 for the walls/tokens, in blue
+otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
+if ( otherBlocking.size ) {
+  const wallShader = calc._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
+  for ( obj of otherBlocking ) {
+    const mesh = buildMesh(obj, wallShader);
+    meshContainer.addChild(mesh);
+  }
+}
+
+// 1 for the tiles
+if ( blockingObjects.tiles.size ) {
+  for ( tile of blockingObjects.tiles ) {
+    const tileShader = calc._buildTileShader(fov, near, far, tile, { r: 0, g: 0, b: 1, a: 1 });
+    const mesh = buildMesh(tile, tileShader);
+    meshContainer.addChild(mesh);
+  }
+}
+
+// Calculate area remaining.
+// TODO: Handle terrain walls.
+canvas.app.renderer.render(meshContainer, { renderTexture, clear: false });
+obstacleCache = PixelCache.fromTexture(renderTexture,
+      { frame, channel: 0, arrayClass: Uint8Array });
+sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+
+/* Using extract._rawPixels:
+
+sumRedPixels = function(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+  return sumTarget;
+}
+obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+sumRedPixels(obstacleCache)
+*/
+
+sumWithObstacles / sumTarget;
+
+
+// Test speed for getting pixel extraction
+
+texConfig = {
+  resolution: 0.25,
+  width: calc.frustrum.frame.width,
+  height: calc.frustrum.frame.height,
+  scaleMode: PIXI.SCALE_MODES.NEAREST,
+  multisample: PIXI.MSAA_QUALITY.NONE,
+  alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA
+}
+
+texConfig = {
+  resolution: 0.25,
+  width: calc.frustrum.frame.width,
+  height: calc.frustrum.frame.height,
+  scaleMode: PIXI.SCALE_MODES.NEAREST,
+  multisample: PIXI.MSAA_QUALITY.NONE,
+  alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA,
+  format: PIXI.FORMATS.RED
+}
+
+tmpRT = PIXI.RenderTexture.create(texConfig);
+
+useTempRTfn = function() {
+  canvas.app.renderer.render(targetMesh, { renderTexture: tmpRT, clear: true });
+  return canvas.app.renderer.extract.pixels(tmpRT);
+}
+
+useNewRTfn = function() {
+  const renderTexture = PIXI.RenderTexture.create(texConfig);
+  canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+  const pixels = canvas.app.renderer.extract.pixels(renderTexture);
+  renderTexture.destroy();
+  return pixels;
+}
+
+useExtractFn = function() {
+  return canvas.app.renderer.extract.pixels(targetMesh);
+}
+
+useExtractFn2 = function() {
+  return canvas.app.renderer.extract.pixels(targetMesh, calc.frustrum.frame);
+}
+
+// Format RED: same speed.
+
+N = 1000
+await QBenchmarkLoopFn(N, useTempRTfn, "useTempRTfn");    // 0.51 ms  // 0.25 resolution: 0.39 ms
+await QBenchmarkLoopFn(N, useNewRTfn, "useNewRTfn");      // 0.68 ms  // 0.25 resolution: 0.50 ms
+
+N = 100
+await QBenchmarkLoopFn(N, useExtractFn, "useExtractFn");  // 21.93 ms
+await QBenchmarkLoopFn(N, useExtractFn, "useExtractFn2"); // 21.93 ms
+
+
+// Speed of different RT extractions
+
+function renderExtractFn() {
+  canvas.app.renderer.render(targetMesh, { renderTexture: tmpRT, clear: true });
+  return canvas.app.renderer.extract.pixels(tmpRT);
+}
+
+function renderPixelsExtractFn() {
+  canvas.app.renderer.render(targetMesh, { renderTexture: tmpRT, clear: true });
+  return canvas.app.renderer.extract._rawPixels(tmpRT);
+}
+
+function pixelCacheFn() {
+  canvas.app.renderer.render(targetMesh, { renderTexture: tmpRT, clear: true });
+  return PixelCache.fromTexture(tmpRT,
+      { resolution: CACHE_RESOLUTION, channel: 0 });
+}
+
+TE = new TextureExtractor(canvas.app.renderer)
+pixels = await TE.extract({ texture: tmpRT }) // Only the red channel
+
+async function foundryExtract() {
+  return TE.extract({ texture: tmpRT });
+}
+
+// basically same for red texture
+N = 1000
+await QBenchmarkLoopFn(N, renderExtractFn, "renderExtractFn");              // 0.39 ms
+await QBenchmarkLoopFn(N, renderPixelsExtractFn, "renderPixelsExtractFn");  // 0.36 ms
+await QBenchmarkLoopFn(N, pixelCacheFn, "pixelCacheFn");                    // 0.36 ms
+
+N = 100
+await QBenchmarkLoopFn(N, foundryExtract, "foundryExtract");                // 92 ms; RED: 79 ms
+
 

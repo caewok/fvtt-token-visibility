@@ -1497,9 +1497,8 @@ export class PixelCache extends PIXI.Rectangle {
    * @param {TypedArray} [opts.arrayClass]        What array class to use to store the resulting pixel values
    */
   static fromDisplayObject(displayObject, opts = {}) {
-    const frame = opts.frame;
+    const frame = opts.frame ??  new PIXI.Rectangle(displayObject.x, displayObject.y, displayObject.width, displayObject.height);
     const pixels = canvas.app.renderer.extract.pixels(displayObject, { frame });
-    frame ??= new PIXI.Rectangle(displayObject.x, displayObject.y, displayObject.width, displayObject.height);
     return this._fromPixels(pixels, frame, opts);
   }
 
@@ -1522,6 +1521,20 @@ export class PixelCache extends PIXI.Rectangle {
 
     opts.resolution *= opts.textureResolution ?? 1;
     return new this(arr, frame.width, opts);
+  }
+
+  _printPixels(threshold = 0) {
+    let str = "";
+    const nrows = this.#localHeight;
+    const ncols = this.#localHeight;
+    for ( let r = 0; r < nrows; r += 1 ) {
+      for ( let c = 0; c < ncols; c += 1 ) {
+        const pix = this._pixelAtLocal(c, r);
+        str += pix > threshold ? "•" : " ";
+      }
+      str += "\n";
+    }
+    return str;
   }
 
   /**

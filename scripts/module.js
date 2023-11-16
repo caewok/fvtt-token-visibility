@@ -42,6 +42,9 @@ import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry } from "./LOS/Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
+import { PixelCache } from "./LOS/PixelCache.js";
+import { extractPixels } from "./LOS/extract-pixels.js";
+
 import * as los from "./visibility_los.js";
 import * as range from "./visibility_range.js";
 
@@ -56,6 +59,9 @@ Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
     bench,
     benchFunctions,
+
+    PixelCache,
+    extractPixels,
 
     AlternativeLOS,
     PointsLOS,
