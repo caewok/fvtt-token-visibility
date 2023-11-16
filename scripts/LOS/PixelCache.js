@@ -1465,20 +1465,45 @@ export class PixelCache extends PIXI.Rectangle {
    * Construct a pixel cache from a texture.
    * Will automatically adjust the resolution of the pixel cache based on the texture resolution.
    * @param {PIXI.Texture} texture      Texture from which to pull pixel data
-   * @param {object} [options]          Options affecting which pixel data is used
-   * @param {PIXI.Rectangle} [options.frame]    Optional rectangle to trim the extraction
-   * @param {number} [options.resolution=1]     At what resolution to pull the pixels
-   * @param {number} [options.x=0]              Move the texture in the x direction by this value
-   * @param {number} [options.y=0]              Move the texture in the y direction by this value
-   * @param {number} [options.channel=0]        Which RGBA channel, where R = 0, A = 3.
-   * @param {function} [options.scalingMethod=PixelCache.nearestNeighborScaling]
-   * @param {function} [options.combineFn]      Function to combine multiple channels of pixel data.
+   * @param {object} [opts]          Options affecting which pixel data is used
+   * @param {PIXI.Rectangle} [opts.frame]    Optional rectangle to trim the extraction
+   * @param {number} [opts.resolution=1]     At what resolution to pull the pixels
+   * @param {number} [opts.x=0]              Move the texture in the x direction by this value
+   * @param {number} [opts.y=0]              Move the texture in the y direction by this value
+   * @param {number} [opts.channel=0]        Which RGBA channel, where R = 0, A = 3.
+   * @param {function} [opts.scalingMethod=PixelCache.nearestNeighborScaling]
+   * @param {function} [opts.combineFn]      Function to combine multiple channels of pixel data.
    *   Will be passed the r, g, b, and a channels.
-   * @param {TypedArray} [options.arrayClass]        What array class to use to store the resulting pixel values
+   * @param {TypedArray} [opts.arrayClass]        What array class to use to store the resulting pixel values
    * @returns {PixelCache}
    */
   static fromTexture(texture, opts = {}) {
     const { pixels, x, y, width, height } = extractPixels(canvas.app.renderer, texture, opts.frame);
+    const frame = opts.frame ?? new PIXI.Rectangle(x, y, width, height);
+    opts.textureResolution = texture.resolution ?? 1;
+    return this._fromPixels(pixels, frame, opts);
+  }
+
+  /**
+   * Construct a pixel cache from a display object.
+   * @param {PIXI.Container|PIXI.Mesh|PIXI.Graphics} displayObject      Object from which to pull pixel data
+   * @param {object} [opts]          Options affecting which pixel data is used
+   * @param {PIXI.Rectangle} [opts.frame]
+   * @param {number} [opts.resolution=1]     At what resolution to pull the pixels
+   * @param {number} [opts.channel=0]        Which RGBA channel, where R = 0, A = 3.
+   * @param {function} [opts.scalingMethod=PixelCache.nearestNeighborScaling]
+   * @param {function} [opts.combineFn]      Function to combine multiple channels of pixel data.
+   *   Will be passed the r, g, b, and a channels.
+   * @param {TypedArray} [opts.arrayClass]        What array class to use to store the resulting pixel values
+   */
+  static fromDisplayObject(displayObject, opts = {}) {
+    const frame = opts.frame;
+    const pixels = canvas.app.renderer.extract.pixels(displayObject, { frame });
+    frame ??= new PIXI.Rectangle(displayObject.x, displayObject.y, displayObject.width, displayObject.height);
+    return this._fromPixels(pixels, frame, opts);
+  }
+
+  static _fromPixels(pixels, frame, opts) {
     const combinedPixels = opts.combineFn ? this.combinePixels(pixels, opts.combineFn, opts.arrayClass) : pixels;
 
     opts.x ??= 0;
@@ -1486,16 +1511,17 @@ export class PixelCache extends PIXI.Rectangle {
     opts.resolution ??= 1;
     opts.channel ??= 0;
     opts.scalingMethod ??= this.nearestNeighborScaling;
-    const arr = opts.scalingMethod(combinedPixels, width, height, opts.resolution, {
+    const arr = opts.scalingMethod(combinedPixels, frame.width, frame.height, opts.resolution, {
       channel: opts.channel,
       skip: opts.combineFn ? 1 : 4,
       arrayClass: opts.arrayClass });
 
-    opts.x += x;
-    opts.y += y;
-    opts.resolution *= texture.resolution;
-    opts.pixelHeight = height;
-    return new this(arr, width, opts);
+    opts.x += frame.x;
+    opts.y += frame.y;
+    opts.pixelHeight = frame.height;
+
+    opts.resolution *= opts.textureResolution ?? 1;
+    return new this(arr, frame.width, opts);
   }
 
   /**

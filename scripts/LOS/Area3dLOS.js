@@ -138,7 +138,7 @@ export class Area3dLOS extends AlternativeLOS {
    * Must be extended by subclasses. This version pops up a blank window.
    */
   async _draw3dDebug() {
-    await this.enableDebugPopout();
+    await this._enableDebugPopout();
   }
 
   /**
@@ -150,7 +150,7 @@ export class Area3dLOS extends AlternativeLOS {
   async _enableDebugPopout() {
     const popout = this.popout;
     if ( !popout.shown ) await popout.app._render(true);
-    const children = popout.app.pixiApp.stage.removeAllChildren();
+    const children = popout.app.pixiApp.stage.removeChildren();
     children.forEach(c => c.destroy());
   }
 }

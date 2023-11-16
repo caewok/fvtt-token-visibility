@@ -1,12 +1,7 @@
 /* globals
 canvas,
-CONST,
-foundry,
 glMatrix,
 PIXI
-Ray,
-Token,
-VisionSource
 */
 "use strict";
 
@@ -18,17 +13,10 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 
 
 // PlaceablePoints folder
-import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
-import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 import { PixelCache } from "./PixelCache.js";
 
-// Base folder
-import { Settings, SETTINGS } from "../settings.js";
 
 // Geometry folder
-import { Draw } from "../geometry/Draw.js"; // For debugging
-import { ClipperPaths } from "../geometry/ClipperPaths.js";
-import { Matrix } from "../geometry/Matrix.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 const RADIANS_90 = Math.toRadians(90);
@@ -36,6 +24,62 @@ const RADIANS_1 = Math.toRadians(1);
 const mat4 = glMatrix.mat4;
 
 export class Area3dLOSWebGL2 extends Area3dLOS {
+
+  _clearCache() {
+    super._clearCache();
+    this.#frustrum.initialized = false;
+  }
+
+  /**
+   * Describes the viewing frustum used by the shaders to view the target.
+   */
+  #frustrum = {
+    near: 0.1,
+    far: 1000,
+    fov: RADIANS_90,
+    frame: new PIXI.Rectangle(),
+    initialized: false
+  };
+
+  get frustrum() {
+    if ( !this.#frustrum.initialized ) this.#constructFrustrum();
+    return this.#frustrum;
+  }
+
+  #constructFrustrum() {
+    const { viewerPoint, target, targetCenter } = this;
+
+    // We want the target token to be within the viewable frustrum.
+    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
+    const targetBoundaryPts = target.bounds.viewablePoints(viewerPoint);
+
+    // Angle is between the two segments from the origin.
+    // TODO: Handle limited angle vision.
+    const angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], viewerPoint, targetBoundaryPts[1]);
+    const fov = this.#frustrum.fov = angleRad + RADIANS_1;
+
+    // Near distance has to be close to the viewer.
+    // We can assume we don't want to view anything within 1/2 grid unit?
+    this.#frustrum.near = canvas.dimensions.size * 0.5;
+
+    // Far distance is distance to the center of the target plus 1/2 the diagonal.
+    const { w, h } = target;
+    const diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5;
+    const dist = Point3d.distanceBetween(viewerPoint, targetCenter) + diagDist;
+    const far = this.#frustrum.far = Math.ceil(dist);
+
+    // Build the frame
+    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, far));
+    const frustrumBase_1_2 = frustrumBase * 0.5;
+
+    const frame = this.#frustrum.frame;
+    frame.x = -frustrumBase_1_2;
+    frame.y = -frustrumBase_1_2;
+    frame.width = frustrumBase;
+    frame.height = frustrumBase;
+    this.#frustrum.initialized = true;
+  }
+
   static frustrumBase(fov, dist) {
     const A = RADIANS_90 - (fov * 0.5);
     return (dist / Math.tan(A)) * 2;
@@ -57,7 +101,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     return shader;
   }
 
-  _buildTileShader(fov, near, far, color, tile) {
+  _buildTileShader(fov, near, far, tile, color) {
     const shader = Tile3dShader.create(this.viewerPoint, this.targetCenter,
       { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
     shader._initializePerspectiveMatrix(fov, 1, near, far);
@@ -66,49 +110,29 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     return shader;
   }
 
-  _buildDebugShader(fov, near, far, color) {
+  _buildDebugShader(fov, near, far) {
     const shader = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
     shader._initializePerspectiveMatrix(fov, 1, near, far);
     mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
-    shader.setColor(color.r, color.g, color.b, color.a);
     return shader;
   }
 
-  _buildTileDebugShader(fov, near, far, color, tile) {
+  _buildTileDebugShader(fov, near, far, tile) {
     const shader = Tile3dDebugShader.create(this.viewerPoint, this.targetCenter,
       { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
     shader._initializePerspectiveMatrix(fov, 1, near, far);
     mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
-    shader.setColor(color.r, color.g, color.b, color.a);
     return shader;
   }
 
   // Textures and containers used by webGL2 method.
   _meshContainer = new PIXI.Container();
 
-
-  _targetRT = PIXI.RenderTexture.create({scaleMode: PIXI.SCALE_MODES.NEAREST});
-
-  _obstacleRT = PIXI.RenderTexture.create({scaleMode: PIXI.SCALE_MODES.NEAREST});
-
-  _targetDebugRT = PIXI.RenderTexture.create({scaleMode: PIXI.SCALE_MODES.NEAREST});
-
-  _obstacleDebugRT = PIXI.RenderTexture.create({scaleMode: PIXI.SCALE_MODES.NEAREST});
-
-  _meshContainer = new PIXI.Container();
-
-  _meshDebugContainer = new PIXI.Container();
-
   #destroyed = false;
 
   destroy() {
     if ( this.#destroyed ) return;
-    this._targetRT.destroy();
-    this._obstacleRT.destroy();
-    this._targetDebugRT.destroy();
-    this._obstacleDebugRT.destroy();
     this._meshContainer.destroy(true);
-    this._meshDebugContainer.destroy(true);
     this.#destroyed = true;
   }
 
@@ -116,64 +140,39 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
-    // If no blocking objects, line-of-sight is assumed true.
     performance.mark("Start_webGL2");
+    // TODO: Don't destroy shaders
+    const children = this._meshContainer.removeChildren();
+    children.forEach(c => {
+      c.shader.destroy();
+      c.destroy();
+      // Keep the geometry.
+    });
+
+    // If no blocking objects, line-of-sight is assumed true.
+
     const target = this.target;
     const blockingObjects = this.blockingObjects;
-    if ( !(blockingObjects.tokens.size
-        || blockingObjects.walls.size
-        || blockingObjects.tiles.size
-        || blockingObjects.terrainWalls.size > 1) ) return 1;
+    const { near, far, fov, frame } = this.frustrum;
 
-    // We want the target token to be within the viewable frustrum.
-    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
-    const targetBoundaryPts = target.bounds.viewablePoints(this.viewerPoint);
-
-    // Angle is between the two segments from the origin.
-    // TODO: Handle limited angle vision.
-    const angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], this.viewerPoint, targetBoundaryPts[1]);
-    const fov = angleRad + RADIANS_1;
-
-    // Near distance has to be close to the viewer.
-    // We can assume we don't want to view anything within 1/2 grid unit?
-    const near = canvas.dimensions.size * 0.5;
-
-    // Far distance is distance to the center of the target plus 1/2 the diagonal.
-    const { w, h } = target;
-    const diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5;
-    const dist = Point3d.distanceBetween(this.viewerPoint, this.targetCenter) + diagDist;
-    const far = Math.ceil(dist);
-
-    // Create texture
-    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, far));
-    const texConfig = {
-      resolution: 1,
-      width: frustrumBase,
-      height: frustrumBase,
-      scaleMode: PIXI.SCALE_MODES.NEAREST
-    };
-
-    // TODO: Keep and clear instead of destroying the render texture.
-    performance.mark("create_renderTexture");
-    const renderTexture = this.renderTexture = PIXI.RenderTexture.create(texConfig);
     performance.mark("targetmesh");
 
     // Create shaders, mesh, draw to texture.
+    // TODO: Store and update shaders instead of creating.
     const buildMesh = this.constructor.buildMesh;
     const CACHE_RESOLUTION = 1.0;
 
     // 1 for the target, in red
     const targetShader = this._buildShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
     const targetMesh = buildMesh(target, targetShader);
+    this._meshContainer.addChild(targetMesh);
 
     // Render target and calculate its visible area alone.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
-    performance.mark("renderTargetMesh");
-    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
 
     performance.mark("targetCache_start");
-    const targetCache = this.targetCache = PixelCache.fromTexture(renderTexture,
-      { resolution: CACHE_RESOLUTION, channel: 0 });
+    const targetCache = this.targetCache = PixelCache.fromDisplayObject(targetMesh,
+      { frame, channel: 0, arrayClass: Uint8Array, resolution: CACHE_RESOLUTION });
     const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
     performance.mark("obstaclemesh");
 
@@ -189,7 +188,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       const terrainWallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
-        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+        this._meshContainer.addChild(mesh);
       }
     }
 
@@ -199,28 +198,27 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       const wallShader = this._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
       for ( const obj of otherBlocking ) {
         const mesh = buildMesh(obj, wallShader);
-        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+        this._meshContainer.addChild(mesh);
       }
     }
 
     // 1 for the tiles
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
-        const tileShader = this._buildTileShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 }, tile);
+        const tileShader = this._buildTileShader(fov, near, far, tile, { r: 0, g: 0, b: 1, a: 1 });
         const mesh = buildMesh(tile, tileShader);
-        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+        this._meshContainer.addChild(mesh);
       }
     }
 
     // Calculate area remaining.
     // TODO: Handle terrain walls.
     performance.mark("obstacleCache");
-    const obstacleCache = this.obstacleCache = PixelCache.fromTexture(renderTexture,
-      { resolution: CACHE_RESOLUTION, channel: 0 });
+
+    const obstacleCache = this.obstacleCache = PixelCache.fromDisplayObject(this._meshContainer,
+      { frame, channel: 0, arrayClass: Uint8Array, resolution: CACHE_RESOLUTION });
     const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
     performance.mark("end_webGL2");
-
-    if ( this.debug ) this.drawWebGL2Debug();
 
     return sumWithObstacles / sumTarget;
   }
@@ -238,70 +236,35 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this._drawWebGL2Debug();
   }
 
+
   _drawWebGL2Debug() {
     // For the moment, repeat webGL2 percent visible process so that shaders with
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
     const stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
-    const popoutApp = AREA3D_POPOUTS.webGL2.app.pixiApp;
 
-    // For now, remove render texture and add new one.
-    const sprites = stage.children.filter(c => c instanceof PIXI.Sprite);
-    sprites.forEach(s => stage.removeChild(s));
-    sprites.forEach(s => s.destroy());
+    const children = stage.removeChildren();
+    children.forEach(c => {
+      c.shader.destroy();
+      c.destroy();
+      // Keep the geometry.
+    });
 
     // If no blocking objects, line-of-sight is assumed true.
     const target = this.target;
     const blockingObjects = this.blockingObjects;
-    if ( !(blockingObjects.tokens.size
-        || blockingObjects.walls.size
-        || blockingObjects.tiles.size
-        || blockingObjects.terrainWalls.size > 1) ) return 1;
-
-    // We want the target token to be within the viewable frustrum.
-    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
-    const targetBoundaryPts = target.bounds.viewablePoints(this.viewerPoint);
-
-    // Angle is between the two segments from the origin.
-    // TODO: Handle limited angle vision.
-    const angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], this.viewerPoint, targetBoundaryPts[1]);
-    const fov = angleRad + RADIANS_1;
-
-    // Near distance has to be close to the viewer.
-    // We can assume we don't want to view anything within 1/2 grid unit?
-    const near = canvas.dimensions.size * 0.5;
-
-    // Far distance is distance to the center of the target plus 1/2 the diagonal.
-    const { w, h } = target;
-    const diagDist = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2)) * 0.5;
-    const dist = Point3d.distanceBetween(this.viewerPoint, this.targetCenter) + diagDist;
-    const far = Math.ceil(dist);
-
-    // Create texture
-    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, far));
-    const texConfig = {
-      resolution: 1,
-      width: frustrumBase,
-      height: frustrumBase,
-      scaleMode: PIXI.SCALE_MODES.NEAREST
-    };
-
-    // TODO: Keep and clear instead of destroying the render texture.
-    const renderTexture = this.renderTextureDebug = PIXI.RenderTexture.create(texConfig);
+    const { near, far, fov } = this.frustrum;
 
     // Create shaders, mesh, draw to texture.
     const buildMesh = this.constructor.buildMesh;
 
-    // Unused:
-    // const CACHE_RESOLUTION = 1.0;
-
     // 1 for the target, in red
-    const targetShader = this._buildDebugShader(fov, near, far, { r: 1, g: 0, b: 0, a: 1 });
+    const targetShader = this._buildDebugShader(fov, near, far);
     const targetMesh = buildMesh(target, targetShader);
+    stage.addChild(targetMesh);
 
     // Render target and calculate its visible area alone.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
-    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
 
     // Unused:
     // const targetCache = this.targetCache = PixelCache.fromTexture(renderTexture,
@@ -317,42 +280,31 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       // Or set to green and then process with pixel cache?
       // Then process the pixel cache to ignore blue alpha?
       // For the moment, draw with blue alpha
-      const terrainWallShader = this._buildDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
+      const terrainWallShader = this._buildDebugShader(fov, near, far);
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
-        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+        stage.addChild(mesh);
       }
     }
 
     // 1 for the walls/tokens, in blue
     const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
     if ( otherBlocking.size ) {
-      const wallShader = this._buildDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
+      const wallShader = this._buildDebugShader(fov, near, far);
       for ( const obj of otherBlocking ) {
         const mesh = buildMesh(obj, wallShader);
-        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+        stage.addChild(mesh);
       }
     }
 
     // 1 for the tiles
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
-        const tileShader = this._buildTileDebugShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 }, tile);
+        const tileShader = this._buildTileDebugShader(fov, near, far, tile);
         const mesh = buildMesh(tile, tileShader);
-        canvas.app.renderer.render(mesh, { renderTexture, clear: false });
+        stage.addChild(mesh);
       }
     }
-
-    const s = new PIXI.Sprite(renderTexture);
-    stage.addChild(s);
-
-    // Calculate area remaining.
-    // TODO: Handle terrain walls.
-    // Unused:
-    //     const obstacleCache = this.obstacleCache = PixelCache.fromTexture(renderTexture,
-    //       { resolution: CACHE_RESOLUTION, channel: 0 });
-    //     const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
-    //     return sumWithObstacles / sumTarget;
   }
 
 }

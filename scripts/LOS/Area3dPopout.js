@@ -86,7 +86,6 @@ export class Area3dPopout extends Application {
     savedData.shown = false;
     savedData.savedTop = this.position.top;
     savedData.savedLeft = this.position.left;
-    this.graphics.clear();
     super.close();
   }
 }
