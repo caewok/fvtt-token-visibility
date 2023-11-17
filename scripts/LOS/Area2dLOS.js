@@ -339,7 +339,7 @@ export class Area2dLOS extends AlternativeLOS {
       });
 
       if ( tiles.size ) {
-        const drawings = this.filterDrawingsByVisionPolygon(visiblePolygon);
+        const drawings = this._filterDrawingsByVisionPolygon(visiblePolygon);
         const combinedTiles = this._combineTilesWithDrawingHoles(tiles, drawings);
         visiblePolygon = combinedTiles.diffPolygon(visiblePolygon);
       }
