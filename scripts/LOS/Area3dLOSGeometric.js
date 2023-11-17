@@ -630,8 +630,8 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
    * Must be extended by subclasses. This version pops up a blank window.
    */
-  async _draw3dDebug() {
-    await super._draw3dDebug();
+  _draw3dDebug() {
+    super._draw3dDebug();
     this._drawDebug3dShapes();
   }
 

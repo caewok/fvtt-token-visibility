@@ -529,10 +529,10 @@ calcPoints._drawCanvasDebug()
 calcArea2d._drawCanvasDebug()
 
 
-calcArea3dGeometric._enableDebugPopout()
+await calcArea3dGeometric._enableDebugPopout()
 calcArea3dGeometric._draw3dDebug()
 
-calcArea3dWebGL1._enableDebugPopout()
+await calcArea3dWebGL1._enableDebugPopout()
 calcArea3dWebGL1._draw3dDebug()
 
 await calcArea3dWebGL2._enableDebugPopout()
@@ -692,30 +692,6 @@ targetMesh = buildMesh(target, targetShader);
 // canvas.stage.addChild(targetMesh)
 
 
-// Render target and calculate its visible area alone.
-// TODO: This will always calculate the full area, even if a wall intersects the target.
-canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
-
-
-targetCache = PixelCache.fromTexture(renderTexture,
-      { channel: 0, arrayClass: Uint8Array });
-sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
-
-s = PIXI.Sprite.from(renderTexture)
-
-/* Using extract._rawPixels:
-
-sumRedPixels = function(targetCache) {
-  const pixels = targetCache.pixels;
-  const nPixels = pixels.length
-  let sumTarget = 0;
-  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
-  return sumTarget;
-}
-targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-sumRedPixels(targetCache)
-*/
-
 // TODO: Fix garbage handling; destroy the shaders and meshes.
 
 // 1 for the terrain walls
@@ -725,7 +701,8 @@ if ( blockingObjects.terrainWalls.size ) {
   // Or set to green and then process with pixel cache?
   // Then process the pixel cache to ignore blue alpha?
   // For the moment, draw with blue alpha
-  const terrainWallShader = calc._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 0.5 });
+  const terrainWallShader = this._terrainWallShader;
+  terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
   for ( terrainWall of blockingObjects.terrainWalls ) {
     const mesh = buildMesh(terrainWall, terrainWallShader);
     obstacleContainer.addChild(mesh);
@@ -735,7 +712,8 @@ if ( blockingObjects.terrainWalls.size ) {
 // 1 for the walls/tokens, in blue
 otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
 if ( otherBlocking.size ) {
-  const wallShader = calc._buildShader(fov, near, far, { r: 0, g: 0, b: 1, a: 1 });
+  const obstacleShader = this._obstacleShader;
+  obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
   for ( obj of otherBlocking ) {
     const mesh = buildMesh(obj, wallShader);
     obstacleContainer.addChild(mesh);
@@ -745,11 +723,20 @@ if ( otherBlocking.size ) {
 // 1 for the tiles
 if ( blockingObjects.tiles.size ) {
   for ( tile of blockingObjects.tiles ) {
-    const tileShader = calc._buildTileShader(fov, near, far, tile, { r: 0, g: 0, b: 1, a: 1 });
+    const tileShader = this._buildTileShader(fov, near, far, tile);
     const mesh = buildMesh(tile, tileShader);
     obstacleContainer.addChild(mesh);
   }
 }
+
+sumRedPixels = function(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+  return sumTarget;
+};
+
 
 // NOTE Test Calculate area remaining.
 // TODO: Handle terrain walls.

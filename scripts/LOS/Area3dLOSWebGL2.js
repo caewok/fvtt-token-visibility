@@ -281,6 +281,19 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       return sumTarget;
     };
 
+    const sumRedObstaclesPixels = function(targetCache) {
+      const pixels = targetCache.pixels;
+      const nPixels = pixels.length;
+      let sumTarget = 0;
+      for ( let i = 0; i < nPixels; i += 4 ) {
+        const px = pixels[i];
+        if ( px < 128 ) continue;
+        sumTarget += Boolean(targetCache.pixels[i]);
+      }
+      return sumTarget;
+    };
+    const obstacleSum = blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
+
     performance.mark("renderTargetMesh");
     canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
 
@@ -304,7 +317,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 //     const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
 
     const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-    const sumWithObstacles = sumRedPixels(obstacleCache);
+    const sumWithObstacles = obstacleSum(obstacleCache);
 
     performance.mark("endWebGL2");
 
@@ -322,8 +335,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
    * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
    * Must be extended by subclasses. This version pops up a blank window.
    */
-  async _draw3dDebug() {
-    await super._draw3dDebug();
+  _draw3dDebug() {
+    super._draw3dDebug();
     this._drawWebGL2Debug();
   }
 
@@ -333,6 +346,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
     const stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
+    const useDebugShaders = this.config.useDebugShaders;
 
     const children = stage.removeChildren();
     children.forEach(c => c.destroy());
@@ -346,7 +360,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const buildMesh = this.constructor.buildMesh;
 
     // 1 for the target, in red
-    const targetShader = this._targetDebugShader;
+    const targetShader = useDebugShaders ? this._targetDebugShader : this._targetShader;
     targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     const targetMesh = buildMesh(target, targetShader);
     stage.addChild(targetMesh);
@@ -368,7 +382,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       // Or set to green and then process with pixel cache?
       // Then process the pixel cache to ignore blue alpha?
       // For the moment, draw with blue alpha
-      const terrainWallShader = this._terrainWallDebugShader;
+      const terrainWallShader = useDebugShaders ? this._terrainWallDebugShader : this._terrainWallShader;
       terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
@@ -379,7 +393,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the walls/tokens, in blue
     const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
     if ( otherBlocking.size ) {
-      const obstacleShader = this._obstacleDebugShader;
+      const obstacleShader = useDebugShaders ? this._obstacleDebugShader : this._obstacleShader;
       obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const obj of otherBlocking ) {
         const mesh = buildMesh(obj, obstacleShader);
@@ -390,7 +404,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the tiles
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
-        const tileShader = this._buildDebugTileShader(fov, near, far, tile);
+        const tileShader = useDebugShaders ? this._buildDebugTileShader(fov, near, far, tile)
+          : this._buildTileShader(fov, near, far, tile);
         const mesh = buildMesh(tile, tileShader);
         stage.addChild(mesh);
       }
