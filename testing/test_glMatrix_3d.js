@@ -591,15 +591,12 @@ geometricBenchFn = function(viewer, target) {
 
 webGLBenchFn = function(viewer, target) {
   const calc = new Area3dLOSWebGL(viewer, target, { largeTarget: false })
-  return calc.percentVisible();
+  const res = calc.percentVisible();
+  calc.destroy();
+  return res;
 }
 
 webGL2BenchFn = function(viewer, target) {
-  const calc = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
-  return calc.percentVisible();
-}
-
-webGL2BenchFnDestroy = function(viewer, target) {
   const calc = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
   const res = calc.percentVisible();
   calc.destroy();
@@ -625,7 +622,6 @@ await QBenchmarkLoopFn(N, webGLBenchFn, "webGL", viewer, target);
 await QBenchmarkLoopFn(N, webGLBenchFn2, "webGL single", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
-await QBenchmarkLoopFn(N, webGL2BenchFnDestroy, "webGL2 destroy", viewer, target);
 
 
 
@@ -666,9 +662,6 @@ obstacleContainer = calc._obstacleContainer
 renderTexture = calc._renderTexture
 targetShader = calc._targetShader;
 
-// TODO: Don't destroy shaders
-children = obstacleContainer.removeChildren();
-children.forEach(c => c.destroy());
 
 // If no blocking objects, line-of-sight is assumed true.
 
@@ -701,7 +694,7 @@ if ( blockingObjects.terrainWalls.size ) {
   // Or set to green and then process with pixel cache?
   // Then process the pixel cache to ignore blue alpha?
   // For the moment, draw with blue alpha
-  const terrainWallShader = this._terrainWallShader;
+  const terrainWallShader = calc._terrainWallShader;
   terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
   for ( terrainWall of blockingObjects.terrainWalls ) {
     const mesh = buildMesh(terrainWall, terrainWallShader);
@@ -712,7 +705,7 @@ if ( blockingObjects.terrainWalls.size ) {
 // 1 for the walls/tokens, in blue
 otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
 if ( otherBlocking.size ) {
-  const obstacleShader = this._obstacleShader;
+  const obstacleShader = calc._obstacleShader;
   obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
   for ( obj of otherBlocking ) {
     const mesh = buildMesh(obj, wallShader);
@@ -723,7 +716,7 @@ if ( otherBlocking.size ) {
 // 1 for the tiles
 if ( blockingObjects.tiles.size ) {
   for ( tile of blockingObjects.tiles ) {
-    const tileShader = this._buildTileShader(fov, near, far, tile);
+    const tileShader = calc._buildTileShader(fov, near, far, tile);
     const mesh = buildMesh(tile, tileShader);
     obstacleContainer.addChild(mesh);
   }
@@ -740,25 +733,39 @@ sumRedPixels = function(targetCache) {
 
 // NOTE Test Calculate area remaining.
 // TODO: Handle terrain walls.
+canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+sumTarget = sumRedPixels(targetCache);
+
 canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
-obstacleCache = PixelCache.fromTexture(renderTexture,
-      { frame, channel: 0, arrayClass: Uint8Array });
-sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
-
-/* Using extract._rawPixels:
-
-sumRedPixels = function(targetCache) {
-  const pixels = targetCache.pixels;
-  const nPixels = pixels.length
-  let sumTarget = 0;
-  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
-  return sumTarget;
-}
 obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-sumRedPixels(obstacleCache)
-*/
+sumWithObstacles = sumRedPixels(obstacleCache);
 
 sumWithObstacles / sumTarget;
+
+children = obstacleContainer.removeChildren();
+children.forEach(c => c.destroy());
+
+
+// Unique pixels
+s = new Map();
+pixels = obstacleCache.pixels
+RED = 256 * 256 * 256;
+GREEN = 256 * 256
+BLUE = 256
+for ( let i = 0; i < pixels.length; i += 4 ) {
+  const r = pixels[i];
+  const g = pixels[i+1];
+  const b = pixels[i+2];
+  const a = pixels[i+3];
+  const idx = r * RED + g * GREEN + b * BLUE + a;
+  if ( s.has(idx) ) continue;
+  s.set(idx, { r, g, b, a });
+}
+
+
+
+
 
 
 // Test speed for getting pixel extraction

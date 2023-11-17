@@ -266,7 +266,6 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     const tileChildren = this.tileContainer.removeChildren();
     const children = this.blockingContainer.removeChildren();
     tileChildren.forEach(c => c.destroy());
-    children.forEach(c => c.destroy());
 
     /* Testing
     s = new PIXI.Sprite(renderTexture)
