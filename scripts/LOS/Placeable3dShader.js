@@ -150,6 +150,8 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 in vec3 aVertex;
 in vec2 aTextureCoord;
 
+out vec2 vTextureCoord;
+
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uLookAtMatrix;
 uniform mat4 uOffsetMatrix;
@@ -237,6 +239,8 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aVertex;
 in vec2 aTextureCoord;
+
+out vec2 vTextureCoord;
 
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uLookAtMatrix;

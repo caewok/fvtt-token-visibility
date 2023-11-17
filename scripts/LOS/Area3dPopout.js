@@ -110,8 +110,8 @@ Hooks.on("renderArea3dPopout", function(app, _html, _data) {
   app.pixiApp.stage.position.y = 200;  // 200 for height 400
 
   // Scale to give a bit more room in the popout
-  app.pixiApp.stage.scale.x = 0.5;
-  app.pixiApp.stage.scale.y = 0.5;
+  app.pixiApp.stage.scale.x = 0.9;
+  app.pixiApp.stage.scale.y = 0.9;
 });
 
 /* Testing

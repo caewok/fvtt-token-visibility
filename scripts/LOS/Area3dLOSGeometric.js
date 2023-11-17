@@ -314,14 +314,12 @@ export class Area3dLOSGeometric extends Area3dLOS {
     blockingPoints.terrainWalls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
 
     // Set the matrix for drawing other debug objects
-    if ( this.debug ) {
-      const blockingObjectsPoints = this.blockingObjectsPoints;
-      blockingObjectsPoints.drawings.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-      blockingObjectsPoints.tiles.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-      blockingObjectsPoints.tokens.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-      blockingObjectsPoints.walls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-      blockingObjectsPoints.terrainWalls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-    }
+    const blockingObjectsPoints = this.blockingObjectsPoints;
+    blockingObjectsPoints.drawings.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
+    blockingObjectsPoints.tiles.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
+    blockingObjectsPoints.tokens.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
+    blockingObjectsPoints.walls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
+    blockingObjectsPoints.terrainWalls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
 
     this.#viewIsSet = true;
   }

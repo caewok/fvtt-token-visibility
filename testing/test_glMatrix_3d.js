@@ -514,12 +514,21 @@ calcArea3dGeometric = new Area3dLOSGeometric(viewer, target, { largeTarget: fals
 calcArea3dWebGL1 = new Area3dLOSWebGL(viewer, target, { largeTarget: false })
 calcArea3dWebGL2 = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
 
-calcDefault.percentVisible();
-calcPoints.percentVisible();
-calcArea2d.percentVisible();
-calcArea3dGeometric.percentVisible();
-calcArea3dWebGL1.percentVisible();
-calcArea3dWebGL2.percentVisible();
+percentVisibleDefault = calcDefault.percentVisible();
+percentVisiblePoints = calcPoints.percentVisible();
+percentVisibleArea2d = calcArea2d.percentVisible();
+percentVisibleArea3dGeometric = calcArea3dGeometric.percentVisible();
+percentVisibleArea3dWebGL1 = calcArea3dWebGL1.percentVisible();
+percentVisibleArea3dWebGL2 = calcArea3dWebGL2.percentVisible();
+
+console.table({
+  percentVisibleDefault,
+  percentVisiblePoints,
+  percentVisibleArea2d,
+  percentVisibleArea3dGeometric,
+  percentVisibleArea3dWebGL1,
+  percentVisibleArea3dWebGL2
+});
 
 
 calcDefault._drawCanvasDebug()
@@ -537,7 +546,7 @@ calcArea3dWebGL1._draw3dDebug()
 
 await calcArea3dWebGL2._enableDebugPopout()
 calcArea3dWebGL2._draw3dDebug()
-
+calcArea3dWebGL2.config.useDebugShaders = true
 
 
 calc = new Area3d(viewer, target, { algorithm: "webGL2", largeTarget: false })

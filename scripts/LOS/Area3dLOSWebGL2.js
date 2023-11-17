@@ -44,6 +44,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   constructor(viewer, target, config) {
     super(viewer, target, config);
     this._initializeShaders();
+    this.config.useDebugShaders ??= false;
   }
 
   _clearCache() {
@@ -404,7 +405,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the tiles
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
-        const tileShader = useDebugShaders ? this._buildDebugTileShader(fov, near, far, tile)
+        const tileShader = useDebugShaders ? this._buildTileDebugShader(fov, near, far, tile)
           : this._buildTileShader(fov, near, far, tile);
         const mesh = buildMesh(tile, tileShader);
         stage.addChild(mesh);

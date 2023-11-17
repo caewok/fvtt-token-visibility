@@ -125,17 +125,18 @@ export class Token3dGeometry extends Placeable3dGeometry {
     const h = height * canvas.dimensions.size;
     const w_1_2 = (w * 0.5) - 1;  // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
     const h_1_2 = (h * 0.5) - 1;  // (common with square grids)
+    const elevationOffset = 1; // Shrink top/bottom by 1 pixel for same reason.
 
     return [
-      centerPts.top.add(new Point3d(-w_1_2, -h_1_2, 0)),
-      centerPts.top.add(new Point3d(w_1_2, -h_1_2, 0)),
-      centerPts.top.add(new Point3d(w_1_2, h_1_2, 0)),
-      centerPts.top.add(new Point3d(-w_1_2, h_1_2, 0)),
+      centerPts.top.add(new Point3d(-w_1_2, -h_1_2, -elevationOffset)),
+      centerPts.top.add(new Point3d(w_1_2, -h_1_2, -elevationOffset)),
+      centerPts.top.add(new Point3d(w_1_2, h_1_2, -elevationOffset)),
+      centerPts.top.add(new Point3d(-w_1_2, h_1_2, -elevationOffset)),
 
-      centerPts.bottom.add(new Point3d(-w_1_2, -h_1_2, 0)),
-      centerPts.bottom.add(new Point3d(w_1_2, -h_1_2, 0)),
-      centerPts.bottom.add(new Point3d(w_1_2, h_1_2, 0)),
-      centerPts.bottom.add(new Point3d(-w_1_2, h_1_2, 0))
+      centerPts.bottom.add(new Point3d(-w_1_2, -h_1_2, elevationOffset)),
+      centerPts.bottom.add(new Point3d(w_1_2, -h_1_2, elevationOffset)),
+      centerPts.bottom.add(new Point3d(w_1_2, h_1_2, elevationOffset)),
+      centerPts.bottom.add(new Point3d(-w_1_2, h_1_2, elevationOffset))
     ];
   }
 
