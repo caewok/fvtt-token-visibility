@@ -125,6 +125,17 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     this.#destroyed = true;
   }
 
+  #renderer;
+
+  get renderer() {
+    return this.#renderer || (this.#renderer = canvas.app.renderer);
+  }
+
+  set renderer(value) {
+    if ( !(value instanceof PIXI.Renderer) ) return console.error("Renderer must be PIXI.Renderer.");
+    this.#renderer = value;
+  }
+
   /**
    * Determine percentage area by estimating the blocking shapes using PIXI.Graphics and WebGL.
    * Constructs a render texture to estimate the percentage.
@@ -139,6 +150,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     const TARGET_COLOR = Draw.COLORS.red;
     const OBSTACLE_COLOR = Draw.COLORS.blue;
     const blockingPoints = this.blockingPoints;
+    const renderer = this.renderer;
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
@@ -253,12 +265,12 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     const obstacleSum = blockingPoints.terrainWalls.length ? sumRedObstaclesPixels : sumRedPixels;
 
     // Render only the target shape and calculate its rendered visible area.
-    canvas.app.renderer.render(targetGraphics, { renderTexture, clear: true });
+    renderer.render(targetGraphics, { renderTexture, clear: true });
     const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumTarget = sumRedPixels(targetCache);
 
     // Render all the obstacles and calculate the remaining area.
-    canvas.app.renderer.render(blockingContainer, { renderTexture, clear: false });
+    renderer.render(blockingContainer, { renderTexture, clear: false });
     const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumWithObstacles = obstacleSum(obstacleCache);
 
@@ -302,15 +314,21 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
   }
 
   _drawWebGLDebug() {
-    // TODO: Make removing and adding less stupid.
-    const stage = AREA3D_POPOUTS.webGL.app.pixiApp.stage;
+    const app = AREA3D_POPOUTS.webGL.app.pixiApp;
+    if ( !app ) return;
 
-    // For now, remove sprite and add new one.
-    const children = stage.removeChildren();
+    // Remove sprite and add new one.
+    const children = app.stage.removeChildren();
     children.forEach(c => c.destroy());
+
+    // Set the renderer and re-run
+    this.renderer = app.renderer;
+    this.percentVisible();
 
     // Add the new sprite
     const s = new PIXI.Sprite(this.renderTexture);
-    stage.addChild(s);
+    app.stage.addChild(s);
+
+    this.renderer = canvas.app.renderer;
   }
 }
