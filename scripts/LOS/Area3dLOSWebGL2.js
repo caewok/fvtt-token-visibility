@@ -336,18 +336,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.webGL2; }
 
-  /**
-   * For debugging.
-   * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
-   * Must be extended by subclasses. This version pops up a blank window.
-   */
   _draw3dDebug() {
-    super._draw3dDebug();
-    this._drawWebGL2Debug();
-  }
-
-
-  _drawWebGL2Debug() {
     // For the moment, repeat webGL2 percent visible process so that shaders with
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.

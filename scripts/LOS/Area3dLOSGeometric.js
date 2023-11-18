@@ -621,16 +621,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   /**
    * For debugging.
-   * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
-   * Must be extended by subclasses. This version pops up a blank window.
-   */
-  _draw3dDebug() {
-    super._draw3dDebug();
-    this._drawDebug3dShapes();
-  }
-
-  /**
-   * For debugging.
    * Popout the debugging window if not already rendered.
    * Clear drawings in that canvas.
    * Clear other children.
@@ -643,7 +633,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _drawDebug3dShapes() {
+  _draw3dDebug() {
     const drawTool = this.debugDrawTool; // Draw in the pop-up box.
     if ( !drawTool ) return;
     const colors = Draw.COLORS;

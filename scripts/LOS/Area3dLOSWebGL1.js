@@ -293,16 +293,6 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
   /**
    * For debugging.
-   * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
-   * Must be extended by subclasses. This version pops up a blank window.
-   */
-  _draw3dDebug() {
-    super._draw3dDebug();
-    this._drawWebGLDebug();
-  }
-
-  /**
-   * For debugging.
    * Popout the debugging window if not already rendered.
    * Clear drawings in that canvas.
    * Clear other children.
@@ -313,7 +303,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     children.forEach(c => c.destroy());
   }
 
-  _drawWebGLDebug() {
+  _draw3dDebug() {
     const app = AREA3D_POPOUTS.webGL.app.pixiApp;
     if ( !app || !app.stage ) return;
 
@@ -327,6 +317,8 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     // Add the new sprite
     const s = new PIXI.Sprite(this.renderTexture);
+    s.anchor.set(0.5);
+    // s.position = new PIXI.Point(0, 0);
     app.stage.addChild(s);
 
     this.renderer = canvas.app.renderer;
