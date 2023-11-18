@@ -116,11 +116,6 @@ export class LOSCalculator {
   constructor() {
     const algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
     this.calc = new this.constructor.ALGORITHM_CLASS[algorithm](undefined, undefined, this.config);
-    this.#configure();
-  }
-
-  #configure() {
-    this.config.threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
   }
 
   destroy() {
@@ -142,7 +137,7 @@ export class LOSCalculator {
     calc.target = target;
     const center = Point3d.fromTokenCenter(viewer);
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
-    const threshold = this.config.threshold;
+    const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     for ( const viewerPoint of viewerPoints ) {
       calc.visionOffset = viewerPoint.subtract(center); // TODO: Confirm this is correct.
       if ( calc.hasLOS(threshold) ) return true;
@@ -186,7 +181,6 @@ export class LOSCalculator {
    */
   _updateConfigurationSettings() {
     this.calc._configure(); // At the moment, this really only changes large target.
-    this.#configure();
     this.calc._clearCache();
   }
 }

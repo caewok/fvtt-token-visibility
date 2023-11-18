@@ -340,8 +340,7 @@ export class Settings {
       config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
       default: 0,
       type: Number,
-      tab: "losTarget",
-      onChange: _value => this.losSettingChange(TARGET.PERCENT)
+      tab: "losTarget"
     });
 
     register(PT_OPTS.NUM_POINTS, {
