@@ -90,11 +90,32 @@ export class TilePoints3d extends HorizontalPoints3d {
     uvs[7] = 1;
   }
 
-  _truncatePlanePoints() {
+  _clipPlanePoints() {
     // Get the new border points for the texture.
     // Calculate the percentage change.
     const oldPoints = [...this._tPoints];
-    super._truncatePlanePoints();
+    super._clipPlanePoints();
+
+    if ( this._tPoints.length < 3 ) {
+      console.warn("_clipPlanePoints resulted in less than 3 points")
+      this._tPoints = oldPoints; // Clipping produced a line or point or nothing; revert.
+    }
+    if ( this._tPoints.length === 3 ) {
+      // Original diagonals: oldPoints 0,2 and 1,3.
+      // Find the two z === -.1 points
+      let otherIdx;
+      const zPoints = this._tPoints.filter((pt, idx) => {
+        if ( pt.z.almostEqual(-0.1) ) return true;
+        otherIdx = idx; // The one point not at the z line.
+        return false;
+      });
+      const ix = foundry.utils.lineSegmentIntersection(oldPoints[0], oldPoints[2], zPoints[0], zPoints[1])
+        || foundry.utils.lineSegmentIntersection(oldPoints[1], oldPoints[3], zPoints[0], zPoints[1])
+      const ixPoint = new Point3d(ix.x, ix.y, -0.1);
+
+      const newIdx = (otherIdx + 2) % 4;
+      this._tPoints.splice(newIdx, 0, ixPoint)
+    }
 
     const xMin = this.#xMin;
     const yMin = this.#yMin;
