@@ -133,12 +133,12 @@ export class Area3dLOS extends AlternativeLOS {
   get popout() { return AREA3D_POPOUTS.geometric; }
 
   debug(hasLOS) {
+    this._enableDebugPopout();
     super.debug(hasLOS);
 
     // Only draw in the popout for the targeted token(s).
     // Otherwise, it is really unclear to what the debug is referring.
     if ( !game.user.targets.has(this.target) ) return;
-    this._enableDebugPopout();
     this._draw3dDebug();
   }
 
