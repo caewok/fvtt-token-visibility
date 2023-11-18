@@ -315,7 +315,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
   _drawWebGLDebug() {
     const app = AREA3D_POPOUTS.webGL.app.pixiApp;
-    if ( !app ) return;
+    if ( !app || !app.stage ) return;
 
     // Remove sprite and add new one.
     const children = app.stage.removeChildren();

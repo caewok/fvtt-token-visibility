@@ -132,13 +132,27 @@ export class Area3dLOS extends AlternativeLOS {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.geometric; }
 
+  debug(hasLOS) {
+    super.debug(hasLOS);
+
+    // Only draw in the popout for the targeted token(s).
+    // Otherwise, it is really unclear to what the debug is referring.
+    if ( !game.user.targets.has(this.target) ) return;
+    this._enableDebugPopout();
+    this._draw3dDebug();
+  }
+
+  clearDebug() {
+    super.clearDebug();
+    this._clear3dDebug();
+  }
+
   /**
    * For debugging.
    * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
    * Must be extended by subclasses. This version pops up a blank window.
    */
   _draw3dDebug() {
-
   }
 
   /**
@@ -166,6 +180,6 @@ export class Area3dLOS extends AlternativeLOS {
    */
   async _enableDebugPopout() {
     const popout = this.popout;
-    if ( popout.app._state < 1 ) await popout.app._render(true);
+    if ( popout.app._state < 2 ) popout.app.render(true);
   }
 }

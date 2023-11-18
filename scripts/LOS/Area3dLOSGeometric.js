@@ -610,12 +610,11 @@ export class Area3dLOSGeometric extends Area3dLOS {
     // If not active, use default draw graphics.
     const draw = new Draw();
     const popout = this.popout;
-    if ( !popout.app.rendered ) return draw;
+    if ( !popout.app.rendered ) return undefined;
 
     const stage = popout.app.pixiApp.stage;
-    if ( !stage.children[0] ) {
-      popout.app.pixiApp.stage.addChild(new PIXI.Graphics());
-    }
+    if ( !stage ) return undefined;
+    if ( !stage.children[0] ) popout.app.pixiApp.stage.addChild(new PIXI.Graphics());
     draw.g = stage.children[0];
     return draw;
   }
@@ -646,6 +645,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
    */
   _drawDebug3dShapes() {
     const drawTool = this.debugDrawTool; // Draw in the pop-up box.
+    if ( !drawTool ) return;
     const colors = Draw.COLORS;
     drawTool.clearDrawings();
 

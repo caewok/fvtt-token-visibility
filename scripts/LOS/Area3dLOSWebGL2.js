@@ -80,6 +80,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this.#shaders.terrainWall.setColor(0, 0, 1, 0.5); // Blue, half-alpha
   }
 
+  _initializeDebugShaders() {
+
+  }
+
   /**
    * Describes the viewing frustum used by the shaders to view the target.
    */
@@ -186,16 +190,17 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   destroy() {
     if ( this.#destroyed ) return;
 
-    // Destroy all shaders
-    this.#shaders.forEach(s => s.destroy());
-    this.#debugShaders.forEach(s => s.destroy());
+    // Destroy this first before handling the shaders.
+    this._obstacleContainer.destroy(true);
+
+    // Destroy all shaders and render texture
+    // Unclear why, but the `forEach` approach is not working (never returns)
+    Object.values(this.#shaders).forEach(s => s.destroy());
+    Object.values(this.#debugShaders).forEach(s => s.destroy());
     this._tileShaders.forEach(s => s.destroy());
     this._tileDebugShaders.forEach(s => s.destroy());
     this._tileShaders.clear();
     this._tileDebugShaders.clear();
-
-    // Destroy the obstacle container and render texture.
-    this._obstacleContainer.destroy(true);
     this._renderTexture.destroy();
 
     // Note that everything is destroyed to avoid errors if called again.
@@ -346,7 +351,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // For the moment, repeat webGL2 percent visible process so that shaders with
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
-    const stage = AREA3D_POPOUTS.webGL2.app.pixiApp.stage;
+    const stage = AREA3D_POPOUTS.webGL2.app?.pixiApp?.stage;
+    if ( !stage ) return;
 
     const children = stage.removeChildren();
     children.forEach(c => c.destroy());

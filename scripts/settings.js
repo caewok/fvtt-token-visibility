@@ -140,8 +140,18 @@ export class Settings {
   //   }
 
   static clearDebugGraphics() {
-    this.DEBUG_LOS.clear();
+    LOS_CALCULATOR.CALCULATOR.calc.clearDebug();
+    // this.DEBUG_LOS.clear();
     this.DEBUG_RANGE.clear();
+  }
+
+  static updateLOSDebugGraphics(enable) {
+    if ( enable ) LOS_CALCULATOR.CALCULATOR.calc?._enableDebugPopout();
+    else {
+      LOS_CALCULATOR.CALCULATOR.calc.clearDebug();
+      LOS_CALCULATOR.CALCULATOR.calc?._closeDebugPopout();
+    }
+
   }
 
   /**
@@ -237,7 +247,7 @@ export class Settings {
       config: true,
       type: Boolean,
       default: false,
-      onChange: _value => this.clearDebugGraphics()
+      onChange: value => this.updateLOSDebugGraphics(value)
     });
 
     // ----- NOTE: Submenu ---- //
