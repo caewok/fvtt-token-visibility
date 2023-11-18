@@ -7,7 +7,6 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { Draw } from "./geometry/Draw.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { LOS_CALCULATOR } from "./visibility_los.js";
 
@@ -314,7 +313,7 @@ export class Settings {
       type: Boolean,
       default: true,
       tab: "losTarget",
-      onChange: LOS_CALCULATOR.CALCULATOR._updateConfigurationSettings
+      onChange: _value => this.losAlgorithmChange(TARGET.LARGE)
     });
 
     register(TARGET.ALGORITHM, {
@@ -326,7 +325,7 @@ export class Settings {
       choices: losChoices,
       default: LTYPES.NINE,
       tab: "losTarget",
-      onChange: LOS_CALCULATOR.CALCULATOR._updateAlgorithm
+      onChange: _value => this.losAlgorithmChange(TARGET.ALGORITHM)
     });
 
     register(TARGET.PERCENT, {
@@ -342,7 +341,7 @@ export class Settings {
       default: 0,
       type: Number,
       tab: "losTarget",
-      onChange: LOS_CALCULATOR.CALCULATOR._updateConfigurationSettings
+      onChange: _value => this.losSettingChange(TARGET.PERCENT)
     });
 
     register(PT_OPTS.NUM_POINTS, {
@@ -419,13 +418,13 @@ export class Settings {
     });
   }
 
-  static algorithmChange() {
-    LOS_CALCULATOR.CALCULATOR._updateCalculatorSettings();
+  static losAlgorithmChange(key) {
+    this.cache.delete(key);
+    LOS_CALCULATOR.CALCULATOR._updateAlgorithm();
   }
 
-  static losSettingsChanged() {
-    LOS_CALCULATOR.CALCULATOR._updateCalculatorAlgorithm();
+  static losSettingChange(key) {
+    this.cache.delete(key);
+    LOS_CALCULATOR.CALCULATOR._updateConfigurationSettings();
   }
 }
-
-

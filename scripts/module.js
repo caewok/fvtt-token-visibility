@@ -98,22 +98,23 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   Settings.registerAll();
+  console.debug(`${MODULE_ID}|registered settings`)
 });
 
 Hooks.on("canvasReady", function() {
-  console.debug("tokenvisibility|canvasReady");
+  console.debug(`${MODULE_ID}|canvasReady`);
   Settings.initializeDebugGraphics();
 
   const api = game.modules.get(MODULE_ID).api;
   api.losCalculator = new LOSCalculator();
-  LOS.CALCULATOR = api.losCalculator;
+  LOS_CALCULATOR.CALCULATOR = api.losCalculator;
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
 Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
 
 Hooks.on("canvasTearDown", function() {
-  console.debug("tokenvisibility|canvasTearDown");
+  console.debug(`${MODULE_ID}|canvasTearDown`);
   const api = game.modules.get(MODULE_ID).api;
   api.losCalculator.destroy();
 });
