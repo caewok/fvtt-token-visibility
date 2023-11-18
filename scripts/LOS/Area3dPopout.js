@@ -9,16 +9,27 @@ PIXI
 // Base folder
 import { MODULE_ID } from "../const.js";
 
-export const area3dPopoutData = {
-  savedTop: null,
-  savedLeft: null,
-  app: null,
-  shown: false
-};
+export const AREA3D_POPOUTS = {};
+const AREA3D_OPTIONS = ["geometric", "webGL", "webGL2"];
+for ( const option of AREA3D_OPTIONS ) {
+  AREA3D_POPOUTS[option] = {
+    savedTop: null,
+    savedLeft: null,
+    app: null,
+    shown: false
+  };
+}
 
 export class Area3dPopout extends Application {
 
-  graphics = new PIXI.Graphics();
+  constructor(options = {}) {
+    const type = options.type ?? "geometric";
+    const savedData = AREA3D_POPOUTS[type];
+    options.top ??= savedData.savedTop;
+    options.left ??= savedData.savedLeft;
+    options.id ??= `area3dpopout_${type}`;
+    super(options);
+  }
 
   /* -------------------------------------------- */
 
@@ -30,8 +41,8 @@ export class Area3dPopout extends Application {
     // If width calc is necessary:
     // let h = window.innerHeight * 0.9,
     // w = Math.min(window.innerWidth * 0.9, 1200);
-    options.top = area3dPopoutData.savedTop;
-    options.left = area3dPopoutData.savedLeft;
+    // options.top = area3dPopoutData.savedTop;
+    // options.left = area3dPopoutData.savedLeft;
     // Other possible options:
     // options.top = (window.innertop - this.h) / 2;
     // options.left = (window.innerleft - this.w) / 2;
@@ -39,8 +50,12 @@ export class Area3dPopout extends Application {
     options.template = `modules/${MODULE_ID}/templates/area3d_popout.html`;
     options.popOut = true;
     options.minimizable = true;
-    options.title = "Area3d Debug";
+    options.title ??= "Area3d Debug";
     return options;
+  }
+
+  getData(options = {}) {
+    return { id: `${options.id}_canvas` };
   }
 
   /* -------------------------------------------- */
@@ -48,7 +63,10 @@ export class Area3dPopout extends Application {
   /** @override */
   render(force=false, options={}) {
     super.render(force, options);
-    area3dPopoutData.shown = true;
+
+    const type = this.options.type ?? "geometric";
+    const savedData = AREA3D_POPOUTS[type];
+    savedData.shown = true;
 
     // Add pixi app
     // this.pixiApp = new PIXI.Application({
@@ -63,30 +81,37 @@ export class Area3dPopout extends Application {
   //   /* -------------------------------------------- */
   /** @override */
   close() {
-    area3dPopoutData.shown = false;
-    area3dPopoutData.savedTop = this.position.top;
-    area3dPopoutData.savedLeft = this.position.left;
-    this.graphics.clear();
+    const type = this.options.type ?? "geometric";
+    const savedData = AREA3D_POPOUTS[type];
+    savedData.shown = false;
+    savedData.savedTop = this.position.top;
+    savedData.savedLeft = this.position.left;
+
+    const children = savedData.app.pixiApp.stage.removeChildren();
+
     super.close();
+    this.pixiApp.destroy();
+    children.forEach(c => c.destroy());
   }
 }
 
 Hooks.on("canvasReady", function() {
-  area3dPopoutData.app = new Area3dPopout();
+  for ( const [key, obj] of Object.entries(AREA3D_POPOUTS) ) {
+    obj.app = new Area3dPopout({ title: `Area3d Debug: ${key}`, type: key });
+  }
 });
 
 Hooks.on("renderArea3dPopout", function(app, _html, _data) {
-  app.pixiApp = new PIXI.Application({width: 400, height: 400, view: document.getElementById("area3dcanvas"), backgroundColor: 0xD3D3D3 });
+  const id = `${app.options.id}_canvas`;
+  app.pixiApp = new PIXI.Application({width: 400, height: 400, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
 
   // Center of window should be 0,0
-  app.pixiApp.stage.position.x = 200;
-  app.pixiApp.stage.position.y = 200;
+  app.pixiApp.stage.position.x = 200;  // 200 for width 400
+  app.pixiApp.stage.position.y = 200;  // 200 for height 400
 
   // Scale to give a bit more room in the popout
-  app.pixiApp.stage.scale.x = 0.5;
-  app.pixiApp.stage.scale.y = 0.5;
-
-  app.pixiApp.stage.addChild(app.graphics);
+  app.pixiApp.stage.scale.x = 0.9;
+  app.pixiApp.stage.scale.y = 0.9;
 });
 
 /* Testing

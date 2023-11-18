@@ -52,9 +52,9 @@ points = [
 newPt = new points[0].constructor()
 points[0].projectToAxisValue(points[1], 100, "x", newPt)
 
-newPoints = PlanePoints3d.truncatePlanePoints(points, 200, "y")
+newPoints = PlanePoints3d.clipPlanePoints(points, 200, "y")
 
-newPoints = PlanePoints3d.truncatePlanePoints(points, 0, "z")
+newPoints = PlanePoints3d.clipPlanePoints(points, 0, "z")
 
 points.forEach(pt => Draw.point(pt))
 newPoints.forEach(pt => Draw.point(pt, { color: Draw.COLORS.blue}))
@@ -143,13 +143,16 @@ export class PlanePoints3d {
   setViewMatrix(M) {
     this.M = M;
     this._transform(M); // Sets _tPoints.
+    this._clipPlanePoints();
+    this.viewIsSet = true;
+  }
 
+  _clipPlanePoints() {
     // Truncate the points to be strictly less than 0 in the z direction.
     // (In front of, as opposed to behind, the viewer.)
     // Use -0.1 instead of 0 to avoid floating point errors near 0.
     const cmp = (a, b) => a < b;
-    this._tPoints = PlanePoints3d.truncatePlanePoints(this._tPoints, -0.1, "z", cmp);
-    this.viewIsSet = true;
+    this._tPoints = PlanePoints3d.clipPlanePoints(this._tPoints, -0.1, "z", cmp);
   }
 
   /**
@@ -167,6 +170,10 @@ export class PlanePoints3d {
    * Truncate a set of points representing a plane shape to keep only the points
    * below a given coordinate value. It is assumed that the shape can be closed by
    * getting lastPoint --> firstPoint.
+   *
+   * If the plane is cut off as a triangle, the fourth point will be the intersection
+   * of the original diagonal with the cutoff side.
+   *
    * @param {PIXI.Point[]|Point3d[]} points   Array of points for a polygon in clockwise order.
    * @param {number} cutoff                   Coordinate value cutoff
    * @param {string} coordinate               "x", "y", or "z"
@@ -174,7 +181,7 @@ export class PlanePoints3d {
    *   Defaults to (coord, cutoff) => coord > cutoff
    * @returns {PIXI.Point[]|Point3d[]} The new set of points.
    */
-  static truncatePlanePoints(points, cutoff, coordinate, cmp) {
+  static clipPlanePoints(points, cutoff, coordinate, cmp) {
     cmp ??= (a, b) => a > b;
     coordinate ??= "x";
 
@@ -211,7 +218,6 @@ export class PlanePoints3d {
       A = B;
       keepA = keepB;
     }
-
     return truncatedPoints;
   }
 
@@ -236,8 +242,8 @@ export class PlanePoints3d {
    * Transform the shape to a 2d perspective.
    * @returns {Point2d[]}
    */
-  perspectiveTransform({ forceClockwise = true } = {}) {
-    const out = this.tPoints.map(pt => PlanePoints3d.perspectiveTransform(pt));
+  perspectiveTransform({ forceClockwise = true, multiplier = 1000 } = {}) {
+    const out = this.tPoints.map(pt => PlanePoints3d.perspectiveTransform(pt, multiplier));
     if ( forceClockwise && PlanePoints3d.pointsArea2d(out) < 0 ) out.reverse();
     return out;
   }
@@ -255,13 +261,12 @@ export class PlanePoints3d {
   /**
    * Draw the transformed shape.
    */
-  drawTransformed({perspective = true, color = Draw.COLORS.blue, width = 1, fill, fillAlpha = 0.2, drawTool } = {}) {
+  drawTransformed({ drawTool, perspective = true, ...drawOpts } = {} ) {
     drawTool ??= new Draw();
-    fill ??= color;
-
+    drawOpts.fill ??= drawOpts.color ?? Draw.COLORS.blue;
     const pts = perspective ? this.perspectiveTransform() : this.tPoints;
     const poly = new PIXI.Polygon(pts);
-    drawTool.shape(poly, { color, width, fill, fillAlpha });
+    drawTool.shape(poly, drawOpts);
   }
 
   /**

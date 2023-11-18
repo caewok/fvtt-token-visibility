@@ -10,7 +10,6 @@ import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
 import { Settings, SETTINGS } from "../settings.js";
-import { insetPoints } from "./util.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -129,83 +128,75 @@ export class PointsLOS extends AlternativeLOS {
    * @property {boolean} points3d                     Use top/bottom target elevation when enabled
    */
 
-  /**
-   * @param {Point3d|Token|VisionSource} viewer       Object from which to determine line-of-sight
-   *   If more than token center is required, then this must be a Token or VisionSource
-   * @param {Token} target                            Object to test for visibility
-   * @param {AlternativeLOSConfig} [config]
-   */
-  constructor(viewer, target, config) {
-    super(viewer, target, config);
-    this.#configure(config);
+
+  _configure(config = {}) {
+    super._configure(config);
+
+    if ( config.pointAlgorithm ) this.#pointAlgorithm = config.pointAlgorithm;
+    if ( config.inset ) this.#inset = config.inset;
+    if ( config.points3d ) this.#points3d = config.points3d;
   }
 
-  #configure(config = {}) {
-    const cfg = this.config;
-    cfg.pointAlgorithm = config.pointAlgorithm ?? Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
-    cfg.inset = config.inset ?? Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
-    cfg.points3d = config.points3d;
+  _clearCache() {
+    super._clearCache();
+    this.#targetPoints = undefined;
   }
 
-  // ----- NOTE: Getters ----- //
+  #pointAlgorithm = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
 
-  /** @type {Point3d} */
-  get viewerCenter() { return this.viewer; } // Alias
+  #inset = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
 
-  /**
-   * Point halfway between target bottom and target top.
-   * @type {number}
-   */
-  get targetAvgElevationZ() {
-    const { bottomZ, topZ } = this.target;
-    const height = (topZ - bottomZ) || 1; // So token always has a minimum height.
-    return bottomZ + (height * 0.5);
+  #points3d = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS3D);
+
+  get pointAlgorithm() { return this.#pointAlgorithm; }
+
+  get inset() { return this.#inset; }
+
+  get points3d() { return this.#points3d; }
+
+  set pointAlgorithm(value) {
+    if ( value === this.#pointAlgorithm ) return;
+    this.#pointAlgorithm = value;
+    this.#targetPoints = undefined;
   }
 
-  // ------ NOTE: Primary methods to be overridden by subclass ----- //
+  set inset(value) {
+    if ( value === this.#inset ) return;
+    this.#inset = value;
+    this.#targetPoints = undefined;
+  }
 
-  /**
-   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * LOS is based on the number of points visible from the viewer position.
-   * @param {number} [threshold]    Percentage visible points required
-   * @returns {boolean}
-   */
-  hasLOS(threshold) {
-    const percentVisible = this.percentVisible();
-    if ( percentVisible.almostEqual(0) ) return false;
-    return percentVisible > threshold || percentVisible.almostEqual(threshold);
+  set points3d(value) {
+    if ( value === this.#points3d ) return;
+    this.#points3d = value;
+    this.#targetPoints = undefined;
+  }
+
+  #targetPoints;
+
+  get targetPoints() {
+    return this.#targetPoints
+      || (this.#targetPoints = this._constructTargetPoints());
   }
 
   /**
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
    */
-  percentVisible() {
-    const percent = 1 - this.applyPercentageTest();
-    if ( this.config.debug ) console.debug(`PointsLOS|${this.target.name} is ${Math.round(percent * 100)}% visible.`);
-    return percent;
-  }
+  percentVisible() { return this._simpleVisibilityTest() ?? (1 - this._applyPercentageTest()); }
 
-  applyPercentageTest() {
-    const targetPoints = this._constructTargetPoints();
-    return this._testTargetPoints(targetPoints);
+  _applyPercentageTest() {
+    return this._testTargetPoints(this.targetPoints);
   }
 
   /**
-   * Build the viewer points based on configuration settings.
-   * Essentially, we can use the viewer center, viewer corners, and/or viewer midpoints between corners.
-   * @param {Token} viewer
-   * @returns {Points3d[]}
+   * Convenience method that uses settings of this calculator to construct viewer points.
+   * @returns {Points3d[]|undefined} Undefined if viewer cannot be ascertained
    */
-  static constructViewerPoints(viewer, { pointAlgorithm, inset } = {}) {
-    pointAlgorithm ??= Settings.get(SETTINGS.LOS.VIEWER.NUM_POINTS);
-    inset ??= Settings.get(SETTINGS.LOS.VIEWER.INSET);
-    return this.constructTokenPoints(
-      pointAlgorithm,
-      viewer.constrainedTokenBorder,
-      viewer.topZ,
-      inset,
-      viewer.center);
+  constructViewerPoints() {
+    const { pointAlgorithm, inset } = this;
+    const tokenShape = this.viewer.bounds;
+    return this.constructor._constructTokenPoints(this.viewer, { pointAlgorithm, inset, tokenShape });
   }
 
   /**
@@ -213,68 +204,37 @@ export class PointsLOS extends AlternativeLOS {
    * - Grid. When set, points are constructed per grid space covered by the token.
    */
   _constructTargetPoints() {
-    const targetElevation = this.targetAvgElevationZ;
-    const cfg = this.config;
+    const target = this.target;
+    const { pointAlgorithm, inset, points3d } = this;
+    const cfg = { pointAlgorithm, inset };
 
-    if ( cfg.largeTarget ) {
+    if ( this.config.largeTarget ) {
       // Construct points for each target subshape, defined by grid spaces under the target.
-      const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.target);
-      const targetPointsArray = targetShapes.map(targetShape => this.constructor.constructTokenPoints(
-        cfg.pointAlgorithm,
-        targetShape,
-        targetElevation,
-        cfg.inset));
+      const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
+      const targetPointsArray = targetShapes.map(targetShape => {
+        cfg.tokenShape = targetShape;
+        const targetPoints = this.constructor._constructTokenPoints(target, cfg);
+        if ( points3d ) return this.constructor.elevatePoints(target, targetPoints);
+        return targetPoints;
+      });
       return targetPointsArray;
     }
 
     // Construct points under this constrained token border.
-    const targetPoints = this.constructor.constructTokenPoints(
-      cfg.pointAlgorithm,
-      this.target.constrainedTokenBorder,
-      targetElevation,
-      cfg.inset);
-
+    cfg.tokenShape = target.constrainedTokenBorder;
+    const targetPoints = this.constructor._constructTokenPoints(target, cfg);
+    if ( this.points3d ) return [this.constructor.elevatePoints(target, targetPoints)];
     return [targetPoints];
   }
 
-  static constructTokenPoints(pointAlgorithm, tokenShape, tokenZ, insetPercentage, tokenCenter) {
-    const TYPES = SETTINGS.POINT_TYPES;
-    if ( !tokenCenter || !tokenShape.contains(tokenCenter) ) tokenCenter = tokenShape.center;
-    const center = new Point3d(tokenCenter.x, tokenCenter.y, tokenZ);
 
-    let tokenPoints = [];
-    if ( pointAlgorithm === TYPES.CENTER
-        || pointAlgorithm === TYPES.FIVE
-        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(center);
-
-    if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
-
-    const cornerPoints = this.getCorners(tokenShape, tokenZ);
-
-    // Inset by 1 pixel or inset percentage;
-    insetPoints(cornerPoints, center, insetPercentage);
-    tokenPoints.push(...cornerPoints);
-    if ( pointAlgorithm === TYPES.FOUR
-      || pointAlgorithm === TYPES.FIVE ) return tokenPoints;
-
-    // Add in the midpoints between corners.
-    const ln = cornerPoints.length;
-    let prevPt = cornerPoints.at(-1);
-    for ( let i = 0; i < ln; i += 1 ) {
-      // Don't need to inset b/c the corners already are.
-      const currPt = cornerPoints[i];
-      tokenPoints.push(Point3d.midPoint(prevPt, currPt));
-      prevPt = currPt;
-    }
-    return tokenPoints;
-  }
 
   /**
    * Adds points to the provided points array that represent the
    * top and bottom of the token.
    * If top and bottom are equal, it just returns the points.
    */
-  _elevatePoints(token, pts) {
+  static elevatePoints(token, pts) {
     const { topZ, bottomZ } = token;
     if ( topZ.almostEqual(bottomZ) ) return pts;
     pts.forEach(pt => {
@@ -296,27 +256,13 @@ export class PointsLOS extends AlternativeLOS {
    */
   _testTargetPoints(targetPointsArray) {
     let minBlocked = 1;
-    let minTargetPoints = []; // Debugging
-    const debug = this.config.debug;
     for ( const targetPoints of targetPointsArray ) {
       const percentBlocked = this._testPointToPoints(targetPoints);
 
       // We can escape early if this is completely visible.
-      if ( !percentBlocked ) {
-        if ( debug ) this._drawPointToPoints(targetPoints, { width: 2 });
-        return 0;
-      }
-
-      if ( debug ) {
-        this._drawPointToPoints(targetPoints, { alpha: 0.1 });
-        if ( percentBlocked < minBlocked ) minTargetPoints = targetPoints;
-      }
-
+      if ( !percentBlocked ) return 0;
       minBlocked = Math.min(minBlocked, percentBlocked);
     }
-
-
-    if ( debug ) this._drawPointToPoints(minTargetPoints, { width: 2 });
     return minBlocked;
   }
 
@@ -342,35 +288,6 @@ export class PointsLOS extends AlternativeLOS {
         || this._hasTileCollision(viewerPoint, targetPoint) );
     }
     return numPointsBlocked / ln;
-  }
-
-  /**
-   * For debugging.
-   * Color lines from point to points as yellow, red, or green depending on collisions.
-   * @param {Point3d[]} targetPoints    Array of points on the target to test
-   */
-  _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
-    const draw = new Draw(Settings.DEBUG_LOS);
-    const viewerPoint = this.viewerPoint;
-    const visibleTargetShape = this.config.visibleTargetShape;
-    const ln = targetPoints.length;
-    for ( let i = 0; i < ln; i += 1 ) {
-      const targetPoint = targetPoints[i];
-      const outsideVisibleShape = visibleTargetShape
-        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
-
-      const tokenCollision = this._hasTokenCollision(viewerPoint, targetPoint);
-      const edgeCollision = this._hasWallCollision(viewerPoint, targetPoint)
-        || this._hasTileCollision(viewerPoint, targetPoint);
-
-      let color;
-      if ( outsideVisibleShape ) color = Draw.COLORS.gray;
-      else if ( tokenCollision && !edgeCollision ) color = Draw.COLORS.yellow;
-      else if ( edgeCollision ) color = Draw.COLORS.red;
-      else color = Draw.COLORS.green;
-
-      draw.segment({ A: viewerPoint, B: targetPoint }, { alpha, width, color });
-    }
   }
 
   /**
@@ -439,5 +356,69 @@ export class PointsLOS extends AlternativeLOS {
     return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
 
-}
+  // ----- NOTE: Debugging methods ----- //
 
+  /**
+   * For debugging.
+   * Draw debugging objects on the main canvas.
+   * @param {boolean} hasLOS    Is there line-of-sight to this target?
+   */
+  _drawCanvasDebug(hasLOS = true) {
+    super._drawCanvasDebug(hasLOS);
+    this._drawTargetPointsArray(this.targetPoints);
+  }
+
+  /**
+   * For debugging.
+   * Draw all the points.
+   * Mirrors _testTargetPoints
+   */
+  _drawTargetPointsArray(targetPointsArray) {
+    let minBlocked = 1;
+    let minTargetPoints = []; // Debugging
+    for ( const targetPoints of targetPointsArray ) {
+      const percentBlocked = this._testPointToPoints(targetPoints);
+
+      // We can escape early if this is completely visible.
+      if ( !percentBlocked ) {
+        minTargetPoints = targetPoints;
+        break;
+      }
+
+      this._drawPointToPoints(targetPoints, { alpha: 0.1 });
+      if ( percentBlocked < minBlocked ) minTargetPoints = targetPoints;
+      minBlocked = Math.min(minBlocked, percentBlocked);
+    }
+    this._drawPointToPoints(minTargetPoints, { width: 2 });
+  }
+
+
+  /**
+   * For debugging.
+   * Color lines from point to points as yellow, red, or green depending on collisions.
+   * @param {Point3d[]} targetPoints    Array of points on the target to test
+   */
+  _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
+    const draw = new Draw(Settings.DEBUG_LOS);
+    const viewerPoint = this.viewerPoint;
+    const visibleTargetShape = this.config.visibleTargetShape;
+    const ln = targetPoints.length;
+    for ( let i = 0; i < ln; i += 1 ) {
+      const targetPoint = targetPoints[i];
+      const outsideVisibleShape = visibleTargetShape
+        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
+
+      const tokenCollision = this._hasTokenCollision(viewerPoint, targetPoint);
+      const edgeCollision = this._hasWallCollision(viewerPoint, targetPoint)
+        || this._hasTileCollision(viewerPoint, targetPoint);
+
+      let color;
+      if ( outsideVisibleShape ) color = Draw.COLORS.gray;
+      else if ( tokenCollision && !edgeCollision ) color = Draw.COLORS.yellow;
+      else if ( edgeCollision ) color = Draw.COLORS.red;
+      else color = Draw.COLORS.green;
+
+      draw.segment({ A: viewerPoint, B: targetPoint }, { alpha, width, color });
+    }
+  }
+}

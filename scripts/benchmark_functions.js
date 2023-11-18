@@ -82,7 +82,7 @@ export async function QBenchmarkLoopFn(iterations, fn, name, ...args) {
 
   for (let i = -num_warmups; i < iterations; i += 1) {
     const t0 = performance.now();
-    fn(...args);
+    await fn(...args);
     const t1 = performance.now();
     if (i >= 0) { timings.push(t1 - t0); }
   }
@@ -112,7 +112,7 @@ export async function QBenchmarkLoopWithSetupFn(iterations, setupFn, fn, name, .
   for (let i = -num_warmups; i < iterations; i += 1) {
     const args = setupFn(...setupArgs);
     const t0 = performance.now();
-    fn(...args);
+    await fn(...args);
     const t1 = performance.now();
     if (i >= 0) { timings.push(t1 - t0); }
   }

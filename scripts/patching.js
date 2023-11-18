@@ -14,8 +14,10 @@ import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
 import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
+import { PATCHES as PATCHES_Tile } from "./Tile.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
+import { PATCHES as PATCHES_Wall } from "./Wall.js";
 
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
@@ -29,8 +31,10 @@ const PATCHES = {
   PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
+  Tile: PATCHES_Tile,
   Token: PATCHES_Token,
   VisionSource: PATCHES_VisionSource,
+  Wall: PATCHES_Wall,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
 
@@ -42,4 +46,7 @@ export function initializePatching() {
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
   PATCHER.registerGroup("NO_LEVELS");
+
+  // TODO: Only when Area3d is enabled.
+  PATCHER.registerGroup("AREA3D");
 }
