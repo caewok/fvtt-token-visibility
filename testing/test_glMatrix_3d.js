@@ -531,6 +531,9 @@ console.table({
 });
 
 
+losCalc = api.losCalculator;
+
+
 calcDefault._drawCanvasDebug()
 calcDefault._clearCanvasDebug();
 
@@ -625,6 +628,11 @@ webGL2BenchFn2 = function(viewer, target) {
 // Full resolution
 calcWebGL1.renderTexture.setResolution(1)
 calcWebGL2._renderTexture.setResolution(1);
+
+viewer = canvas.tokens.controlled[0]
+let [target] = game.user.targets;
+calcWebGL1 = new Area3dLOSWebGL(viewer, target, { largeTarget: false });
+calcWebGL2 = new Area3dLOSWebGL2(viewer, target, { largeTarget: false })
 
 N = 1000
 await QBenchmarkLoopFn(N, defaultBenchFn, "default", viewer, target);
