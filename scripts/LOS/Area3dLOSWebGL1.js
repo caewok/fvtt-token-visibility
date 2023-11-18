@@ -141,7 +141,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
    * Constructs a render texture to estimate the percentage.
    * @returns {number}
    */
-  percentVisible() {
+  percentVisible(debug = false) {
     // See https://stackoverflow.com/questions/54415773/calling-grand-parent-function-in-javascript
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
@@ -240,8 +240,15 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
 
     const renderTexture = this.renderTexture;
-    renderTexture.resize(xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min, true);
-    targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+    if ( debug ) {
+      renderTexture.resize(400, 400, true);
+      targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+    } else {
+      renderTexture.resize(xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min, true);
+      targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+    }
+
+
 
     const sumRedPixels = function(targetCache) {
       const pixels = targetCache.pixels;
@@ -313,7 +320,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     // Set the renderer and re-run
     this.renderer = app.renderer;
-    this.percentVisible();
+    this.percentVisible(true);
 
     // Add the new sprite
     const s = new PIXI.Sprite(this.renderTexture);
