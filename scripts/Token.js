@@ -22,7 +22,8 @@ PATCHES.AREA3D = {};
  * If the token is controlled or uncontrolled, clear debug drawings.
  */
 function controlToken(_token, _controlled) {
-  Settings.clearDebugGraphics();
+  // Settings.clearDebugGraphics();
+  console.debug("Token controlled.");
 }
 
 /**
@@ -40,11 +41,13 @@ function updateToken(tokenD, change, _options, _userId) {
   const token = tokenD.object;
   if ( (Object.hasOwn(change, "width") || Object.hasOwn(change, "height")) && token ) token._tokenShape = undefined;
 
-  // Token moved; clear drawings.
+  // Token moved; clear debug drawings.
   if ( Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
       || Object.hasOwn(change, "elevation") ) {
+    console.debug("Token moved.");
     Settings.clearDebugGraphics();
+    console.debug("cleared graphics after token moved.");
   }
 }
 
@@ -100,7 +103,9 @@ PATCHES.AREA3D.HOOKS = {
  * Reset the debugging drawings.
  */
 function updateSource(wrapper, ...args) {
+  console.debug("Token source updated.");
   Settings.clearDebugGraphics();
+  console.debug("Cleared graphics after token source updated.")
   return wrapper(...args);
 }
 

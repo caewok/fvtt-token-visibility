@@ -141,7 +141,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
    * Constructs a render texture to estimate the percentage.
    * @returns {number}
    */
-  percentVisible() {
+  percentVisible(debug = false) {
     // See https://stackoverflow.com/questions/54415773/calling-grand-parent-function-in-javascript
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
@@ -235,13 +235,21 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     }
     const xMinMax = Math.minMax(...xValues);
     const yMinMax = Math.minMax(...yValues);
+    const rtWidth = xMinMax.max - xMinMax.min;
+    const rtHeight = yMinMax.max - yMinMax.min;
+    if ( debug ) {
+      rtWidth = Math.max(rtWidth, 400);
+      rtHeight = Math.max(rtHeight, 400);
+    }
 
-    blockingContainer.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
-    blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
-
+    // Center everything.
     const renderTexture = this.renderTexture;
-    renderTexture.resize(xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min, true);
-    targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+    renderTexture.resize(rtWidth, rtHeight, true);
+    targetGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
+    blockingContainer.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
+
+    // Set blend mode to remove red covered by the blue.
+    blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT;
 
     const sumRedPixels = function(targetCache) {
       const pixels = targetCache.pixels;
@@ -293,16 +301,6 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
   /**
    * For debugging.
-   * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
-   * Must be extended by subclasses. This version pops up a blank window.
-   */
-  _draw3dDebug() {
-    super._draw3dDebug();
-    this._drawWebGLDebug();
-  }
-
-  /**
-   * For debugging.
    * Popout the debugging window if not already rendered.
    * Clear drawings in that canvas.
    * Clear other children.
@@ -313,9 +311,9 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     children.forEach(c => c.destroy());
   }
 
-  _drawWebGLDebug() {
+  _draw3dDebug() {
     const app = AREA3D_POPOUTS.webGL.app.pixiApp;
-    if ( !app ) return;
+    if ( !app || !app.stage ) return;
 
     // Remove sprite and add new one.
     const children = app.stage.removeChildren();
@@ -323,10 +321,12 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     // Set the renderer and re-run
     this.renderer = app.renderer;
-    this.percentVisible();
+    this.percentVisible(true);
 
     // Add the new sprite
     const s = new PIXI.Sprite(this.renderTexture);
+    s.anchor.set(0.5);
+    // s.position = new PIXI.Point(0, 0);
     app.stage.addChild(s);
 
     this.renderer = canvas.app.renderer;

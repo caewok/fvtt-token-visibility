@@ -610,24 +610,13 @@ export class Area3dLOSGeometric extends Area3dLOS {
     // If not active, use default draw graphics.
     const draw = new Draw();
     const popout = this.popout;
-    if ( !popout.app.rendered ) return draw;
+    if ( !popout.app.rendered ) return undefined;
 
     const stage = popout.app.pixiApp.stage;
-    if ( !stage.children[0] ) {
-      popout.app.pixiApp.stage.addChild(new PIXI.Graphics());
-    }
+    if ( !stage ) return undefined;
+    if ( !stage.children[0] ) popout.app.pixiApp.stage.addChild(new PIXI.Graphics());
     draw.g = stage.children[0];
     return draw;
-  }
-
-  /**
-   * For debugging.
-   * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
-   * Must be extended by subclasses. This version pops up a blank window.
-   */
-  _draw3dDebug() {
-    super._draw3dDebug();
-    this._drawDebug3dShapes();
   }
 
   /**
@@ -644,8 +633,9 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _drawDebug3dShapes() {
+  _draw3dDebug() {
     const drawTool = this.debugDrawTool; // Draw in the pop-up box.
+    if ( !drawTool ) return;
     const colors = Draw.COLORS;
     drawTool.clearDrawings();
 

@@ -133,15 +133,22 @@ export class LOSCalculator {
    */
   hasLOS(viewer, target) {
     const calc = this.calc;
+
     calc.viewer = viewer;
     calc.target = target;
     const center = Point3d.fromTokenCenter(viewer);
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
+    const useDebug = Settings.get(SETTINGS.DEBUG.LOS );
+
     for ( const viewerPoint of viewerPoints ) {
       calc.visionOffset = viewerPoint.subtract(center); // TODO: Confirm this is correct.
-      if ( calc.hasLOS(threshold) ) return true;
+      if ( calc.hasLOS(threshold) ) {
+        if ( useDebug ) calc.debug(true);
+        return true;
+      }
     }
+    if ( useDebug ) calc.debug(false);
     return false;
   }
 
@@ -161,6 +168,7 @@ export class LOSCalculator {
       const center = Point3d.fromTokenCenter(viewer);
       calc.visionOffset = visionOffset.subtract(center); // TODO: Confirm this is correct.
     }
+    if ( Settings.get(SETTINGS.DEBUG.LOS ) ) calc.debug(true);
     return calc.percentVisible();
   }
 

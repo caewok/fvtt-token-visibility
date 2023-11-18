@@ -857,13 +857,21 @@ export class AlternativeLOS {
 
   // ----- NOTE: Debugging methods ----- //
 
+  async debug(hasLOS) {
+    hasLOS ??= this.hasLOS();
+    this._drawCanvasDebug(hasLOS);
+  }
+
+  clearDebug() {
+    this._clearCanvasDebug();
+  }
+
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawCanvasDebug(hasLOS = true) {
-    this._clearCanvasDebug();
     this._drawLineOfSight();
     this._drawVisionTriangle();
     this._drawVisibleTokenBorder(hasLOS);
