@@ -45,7 +45,7 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 import { PixelCache } from "./LOS/PixelCache.js";
 import { extractPixels } from "./LOS/extract-pixels.js";
 
-import * as los from "./visibility_los.js";
+import { LOS_CALCULATOR, LOSCalculator, drawDebugPoint } from "./visibility_los.js";
 import * as range from "./visibility_range.js";
 
 // Other self-executing hooks
@@ -72,7 +72,7 @@ Hooks.once("init", function() {
 
     util,
     ConstrainedTokenBorder,
-    los,
+    los: { LOS_CALCULATOR, LOSCalculator, drawDebugPoint },
     range,
     PlanePoints3d,
     TokenPoints3d,
@@ -103,11 +103,20 @@ Hooks.once("setup", function() {
 Hooks.on("canvasReady", function() {
   console.debug("tokenvisibility|canvasReady");
   Settings.initializeDebugGraphics();
+
+  const api = game.modules.get(MODULE_ID).api;
+  api.losCalculator = new LOSCalculator();
+  LOS.CALCULATOR = api.losCalculator;
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
 Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
 
+Hooks.on("canvasTearDown", function() {
+  console.debug("tokenvisibility|canvasTearDown");
+  const api = game.modules.get(MODULE_ID).api;
+  api.losCalculator.destroy();
+});
 
 /**
  * Refresh vision for relevant active effect creation/deletion

@@ -1,12 +1,8 @@
 /* globals
-canvas,
-PIXI,
 Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
-
-import { ClipperPaths } from "./geometry/ClipperPaths.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -85,14 +81,10 @@ function _testPoint(wrapped, visionSource, mode, target, test) {
 
   // If within range, counts if any portion of the token is visible.
   if ( this._testRange(visionSource, mode, target, test)
-    && this._testLOS(visionSource, mode, target, test) ) return true;
+    && this._testLOS(visionSource, mode, target, test, { useLitTargetShape: false }) ) return true;
 
   // Outside of vision range, token is visible if the lit portions are visible.
-  const visibleTargetShape = constrainTokenShapeWithLights(target);
-  if ( visibleTargetShape === null ) return false;
-
-
-  return this._testLOS(visionSource, mode, target, test, visibleTargetShape);
+  return this._testLOS(visionSource, mode, target, test, { useLitTargetShape: true });
 }
 
 
@@ -104,35 +96,35 @@ PATCHES.BASIC.MIXES = { _testPoint };
  * @param {Token} token
  * @returns {PIXI.Polygon|PIXI.Rectangle|ClipperPaths}
  */
-function constrainTokenShapeWithLights(token) {
-  const tokenBorder = token.constrainedTokenBorder;
-
-  // If the global light source is present, then we can use the whole token.
-  if ( canvas.effects.illumination.globalLight ) return undefined;
-
-  // Cannot really use quadtree b/c it doesn't contain all light sources.
-  const lightShapes = [];
-  for ( const light of canvas.effects.lightSources.values() ) {
-    const lightShape = light.shape;
-    if ( !light.active || lightShape.points < 6 ) continue; // Avoid disabled or broken lights.
-
-    // If a light envelops the token shape, then we can use the entire token shape.
-    if ( lightShape.envelops(tokenBorder) ) return undefined;
-
-    // If the token overlaps the light, then we may need to intersect the shape.
-    if ( tokenBorder.overlaps(lightShape) ) lightShapes.push(lightShape);
-  }
-  if ( !lightShapes.length ) return null;
-
-  const paths = ClipperPaths.fromPolygons(lightShapes);
-  const tokenPath = ClipperPaths.fromPolygons(tokenBorder instanceof PIXI.Rectangle
-    ? [tokenBorder.toPolygon()] : [tokenBorder]);
-  const combined = paths
-    .combine()
-    .intersectPaths(tokenPath)
-    .clean()
-    .simplify();
-  return combined;
-}
+// function constrainTokenShapeWithLights(token) {
+//   const tokenBorder = token.constrainedTokenBorder;
+//
+//   // If the global light source is present, then we can use the whole token.
+//   if ( canvas.effects.illumination.globalLight ) return undefined;
+//
+//   // Cannot really use quadtree b/c it doesn't contain all light sources.
+//   const lightShapes = [];
+//   for ( const light of canvas.effects.lightSources.values() ) {
+//     const lightShape = light.shape;
+//     if ( !light.active || lightShape.points < 6 ) continue; // Avoid disabled or broken lights.
+//
+//     // If a light envelops the token shape, then we can use the entire token shape.
+//     if ( lightShape.envelops(tokenBorder) ) return undefined;
+//
+//     // If the token overlaps the light, then we may need to intersect the shape.
+//     if ( tokenBorder.overlaps(lightShape) ) lightShapes.push(lightShape);
+//   }
+//   if ( !lightShapes.length ) return null;
+//
+//   const paths = ClipperPaths.fromPolygons(lightShapes);
+//   const tokenPath = ClipperPaths.fromPolygons(tokenBorder instanceof PIXI.Rectangle
+//     ? [tokenBorder.toPolygon()] : [tokenBorder]);
+//   const combined = paths
+//     .combine()
+//     .intersectPaths(tokenPath)
+//     .clean()
+//     .simplify();
+//   return combined;
+// }
 
 

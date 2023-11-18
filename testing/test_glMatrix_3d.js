@@ -622,6 +622,10 @@ webGL2BenchFn2 = function(viewer, target) {
   return calcWebGL2.percentVisible();
 }
 
+// Full resolution
+calcWebGL1.renderTexture.setResolution(1)
+calcWebGL2._renderTexture.setResolution(1);
+
 N = 1000
 await QBenchmarkLoopFn(N, defaultBenchFn, "default", viewer, target);
 await QBenchmarkLoopFn(N, pointsBenchFn, "points", viewer, target);
@@ -632,6 +636,15 @@ await QBenchmarkLoopFn(N, webGLBenchFn2, "webGL single", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
 
+// Half resolution
+calcWebGL1.renderTexture.setResolution(0.5)
+calcWebGL2._renderTexture.setResolution(0.5);
+await QBenchmarkLoopFn(N, webGLBenchFn2, "webGL single", viewer, target);
+await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
+
+// Quarter resolution
+calcWebGL1.renderTexture.setResolution(0.25)
+calcWebGL2._renderTexture.setResolution(0.25);
 
 
 // NOTE: Peformance measures

@@ -10,7 +10,6 @@ import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
 import { Settings, SETTINGS } from "../settings.js";
-import { insetPoints } from "./util.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -196,7 +195,8 @@ export class PointsLOS extends AlternativeLOS {
    */
   constructViewerPoints() {
     const { pointAlgorithm, inset } = this;
-    return this.constructor.constructTokenPoints(this.viewer, { pointAlgorithm, inset });
+    const tokenShape = this.viewer.bounds;
+    return this.constructor._constructTokenPoints(this.viewer, { pointAlgorithm, inset, tokenShape });
   }
 
   /**
@@ -213,7 +213,7 @@ export class PointsLOS extends AlternativeLOS {
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
       const targetPointsArray = targetShapes.map(targetShape => {
         cfg.tokenShape = targetShape;
-        const targetPoints = this.constructor.constructTokenPoints(target, cfg);
+        const targetPoints = this.constructor._constructTokenPoints(target, cfg);
         if ( points3d ) return this.constructor.elevatePoints(target, targetPoints);
         return targetPoints;
       });
@@ -221,45 +221,13 @@ export class PointsLOS extends AlternativeLOS {
     }
 
     // Construct points under this constrained token border.
-    const targetPoints = this.constructor.constructTokenPoints(target, cfg);
+    cfg.tokenShape = target.constrainedTokenBorder;
+    const targetPoints = this.constructor._constructTokenPoints(target, cfg);
     if ( this.points3d ) return [this.constructor.elevatePoints(target, targetPoints)];
     return [targetPoints];
   }
 
-  static constructTokenPoints(token, { tokenShape, pointAlgorithm, inset } = {}) {
-    pointAlgorithm ??= Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
-    inset ??= Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
-    tokenShape ??= token.constrainedTokenBorder;
 
-    const TYPES = SETTINGS.POINT_TYPES;
-    const center = Point3d.fromTokenCenter(token);
-
-    const tokenPoints = [];
-    if ( pointAlgorithm === TYPES.CENTER
-        || pointAlgorithm === TYPES.FIVE
-        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(center);
-
-    if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
-
-    const cornerPoints = this.getCorners(tokenShape, center.z);
-
-    // Inset by 1 pixel or inset percentage;
-    insetPoints(cornerPoints, center, inset);
-    tokenPoints.push(...cornerPoints);
-    if ( pointAlgorithm === TYPES.FOUR
-      || pointAlgorithm === TYPES.FIVE ) return tokenPoints;
-
-    // Add in the midpoints between corners.
-    const ln = cornerPoints.length;
-    let prevPt = cornerPoints.at(-1);
-    for ( let i = 0; i < ln; i += 1 ) {
-      // Don't need to inset b/c the corners already are.
-      const currPt = cornerPoints[i];
-      tokenPoints.push(Point3d.midPoint(prevPt, currPt));
-      prevPt = currPt;
-    }
-    return tokenPoints;
-  }
 
   /**
    * Adds points to the provided points array that represent the

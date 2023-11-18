@@ -9,6 +9,7 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { Draw } from "./geometry/Draw.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
+import { LOS_CALCULATOR } from "./visibility_los.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -74,7 +75,9 @@ export const SETTINGS = {
       TYPES: {
         POINTS: "los-points",
         AREA2D: "los-area-2d",
-        AREA3D: "los-area-3d"
+        AREA3D: "los-area-3d",
+        AREA3D_WEBGL1: "los-area-3d-webgl1",
+        AREA3D_WEBGL2: "los-area-3d-webgl2"
       },
       POINT_OPTIONS: {
         NUM_POINTS: "los-points-target",
@@ -310,7 +313,8 @@ export class Settings {
       config: false,
       type: Boolean,
       default: true,
-      tab: "losTarget"
+      tab: "losTarget",
+      onChange: LOS_CALCULATOR.CALCULATOR._updateConfigurationSettings
     });
 
     register(TARGET.ALGORITHM, {
@@ -321,7 +325,8 @@ export class Settings {
       type: String,
       choices: losChoices,
       default: LTYPES.NINE,
-      tab: "losTarget"
+      tab: "losTarget",
+      onChange: LOS_CALCULATOR.CALCULATOR._updateAlgorithm
     });
 
     register(TARGET.PERCENT, {
@@ -336,7 +341,8 @@ export class Settings {
       config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
       default: 0,
       type: Number,
-      tab: "losTarget"
+      tab: "losTarget",
+      onChange: LOS_CALCULATOR.CALCULATOR._updateConfigurationSettings
     });
 
     register(PT_OPTS.NUM_POINTS, {
@@ -412,4 +418,14 @@ export class Settings {
       type: Boolean
     });
   }
+
+  static algorithmChange() {
+    LOS_CALCULATOR.CALCULATOR._updateCalculatorSettings();
+  }
+
+  static losSettingsChanged() {
+    LOS_CALCULATOR.CALCULATOR._updateCalculatorAlgorithm();
+  }
 }
+
+

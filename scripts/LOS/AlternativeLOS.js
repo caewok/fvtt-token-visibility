@@ -8,7 +8,6 @@ LimitedAnglePolygon,
 PIXI,
 PointSourcePolygon,
 Ray,
-Token,
 VisionSource
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -16,12 +15,16 @@ VisionSource
 
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
-import { lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
+import { insetPoints, lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
 import { Settings, SETTINGS } from "../settings.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
+import { ClipperPaths } from "../geometry/ClipperPaths.js";
+
+// Points folder
+import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
 /**
  * Base class to estimate line-of-sight between a source and a token using different methods.
@@ -59,32 +62,14 @@ export class AlternativeLOS {
   config = {};
 
   /**
-   * The token that is considered the "viewer" of the target.
-   * By default, the viewer is assumed to view from its center point, although this can
-   * be changed by setting config.visionOffset.
-   * @type {Token}
-   */
-  viewer;
-
-  /**
-   * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
-   * Typically viewable by a light ray but could be other rays (such as whether an arrow could hit it).
-   * Typically based on sight but could be other physical characteristics.
-   * The border shape of the token is separately controlled by configuration.
-   * Subclasses might measure points on the token or the token shape itself for visibility.
-   * @type {Token}
-   */
-  target;
-
-  /**
    * @param {Point3d|Token|VisionSource} viewer   Point or object with z, y, z|elevationZ properties
    * @param {Token} target
    * @param {AlternativeLOSConfig} config
    */
   constructor(viewer, target, config) {
     if ( viewer instanceof VisionSource ) viewer = viewer.object;
-    this.viewer = viewer;
-    this.target = target;
+    this.#viewer = viewer;
+    this.#target = target;
     this._configure(config);
   }
 
@@ -96,10 +81,10 @@ export class AlternativeLOS {
     const cfg = this.config;
     cfg.type = config.type ?? "sight";
     cfg.wallsBlock = config.wallsBlock ?? true;
-    cfg.tilesBlock = config.tilesBlock ?? (MODULES_ACTIVE.LEVELS || MODULES_ACTIVE.EV);
+    cfg.tilesBlock = config.tilesBlock ?? true;
     cfg.deadTokensBlock = config.deadTokensBlock ?? false;
     cfg.liveTokensBlock = config.liveTokensBlock ?? false;
-    cfg.proneTokensBlock = config.proneTokensBlock ?? true;
+    cfg.proneTokensBlock = config.proneTokensBlock ?? false;
     cfg.useLitTargetShape = config.useLitTargetShape ?? false;
     cfg.largeTarget = config.largeTarget ?? Settings.get(SETTINGS.LOS.TARGET.LARGE);
     cfg.visionOffset = config.visionOffset ?? new Point3d();
@@ -118,7 +103,31 @@ export class AlternativeLOS {
     this.#blockingObjects.initialized = false;
   }
 
+  /**
+   * Method to be overridden by subclasses if objects must be destroyed before deleting.
+   */
+  destroy() {
+
+  }
+
   // ----- NOTE: Viewer properties ----- //
+
+  /**
+   * The token that is considered the "viewer" of the target.
+   * By default, the viewer is assumed to view from its center point, although this can
+   * be changed by setting config.visionOffset.
+   * @type {Token}
+   */
+  #viewer;
+
+  get viewer() { return this.#viewer; }
+
+  set viewer(value) {
+    if ( value instanceof VisionSource ) value = value.object;
+    if ( value === this.#viewer ) return;
+    this.#viewer = value;
+    this._clearCache();
+  }
 
   #viewerPoint;
 
@@ -134,16 +143,35 @@ export class AlternativeLOS {
   /** @type {Point3d} */
   set visionOffset(value) {
     this.config.visionOffset.copyPartial(value);
+    this._clearCache();
   }
 
   // ----- NOTE: Target properties ----- //
+
+  /**
+   * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
+   * Typically viewable by a light ray but could be other rays (such as whether an arrow could hit it).
+   * Typically based on sight but could be other physical characteristics.
+   * The border shape of the token is separately controlled by configuration.
+   * Subclasses might measure points on the token or the token shape itself for visibility.
+   * @type {Token}
+   */
+  #target;
+
+  get target() { return this.#target; }
+
+  set target(value) {
+    if ( value === this.#target ) return;
+    this.#target = value;
+    this._clearCache();
+  }
 
   /** @type {Point3d} */
   #targetCenter;
 
   get targetCenter() {
     return this.#targetCenter
-      || (this.#targetCenter = Point3d.fromTokenCenter(this.target))
+      || (this.#targetCenter = Point3d.fromTokenCenter(this.target));
   }
 
   #visibleTargetShape;
@@ -212,7 +240,7 @@ export class AlternativeLOS {
     const percentVisible = this.percentVisible();
     if ( typeof percentVisible === "undefined" ) return true; // Defaults to visible.
     if ( percentVisible.almostEqual(0) ) return false;
-    return this.percentVisible > threshold || percentVisible.almostEqual(threshold);
+    return percentVisible > threshold || percentVisible.almostEqual(threshold);
   }
 
   /**
@@ -432,7 +460,63 @@ export class AlternativeLOS {
     return false;
   }
 
+
+  /**
+   * Convenience method that uses settings of this calculator to construct viewer points.
+   * @returns {Points3d[]|undefined} Undefined if viewer cannot be ascertained
+   */
+  constructViewerPoints() {
+    const { pointAlgorithm, inset } = this;
+    return this.constructor.constructTokenPoints(this.viewer, { pointAlgorithm, inset });
+  }
+
+
   // ----- NOTE: Static methods ----- //
+
+  static constructViewerPoints(viewer, opts = {}) {
+    opts.pointAlgorithm ??= Settings.get(SETTINGS.LOS.VIEWER.NUM_POINTS);
+    opts.inset ??= Settings.get(SETTINGS.LOS.VIEWER.INSET);
+    opts.viewer ??= viewer.bounds; // TODO: Should probably handle hex token shapes?
+    return this._constructTokenPoints(viewer, opts);
+  }
+
+  static constructTargetPoints(target, opts = {}) {
+    opts.pointAlgorithm ??= Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
+    opts.inset ??= Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
+    opts.tokenShape ??= target.constrainedTokenBorder;
+    return this._constructTokenPoints(target, opts);
+  }
+
+  static _constructTokenPoints(token, { tokenShape, pointAlgorithm, inset } = {}) {
+    const TYPES = SETTINGS.POINT_TYPES;
+    const center = Point3d.fromTokenCenter(token);
+
+    const tokenPoints = [];
+    if ( pointAlgorithm === TYPES.CENTER
+        || pointAlgorithm === TYPES.FIVE
+        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(center);
+
+    if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
+
+    const cornerPoints = this.getCorners(tokenShape, center.z);
+
+    // Inset by 1 pixel or inset percentage;
+    insetPoints(cornerPoints, center, inset);
+    tokenPoints.push(...cornerPoints);
+    if ( pointAlgorithm === TYPES.FOUR
+      || pointAlgorithm === TYPES.FIVE ) return tokenPoints;
+
+    // Add in the midpoints between corners.
+    const ln = cornerPoints.length;
+    let prevPt = cornerPoints.at(-1);
+    for ( let i = 0; i < ln; i += 1 ) {
+      // Don't need to inset b/c the corners already are.
+      const currPt = cornerPoints[i];
+      tokenPoints.push(Point3d.midPoint(prevPt, currPt));
+      prevPt = currPt;
+    }
+    return tokenPoints;
+  }
 
   /**
    * Vision Polygon for the view point --> target.
@@ -657,7 +741,7 @@ export class AlternativeLOS {
    * @return {Set<Wall>}
    */
   _filterWallsByVisionPolygon() {
-    const { visionPolygon, config } = this;
+    const visionPolygon = this.visionPolygon;
     let walls = canvas.walls.quadtree.getObjects(visionPolygon._bounds);
     walls = walls.filter(w => this._testWallInclusion(w));
 
@@ -748,7 +832,7 @@ export class AlternativeLOS {
    * @returns {null|WallPoints3d[2]}
    */
   _constructLimitedAngleWallPoints3d() {
-    const visionSource = this.config.visionSource ;
+    const visionSource = this.config.visionSource;
     if ( !visionSource ) return;
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return null;

@@ -11,7 +11,9 @@ import { Settings, SETTINGS } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { PointsLOS } from "./LOS/PointsLOS.js";
 import { Area2dLOS } from "./LOS/Area2dLOS.js";
-import { Area3dLOS } from "./LOS/Area3dLOS.js";
+import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
+import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
+import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Draw } from "./geometry/Draw.js";
 
@@ -79,6 +81,115 @@ DetectionMode.prototype._testRange
 - Tests whether the test point is within range of a light source visionSource.object.getLightRadius
 
 */
+
+export const LOS_CALCULATOR = { CALCULATOR: undefined };
+
+
+/**
+ * Class that handles calculating line-of-sight between two tokens based on current settings.
+ */
+export class LOSCalculator {
+
+  /** @enum {string: AlternativeLOS} */
+  static ALGORITHM_CLASS = {
+    "los-points": PointsLOS,
+    "los-area-2d": Area2dLOS,
+    "los-area-3d": Area3dLOSGeometric,
+    "los-area-3d-webgl1": Area3dLOSWebGL,
+    "los-area-3d-webgl2": Area3dLOSWebGL2
+  };
+
+  config = {
+    type: "sight",
+    wallsBlock: true,
+    tilesBlock: true,
+    deadTokensBlock: false,
+    liveTokensBlock: false,
+    proneTokensBlock: false,
+    threshold: 0,
+
+  };
+
+  /** @type {AlternativeLOS} */
+  calc;
+
+  constructor() {
+    const algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
+    this.calc = new this.constructor.ALGORITHM_CLASS[algorithm](undefined, undefined, this.config);
+    this.#configure();
+  }
+
+  #configure() {
+    this.config.threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
+  }
+
+  destroy() {
+    this.calc.destroy();
+  }
+
+  /**
+   * @typedef {object}  LOSCalculatorConfiguration
+   * Options that affect the one-off calculation.
+   */
+
+  /**
+   * Test if viewer token has LOS to a target token.
+   * Accounts for all viewer points if more than one in settings.
+   */
+  hasLOS(viewer, target) {
+    const calc = this.calc;
+    calc.viewer = viewer;
+    calc.target = target;
+    const center = Point3d.fromTokenCenter(viewer);
+    const viewerPoints = calc.constructor.constructViewerPoints(viewer);
+    const threshold = this.config.threshold;
+    for ( const viewerPoint of viewerPoints ) {
+      calc.visionOffset = viewerPoint.subtract(center); // TODO: Confirm this is correct.
+      if ( calc.hasLOS(threshold) ) return true;
+    }
+    return false;
+  }
+
+
+  /**
+   * Calculate the percentage visible for a target token from a viewer token.
+   * @param {Token} viewer
+   * @param {Token} target
+   * @returns {number}  Percent between 0 and 1. If the "large token subtargeting" is enabled,
+   *   this could be greater than 1.
+   */
+  percentVisible(viewer, target, { visionOffset } = {}) {
+    const calc = this.calc;
+    calc.viewer = viewer;
+    calc.target = target;
+    if ( visionOffset ) {
+      const center = Point3d.fromTokenCenter(viewer);
+      calc.visionOffset = visionOffset.subtract(center); // TODO: Confirm this is correct.
+    }
+    return calc.percentVisible();
+  }
+
+  /**
+   * Update the calculator algorithm.
+   */
+  _updateAlgorithm() {
+    const algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
+    const cl = this.constructor.ALGORITHM_CLASS[algorithm];
+    if ( this.calc instanceof cl ) return;
+
+    this.calc.destroy();
+    this.calc = new cl(undefined, undefined, this.config);
+  }
+
+  /**
+   * Update the calculator settings.
+   */
+  _updateConfigurationSettings() {
+    this.calc._configure(); // At the moment, this really only changes large target.
+    this.#configure();
+    this.calc._clearCache();
+  }
+}
 
 /**
  * Draw red or green test points for debugging.
@@ -167,41 +278,20 @@ export function testLOSPoint(visionSource, target, test) {
  * @param {Token} target
  * @returns {boolean} True if source has line-of-sight to target.
  */
-const LOS_CLASSES = {
-  "los-points": PointsLOS,
-  "los-area-2d": Area2dLOS,
-  "los-area-3d": Area3dLOS
-};
+// const LOS_CLASSES = {
+//   "los-points": PointsLOS,
+//   "los-area-2d": Area2dLOS,
+//   "los-area-3d": Area3dLOS
+// };
 
-export function testLOS(visionSource, target, visibleTargetShape) {
-  // Avoid errors when testing vision for tokens directly on top of one another
-  const targetCenter = target.center;
-
-  if ( visionSource.x === targetCenter.x && visionSource.y === targetCenter.y ) return false;
-
-  const opts = {
-    type: "sight",
-    wallsBlock: true,
-    deadTokensBlock: false,
-    liveTokensBlock: false,
-    liveForceHalfCover: false,
-    proneTokensBlock: false,
-    visibleTargetShape,
-    visionSource
-  };
-  const viewerToken = visionSource.object;
-  const viewerPoints = viewerToken ? PointsLOS.constructTokenPoints(viewerToken)
-    : [Point3d.fromSource(visionSource)];
-  const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
-  const cl = LOS_CLASSES[Settings.get(SETTINGS.LOS.TARGET.ALGORITHM)];
-
-  for ( const viewerPoint of viewerPoints ) {
-    const calc = new cl(viewerPoint, target, opts);
-    const hasLOS = calc.hasLOS(threshold);
-    if ( hasLOS ) return true;
-  }
-  return false;
-}
+// export function testLOS(visionSource, target) {
+//   // Avoid errors when testing vision for tokens directly on top of one another
+//   const targetCenter = target.center;
+//   if ( visionSource.x === targetCenter.x && visionSource.y === targetCenter.y ) return false;
+//
+//   const api = game.modules.get(MODULE_ID).api;
+//   return api.losCalculator.hasLOS(visionSource.object, target);
+// }
 
 /**
  * Test whether the origin and test point are on different levels and so no LOS.

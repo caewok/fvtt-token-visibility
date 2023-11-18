@@ -96,9 +96,6 @@ import { Matrix } from "../geometry/Matrix.js";
 
 export class Area3dLOSGeometric extends Area3dLOS {
 
-
-
-
   /** @type {Shadow[]} */
   wallShadows = [];
 
@@ -134,7 +131,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   get visibleTargetPoints() {
     return this.#visibleTargetPoints
-      || (this.#visibleTargetPoints =  new TokenPoints3d(target, { tokenBorder: this.config.visibleTargetShape }));
+      || (this.#visibleTargetPoints =  new TokenPoints3d(this.target, { tokenBorder: this.config.visibleTargetShape }));
   }
 
   #boundaryTargetPoints;
