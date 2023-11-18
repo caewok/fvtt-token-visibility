@@ -235,20 +235,21 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     }
     const xMinMax = Math.minMax(...xValues);
     const yMinMax = Math.minMax(...yValues);
-
-    blockingContainer.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
-    blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
-
-    const renderTexture = this.renderTexture;
+    const rtWidth = xMinMax.max - xMinMax.min;
+    const rtHeight = yMinMax.max - yMinMax.min;
     if ( debug ) {
-      renderTexture.resize(400, 400, true);
-      targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
-    } else {
-      renderTexture.resize(xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min, true);
-      targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
+      rtWidth = Math.max(rtWidth, 400);
+      rtHeight = Math.max(rtHeight, 400);
     }
 
+    // Center everything.
+    const renderTexture = this.renderTexture;
+    renderTexture.resize(rtWidth, rtHeight, true);
+    targetGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
+    blockingContainer.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
 
+    // Set blend mode to remove red covered by the blue.
+    blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT;
 
     const sumRedPixels = function(targetCache) {
       const pixels = targetCache.pixels;

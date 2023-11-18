@@ -903,8 +903,8 @@ if ( typeof percentVisible !== "undefined" ) console.log(percentVisible);
 if ( !calc.viewIsSet ) calc.calculateViewMatrix();
 TARGET_COLOR = Draw.COLORS.red;
 OBSTACLE_COLOR = Draw.COLORS.blue;
-TERRAIN_COLOR = Draw.COLORS.green;
 blockingPoints = calc.blockingPoints;
+renderer = calc.renderer;
 
 // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
 // and that causes a lighter-color border to appear outside the shape.
@@ -916,42 +916,41 @@ drawOpts = {
   drawTool: undefined
 };
 
-// Clear everything
-calc.targetGraphics.clear();
-calc.blockingGraphics.clear();
-calc.terrainGraphics.clear();
-children = calc.tileContainer.removeChildren();
-children.forEach(c => c.destroy());
-if ( calc.targetRT ) { calc.targetRT.destroy(); }
+blockingContainer = calc.blockingContainer;
+targetGraphics = calc.targetGraphics;
 
 // Draw the target shape.
 targetGraphics = calc.targetGraphics;
 drawOpts.drawTool = new Draw(targetGraphics);
 calc.targetPoints.drawTransformed(drawOpts);
 
-// TODO: Can we draw these using WebGL shader so that if they are behind the target,
-// they are not drawn or otherwise ignored? Could then use _blockingObjectsPoints, which is simpler.
-// Draw walls.
-blockingGraphics = calc.blockingGraphics;
-drawOpts.drawTool = new Draw(blockingGraphics);
-drawOpts.color = OBSTACLE_COLOR;
-drawOpts.fill = OBSTACLE_COLOR;
-blockingPoints.walls.forEach(w => w.drawTransformed(drawOpts));
+// Draw walls and other tokens.
+if ( blockingPoints.walls.length || blockingPoints.tokens.length ) {
+  const blockingGraphics = calc.blockingGraphics;
+  blockingGraphics.clear();
+  blockingContainer.addChild(blockingGraphics);
+  drawOpts.drawTool = new Draw(blockingGraphics);
+  drawOpts.color = OBSTACLE_COLOR;
+  drawOpts.fill = OBSTACLE_COLOR;
 
-// Draw token obstacles
-blockingPoints.tokens.forEach(t => t.drawTransformed(drawOpts));
+  // Draw wall obstacles, if any
+  blockingPoints.walls.forEach(w => w.drawTransformed(drawOpts));
+
+  // Draw token obstacles, if any
+  blockingPoints.tokens.forEach(t => t.drawTransformed(drawOpts));
+}
 
 // Draw terrain walls.
 // Use a separate container with an AlphaCutoffFilter.
 // For an additive blend, can set each terrain to alpha 0.4. Any overlap will be over 0.5.
-terrainGraphics = calc.terrainGraphics;
-if ( blockingPoints.terrainWalls.size ) {
-  if ( !terrainGraphics.filter
-    || !terrainGraphics.filter.length ) terrainGraphics.filters = [new AlphaCutoffFilter(0.5)];
+if ( blockingPoints.terrainWalls.length ) {
+  const terrainGraphics = calc.terrainGraphics;
+  terrainGraphics.clear();
+  blockingContainer.addChild(terrainGraphics);
   drawOpts.drawTool = new Draw(terrainGraphics);
-  drawOpts.color = TERRAIN_COLOR;
-  drawOpts.fill = TERRAIN_COLOR;
-  drawOpts.fillAlpha = 0.4;
+  drawOpts.color = OBSTACLE_COLOR;
+  drawOpts.fill = OBSTACLE_COLOR;
+  drawOpts.fillAlpha = 0.5;
   blockingPoints.terrainWalls.forEach(w => w.drawTransformed(drawOpts));
 }
 
@@ -961,28 +960,22 @@ tileContainer = calc.tileContainer;
 tileFilter = new AlphaCutoffFilter(0.75);
 Sprite2d = PIXI.projection.Sprite2d;
 
-// TODO: Does _blockingObjectsPoints even for tiles under a target token?
+// TODO: Does _blockingObjectsPoints work for tiles under a target token?
 for ( const tilePts of calc.blockingObjectsPoints.tiles ) {
+  blockingContainer.addChild(tileContainer);
   // TODO: Need to cutoff tiles at the z=0 point. And need to have the uv coordinates reflect this.
   // Any chance mapSprite will do this?
-  containerSprite = new Sprite2d(tilePts.object.texture);
+  const containerSprite = new Sprite2d(tilePts.object.texture);
   containerSprite.filters = [tileFilter];
   tileContainer.addChild(containerSprite);
-  perspectivePoints = tilePts.perspectiveTransform();
+  const perspectivePoints = tilePts.perspectiveTransform();
   containerSprite.proj.mapSprite(containerSprite, perspectivePoints);
 
   // Adjust the uvs points if the tile is cutoff behind the viewer.
   containerSprite.calculateVertices(); // Force uvs to be calculated.
-  tileUVs = tilePts.uvs;
+  const tileUVs = tilePts.uvs;
   for ( let i = 0; i < 8; i += 1 ) containerSprite.uvs[i] = tileUVs[i];
-
 }
-
-// Draw everything. Need to first draw the red target token, then draw all the blue obstacles on top.
-blockingContainer = new PIXI.Container();
-blockingContainer.addChild(blockingGraphics);
-blockingContainer.addChild(terrainGraphics);
-blockingContainer.addChild(tileContainer);
 
 // Translate the points to fit in the render texture.
 txPtsArray = calc.targetPoints.faces.map(face => face.perspectiveTransform());
@@ -996,28 +989,52 @@ for ( const ptArray of txPtsArray ) {
 }
 xMinMax = Math.minMax(...xValues);
 yMinMax = Math.minMax(...yValues);
+rtWidth = xMinMax.max - xMinMax.min;
+rtHeight = yMinMax.max - yMinMax.min;
+debug = false
+if ( debug ) {
+  rtWidth = Math.max(rtWidth, 400);
+  rtHeight = Math.max(rtHeight, 400);
+}
 
-targetGraphics.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
-blockingContainer.position = new PIXI.Point(-xMinMax.min, -yMinMax.min);
-blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT; // Works: removes the red.
+// Center everything.
+renderTexture = calc.renderTexture;
+renderTexture.resize(rtWidth, rtHeight, true);
+targetGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5)
+blockingContainer.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
 
-texConfig = {
-  resolution: 1,
-  width: xMinMax.max - xMinMax.min,
-  height: yMinMax.max - yMinMax.min,
-  scaleMode: PIXI.SCALE_MODES.NEAREST
+// Set blend mode to remove red covered by the blue.
+blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT;
+
+
+
+sumRedPixels = function(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+  return sumTarget;
 };
-// TODO: Keep and clear instead of destroying the render texture.
-renderTexture = calc.targetRT = PIXI.RenderTexture.create(texConfig);
+
+sumRedObstaclesPixels = function(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) {
+    const px = pixels[i];
+    if ( px < 128 ) continue;
+    sumTarget += Boolean(targetCache.pixels[i]);
+  }
+  return sumTarget;
+};
+obstacleSum = blockingPoints.terrainWalls.length ? sumRedObstaclesPixels : sumRedPixels;
 
 // Render only the target shape and calculate its rendered visible area.
-canvas.app.renderer.render(targetGraphics, { renderTexture, clear: true });
-targetCache = calc.targetCache = PixelCache.fromTexture(renderTexture, { resolution: 1 } );
-sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
+renderer.render(targetGraphics, { renderTexture, clear: true });
+targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+sumTarget = sumRedPixels(targetCache);
 
 // Render all the obstacles and calculate the remaining area.
-canvas.app.renderer.render(blockingContainer, { renderTexture, clear: false });
-obstacleCache = calc.obstacleCache = PixelCache.fromTexture(renderTexture, { resolution: 1 });
-sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
-
-blockingContainer.destroy();
+renderer.render(blockingContainer, { renderTexture, clear: false });
+obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+sumWithObstacles = obstacleSum(obstacleCache);
