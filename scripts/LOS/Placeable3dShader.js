@@ -51,6 +51,8 @@ void main() {
   };
 
   static create(viewerPt, targetPt, defaultUniforms = {}) {
+    defaultUniforms.uOffsetMatrix = mat4.create();
+    mat4.fromScaling(defaultUniforms.uOffsetMatrix , [-1, 1, 1]);
     const res = super.create(defaultUniforms);
     res._initializeLookAtMatrix(viewerPt, targetPt);
     res._calculatePerspectiveMatrix();
@@ -66,7 +68,7 @@ void main() {
 
   #near = 50;
 
-  #far = 5000;
+  #far = null;
 
   setColor(r = 0, g = 0, b = 1, a = 1) { this.uniforms.uColor = [r, g, b, a]; }
 
