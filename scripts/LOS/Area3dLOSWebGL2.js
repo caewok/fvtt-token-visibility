@@ -108,7 +108,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     // Angle is between the two segments from the origin.
     // TODO: Handle limited angle vision.
-    const angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], viewerPoint, targetBoundaryPts[1]);
+    const angleRad = targetBoundaryPts
+      ? PIXI.Point.angleBetween(targetBoundaryPts[0], viewerPoint, targetBoundaryPts[1])
+      : RADIANS_90;
     const fov = this.#frustrum.fov = angleRad + RADIANS_1;
 
     // Near distance has to be close to the viewer.
