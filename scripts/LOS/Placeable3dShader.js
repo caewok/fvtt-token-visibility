@@ -90,6 +90,14 @@ void main() {
     this._calculatePerspectiveMatrix();
   }
 
+  get fovy() { return this.#fovy; }
+
+  get aspect() { return this.#aspect; }
+
+  get near() { return this.#near; }
+
+  get far() { return this.#far; }
+
   _initializePerspectiveMatrix(fovy, aspect, near, far) {
     this.#fovy = fovy;
     this.#aspect = aspect;
@@ -109,6 +117,12 @@ void main() {
   #center = vec3.create();
 
   #up = vec3.fromValues(0, 0, 1);
+
+  get eye() { return this.#eye; }
+
+  get center() { return this.#center; }
+
+  get up() { return this.#up; }
 
   set eye(value) {
     vec3.set(this.#eye, value.x, value.y, value.z);
@@ -132,7 +146,10 @@ void main() {
   }
 
   _calculateLookAtMatrix() {
+    // Apparently, the glMatrix lookAt is the one to use to move the target to look at the camera.
+
     mat4.lookAt(this.uniforms.uLookAtMatrix, this.#eye, this.#center, this.#up);
+    // mat4.targetTo(this.uniforms.uLookAtMatrix, this.#center, this.#eye, this.#up);
     this.uniformGroup.update();
   }
 }
@@ -209,6 +226,27 @@ uniform mat4 uLookAtMatrix;
 uniform mat4 uOffsetMatrix;
 
 void main() {
+//   int side = gl_VertexID;
+//   switch ( side ) {
+//     case 0:
+//       vColor = vec4(1.0, 0.0, 0.0, 1.0);
+//       break;
+//     case 1:
+//       vColor = vec4(0.0, 0.0, 1.0, 1.0);
+//       break;
+//     case 2:
+//       vColor = vec4(0.0, 1.0, 0.0, 1.0);
+//       break;
+//     case 3:
+//       vColor = vec4(1.0, 1.0, 0.0, 1.0);
+//       break;
+//     case 4:
+//       vColor = vec4(0.0, 1.0, 1.0, 1.0);
+//       break;
+//     default:
+//       vColor = vec4(0.5, 1.0, .5, 1.0);
+//   }
+
   vColor = vec4(aColor, 1.0);
   vec4 cameraPosition = uLookAtMatrix * vec4(aVertex, 1.0);
   gl_Position = uOffsetMatrix * uPerspectiveMatrix * cameraPosition;

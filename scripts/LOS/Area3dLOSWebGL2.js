@@ -31,7 +31,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
   constructor(viewer, target, config) {
     super(viewer, target, config);
-    this.config.useDebugShaders ??= false;
+    this.config.useDebugShaders ??= true;
   }
 
   _clearCache() {
@@ -66,6 +66,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       "terrainWall"
     ];
 
+    // const axes = [1, 1, 1];
     const axes = [-1, 1, 1];  // Mirror along the y axis.
     for ( const shaderName of shaders ) {
       const shader = this.#shaders[shaderName] = Placeable3dShader.create(this.viewerPoint, this.targetCenter);
