@@ -233,7 +233,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     // 1 for the target, in red
     const targetShader = shaders.target;
-    targetShader._initializePerspectiveMatrix(fov, 1, near, far);
+    targetShader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
+    //targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     const targetMesh = buildMesh(target, targetShader);
     // obstacleContainer.addChild(targetMesh);
 
@@ -358,7 +359,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // 1 for the target, in red
     const shaders = this.debugShaders;
     const targetShader = shaders.target;
-    targetShader._initializePerspectiveMatrix(fov, 1, near, far);
+    targetShader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
+    // targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     const targetMesh = buildMesh(target, targetShader);
     stage.addChild(targetMesh);
 

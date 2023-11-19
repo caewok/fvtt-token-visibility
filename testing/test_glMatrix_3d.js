@@ -712,6 +712,7 @@ buildMesh = calc.constructor.buildMesh;
 // 1 for the target, in red
 // aspect = window.outerWidth / window.innerHeight
 targetShader = shaders.target;
+targetShader.uniforms.uOffsetMatrix = mat4.create()
 targetShader._initializePerspectiveMatrix(fov, 1, near, far);
 targetMesh = buildMesh(target, targetShader);
 
