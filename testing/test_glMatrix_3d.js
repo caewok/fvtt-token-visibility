@@ -625,9 +625,7 @@ webGL2BenchFn2 = function(viewer, target) {
   return calcWebGL2.percentVisible();
 }
 
-// Full resolution
-calcWebGL1.renderTexture.setResolution(1)
-calcWebGL2._renderTexture.setResolution(1);
+
 
 viewer = canvas.tokens.controlled[0]
 let [target] = game.user.targets;
@@ -644,6 +642,10 @@ await QBenchmarkLoopFn(N, webGLBenchFn2, "webGL single", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
 
+// Full resolution
+calcWebGL1.renderTexture.setResolution(1)
+calcWebGL2._renderTexture.setResolution(1);
+
 // Half resolution
 calcWebGL1.renderTexture.setResolution(0.5)
 calcWebGL2._renderTexture.setResolution(0.5);
@@ -654,6 +656,17 @@ await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
 calcWebGL1.renderTexture.setResolution(0.25)
 calcWebGL2._renderTexture.setResolution(0.25);
 
+// Full resolution, medium size
+calcWebGL1.renderTexture.setResolution(1)
+calcWebGL2._renderTexture.setResolution(1);
+calcWebGL1.renderTexture.resize(200, 200, true)
+calcWebGL2._renderTexture.resize(200, 200, true)
+
+// Full resolution, smaller size
+calcWebGL1.renderTexture.setResolution(1)
+calcWebGL2._renderTexture.setResolution(1);
+calcWebGL1.renderTexture.resize(100, 100, true)
+calcWebGL2._renderTexture.resize(100, 100, true)
 
 // NOTE: Peformance measures
 measures = [
@@ -680,25 +693,43 @@ console.table(res)
 
 // ------ NOTE: Testing WebGL2
 
+Draw = CONFIG.GeometryLib.Draw;
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
+api = game.modules.get("tokenvisibility").api
+QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
+AREA3D_POPOUTS = api.AREA3D_POPOUTS
+calc = api.los.LOS_CALCULATOR.CALCULATOR.calc
+
+calc.target.bounds.viewablePoints(calc.viewerPoint)
+calc.frustrum
+Math.toDegrees(calc.frustrum.fov)
+
+// Test the render texture
+s = PIXI.Sprite.from(calc._renderTexture)
+canvas.stage.addChild(s)
+canvas.stage.removeChild(s)
+
+Matrix = CONFIG.GeometryLib.Matrix
+Draw = CONFIG.GeometryLib.Draw
 AREA3D_POPOUTS = api.AREA3D_POPOUTS
 PixelCache = api.PixelCache;
 extractPixels = api.extractPixels
 calc = calcArea3dWebGL2
+calc.config.useDebugShaders = true;
 
 percentVisible = calc._simpleVisibilityTest();
 if ( typeof percentVisible !== "undefined" ) console.log(percentVisible);
 
 obstacleContainer = calc._obstacleContainer
 renderTexture = calc._renderTexture
-targetShader = calc._targetShader;
+shaders = calc.debugShaders;
 
-
-// If no blocking objects, line-of-sight is assumed true.
 
 target = calc.target;
 blockingObjects = calc.blockingObjects;
 let { near, far, fov, frame } = calc.frustrum;
-
+renderTexture.resize(frame.width, frame.height, true);
 
 // Create shaders, mesh, draw to texture.
 // TODO: Store and update shaders instead of creating.
@@ -709,10 +740,92 @@ buildMesh = calc.constructor.buildMesh;
 
 
 // 1 for the target, in red
+// aspect = window.outerWidth / window.innerHeight
+targetShader = shaders.target;
+targetShader.uniforms.uOffsetMatrix = mat4.create()
 targetShader._initializePerspectiveMatrix(fov, 1, near, far);
 targetMesh = buildMesh(target, targetShader);
+
+// targetShader._initializePerspectiveMatrix(fov, 1, -.1, -2000);
 // meshContainer.addChild(targetMesh);
 // canvas.stage.addChild(targetMesh)
+
+/* Debug transformations
+let { vec3, vec4, mat4 } = glMatrix
+
+Matrix.lookAt(Point3d.fromTokenCenter(calc.viewer), Point3d.fromTokenCenter(calc.target), new Point3d(0, 0, 1))
+targetShader.uniforms.uLookAtMatrix
+
+
+aTextureCoords = []
+aVertexData = targetMesh.geometry.getBuffer("aVertex").data
+// for ( let i = 2; i < aVertexData.length; i += 3 ) {
+//   aVertexData[i] *= -1
+// }
+
+for ( let i = 0; i < aVertexData.length; i += 3 ) {
+  aTextureCoords.push(aVertexData.subarray(i, i + 3))
+}
+
+cameraPositions = [];
+// uLookAtMatrix = targetMesh.shader.uniforms.uLookAtMatrix
+uLookAtMatrix = mat4.create();
+mat4.lookAt(uLookAtMatrix, targetShader.eye, targetShader.center, targetShader.up);
+
+
+for ( let i = 0; i < aTextureCoords.length; i += 1 ) {
+  const aTextureCoord = aTextureCoords[i];
+  const v4 = vec4.fromValues(aTextureCoord[0], aTextureCoord[1], aTextureCoord[2], 1);
+  const cameraPosition = vec4.create();
+  vec4.transformMat4(cameraPosition, v4, uLookAtMatrix);
+  cameraPositions.push(cameraPosition);
+}
+
+// Convert to points and draw
+cameraPoints = cameraPositions.map(arr => new Point3d(arr[0], arr[1], arr[2]))
+indices = targetMesh.geometry.indexBuffer.data
+for ( let i = 0; i < indices.length; i += 3 ) {
+  const a = indices[i];
+  const b = indices[i + 1];
+  const c = indices[i + 2]
+  Draw.connectPoints([cameraPoints[a], cameraPoints[b], cameraPoints[c]])
+}
+
+
+uPerspectiveMatrix = targetMesh.shader.uniforms.uPerspectiveMatrix
+glPositions = [];
+for ( let i = 0; i < cameraPositions.length; i += 1 ) {
+  const cameraPosition = cameraPositions[i];
+  const glPosition = vec4.create();
+  vec4.transformMat4(glPosition, cameraPosition, uPerspectiveMatrix);
+  glPositions.push(glPosition);
+}
+
+
+// Divide by w, convert by points, draw
+glPoints = glPositions.map(arr => new Point3d(arr[0] / arr[3], arr[1] / arr[3], arr[2] / arr[3]))
+indices = targetMesh.geometry.indexBuffer.data
+
+xMinMax = Math.minMax(...glPoints.map(pt => pt.x))
+yMinMax = Math.minMax(...glPoints.map(pt => pt.y))
+
+trMat = Matrix.translation(-xMinMax.min * 100, -yMinMax.min * 100, 0);
+scaleMat = Matrix.scale(100, 100, 1);
+
+for ( let i = 0; i < indices.length; i += 3 ) {
+  const a = indices[i];
+  const b = indices[i + 1];
+  const c = indices[i + 2]
+
+  const pt0 = trMat.multiplyPoint3d(scaleMat.multiplyPoint3d(glPoints[a]))
+  const pt1 = trMat.multiplyPoint3d(scaleMat.multiplyPoint3d(glPoints[b]))
+  const pt2 = trMat.multiplyPoint3d(scaleMat.multiplyPoint3d(glPoints[c]))
+
+  Draw.connectPoints([pt0, pt1, pt2])
+}
+*/
+
+
 
 
 // TODO: Fix garbage handling; destroy the shaders and meshes.
