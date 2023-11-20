@@ -625,9 +625,7 @@ webGL2BenchFn2 = function(viewer, target) {
   return calcWebGL2.percentVisible();
 }
 
-// Full resolution
-calcWebGL1.renderTexture.setResolution(1)
-calcWebGL2._renderTexture.setResolution(1);
+
 
 viewer = canvas.tokens.controlled[0]
 let [target] = game.user.targets;
@@ -644,6 +642,10 @@ await QBenchmarkLoopFn(N, webGLBenchFn2, "webGL single", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn, "webGL2", viewer, target);
 await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
 
+// Full resolution
+calcWebGL1.renderTexture.setResolution(1)
+calcWebGL2._renderTexture.setResolution(1);
+
 // Half resolution
 calcWebGL1.renderTexture.setResolution(0.5)
 calcWebGL2._renderTexture.setResolution(0.5);
@@ -654,6 +656,17 @@ await QBenchmarkLoopFn(N, webGL2BenchFn2, "webGL2 single", viewer, target);
 calcWebGL1.renderTexture.setResolution(0.25)
 calcWebGL2._renderTexture.setResolution(0.25);
 
+// Full resolution, medium size
+calcWebGL1.renderTexture.setResolution(1)
+calcWebGL2._renderTexture.setResolution(1);
+calcWebGL1.renderTexture.resize(200, 200, true)
+calcWebGL2._renderTexture.resize(200, 200, true)
+
+// Full resolution, smaller size
+calcWebGL1.renderTexture.setResolution(1)
+calcWebGL2._renderTexture.setResolution(1);
+calcWebGL1.renderTexture.resize(100, 100, true)
+calcWebGL2._renderTexture.resize(100, 100, true)
 
 // NOTE: Peformance measures
 measures = [

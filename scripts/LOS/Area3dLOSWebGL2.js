@@ -219,8 +219,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     scaleMode: PIXI.SCALE_MODES.NEAREST,
     multisample: PIXI.MSAA_QUALITY.NONE,
     alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
-    width: 200,
-    height: 200
+    width: 100,
+    height: 100
   });
 
   #destroyed = false;
