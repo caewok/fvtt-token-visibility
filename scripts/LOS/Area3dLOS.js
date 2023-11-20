@@ -133,7 +133,7 @@ export class Area3dLOS extends AlternativeLOS {
   get popout() { return AREA3D_POPOUTS.geometric; }
 
   debug(hasLOS) {
-    console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._enableDebugPopout();
     super.debug(hasLOS);
 
@@ -144,7 +144,7 @@ export class Area3dLOS extends AlternativeLOS {
   }
 
   clearDebug() {
-    console.debug(`clearDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // console.debug(`clearDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     super.clearDebug();
     this._clear3dDebug();
   }

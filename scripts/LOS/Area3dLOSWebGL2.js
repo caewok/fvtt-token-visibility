@@ -65,27 +65,21 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   get debugShaders() {
-    if ( !this.#debugShaders ) this._initializeShaders();
-    if ( this.config.useDebugShaders ) return this.#debugShaders;
-    return this.#shaders;
+    if ( !this.config.useDebugShaders ) return this.shaders;
+    if ( !this.#debugShaders ) this._initializeDebugShaders();
+    return this.#debugShaders;
   }
 
   _initializeShaders() {
     this.#shaders = {};
-    this.#debugShaders = {};
-
     const shaders = [
       "target",
       "obstacle",
       "terrainWall"
     ];
 
-    // const axes = [-1, 1, 1];  // Mirror along the y axis.
     for ( const shaderName of shaders ) {
       const shader = this.#shaders[shaderName] = Placeable3dShader.create(this.viewerPoint, this.targetCenter);
-      const debugShader = this.#debugShaders[shaderName] = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
-      // mat4.fromScaling(shader.uniforms.uOffsetMatrix, axes);
-      // mat4.fromScaling(debugShader.uniforms.uOffsetMatrix, axes);
     }
 
     // Set color for each shader.
@@ -95,7 +89,16 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   _initializeDebugShaders() {
+    this.#debugShaders = {};
+    const shaders = [
+      "target",
+      "obstacle",
+      "terrainWall"
+    ];
 
+    for ( const shaderName of shaders ) {
+      const debugShader = this.#debugShaders[shaderName] = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
+    }
   }
 
   /**
@@ -241,12 +244,16 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this._tileDebugShaders.clear();
     this._renderTexture.destroy();
 
+    this._debugRenderTexture?.destroy();
+    this._debugSprite?.destroy();
+    this._debugObstacleContainer?.destroy();
+
     // Note that everything is destroyed to avoid errors if called again.
     this.#destroyed = true;
   }
 
   percentVisible() {
-    console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
@@ -292,14 +299,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.webGL2; }
 
-  _debugRenderTexture = PIXI.RenderTexture.create({
-    resolution: 1,
-    scaleMode: PIXI.SCALE_MODES.NEAREST,
-    multisample: PIXI.MSAA_QUALITY.NONE,
-    alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
-    width: 400,
-    height: 400
-  });
+
 
   _draw3dDebug() {
     // For the moment, repeat webGL2 percent visible process so that shaders with
@@ -308,39 +308,47 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const app = AREA3D_POPOUTS.webGL2.app?.pixiApp;
     const stage = app?.stage;
     if ( !stage ) return;
+    stage.removeChildren();
 
-    console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
-    const children = stage.removeChildren();
-    // children.forEach(c => c.destroy());
+    // Build the debug objects.
+    if ( !this._debugRenderTexture ) this._debugRenderTexture = PIXI.RenderTexture.create({
+      resolution: 1,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
+      width: 400,
+      height: 400
+    });
+    if ( !this._debugObstacleContainer ) this._debugObstacleContainer = new PIXI.Container();
+    if ( !this._debugSprite ) {
+      this._debugSprite = PIXI.Sprite.from(this._debugRenderTexture);
+      this._debugSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
+      this._debugSprite.anchor = new PIXI.Point(0.5, 0.5); // Centered on the debug window.
+    }
+
+    // console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
 
     const shaders = this.debugShaders;
+    const obstacleContainer = this._debugObstacleContainer;
     const targetMesh = this.#buildTargetMesh(shaders);
-    const c = new PIXI.Container();
-    this.#buildObstacleContainer(c, shaders, this._buildTileDebugShader.bind(this));
+    this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileDebugShader.bind(this));
     const renderTexture = this._debugRenderTexture;
-
-    // targetMesh.position.set(-200, 200);
-    // c.position.set(-200, 200);
-
     app.renderer.render(targetMesh, { renderTexture, clear: true });
-    app.renderer.render(c, { renderTexture, clear: false });
-
-    if ( !this._debugSprite ) {
-      this._debugSprite = PIXI.Sprite.from(renderTexture);
-      this._debugSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
-      this._debugSprite.anchor = new PIXI.Point(0.5, 0.5);
-    }
+    app.renderer.render(obstacleContainer, { renderTexture, clear: false });
     stage.addChild(this._debugSprite);
+
+    targetMesh.destroy();
+    obstacleContainer.removeChildren().forEach(c => c.destroy());
 
     // stage.addChild(targetMesh);
     // stage.addChild(c);
 
     // Temporarily render the texture for debugging.
-    if ( !this.renderSprite || this.renderSprite.destroyed ) {
-      this.renderSprite ??= PIXI.Sprite.from(this._renderTexture);
-      this.renderSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
-      canvas.stage.addChild(this.renderSprite);
-    }
+    // if ( !this.renderSprite || this.renderSprite.destroyed ) {
+    //  this.renderSprite ??= PIXI.Sprite.from(this._renderTexture);
+    //  this.renderSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
+    //  canvas.stage.addChild(this.renderSprite);
+    // }
   }
 
   #buildTargetMesh(shaders) {

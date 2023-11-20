@@ -234,7 +234,7 @@ export class AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(threshold, printResult = false) {
-    console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._clearCache();
 
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
