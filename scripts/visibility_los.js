@@ -140,7 +140,7 @@ export class LOSCalculator {
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const useDebug = Settings.get(SETTINGS.DEBUG.LOS);
-    console.debug(`\n----- Visibility.prototype.hasLOS|${viewer.name}👀 => ${target.name}🎯 -----`);
+    // console.debug(`\n----- Visibility.prototype.hasLOS|${viewer.name}👀 => ${target.name}🎯 -----`);
 
     for ( const viewerPoint of viewerPoints ) {
       calc.visionOffset = viewerPoint.subtract(center); // TODO: Confirm this is correct.
