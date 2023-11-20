@@ -688,6 +688,10 @@ QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
 AREA3D_POPOUTS = api.AREA3D_POPOUTS
 calc = api.los.LOS_CALCULATOR.CALCULATOR.calc
 
+calc.target.bounds.viewablePoints(calc.viewerPoint)
+calc.frustrum
+Math.toDegrees(calc.frustrum.fov)
+
 // Test the render texture
 s = PIXI.Sprite.from(calc._renderTexture)
 canvas.stage.addChild(s)
