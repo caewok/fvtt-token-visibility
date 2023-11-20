@@ -37,6 +37,20 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   _clearCache() {
     super._clearCache();
     this.#frustrum.initialized = false;
+    this.#targetDistance3dProperties.initialized = false;
+  }
+
+  /** @type {object} */
+  #targetDistance3dProperties = {
+    diagonal: 0,
+    farDistance: 0,
+    nearDistance: 0,
+    initialized: false
+  };
+
+  get targetDistance3dProperties() {
+    if ( !this.#targetDistance3dProperties.initialized ) this._calculateTargetDistance3dProperties();
+    return this.#targetDistance3dProperties;
   }
 
   /** @type {object} */
@@ -100,6 +114,33 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     return this.#frustrum;
   }
 
+  _calculateTargetDistance3dProperties() {
+    const { viewerPoint, target } = this;
+    const props = this.#targetDistance3dProperties;
+
+    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
+    const { topZ, bottomZ, bounds } = target;
+    const tokenBoundaryPts = [
+      new Point3d(bounds.left, bounds.top, topZ),
+      new Point3d(bounds.right, bounds.top, topZ),
+      new Point3d(bounds.right, bounds.bottom, topZ),
+      new Point3d(bounds.left, bounds.bottom, topZ),
+
+      new Point3d(bounds.left, bounds.top, bottomZ),
+      new Point3d(bounds.right, bounds.top, bottomZ),
+      new Point3d(bounds.right, bounds.bottom, bottomZ),
+      new Point3d(bounds.left, bounds.bottom, bottomZ)
+    ];
+
+    const distances = tokenBoundaryPts.map(pt => Point3d.distanceBetween(viewerPoint, pt));
+    const distMinMax = Math.minMax(...distances);
+
+    props.farDistance = distMinMax.max;
+    props.nearDistance = distMinMax.min;
+    props.diagonal = Point3d.distanceBetween(tokenBoundaryPts[0], tokenBoundaryPts[6]);
+    props.initialized = true;
+  }
+
 
   /**
    * Calculate the relevant frustrum properties for this viewer and target.
@@ -107,125 +148,26 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
    * take up as much as the frustrum frame as possible, while limiting the size of the frame.
    */
   #constructFrustrum() {
-    const { viewerPoint, target, targetCenter } = this;
     const viewerAngle = Math.toRadians(this.viewer.vision?.data?.angle) || Math.PI * 2;
 
-    // Use the full token shape, not constrained shape, so that the angle captures the whole token.
-    const targetBounds = target.bounds;
-    const targetViewablePts = targetBounds
-      .viewablePoints(viewerPoint, { outermostOnly: false })
-      .map(pt => new PIXI.Point(pt.x, pt.y));
+    // Determine the optimal fov given the distance.
+    // https://docs.unity3d.com/Manual/FrustumSizeAtDistance.html
+    // Use near instead of far to ensure frame at start of token is large enough.
+    const { diagonal, farDistance, nearDistance } = this.targetDistance3dProperties;
+    let angleRad = 2 * Math.atan(diagonal * (0.5 / nearDistance));
+    angleRad = Math.min(angleRad, viewerAngle);
+    angleRad ??= RADIANS_90;
+    const fov = this.#frustrum.fov = angleRad;// + RADIANS_1;
 
-    // Determine which point(s) are further away on the 2d plane.
-    const viewablePointsSet = new Set(targetViewablePts.map(pt => pt.key));
-
-    const tokenBoundaryPts = [
-      new PIXI.Point(targetBounds.left, targetBounds.top),
-      new PIXI.Point(targetBounds.right, targetBounds.top),
-      new PIXI.Point(targetBounds.right, targetBounds.bottom),
-      new PIXI.Point(targetBounds.left, targetBounds.bottom)
-    ];
-    const fullPointSet = new Set(tokenBoundaryPts.map(pt => pt.key));
-    const fartherPoints2d = fullPointSet.difference(viewablePointsSet).map(key => PIXI.Point.invertKey(key));
-
-    // Check the top and bottom distance to each.
-    const fartherPoints3d = [];
-    const { topZ, bottomZ } = target;
-    for ( const pt2d of fartherPoints2d ) {
-      fartherPoints3d.push(
-        new Point3d(pt2d.x, pt2d.y, topZ),
-        new Point3d(pt2d.x, pt2d.y, bottomZ)
-      );
-    }
-
-    const dist = fartherPoints3d.reduce((acc, curr) => {
-      const dist = Point3d.distanceBetween(viewerPoint, curr);
-      return Math.max(acc, dist);
-    }, 0);
-
-    // Distance to the nearer point
-    const nearestPt = targetViewablePts[1];
-    const nearerPoints3d = [
-      new Point3d(nearestPt.x, nearestPt.y, topZ),
-      new Point3d(nearestPt.x, nearestPt.y, bottomZ)
-    ];
-
-
-    const nearDist = nearerPoints3d.reduce((acc, curr) => {
-      const dist = Point3d.distanceBetween(viewerPoint, curr);
-      return Math.min(acc, dist);
-    }, Number.POSITIVE_INFINITY);
-
-
-//     const { topZ, bottomZ } = target;
-//
-//     let angleRad = 0;
-//     if ( targetBoundaryPts ) {
-//       angleRad = PIXI.Point.angleBetween(targetBoundaryPts[0], viewerPoint, targetBoundaryPts.at(-1));
-//
-//       // Check the height angle using the closest point.
-//       const closestPt = targetBoundaryPts[1];
-//       const heightAngle = Point3d.angleBetween(
-//         new Point3d(closestPt.x, closestPt.y, bottomZ),
-//         viewerPoint,
-//         new Point3d(closestPt.x, closestPt.y, topZ));
-//       angleRad = Math.max(heightAngle, angleRad);
-//     }
-//
-//     // Use the diagonals to check the height angle.
-//     const
-//
-//
-//     const angleDiag0 = Point3d.angleBetween(
-//       new Point3d(targetBounds.left, targetBounds.top, topZ),
-//       viewerPoint,
-//       new Point3d(targetBounds.right, targetBounds.bottom, bottomZ),
-//     );
-//
-//     const angleDiag1 = Point3d.angleBetween(
-//       new Point3d(targetBounds.left, targetBounds.bottom, topZ),
-//       viewerPoint,
-//       new Point3d(targetBounds.right, targetBounds.top, bottomZ),
-//     );
-//
-//
-//
-//
-//     // Check the 3d angle from center.
-//     const { top, bottom } = Point3d.fromToken(target);
-//     const heightAngle = Point3d.angleBetween(top, viewerPoint, bottom);
-//     angleRad = Math.max(angleRad, angleDiag0, a);
-//     if ( viewerAngle < 360 ) angleRad = Math.min(Math.toRadians(viewerAngle), angleRad);
-//     angleRad ??= RADIANS_90; // Don't let the angle be 0.
-//
-//     const fov = this.#frustrum.fov = angleRad + RADIANS_1;
+    // Far distance is distance to the furthest point of the target.
+    this.#frustrum.far = farDistance;
 
     // Near distance has to be close to the viewer.
     // We can assume we don't want to view anything within 1/2 grid unit?
     this.#frustrum.near = canvas.dimensions.size * 0.5;
 
-    // Far distance is distance to the furthest point of the target.
-
-    // const { w, h } = target;
-    // const diagDist = Math.hypot(w, h) * 0.5;
-    // const dist = Point3d.distanceBetween(viewerPoint, targetCenter) + diagDist;
-    const far = this.#frustrum.far = dist; //Math.ceil(dist);
-
-    // Determine the optimal fov given the distance.
-    // https://docs.unity3d.com/Manual/FrustumSizeAtDistance.html
-    // const targetBounds = target.bounds;
-    // const targetLength = Math.max(target.w, target.h, topZ - bottomZ);
-
-    const targetLength = Point3d.distanceBetween(
-      new Point3d(targetBounds.left, targetBounds.top, target.topZ),
-      new Point3d(targetBounds.right, targetBounds.bottom, target.bottomZ));
-    let angleRad = 2 * Math.atan(targetLength * (0.5 / nearDist)); // Use nearDist instead of far to increase the angle.
-    angleRad = Math.min(angleRad, viewerAngle);
-    angleRad ??= RADIANS_90;
-    const fov = this.#frustrum.fov = angleRad + RADIANS_1;
-
     // Build the frame
-    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, far));
+    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, farDistance));
     const frame = this.#frustrum.frame;
     frame.x = -frustrumBase;
     frame.y = -frustrumBase;
@@ -314,11 +256,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
     performance.mark("startWebGL2");
-
     const renderTexture = this._renderTexture;
     const shaders = this.shaders;
-
-    // If no blocking objects, line-of-sight is assumed true.
     const blockingObjects = this.blockingObjects;
 
     // Build target mesh to measure the target viewable area.
@@ -332,36 +271,28 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileShader.bind(this));
 
     // Resize the renderTexture to match the frustrum frame.
-    const { width } = this.frustrum.frame; // Width and height are equal b/c we are using aspect = 1.
+    // const { width } = this.frustrum.frame; // Width and height are equal b/c we are using aspect = 1.
+    const width = 200;
     renderTexture.resize(width, width, true);
 
     performance.mark("renderTargetMesh");
     canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
 
+    // Calculate visible area of the target.
     performance.mark("targetCache");
     const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumTarget = this.#sumRedPixels(targetCache);
 
-//     const targetCache = PixelCache.fromTexture(renderTexture,
-//       { channel: 0, arrayClass: Uint8Array });
-//     const sumTarget = targetCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
-
-
     performance.mark("renderObstacleMesh");
     canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
 
-    // Calculate area remaining.
-    // TODO: Handle terrain walls.
+    // Calculate target area remaining after obstacles.
     performance.mark("obstacleCache");
-//     const obstacleCache = PixelCache.fromTexture(renderTexture,
-//       { frame, channel: 0, arrayClass: Uint8Array });
-//     const sumWithObstacles = obstacleCache.pixels.reduce((acc, curr) => acc += Boolean(curr), 0);
     const obstacleSum = blockingObjects.terrainWalls.size ? this.#sumRedObstaclesPixels : this.#sumRedPixels;
     const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumWithObstacles = obstacleSum(obstacleCache);
 
     performance.mark("endWebGL2");
-
     const children = obstacleContainer.removeChildren();
     children.forEach(c => c.destroy());
 
@@ -400,6 +331,14 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const draw = new Draw(g);
     stage.addChild(g);
     draw.shape(this.frustrum.frame);
+
+    // Temporarily render the texture.
+    if ( !this.renderSprite || this.renderSprite.destroyed ) {
+      this.renderSprite ??= PIXI.Sprite.from(this._renderTexture);
+      canvas.stage.addChild(this.renderSprite);
+    }
+
+
   }
 
   #buildTargetMesh(shaders) {
