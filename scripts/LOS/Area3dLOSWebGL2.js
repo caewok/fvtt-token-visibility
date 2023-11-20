@@ -7,6 +7,7 @@ PIXI
 
 import { Area3dLOS } from "./Area3dLOS.js";
 import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
+import { Draw } from "../geometry/Draw.js";
 
 // webGL2
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
@@ -128,10 +129,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const frustrumBase_1_2 = frustrumBase * 0.5;
 
     const frame = this.#frustrum.frame;
-    frame.x = -frustrumBase_1_2;
-    frame.y = -frustrumBase_1_2;
-    frame.width = frustrumBase;
-    frame.height = frustrumBase;
+    frame.x = -frustrumBase;
+    frame.y = -frustrumBase;
+    frame.width = frustrumBase * 2;
+    frame.height = frustrumBase * 2;
     this.#frustrum.initialized = true;
   }
 
@@ -159,7 +160,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     const shader = this._tileShaders.get(tile);
     shader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
-    // shader._initializePerspectiveMatrix(fov, 1, near, far);
+    shader._initializePerspectiveMatrix(fov, 1, near, far);
     return shader;
   }
 
@@ -174,7 +175,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     const shader = this._tileDebugShaders.get(tile);
     shader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
-    // shader._initializePerspectiveMatrix(fov, 1, near, far);
+    shader._initializePerspectiveMatrix(fov, 1, near, far);
     return shader;
   }
 
@@ -221,8 +222,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     // If no blocking objects, line-of-sight is assumed true.
     const blockingObjects = this.blockingObjects;
-    const frame = this.frustrum.frame;
-    renderTexture.resize(frame.width, frame.height, true);
+
 
 
     // Build target mesh to measure the target viewable area.
@@ -234,6 +234,14 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     performance.mark("obstacleMesh");
     const obstacleContainer = this._obstacleContainer;
     this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileShader.bind(this));
+
+    // Center everything.
+    // const { width, height } = this.frustrum.frame;
+    const width = 200;
+    const height = 200;
+    renderTexture.resize(width, height, true);
+    targetMesh.position = new PIXI.Point(width * 0.5, height * 0.5);
+    obstacleContainer.position = new PIXI.Point(width * 0.5, height * 0.5);
 
     performance.mark("renderTargetMesh");
     canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
@@ -285,13 +293,19 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const targetMesh = this.#buildTargetMesh(shaders);
     stage.addChild(targetMesh);
     this.#buildObstacleContainer(stage, shaders, this._buildTileDebugShader.bind(this));
+
+    // Temporarily draw the estimated frustrum frame.
+    const g = new PIXI.Graphics();
+    const draw = new Draw(g);
+    stage.addChild(g);
+    draw.shape(this.frustrum.frame);
   }
 
   #buildTargetMesh(shaders) {
     const targetShader = shaders.target;
-    // const { near, far, fov } = this.frustrum;
+    const { near, far, fov } = this.frustrum;
     targetShader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
-    //targetShader._initializePerspectiveMatrix(fov, 1, near, far);
+    targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     return this.constructor.buildMesh(this.target, targetShader);
   }
 
@@ -304,7 +318,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( blockingObjects.terrainWalls.size ) {
       const terrainWallShader = shaders.terrainWall;
       terrainWallShader._initializeLookAtMatrix(viewerPoint, targetCenter);
-      //terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
+      terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const terrainWall of blockingObjects.terrainWalls ) {
         const mesh = buildMesh(terrainWall, terrainWallShader);
         container.addChild(mesh);
@@ -316,7 +330,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( otherBlocking.size ) {
       const obstacleShader = shaders.obstacle;
       obstacleShader._initializeLookAtMatrix(viewerPoint, targetCenter);
-      //obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
+      obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const obj of otherBlocking ) {
         const mesh = buildMesh(obj, obstacleShader);
         container.addChild(mesh);

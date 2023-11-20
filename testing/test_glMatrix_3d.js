@@ -680,6 +680,19 @@ console.table(res)
 
 // ------ NOTE: Testing WebGL2
 
+Draw = CONFIG.GeometryLib.Draw;
+Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
+api = game.modules.get("tokenvisibility").api
+QBenchmarkLoopFn = api.benchFunctions.QBenchmarkLoopFn
+AREA3D_POPOUTS = api.AREA3D_POPOUTS
+calc = api.los.LOS_CALCULATOR.CALCULATOR.calc
+
+// Test the render texture
+s = PIXI.Sprite.from(calc._renderTexture)
+canvas.stage.addChild(s)
+canvas.stage.removeChild(s)
+
 Matrix = CONFIG.GeometryLib.Matrix
 Draw = CONFIG.GeometryLib.Draw
 AREA3D_POPOUTS = api.AREA3D_POPOUTS

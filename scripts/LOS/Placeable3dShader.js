@@ -68,7 +68,7 @@ void main() {
 
   #near = 50;
 
-  #far = null;
+  #far = 1000; // null;
 
   setColor(r = 0, g = 0, b = 1, a = 1) { this.uniforms.uColor = [r, g, b, a]; }
 
