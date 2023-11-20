@@ -246,6 +246,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   percentVisible() {
+    console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
@@ -291,29 +292,53 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.webGL2; }
 
+  _debugRenderTexture = PIXI.RenderTexture.create({
+    resolution: 1,
+    scaleMode: PIXI.SCALE_MODES.NEAREST,
+    multisample: PIXI.MSAA_QUALITY.NONE,
+    alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
+    width: 400,
+    height: 400
+  });
+
   _draw3dDebug() {
     // For the moment, repeat webGL2 percent visible process so that shaders with
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
-    const stage = AREA3D_POPOUTS.webGL2.app?.pixiApp?.stage;
+    const app = AREA3D_POPOUTS.webGL2.app?.pixiApp;
+    const stage = app?.stage;
     if ( !stage ) return;
 
+    console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const children = stage.removeChildren();
-    children.forEach(c => c.destroy());
+    // children.forEach(c => c.destroy());
 
     const shaders = this.debugShaders;
-
     const targetMesh = this.#buildTargetMesh(shaders);
-
     const c = new PIXI.Container();
     this.#buildObstacleContainer(c, shaders, this._buildTileDebugShader.bind(this));
+    const renderTexture = this._debugRenderTexture;
 
-    stage.addChild(targetMesh);
-    stage.addChild(c);
+    // targetMesh.position.set(-200, 200);
+    // c.position.set(-200, 200);
+
+    app.renderer.render(targetMesh, { renderTexture, clear: true });
+    app.renderer.render(c, { renderTexture, clear: false });
+
+    if ( !this._debugSprite ) {
+      this._debugSprite = PIXI.Sprite.from(renderTexture);
+      this._debugSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
+      this._debugSprite.anchor = new PIXI.Point(0.5, 0.5);
+    }
+    stage.addChild(this._debugSprite);
+
+    // stage.addChild(targetMesh);
+    // stage.addChild(c);
 
     // Temporarily render the texture for debugging.
     if ( !this.renderSprite || this.renderSprite.destroyed ) {
       this.renderSprite ??= PIXI.Sprite.from(this._renderTexture);
+      this.renderSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
       canvas.stage.addChild(this.renderSprite);
     }
   }
