@@ -102,10 +102,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
    * Describes the viewing frustum used by the shaders to view the target.
    */
   #frustrum = {
-    near: 0.1,
+    near: 1,
     far: 1000,
     fov: RADIANS_90,
-    frame: new PIXI.Rectangle(),
     initialized: false
   };
 
@@ -166,13 +165,6 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // We can assume we don't want to view anything within 1/2 grid unit?
     this.#frustrum.near = canvas.dimensions.size * 0.5;
 
-    // Build the frame
-    const frustrumBase = Math.ceil(this.constructor.frustrumBase(fov, farDistance));
-    const frame = this.#frustrum.frame;
-    frame.x = -frustrumBase;
-    frame.y = -frustrumBase;
-    frame.width = frustrumBase * 2;
-    frame.height = frustrumBase * 2;
     this.#frustrum.initialized = true;
   }
 
@@ -226,7 +218,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     resolution: 1,
     scaleMode: PIXI.SCALE_MODES.NEAREST,
     multisample: PIXI.MSAA_QUALITY.NONE,
-    alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA
+    alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
+    width: 200,
+    height: 200
   });
 
   #destroyed = false;
@@ -269,11 +263,6 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     performance.mark("obstacleMesh");
     const obstacleContainer = this._obstacleContainer;
     this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileShader.bind(this));
-
-    // Resize the renderTexture to match the frustrum frame.
-    // const { width } = this.frustrum.frame; // Width and height are equal b/c we are using aspect = 1.
-    const width = 200;
-    renderTexture.resize(width, width, true);
 
     performance.mark("renderTargetMesh");
     canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
@@ -322,41 +311,25 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     stage.addChild(targetMesh);
     stage.addChild(c);
 
-    // Stage is centered at 0,0, so revert the positioning.
-    targetMesh.position = new PIXI.Point();
-    c.position = new PIXI.Point();
-
-    // Temporarily draw the estimated frustrum frame.
-    const g = new PIXI.Graphics();
-    const draw = new Draw(g);
-    stage.addChild(g);
-    draw.shape(this.frustrum.frame);
-
-    // Temporarily render the texture.
+    // Temporarily render the texture for debugging.
     if ( !this.renderSprite || this.renderSprite.destroyed ) {
       this.renderSprite ??= PIXI.Sprite.from(this._renderTexture);
       canvas.stage.addChild(this.renderSprite);
     }
-
-
   }
 
   #buildTargetMesh(shaders) {
     const targetShader = shaders.target;
-    const { near, far, fov, frame } = this.frustrum;
+    const { near, far, fov } = this.frustrum;
     targetShader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
     targetShader._initializePerspectiveMatrix(fov, 1, near, far);
-    const targetMesh = this.constructor.buildMesh(this.target, targetShader);
-
-    const width_1_2 = frame.width * 0.5; // Width and height are equal b/c we are using aspect = 1.
-    targetMesh.position = new PIXI.Point(width_1_2, width_1_2);
-    return targetMesh;
+    return this.constructor.buildMesh(this.target, targetShader);
   }
 
   #buildObstacleContainer(container, shaders, tileMethod) {
     const { viewerPoint, targetCenter, frustrum, blockingObjects } = this;
     const buildMesh = this.constructor.buildMesh;
-    const { near, far, fov, frame } = frustrum;
+    const { near, far, fov } = frustrum;
 
     // Limited angle walls
     if ( blockingObjects.terrainWalls.size ) {
@@ -389,9 +362,6 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
         container.addChild(mesh);
       }
     }
-
-    const width_1_2 = frame.width * 0.5; // Width and height are equal b/c we are using aspect = 1.
-    container.position = new PIXI.Point(width_1_2, width_1_2);
   }
 
   #sumRedPixels(targetCache) {
