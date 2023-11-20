@@ -233,11 +233,15 @@ export class AlternativeLOS {
    * @param {number} [threshold]    Percentage to be met to be considered visible
    * @returns {boolean}
    */
-  hasLOS(threshold) {
+  hasLOS(threshold, printResult = false) {
+    // console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._clearCache();
 
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const percentVisible = this.percentVisible();
+    if ( printResult ) console.debug(`${this.viewer.name} sees ${Math.round(percentVisible * 100 * 10) / 10}% of ${this.target.name}.`);
+
+
     if ( typeof percentVisible === "undefined" ) return true; // Defaults to visible.
     if ( percentVisible.almostEqual(0) ) return false;
     return percentVisible > threshold || percentVisible.almostEqual(threshold);
