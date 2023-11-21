@@ -263,6 +263,11 @@ export class AlternativeLOS {
    */
   _simpleVisibilityTest() {
     this._clearCache();
+
+    // To avoid obvious errors.
+    if ( this.viewer === this.target
+      || this.viewerPoint.almostEqual(Point3d.fromTokenCenter(this.target)) ) return 1;
+
     const visionSource = this.config.visionSource;
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
     if ( !targetWithin ) return 0;

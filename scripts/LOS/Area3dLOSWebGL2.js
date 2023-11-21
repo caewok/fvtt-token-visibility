@@ -235,9 +235,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this._obstacleContainer.destroy(true);
 
     // Destroy all shaders and render texture
-    // Unclear why, but the `forEach` approach is not working (never returns)
-    Object.values(this.#shaders).forEach(s => s.destroy());
-    Object.values(this.#debugShaders).forEach(s => s.destroy());
+    if ( this.#shaders ) Object.values(this.#shaders).forEach(s => s.destroy());
+    if ( this.#debugShaders ) Object.values(this.#debugShaders).forEach(s => s.destroy());
     this._tileShaders.forEach(s => s.destroy());
     this._tileDebugShaders.forEach(s => s.destroy());
     this._tileShaders.clear();
