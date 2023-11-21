@@ -32,6 +32,7 @@ import { Area2dLOS } from "./LOS/Area2dLOS.js";
 import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
+import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 
@@ -69,6 +70,7 @@ Hooks.once("init", function() {
     Area3dLOSGeometric,
     Area3dLOSWebGL,
     Area3dLOSWebGL2,
+    Area3dLOSHybrid,
 
     util,
     ConstrainedTokenBorder,

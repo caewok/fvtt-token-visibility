@@ -1,27 +1,19 @@
 /* globals
 canvas,
-glMatrix,
 PIXI
 */
 "use strict";
 
 import { Area3dLOS } from "./Area3dLOS.js";
 import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
-import { Draw } from "../geometry/Draw.js";
 
-// webGL2
+// GLSL
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
-
-
-// PlaceablePoints folder
-// import { PixelCache } from "./PixelCache.js";
-
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 const RADIANS_90 = Math.toRadians(90);
-const RADIANS_1 = Math.toRadians(1);
 
 export class Area3dLOSWebGL2 extends Area3dLOS {
 
@@ -79,7 +71,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     ];
 
     for ( const shaderName of shaders ) {
-      const shader = this.#shaders[shaderName] = Placeable3dShader.create(this.viewerPoint, this.targetCenter);
+      this.#shaders[shaderName] = Placeable3dShader.create(this.viewerPoint, this.targetCenter);
     }
 
     // Set color for each shader.
@@ -97,7 +89,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     ];
 
     for ( const shaderName of shaders ) {
-      const debugShader = this.#debugShaders[shaderName] = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
+      this.#debugShaders[shaderName] = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
     }
   }
 
@@ -159,7 +151,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     let angleRad = 2 * Math.atan(diagonal * (0.5 / nearDistance));
     angleRad = Math.min(angleRad, viewerAngle);
     angleRad ??= RADIANS_90;
-    const fov = this.#frustrum.fov = angleRad;// + RADIANS_1;
+    this.#frustrum.fov = angleRad;// + RADIANS_1;
 
     // Far distance is distance to the furthest point of the target.
     this.#frustrum.far = farDistance;
@@ -187,8 +179,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   _buildTileShader(fov, near, far, tile) {
     if ( !this._tileShaders.has(tile) ) {
       const shader = Tile3dShader.create(this.viewerPoint, this.targetCenter,
-      { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
-      // mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
+        { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
       shader.setColor(0, 0, 1, 1); // Blue
       this._tileShaders.set(tile, shader);
     }
@@ -204,7 +195,6 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( !this._tileDebugShaders.has(tile) ) {
       const shader = Tile3dDebugShader.create(this.viewerPoint, this.targetCenter,
         { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
-      // mat4.fromScaling(shader.uniforms.uOffsetMatrix, [-1, 1, 1]); // Mirror along the y axis
       this._tileDebugShaders.set(tile, shader);
     }
 
@@ -252,7 +242,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   percentVisible() {
-    // console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // Debug: console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
@@ -298,13 +288,11 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.webGL2; }
 
-
-
   _draw3dDebug() {
     // For the moment, repeat webGL2 percent visible process so that shaders with
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
-    const app = AREA3D_POPOUTS.webGL2.app?.pixiApp;
+    const app = this.popout.app?.pixiApp;
     const stage = app?.stage;
     if ( !stage ) return;
     stage.removeChildren();
@@ -325,7 +313,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       this._debugSprite.anchor = new PIXI.Point(0.5, 0.5); // Centered on the debug window.
     }
 
-    // console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
 
     const shaders = this.debugShaders;
     const obstacleContainer = this._debugObstacleContainer;
@@ -339,6 +327,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     targetMesh.destroy();
     obstacleContainer.removeChildren().forEach(c => c.destroy());
 
+    // For testing the mesh directly:
     // stage.addChild(targetMesh);
     // stage.addChild(c);
 

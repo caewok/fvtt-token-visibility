@@ -18,6 +18,7 @@ import { Area2dLOS } from "./LOS/Area2dLOS.js";
 import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
+import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 import { LOS_CALCULATOR } from "./visibility_los.js";
 
 /* Use
@@ -65,7 +66,8 @@ function summarizeTokenVisibility(viewers, targets) {
     calcArea2d: new Area2dLOS(),
     calcArea3dGeometric: new Area3dLOSGeometric(),
     calcArea3dWebGL1: new Area3dLOSWebGL(),
-    calcArea3dWebGL2: new Area3dLOSWebGL2()
+    calcArea3dWebGL2: new Area3dLOSWebGL2(),
+    calcArea3dLOSHybrid: new Area3dLOSHybrid()
   };
 
   const summary = {};
@@ -153,6 +155,7 @@ export async function benchTokenRange(n = 100) {
   await storeDebugStatus();
   storeRangeSettings();
 
+  console.log("\n");
   await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.CENTER, false);
   await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.NINE, false);
 
@@ -224,20 +227,14 @@ export async function benchTokenLOS(n = 100) {
 
   const algs = SETTINGS.LOS.TARGET.TYPES;
   const nPts = SETTINGS.POINT_TYPES;
+
+  console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.CENTER);
-  await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.NINE);
-  await runLOSTest(n, viewers, targets, algs.AREA2D, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, false);
+  for ( const alg of algs ) await runLOSTest(n, viewers, targets, alg, false, nPts.NINE);
 
   console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
-  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
-  await runLOSTest(n, viewers, targets, algs.AREA2D, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, true);
+  for ( const alg of algs ) await runLOSTest(n, viewers, targets, alg, true, nPts.NINE);
 
   await revertDebugStatus();
   await revertLOSSettings();
