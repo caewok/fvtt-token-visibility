@@ -7,6 +7,7 @@ PIXI
 
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { AbstractShader } from "./AbstractShader.js";
+import { MODULE_ID } from "../const.js";
 
 const { vec3, mat4 } = glMatrix;
 
@@ -203,9 +204,14 @@ void main() {
     uLookAtMatrix: mat4.create(),
     uOffsetMatrix: mat4.create(),
     uColor: [0, 0, 1, 1],
-    uAlphaThreshold: 0.7,
+    uAlphaThreshold: 0.75,
     uTileTexture: -1
   };
+
+  static create(viewerPt, targetPt, defaultUniforms = {}) {
+    defaultUniforms.uAlphaThreshold ??= CONFIG[MODULE_ID].alphaThreshold;
+    return super.create(viewerPt, targetPt, defaultUniforms);
+  }
 }
 
 export class Placeable3dDebugShader extends Placeable3dShader {

@@ -57,6 +57,16 @@ Hooks.once("init", function() {
   registerGeometry();
   initializePatching();
 
+   // Set CONFIGS used by this module.
+  CONFIG[MODULE_ID] = {
+
+    /**
+     * The percent threshold under which a tile should be considered transparent at that pixel.
+     * @type {number}
+     */
+    alphaThreshold: 0.75,
+  }
+
   game.modules.get(MODULE_ID).api = {
     bench,
     benchFunctions,
