@@ -133,7 +133,6 @@ export class LOSCalculator {
    */
   hasLOS(viewer, target) {
     const calc = this.calc;
-
     calc.viewer = viewer;
     calc.target = target;
     const center = Point3d.fromTokenCenter(viewer);
