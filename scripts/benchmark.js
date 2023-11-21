@@ -11,6 +11,7 @@ PIXI
 import { QBenchmarkLoopFn } from "./benchmark_functions.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
+import { randomUniform } from "./random.js";
 
 import { PointsLOS } from "./LOS/PointsLOS.js";
 import { Area2dLOS } from "./LOS/Area2dLOS.js";
@@ -19,11 +20,13 @@ import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { LOS_CALCULATOR } from "./visibility_los.js";
 
-/*
+/* Use
 api = game.modules.get("tokenvisibility").api
-await api.bench.benchCurrent()
 await api.bench.benchAll();
 
+await api.benchTokenRange(1000)
+await api.benchTokenLOS(100)
+await api.benchTokenVisibility(1000)
 */
 
 /**
@@ -33,6 +36,13 @@ await api.bench.benchAll();
  * - test visibility of all other tokens
  */
 
+export async function benchAll(n = 100) {
+  await benchTokenRange(n);
+  await benchTokenLOS(n);
+  await benchTokenVisibility(n);
+}
+
+// ----- NOTE: Setup and summaries ----- //
 
 /**
  * Set controlled tokens to viewers and targeted tokens to targets.
@@ -100,16 +110,43 @@ function summarizeTokenRange(viewers, targets) {
   console.table(summary);
 }
 
+// ----- NOTE: Visibility testing -----
 
-export async function benchAll(n = 100) {
-  await benchTokenRange(n);
-  await benchTokenLOS(n);
+export async function benchTokenVisibility(n = 100) {
+  const { targets } = getTokens();
+  console.log(`\nBenchmarking visibility of ${targets.length} targets from user's current perspective and settings.`);
+
+  await storeDebugStatus();
+  await QBenchmarkLoopFn(n, benchVisibility, "Visibility", targets);
+  await revertDebugStatus();
 }
 
+function benchVisibility(targets) {
+  const out = [];
+  for ( const target of targets ) {
+    out.push(testVisibility(target));
+  }
+  return out;
+}
+
+function testVisibility(target) {
+  const tolerance = target.document.iconSize / 4;
+
+  // Randomize a bit to try to limit caching
+  const center = {
+    x: target.center.x + Math.round(randomUniform(-10, 10)),
+    y: target.center.y + Math.round(randomUniform(-10, 10))
+  };
+
+  return canvas.effects.visibility.testVisibility(center, { tolerance, object: target });
+}
+
+// ----- NOTE: Range testing -----
 
 export async function benchTokenRange(n = 100) {
   console.log("\n");
   const { viewers, targets } = getTokens();
+  console.log("Elevation and distance summary.");
   summarizeTokenRange(viewers, targets);
 
   console.log("\nBenchmarking token range");
@@ -170,12 +207,15 @@ function benchRange(viewers, targets) {
       out.push(testFn(viewer.vision, "sight", target));
     }
   }
+  return out;
 }
 
+// ----- NOTE: LOS testing -----
 
 export async function benchTokenLOS(n = 100) {
   console.log("\n");
   const { viewers, targets } = getTokens();
+  console.log("Percent visible using different LOS algorithms.");
   summarizeTokenVisibility(viewers, targets);
 
   console.log("\nBenchmarking token los");
@@ -244,5 +284,6 @@ function benchLOS(viewers, targets) {
       out.push(calc.hasLOS(viewer, target));
     }
   }
+  return out;
 }
 
