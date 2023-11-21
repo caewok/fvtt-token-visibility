@@ -228,13 +228,22 @@ export async function benchTokenLOS(n = 100) {
   const algs = SETTINGS.LOS.TARGET.TYPES;
   const nPts = SETTINGS.POINT_TYPES;
 
-  console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.CENTER);
-  for ( const alg of Object.values(algs) ) await runLOSTest(n, viewers, targets, alg, false, nPts.NINE);
+  await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.NINE);
+  await runLOSTest(n, viewers, targets, algs.AREA2D, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, false);
 
   console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
-  for ( const alg of Object.values(algs) ) await runLOSTest(n, viewers, targets, alg, true, nPts.NINE);
+  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
+  await runLOSTest(n, viewers, targets, algs.AREA2D, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, true);
 
   await revertDebugStatus();
   await revertLOSSettings();
