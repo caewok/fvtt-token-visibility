@@ -78,6 +78,7 @@ function refreshTokenArea3d(token, flags) {
 
   const geometry = token[MODULE_ID]?.geometry;
   if ( !geometry ) return;
+  geometry.updateObjectPoints();
   geometry.updateVertices();
 }
 

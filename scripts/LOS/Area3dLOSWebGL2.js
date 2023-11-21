@@ -94,6 +94,22 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   /**
+   * Geometry used to estimate the visible area of a grid cube in perspective for use with
+   * largeTarget.
+   */
+  #gridSquareGeometry;
+
+  get gridSquareGeometry() {
+    // If not yet defined or destroyed.
+    if ( !this.#gridSquareGeometry || !this.#gridSquareGeometry.indexBuffer ) {
+
+    }
+
+    return this.#gridSquareGeometry;
+  }
+
+
+  /**
    * Describes the viewing frustum used by the shaders to view the target.
    */
   #frustrum = {
