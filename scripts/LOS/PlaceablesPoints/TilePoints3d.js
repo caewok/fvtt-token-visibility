@@ -97,7 +97,7 @@ export class TilePoints3d extends HorizontalPoints3d {
     super._clipPlanePoints();
 
     if ( this._tPoints.length < 3 ) {
-      console.warn("_clipPlanePoints resulted in less than 3 points")
+      console.warn("_clipPlanePoints resulted in less than 3 points");
       this._tPoints = oldPoints; // Clipping produced a line or point or nothing; revert.
     }
     if ( this._tPoints.length === 3 ) {
@@ -110,11 +110,16 @@ export class TilePoints3d extends HorizontalPoints3d {
         return false;
       });
       const ix = foundry.utils.lineSegmentIntersection(oldPoints[0], oldPoints[2], zPoints[0], zPoints[1])
-        || foundry.utils.lineSegmentIntersection(oldPoints[1], oldPoints[3], zPoints[0], zPoints[1])
-      const ixPoint = new Point3d(ix.x, ix.y, -0.1);
+        || foundry.utils.lineSegmentIntersection(oldPoints[1], oldPoints[3], zPoints[0], zPoints[1]);
 
-      const newIdx = (otherIdx + 2) % 4;
-      this._tPoints.splice(newIdx, 0, ixPoint)
+      if ( ix ) {
+        const ixPoint = new Point3d(ix.x, ix.y, -0.1);
+        const newIdx = (otherIdx + 2) % 4;
+        this._tPoints.splice(newIdx, 0, ixPoint)
+      } else {
+        console.warn("_clipPlanePoints resulted in less than 4 points");
+        this._tPoints = oldPoints;
+      }
     }
 
     const xMin = this.#xMin;
