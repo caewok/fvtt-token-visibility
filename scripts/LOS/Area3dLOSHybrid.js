@@ -116,24 +116,6 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.hybrid; }
 
-//   #debugGraphics;
-//
-//   get debugDrawTool() {
-//     // If popout is active, use the popout graphics.
-//     // If not active, use default draw graphics.
-//     const popout = this.popout;
-//     if ( !popout.app.rendered ) return undefined;
-//
-//     const stage = popout.app.pixiApp.stage;
-//     if ( !stage ) return undefined;
-//
-//     stage.removeChildren();
-//
-//     if ( !this.#debugGraphics || this.#debugGraphics._destroyed ) this.#debugGraphics = new PIXI.Graphics();
-//     popout.app.pixiApp.stage.addChild(this.#debugGraphics);
-//     return new Draw(this.#debugGraphics);
-//   }
-
   /**
    * For debugging
    * Switch drawing depending on the algorithm used.
@@ -156,37 +138,7 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebugGeometric() {
-    const drawTool = this.debugDrawTool; // Draw in the pop-up box.
-    if ( !drawTool ) return;
-    const colors = Draw.COLORS;
-    drawTool.clearDrawings();
-
-    // Scale the target graphics to fit in the view window.
-    const ptsArr = this.visibleTargetPoints.perspectiveTransform()
-    const xMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.x));
-    const yMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.y));
-    const maxCoord = 200;
-    const scale = Math.min(1,
-      maxCoord / xMinMax.max,
-      -maxCoord / xMinMax.min,
-      maxCoord / yMinMax.max,
-      -maxCoord / yMinMax.min
-    );
-    drawTool.g.scale = new PIXI.Point(scale, scale);
-
-    // Draw the target in 3d, centered on 0,0
-    this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
-    if ( this.config.largeTarget ) this.gridPoints.drawTransformed({ color: colors.lightred, drawTool });
-
-    // Draw the detected objects in 3d, centered on 0,0
-    const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
-    pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, fillAlpha: 0.5, drawTool }));
-    pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, fillAlpha: 0.3, drawTool }));
-    pts.drawings.forEach(d => d.drawTransformed({ color: colors.gray, fillAlpha: 0.3, drawTool }));
-    pts.tokens.forEach(t => t.drawTransformed({ color: colors.orange, drawTool }));
-    pts.terrainWalls.forEach(w => w.drawTransformed({ color: colors.lightgreen, fillAlpha: 0.1, drawTool }));
-  }
+  _draw3dDebugGeometric() { super._draw3dDebug(); }
 
   // ----- NOTE: WebGL ----- //
 
