@@ -162,6 +162,19 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
     const colors = Draw.COLORS;
     drawTool.clearDrawings();
 
+    // Scale the target graphics to fit in the view window.
+    const ptsArr = this.visibleTargetPoints.perspectiveTransform()
+    const xMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.x));
+    const yMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.y));
+    const maxCoord = 200;
+    const scale = Math.min(1,
+      maxCoord / xMinMax.max,
+      -maxCoord / xMinMax.min,
+      maxCoord / yMinMax.max,
+      -maxCoord / yMinMax.min
+    );
+    drawTool.g.scale = new PIXI.Point(scale, scale);
+
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
     if ( this.config.largeTarget ) this.gridPoints.drawTransformed({ color: colors.lightred, drawTool });
