@@ -230,11 +230,11 @@ export async function benchTokenLOS(n = 100) {
 
   console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.CENTER);
-  for ( const alg of algs ) await runLOSTest(n, viewers, targets, alg, false, nPts.NINE);
+  for ( const alg of Object.values(algs) ) await runLOSTest(n, viewers, targets, alg, false, nPts.NINE);
 
   console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
-  for ( const alg of algs ) await runLOSTest(n, viewers, targets, alg, true, nPts.NINE);
+  for ( const alg of Object.values(algs) ) await runLOSTest(n, viewers, targets, alg, true, nPts.NINE);
 
   await revertDebugStatus();
   await revertLOSSettings();
