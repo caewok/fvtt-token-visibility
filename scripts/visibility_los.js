@@ -14,6 +14,7 @@ import { Area2dLOS } from "./LOS/Area2dLOS.js";
 import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
+import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Draw } from "./geometry/Draw.js";
 
@@ -96,7 +97,17 @@ export class LOSCalculator {
     "los-area-2d": Area2dLOS,
     "los-area-3d": Area3dLOSGeometric,
     "los-area-3d-webgl1": Area3dLOSWebGL,
-    "los-area-3d-webgl2": Area3dLOSWebGL2
+    "los-area-3d-webgl2": Area3dLOSWebGL2,
+    "los-area-3d-hybrid": Area3dLOSHybrid
+  };
+
+  static ALGORITHM_CLASS_NAME = {
+    "los-points": "PointsLOS",
+    "los-area-2d": "Area2dLOS",
+    "los-area-3d": "Area3dLOSGeometric",
+    "los-area-3d-webgl1": "Area3dLOSWebGL",
+    "los-area-3d-webgl2": "Area3dLOSWebGL2",
+    "los-area-3d-hybrid": "Area3dLOSHybrid"
   };
 
   config = {
@@ -177,9 +188,10 @@ export class LOSCalculator {
    */
   _updateAlgorithm() {
     const algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
-    const cl = this.constructor.ALGORITHM_CLASS[algorithm];
-    if ( this.calc instanceof cl ) return;
+    const clName = this.calc.constructor.name;
+    if ( clName === this.constructor.ALGORITHM_CLASS_NAME[algorithm] ) return;
 
+    const cl = this.constructor.ALGORITHM_CLASS[algorithm];
     this.calc.destroy();
     this.calc = new cl(undefined, undefined, this.config);
   }

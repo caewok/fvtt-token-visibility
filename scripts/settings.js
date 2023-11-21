@@ -76,7 +76,8 @@ export const SETTINGS = {
         AREA2D: "los-area-2d",
         AREA3D: "los-area-3d",
         AREA3D_WEBGL1: "los-area-3d-webgl1",
-        AREA3D_WEBGL2: "los-area-3d-webgl2"
+        AREA3D_WEBGL2: "los-area-3d-webgl2",
+        AREA3D_HYBRID: "los-area-3d-hybrid"
       },
       POINT_OPTIONS: {
         NUM_POINTS: "los-points-target",

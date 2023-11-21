@@ -1,21 +1,146 @@
 /* globals
 canvas,
+CONFIG,
 PIXI
 */
 "use strict";
 
-import { Area3dLOS } from "./Area3dLOS.js";
+import { Area3dLOSGeometric } from "./Area3dLOSGeometric.js";
 import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
-// GLSL
-import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
+// PlaceablePoints folder
+import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
+import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
+import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
+import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
+
+// Base folder
+import { Settings } from "../settings.js";
+import { buildTokenPoints } from "./util.js";
 
 // Geometry folder
+import { Draw } from "../geometry/Draw.js"; // For debugging
+import { ClipperPaths } from "../geometry/ClipperPaths.js";
+import { Matrix } from "../geometry/Matrix.js";
+
+// WebGL2
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
 
 const RADIANS_90 = Math.toRadians(90);
 
-export class Area3dLOSWebGL2 extends Area3dLOS {
+/**
+ * Uses Area3dLOSGeometric unless a tile is encountered, at which point it switches to
+ * Area3dLOSWebGL2.
+ * To avoid recalculating things, this class copies over code from both and modifies
+ * the `percentVisible` method.
+ */
+export class Area3dLOSHybrid extends Area3dLOSGeometric {
+
+  _clearCache() {
+    super._clearCache();
+
+    // WebGL
+    this.#frustrum.initialized = false;
+    this.#targetDistance3dProperties.initialized = false;
+  }
+
+  // NOTE ----- USER-FACING METHODS -----
+
+  /**
+   * Determine percentage area by estimating the blocking shapes geometrically.
+   * Uses drawings for tile holes; cannot handle transparent tile pixels.
+   * @returns {number}
+   */
+  percentVisible() {
+    // Super and percentVisibleWebGL both run the visibility test.
+    if ( this.blockingObjects.tiles.size ) return this.percentVisibleWebGL();
+    return super.percentVisible();
+  }
+
+  /**
+   * Geometric test for percent visible.
+   * @returns {number}
+   */
+  percentVisibleGeometric() { return super.percentVisible(); }
+
+  /**
+   * WebGL test for percent visible.
+   * @returns {number}
+   */
+  percentVisibleWebGL() {
+    // Debug: console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    const percentVisible = this._simpleVisibilityTest();
+    if ( typeof percentVisible !== "undefined" ) return percentVisible;
+
+    performance.mark("startWebGL2");
+    const renderTexture = this._renderTexture;
+    const shaders = this.shaders;
+    const blockingObjects = this.blockingObjects;
+
+    // Build target mesh to measure the target viewable area.
+    // TODO: This will always calculate the full area, even if a wall intersects the target.
+    performance.mark("targetMesh");
+    const targetMesh = this.#buildTargetMesh(shaders);
+
+    // Build mesh of all obstacles in viewable triangle.
+    performance.mark("obstacleMesh");
+    const obstacleContainer = this._obstacleContainer;
+    this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileShader.bind(this));
+
+    performance.mark("renderTargetMesh");
+    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+
+    // Calculate visible area of the target.
+    performance.mark("targetCache");
+    const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+    const sumTarget = this.#sumRedPixels(targetCache);
+
+    performance.mark("renderObstacleMesh");
+    canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
+
+    // Calculate target area remaining after obstacles.
+    performance.mark("obstacleCache");
+    const obstacleSum = blockingObjects.terrainWalls.size ? this.#sumRedObstaclesPixels : this.#sumRedPixels;
+    const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+    const sumWithObstacles = obstacleSum(obstacleCache);
+
+    performance.mark("endWebGL2");
+    const children = obstacleContainer.removeChildren();
+    children.forEach(c => c.destroy());
+
+    return sumWithObstacles / sumTarget;
+  }
+
+
+  // ----- NOTE: Debugging methods ----- //
+  get popout() { return AREA3D_POPOUTS.hybrid; }
+
+  /**
+   * For debugging
+   * Switch drawing depending on the algorithm used.
+   */
+  _draw3dDebug() {
+    const drawTool = this.debugDrawTool; // Draw in the pop-up box.
+    if ( !drawTool ) return;
+    drawTool.clearDrawings();
+
+    const app = this.popout.app?.pixiApp;
+    const stage = app?.stage;
+    if ( !stage ) return;
+    stage.removeChildren();
+
+    if ( this.blockingObjects.tiles.size ) this._draw3dDebugWebGL();
+    else this._draw3dDebugGeometric();
+  }
+
+  /**
+   * For debugging.
+   * Draw the 3d objects in the popout.
+   */
+  _draw3dDebugGeometric() { super._draw3dDebug(); }
+
+  // ----- NOTE: WebGL ----- //
 
   _tileShaders = new Map();
 
@@ -24,12 +149,6 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   constructor(viewer, target, config) {
     super(viewer, target, config);
     this.config.useDebugShaders ??= true;
-  }
-
-  _clearCache() {
-    super._clearCache();
-    this.#frustrum.initialized = false;
-    this.#targetDistance3dProperties.initialized = false;
   }
 
   /** @type {object} */
@@ -241,54 +360,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this.#destroyed = true;
   }
 
-  percentVisible() {
-    // Debug: console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
-    const percentVisible = this._simpleVisibilityTest();
-    if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
-    performance.mark("startWebGL2");
-    const renderTexture = this._renderTexture;
-    const shaders = this.shaders;
-    const blockingObjects = this.blockingObjects;
+  // ----- NOTE: WebGL Debugging methods ----- //
 
-    // Build target mesh to measure the target viewable area.
-    // TODO: This will always calculate the full area, even if a wall intersects the target.
-    performance.mark("targetMesh");
-    const targetMesh = this.#buildTargetMesh(shaders);
-
-    // Build mesh of all obstacles in viewable triangle.
-    performance.mark("obstacleMesh");
-    const obstacleContainer = this._obstacleContainer;
-    this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileShader.bind(this));
-
-    performance.mark("renderTargetMesh");
-    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
-
-    // Calculate visible area of the target.
-    performance.mark("targetCache");
-    const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-    const sumTarget = this.#sumRedPixels(targetCache);
-
-    performance.mark("renderObstacleMesh");
-    canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
-
-    // Calculate target area remaining after obstacles.
-    performance.mark("obstacleCache");
-    const obstacleSum = blockingObjects.terrainWalls.size ? this.#sumRedObstaclesPixels : this.#sumRedPixels;
-    const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-    const sumWithObstacles = obstacleSum(obstacleCache);
-
-    performance.mark("endWebGL2");
-    const children = obstacleContainer.removeChildren();
-    children.forEach(c => c.destroy());
-
-    return sumWithObstacles / sumTarget;
-  }
-
-  // ----- NOTE: Debugging methods ----- //
-  get popout() { return AREA3D_POPOUTS.webGL2; }
-
-  _draw3dDebug() {
+  _draw3dDebugWebGL() {
     // For the moment, repeat webGL2 percent visible process so that shaders with
     // colors to differentiate sides can be used.
     // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
@@ -404,6 +479,4 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     }
     return sumTarget;
   }
-
-
 }

@@ -732,12 +732,16 @@ export class AlternativeLOS {
     // Filter by the precise triangle shape
     // Also filter by overhead tiles
     const edges = visionPolygon._edges;
+    const alphaThreshold = CONFIG[MODULE_ID].alphaThreshold;
     return tiles.filter(t => {
       // Only overhead tiles count for blocking vision
       if ( !t.document.overhead ) return false;
 
       // Check remainder against the vision polygon shape
-      const tBounds = t.bounds;
+      //const tBounds = t.bounds;
+
+      // Use the alpha bounding box. This might be a polygon if the tile is rotated.
+      const tBounds = t.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
       const tCenter = tBounds.center;
       if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
       return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));

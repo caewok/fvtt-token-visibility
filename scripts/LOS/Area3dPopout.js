@@ -10,7 +10,7 @@ PIXI
 import { MODULE_ID } from "../const.js";
 
 export const AREA3D_POPOUTS = {};
-const AREA3D_OPTIONS = ["geometric", "webGL", "webGL2"];
+const AREA3D_OPTIONS = ["geometric", "webGL", "webGL2", "hybrid"];
 for ( const option of AREA3D_OPTIONS ) {
   AREA3D_POPOUTS[option] = {
     savedTop: null,

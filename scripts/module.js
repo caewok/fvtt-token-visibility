@@ -32,6 +32,7 @@ import { Area2dLOS } from "./LOS/Area2dLOS.js";
 import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
+import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 
@@ -56,6 +57,16 @@ Hooks.once("init", function() {
   registerGeometry();
   initializePatching();
 
+   // Set CONFIGS used by this module.
+  CONFIG[MODULE_ID] = {
+
+    /**
+     * The percent threshold under which a tile should be considered transparent at that pixel.
+     * @type {number}
+     */
+    alphaThreshold: 0.75,
+  }
+
   game.modules.get(MODULE_ID).api = {
     bench,
     benchFunctions,
@@ -69,6 +80,7 @@ Hooks.once("init", function() {
     Area3dLOSGeometric,
     Area3dLOSWebGL,
     Area3dLOSWebGL2,
+    Area3dLOSHybrid,
 
     util,
     ConstrainedTokenBorder,

@@ -14,7 +14,7 @@ import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
 import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
-import { PATCHES as PATCHES_Tile } from "./Tile.js";
+import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
@@ -49,4 +49,7 @@ export function initializePatching() {
 
   // TODO: Only when Area3d is enabled.
   PATCHER.registerGroup("AREA3D");
+
+  // If Elevated Vision is present, we can rely on its tile cache.
+  if ( !MODULES_ACTIVE.EV ) PATCHER.registerGroup("TILE");
 }

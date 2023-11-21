@@ -605,18 +605,22 @@ export class Area3dLOSGeometric extends Area3dLOS {
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.geometric; }
 
+  #debugGraphics;
+
   get debugDrawTool() {
     // If popout is active, use the popout graphics.
     // If not active, use default draw graphics.
-    const draw = new Draw();
     const popout = this.popout;
     if ( !popout.app.rendered ) return undefined;
 
     const stage = popout.app.pixiApp.stage;
     if ( !stage ) return undefined;
-    if ( !stage.children[0] ) popout.app.pixiApp.stage.addChild(new PIXI.Graphics());
-    draw.g = stage.children[0];
-    return draw;
+
+    stage.removeChildren();
+
+    if ( !this.#debugGraphics || this.#debugGraphics._destroyed ) this.#debugGraphics = new PIXI.Graphics();
+    popout.app.pixiApp.stage.addChild(this.#debugGraphics);
+    return new Draw(this.#debugGraphics);
   }
 
   /**
@@ -638,6 +642,19 @@ export class Area3dLOSGeometric extends Area3dLOS {
     if ( !drawTool ) return;
     const colors = Draw.COLORS;
     drawTool.clearDrawings();
+
+    // Scale the target graphics to fit in the view window.
+    const ptsArr = this.visibleTargetPoints.perspectiveTransform()
+    const xMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.x));
+    const yMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.y));
+    const maxCoord = 200;
+    const scale = Math.min(1,
+      maxCoord / xMinMax.max,
+      -maxCoord / xMinMax.min,
+      maxCoord / yMinMax.max,
+      -maxCoord / yMinMax.min
+    );
+    drawTool.g.scale = new PIXI.Point(scale, scale);
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
