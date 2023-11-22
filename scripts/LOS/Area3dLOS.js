@@ -129,6 +129,26 @@ export class Area3dLOS extends AlternativeLOS {
    */
   static upVector = new Point3d(0, 0, -1);
 
+  static sumRedPixels(targetCache) {
+    const pixels = targetCache.pixels;
+    const nPixels = pixels.length;
+    let sumTarget = 0;
+    for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+    return sumTarget;
+  }
+
+  static sumRedObstaclesPixels(targetCache) {
+    const pixels = targetCache.pixels;
+    const nPixels = pixels.length;
+    let sumTarget = 0;
+    for ( let i = 0; i < nPixels; i += 4 ) {
+      const px = pixels[i];
+      if ( px < 128 ) continue;
+      sumTarget += Boolean(targetCache.pixels[i]);
+    }
+    return sumTarget;
+  }
+
   // ----- NOTE: Debugging methods ----- //
   get popout() { return AREA3D_POPOUTS.geometric; }
 
@@ -166,12 +186,18 @@ export class Area3dLOS extends AlternativeLOS {
 
   }
 
+  async enableDebug() { return this._enableDebugPopout(); }
+
+  async disableDebug() { return this._closeDebugPopout(); }
+
   /**
    * For debugging.
    * Close the popout window.
    */
   async _closeDebugPopout() {
-    return this.popout.app.close()
+    const app = this.popout.app;
+    if ( !app || app.closing ) return;
+    return app.close()
   }
 
   /**

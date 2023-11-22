@@ -334,6 +334,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     performance.mark("startWebGL2");
     const { renderTexture, shaders, blockingObjects, obstacleContainer } = this;
+    const { sumRedPixels, sumRedObstaclesPixels } = this.constructor;
 
     // Build target mesh to measure the target viewable area.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
@@ -342,12 +343,12 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
     // If largeTarget is enabled, use the visible area of a grid cube to be 100% visible.
     // #buildTargetMesh already initialized the shader matrices.
-    let sumGridCube = 50_000;
+    let sumGridCube = 100_000;
     if ( this.config.largeTarget ) {
       const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
       canvas.app.renderer.render(gridCubeMesh, { renderTexture, clear: true });
       const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-      sumGridCube = this.#sumRedPixels(gridCubeCache);
+      sumGridCube = sumRedPixels(gridCubeCache) || 100_000;
       gridCubeMesh.destroy();
     }
 
@@ -361,14 +362,14 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // Calculate visible area of the target.
     performance.mark("targetCache");
     const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-    const sumTarget = this.#sumRedPixels(targetCache);
+    const sumTarget = sumRedPixels(targetCache);
 
     performance.mark("renderObstacleMesh");
     canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
 
     // Calculate target area remaining after obstacles.
     performance.mark("obstacleCache");
-    const obstacleSum = blockingObjects.terrainWalls.size ? this.#sumRedObstaclesPixels : this.#sumRedPixels;
+    const obstacleSum = blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
     const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumWithObstacles = obstacleSum(obstacleCache);
 
@@ -468,26 +469,4 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       }
     }
   }
-
-  #sumRedPixels(targetCache) {
-    const pixels = targetCache.pixels;
-    const nPixels = pixels.length;
-    let sumTarget = 0;
-    for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
-    return sumTarget;
-  }
-
-  #sumRedObstaclesPixels(targetCache) {
-    const pixels = targetCache.pixels;
-    const nPixels = pixels.length;
-    let sumTarget = 0;
-    for ( let i = 0; i < nPixels; i += 4 ) {
-      const px = pixels[i];
-      if ( px < 128 ) continue;
-      sumTarget += Boolean(targetCache.pixels[i]);
-    }
-    return sumTarget;
-  }
-
-
 }
