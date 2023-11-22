@@ -95,7 +95,8 @@ export class LOSCalculator {
   static ALGORITHM_CLASS = {
     "los-points": PointsLOS,
     "los-area-2d": Area2dLOS,
-    "los-area-3d": Area3dLOSGeometric,
+    "los-area-3d": Area3dLOSHybrid,
+    "los-area-3d-geometric": Area3dLOSGeometric,
     "los-area-3d-webgl1": Area3dLOSWebGL,
     "los-area-3d-webgl2": Area3dLOSWebGL2,
     "los-area-3d-hybrid": Area3dLOSHybrid
@@ -104,7 +105,8 @@ export class LOSCalculator {
   static ALGORITHM_CLASS_NAME = {
     "los-points": "PointsLOS",
     "los-area-2d": "Area2dLOS",
-    "los-area-3d": "Area3dLOSGeometric",
+    "los-area-3d": "Area3dLOSHybrid",
+    "los-area-3d-geometric": "Area3dLOSGeometric",
     "los-area-3d-webgl1": "Area3dLOSWebGL",
     "los-area-3d-webgl2": "Area3dLOSWebGL2",
     "los-area-3d-hybrid": "Area3dLOSHybrid"
