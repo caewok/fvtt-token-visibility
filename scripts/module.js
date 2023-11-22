@@ -65,6 +65,19 @@ Hooks.once("init", function() {
      * @type {number}
      */
     alphaThreshold: 0.75,
+
+    /**
+     * Size of the render texture (width and height) used in the webGL LOS algorithms.
+     * @type {number}
+     */
+    renderTextureSize: 100,
+
+    /**
+     * Resolution of the render texture used in the webZGL LOS algorithm.
+     * Should be between (0, 1).
+     * @type {number}
+     */
+    renderTextureResolution: 1
   }
 
   game.modules.get(MODULE_ID).api = {
