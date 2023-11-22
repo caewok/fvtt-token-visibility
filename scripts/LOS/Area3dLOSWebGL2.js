@@ -234,14 +234,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   // Textures and containers used by webGL2 method.
-
   #destroyed = false;
 
   destroy() {
     if ( this.#destroyed ) return;
-
-    // Destroy this first before handling the shaders.
-    this._obstacleContainer.destroy(true);
 
     // Destroy all shaders and render texture
     if ( this.#shaders ) Object.values(this.#shaders).forEach(s => s.destroy());
@@ -258,7 +254,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this.#debugRenderTexture?.destroy();
     this.#debugObstacleContainer?.destroy();
 
-    this._debugSprite?.destroy();
+    this.#debugSprite?.destroy();
 
     // Note that everything is destroyed to avoid errors if called again.
     this.#destroyed = true;
@@ -348,7 +344,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // #buildTargetMesh already initialized the shader matrices.
     let sumGridCube = 50_000;
     if ( this.config.largeTarget ) {
-      const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target)
+      const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
       canvas.app.renderer.render(gridCubeMesh, { renderTexture, clear: true });
       const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);
       sumGridCube = this.#sumRedPixels(gridCubeCache);
@@ -383,7 +379,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // The grid area can be less than target area if the target is smaller than a grid.
     // Example: target may not be 1 unit high or may only be half a grid wide.
     const denom = Math.min(sumGridCube, sumTarget);
-    // console.debug(`${this.viewer.name} viewing ${this.target.name}: Seen: ${sumWithObstacles}; Full Target: ${sumTarget}; Grid: ${sumGridCube}. ${Math.round(sumWithObstacles/sumTarget * 100 * 10) / 10}% | ${Math.round(sumWithObstacles/sumGridCube * 100 * 10)/ 10}%`)
+    // console.debug(`${this.viewer.name} viewing ${this.target.name}:
+    // Seen: ${sumWithObstacles}; Full Target: ${sumTarget}; Grid: ${sumGridCube}.
+    // ${Math.round(sumWithObstacles/sumTarget * 100 * 10) / 10}% |
+    // ${Math.round(sumWithObstacles/sumGridCube * 100 * 10)/ 10}%`)
 
     return sumWithObstacles / denom;
   }
@@ -407,7 +406,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this.#buildObstacleContainer(debugObstacleContainer, debugShaders, this._buildTileDebugShader.bind(this));
     app.renderer.render(targetMesh, { renderTexture: debugRenderTexture, clear: true });
     app.renderer.render(debugObstacleContainer, { renderTexture: debugRenderTexture, clear: false });
-    stage.addChild(this.debugSprite);
+    stage.addChild(debugSprite);
 
     targetMesh.destroy();
     debugObstacleContainer.removeChildren().forEach(c => c.destroy());
