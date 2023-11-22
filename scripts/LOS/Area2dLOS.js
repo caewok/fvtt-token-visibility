@@ -138,11 +138,11 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {object{top: {PIXI.Polygon|undefined}, bottom: {PIXI.Polygon|undefined}}} shadowLOS
    * @returns {number}
    */
-  percentVisible(shadowLOS) {
+  percentVisible() {
     const percentVisible = this._simpleVisibilityTest();
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
-    shadowLOS ??= this._buildShadowLOS();
+    const shadowLOS = this._buildShadowLOS();
     const constrained = this.target.constrainedTokenBorder;
     const targetPercentAreaBottom = shadowLOS.bottom ? this._calculatePercentSeen(shadowLOS.bottom, constrained) : 0;
     const targetPercentAreaTop = shadowLOS.top ? this._calculatePercentSeen(shadowLOS.top, constrained) : 0;

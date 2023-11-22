@@ -321,7 +321,7 @@ export class Settings {
       type: Boolean,
       default: true,
       tab: "losTarget",
-      onChange: _value => this.losAlgorithmChange(TARGET.LARGE)
+      onChange: _value => this.losSettingChange(TARGET.LARGE)
     });
 
     register(TARGET.ALGORITHM, {
