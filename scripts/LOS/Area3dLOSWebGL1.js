@@ -132,7 +132,10 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
   }
 
   set renderer(value) {
-    if ( !(value instanceof PIXI.Renderer) ) return console.error("Renderer must be PIXI.Renderer.");
+    if ( !(value instanceof PIXI.Renderer) ) {
+      console.error("Renderer must be PIXI.Renderer.");
+      return;
+    }
     this.#renderer = value;
   }
 
@@ -151,6 +154,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     const OBSTACLE_COLOR = Draw.COLORS.blue;
     const blockingPoints = this.blockingPoints;
     const renderer = this.renderer;
+    const { sumRedPixels, sumRedObstaclesPixels } = this.constructor;
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
     // and that causes a lighter-color border to appear outside the shape.
@@ -165,10 +169,48 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     const blockingContainer = this.blockingContainer;
     const targetGraphics = this.targetGraphics;
 
+    // Translate the points to fit in the render texture.
+    const txPtsArray = this.targetPoints.faces.map(face => face.perspectiveTransform());
+    const xValues = [];
+    const yValues = [];
+    for ( const ptArray of txPtsArray ) {
+      for ( const pt of ptArray ) {
+        xValues.push(pt.x);
+        yValues.push(pt.y);
+      }
+    }
+    const xMinMax = Math.minMax(...xValues);
+    const yMinMax = Math.minMax(...yValues);
+    let rtWidth = xMinMax.max - xMinMax.min;
+    let rtHeight = yMinMax.max - yMinMax.min;
+    if ( debug ) {
+      rtWidth = Math.max(rtWidth, 400);
+      rtHeight = Math.max(rtHeight, 400);
+    }
+
+    // Center everything.
+    const renderTexture = this.renderTexture;
+    renderTexture.resize(rtWidth, rtHeight, true);
+    targetGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
+    blockingContainer.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
+
     // Draw the target shape.
     targetGraphics.clear();
     drawOpts.drawTool = new Draw(targetGraphics);
     this.targetPoints.drawTransformed(drawOpts);
+
+    // If large target, measure the viewable area of a unit grid shape.
+    let sumGridCube = 100_000;
+    if ( this.config.largeTarget ) {
+      const gridGraphics = new PIXI.Graphics();
+      gridGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
+      drawOpts.drawTool = new Draw(gridGraphics);
+      this.gridPoints.drawTransformed(drawOpts);
+      renderer.render(gridGraphics, { renderTexture, clear: true });
+      const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+      sumGridCube = sumRedPixels(gridCubeCache) || 100_000;
+      gridGraphics.destroy();
+    }
 
     // Draw walls and other tokens.
     if ( blockingPoints.walls.length || blockingPoints.tokens.length ) {
@@ -223,53 +265,8 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
       for ( let i = 0; i < 8; i += 1 ) containerSprite.uvs[i] = tileUVs[i];
     }
 
-    // Translate the points to fit in the render texture.
-    const txPtsArray = this.targetPoints.faces.map(face => face.perspectiveTransform());
-    const xValues = [];
-    const yValues = [];
-    for ( const ptArray of txPtsArray ) {
-      for ( const pt of ptArray ) {
-        xValues.push(pt.x);
-        yValues.push(pt.y);
-      }
-    }
-    const xMinMax = Math.minMax(...xValues);
-    const yMinMax = Math.minMax(...yValues);
-    const rtWidth = xMinMax.max - xMinMax.min;
-    const rtHeight = yMinMax.max - yMinMax.min;
-    if ( debug ) {
-      rtWidth = Math.max(rtWidth, 400);
-      rtHeight = Math.max(rtHeight, 400);
-    }
-
-    // Center everything.
-    const renderTexture = this.renderTexture;
-    renderTexture.resize(rtWidth, rtHeight, true);
-    targetGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
-    blockingContainer.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
-
     // Set blend mode to remove red covered by the blue.
     blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT;
-
-    const sumRedPixels = function(targetCache) {
-      const pixels = targetCache.pixels;
-      const nPixels = pixels.length;
-      let sumTarget = 0;
-      for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
-      return sumTarget;
-    };
-
-    const sumRedObstaclesPixels = function(targetCache) {
-      const pixels = targetCache.pixels;
-      const nPixels = pixels.length;
-      let sumTarget = 0;
-      for ( let i = 0; i < nPixels; i += 4 ) {
-        const px = pixels[i];
-        if ( px < 128 ) continue;
-        sumTarget += Boolean(targetCache.pixels[i]);
-      }
-      return sumTarget;
-    };
     const obstacleSum = blockingPoints.terrainWalls.length ? sumRedObstaclesPixels : sumRedPixels;
 
     // Render only the target shape and calculate its rendered visible area.
@@ -284,7 +281,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     // Clean up
     const tileChildren = this.tileContainer.removeChildren();
-    const children = this.blockingContainer.removeChildren();
+    this.blockingContainer.removeChildren();
     tileChildren.forEach(c => c.destroy());
 
     /* Testing
@@ -292,8 +289,9 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     canvas.stage.addChild(s)
     canvas.stage.removeChild(s)
     */
+    const denom = Math.min(sumGridCube, sumTarget);
 
-    return sumWithObstacles / sumTarget;
+    return sumWithObstacles / denom;
   }
 
   // ----- NOTE: Debugging methods ----- //
