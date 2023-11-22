@@ -122,36 +122,40 @@ export class Grid3dGeometry extends Placeable3dGeometry {
     const size = canvas.dimensions.size;
     const size_1_2 = (size * 0.5) - 1; // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
     const elevationOffset = 1; // Shrink top/bottom by 1 pixel for same reason.
-    const topZ = size_1_2 - elevationOffset;
-    const bottomZ = -size_1_2 + elevationOffset;
+    const z = size_1_2 - elevationOffset;
     const pts = [
-      new Point3d(-size_1_2, -size_1_2, topZ),
-      new Point3d(size_1_2, -size_1_2, topZ),
-      new Point3d(size_1_2, size_1_2, topZ),
-      new Point3d(-size_1_2, size_1_2, topZ),
+      new Point3d(-size_1_2, -size_1_2, z),
+      new Point3d(size_1_2, -size_1_2, z),
+      new Point3d(size_1_2, size_1_2, z),
+      new Point3d(-size_1_2, size_1_2, z),
 
-      new Point3d(-size_1_2, -size_1_2, bottomZ),
-      new Point3d(size_1_2, -size_1_2, bottomZ),
-      new Point3d(size_1_2, size_1_2, bottomZ),
-      new Point3d(-size_1_2, size_1_2, bottomZ)
+      new Point3d(-size_1_2, -size_1_2, -z),
+      new Point3d(size_1_2, -size_1_2, -z),
+      new Point3d(size_1_2, size_1_2, -z),
+      new Point3d(-size_1_2, size_1_2, -z)
     ];
 
     pts.forEach(pt => center.add(pt, pt));
     return pts;
   }
 
-  // Cache the relevant token properties and update when the token is updated.
-  _tokenCenter = new Point3d();
-
-  constructObjectPoints() {
-    this._tokenCenter = Point3d.fromTokenCenter(this.object);
-    return this.constructor.cubePoints(this.object);
+  constructor(object) {
+    super(object);
+    this._updateTokenCenter();
   }
+
+  // Cache the relevant token properties and update when the token is updated.
+  #tokenCenter = new Point3d();
+
+  _updateTokenCenter() { this.#tokenCenter = Point3d.fromTokenCenter(this.object); }
+
+  constructObjectPoints() { return this.constructor.cubePoints(this.object); }
 
   updateObjectPoints() {
     const newCenter = Point3d.fromTokenCenter(this.object);
-    const delta = newCenter.subtract(this._tokenCenter);
+    const delta = newCenter.subtract(this.#tokenCenter);
     this.objectPoints.forEach(pt => pt.add(delta, pt));
+    this._updateTokenCenter();
   }
 }
 
@@ -178,20 +182,30 @@ export class Token3dGeometry extends Grid3dGeometry {
     ];
   }
 
-  _tokenWidth = 0;
-
-  _tokenHeight = 0;
-
-  constructObjectPoints() {
-    this._tokenWidth = this.object.document.width;
-    this._tokenHeight = this.object.document.height;
-    return super.constructObjectPoints();
+  constructor(object) {
+    super(object);
+    this._updateTokenSize();
   }
+
+  _updateTokenSize() {
+    const { width, height } = this.object.document;
+    this.#tokenWidth = width;
+    this.#tokenHeight = height;
+  }
+
+  #tokenWidth = 0;
+
+  #tokenHeight = 0;
 
   updateObjectPoints() {
     // If token width or height has changed, rebuild the points.
-    if ( this.object.document.width !== this._tokenWidth
-      || this.object.document.height !== this._tokenHeight ) this.initializeObjectPoints();
+    if ( this.object.document.width !== this.#tokenWidth
+      || this.object.document.height !== this.#tokenHeight ) {
+
+      this._updateTokenSize();
+      this._updateTokenCenter();
+      this.initializeObjectPoints();
+    }
     super.updateObjectPoints();
   }
 }
