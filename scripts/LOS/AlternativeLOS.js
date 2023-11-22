@@ -875,6 +875,10 @@ export class AlternativeLOS {
     this._drawCanvasDebug(hasLOS);
   }
 
+  async enableDebug() { }
+
+  async disableDebug() { }
+
   clearDebug() {
     this._clearCanvasDebug();
   }

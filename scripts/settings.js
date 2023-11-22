@@ -147,12 +147,9 @@ export class Settings {
   }
 
   static updateLOSDebugGraphics(enable) {
-    if ( enable ) LOS_CALCULATOR.CALCULATOR.calc?._enableDebugPopout();
-    else {
-      LOS_CALCULATOR.CALCULATOR.calc.clearDebug();
-      LOS_CALCULATOR.CALCULATOR.calc?._closeDebugPopout();
-    }
-
+    const calc = LOS_CALCULATOR.CALCULATOR.calc;
+    if ( enable ) calc.enableDebug();
+    else calc.disableDebug();
   }
 
   /**
