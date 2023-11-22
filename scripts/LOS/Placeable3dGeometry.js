@@ -29,9 +29,7 @@ class Placeable3dGeometry extends PIXI.Geometry {
   }
 
   // Cache the object points
-  #objectPoints = [];
-
-  get objectPoints() { return this.#objectPoints; }
+  objectPoints = [];
 
   /**
    * Build the set of 3d points used to frame the object.
@@ -42,10 +40,10 @@ class Placeable3dGeometry extends PIXI.Geometry {
     console.error("Placeable3dGeometry|constructObjectPoints must be implemented by child class.");
   }
 
-  initializeObjectPoints() { this.#objectPoints = this.constructObjectPoints(); }
+  initializeObjectPoints() { this.objectPoints = this.constructObjectPoints(); }
 
-  // Should be overriden by subclass to avoid building new Point3d.
-  updateObjectPoints() { this.#objectPoints = this.constructObjectPoints(); }
+  // May be overriden by subclass to avoid building new Point3d.
+  updateObjectPoints() { this.objectPoints = this.constructObjectPoints(); }
 
   initializeVertices() {
     this.addAttribute("aVertex", new Float32Array(this.constructor.NUM_VERTICES * 3));
@@ -53,7 +51,7 @@ class Placeable3dGeometry extends PIXI.Geometry {
   }
 
   updateVertices() {
-    const objectVertices = this.#objectPoints.map(pt => vec3.fromValues(pt.x, pt.y, pt.z));
+    const objectVertices = this.objectPoints.map(pt => vec3.fromValues(pt.x, pt.y, pt.z));
     const buffer = this.getBuffer("aVertex");
     const data = buffer.data;
     objectVertices.forEach((v, idx) => data.set(v, idx * 3));
@@ -67,7 +65,7 @@ class Placeable3dGeometry extends PIXI.Geometry {
   initializeColors() { this.addAttribute("aColor", this.constructor.colorVertices, 3); }
 }
 
-export class Token3dGeometry extends Placeable3dGeometry {
+export class Grid3dGeometry extends Placeable3dGeometry {
   static NUM_VERTICES = 8;
 
   static colorVertices = [
@@ -119,6 +117,51 @@ export class Token3dGeometry extends Placeable3dGeometry {
   ];
 
   static cubePoints(token) {
+    // Construct a grid unit cube at the token center.
+    const center = Point3d.fromTokenCenter(token);
+    const size = canvas.dimensions.size;
+    const size_1_2 = (size * 0.5) - 1; // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
+    const elevationOffset = 1; // Shrink top/bottom by 1 pixel for same reason.
+    const z = size_1_2 - elevationOffset;
+    const pts = [
+      new Point3d(-size_1_2, -size_1_2, z),
+      new Point3d(size_1_2, -size_1_2, z),
+      new Point3d(size_1_2, size_1_2, z),
+      new Point3d(-size_1_2, size_1_2, z),
+
+      new Point3d(-size_1_2, -size_1_2, -z),
+      new Point3d(size_1_2, -size_1_2, -z),
+      new Point3d(size_1_2, size_1_2, -z),
+      new Point3d(-size_1_2, size_1_2, -z)
+    ];
+
+    pts.forEach(pt => center.add(pt, pt));
+    return pts;
+  }
+
+  constructor(object) {
+    super(object);
+    this._updateTokenCenter();
+  }
+
+  // Cache the relevant token properties and update when the token is updated.
+  #tokenCenter = new Point3d();
+
+  _updateTokenCenter() { this.#tokenCenter = Point3d.fromTokenCenter(this.object); }
+
+  constructObjectPoints() { return this.constructor.cubePoints(this.object); }
+
+  updateObjectPoints() {
+    const newCenter = Point3d.fromTokenCenter(this.object);
+    const delta = newCenter.subtract(this.#tokenCenter);
+    this.objectPoints.forEach(pt => pt.add(delta, pt));
+    this._updateTokenCenter();
+  }
+}
+
+export class Token3dGeometry extends Grid3dGeometry {
+
+  static cubePoints(token) {
     const centerPts = Point3d.fromToken(token);
     const { width, height } = token.document;
     const w = width * canvas.dimensions.size;
@@ -126,7 +169,6 @@ export class Token3dGeometry extends Placeable3dGeometry {
     const w_1_2 = (w * 0.5) - 1;  // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
     const h_1_2 = (h * 0.5) - 1;  // (common with square grids)
     const elevationOffset = 1; // Shrink top/bottom by 1 pixel for same reason.
-
     return [
       centerPts.top.add(new Point3d(-w_1_2, -h_1_2, -elevationOffset)),
       centerPts.top.add(new Point3d(w_1_2, -h_1_2, -elevationOffset)),
@@ -140,7 +182,32 @@ export class Token3dGeometry extends Placeable3dGeometry {
     ];
   }
 
-  constructObjectPoints() { return this.constructor.cubePoints(this.object); }
+  constructor(object) {
+    super(object);
+    this._updateTokenSize();
+  }
+
+  _updateTokenSize() {
+    const { width, height } = this.object.document;
+    this.#tokenWidth = width;
+    this.#tokenHeight = height;
+  }
+
+  #tokenWidth = 0;
+
+  #tokenHeight = 0;
+
+  updateObjectPoints() {
+    // If token width or height has changed, rebuild the points.
+    if ( this.object.document.width !== this.#tokenWidth
+      || this.object.document.height !== this.#tokenHeight ) {
+
+      this._updateTokenSize();
+      this._updateTokenCenter();
+      this.initializeObjectPoints();
+    }
+    super.updateObjectPoints();
+  }
 }
 
 export class Wall3dGeometry extends Placeable3dGeometry {

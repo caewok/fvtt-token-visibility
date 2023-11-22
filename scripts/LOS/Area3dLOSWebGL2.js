@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 PIXI
 */
 "use strict";
@@ -8,12 +9,19 @@ import { Area3dLOS } from "./Area3dLOS.js";
 import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
 // GLSL
+import { Grid3dGeometry } from "./Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
 
+// Base folder
+import { MODULE_ID } from "../const.js";
+
 const RADIANS_90 = Math.toRadians(90);
+
+// Containers, Sprites, RenderTexture.baseTexture have a destroyed property.
+// Geometry is probably destroyed if it has a null index buffer.
 
 export class Area3dLOSWebGL2 extends Area3dLOS {
 
@@ -30,6 +38,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     super._clearCache();
     this.#frustrum.initialized = false;
     this.#targetDistance3dProperties.initialized = false;
+
+    // Target may have been changed.
+    if ( this.#gridCubeGeometry ) this.#gridCubeGeometry.object = this.target;
   }
 
   /** @type {object} */
@@ -91,6 +102,24 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     for ( const shaderName of shaders ) {
       this.#debugShaders[shaderName] = Placeable3dDebugShader.create(this.viewerPoint, this.targetCenter);
     }
+  }
+
+  /**
+   * Geometry used to estimate the visible area of a grid cube in perspective for use with
+   * largeTarget.
+   */
+  #gridCubeGeometry;
+
+  get gridCubeGeometry() {
+    // If not yet defined or destroyed.
+    if ( !this.#gridCubeGeometry || !this.#gridCubeGeometry.indexBuffer ) {
+      this.#gridCubeGeometry = new Grid3dGeometry(this.target);
+    }
+
+    // Update the positioning based on target.
+    this.#gridCubeGeometry.updateObjectPoints();
+    this.#gridCubeGeometry.updateVertices();
+    return this.#gridCubeGeometry;
   }
 
   /**
@@ -168,8 +197,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     return (dist / Math.tan(A)) * 2;
   }
 
-  static buildMesh(obj, shader) {
-    const mesh = new PIXI.Mesh(obj.tokenvisibility.geometry, shader);
+  static buildMesh(geometry, shader) {
+    const mesh = new PIXI.Mesh(geometry, shader);
     mesh.state.depthTest = true;
     mesh.state.culling = true;
     mesh.state.clockwiseFrontFace = true;
@@ -205,24 +234,10 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   // Textures and containers used by webGL2 method.
-  _obstacleContainer = new PIXI.Container();
-
-  _renderTexture = PIXI.RenderTexture.create({
-    resolution: 1,
-    scaleMode: PIXI.SCALE_MODES.NEAREST,
-    multisample: PIXI.MSAA_QUALITY.NONE,
-    alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
-    width: 100,
-    height: 100
-  });
-
   #destroyed = false;
 
   destroy() {
     if ( this.#destroyed ) return;
-
-    // Destroy this first before handling the shaders.
-    this._obstacleContainer.destroy(true);
 
     // Destroy all shaders and render texture
     if ( this.#shaders ) Object.values(this.#shaders).forEach(s => s.destroy());
@@ -231,15 +246,86 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     this._tileDebugShaders.forEach(s => s.destroy());
     this._tileShaders.clear();
     this._tileDebugShaders.clear();
-    this._renderTexture.destroy();
 
-    this._debugRenderTexture?.destroy();
-    this._debugSprite?.destroy();
-    this._debugObstacleContainer?.destroy();
+    this.#renderTexture?.destroy();
+    this.#obstacleContainer?.destroy();
+    this.#gridCubeGeometry?.destroy();
+
+    this.#debugRenderTexture?.destroy();
+    this.#debugObstacleContainer?.destroy();
+
+    this.#debugSprite?.destroy();
 
     // Note that everything is destroyed to avoid errors if called again.
     this.#destroyed = true;
   }
+
+  /** @type {PIXI.RenderTexture} */
+  #renderTexture;
+
+  get renderTexture() {
+    if ( !this.#renderTexture || this.#renderTexture.baseTexture.destroyed ) {
+      const cfg = this._renderTextureConfiguration();
+      this.#renderTexture = PIXI.RenderTexture.create(cfg);
+    }
+    return this.#renderTexture;
+  }
+
+  /** @type {PIXI.RenderTexture} */
+  #debugRenderTexture;
+
+  get debugRenderTexture() {
+    if ( !this.#debugRenderTexture || this.#debugRenderTexture.baseTexture.destroyed ) {
+      const cfg = this._renderTextureConfiguration();
+      cfg.width = 400;
+      cfg.height = 400;
+      this.#debugRenderTexture = PIXI.RenderTexture.create(cfg);
+    }
+    return this.#debugRenderTexture;
+  }
+
+  _renderTextureConfiguration() {
+    const { renderTextureResolution, renderTextureSize } = CONFIG[MODULE_ID];
+    return {
+      resolution: renderTextureResolution,
+      scaleMode: PIXI.SCALE_MODES.NEAREST,
+      multisample: PIXI.MSAA_QUALITY.NONE,
+      alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
+      width: renderTextureSize,
+      height: renderTextureSize
+    };
+  }
+
+  /** @type {PIXI.Container} */
+  #obstacleContainer;
+
+  get obstacleContainer() {
+    if ( !this.#obstacleContainer
+      || this.#obstacleContainer.destroyed ) this.#obstacleContainer = new PIXI.Container();
+    return this.#obstacleContainer;
+  }
+
+  /** @type {PIXI.Container} */
+  #debugObstacleContainer;
+
+  get debugObstacleContainer() {
+    if ( !this.#debugObstacleContainer
+      || this.#debugObstacleContainer.destroyed ) this.#debugObstacleContainer = new PIXI.Container();
+    return this.#debugObstacleContainer;
+  }
+
+  /** @type {PIXI.Sprite} */
+  #debugSprite;
+
+  get debugSprite() {
+    if ( !this.#debugSprite || this.#debugSprite.destroyed ) {
+      const s = this.#debugSprite = PIXI.Sprite.from(this.debugRenderTexture);
+      s.scale = new PIXI.Point(1, -1); // Flip y-axis.
+      s.anchor = new PIXI.Point(0.5, 0.5); // Centered on the debug window.
+    }
+    return this.#debugSprite;
+  }
+
 
   percentVisible() {
     // Debug: console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
@@ -247,18 +333,27 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( typeof percentVisible !== "undefined" ) return percentVisible;
 
     performance.mark("startWebGL2");
-    const renderTexture = this._renderTexture;
-    const shaders = this.shaders;
-    const blockingObjects = this.blockingObjects;
+    const { renderTexture, shaders, blockingObjects, obstacleContainer } = this;
+    const { sumRedPixels, sumRedObstaclesPixels } = this.constructor;
 
     // Build target mesh to measure the target viewable area.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
     performance.mark("targetMesh");
     const targetMesh = this.#buildTargetMesh(shaders);
 
+    // If largeTarget is enabled, use the visible area of a grid cube to be 100% visible.
+    // #buildTargetMesh already initialized the shader matrices.
+    let sumGridCube = 100_000;
+    if ( this.config.largeTarget ) {
+      const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
+      canvas.app.renderer.render(gridCubeMesh, { renderTexture, clear: true });
+      const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+      sumGridCube = sumRedPixels(gridCubeCache) || 100_000;
+      gridCubeMesh.destroy();
+    }
+
     // Build mesh of all obstacles in viewable triangle.
     performance.mark("obstacleMesh");
-    const obstacleContainer = this._obstacleContainer;
     this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileShader.bind(this));
 
     performance.mark("renderTargetMesh");
@@ -267,14 +362,14 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // Calculate visible area of the target.
     performance.mark("targetCache");
     const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-    const sumTarget = this.#sumRedPixels(targetCache);
+    const sumTarget = sumRedPixels(targetCache);
 
     performance.mark("renderObstacleMesh");
     canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
 
     // Calculate target area remaining after obstacles.
     performance.mark("obstacleCache");
-    const obstacleSum = blockingObjects.terrainWalls.size ? this.#sumRedObstaclesPixels : this.#sumRedPixels;
+    const obstacleSum = blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
     const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumWithObstacles = obstacleSum(obstacleCache);
 
@@ -282,7 +377,15 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const children = obstacleContainer.removeChildren();
     children.forEach(c => c.destroy());
 
-    return sumWithObstacles / sumTarget;
+    // The grid area can be less than target area if the target is smaller than a grid.
+    // Example: target may not be 1 unit high or may only be half a grid wide.
+    const denom = Math.min(sumGridCube, sumTarget);
+    // console.debug(`${this.viewer.name} viewing ${this.target.name}:
+    // Seen: ${sumWithObstacles}; Full Target: ${sumTarget}; Grid: ${sumGridCube}.
+    // ${Math.round(sumWithObstacles/sumTarget * 100 * 10) / 10}% |
+    // ${Math.round(sumWithObstacles/sumGridCube * 100 * 10)/ 10}%`)
+
+    return sumWithObstacles / denom;
   }
 
   // ----- NOTE: Debugging methods ----- //
@@ -297,35 +400,17 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( !stage ) return;
     stage.removeChildren();
 
-    // Build the debug objects.
-    if ( !this._debugRenderTexture ) this._debugRenderTexture = PIXI.RenderTexture.create({
-      resolution: 1,
-      scaleMode: PIXI.SCALE_MODES.NEAREST,
-      multisample: PIXI.MSAA_QUALITY.NONE,
-      alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
-      width: 400,
-      height: 400
-    });
-    if ( !this._debugObstacleContainer ) this._debugObstacleContainer = new PIXI.Container();
-    if ( !this._debugSprite ) {
-      this._debugSprite = PIXI.Sprite.from(this._debugRenderTexture);
-      this._debugSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
-      this._debugSprite.anchor = new PIXI.Point(0.5, 0.5); // Centered on the debug window.
-    }
-
     // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    const { debugShaders, debugObstacleContainer, debugSprite, debugRenderTexture } = this;
 
-    const shaders = this.debugShaders;
-    const obstacleContainer = this._debugObstacleContainer;
-    const targetMesh = this.#buildTargetMesh(shaders);
-    this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileDebugShader.bind(this));
-    const renderTexture = this._debugRenderTexture;
-    app.renderer.render(targetMesh, { renderTexture, clear: true });
-    app.renderer.render(obstacleContainer, { renderTexture, clear: false });
-    stage.addChild(this._debugSprite);
+    const targetMesh = this.#buildTargetMesh(debugShaders);
+    this.#buildObstacleContainer(debugObstacleContainer, debugShaders, this._buildTileDebugShader.bind(this));
+    app.renderer.render(targetMesh, { renderTexture: debugRenderTexture, clear: true });
+    app.renderer.render(debugObstacleContainer, { renderTexture: debugRenderTexture, clear: false });
+    stage.addChild(debugSprite);
 
     targetMesh.destroy();
-    obstacleContainer.removeChildren().forEach(c => c.destroy());
+    debugObstacleContainer.removeChildren().forEach(c => c.destroy());
 
     // For testing the mesh directly:
     // stage.addChild(targetMesh);
@@ -344,7 +429,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const { near, far, fov } = this.frustrum;
     targetShader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
     targetShader._initializePerspectiveMatrix(fov, 1, near, far);
-    return this.constructor.buildMesh(this.target, targetShader);
+    return this.constructor.buildMesh(this.target.tokenvisibility.geometry, targetShader);
   }
 
   #buildObstacleContainer(container, shaders, tileMethod) {
@@ -358,7 +443,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       terrainWallShader._initializeLookAtMatrix(viewerPoint, targetCenter);
       terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const terrainWall of blockingObjects.terrainWalls ) {
-        const mesh = buildMesh(terrainWall, terrainWallShader);
+        const mesh = buildMesh(terrainWall.tokenvisibility.geometry, terrainWallShader);
         container.addChild(mesh);
       }
     }
@@ -370,7 +455,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       obstacleShader._initializeLookAtMatrix(viewerPoint, targetCenter);
       obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const obj of otherBlocking ) {
-        const mesh = buildMesh(obj, obstacleShader);
+        const mesh = buildMesh(obj.tokenvisibility.geometry, obstacleShader);
         container.addChild(mesh);
       }
     }
@@ -379,31 +464,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
         const tileShader = tileMethod(fov, near, far, tile);
-        const mesh = buildMesh(tile, tileShader);
+        const mesh = buildMesh(tile.tokenvisibility.geometry, tileShader);
         container.addChild(mesh);
       }
     }
   }
-
-  #sumRedPixels(targetCache) {
-    const pixels = targetCache.pixels;
-    const nPixels = pixels.length;
-    let sumTarget = 0;
-    for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
-    return sumTarget;
-  }
-
-  #sumRedObstaclesPixels(targetCache) {
-    const pixels = targetCache.pixels;
-    const nPixels = pixels.length;
-    let sumTarget = 0;
-    for ( let i = 0; i < nPixels; i += 4 ) {
-      const px = pixels[i];
-      if ( px < 128 ) continue;
-      sumTarget += Boolean(targetCache.pixels[i]);
-    }
-    return sumTarget;
-  }
-
-
 }

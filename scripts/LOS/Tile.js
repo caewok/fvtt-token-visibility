@@ -90,6 +90,7 @@ function updateTileArea3d(tileD, changed, _options, _userId) {
   // May need to create the geometry if the tile was previously overhead.
   const tile = tileD.object;
   let geometry = tile[MODULE_ID]?.geometry ?? new Tile3dGeometry(tile);
+  geometry.updateObjectPoints();
   geometry.updateVertices();
 }
 

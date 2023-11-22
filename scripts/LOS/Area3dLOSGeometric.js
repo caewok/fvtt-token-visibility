@@ -81,7 +81,7 @@ import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
 // PlaceablePoints folder
 import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
-import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
+import { TokenPoints3d, UnitTokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
@@ -161,17 +161,10 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * @returns {TokenPoints3d}
    */
   _buildGridShape() {
-    const size = canvas.scene.dimensions.size;
-    let tokenBorder = canvas.grid.isHex
-      ? new PIXI.Polygon(canvas.grid.grid.getBorderPolygon(1, 1, 0))
-      : new PIXI.Rectangle(0, 0, size, size);
-    const { x, y } = this.target.center;
-    tokenBorder = tokenBorder.translate(x - (size * 0.5), y - (size * 0.5));
-
     // Transform to TokenPoints3d and calculate viewable area.
     // Really only an estimate b/c the view will shift depending on where on the large token
     // we are looking.
-    return new TokenPoints3d(this.target, { tokenBorder });
+    return new UnitTokenPoints3d(this.target);
   }
 
   /**
@@ -202,7 +195,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     let sidesArea = sidePolys.reduce((area, poly) =>
       area += poly.scaledArea({scalingFactor: this.constructor.SCALING_FACTOR}), 0);
 
-    if ( this.config.largeTarget ) sidesArea = Math.min(this._gridSquareArea(), sidesArea);
+    if ( this.config.largeTarget ) sidesArea = Math.min(this._gridSquareArea() || 100_000, sidesArea);
 
     // Round the percent seen so that near-zero areas are 0.
     // Because of trimming walls near the vision triangle, a small amount of token area can poke through
@@ -292,12 +285,13 @@ export class Area3dLOSGeometric extends Area3dLOS {
    */
   calculateViewMatrix() {
     // Set the matrix to look at the target from the viewer.
-    const { visibleTargetPoints, targetPoints, gridPoints, viewerPoint, targetLookAtMatrix } = this;
+    const { visibleTargetPoints, targetPoints, viewerPoint, targetLookAtMatrix } = this;
     targetPoints.setViewingPoint(viewerPoint);
     targetPoints.setViewMatrix(targetLookAtMatrix);
     visibleTargetPoints.setViewingPoint(viewerPoint);
     visibleTargetPoints.setViewMatrix(targetLookAtMatrix);
-    if ( gridPoints ) {
+    if ( this.config.largeTarget ) {
+      const gridPoints = this.gridPoints;
       gridPoints.setViewingPoint(viewerPoint);
       gridPoints.setViewMatrix(targetLookAtMatrix);
     }

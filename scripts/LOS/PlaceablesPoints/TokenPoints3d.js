@@ -1,4 +1,5 @@
 /* globals
+canvas,
 PIXI
 */
 "use strict";
@@ -8,7 +9,6 @@ import { HorizontalPoints3d } from "./HorizontalPoints3d.js";
 
 // Geometry folder
 import { Point3d } from "../../geometry/3d/Point3d.js";
-import { ConstrainedTokenBorder } from "../ConstrainedTokenBorder.js";
 import { Draw } from "../../geometry/Draw.js";
 
 
@@ -229,5 +229,35 @@ export class TokenPoints3d {
     }
 
     this.faces.forEach(f => f.drawTransformed(opts));
+  }
+}
+
+/**
+ * Instead of using the full token size, this creates points for a grid-square-sized cube
+ * centered on the token.
+ */
+export class UnitTokenPoints3d extends TokenPoints3d {
+  #token;
+
+  constructor(token, opts = {}) {
+    const center = Point3d.fromTokenCenter(token);
+    const size = canvas.dimensions.size;
+    const size_1_2 = size * 0.5;
+
+    let tokenBorder = canvas.grid.isHex
+      ? new PIXI.Polygon(canvas.grid.grid.getBorderPolygon(1, 1, 0))
+      : new PIXI.Rectangle(0, 0, size, size);
+    tokenBorder = tokenBorder.translate(center.x - size_1_2, center.y - size_1_2);
+
+    opts.tokenBorder = tokenBorder;
+    const fakeToken = {
+      topZ: center.z + size_1_2,
+      bottomZ: center.z - size_1_2,
+      center: token.center,
+      name: token.name
+    }
+
+    super(fakeToken, opts);
+    this.#token = token;
   }
 }

@@ -147,12 +147,9 @@ export class Settings {
   }
 
   static updateLOSDebugGraphics(enable) {
-    if ( enable ) LOS_CALCULATOR.CALCULATOR.calc?._enableDebugPopout();
-    else {
-      LOS_CALCULATOR.CALCULATOR.calc.clearDebug();
-      LOS_CALCULATOR.CALCULATOR.calc?._closeDebugPopout();
-    }
-
+    const calc = LOS_CALCULATOR.CALCULATOR.calc;
+    if ( enable ) calc.enableDebug();
+    else calc.disableDebug();
   }
 
   /**
@@ -324,7 +321,7 @@ export class Settings {
       type: Boolean,
       default: true,
       tab: "losTarget",
-      onChange: _value => this.losAlgorithmChange(TARGET.LARGE)
+      onChange: _value => this.losSettingChange(TARGET.LARGE)
     });
 
     register(TARGET.ALGORITHM, {

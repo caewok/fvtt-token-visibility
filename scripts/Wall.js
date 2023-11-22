@@ -37,6 +37,7 @@ function updateWallArea3d(wallD, changed, _options, _userId) {
   const wall = wallD.object;
   const geometry = wall[MODULE_ID]?.geometry;
   if ( !geometry ) return;
+  geometry.updateObjectPoints();
   geometry.updateVertices();
 }
 
