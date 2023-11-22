@@ -94,13 +94,17 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {number} [threshold]    Percentage area required
    * @returns {boolean}
    */
-  hasLOS(threshold) {
+  hasLOS(threshold, printResult = false) {
     this._clearCache();
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
 
     // Start with easy cases, in which the center point is determinative.
     if ( !this.config.visibleTargetShape || this.config.visibleTargetShape instanceof PIXI.Rectangle ) {
       const centerPointIsVisible = !this._hasCollision(this.viewerPoint, this.targetCenter);
+      if ( printResult ) {
+        console.debug(`${this.viewer.name} ${centerPointIsVisible ? "sees" : "doesn't see"} the center point of ${this.target.name}.`);
+      }
+
 
       // If less than 50% of the token area is required to be viewable, then
       // if the center point is viewable, the token is viewable from that source.
@@ -125,7 +129,7 @@ export class Area2dLOS extends AlternativeLOS {
     //       if ( typeof bottomTest !== "undefined" || typeof topTest !== "undefined" ) return false;
     //     }
 
-    return super.hasLOS(threshold);
+    return super.hasLOS(threshold, printResult);
   }
 
   /**
@@ -428,7 +432,9 @@ export class Area2dLOS extends AlternativeLOS {
     if ( visionSource.disabled ) losConfig.radius = 0;
     if ( !redoLOS ) {
       const polygonClass = CONFIG.Canvas.polygonBackends[visionSource.constructor.sourceType];
-      return polygonClass.create(viewerPoint, losConfig);
+      const los = polygonClass.create(viewerPoint, losConfig);
+      this.los = los;
+      return los;
     }
 
     // Rerun the LOS with infinite walls only
@@ -481,8 +487,8 @@ export class Area2dLOS extends AlternativeLOS {
     super._drawCanvasDebug(hasLOS);
     if ( this._drawCenterPoint(threshold) ) return;
     if ( !this.los ) this.shadowLOSForElevation(this.targetCenter.z);
-    this._drawLOS(this.los);
-    this._drawLOSShadows(this.shadows);
+    if ( this.los ) this._drawLOS(this.los);
+    if ( this.shadows ) this._drawLOSShadows(this.shadows);
   }
 
   _drawCenterPoint(threshold) {
