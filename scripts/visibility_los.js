@@ -188,8 +188,8 @@ export class LOSCalculator {
   /**
    * Update the calculator algorithm.
    */
-  _updateAlgorithm() {
-    const algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
+  _updateAlgorithm(algorithm) {
+    algorithm ??= Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
     const clName = this.calc.constructor.name;
     if ( clName === this.constructor.ALGORITHM_CLASS_NAME[algorithm] ) return;
 
