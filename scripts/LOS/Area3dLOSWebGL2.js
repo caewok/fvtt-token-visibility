@@ -43,6 +43,21 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( this.#gridCubeGeometry ) this.#gridCubeGeometry.object = this.target;
   }
 
+  /**
+   * For WebGL, it currently uses the full token border, not the constrained target border,
+   * to construct the shape.
+   * To ensure all blocking walls are captured, must use the same border for the vision
+   * polygon.
+   */
+  get visionPolygon() {
+    if ( !this._visionPolygon ) {
+      this._visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target, this.target.bounds);
+      this._visionPolygon._edges = [...this._visionPolygon.iterateEdges()];
+      this._visionPolygon._bounds = this._visionPolygon.getBounds();
+    }
+    return this._visionPolygon;
+  }
+
   /** @type {object} */
   #targetDistance3dProperties = {
     diagonal: 0,
@@ -127,7 +142,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
    */
   #frustrum = {
     near: 1,
-    far: 1000,
+    far: null,
     fov: RADIANS_90,
     initialized: false
   };
@@ -180,16 +195,37 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     let angleRad = 2 * Math.atan(diagonal * (0.5 / nearDistance));
     angleRad = Math.min(angleRad, viewerAngle);
     angleRad ??= RADIANS_90;
-    this.#frustrum.fov = angleRad;// + RADIANS_1;
+    this.#frustrum.fov = this.#frustrumFOV || angleRad;// + RADIANS_1;
 
     // Far distance is distance to the furthest point of the target.
-    this.#frustrum.far = farDistance;
+    //this.#frustrum.far = this.#frustrumFar || farDistance;
 
     // Near distance has to be close to the viewer.
     // We can assume we don't want to view anything within 1/2 grid unit?
-    this.#frustrum.near = canvas.dimensions.size * 0.5;
+    this.#frustrum.near = this.#frustrumNear || canvas.dimensions.size * 0.5;
 
     this.#frustrum.initialized = true;
+  }
+
+  #frustrumNear;
+
+  set frustrumNear(value) {
+    this.#frustrumNear = value;
+    this._clearCache();
+  }
+
+  #frustrumFOV;
+
+  set frustrumFOV(value) {
+    this.#frustrumFOV = value;
+    this._clearCache();
+  }
+
+  #frustrumFar;
+
+  set frustrumFar(value) {
+    this.#frustrumFar = value;
+    this._clearCache();
   }
 
   static frustrumBase(fov, dist) {

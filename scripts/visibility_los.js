@@ -85,6 +85,12 @@ DetectionMode.prototype._testRange
 
 export const LOS_CALCULATOR = { CALCULATOR: undefined };
 
+/** Testing
+api = game.modules.get("tokenvisibility").api
+api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2)
+api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC)
+*/
+
 
 /**
  * Class that handles calculating line-of-sight between two tokens based on current settings.
