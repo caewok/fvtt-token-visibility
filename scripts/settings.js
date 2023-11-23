@@ -75,6 +75,7 @@ export const SETTINGS = {
         POINTS: "los-points",
         AREA2D: "los-area-2d",
         AREA3D: "los-area-3d",
+        AREA3D_GEOMETRIC: "los-area-3d-geometric",
         AREA3D_WEBGL1: "los-area-3d-webgl1",
         AREA3D_WEBGL2: "los-area-3d-webgl2",
         AREA3D_HYBRID: "los-area-3d-hybrid"
@@ -211,7 +212,7 @@ export class Settings {
     const PT_TYPES = KEYS.POINT_TYPES;
     const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
     const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
-    const LTYPES = KEYS.LOS.TARGET.TYPES;
+    const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES, { POINTS: 0, AREA2D: 0, AREA3D: 0 });
     const losChoices = {};
     const ptChoices = {};
     const rangeChoices = {};

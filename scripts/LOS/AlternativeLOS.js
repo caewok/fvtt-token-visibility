@@ -99,7 +99,7 @@ export class AlternativeLOS {
     this.#visibleTargetShape = undefined;
 
     // Other
-    this.#visionPolygon = undefined;
+    this._visionPolygon = undefined;
     this.#blockingObjects.initialized = false;
   }
 
@@ -187,19 +187,23 @@ export class AlternativeLOS {
    * The viewable area between viewer and target.
    * Typically, this is a triangle, but if viewed head-on, it will be a triangle
    * with the portion of the target between viewer and target center added on.
+   * Not private so subclasses, like WebGL, can override.
    * @typedef {PIXI.Polygon} visionPolygon
    * @property {Segment[]} edges
    * @property {PIXI.Rectangle} bounds
    */
-  #visionPolygon;
+  _visionPolygon;
 
+  // TODO: Define a target border property and use that instead.
+  // Make consistent with visible token border.
+  // For speed and simplicity, may want to have a target rectangle bounds and a target border.
   get visionPolygon() {
-    if ( !this.#visionPolygon ) {
-      this.#visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target);
-      this.#visionPolygon._edges = [...this.#visionPolygon.iterateEdges()];
-      this.#visionPolygon._bounds = this.#visionPolygon.getBounds();
+    if ( !this._visionPolygon ) {
+      this._visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target);
+      this._visionPolygon._edges = [...this._visionPolygon.iterateEdges()];
+      this._visionPolygon._bounds = this._visionPolygon.getBounds();
     }
-    return this.#visionPolygon;
+    return this._visionPolygon;
   }
 
   /**
@@ -537,8 +541,8 @@ export class AlternativeLOS {
    * @param {Token} target
    * @returns {PIXI.Polygon} Triangle between view point and target. Will be clockwise.
    */
-  static visionPolygon(viewingPoint, target) {
-    const border = target.constrainedTokenBorder;
+  static visionPolygon(viewingPoint, target, border) {
+    border ??= target.constrainedTokenBorder;
     const keyPoints = border.viewablePoints(viewingPoint, { outermostOnly: false });
     if ( !keyPoints ) return border.toPolygon();
 
@@ -569,7 +573,7 @@ export class AlternativeLOS {
         break;
       }
       default:
-        out = new PIXI.Polygon([viewingPoint, keyPoints[0], keyPoints[keyPoints.length - 1]]);
+        out = new PIXI.Polygon([viewingPoint, keyPoints[0], keyPoints.at(-1)]);
     }
 
     if ( !out.isClockwise ) out.reverseOrientation();

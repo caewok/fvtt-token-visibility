@@ -86,9 +86,8 @@ export class Area3dPopout extends Application {
     savedData.shown = false;
     savedData.savedTop = this.position.top;
     savedData.savedLeft = this.position.left;
-
+    if ( !this.closing ) this.pixiApp?.destroy();
     super.close();
-    this.pixiApp?.destroy();
   }
 }
 

@@ -38,6 +38,21 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
     if ( this.#gridCubeGeometry ) this.#gridCubeGeometry.object = this.target;
   }
 
+  /**
+   * For WebGL, it currently uses the full token border, not the constrained target border,
+   * to construct the shape.
+   * To ensure all blocking walls are captured, must use the same border for the vision
+   * polygon.
+   */
+  get visionPolygon() {
+    if ( !this._visionPolygon ) {
+      this._visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target, this.target.bounds);
+      this._visionPolygon._edges = [...this._visionPolygon.iterateEdges()];
+      this._visionPolygon._bounds = this._visionPolygon.getBounds();
+    }
+    return this._visionPolygon;
+  }
+
   // NOTE ----- USER-FACING METHODS -----
 
   /**

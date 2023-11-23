@@ -232,6 +232,7 @@ export async function benchTokenLOS(n = 100) {
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.NINE);
   await runLOSTest(n, viewers, targets, algs.AREA2D, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, false);
@@ -241,6 +242,7 @@ export async function benchTokenLOS(n = 100) {
   await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
   await runLOSTest(n, viewers, targets, algs.AREA2D, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, true);
