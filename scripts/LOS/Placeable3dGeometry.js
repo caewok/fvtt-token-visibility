@@ -162,24 +162,24 @@ export class Grid3dGeometry extends Placeable3dGeometry {
 
 export class Token3dGeometry extends Grid3dGeometry {
 
-  static cubePoints(token) {
+  static cubePoints(token, padding = -1) {
     const centerPts = Point3d.fromToken(token);
     const { width, height } = token.document;
     const w = width * canvas.dimensions.size;
     const h = height * canvas.dimensions.size;
-    const w_1_2 = (w * 0.5) - 1;  // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
-    const h_1_2 = (h * 0.5) - 1;  // (common with square grids)
-    const elevationOffset = 1; // Shrink top/bottom by 1 pixel for same reason.
+    const w_1_2 = (w * 0.5) + padding;  // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
+    const h_1_2 = (h * 0.5) + padding;  // (common with square grids)
+    const elevationOffset = padding; // Shrink top/bottom by 1 pixel for same reason.
     return [
-      centerPts.top.add(new Point3d(-w_1_2, -h_1_2, -elevationOffset)),
-      centerPts.top.add(new Point3d(w_1_2, -h_1_2, -elevationOffset)),
-      centerPts.top.add(new Point3d(w_1_2, h_1_2, -elevationOffset)),
-      centerPts.top.add(new Point3d(-w_1_2, h_1_2, -elevationOffset)),
+      centerPts.top.add(new Point3d(-w_1_2, -h_1_2, elevationOffset)),
+      centerPts.top.add(new Point3d(w_1_2, -h_1_2, elevationOffset)),
+      centerPts.top.add(new Point3d(w_1_2, h_1_2, elevationOffset)),
+      centerPts.top.add(new Point3d(-w_1_2, h_1_2, elevationOffset)),
 
-      centerPts.bottom.add(new Point3d(-w_1_2, -h_1_2, elevationOffset)),
-      centerPts.bottom.add(new Point3d(w_1_2, -h_1_2, elevationOffset)),
-      centerPts.bottom.add(new Point3d(w_1_2, h_1_2, elevationOffset)),
-      centerPts.bottom.add(new Point3d(-w_1_2, h_1_2, elevationOffset))
+      centerPts.bottom.add(new Point3d(-w_1_2, -h_1_2, -elevationOffset)),
+      centerPts.bottom.add(new Point3d(w_1_2, -h_1_2, -elevationOffset)),
+      centerPts.bottom.add(new Point3d(w_1_2, h_1_2, -elevationOffset)),
+      centerPts.bottom.add(new Point3d(-w_1_2, h_1_2, -elevationOffset))
     ];
   }
 
@@ -386,10 +386,10 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
 
   }
 
-  _constrainedVertices() {
+  _constrainedVertices(padding = -1) {
     // Clockwise order for both top and bottom.
     // Will reverse the bottom in the indices.
-    const border = this.object.constrainedTokenBorder;
+    const border = this.object.constrainedTokenBorder.pad(padding);
     const { topZ, bottomZ } = this.object;
     if ( !border.isClockwise ) border.reverseOrientation();
 
@@ -417,59 +417,11 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
     return vertices;
   }
 
-  //   _constrainedSides() {
-  //     const border = this.object.constrainedTokenBorder;
-  //     const { topZ, bottomZ } = this.object;
-  //     if ( border.isClockwise ) border.reverseOrientation();
-  //
-  //     // Each edge represents the top/bottom of a side.
-  //     // So nSides === nEdges.
-  //     // Each side has 4 vertices, with 3 coordinates for each.
-  //     // Shared vertices between edges means we need nSide vertices * 2 * 3
-  //     const edges = [...border.iterateEdges({close: true})];
-  //     const nSides = edges.length;
-  //     const vertices = new Float32Array(nSides * 2 * 3);
-  //     for ( let i = 0; i < nSides; i += 1 ) {
-  //       const {x, y} = edges[i].B;
-  //       const v = i * 2 * 3; // 2 vertices per side, 3 coordinates per vertex.
-  //       vertices[v] = x;
-  //       vertices[v + 1] = y;
-  //       vertices[v + 2] = topZ;
-  //       vertices[v + 3] = x;
-  //       vertices[v + 4] = y;
-  //       vertices[v + 5] = bottomZ;
-  //     }
-  //
-  //     // 2 triangles per side; 3 indices per triangle
-  //     // Vertices are TL, BL, TR, BR...
-  //     // Arrange CW: TL - TR - BR and TL - BR - BL
-  //     const indices = new Uint16Array(nSides * 2 * 3);
-  //     for ( let i = 0; i < nSides; i += 1 ) {
-  //       const j = i * 6; // Which indice (6 per side).
-  //       const v = i * 2; // Which vertex (2 per side, repeated other 2).
-  //
-  //       indices[j] = v;           // TL
-  //       indices[j + 1] = v + 2;   // TR
-  //       indices[j + 2] = v + 3;   // BR
-  //
-  //       indices[j + 3] = v;       // TL
-  //       indices[j + 4] = v + 3;   // BR
-  //       indices[j + 5] = v + 1;   // BL
-  //     }
-  //     // The final right vertices circle back to the beginning.
-  //     const j = (nSides - 1) * 6;
-  //     indices[j + 1] = 0;
-  //     indices[j + 2] = 1;
-  //     indices[j + 4] = 1;
-  //
-  //     return { vertices, indices };
-  //   }
-
   /** @type {PIXI.Geometry} */
   _constrainedTopGeometry;
 
 
-  _triangulateConstrainedTop() {
+  _triangulateConstrainedTop(padding = -1) {
     // Don't trust PolygonMesher._defaultOptions.
     const opts = {
       normalize: false,
@@ -484,7 +436,7 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
       interleaved: false
     };
 
-    const border = this.object.constrainedTokenBorder;
+    const border = this.object.constrainedTokenBorder.pad(padding);
     const mesh = new PolygonMesher(border, opts);
     this._constrainedTopGeometry = mesh.triangulate(this._constrainedTopGeometry);
 
