@@ -9,7 +9,7 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Settings } from "./settings.js";
-import { ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
+import { ConstrainedToken3dGeometry, ConstrainedTokenHex3dGeometry } from "./LOS/Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -63,7 +63,8 @@ PATCHES.BASIC.HOOKS = { controlToken, updateToken };
  */
 function drawTokenArea3d(token) {
   const obj = token[MODULE_ID] ??= {};
-  obj.geometry = new ConstrainedToken3dGeometry(token);
+  const cl = canvas.grid.isHex ? ConstrainedTokenHex3dGeometry : ConstrainedToken3dGeometry;
+  obj.geometry = new cl(token);
 }
 
 /**
@@ -124,6 +125,14 @@ PATCHES.BASIC.WRAPS = {
 function constrainedTokenBorder() { return ConstrainedTokenBorder.get(this).constrainedBorder(); }
 
 /**
+ * New getter: Token.prototype.isConstrainedTokenBorder
+ * Determine whether the border is currently constrained for this token.
+ * I.e., the token overlaps a wall.
+ * @returns {boolean}
+ */
+function isConstrainedTokenBorder() { return !ConstrainedTokenBorder.get(this)._unrestricted; }
+
+/**
  * New getter: Token.prototype.tokenBorder
  * Determine the correct border shape for this token. Utilize the cached token shape.
  * @returns {PIXI.Polygon|PIXI.Rectangle}
@@ -140,7 +149,8 @@ function tokenShape() { return this._tokenShape || (this._tokenShape = calculate
 PATCHES.BASIC.GETTERS = {
   constrainedTokenBorder,
   tokenBorder,
-  tokenShape
+  tokenShape,
+  isConstrainedTokenBorder
 };
 
 

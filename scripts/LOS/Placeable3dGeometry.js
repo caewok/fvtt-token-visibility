@@ -117,7 +117,7 @@ export class Grid3dGeometry extends Placeable3dGeometry {
     3, 6, 7 // BL (top) - BR (bottom) - BL (bottom)
   ]);
 
-  static cubePoints(token) {
+  static points(token) {
     // Construct a grid unit cube at the token center.
     const center = Point3d.fromTokenCenter(token);
     const size = canvas.dimensions.size;
@@ -150,7 +150,7 @@ export class Grid3dGeometry extends Placeable3dGeometry {
 
   _updateTokenCenter() { this.#tokenCenter = Point3d.fromTokenCenter(this.object); }
 
-  constructObjectPoints() { return this.constructor.cubePoints(this.object); }
+  constructObjectPoints() { return this.constructor.points(this.object); }
 
   updateObjectPoints() {
     const newCenter = Point3d.fromTokenCenter(this.object);
@@ -162,7 +162,7 @@ export class Grid3dGeometry extends Placeable3dGeometry {
 
 export class Token3dGeometry extends Grid3dGeometry {
 
-  static cubePoints(token, padding = -1) {
+  static points(token, padding = -1) {
     const centerPts = Point3d.fromToken(token);
     const { width, height } = token.document;
     const w = width * canvas.dimensions.size;
@@ -213,9 +213,8 @@ export class Token3dGeometry extends Grid3dGeometry {
 
 export class ConstrainedToken3dGeometry extends Token3dGeometry {
 
-  // TODO: Can we always assume a rectangular border is equivalent to the unconstrained border?
   /** @type {boolean} */
-  get isConstrained() { return !(this.object.constrainedTokenBorder instanceof PIXI.Rectangle); }
+  get isConstrained() { return this.object.isConstrainedTokenBorder; }
 
   updateVertices() {
     if ( !this.isConstrained ) {
@@ -314,7 +313,6 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
     // Top: shades of orange.
     // Bottom: shades of blue.
     const mult = 1 / (nSides - 1);
-    const ln = nSides * 2;
     const colors = new Float32Array(nSides * 3 * 2);
     for ( let i = 0, s = 0; s < nSides; i += 3, s += 1 ) {
       const shade = s * mult;
@@ -326,7 +324,6 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
       colors[j] = 0.0;
       colors[j + 1] = 1.0;
       colors[j + 2] = shade;
-      console.log({i, s, j})
     }
 
     return {
@@ -379,9 +376,6 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
       sideTriangles = triangles.slice(0, nSides * 2)
       topTriangles = triangles.slice(nSides * 2, nSides * 2 + topLn / 3)
       bottomTriangles = triangles.slice(nSides * 2 + topLn / 3)
-
-
-
     */
 
   }
@@ -472,6 +466,146 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
       && this._constrainedTopGeometry.indices ) this._constrainedTopGeometry.destroy();
   }
 
+}
+
+export class HexGrid3dGeometry extends Grid3dGeometry {
+  static NUM_VERTICES = 12;
+
+  static colorVertices = [
+    // Top: Shades of orange
+    1.0, 0.00, 0.0,
+    1.0, 0.20, 0.0,
+    1.0, 0.40, 0.0,
+    1.0, 0.60, 0.0,
+    1.0, 0.80, 0.0,
+    1.0, 1.00, 0.0,
+
+    // Bottom: Shades of blue
+    0.0, 0.00, 1.0,
+    0.0, 0.20, 1.0,
+    0.0, 0.40, 1.0,
+    0.0, 0.60, 1.0,
+    0.0, 0.80, 1.0,
+    0.0, 1.00, 1.0
+  ];
+
+  /*
+    T: 0, 6
+   TR: 1, 7
+   BR: 2, 8
+    B: 3, 9
+   BL: 4, 10,
+   TL: 5, 11
+
+         T
+       /  \
+      /    \
+    TL      TR
+    |       |
+    |       |
+    BL      BR
+     \     /
+      \   /
+        B
+  */
+  static indices = new Uint16Array([
+    // Top
+    0, 1, 2, // T - TR - BR
+    2, 3, 4, // BR - B - BL
+    4, 5, 0, // BL - TL - T
+    0, 2, 4, // T - BR - BL (Triangle in middle)
+
+    // Bottom (reversed order)
+    8, 7, 6,   // T - TR - BR
+    10, 9, 8,  // BR - B - BL
+    6, 11, 10, // BL - TL - T
+    10, 8, 6,  // T - BR - BL (Triangle in middle)
+
+
+    // Sides (from top)
+    0, 5, 11, // T (top) - TL (top) - TL (bottom)
+    0, 11, 6, // T (top) - TL (bottom) - T (bottom)
+
+    1, 0, 6,
+    1, 6, 7,
+
+    2, 1, 7,
+    2, 7, 8,
+
+    3, 2, 8,
+    3, 8, 9,
+
+    4, 3, 9,
+    4, 9, 10,
+
+    5, 4, 10,
+    5, 10, 11
+  ]);
+
+  static points(token) {
+    // Construct a grid unit hex cube at the token center.
+    const center = Point3d.fromTokenCenter(token);
+    const size = canvas.dimensions.size;
+    const size_1_2 = (size * 0.5) - 1; // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
+    const elevationOffset = 1; // Shrink top/bottom by 1 pixel for same reason.
+    const z = size_1_2 - elevationOffset;
+
+    // Get unit = 1 hex points and translate to current token position.
+    const hexPts = canvas.grid.grid.getBorderPolygon(1, 1, -1); // Pad minus 1.
+    const nPts = hexPts.length * 0.5;
+    const pts = new Array(nPts * 2);
+    for ( let i = 0; i < nPts; i += 1 ) {
+      const j = i * 2;
+      const x = hexPts[j];
+      const y = hexPts[j + 1];
+      const k = i + nPts;
+      pts[i] = new Point3d(x, y, z);
+      pts[k] = new Point3d(x, y, -z);
+    }
+    pts.forEach(pt => center.add(pt, pt));
+    return pts;
+  }
+}
+
+export class TokenHex3dGeometry extends Token3dGeometry {
+  static NUM_VERTICES = HexGrid3dGeometry.NUM_VERTICES;
+
+  static indices = HexGrid3dGeometry.indices;
+
+  static colorVertices = HexGrid3dGeometry.colorVertices;
+
+  static points(token, padding = -1) {
+    // Construct a grid unit hex cube at the token center.
+    const { topZ, bottomZ } = token;
+    const z = ((topZ - bottomZ) * 0.5) + padding; // Shrink top/bottom by 1 pixel for same reason.
+
+    // Get unit = 1 hex points and translate to current token position.
+    // Pad (typically minus 1) to avoid z-fighting if wall is at token edge.
+    const hexPts = canvas.grid.grid.getBorderPolygon(token.document.width, token.document.height, padding);
+    const nPts = hexPts.length * 0.5;
+    const pts = new Array(nPts * 2);
+    for ( let i = 0; i < nPts; i += 1 ) {
+      const j = i * 2;
+      const x = hexPts[j];
+      const y = hexPts[j + 1];
+      const k = i + nPts;
+      pts[i] = new Point3d(x, y, z);
+      pts[k] = new Point3d(x, y, -z);
+    }
+    const center = Point3d.fromTokenCenter(token);
+    pts.forEach(pt => center.add(pt, pt));
+    return pts;
+  }
+}
+
+export class ConstrainedTokenHex3dGeometry extends ConstrainedToken3dGeometry {
+  static NUM_VERTICES = HexGrid3dGeometry.NUM_VERTICES;
+
+  static indices = HexGrid3dGeometry.indices;
+
+  static colorVertices = HexGrid3dGeometry.colorVertices;
+
+  static points(token, padding) { return TokenHex3dGeometry.points(token, padding); }
 }
 
 export class Wall3dGeometry extends Placeable3dGeometry {
