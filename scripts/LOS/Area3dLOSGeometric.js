@@ -131,7 +131,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   get visibleTargetPoints() {
     return this.#visibleTargetPoints
-      || (this.#visibleTargetPoints =  new TokenPoints3d(this.target, { tokenBorder: this.config.visibleTargetShape }));
+      || (this.#visibleTargetPoints =  new TokenPoints3d(this.target, { pad: -1, tokenBorder: this.config.visibleTargetShape }));
   }
 
   #boundaryTargetPoints;
@@ -652,7 +652,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
-    if ( this.config.largeTarget ) this.gridPoints.drawTransformed({ color: colors.lightred, drawTool });
+    if ( this.config.largeTarget ) this.gridPoints.drawTransformed({ color: colors.lightred, drawTool, fillAlpha: 0.4 });
 
     // Draw the detected objects in 3d, centered on 0,0
     const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
