@@ -49,14 +49,14 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
    * To ensure all blocking walls are captured, must use the same border for the vision
    * polygon.
    */
-  get visionPolygon() {
-    if ( !this._visionPolygon ) {
-      this._visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target, this.target.bounds);
-      this._visionPolygon._edges = [...this._visionPolygon.iterateEdges()];
-      this._visionPolygon._bounds = this._visionPolygon.getBounds();
-    }
-    return this._visionPolygon;
-  }
+//   get visionPolygon() {
+//     if ( !this._visionPolygon ) {
+//       this._visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target, this.target.bounds);
+//       this._visionPolygon._edges = [...this._visionPolygon.iterateEdges()];
+//       this._visionPolygon._bounds = this._visionPolygon.getBounds();
+//     }
+//     return this._visionPolygon;
+//   }
 
   /** @type {object} */
   #targetDistance3dProperties = {
