@@ -40,7 +40,7 @@ import { AREA3D_POPOUTS } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 
-import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry } from "./LOS/Placeable3dGeometry.js";
+import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
 import { PixelCache } from "./LOS/PixelCache.js";
@@ -111,7 +111,7 @@ Hooks.once("init", function() {
 
     AREA3D_POPOUTS,
 
-    Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry,
+    Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
     Placeable3dShader, Tile3dShader,
     Placeable3dDebugShader, Tile3dDebugShader,
 

@@ -9,7 +9,7 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Settings } from "./settings.js";
-import { Token3dGeometry } from "./LOS/Placeable3dGeometry.js";
+import { ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -63,7 +63,7 @@ PATCHES.BASIC.HOOKS = { controlToken, updateToken };
  */
 function drawTokenArea3d(token) {
   const obj = token[MODULE_ID] ??= {};
-  obj.geometry = new Token3dGeometry(token);
+  obj.geometry = new ConstrainedToken3dGeometry(token);
 }
 
 /**

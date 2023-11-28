@@ -1,7 +1,8 @@
 /* globals
 canvas,
 glMatrix,
-PIXI
+PIXI,
+PolygonMesher
 */
 "use strict";
 
@@ -26,6 +27,7 @@ class Placeable3dGeometry extends PIXI.Geometry {
     this.initializeVertices();
     this.initializeIndices();
     this.initializeColors(); // For debugging.
+    this.updateVertices();
   }
 
   // Cache the object points
@@ -47,7 +49,6 @@ class Placeable3dGeometry extends PIXI.Geometry {
 
   initializeVertices() {
     this.addAttribute("aVertex", new Float32Array(this.constructor.NUM_VERTICES * 3));
-    this.updateVertices();
   }
 
   updateVertices() {
@@ -93,7 +94,7 @@ export class Grid3dGeometry extends Placeable3dGeometry {
     |      |
     BL --- BR
   */
-  static indices = [
+  static indices = new Uint16Array([
     // Top
     0, 1, 2, // TL - TR - BR
     0, 2, 3, // TL - BR - BL
@@ -114,7 +115,7 @@ export class Grid3dGeometry extends Placeable3dGeometry {
 
     3, 2, 6, // BL (top) - BR (top) - BR (bottom)
     3, 6, 7 // BL (top) - BR (bottom) - BL (bottom)
-  ];
+  ]);
 
   static cubePoints(token) {
     // Construct a grid unit cube at the token center.
@@ -161,24 +162,24 @@ export class Grid3dGeometry extends Placeable3dGeometry {
 
 export class Token3dGeometry extends Grid3dGeometry {
 
-  static cubePoints(token) {
+  static cubePoints(token, padding = -1) {
     const centerPts = Point3d.fromToken(token);
     const { width, height } = token.document;
     const w = width * canvas.dimensions.size;
     const h = height * canvas.dimensions.size;
-    const w_1_2 = (w * 0.5) - 1;  // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
-    const h_1_2 = (h * 0.5) - 1;  // (common with square grids)
-    const elevationOffset = 1; // Shrink top/bottom by 1 pixel for same reason.
+    const w_1_2 = (w * 0.5) + padding;  // Shrink by 1 pixel to avoid z-fighting if wall is at token edge.
+    const h_1_2 = (h * 0.5) + padding;  // (common with square grids)
+    const elevationOffset = padding; // Shrink top/bottom by 1 pixel for same reason.
     return [
-      centerPts.top.add(new Point3d(-w_1_2, -h_1_2, -elevationOffset)),
-      centerPts.top.add(new Point3d(w_1_2, -h_1_2, -elevationOffset)),
-      centerPts.top.add(new Point3d(w_1_2, h_1_2, -elevationOffset)),
-      centerPts.top.add(new Point3d(-w_1_2, h_1_2, -elevationOffset)),
+      centerPts.top.add(new Point3d(-w_1_2, -h_1_2, elevationOffset)),
+      centerPts.top.add(new Point3d(w_1_2, -h_1_2, elevationOffset)),
+      centerPts.top.add(new Point3d(w_1_2, h_1_2, elevationOffset)),
+      centerPts.top.add(new Point3d(-w_1_2, h_1_2, elevationOffset)),
 
-      centerPts.bottom.add(new Point3d(-w_1_2, -h_1_2, elevationOffset)),
-      centerPts.bottom.add(new Point3d(w_1_2, -h_1_2, elevationOffset)),
-      centerPts.bottom.add(new Point3d(w_1_2, h_1_2, elevationOffset)),
-      centerPts.bottom.add(new Point3d(-w_1_2, h_1_2, elevationOffset))
+      centerPts.bottom.add(new Point3d(-w_1_2, -h_1_2, -elevationOffset)),
+      centerPts.bottom.add(new Point3d(w_1_2, -h_1_2, -elevationOffset)),
+      centerPts.bottom.add(new Point3d(w_1_2, h_1_2, -elevationOffset)),
+      centerPts.bottom.add(new Point3d(-w_1_2, h_1_2, -elevationOffset))
     ];
   }
 
@@ -208,6 +209,269 @@ export class Token3dGeometry extends Grid3dGeometry {
     }
     super.updateObjectPoints();
   }
+}
+
+export class ConstrainedToken3dGeometry extends Token3dGeometry {
+
+  // TODO: Can we always assume a rectangular border is equivalent to the unconstrained border?
+  /** @type {boolean} */
+  get isConstrained() { return !(this.object.constrainedTokenBorder instanceof PIXI.Rectangle); }
+
+  updateVertices() {
+    if ( !this.isConstrained ) {
+      // Fix the buffer lengths.
+      const vBuffer = this.getBuffer("aVertex");
+      const n = this.constructor.NUM_VERTICES * 3;
+      if ( vBuffer.data.length !== n ) vBuffer.data = new Float32Array(n);
+
+      const cBuffer = this.getBuffer("aColor");
+      if ( cBuffer.data.length !== n ) cBuffer.data = new Float32Array(n);
+
+      // Replace the index buffer.
+      this.indexBuffer.update(this.constructor.indices);
+
+      return super.updateVertices();
+    }
+
+    // TODO: Is it necessary to both set the data and update the buffer?
+    // Can we trigger one update after all this instead?
+    const { vertices, indices, colors } = this._buildConstrainedGeometry();
+    const vBuffer = this.getBuffer("aVertex");
+    vBuffer.update(vertices);
+
+    const cBuffer = this.getBuffer("aColor");
+    cBuffer.update(colors);
+
+    const iBuffer = this.indexBuffer;
+    iBuffer.update(indices);
+  }
+
+  _indexSides(n) {
+    // Top points: 0 - (n - 1)
+    // Bottom points: n - (n * 2 - 1)
+    // e.g., if 4 sides, then 0 - 3, 4 - 7
+    const sides = new Uint16Array(n * 6);
+    for ( let s = 0; s < n; s += 1 ) {
+      const i = s * 6;
+      const minus1 = ((s + n) - 1) % n;
+
+      sides[i] = s;
+      sides[i + 1] = minus1;
+      sides[i + 2] = minus1 + n;
+
+      sides[i + 3] = s;
+      sides[i + 4] = minus1 + n;
+      sides[i + 5] = s + n;
+    }
+    return sides;
+  }
+
+  _buildConstrainedGeometry() {
+    const triangulatedFace = this._triangulateConstrainedTop();
+    const vertices = this._constrainedVertices();
+    const nSides = vertices.length / 6; // 3 coordinates per side, top + bottom
+    const sideIndices = this._indexSides(nSides);
+
+    // Map the triangulated top indices to the vertices.
+    // Note that vertices are top, bottom, so can skip second half.
+    //
+    const indicesMap = new Map();
+    const triV = new PIXI.Point();
+    const V = new PIXI.Point();
+    const triVertices = triangulatedFace.vertices;
+    const lnTop = triangulatedFace.vertices.length;
+    const lnTopVertices = nSides * 3;
+    for ( let i = 0; i < lnTop; i += 2 ) {
+      triV.set(triVertices[i], triVertices[i + 1]);
+      for ( let j = 0; j < lnTopVertices; j += 3 ) {
+        V.set(vertices[j], vertices[j + 1]);
+        if ( triV.almostEqual(V) ) {
+          indicesMap.set(i / 2, j / 3);
+          break;
+        }
+      }
+    }
+
+    // Is the map always the same?
+    for ( const [key, value] of indicesMap.entries()) {
+      if ( key !== value ) {
+        console.debug("indicesMap key ≠ value", {key, value});
+      }
+    }
+
+    const topIndices = triangulatedFace.indices.map(i => indicesMap.get(i));
+    const bottomIndices = topIndices.map(i => i + nSides);
+
+    // Merge the sides, top, bottom indices. All rely on the same side points.
+    const sidesLn = sideIndices.length;
+    const topLn = topIndices.length;
+    const indices = new Uint16Array(sidesLn + topLn + topLn);
+    indices.set(sideIndices);
+    indices.set(topIndices, sidesLn);
+    indices.set(bottomIndices.reverse(), sidesLn + topLn);
+
+    // Colors cycle around the top/bottom face.
+    // Top: shades of orange.
+    // Bottom: shades of blue.
+    const mult = 1 / (nSides - 1);
+    const ln = nSides * 2;
+    const colors = new Float32Array(nSides * 3 * 2);
+    for ( let i = 0, s = 0; s < nSides; i += 3, s += 1 ) {
+      const shade = s * mult;
+      colors[i] = 1.0;
+      colors[i + 1] = shade;
+      colors[i + 2] = 0.0;
+
+      const j = i + (nSides * 3);
+      colors[j] = 0.0;
+      colors[j + 1] = 1.0;
+      colors[j + 2] = shade;
+      console.log({i, s, j})
+    }
+
+    return {
+      vertices,
+      indices,
+      colors
+    };
+
+    /* For debugging, construct the top triangles.
+    triangles = [];
+    for ( let i = 0; i < topIndices.length; i += 3 ) {
+      const j0 = topIndices[i] * 3
+      const j1 = topIndices[i+1] * 3;
+      const j2 = topIndices[i+2] * 3;
+      triangles.push(new PIXI.Polygon([
+        vertices[j0],
+        vertices[j0+1],
+        vertices[j1],
+        vertices[j1+1],
+        vertices[j2],
+        vertices[j2+1]
+      ]))
+    }
+
+    triangles.forEach(tri => Draw.shape(tri))
+    */
+
+    /* Print triangle points
+      pts = [];
+      triangles = [];
+      for ( let i = 0; i < indices.length; i += 3 ) {
+        const j0 = indices[i] * 3
+        const j1 = indices[i+1] * 3;
+        const j2 = indices[i+2] * 3;
+        const pt0 = new Point3d(vertices[j0], vertices[j0+1], vertices[j0+2]);
+        const pt1 = new Point3d(vertices[j1], vertices[j1+1], vertices[j1+2]);
+        const pt2 = new Point3d(vertices[j2], vertices[j2+1], vertices[j2+2]);
+        pts.push(pt0, pt1, pt2);
+
+        triangles.push(new PIXI.Polygon([
+          pt0.x,
+          pt0.y,
+          pt1.x,
+          pt1.y,
+          pt2.x,
+          pt2.y
+        ]));
+      }
+
+      sideTriangles = triangles.slice(0, nSides * 2)
+      topTriangles = triangles.slice(nSides * 2, nSides * 2 + topLn / 3)
+      bottomTriangles = triangles.slice(nSides * 2 + topLn / 3)
+
+
+
+    */
+
+  }
+
+  _constrainedVertices(padding = -1) {
+    // Clockwise order for both top and bottom.
+    // Will reverse the bottom in the indices.
+    const border = this.object.constrainedTokenBorder.pad(padding);
+    const { topZ, bottomZ } = this.object;
+    if ( !border.isClockwise ) border.reverseOrientation();
+
+    // Each side has 4 vertices, with 3 coordinates for each.
+    // Shared vertices between edges means we need nSide vertices * 3 top, same for bottom
+    const pts = [...border.iteratePoints({close: false})];
+    const nPts = pts.length;
+    const vertices = new Float32Array(nPts * 3 * 2); // 3 coordinates per point, top + bottom.
+    const bottomStartI = nPts * 3;
+    for ( let i = 0; i < nPts; i += 1 ) {
+      const { x, y } = pts[i];
+
+      // Top vertices
+      const v = i * 3;  // 3 coordinates per vertex.
+      vertices[v] = x;
+      vertices[v + 1] = y;
+      vertices[v + 2] = topZ;
+
+      // Bottom vertices
+      const w = v + bottomStartI; // Add after all top vertices.
+      vertices[w] = x;
+      vertices[w + 1] = y;
+      vertices[w + 2] = bottomZ;
+    }
+    return vertices;
+  }
+
+  /** @type {PIXI.Geometry} */
+  _constrainedTopGeometry;
+
+
+  _triangulateConstrainedTop(padding = -1) {
+    // Don't trust PolygonMesher._defaultOptions.
+    const opts = {
+      normalize: false,
+      offset: 0,
+      x: 0,
+      y: 0,
+      radius: 0,
+      depthOuter: 0,
+      depthInner: 1,
+      scale: 10e8,
+      miterLimit: 7,
+      interleaved: false
+    };
+
+    const border = this.object.constrainedTokenBorder.pad(padding);
+    const mesh = new PolygonMesher(border, opts);
+    this._constrainedTopGeometry = mesh.triangulate(this._constrainedTopGeometry);
+
+    return {
+      vertices: this._constrainedTopGeometry.getBuffer("aVertexPosition").data,
+      indices: this._constrainedTopGeometry.getIndex().data
+    };
+
+    /* For debugging, construct the triangles.
+    vertices = constrainedTopGeometry.getBuffer("aVertexPosition").data;
+    indices = constrainedTopGeometry.getIndex().data;
+    triangles = [];
+    for ( let i = 0; i < indices.length; i += 3 ) {
+      const j0 = indices[i] * 2;
+      const j1 = indices[i+1] * 2;
+      const j2 = indices[i+2] * 2;
+      triangles.push(new PIXI.Polygon([
+        vertices[j0],
+        vertices[j0+1],
+        vertices[j1],
+        vertices[j1+1],
+        vertices[j2],
+        vertices[j2+1]
+      ]))
+    }
+    triangles.forEach(tri => Draw.shape(tri, { color: Draw.COLORS.red}))
+
+    */
+  }
+
+  destroy() {
+    if ( this._constrainedTopGeometry
+      && this._constrainedTopGeometry.indices ) this._constrainedTopGeometry.destroy();
+  }
+
 }
 
 export class Wall3dGeometry extends Placeable3dGeometry {
