@@ -90,6 +90,13 @@ export class AlternativeLOS {
     cfg.visionOffset = config.visionOffset ?? new Point3d();
   }
 
+  _updateConfiguration(config = {}) {
+    const cfg = this.config;
+    for ( const [key, value] of Object.entries(config) ) {
+      cfg[key] = value;
+    }
+  }
+
   _clearCache() {
     // Viewer
     this.#viewerPoint = undefined;
