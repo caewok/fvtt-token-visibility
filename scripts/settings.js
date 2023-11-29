@@ -51,6 +51,7 @@ export const SETTINGS = {
   SUBMENU: "submenu",
   POINT_TYPES: {
     CENTER: "points-center",
+    TWO: "points-two",
     FOUR: "points-four", // Five without center
     FIVE: "points-five", // Corners + center
     EIGHT: "points-eight", // Nine without center
