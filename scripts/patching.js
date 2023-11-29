@@ -14,14 +14,13 @@ import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasic
 import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
-import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
-
 
 // LOS
 import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
 import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
+import { PATCHES as PATCHES_VisionSource } from "./LOS/VisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./LOS/Wall.js";
 
 // Levels
