@@ -127,9 +127,6 @@ Hooks.once("init", function() {
 Hooks.once("setup", function() {
   Settings.registerAll();
   registerElevationConfig("Tile", "Alt. Token Visibility");
-  registerElevationConfig("AmbientLight", "Alt. Token Visibility");
-  registerElevationConfig("AmbientSound", "Alt. Token Visibility");
-  registerElevationConfig("MeasuredTemplate", "Alt. Token Visibility");
   console.debug(`${MODULE_ID}|registered settings`);
 });
 
