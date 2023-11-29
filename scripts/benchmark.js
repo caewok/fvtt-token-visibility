@@ -19,7 +19,7 @@ import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
-import { LOS_CALCULATOR } from "./visibility_los.js";
+import { LOS_CALCULATOR } from "./LOSCalculator.js";
 
 /* Use
 api = game.modules.get("tokenvisibility").api

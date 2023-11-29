@@ -6,7 +6,7 @@ Token
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { LOS_CALCULATOR } from "./visibility_los.js";
+import { LOS_CALCULATOR } from "./LOSCalculator.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";

@@ -46,7 +46,8 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 import { PixelCache } from "./LOS/PixelCache.js";
 import { extractPixels } from "./LOS/extract-pixels.js";
 
-import { LOS_CALCULATOR, LOSCalculator, drawDebugPoint } from "./visibility_los.js";
+import { LOS_CALCULATOR, LOSCalculator } from "./LOSCalculator.js";
+import { drawDebugPoint } from "./visibility_los.js";
 import * as range from "./visibility_range.js";
 
 // Other self-executing hooks

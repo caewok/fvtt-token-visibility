@@ -9,7 +9,7 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-import { LOS_CALCULATOR } from "./visibility_los.js";
+import { LOS_CALCULATOR } from "./LOSCalculator.js";
 import { registerArea3d, deregisterArea3d } from "./patching.js";
 
 // Patches for the Setting class
