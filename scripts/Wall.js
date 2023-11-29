@@ -18,7 +18,10 @@ PATCHES.AREA3D = {};
  * Create the geometry used by Area3d
  * @param {PlaceableObject} object    The object instance being drawn
  */
-function drawWallArea3d(wall) { wall[MODULE_ID] = new WallGeometryHandler(wall); }
+function drawWallArea3d(wall) {
+  const obj = wall[MODULE_ID] ??= {};
+  obj.geomHandler = new WallGeometryHandler(wall);
+}
 
 /**
  * Hook: updateWall
@@ -30,14 +33,14 @@ function drawWallArea3d(wall) { wall[MODULE_ID] = new WallGeometryHandler(wall);
 function updateWallArea3d(wallD, changed, _options, _userId) {
   const changeKeys = new Set(Object.keys(flattenObject(changed)));
   if ( !changeKeys.has("c") ) return;
-  wall[MODULE_ID].update();
+  wall[MODULE_ID].geomHandler.update();
 }
 
 /**
  * Hook: destroyWall
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyWallArea3d(wall) { wall[MODULE_ID].destroy(); }
+function destroyWallArea3d(wall) { wall[MODULE_ID].geomHandler.destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawWall: drawWallArea3d,

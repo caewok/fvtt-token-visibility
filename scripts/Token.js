@@ -10,6 +10,7 @@ import { MODULE_ID } from "./const.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Settings } from "./settings.js";
 import { TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
+import { LOSCalculator } from "./LOSCalculator.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -36,13 +37,24 @@ function updateToken(tokenD, change, _options, _userId) {
   if ( Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
       || Object.hasOwn(change, "elevation") ) {
-    // console.debug("Token moved.");
+    // Debug: console.debug("Token moved.");
     Settings.clearDebugGraphics();
-    // console.debug("cleared graphics after token moved.");
+    // Debug: console.debug("cleared graphics after token moved.");
   }
 }
 
-PATCHES.BASIC.HOOKS = { updateToken };
+/**
+ * Hook: destroyToken
+ * @param {PlaceableObject} object    The object instance being destroyed
+ */
+function destroyToken(token) {
+  const losCalc = token.vision?.[MODULE_ID].losCalc;
+  if ( !losCalc ) return;
+  losCalc.destroy();
+}
+
+
+PATCHES.BASIC.HOOKS = { updateToken, destroyToken };
 
 
 // ----- NOTE: Area3d Hooks ----- //
@@ -52,7 +64,10 @@ PATCHES.BASIC.HOOKS = { updateToken };
  * Create the geometry used by Area3d
  * @param {PlaceableObject} object    The object instance being drawn
  */
-function drawTokenArea3d(token) { token[MODULE_ID] = new TokenGeometryHandler(token); }
+function drawTokenArea3d(token) {
+  const obj = token[MODULE_ID] ??= {};
+  obj.geomHandler = new TokenGeometryHandler(token);
+}
 
 /**
  * Hook: refreshToken
@@ -63,14 +78,14 @@ function refreshTokenArea3d(token, flags) {
   // TODO: What other updates affect the view?
   //       Need to hook updateTokenDocument as well or instead?
   if ( !(flags.refreshPosition || flags.refreshElevation) ) return;
-  token[MODULE_ID].update();
+  token[MODULE_ID].geomHandler.update();
 }
 
 /**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTokenArea3d(token) { token[MODULE_ID].destroy(); }
+function destroyTokenArea3d(token) { token[MODULE_ID].geomHandler.destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawToken: drawTokenArea3d,
@@ -85,9 +100,9 @@ PATCHES.AREA3D.HOOKS = {
  * Reset the debugging drawings.
  */
 function updateSource(wrapper, ...args) {
-  // console.debug("Token source updated.");
+  // Debug: console.debug("Token source updated.");
   Settings.clearDebugGraphics();
-  // console.debug("Cleared graphics after token source updated.")
+  // Debug: console.debug("Cleared graphics after token source updated.")
   return wrapper(...args);
 }
 

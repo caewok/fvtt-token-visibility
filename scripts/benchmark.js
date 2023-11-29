@@ -19,7 +19,7 @@ import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
-import { LOS_CALCULATOR } from "./visibility_los.js";
+import { LOSCalculator } from "./LOSCalculator.js";
 
 /* Use
 api = game.modules.get("tokenvisibility").api
@@ -262,10 +262,6 @@ async function revertLOSSettings() {
   await Settings.set(SETTINGS.LOS.TARGET.ALGORITHM, algorithm);
   await Settings.set(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS, points);
   await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
-
-  const calc = LOS_CALCULATOR.CALCULATOR;
-  calc._updateAlgorithm();
-  calc._updateConfigurationSettings();
 }
 
 async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
@@ -276,16 +272,19 @@ async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
   }
   await Settings.set(SETTINGS.LOS.TARGET.ALGORITHM, algorithm);
   await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
-  const calc = LOS_CALCULATOR.CALCULATOR;
-  calc._updateAlgorithm();
-  calc._updateConfigurationSettings();
+  const calc = new LOSCalculator();
 
-  await QBenchmarkLoopFn(n, benchLOS, label, viewers, targets);
+  // Unneeded b/c the settings change accomplishes this already...
+  // TODO: Keep benchmark from changing the settings everywhere.
+  //   calc._updateAlgorithm();
+  //   calc._updateConfigurationSettings();
+
+  await QBenchmarkLoopFn(n, benchLOS, label, calc, viewers, targets);
+  calc.destroy();
 }
 
-function benchLOS(viewers, targets) {
+function benchLOS(calc, viewers, targets) {
   const out = [];
-  const calc = LOS_CALCULATOR.CALCULATOR;
   for ( const viewer of viewers ) {
     for ( const target of targets ) {
       if ( viewer === target ) continue;

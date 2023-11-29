@@ -46,7 +46,6 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 import { PixelCache } from "./LOS/PixelCache.js";
 import { extractPixels } from "./LOS/extract-pixels.js";
 
-import { LOS_CALCULATOR, LOSCalculator, drawDebugPoint } from "./visibility_los.js";
 import * as range from "./visibility_range.js";
 
 // Other self-executing hooks
@@ -57,7 +56,7 @@ Hooks.once("init", function() {
   registerGeometry();
   initializePatching();
 
-   // Set CONFIGS used by this module.
+  // Set CONFIGS used by this module.
   CONFIG[MODULE_ID] = {
 
     /**
@@ -78,7 +77,7 @@ Hooks.once("init", function() {
      * @type {number}
      */
     renderTextureResolution: 1
-  }
+  };
 
   game.modules.get(MODULE_ID).api = {
     bench,
@@ -97,7 +96,6 @@ Hooks.once("init", function() {
 
     util,
     ConstrainedTokenBorder,
-    los: { LOS_CALCULATOR, LOSCalculator, drawDebugPoint },
     range,
     PlanePoints3d,
     TokenPoints3d,
@@ -123,16 +121,12 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   Settings.registerAll();
-  console.debug(`${MODULE_ID}|registered settings`)
+  console.debug(`${MODULE_ID}|registered settings`);
 });
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   Settings.initializeDebugGraphics();
-
-  const api = game.modules.get(MODULE_ID).api;
-  api.losCalculator = new LOSCalculator();
-  LOS_CALCULATOR.CALCULATOR = api.losCalculator;
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
@@ -140,8 +134,6 @@ Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
 
 Hooks.on("canvasTearDown", function() {
   console.debug(`${MODULE_ID}|canvasTearDown`);
-  const api = game.modules.get(MODULE_ID).api;
-  api.losCalculator.destroy();
 });
 
 /**

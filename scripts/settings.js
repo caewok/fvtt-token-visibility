@@ -9,7 +9,6 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-import { LOS_CALCULATOR } from "./visibility_los.js";
 import { registerArea3d, deregisterArea3d } from "./patching.js";
 
 // Patches for the Setting class
@@ -145,14 +144,21 @@ export class Settings {
   //   }
 
   static clearDebugGraphics() {
-    LOS_CALCULATOR.CALCULATOR.calc.clearDebug();
     this.DEBUG_RANGE.clear();
+    for ( const source of canvas.effects.visionSources ) {
+      const losCalc = source[MODULE_ID]?.losCalc;
+      if ( !losCalc ) continue;
+      losCalc.calc.clearDebug();
+    }
   }
 
   static updateLOSDebugGraphics(enable) {
-    const calc = LOS_CALCULATOR.CALCULATOR.calc;
-    if ( enable ) calc.enableDebug();
-    else calc.disableDebug();
+    for ( const source of canvas.effects.visionSources ) {
+      const losCalc = source[MODULE_ID]?.losCalc;
+      if ( !losCalc ) continue;
+      if ( enable ) losCalc.calc.enableDebug();
+      else losCalc.calc.disableDebug();
+    }
   }
 
   /**
@@ -445,11 +451,11 @@ export class Settings {
     if ( this.typesWebGL2.has(value) ) registerArea3d();
     else deregisterArea3d();
 
-    LOS_CALCULATOR.CALCULATOR._updateAlgorithm();
+    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateAlgorithm());
   }
 
   static losSettingChange(key, _value) {
     this.cache.delete(key);
-    LOS_CALCULATOR.CALCULATOR._updateConfigurationSettings();
+    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateConfigurationSettings());
   }
 }
