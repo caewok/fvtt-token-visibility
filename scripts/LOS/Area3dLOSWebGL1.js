@@ -339,7 +339,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     // Add the new sprite
     const s = new PIXI.Sprite(this.renderTexture);
     s.anchor.set(0.5);
-    // s.position = new PIXI.Point(0, 0);
+    // Position already set to 0,0: s.position = new PIXI.Point(0, 0);
     app.stage.addChild(s);
 
     this.renderer = canvas.app.renderer;

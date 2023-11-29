@@ -6,7 +6,7 @@ Hooks
 */
 "use strict";
 
-import { MODULE_ID, DEBUG } from "./const.js";
+import { MODULE_ID } from "./const.js";
 
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
@@ -50,7 +50,6 @@ import * as range from "./visibility_range.js";
 
 // Other self-executing hooks
 import "./changelog.js";
-import "./migration.js";
 
 Hooks.once("init", function() {
   registerGeometry();
@@ -86,36 +85,41 @@ Hooks.once("init", function() {
     PixelCache,
     extractPixels,
 
-    AlternativeLOS,
-    PointsLOS,
-    Area2dLOS,
-    Area3dLOSGeometric,
-    Area3dLOSWebGL,
-    Area3dLOSWebGL2,
-    Area3dLOSHybrid,
+    losCalcMethods: {
+      AlternativeLOS,
+      PointsLOS,
+      Area2dLOS,
+      Area3dLOSGeometric,
+      Area3dLOSWebGL,
+      Area3dLOSWebGL2,
+      Area3dLOSHybrid
+    },
 
     util,
     ConstrainedTokenBorder,
     range,
-    PlanePoints3d,
-    TokenPoints3d,
-    DrawingPoints3d,
-    WallPoints3d,
-    TilePoints3d,
-    VerticalPoints3d,
-    HorizontalPoints3d,
-    Settings,
-    AlphaCutoffFilter,
+
+    points3d: {
+      PlanePoints3d,
+      TokenPoints3d,
+      DrawingPoints3d,
+      WallPoints3d,
+      TilePoints3d,
+      VerticalPoints3d,
+      HorizontalPoints3d,
+      Settings,
+      AlphaCutoffFilter
+    },
 
     AREA3D_POPOUTS,
 
-    Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
-    Placeable3dShader, Tile3dShader,
-    Placeable3dDebugShader, Tile3dDebugShader,
+    webgl: {
+      Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
+      Placeable3dShader, Tile3dShader,
+      Placeable3dDebugShader, Tile3dDebugShader
+    },
 
-    PATCHER,
-
-    debug: DEBUG
+    PATCHER
   };
 });
 

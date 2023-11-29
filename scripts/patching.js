@@ -12,7 +12,6 @@ import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
-import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
 import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
@@ -30,7 +29,6 @@ const PATCHES = {
   ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
-  DrawingConfig: PATCHES_DrawingConfig,
   PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
@@ -61,15 +59,15 @@ export function registerArea3d() {
   if ( canvas.walls ) {
     canvas.walls.placeables
       .filter(wall => !wall[MODULE_ID])
-      .forEach(wall => wall[MODULE_ID] = new WallGeometryHandler(wall));
+      .forEach(wall => wall[MODULE_ID] = { geomHandler: new WallGeometryHandler(wall) });
 
     canvas.tiles.placeables
       .filter(tile => !tile[MODULE_ID])
-      .forEach(tile => tile[MODULE_ID] = new TileGeometryHandler(tile));
+      .forEach(tile => tile[MODULE_ID] = { geomHandler: new TileGeometryHandler(tile) });
 
     canvas.tokens.placeables
       .filter(token => !token[MODULE_ID])
-      .forEach(token => token[MODULE_ID] = new TokenGeometryHandler(token));
+      .forEach(token => token[MODULE_ID] = { geomHandler: new TokenGeometryHandler(token) });
   }
 }
 
@@ -80,7 +78,7 @@ export function deregisterArea3d() {
       ...canvas.walls.placeables,
       ...canvas.tiles.placeables,
       ...canvas.tokens.placeables];
-    for ( const placeable of placeables ) placeable[MODULE_ID]?.destroy();
+    for ( const placeable of placeables ) placeable[MODULE_ID]?.geomHandler.destroy();
   }
 
   // Remove the unused methods, getters.

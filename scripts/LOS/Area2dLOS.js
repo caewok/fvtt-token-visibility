@@ -10,7 +10,6 @@ PIXI
 import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
-import { MODULES_ACTIVE } from "../const.js";
 import { buildTokenPoints } from "./util.js";
 import { Settings, SETTINGS } from "../Settings.js";
 import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
@@ -18,7 +17,6 @@ import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
 // Geometry folder
 import { Shadow } from "../geometry/Shadow.js";
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
 
 /* Area 2d
@@ -226,13 +224,12 @@ export class Area2dLOS extends AlternativeLOS {
   }
 
   /**
-   * Create ClipperPaths that combine tiles with drawings holes.
+   * Create ClipperPaths that combine tiles
    * Comparable to Area3d._combineBlockingTiles
    * @param {Set<Tile>} tiles
-   * @param {Set<CenteredPolygonBase>} drawings
    * @returns {ClipperPaths}
    */
-  _combineTilesWithDrawingHoles(tiles, drawings) {
+  _combineTiles(tiles) {
     if ( !tiles.size ) return undefined;
 
     const tilePolygons = tiles.map(tile => {
@@ -248,49 +245,9 @@ export class Area2dLOS extends AlternativeLOS {
       return poly;
     });
 
-    if ( !drawings.size ) {
-      const paths = ClipperPaths.fromPolygons(tilePolygons, {scalingFactor: Area2d.SCALING_FACTOR});
-      paths.combine().clean();
-      return paths;
-    }
-
-    // Check if any drawings might create a hole in one or more tiles
-    const tilesUnholed = [];
-    const tilesHoled = [];
-    for ( const tilePoly of tilePolygons ) {
-      const drawingHoles = [];
-
-      for ( const drawing of drawings ) {
-        const minE = drawing.document.getFlag("levels", "rangeTop");
-        const maxE = drawing.document.getFlag("levels", "rangeBottom");
-        const tileE = tilePoly._elevation;
-        if ( minE == null && maxE == null ) continue; // Intended to test null, undefined
-        else if ( minE == null && tileE !== maxE ) continue;
-        else if ( maxE == null && tileE !== minE ) continue;
-        else if ( !tileE.between(minE, maxE) ) continue;
-
-        const shape = CONFIG.GeometryLib.utils.centeredPolygonFromDrawing(drawing);
-        drawingHoles.push(shape.toPolygon());
-      }
-
-      if ( drawingHoles.length ) {
-        // Construct a hole at the tile's elevation from the drawing taking the difference.
-        const drawingHolesPaths = ClipperPaths.fromPolygons(drawingHoles, {scalingFactor: Area2d.SCALING_FACTOR});
-        const tileHoled = drawingHolesPaths.diffPolygon(tilePoly);
-        tilesHoled.push(tileHoled);
-      } else tilesUnholed.push(tilePoly);
-    }
-
-    if ( tilesUnholed.length ) {
-      const unHoledPaths = ClipperPaths.fromPolygons(tilesUnholed, {scalingFactor: Area2d.SCALING_FACTOR});
-      // Not needed? unHoledPaths.combine().clean();
-      tilesHoled.push(unHoledPaths);
-    }
-
-    // Combine all the tiles, holed and unholed
-    tiles = ClipperPaths.combinePaths(tilesHoled);
-    tiles.combine().clean();
-    return tiles;
+    const paths = ClipperPaths.fromPolygons(tilePolygons, {scalingFactor: Area2d.SCALING_FACTOR});
+    paths.combine().clean();
+    return paths;
   }
 
   /**
@@ -328,25 +285,22 @@ export class Area2dLOS extends AlternativeLOS {
    * @returns {number} Amount of polygon that is seen
    */
   _calculateSeenAreaForPolygon(visiblePolygon) {
-    // If Levels is enabled, consider tiles and drawings; obscure the visible token shape.
-    if ( MODULES_ACTIVE.LEVELS ) {
-      visiblePolygon._bounds = visiblePolygon.getBounds();
-      visiblePolygon._edges = [...visiblePolygon.iterateEdges()];
-      let tiles = this._filterTilesByVisionPolygon(visiblePolygon);
+    visiblePolygon._bounds = visiblePolygon.getBounds();
+    visiblePolygon._edges = [...visiblePolygon.iterateEdges()];
+    let tiles = this._filterTilesByVisionPolygon(visiblePolygon);
 
-      // Limit to tiles between viewer and target.
-      const minEZ = Math.min(this.viewerPoint.z, this.target.bottomZ);
-      const maxEZ = Math.max(this.viewerPoint.z, this.target.topZ);
-      tiles = tiles.filter(tile => {
-        const tileEZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(tile.document.elevation);
-        return tileEZ.between(minEZ, maxEZ);
-      });
+    // Limit to tiles between viewer and target.
+    const minEZ = Math.min(this.viewerPoint.z, this.target.bottomZ);
+    const maxEZ = Math.max(this.viewerPoint.z, this.target.topZ);
+    tiles = tiles.filter(tile => {
+      const tileEZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(tile.document.elevation);
+      return tileEZ.between(minEZ, maxEZ);
+    });
 
-      if ( tiles.size ) {
-        const drawings = this._filterDrawingsByVisionPolygon(visiblePolygon);
-        const combinedTiles = this._combineTilesWithDrawingHoles(tiles, drawings);
-        visiblePolygon = combinedTiles.diffPolygon(visiblePolygon);
-      }
+    // Combine all tiles into one polygon; determine how much of the visible polygon is blocked.
+    if ( tiles.size ) {
+      const combinedTiles = this._combineTiles(tiles);
+      visiblePolygon = combinedTiles.diffPolygon(visiblePolygon);
     }
 
     return visiblePolygon.scaledArea({scalingFactor: Area2d.SCALING_FACTOR});
@@ -401,7 +355,7 @@ export class Area2dLOS extends AlternativeLOS {
    */
   shadowLOSForElevation(targetElevation = 0) {
     const viewerPoint = this.viewerPoint;
-    const { type, liveTokensBlock, deadTokensBlock } = this.config;
+    const { type } = this.config;
     const visionSource = this.viewer.vision;
 
     // Find the walls and, optionally, tokens, for the triangle between origin and target
@@ -429,6 +383,7 @@ export class Area2dLOS extends AlternativeLOS {
     });
 
     const losConfig = visionSource._getPolygonConfiguration();
+    losConfig.type = type;
     if ( visionSource.disabled ) losConfig.radius = 0;
     if ( !redoLOS ) {
       const polygonClass = CONFIG.Canvas.polygonBackends[visionSource.constructor.sourceType];

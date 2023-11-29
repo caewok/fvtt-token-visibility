@@ -43,21 +43,6 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( this.#gridCubeGeometry ) this.#gridCubeGeometry.object = this.target;
   }
 
-  /**
-   * For WebGL, it currently uses the full token border, not the constrained target border,
-   * to construct the shape.
-   * To ensure all blocking walls are captured, must use the same border for the vision
-   * polygon.
-   */
-//   get visionPolygon() {
-//     if ( !this._visionPolygon ) {
-//       this._visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target, this.target.bounds);
-//       this._visionPolygon._edges = [...this._visionPolygon.iterateEdges()];
-//       this._visionPolygon._bounds = this._visionPolygon.getBounds();
-//     }
-//     return this._visionPolygon;
-//   }
-
   /** @type {object} */
   #targetDistance3dProperties = {
     diagonal: 0,
@@ -191,14 +176,14 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // Determine the optimal fov given the distance.
     // https://docs.unity3d.com/Manual/FrustumSizeAtDistance.html
     // Use near instead of far to ensure frame at start of token is large enough.
-    const { diagonal, farDistance, nearDistance } = this.targetDistance3dProperties;
+    const { diagonal, nearDistance } = this.targetDistance3dProperties;
     let angleRad = 2 * Math.atan(diagonal * (0.5 / nearDistance));
     angleRad = Math.min(angleRad, viewerAngle);
     angleRad ??= RADIANS_90;
     this.#frustrum.fov = this.#frustrumFOV || angleRad;// + RADIANS_1;
 
     // Far distance is distance to the furthest point of the target.
-    //this.#frustrum.far = this.#frustrumFar || farDistance;
+    // this.#frustrum.far = this.#frustrumFar || farDistance;
 
     // Near distance has to be close to the viewer.
     // We can assume we don't want to view anything within 1/2 grid unit?
@@ -416,7 +401,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // The grid area can be less than target area if the target is smaller than a grid.
     // Example: target may not be 1 unit high or may only be half a grid wide.
     const denom = Math.min(sumGridCube, sumTarget);
-    // console.debug(`${this.viewer.name} viewing ${this.target.name}:
+    // Debug: console.debug(`${this.viewer.name} viewing ${this.target.name}:
     // Seen: ${sumWithObstacles}; Full Target: ${sumTarget}; Grid: ${sumGridCube}.
     // ${Math.round(sumWithObstacles/sumTarget * 100 * 10) / 10}% |
     // ${Math.round(sumWithObstacles/sumGridCube * 100 * 10)/ 10}%`)
