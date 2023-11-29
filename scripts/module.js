@@ -10,6 +10,7 @@ import { MODULE_ID } from "./const.js";
 
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
+import { registerElevationConfig } from "./geometry/elevation_configs.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import { Settings, SETTINGS } from "./settings.js";
 
@@ -125,6 +126,10 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   Settings.registerAll();
+  registerElevationConfig("Tile", "Alt. Token Visibility");
+  registerElevationConfig("AmbientLight", "Alt. Token Visibility");
+  registerElevationConfig("AmbientSound", "Alt. Token Visibility");
+  registerElevationConfig("MeasuredTemplate", "Alt. Token Visibility");
   console.debug(`${MODULE_ID}|registered settings`);
 });
 

@@ -259,7 +259,7 @@ export class Patcher {
  * @param {string} method       Method to wrap
  * @param {function} fn         Function to use for the wrap
  * @param {libWrapper.TYPES}    libWrapper.WRAPPED, MIXED, OVERRIDE
- * @param {object} [options]    Options passed to libWrapper.register. E.g., { perf_mode: libWrapper.PERF_FAST}
+ * @param {object} [options]    Options passed to libWrapper.register. E.g., { perf_mode: libWrapper.PERF_FAST }
  * @returns {object<id{number}, args{string}} libWrapper ID and the method used
  */
 function addLibWrapperPatch(method, fn, libWrapperType, options) {
