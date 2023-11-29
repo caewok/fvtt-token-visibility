@@ -518,12 +518,24 @@ export class AlternativeLOS {
     if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
 
     tokenShape ??= token.constrainedTokenBorder;
-    const cornerPoints = this.getCorners(tokenShape, center.z);
+    let cornerPoints = this.getCorners(tokenShape, center.z);
 
     // Inset by 1 pixel or inset percentage;
     insetPoints(cornerPoints, center, inset);
+
+    // If two points, keep only the front-facing points.
+    if ( pointAlgorithm === TYPES.TWO ) {
+      // Token rotation is 0º for due south, while Ray is 0º for due east.
+      // Token rotation is 90º for due west, while Ray is 90º for due south.
+      // Use the Ray version to divide the token into front and back.
+      const angle = Math.toRadians(token.document.rotation);
+      const dirPt = PIXI.Point.fromAngle(center, angle, 100);
+      cornerPoints = cornerPoints.filter(pt => foundry.utils.orient2dFast(center, dirPt, pt) <= 0);
+    }
+
     tokenPoints.push(...cornerPoints);
-    if ( pointAlgorithm === TYPES.FOUR
+    if ( pointAlgorithm === TYPES.TWO
+      || pointAlgorithm === TYPES.FOUR
       || pointAlgorithm === TYPES.FIVE ) return tokenPoints;
 
     // Add in the midpoints between corners.
