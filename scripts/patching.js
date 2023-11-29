@@ -18,6 +18,7 @@ import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
+import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
 
@@ -34,7 +35,7 @@ const PATCHES = {
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
   Tile: PATCHES_Tile,
-  Token: PATCHES_Token,
+  Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
   VisionSource: PATCHES_VisionSource,
   Wall: PATCHES_Wall,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
