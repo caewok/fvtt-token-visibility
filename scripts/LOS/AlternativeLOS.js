@@ -244,7 +244,7 @@ export class AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS(threshold, printResult = false) {
-    // console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // Debug: console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._clearCache();
 
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
@@ -517,6 +517,7 @@ export class AlternativeLOS {
 
     if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
 
+    tokenShape ??= token.constrainedTokenBorder;
     const cornerPoints = this.getCorners(tokenShape, center.z);
 
     // Inset by 1 pixel or inset percentage;
@@ -748,7 +749,7 @@ export class AlternativeLOS {
       if ( !t.document.overhead ) return false;
 
       // Check remainder against the vision polygon shape
-      //const tBounds = t.bounds;
+      // const tBounds = t.bounds;
 
       // Use the alpha bounding box. This might be a polygon if the tile is rotated.
       const tBounds = t.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
