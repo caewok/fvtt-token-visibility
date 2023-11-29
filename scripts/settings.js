@@ -145,16 +145,16 @@ export class Settings {
 
   static clearDebugGraphics() {
     this.DEBUG_RANGE.clear();
-    for ( const token of canvas.tokens.placeables ) {
-      const losCalc = token[MODULE_ID].losCalc;
+    for ( const source of canvas.effects.visionSources ) {
+      const losCalc = source[MODULE_ID]?.losCalc;
       if ( !losCalc ) continue;
       losCalc.calc.clearDebug();
     }
   }
 
   static updateLOSDebugGraphics(enable) {
-    for ( const token of canvas.tokens.placeables ) {
-      const losCalc = token[MODULE_ID].losCalc;
+    for ( const source of canvas.effects.visionSources ) {
+      const losCalc = source[MODULE_ID]?.losCalc;
       if ( !losCalc ) continue;
       if ( enable ) losCalc.calc.enableDebug();
       else losCalc.calc.disableDebug();
@@ -451,15 +451,11 @@ export class Settings {
     if ( this.typesWebGL2.has(value) ) registerArea3d();
     else deregisterArea3d();
 
-    canvas.tokens.placeables
-      .filter(token => token[MODULE_ID]?.losCalc)
-      .forEach(token => token[MODULE_ID].losCalc._updateAlgorithm());
+    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateAlgorithm());
   }
 
   static losSettingChange(key, _value) {
     this.cache.delete(key);
-    canvas.tokens.placeables
-      .filter(token => token[MODULE_ID]?.losCalc)
-      .forEach(token => token[MODULE_ID].losCalc._updateConfigurationSettings());
+    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateConfigurationSettings());
   }
 }

@@ -33,11 +33,6 @@ function updateToken(tokenD, change, _options, _userId) {
   const token = tokenD.object;
   if ( (Object.hasOwn(change, "width") || Object.hasOwn(change, "height")) && token ) token._tokenShape = undefined;
 
-  if ( change.sight?.enabled ) {
-    const obj = tokenD.object[MODULE_ID] ??= {};
-    obj.losCalc ??= new LOSCalculator(token, undefined);
-  }
-
   // Token moved; clear debug drawings.
   if ( Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
@@ -48,30 +43,18 @@ function updateToken(tokenD, change, _options, _userId) {
   }
 }
 
-
-/**
- * Hook: drawToken
- * Create the geometry used by Area3d
- * @param {PlaceableObject} object    The object instance being drawn
- */
-function drawToken(token) {
-  if ( !token.hasSight ) return;
-  const obj = token[MODULE_ID] ??= {};
-  obj.losCalc = new LOSCalculator(token, undefined);
-}
-
 /**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
 function destroyToken(token) {
-  const losCalc = token[MODULE_ID].losCalc;
+  const losCalc = token.vision?.[MODULE_ID].losCalc;
   if ( !losCalc ) return;
   losCalc.destroy();
 }
 
 
-PATCHES.BASIC.HOOKS = { updateToken, drawToken, destroyToken };
+PATCHES.BASIC.HOOKS = { updateToken, destroyToken };
 
 
 // ----- NOTE: Area3d Hooks ----- //
