@@ -365,7 +365,8 @@ export class Settings {
       type: String,
       choices: ptChoices,
       default: PT_TYPES.NINE,
-      tab: "losTarget"
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(PT_OPTS.NUM_POINTS, value)
     });
 
     register(PT_OPTS.INSET, {
@@ -380,7 +381,8 @@ export class Settings {
       config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
       default: 0.75,
       type: Number,
-      tab: "losTarget"
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(PT_OPTS.INSET, value)
     });
 
     register(PT_OPTS.POINTS3D, {
@@ -390,7 +392,8 @@ export class Settings {
       config: false,
       type: Boolean,
       default: true,
-      tab: "losTarget"
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(PT_OPTS.POINTS3D, value)
     });
 
     // ----- NOTE: Hidden settings ----- //
