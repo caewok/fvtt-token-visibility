@@ -61,7 +61,10 @@ PATCHES.AREA3D = {};
  * Create the geometry used by Area3d
  * @param {PlaceableObject} object    The object instance being drawn
  */
-function drawTileArea3d(tile) { tile[MODULE_ID] = new TileGeometryHandler(tile); }
+function drawTileArea3d(tile) {
+  const obj = tile[MODULE_ID] ??= {};
+  obj.geomHandler = new TileGeometryHandler(tile);
+}
 
 /**
  * Hook: updateTile
@@ -80,14 +83,14 @@ function updateTileArea3d(tileD, changed, _options, _userId) {
       || changeKeys.has("z")
       || changeKeys.has("overhead")) ) return;
 
-  tile[MODULE_ID].update();
+  tile[MODULE_ID].geomHandler.update();
 }
 
 /**
  * Hook: destroyTile
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTileArea3d(tile) { tile[MODULE_ID].destroy(); }
+function destroyTileArea3d(tile) { tile[MODULE_ID].geomHandler.destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawTile: drawTileArea3d,

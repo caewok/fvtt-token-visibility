@@ -52,7 +52,10 @@ PATCHES.BASIC.HOOKS = { updateToken };
  * Create the geometry used by Area3d
  * @param {PlaceableObject} object    The object instance being drawn
  */
-function drawTokenArea3d(token) { token[MODULE_ID] = new TokenGeometryHandler(token); }
+function drawTokenArea3d(token) {
+  const obj = token[MODULE_ID] ??= {};
+  obj.geomHandler = new TokenGeometryHandler(token);
+}
 
 /**
  * Hook: refreshToken
@@ -63,14 +66,14 @@ function refreshTokenArea3d(token, flags) {
   // TODO: What other updates affect the view?
   //       Need to hook updateTokenDocument as well or instead?
   if ( !(flags.refreshPosition || flags.refreshElevation) ) return;
-  token[MODULE_ID].update();
+  token[MODULE_ID].geomHandler.update();
 }
 
 /**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTokenArea3d(token) { token[MODULE_ID].destroy(); }
+function destroyTokenArea3d(token) { token[MODULE_ID].geomHandler.destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawToken: drawTokenArea3d,
