@@ -138,10 +138,6 @@ Hooks.on("canvasReady", function() {
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
 Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
 
-Hooks.on("canvasTearDown", function() {
-  console.debug(`${MODULE_ID}|canvasTearDown`);
-});
-
 /**
  * Refresh vision for relevant active effect creation/deletion
  */
@@ -152,11 +148,3 @@ function refreshVisionOnActiveEffect(activeEffect) {
 
   canvas.effects.visibility.refresh();
 }
-
-/**
- * Tell DevMode that we want a flag for debugging this module.
- * https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
- */
-Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
-  registerPackageDebugFlag(MODULE_ID);
-});
