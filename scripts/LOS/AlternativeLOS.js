@@ -92,9 +92,8 @@ export class AlternativeLOS {
 
   _updateConfiguration(config = {}) {
     const cfg = this.config;
-    for ( const [key, value] of Object.entries(config) ) {
-      cfg[key] = value;
-    }
+    for ( const [key, value] of Object.entries(config) ) cfg[key] = value;
+    this._clearCache();
   }
 
   _clearCache() {

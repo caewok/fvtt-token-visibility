@@ -209,7 +209,7 @@ export class LOSCalculator {
    * Update the calculator settings.
    */
   _updateConfigurationSettings() {
-    this.calc._configure(); // At the moment, this really only changes large target.
+    this.calc._configure();
     this.calc._clearCache();
   }
 }

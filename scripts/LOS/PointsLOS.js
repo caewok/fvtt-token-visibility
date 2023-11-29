@@ -131,44 +131,16 @@ export class PointsLOS extends AlternativeLOS {
 
   _configure(config = {}) {
     super._configure(config);
+    const cfg = this.config;
+    const OPTS = SETTINGS.LOS.TARGET.POINT_OPTIONS;
 
-    if ( config.pointAlgorithm ) this.#pointAlgorithm = config.pointAlgorithm;
-    if ( config.inset ) this.#inset = config.inset;
-    if ( config.points3d ) this.#points3d = config.points3d;
+    cfg.pointAlgorithm = config.pointAlgorithm ?? Settings.get(OPTS.NUM_POINTS);
+    cfg.inset = config.inset ?? Settings.get(OPTS.INSET);
+    cfg.points3d = config.points3d ?? Settings.get(OPTS.POINTS3D);
   }
 
   _clearCache() {
     super._clearCache();
-    this.#targetPoints = undefined;
-  }
-
-  #pointAlgorithm = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
-
-  #inset = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
-
-  #points3d = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS3D);
-
-  get pointAlgorithm() { return this.#pointAlgorithm; }
-
-  get inset() { return this.#inset; }
-
-  get points3d() { return this.#points3d; }
-
-  set pointAlgorithm(value) {
-    if ( value === this.#pointAlgorithm ) return;
-    this.#pointAlgorithm = value;
-    this.#targetPoints = undefined;
-  }
-
-  set inset(value) {
-    if ( value === this.#inset ) return;
-    this.#inset = value;
-    this.#targetPoints = undefined;
-  }
-
-  set points3d(value) {
-    if ( value === this.#points3d ) return;
-    this.#points3d = value;
     this.#targetPoints = undefined;
   }
 
@@ -194,7 +166,7 @@ export class PointsLOS extends AlternativeLOS {
    * @returns {Points3d[]|undefined} Undefined if viewer cannot be ascertained
    */
   constructViewerPoints() {
-    const { pointAlgorithm, inset } = this;
+    const { pointAlgorithm, inset } = this.config;
     const tokenShape = this.viewer.bounds;
     return this.constructor._constructTokenPoints(this.viewer, { pointAlgorithm, inset, tokenShape });
   }
@@ -204,11 +176,11 @@ export class PointsLOS extends AlternativeLOS {
    * - Grid. When set, points are constructed per grid space covered by the token.
    */
   _constructTargetPoints() {
-    const target = this.target;
-    const { pointAlgorithm, inset, points3d } = this;
+    const { target, config } = this;
+    const { largeTarget, pointAlgorithm, inset, points3d } = config;
     const cfg = { pointAlgorithm, inset };
 
-    if ( this.config.largeTarget ) {
+    if ( largeTarget ) {
       // Construct points for each target subshape, defined by grid spaces under the target.
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
       const targetPointsArray = targetShapes.map(targetShape => {
@@ -223,11 +195,9 @@ export class PointsLOS extends AlternativeLOS {
     // Construct points under this constrained token border.
     cfg.tokenShape = target.constrainedTokenBorder;
     const targetPoints = this.constructor._constructTokenPoints(target, cfg);
-    if ( this.points3d ) return [this.constructor.elevatePoints(target, targetPoints)];
+    if ( points3d ) return [this.constructor.elevatePoints(target, targetPoints)];
     return [targetPoints];
   }
-
-
 
   /**
    * Adds points to the provided points array that represent the
