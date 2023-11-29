@@ -1,10 +1,12 @@
 /* globals
+canvas
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { Patcher } from "./Patcher.js";
-import { MODULES_ACTIVE } from "./const.js";
+import { MODULES_ACTIVE, MODULE_ID } from "./const.js";
+import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
 
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
@@ -47,9 +49,39 @@ export function initializePatching() {
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
   PATCHER.registerGroup("NO_LEVELS");
 
-  // TODO: Only when Area3d is enabled.
-  PATCHER.registerGroup("AREA3D");
-
   // If Elevated Vision is present, we can rely on its tile cache.
   if ( !MODULES_ACTIVE.EV ) PATCHER.registerGroup("TILE");
+}
+
+export function registerArea3d() {
+  PATCHER.registerGroup("AREA3D");
+
+  // Create placeable geometry handlers.
+  if ( canvas.walls ) {
+    canvas.walls.placeables
+      .filter(wall => !wall[MODULE_ID])
+      .forEach(wall => wall[MODULE_ID] = new WallGeometryHandler(wall));
+
+    canvas.tiles.placeables
+      .filter(tile => !tile[MODULE_ID])
+      .forEach(tile => tile[MODULE_ID] = new TileGeometryHandler(tile));
+
+    canvas.tokens.placeables
+      .filter(token => !token[MODULE_ID])
+      .forEach(token => token[MODULE_ID] = new TokenGeometryHandler(token));
+  }
+}
+
+export function deregisterArea3d() {
+  // Destroy all the placeable geometries.
+  if ( canvas.walls ) {
+    const placeables = [
+      ...canvas.walls.placeables,
+      ...canvas.tiles.placeables,
+      ...canvas.tokens.placeables];
+    for ( const placeable of placeables ) placeable[MODULE_ID]?.destroy();
+  }
+
+  // Remove the unused methods, getters.
+  PATCHER.deregisterGroup("AREA3D");
 }

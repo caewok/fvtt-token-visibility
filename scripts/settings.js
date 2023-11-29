@@ -1,5 +1,6 @@
 /* globals
 canvas,
+foundry,
 game,
 PIXI
 */
@@ -9,6 +10,7 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { LOS_CALCULATOR } from "./visibility_los.js";
+import { registerArea3d, deregisterArea3d } from "./patching.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -143,7 +145,6 @@ export class Settings {
 
   static clearDebugGraphics() {
     LOS_CALCULATOR.CALCULATOR.calc.clearDebug();
-    // this.DEBUG_LOS.clear();
     this.DEBUG_RANGE.clear();
   }
 
@@ -322,7 +323,7 @@ export class Settings {
       type: Boolean,
       default: true,
       tab: "losTarget",
-      onChange: _value => this.losSettingChange(TARGET.LARGE)
+      onChange: value => this.losSettingChange(TARGET.LARGE, value)
     });
 
     register(TARGET.ALGORITHM, {
@@ -334,8 +335,12 @@ export class Settings {
       choices: losChoices,
       default: LTYPES.NINE,
       tab: "losTarget",
-      onChange: _value => this.losAlgorithmChange(TARGET.ALGORITHM)
+      onChange: value => this.losAlgorithmChange(TARGET.ALGORITHM, value)
     });
+
+    // Register the Area3D methods on initial load.
+    if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
+    else deregisterArea3d();
 
     register(TARGET.PERCENT, {
       name: localize(`${TARGET.PERCENT}.Name`),
@@ -426,12 +431,20 @@ export class Settings {
     });
   }
 
-  static losAlgorithmChange(key) {
+  static typesWebGL2 = new Set([
+    SETTINGS.LOS.TARGET.TYPES.AREA3D,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID]);
+
+  static losAlgorithmChange(key, value) {
     this.cache.delete(key);
+    if ( this.typesWebGL2.has(value) ) registerArea3d();
+    else deregisterArea3d();
+
     LOS_CALCULATOR.CALCULATOR._updateAlgorithm();
   }
 
-  static losSettingChange(key) {
+  static losSettingChange(key, _value) {
     this.cache.delete(key);
     LOS_CALCULATOR.CALCULATOR._updateConfigurationSettings();
   }
