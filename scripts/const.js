@@ -15,25 +15,10 @@ export const FLAGS = {
 };
 
 export const MODULES_ACTIVE = {
-  WALL_HEIGHT: false,
   LEVELS: false,
-  EV: false
 };
-
-export const DEBUG = {
-  range: false,
-  los: false,
-  cover: false,
-  area: false,
-  once: false,
-  forceLiveTokensBlock: false,
-  forceDeadTokensBlock: false
-};
-
 
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
-  MODULES_ACTIVE.WALL_HEIGHT = game.modules.get("wall-height")?.active;
   MODULES_ACTIVE.LEVELS = game.modules.get("levels")?.active;
-  MODULES_ACTIVE.ELEVATED_VISION = game.modules.get("elevatedvision")?.active;
 });
