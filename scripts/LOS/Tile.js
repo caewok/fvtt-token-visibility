@@ -8,7 +8,7 @@ flattenObject
 
 import { MODULE_ID } from "../const.js";
 import { TilePixelCache } from "./PixelCache.js";
-import { Tile3dGeometry } from "./Placeable3dGeometry.js";
+import { TileGeometryHandler } from "./Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.TILE = {};
@@ -61,11 +61,7 @@ PATCHES.AREA3D = {};
  * Create the geometry used by Area3d
  * @param {PlaceableObject} object    The object instance being drawn
  */
-function drawTileArea3d(tile) {
-  const obj = tile[MODULE_ID] ??= {};
-  if ( !tile.document.overhead ) return;
-  obj.geometry = new Tile3dGeometry(tile);
-}
+function drawTileArea3d(tile) { tile[MODULE_ID] = new TileGeometryHandler(tile); }
 
 /**
  * Hook: updateTile
@@ -84,24 +80,14 @@ function updateTileArea3d(tileD, changed, _options, _userId) {
       || changeKeys.has("z")
       || changeKeys.has("overhead")) ) return;
 
-  // Only overhead tiles are used by Area3d.
-  if ( !tileD.overhead ) return;
-
-  // May need to create the geometry if the tile was previously overhead.
-  const tile = tileD.object;
-  let geometry = tile[MODULE_ID]?.geometry ?? new Tile3dGeometry(tile);
-  geometry.updateObjectPoints();
-  geometry.updateVertices();
+  tile[MODULE_ID].update();
 }
 
 /**
  * Hook: destroyTile
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTileArea3d(tile) {
-  const geometry = tile[MODULE_ID]?.geometry;
-  if ( geometry ) geometry.destroy();
-}
+function destroyTileArea3d(tile) { tile[MODULE_ID].destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawTile: drawTileArea3d,

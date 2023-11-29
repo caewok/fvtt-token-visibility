@@ -6,7 +6,7 @@ flattenObject
 // Patches for the Wall class
 
 import { MODULE_ID } from "./const.js";
-import { Wall3dGeometry } from "./LOS/Placeable3dGeometry.js";
+import { WallGeometryHandler } from "./LOS/Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.AREA3D = {};
@@ -18,10 +18,7 @@ PATCHES.AREA3D = {};
  * Create the geometry used by Area3d
  * @param {PlaceableObject} object    The object instance being drawn
  */
-function drawWallArea3d(wall) {
-  const obj = wall[MODULE_ID] ??= {};
-  obj.geometry = new Wall3dGeometry(wall);
-}
+function drawWallArea3d(wall) { wall[MODULE_ID] = new WallGeometryHandler(wall); }
 
 /**
  * Hook: updateWall
@@ -33,22 +30,14 @@ function drawWallArea3d(wall) {
 function updateWallArea3d(wallD, changed, _options, _userId) {
   const changeKeys = new Set(Object.keys(flattenObject(changed)));
   if ( !changeKeys.has("c") ) return;
-
-  const wall = wallD.object;
-  const geometry = wall[MODULE_ID]?.geometry;
-  if ( !geometry ) return;
-  geometry.updateObjectPoints();
-  geometry.updateVertices();
+  wall[MODULE_ID].update();
 }
 
 /**
  * Hook: destroyWall
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyWallArea3d(wall) {
-  const geometry = wall[MODULE_ID]?.geometry;
-  if ( geometry ) geometry.destroy();
-}
+function destroyWallArea3d(wall) { wall[MODULE_ID].destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawWall: drawWallArea3d,
