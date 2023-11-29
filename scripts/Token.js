@@ -10,6 +10,7 @@ import { MODULE_ID } from "./const.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Settings } from "./settings.js";
 import { TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
+import { LOSCalculator } from "./LOSCalculator.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -32,13 +33,18 @@ function updateToken(tokenD, change, _options, _userId) {
   const token = tokenD.object;
   if ( (Object.hasOwn(change, "width") || Object.hasOwn(change, "height")) && token ) token._tokenShape = undefined;
 
+  if ( change.sight?.enabled ) {
+    const obj = tokenD.object[MODULE_ID] ??= {};
+    obj.losCalc ??= new LOSCalculator(token, undefined);
+  }
+
   // Token moved; clear debug drawings.
   if ( Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
       || Object.hasOwn(change, "elevation") ) {
-    // console.debug("Token moved.");
+    // Debug: console.debug("Token moved.");
     Settings.clearDebugGraphics();
-    // console.debug("cleared graphics after token moved.");
+    // Debug: console.debug("cleared graphics after token moved.");
   }
 }
 
@@ -49,30 +55,23 @@ function updateToken(tokenD, change, _options, _userId) {
  * @param {PlaceableObject} object    The object instance being drawn
  */
 function drawToken(token) {
+  if ( !token.hasSight ) return;
   const obj = token[MODULE_ID] ??= {};
-  obj.geomHandler = new TokenGeometryHandler(token);
-}
-
-/**
- * Hook: refreshToken
- * @param {PlaceableObject} object    The object instance being refreshed
- * @param {RenderFlags} flags         Flags being refreshed
- */
-function refreshToken(token, flags) {
-  // TODO: What other updates affect the view?
-  //       Need to hook updateTokenDocument as well or instead?
-  if ( !(flags.refreshPosition || flags.refreshElevation) ) return;
-  token[MODULE_ID].geomHandler.update();
+  obj.losCalc = new LOSCalculator(token, undefined);
 }
 
 /**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyToken(token) { token[MODULE_ID] .geomHandler.destroy(); }
+function destroyToken(token) {
+  const losCalc = token[MODULE_ID].losCalc;
+  if ( !losCalc ) return;
+  losCalc.destroy();
+}
 
 
-PATCHES.BASIC.HOOKS = { updateToken };
+PATCHES.BASIC.HOOKS = { updateToken, drawToken, destroyToken };
 
 
 // ----- NOTE: Area3d Hooks ----- //
@@ -103,7 +102,7 @@ function refreshTokenArea3d(token, flags) {
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTokenArea3d(token) { token[MODULE_ID] .geomHandler.destroy(); }
+function destroyTokenArea3d(token) { token[MODULE_ID].geomHandler.destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawToken: drawTokenArea3d,
@@ -118,9 +117,9 @@ PATCHES.AREA3D.HOOKS = {
  * Reset the debugging drawings.
  */
 function updateSource(wrapper, ...args) {
-  // console.debug("Token source updated.");
+  // Debug: console.debug("Token source updated.");
   Settings.clearDebugGraphics();
-  // console.debug("Cleared graphics after token source updated.")
+  // Debug: console.debug("Cleared graphics after token source updated.")
   return wrapper(...args);
 }
 

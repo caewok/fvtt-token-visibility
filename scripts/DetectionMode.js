@@ -1,12 +1,10 @@
 /* globals
-canvas,
-LimitedAnglePolygon,
 Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { LOS_CALCULATOR } from "./LOSCalculator.js";
+import { MODULE_ID } from "./const.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -57,19 +55,19 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
 
   // TODO: Is this addressed by the AltLOS algorithms?
   // Check if limited angle interferes with view of this target.
-//   if ( this.angle && visionSource.data.angle < 360 ) {
-//     if ( !this._testAngle(visionSource, mode, target, test) ) {
-//       test.los.set(visionSource, false);
-//       return false;
-//     }
-//
-//     // Limit the visible shape to vision angle.
-//     visibleTargetShape ??= target.constrainedTokenBorder;
-//     visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
-//   }
+  //   if ( this.angle && visionSource.data.angle < 360 ) {
+  //     if ( !this._testAngle(visionSource, mode, target, test) ) {
+  //       test.los.set(visionSource, false);
+  //       return false;
+  //     }
+  //
+  //     // Limit the visible shape to vision angle.
+  //     visibleTargetShape ??= target.constrainedTokenBorder;
+  //     visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
+  //   }
 
   // Configure the line-of-sight calculator.
-  const losCalc = LOS_CALCULATOR.CALCULATOR;
+  const losCalc = visionSource.object[MODULE_ID].losCalc;
   losCalc.calc.config.useLitTargetShape = useLitTargetShape;
   losCalc.calc.config.type = visionSource.constructor.sourceType;
 

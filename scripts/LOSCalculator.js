@@ -11,8 +11,6 @@ import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
-export const LOS_CALCULATOR = { CALCULATOR: undefined };
-
 /** Testing
 api = game.modules.get("tokenvisibility").api
 api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL1)
@@ -60,9 +58,9 @@ export class LOSCalculator {
   /** @type {AlternativeLOS} */
   calc;
 
-  constructor() {
+  constructor(viewer, target) {
     const algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
-    this.calc = new this.constructor.ALGORITHM_CLASS[algorithm](undefined, undefined, this.config);
+    this.calc = new this.constructor.ALGORITHM_CLASS[algorithm](viewer, target, this.config);
   }
 
   destroy() {
