@@ -9,22 +9,13 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { Settings } from "./settings.js";
-import { ConstrainedToken3dGeometry, ConstrainedTokenHex3dGeometry } from "./LOS/Placeable3dGeometry.js";
+import { TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
 PATCHES.AREA3D = {};
 
 // ----- NOTE: Hooks ----- //
-
-/**
- * Hook controlToken
- * If the token is controlled or uncontrolled, clear debug drawings.
- */
-function controlToken(_token, _controlled) {
-  // Settings.clearDebugGraphics();
-  // console.debug("Token controlled.");
-}
 
 /**
  * Hook: updateToken
@@ -51,7 +42,7 @@ function updateToken(tokenD, change, _options, _userId) {
   }
 }
 
-PATCHES.BASIC.HOOKS = { controlToken, updateToken };
+PATCHES.BASIC.HOOKS = { updateToken };
 
 
 // ----- NOTE: Area3d Hooks ----- //
@@ -61,11 +52,7 @@ PATCHES.BASIC.HOOKS = { controlToken, updateToken };
  * Create the geometry used by Area3d
  * @param {PlaceableObject} object    The object instance being drawn
  */
-function drawTokenArea3d(token) {
-  const obj = token[MODULE_ID] ??= {};
-  const cl = canvas.grid.isHex ? ConstrainedTokenHex3dGeometry : ConstrainedToken3dGeometry;
-  obj.geometry = new cl(token);
-}
+function drawTokenArea3d(token) { token[MODULE_ID] = new TokenGeometryHandler(token); }
 
 /**
  * Hook: refreshToken
@@ -76,21 +63,14 @@ function refreshTokenArea3d(token, flags) {
   // TODO: What other updates affect the view?
   //       Need to hook updateTokenDocument as well or instead?
   if ( !(flags.refreshPosition || flags.refreshElevation) ) return;
-
-  const geometry = token[MODULE_ID]?.geometry;
-  if ( !geometry ) return;
-  geometry.updateObjectPoints();
-  geometry.updateVertices();
+  token[MODULE_ID].update();
 }
 
 /**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTokenArea3d(token) {
-  const geometry = token[MODULE_ID]?.geometry;
-  if ( geometry ) geometry.destroy();
-}
+function destroyTokenArea3d(token) { token[MODULE_ID].destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawToken: drawTokenArea3d,

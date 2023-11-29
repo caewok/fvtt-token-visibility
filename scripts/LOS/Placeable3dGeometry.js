@@ -463,7 +463,7 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
 
   destroy() {
     if ( this._constrainedTopGeometry
-      && this._constrainedTopGeometry.indices ) this._constrainedTopGeometry.destroy();
+      && this._constrainedTopGeometry.buffers !== null ) this._constrainedTopGeometry.destroy();
   }
 
 }
@@ -694,5 +694,98 @@ export class Tile3dGeometry extends Wall3dGeometry {
       pts.br,
       pts.bl
     ];
+  }
+}
+
+
+/**
+ * Class to handle on-demand updating and destroying fo the geometry.
+ * Only build when necessary; rebuild when destroyed.
+ */
+class PlaceableGeometryHandler {
+  /** @type {PlaceableObject} */
+  object;
+
+  constructor(object) {
+    this.object = object;
+  }
+
+  /** @type {Placeable3dGeometry} */
+  #geometry;
+
+  get geometry() {
+    if ( this.destroyed ) this.#geometry = this._buildGeometry();
+    return this.#geometry;
+  }
+
+  /**
+   * Instantiate the geometry object for this placeable.
+   * @returns {Placeable3dGeometry}
+   */
+  _buildGeometry() { console.error("PlaceableGeometryHandler|Must be overriden by subclass."); }
+
+  /**
+   * Update the existing geometry, if one has been built. Ignore otherwise.
+   */
+  update() {
+    if ( !this.#geometry ) return;
+    this.geometry.updateObjectPoints();
+    this.geometry.updateVertices();
+  }
+
+  /** @type {boolean} */
+  get destroyed() { return !this.#geometry || this.#geometry.buffers === null; }
+
+  /**
+   * Destroy the existing geometry, if one has been built and not yet destroyed. Ignore otherwise.
+   */
+  destroy() {
+    if ( this.destroyed ) return;
+    this.#geometry.destroy();
+    this.#geometry = undefined;
+  }
+}
+
+export class WallGeometryHandler extends PlaceableGeometryHandler {
+  /** @type {Wall} */
+  get wall() { return this.object; }
+
+  /**
+   * Instantiate the geometry object for this wall.
+   * @returns {Wall3dGeometry}
+   */
+  _buildGeometry() { return new Wall3dGeometry(this.wall); }
+}
+
+export class TokenGeometryHandler extends PlaceableGeometryHandler {
+  /** @type {Token} */
+  get token() { return this.object; }
+
+  /**
+   * Instantiate the geometry object for this token.
+   * @returns {ConstrainedToken3dGeometry|ConstrainedTokenHex3dGeometry}
+   */
+  _buildGeometry() {
+    const cl = canvas.grid.isHex ? ConstrainedTokenHex3dGeometry : ConstrainedToken3dGeometry;
+    return new cl(this.token);
+  }
+}
+
+export class TileGeometryHandler extends PlaceableGeometryHandler {
+  /** @type {Tile} */
+  get tile() { return this.object; }
+
+  /**
+   * Instantiate the geometry object for this tile.
+   * @returns {ConstrainedToken3dGeometry|ConstrainedTokenHex3dGeometry}
+   */
+  _buildGeometry() { return new Tile3dGeometry(this.tile); }
+
+  /**
+   * If not overhead, don't update.
+   */
+  update() {
+    if ( !this.tile.document.overhead ) return;
+    super.update();
   }
 }
