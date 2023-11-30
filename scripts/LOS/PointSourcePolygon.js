@@ -8,12 +8,12 @@ Ray
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Point3d } from "./geometry/3d/Point3d.js";
-import { Plane } from "./geometry/3d/Plane.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
+import { Plane } from "../geometry/3d/Plane.js";
 
 // Patches for the PointSourcePolygon class
 export const PATCHES = {};
-PATCHES.BASIC = {};
+PATCHES.LOS = {};
 
 // ----- NOTE: New static methods ----- //
 
@@ -39,7 +39,7 @@ function testCollision3d(origin, destination, {mode="all", wallTypes="all", ...c
   return poly._testCollision3d(ray, mode, wallTypes);
 }
 
-PATCHES.BASIC.STATIC_METHODS = {
+PATCHES.LOS.STATIC_METHODS = {
   testCollision3d
 };
 
@@ -75,7 +75,7 @@ function _testCollision3d(ray, mode, wallTypes = "all") {
   return testWallsForIntersections(ray.A, ray.B, walls, mode, this.config.type);
 }
 
-PATCHES.BASIC.METHODS = {
+PATCHES.LOS.METHODS = {
   _testCollision3d
 };
 

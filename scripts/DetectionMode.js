@@ -72,7 +72,7 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   losCalc.calc.config.type = visionSource.constructor.sourceType;
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-  hasLOS = losCalc.hasLOS(visionSource.object, target);
+  hasLOS = losCalc.hasLOS(target);
   test.los.set(visionSource, hasLOS);
   return hasLOS;
 }

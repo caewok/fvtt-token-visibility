@@ -14,13 +14,14 @@ import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasic
 import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
+import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 
 // LOS
 import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
 import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
-import { PATCHES as PATCHES_VisionSource } from "./LOS/VisionSource.js";
+import { PATCHES as PATCHES_VisionSourceLOS } from "./LOS/VisionSource.js";
 import { PATCHES as PATCHES_Wall } from "./LOS/Wall.js";
 
 // Levels
@@ -36,7 +37,7 @@ const PATCHES = {
   SettingsConfig: PATCHES_SettingsConfig,
   Tile: PATCHES_Tile,
   Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
-  VisionSource: PATCHES_VisionSource,
+  VisionSource: foundry.utils.mergeObject(PATCHES_VisionSource, PATCHES_VisionSourceLOS),
   Wall: PATCHES_Wall,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
@@ -45,6 +46,7 @@ export const PATCHER = new Patcher(PATCHES);
 
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
+  PATCHER.registerGroup("LOS");
   PATCHER.registerGroup("ConstrainedTokenBorder");
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");

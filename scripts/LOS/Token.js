@@ -11,7 +11,7 @@ import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
 import { TokenGeometryHandler } from "./Placeable3dGeometry.js";
 
 export const PATCHES = {};
-PATCHES.BASIC = {};
+PATCHES.LOS = {};
 PATCHES.AREA3D = {};
 
 // ----- NOTE: Area3d Hooks ----- //
@@ -82,7 +82,7 @@ function tokenBorder() { return this.tokenShape.translate(this.x, this.y); }
  */
 function tokenShape() { return this._tokenShape || (this._tokenShape = calculateTokenShape(this)); }
 
-PATCHES.BASIC.GETTERS = {
+PATCHES.LOS.GETTERS = {
   constrainedTokenBorder,
   tokenBorder,
   tokenShape,

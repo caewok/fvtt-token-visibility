@@ -5,8 +5,8 @@ flattenObject
 
 // Patches for the Wall class
 
-import { MODULE_ID } from "./const.js";
-import { WallGeometryHandler } from "./LOS/Placeable3dGeometry.js";
+import { MODULE_ID } from "../const.js";
+import { WallGeometryHandler } from "./Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.AREA3D = {};
