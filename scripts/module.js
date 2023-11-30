@@ -6,10 +6,11 @@ Hooks
 */
 "use strict";
 
-import { MODULE_ID, DEBUG } from "./const.js";
+import { MODULE_ID } from "./const.js";
 
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
+import { registerElevationConfig } from "./geometry/elevation_configs.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import { Settings, SETTINGS } from "./settings.js";
 
@@ -50,7 +51,6 @@ import * as range from "./visibility_range.js";
 
 // Other self-executing hooks
 import "./changelog.js";
-import "./migration.js";
 
 Hooks.once("init", function() {
   registerGeometry();
@@ -86,41 +86,47 @@ Hooks.once("init", function() {
     PixelCache,
     extractPixels,
 
-    AlternativeLOS,
-    PointsLOS,
-    Area2dLOS,
-    Area3dLOSGeometric,
-    Area3dLOSWebGL,
-    Area3dLOSWebGL2,
-    Area3dLOSHybrid,
+    losCalcMethods: {
+      AlternativeLOS,
+      PointsLOS,
+      Area2dLOS,
+      Area3dLOSGeometric,
+      Area3dLOSWebGL,
+      Area3dLOSWebGL2,
+      Area3dLOSHybrid
+    },
 
     util,
     ConstrainedTokenBorder,
     range,
-    PlanePoints3d,
-    TokenPoints3d,
-    DrawingPoints3d,
-    WallPoints3d,
-    TilePoints3d,
-    VerticalPoints3d,
-    HorizontalPoints3d,
-    Settings,
-    AlphaCutoffFilter,
+
+    points3d: {
+      PlanePoints3d,
+      TokenPoints3d,
+      DrawingPoints3d,
+      WallPoints3d,
+      TilePoints3d,
+      VerticalPoints3d,
+      HorizontalPoints3d,
+      Settings,
+      AlphaCutoffFilter
+    },
 
     AREA3D_POPOUTS,
 
-    Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
-    Placeable3dShader, Tile3dShader,
-    Placeable3dDebugShader, Tile3dDebugShader,
+    webgl: {
+      Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
+      Placeable3dShader, Tile3dShader,
+      Placeable3dDebugShader, Tile3dDebugShader
+    },
 
-    PATCHER,
-
-    debug: DEBUG
+    PATCHER
   };
 });
 
 Hooks.once("setup", function() {
   Settings.registerAll();
+  registerElevationConfig("Tile", "Alt. Token Visibility");
   console.debug(`${MODULE_ID}|registered settings`);
 });
 
@@ -132,10 +138,6 @@ Hooks.on("canvasReady", function() {
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
 Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
 
-Hooks.on("canvasTearDown", function() {
-  console.debug(`${MODULE_ID}|canvasTearDown`);
-});
-
 /**
  * Refresh vision for relevant active effect creation/deletion
  */
@@ -146,11 +148,3 @@ function refreshVisionOnActiveEffect(activeEffect) {
 
   canvas.effects.visibility.refresh();
 }
-
-/**
- * Tell DevMode that we want a flag for debugging this module.
- * https://github.com/League-of-Foundry-Developers/foundryvtt-devMode
- */
-Hooks.once("devModeReady", ({ registerPackageDebugFlag }) => {
-  registerPackageDebugFlag(MODULE_ID);
-});

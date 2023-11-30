@@ -9,17 +9,20 @@ import { MODULES_ACTIVE, MODULE_ID } from "./const.js";
 import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
 
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
-import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
-import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
-import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
 import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
-import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
-import { PATCHES as PATCHES_Wall } from "./Wall.js";
+
+// LOS
+import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
+import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
+import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
+import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
+import { PATCHES as PATCHES_VisionSourceLOS } from "./LOS/VisionSource.js";
+import { PATCHES as PATCHES_Wall } from "./LOS/Wall.js";
 
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
@@ -29,13 +32,12 @@ const PATCHES = {
   ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
-  DrawingConfig: PATCHES_DrawingConfig,
   PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
   Tile: PATCHES_Tile,
-  Token: PATCHES_Token,
-  VisionSource: PATCHES_VisionSource,
+  Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
+  VisionSource: foundry.utils.mergeObject(PATCHES_VisionSource, PATCHES_VisionSourceLOS),
   Wall: PATCHES_Wall,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
@@ -44,6 +46,7 @@ export const PATCHER = new Patcher(PATCHES);
 
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
+  PATCHER.registerGroup("LOS");
   PATCHER.registerGroup("ConstrainedTokenBorder");
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
@@ -60,15 +63,15 @@ export function registerArea3d() {
   if ( canvas.walls ) {
     canvas.walls.placeables
       .filter(wall => !wall[MODULE_ID])
-      .forEach(wall => wall[MODULE_ID] = new WallGeometryHandler(wall));
+      .forEach(wall => wall[MODULE_ID] = { geomHandler: new WallGeometryHandler(wall) });
 
     canvas.tiles.placeables
       .filter(tile => !tile[MODULE_ID])
-      .forEach(tile => tile[MODULE_ID] = new TileGeometryHandler(tile));
+      .forEach(tile => tile[MODULE_ID] = { geomHandler: new TileGeometryHandler(tile) });
 
     canvas.tokens.placeables
       .filter(token => !token[MODULE_ID])
-      .forEach(token => token[MODULE_ID] = new TokenGeometryHandler(token));
+      .forEach(token => token[MODULE_ID] = { geomHandler: new TokenGeometryHandler(token) });
   }
 }
 
@@ -79,7 +82,7 @@ export function deregisterArea3d() {
       ...canvas.walls.placeables,
       ...canvas.tiles.placeables,
       ...canvas.tokens.placeables];
-    for ( const placeable of placeables ) placeable[MODULE_ID]?.destroy();
+    for ( const placeable of placeables ) placeable[MODULE_ID]?.geomHandler.destroy();
   }
 
   // Remove the unused methods, getters.

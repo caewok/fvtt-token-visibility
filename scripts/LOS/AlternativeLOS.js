@@ -14,7 +14,7 @@ VisionSource
 "use strict";
 
 // Base folder
-import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
+import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
 import { insetPoints, lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
 import { Settings, SETTINGS } from "../settings.js";
 
@@ -57,7 +57,6 @@ export class AlternativeLOS {
    * @property {Point3d} visionOffset                 Offset delta from the viewer center for vision point.
    * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible.
    * @property {VisionSource} visionSource            Vision source of the viewer.
-   * @property {boolean} debug                        Enable debug visualizations.
    */
   config = {};
 
@@ -216,14 +215,12 @@ export class AlternativeLOS {
    * Holds Foundry objects that are within the vision triangle.
    * @typedef BlockingObjects
    * @type {object}
-   * @property {Set<Drawing>} drawing
    * @property {Set<Wall>}    terrainWalls
    * @property {Set<Tile>}    tiles
    * @property {Set<Token>}   tokens
    * @property {Set<Wall>}    walls
    */
   #blockingObjects = {
-    drawings: new Set(),
     terrainWalls: new Set(),
     tiles: new Set(),
     tokens: new Set(),
@@ -334,7 +331,7 @@ export class AlternativeLOS {
 
   /**
    * Find objects that are within the vision triangle between viewer and target.
-   * Sets this._blockingObjects for drawings, tiles, tokens, walls, and terrainWalls.
+   * Sets this._blockingObjects for tiles, tokens, walls, and terrainWalls.
    * Sets _blockingObjectsAreSet
    */
   _findBlockingObjects() {
@@ -359,15 +356,12 @@ export class AlternativeLOS {
       walls.add(limitedAngleWalls[1]);
     }
 
-    // Add tokens, tiles, drawings
+    // Add tokens, tiles
     if ( objsFound.tokens ) blockingObjs.tokens = objsFound.tokens;
     else blockingObjs.tokens.clear();
 
     if ( objsFound.tiles ) blockingObjs.tiles = objsFound.tiles;
     else blockingObjs.tiles.clear();
-
-    if ( objsFound.drawings ) blockingObjs.drawings = objsFound.drawings;
-    else blockingObjs.drawings.clear();
 
     blockingObjs.initialized = true;
   }
@@ -642,7 +636,6 @@ export class AlternativeLOS {
    *   - @property {Set<Wall>} walls
    *   - @property {Set<Tile>} tiles
    *   - @property {Set<Token>} tokens
-   *   - @property {Set<Drawings>} drawings
    */
   _filterSceneObjectsByVisionPolygon() {
     const {
@@ -675,9 +668,6 @@ export class AlternativeLOS {
       if ( MODULES_ACTIVE.LEVELS && type === "sight" ) {
         out.tiles = out.tiles.filter(t => !t.document?.flags?.levels?.noCollision);
       }
-
-      // Check drawings if there are tiles
-      if ( out.tiles.size ) out.drawings = this._filterDrawingsByVisionPolygon();
     }
 
     if ( liveTokensBlock || deadTokensBlock ) {
@@ -687,32 +677,6 @@ export class AlternativeLOS {
     }
 
     return out;
-  }
-
-  /**
-   * Filter drawings in the scene if they are flagged as holes.
-   * @return {Set<Drawings>}
-   */
-  _filterDrawingsByVisionPolygon(visionPolygon) {
-    visionPolygon ??= this.visionPolygon;
-    let drawings = canvas.drawings.quadtree.getObjects(visionPolygon._bounds);
-
-    // Filter by holes
-    drawings = drawings.filter(d => d.document.getFlag(MODULE_ID, FLAGS.DRAWING.IS_HOLE)
-      && ( d.document.shape.type === CONST.DRAWING_TYPES.POLYGON
-      || d.document.shape.type === CONST.DRAWING_TYPES.ELLIPSE
-      || d.document.shape.type === CONST.DRAWING_TYPES.RECTANGLE));
-
-    // Filter by the precise triangle cone
-    // Also convert to CenteredPolygon b/c it handles bounds better
-    const edges = visionPolygon._edges;
-    return drawings.filter(d => {
-      const shape = CONFIG.GeometryLib.utils.centeredPolygonFromDrawing(d);
-      const center = shape.center;
-      if ( visionPolygon.contains(center.x, center.y) ) return true;
-      const dBounds = shape.getBounds();
-      return edges.some(e => dBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
-    });
   }
 
   /**
@@ -956,11 +920,10 @@ export class AlternativeLOS {
   _drawDetectedObjects() {
     const draw = new Draw(Settings.DEBUG_LOS);
     const colors = Draw.COLORS;
-    const { walls, tiles, terrainWalls, tokens, drawings } = this.blockingObjects;
+    const { walls, tiles, terrainWalls, tokens } = this.blockingObjects;
     walls.forEach(w => draw.segment(w, { color: colors.blue, fillAlpha: 0.3 }));
     tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
     terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
-    drawings.forEach(d => draw.shape(d.bounds, { color: colors.gray, fillAlpha: 0.3 }));
     tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
   }
 

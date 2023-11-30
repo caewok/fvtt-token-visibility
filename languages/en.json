@@ -61,10 +61,6 @@
     "tokenvisibility.settings.button-documentation.Label": "Open Documentation",
     "tokenvisibility.settings.button-issue.Label": "Report an Issue",
 
-    "tokenvisibility.DrawingConfiguration.LegendTitle": "Alternative Token Visibility",
-    "tokenvisibility.DrawingConfiguration.isHole.Name": "Drawing is Hole",
-    "tokenvisibility.DrawingConfiguration.isHole.Hint": "For area algorithms, treat the space indicated by the drawing (including elevation) as a hole for tiles. Only applicable when Levels is active.",
-
     "tokenvisibility.template.settings-config.tabs.range": "Range",
     "tokenvisibility.template.settings-config.tabs.los_viewer": "Viewer LOS",
     "tokenvisibility.template.settings-config.tabs.los_target": "Target LOS",
@@ -80,5 +76,5 @@
     "tokenvisibility.settings.submenu.title": "Alternative Token Visibility Settings",
     "tokenvisibility.settings.submenu.Name": "ATV Settings",
     "tokenvisibility.settings.submenu.Label": "Configure",
-    "tokenvisibility.settings.submenu.Hint": "Hint"
+    "tokenvisibility.settings.submenu.Hint": "Hint",
  }

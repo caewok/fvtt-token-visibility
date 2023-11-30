@@ -24,7 +24,7 @@ api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEO
  */
 export class LOSCalculator {
 
-  /** @enum {string: AlternativeLOS} */
+  /** @enum {AlternativeLOS} */
   static ALGORITHM_CLASS = {
     "los-points": PointsLOS,
     "los-area-2d": Area2dLOS,
@@ -35,6 +35,7 @@ export class LOSCalculator {
     "los-area-3d-hybrid": Area3dLOSHybrid
   };
 
+  /** @enum {string} */
   static ALGORITHM_CLASS_NAME = {
     "los-points": "PointsLOS",
     "los-area-2d": "Area2dLOS",
@@ -63,9 +64,17 @@ export class LOSCalculator {
     this.calc = new this.constructor.ALGORITHM_CLASS[algorithm](viewer, target, this.config);
   }
 
-  destroy() {
-    this.calc.destroy();
-  }
+  /** @type {Token} */
+  get viewer() { return this.calc.viewer; }
+
+  set viewer(value) { this.calc.viewer = value; }
+
+  /** @type {Token} */
+  get target() { return this.calc.target; }
+
+  set target(value) { this.calc.target = value; }
+
+  destroy() { this.calc.destroy(); }
 
   /**
    * @typedef {object}  LOSCalculatorConfiguration
@@ -76,10 +85,9 @@ export class LOSCalculator {
    * Test if viewer token has LOS to a target token.
    * Accounts for all viewer points if more than one in settings.
    */
-  hasLOS(viewer, target) {
-    const calc = this.calc;
-    calc.viewer = viewer;
-    calc.target = target;
+  hasLOS(target) {
+    const { viewer, calc } = this;
+    if ( target ) calc.target = target;
     const center = Point3d.fromTokenCenter(viewer);
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
@@ -87,7 +95,7 @@ export class LOSCalculator {
     // Debug: console.debug(`\n----- Visibility.prototype.hasLOS|${viewer.name}👀 => ${target.name}🎯 -----`);
 
     for ( const viewerPoint of viewerPoints ) {
-      calc.visionOffset = viewerPoint.subtract(center); // TODO: Confirm this is correct.
+      calc.visionOffset = viewerPoint.subtract(center);
       if ( calc.hasLOS(threshold, useDebug) ) {
         if ( useDebug ) calc.debug(true);
         return true;
@@ -97,22 +105,16 @@ export class LOSCalculator {
     return false;
   }
 
-
   /**
    * Calculate the percentage visible for a target token from a viewer token.
-   * @param {Token} viewer
-   * @param {Token} target
+   * @param {Point3d} visionOffset     Offset from the center of the viewer.
    * @returns {number}  Percent between 0 and 1. If the "large token subtargeting" is enabled,
    *   this could be greater than 1.
    */
-  percentVisible(viewer, target, { visionOffset } = {}) {
+  percentVisible(target, visionOffset = new Point3d()) {
     const calc = this.calc;
-    calc.viewer = viewer;
-    calc.target = target;
-    if ( visionOffset ) {
-      const center = Point3d.fromTokenCenter(viewer);
-      calc.visionOffset = visionOffset.subtract(center); // TODO: Confirm this is correct.
-    }
+    if ( target ) calc.target = target;
+    calc.visionOffset = visionOffset
     if ( Settings.get(SETTINGS.DEBUG.LOS ) ) calc.debug(true);
     return calc.percentVisible();
   }
@@ -127,7 +129,7 @@ export class LOSCalculator {
 
     const cl = this.constructor.ALGORITHM_CLASS[algorithm];
     this.calc.destroy();
-    this.calc = new cl(undefined, undefined, this.config);
+    this.calc = new cl(this.viewer, this.target, this.config);
   }
 
   /**

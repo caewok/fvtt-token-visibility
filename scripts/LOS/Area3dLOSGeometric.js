@@ -1,6 +1,4 @@
 /* globals
-canvas,
-CONFIG,
 PIXI
 */
 "use strict";
@@ -80,7 +78,6 @@ import { Area3dLOS } from "./Area3dLOS.js";
 import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
 // PlaceablePoints folder
-import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
 import { TokenPoints3d, UnitTokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
@@ -131,7 +128,8 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   get visibleTargetPoints() {
     return this.#visibleTargetPoints
-      || (this.#visibleTargetPoints =  new TokenPoints3d(this.target, { pad: -1, tokenBorder: this.config.visibleTargetShape }));
+      || (this.#visibleTargetPoints = new TokenPoints3d(this.target,
+        { pad: -1, tokenBorder: this.config.visibleTargetShape }));
   }
 
   #boundaryTargetPoints;
@@ -182,7 +180,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   /**
    * Determine percentage area by estimating the blocking shapes geometrically.
-   * Uses drawings for tile holes; cannot handle transparent tile pixels.
    * @returns {number}
    */
   percentVisible() {
@@ -212,14 +209,12 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * @typedef BlockingPoints
    * @type {object}
    * @type {object}:
-   * @property {HorizontalPoints3d[]}   drawings
    * @property {VerticalPoints3d[]}     terrainWalls
    * @property {HorizontalPoints3d[]}   tiles
    * @property {(VerticalPoints3d|HorizontalPoints3d)[]}     tokens
    * @property {VerticalPoints3d[]}     walls
    */
   #blockingPoints = {
-    drawings: [],
     terrainWalls: [],
     tiles: [],
     tokens: [],
@@ -237,14 +232,12 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * Debug/temp object that holds the converted Foundry blockingObjects as PlanePoints3d.
    * @typedef {BlockingObjectsPoints}
    * @type {object}:
-   * @property {Set<DrawingPoints3d>} drawing
    * @property {Set<WallPoints3d>}    terrainWalls
    * @property {Set<TilePoints3d>}    tiles
    * @property {Set<TokenPoints3d>}   tokens
    * @property {Set<WallPoints3d>}    walls
    */
   #blockingObjectsPoints = {
-    drawings: new Set(),
     terrainWalls: new Set(),
     tiles: new Set(),
     tokens: new Set(),
@@ -298,7 +291,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
     // Set the matrix to look at blocking point objects from the viewer.
     const blockingPoints = this.blockingPoints;
-    blockingPoints.drawings.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
     blockingPoints.tiles.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
     blockingPoints.tokens.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
     blockingPoints.walls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
@@ -306,7 +298,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
     // Set the matrix for drawing other debug objects
     const blockingObjectsPoints = this.blockingObjectsPoints;
-    blockingObjectsPoints.drawings.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
     blockingObjectsPoints.tiles.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
     blockingObjectsPoints.tokens.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
     blockingObjectsPoints.walls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
@@ -335,10 +326,8 @@ export class Area3dLOSGeometric extends Area3dLOS {
         scalingFactor: this.constructor.SCALING_FACTOR
       }) : undefined;
 
-    // Combine blocking tiles with drawings as holes
+    // Combine alike objects
     const tiles = this._combineBlockingTiles();
-
-    // Combine other objects
     const walls = this._combineBlockingWalls();
     const tokens = this._combineBlockingTokens();
 
@@ -384,7 +373,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   /**
    * Find objects that are within the vision triangle between viewer and target.
-   * Sets this._blockingObjects for drawings, tiles, tokens, walls, and terrainWalls.
+   * Sets this._blockingObjects for tiles, tokens, walls, and terrainWalls.
    * Sets _blockingObjectsAreSet and resets _blockingPointsAreSet and _viewIsSet.
    */
   _findBlockingObjects() {
@@ -405,8 +394,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     const objs = this.blockingObjects;
 
     // Clear any prior objects from the respective sets
-    const { drawings, terrainWalls, tiles, tokens, walls } = this.#blockingObjectsPoints;
-    drawings.clear();
+    const { terrainWalls, tiles, tokens, walls } = this.#blockingObjectsPoints;
     terrainWalls.clear();
     tiles.clear();
     tokens.clear();
@@ -414,10 +402,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
     // Add Tiles
     objs.tiles.forEach(t => tiles.add(new TilePoints3d(t, { viewerElevationZ: this.viewerPoint.z })));
-
-    // Add Drawings
-    if ( objs.tiles.size
-      && objs.drawings.size ) objs.drawings.forEach(d => drawings.add(new DrawingPoints3d(d)));
 
     // Add Tokens
     const tokenPoints = buildTokenPoints(objs.tokens, this.config);
@@ -456,7 +440,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
     // Clear the existing arrays.
     blockingPoints.tiles.length = 0;
-    blockingPoints.drawings.length = 0;
     blockingPoints.tokens.length = 0;
     blockingPoints.walls.length = 0;
     blockingPoints.terrainWalls.length = 0;
@@ -476,14 +459,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
     blockingObjectsPoints.tiles.forEach(pts => {
       const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
       if ( res.length ) blockingPoints.tiles.push(...res);
-    });
-
-    blockingObjectsPoints.drawings.forEach(pts => {
-      const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
-      if ( res.length ) {
-        res.forEach(x => x.object = pts.object); // Copy the underlying drawing object.
-        blockingPoints.drawings.push(...res);
-      }
     });
 
     // Tokens have both horizontal and vertical.
@@ -539,59 +514,14 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   /**
    * Combine all the blocking tiles using Clipper.
-   * If drawings with holes exist, construct relevant tiles with holes accordingly.
    * @returns {ClipperPaths|undefined}
    */
   _combineBlockingTiles() {
     const blockingPoints = this.blockingPoints;
-
     if ( !blockingPoints.tiles.length ) return undefined;
 
-    if ( !blockingPoints.drawings.length ) {
-      const tilePolys = blockingPoints.tiles.map(w => new PIXI.Polygon(w.perspectiveTransform()));
-      const paths = ClipperPaths.fromPolygons(tilePolys, {scalingFactor: this.constructor.SCALING_FACTOR});
-      paths.combine().clean();
-      return paths;
-    }
-
-    // Check if any drawings might create a hole in one or more tiles
-    const tilesUnholed = [];
-    const tilesHoled = [];
-    const scalingFactor = this.constructor.SCALING_FACTOR;
-    const pixelsToGridUnits = CONFIG.GeometryLib.utils.pixelsToGridUnits;
-    for ( const tilePts of blockingPoints.tiles ) {
-      const drawingHoles = [];
-      const tileE = pixelsToGridUnits(tilePts.z);
-      const tilePoly = new PIXI.Polygon(tilePts.perspectiveTransform());
-      for ( const drawingPts of blockingPoints.drawings ) {
-        const minE = drawingPts.object.document.getFlag("levels", "rangeTop");
-        const maxE = drawingPts.object.document.getFlag("levels", "rangeBottom");
-        if ( minE == null && maxE == null ) continue; // Intended to test null, undefined
-        else if ( minE == null && tileE !== maxE ) continue;
-        else if ( maxE == null && tileE !== minE ) continue;
-        else if ( !tileE.between(minE, maxE) ) continue;
-
-        // We know the tile is within the drawing elevation range.
-        drawingPts.elevation = tileE; // Temporarily change the drawing elevation to match tile.
-        drawingHoles.push(new PIXI.Polygon(drawingPts.perspectiveTransform()));
-      }
-
-      if ( drawingHoles.length ) {
-        // Construct a hole at the tile's elevation from the drawing taking the difference.
-        const drawingHolesPaths = ClipperPaths.fromPolygons(drawingHoles, { scalingFactor });
-        const tileHoled = drawingHolesPaths.diffPolygon(tilePoly);
-        tilesHoled.push(tileHoled);
-      } else tilesUnholed.push(tilePoly);
-    }
-
-    if ( tilesUnholed.length ) {
-      const unHoledPaths = ClipperPaths.fromPolygons(tilesUnholed, { scalingFactor });
-      unHoledPaths.combine().clean();
-      tilesHoled.push(unHoledPaths);
-    }
-
-    // Combine all the tiles, holed and unholed
-    const paths = ClipperPaths.combinePaths(tilesHoled);
+    const tilePolys = blockingPoints.tiles.map(w => new PIXI.Polygon(w.perspectiveTransform()));
+    const paths = ClipperPaths.fromPolygons(tilePolys, {scalingFactor: this.constructor.SCALING_FACTOR});
     paths.combine().clean();
     return paths;
   }
@@ -638,7 +568,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     drawTool.clearDrawings();
 
     // Scale the target graphics to fit in the view window.
-    const ptsArr = this.visibleTargetPoints.perspectiveTransform()
+    const ptsArr = this.visibleTargetPoints.perspectiveTransform();
     const xMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.x));
     const yMinMax = Math.minMax(...ptsArr.flat().map(pt => pt.y));
     const maxCoord = 200;
@@ -652,13 +582,13 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
-    if ( this.config.largeTarget ) this.gridPoints.drawTransformed({ color: colors.lightred, drawTool, fillAlpha: 0.4 });
+    if ( this.config.largeTarget ) this.gridPoints.drawTransformed(
+      { color: colors.lightred, drawTool, fillAlpha: 0.4 });
 
     // Draw the detected objects in 3d, centered on 0,0
     const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
     pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, fillAlpha: 0.5, drawTool }));
     pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, fillAlpha: 0.3, drawTool }));
-    pts.drawings.forEach(d => d.drawTransformed({ color: colors.gray, fillAlpha: 0.3, drawTool }));
     pts.tokens.forEach(t => t.drawTransformed({ color: colors.orange, drawTool }));
     pts.terrainWalls.forEach(w => w.drawTransformed({ color: colors.lightgreen, fillAlpha: 0.1, drawTool }));
   }

@@ -1,13 +1,5 @@
 /* globals
-canvas,
-CONFIG,
-CONST,
-foundry,
-glMatrix,
-PIXI
-Ray,
-Token,
-VisionSource
+game,
 */
 "use strict";
 
@@ -82,37 +74,11 @@ Draw.shape(targetShape, { color: Draw.COLORS.red })
 
 */
 
-
 import { AlternativeLOS } from "./AlternativeLOS.js";
 import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
-// webGL2
-import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
-
-
-// PlaceablePoints folder
-import { DrawingPoints3d } from "./PlaceablesPoints/DrawingPoints3d.js";
-import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
-import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
-import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
-import { PixelCache } from "./PixelCache.js";
-import { AlphaCutoffFilter } from "./AlphaCutoffFilter.js";
-
-// Base folder
-import { Settings, SETTINGS } from "../settings.js";
-import { buildTokenPoints } from "./util.js";
-
 // Geometry folder
-import { Draw } from "../geometry/Draw.js"; // For debugging
-import { ClipperPaths } from "../geometry/ClipperPaths.js";
-import { Matrix } from "../geometry/Matrix.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-
-const RADIANS_90 = Math.toRadians(90);
-const RADIANS_1 = Math.toRadians(1);
-const mat4 = glMatrix.mat4;
-
-
 
 /**
  * Base class for measuring area 3d.
@@ -153,7 +119,7 @@ export class Area3dLOS extends AlternativeLOS {
   get popout() { return AREA3D_POPOUTS.geometric; }
 
   debug(hasLOS) {
-    // console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // Debug: console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._enableDebugPopout();
     super.debug(hasLOS);
 
@@ -164,7 +130,7 @@ export class Area3dLOS extends AlternativeLOS {
   }
 
   clearDebug() {
-    // console.debug(`clearDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    // Debug: console.debug(`clearDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     super.clearDebug();
     this._clear3dDebug();
   }
@@ -197,7 +163,7 @@ export class Area3dLOS extends AlternativeLOS {
   async _closeDebugPopout() {
     const app = this.popout.app;
     if ( !app || app.closing ) return;
-    return app.close()
+    return app.close();
   }
 
   /**

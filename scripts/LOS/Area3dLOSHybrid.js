@@ -79,7 +79,6 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
 
   /**
    * Determine percentage area by estimating the blocking shapes geometrically.
-   * Uses drawings for tile holes; cannot handle transparent tile pixels.
    * @returns {number}
    */
   percentVisible() {
