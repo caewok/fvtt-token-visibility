@@ -57,7 +57,6 @@ export class AlternativeLOS {
    * @property {Point3d} visionOffset                 Offset delta from the viewer center for vision point.
    * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible.
    * @property {VisionSource} visionSource            Vision source of the viewer.
-   * @property {boolean} debug                        Enable debug visualizations.
    */
   config = {};
 
