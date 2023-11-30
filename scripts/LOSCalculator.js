@@ -87,7 +87,7 @@ export class LOSCalculator {
    */
   hasLOS(target) {
     const { viewer, calc } = this;
-    calc.target = target;
+    if ( target ) calc.target = target;
     const center = Point3d.fromTokenCenter(viewer);
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
@@ -113,7 +113,7 @@ export class LOSCalculator {
    */
   percentVisible(target, visionOffset = new Point3d()) {
     const calc = this.calc;
-    calc.target = target;
+    if ( target ) calc.target = target;
     calc.visionOffset = visionOffset
     if ( Settings.get(SETTINGS.DEBUG.LOS ) ) calc.debug(true);
     return calc.percentVisible();
@@ -129,7 +129,7 @@ export class LOSCalculator {
 
     const cl = this.constructor.ALGORITHM_CLASS[algorithm];
     this.calc.destroy();
-    this.calc = new cl(undefined, undefined, this.config);
+    this.calc = new cl(this.viewer, this.target, this.config);
   }
 
   /**
