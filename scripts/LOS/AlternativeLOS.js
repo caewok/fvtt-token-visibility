@@ -4,6 +4,7 @@ ClipperLib,
 CONFIG,
 CONST,
 foundry,
+Hooks,
 LimitedAnglePolygon,
 PIXI,
 PointSourcePolygon,
@@ -106,13 +107,6 @@ export class AlternativeLOS {
     // Other
     this._visionPolygon = undefined;
     this.#blockingObjects.initialized = false;
-  }
-
-  /**
-   * Method to be overridden by subclasses if objects must be destroyed before deleting.
-   */
-  destroy() {
-
   }
 
   // ----- NOTE: Viewer properties ----- //
@@ -857,17 +851,91 @@ export class AlternativeLOS {
 
   // ----- NOTE: Debugging methods ----- //
 
+  /**
+   * Destroy any PIXI objects and remove hooks upon destroying.
+   */
+  destroy() {
+    if ( !this.#debugGraphics || this.#debugGraphics._destroyed ) return;
+    canvas.tokens.removeChild(this.#debugGraphics);
+    this.#debugGraphics.destroy();
+    this.#debugGraphics = undefined;
+    this.#hookIds.forEach(id => Hooks.off(id));
+    this.#hookIds.length = 0;
+  }
+
+  #hookIds = [];
+
+  /**
+   * Hooks to render/clear debug graphics when token is controlled/uncontrolled.
+   */
+  _initializeDebugHooks() {
+    const controlId = Hooks.on("controlToken", this._controlTokenHook.bind(this));
+    const updateId = Hooks.on("updateToken", this._updateTokenHook.bind(this));
+    this.#hookIds.push(controlId, updateId);
+  }
+
+  /**
+   * Hook: controlToken
+   * If the token is uncontrolled, clear debug drawings.
+   * @event controlObject
+   * @category PlaceableObject
+   * @param {PlaceableObject} object The object instance which is selected/deselected.
+   * @param {boolean} controlled     Whether the PlaceableObject is selected or not.
+   */
+  _controlTokenHook(token, controlled) {
+    if ( controlled || this.viewer !== token ) return;
+    this.clearDebug();
+  }
+
+  /**
+   * Hook: updateToken
+   * If the token moves, clear all debug drawings.
+
+   * @param {Document} tokenD                         The existing Document which was updated
+   * @param {object} change                           Differential data that was used to update the document
+   * @param {DocumentModificationContext} options     Additional options which modified the update request
+   * @param {string} userId                           The ID of the User who triggered the update workflow
+   */
+
+  _updateTokenHook(tokenD, change, _options, _userId) {
+    const token = tokenD.object;
+    if ( token !== this.viewer ) return;
+
+    // Token moved; clear drawings.
+    if ( Object.hasOwn(change, "x")
+      || Object.hasOwn(change, "y")
+      || Object.hasOwn(change, "elevation") ) this.clearDebug();
+  }
+
   async debug(hasLOS) {
     hasLOS ??= this.hasLOS();
     this._drawCanvasDebug(hasLOS);
   }
 
-  async enableDebug() { }
+  /** @type {PIXI.Graphics} */
+  #debugGraphics;
 
-  async disableDebug() { }
+  get debugGraphics() {
+    return this.#debugGraphics || (this.#debugGraphics = this._initializeDebugGraphics);
+  }
+
+  /** @type {Draw} */
+  #debugDraw;
+
+  get debugDraw() {
+    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
+  }
+
+  _initializeDebugGraphics() {
+    const g = new PIXI.Graphics();
+    g.eventMode = "passive"; // Allow targeting, selection to pass through.
+    canvas.tokens.addChild(g);
+    return g;
+  }
 
   clearDebug() {
-    this._clearCanvasDebug();
+    if ( !this.#debugGraphics ) return;
+    this.#debugGraphics.clear();
   }
 
   /**
@@ -876,15 +944,11 @@ export class AlternativeLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawCanvasDebug(hasLOS = true) {
+    this.clearDebug();
     this._drawLineOfSight();
     this._drawVisionTriangle();
     this._drawVisibleTokenBorder(hasLOS);
     this._drawDetectedObjects();
-  }
-
-  _clearCanvasDebug() {
-    const draw = new Draw(Settings.DEBUG_LOS);
-    draw.clearDrawings();
   }
 
   /**
@@ -892,8 +956,7 @@ export class AlternativeLOS {
    * Draw the line of sight from token to target.
    */
   _drawLineOfSight() {
-    const draw = new Draw(Settings.DEBUG_LOS);
-    draw.segment({A: this.viewerPoint, B: this.targetCenter});
+    this.debugDraw.segment({A: this.viewerPoint, B: this.targetCenter});
   }
 
   /**
@@ -902,7 +965,7 @@ export class AlternativeLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawVisibleTokenBorder(hasLOS = true) {
-    const draw = new Draw(Settings.DEBUG_LOS);
+    const draw = this.debugDraw;
     const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
 
     // Fill in the constrained border on canvas
@@ -918,7 +981,7 @@ export class AlternativeLOS {
    * Draw outlines for the various objects that can be detected on the canvas.
    */
   _drawDetectedObjects() {
-    const draw = new Draw(Settings.DEBUG_LOS);
+    const draw = this.debugDraw;
     const colors = Draw.COLORS;
     const { walls, tiles, terrainWalls, tokens } = this.blockingObjects;
     walls.forEach(w => draw.segment(w, { color: colors.blue, fillAlpha: 0.3 }));
@@ -932,7 +995,7 @@ export class AlternativeLOS {
    * Draw the vision triangle between viewer point and target.
    */
   _drawVisionTriangle() {
-    const draw = new Draw(Settings.DEBUG_LOS);
+    const draw = this.debugDraw;
     draw.shape(this.visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
   }
 }

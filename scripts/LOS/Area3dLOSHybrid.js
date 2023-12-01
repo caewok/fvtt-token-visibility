@@ -4,7 +4,6 @@
 
 import { Area3dLOSGeometric } from "./Area3dLOSGeometric.js";
 import { Area3dLOSWebGL2 } from "./Area3dLOSWebGL2.js";
-import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 import { addClassGetter } from "../geometry/util.js";
 
 // Containers, Sprites, RenderTexture.baseTexture have a destroyed property.
@@ -88,7 +87,6 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
   }
 
   // ----- NOTE: Debugging methods ----- //
-  get popout() { return AREA3D_POPOUTS.hybrid; }
 
   /**
    * For debugging

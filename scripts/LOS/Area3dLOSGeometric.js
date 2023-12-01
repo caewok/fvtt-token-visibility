@@ -75,7 +75,6 @@ Draw.shape(targetShape, { color: Draw.COLORS.red })
 */
 
 import { Area3dLOS } from "./Area3dLOS.js";
-import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
 // PlaceablePoints folder
 import { TokenPoints3d, UnitTokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
@@ -527,34 +526,31 @@ export class Area3dLOSGeometric extends Area3dLOS {
   }
 
   // ----- NOTE: Debugging methods ----- //
-  get popout() { return AREA3D_POPOUTS.geometric; }
 
-  #debugGraphics;
-
-  get debugDrawTool() {
-    // If popout is active, use the popout graphics.
-    // If not active, use default draw graphics.
-    const popout = this.popout;
-    if ( !popout.app.rendered ) return undefined;
-
-    const stage = popout.app.pixiApp.stage;
-    if ( !stage ) return undefined;
-
-    stage.removeChildren();
-
-    if ( !this.#debugGraphics || this.#debugGraphics._destroyed ) this.#debugGraphics = new PIXI.Graphics();
-    popout.app.pixiApp.stage.addChild(this.#debugGraphics);
-    return new Draw(this.#debugGraphics);
+  destroy() {
+    super.destroy();
+    if ( this.#popoutGraphics && !this.#popoutGraphics._destroyed ) this.#popoutGraphics.destroy();
   }
 
-  /**
-   * For debugging.
-   * Popout the debugging window if not already rendered.
-   * Clear drawings in that canvas.
-   * Clear other children.
-   */
-  async enableDebugPopout() {
-    await super._enableDebugPopout();
+  /** @type {PIXI.Graphics} */
+  #popoutGraphics;
+
+  get popoutGraphics() {
+    return this.#popoutGraphics || (this.#popoutGraphics = new PIXI.Graphics());
+  }
+
+  /** @type {Draw} */
+  #popoutDraw;
+
+  get popoutDraw() {
+    const g = this.popoutGraphics;
+    this._addChildToPopout(g);
+    return this.#popoutDraw || (this.#popoutDraw = new Draw(g));
+  }
+
+  _clear3dDebug() {
+    if ( !this.#popoutGraphics ) return;
+    this.#popoutGraphics.clear();
   }
 
   /**
@@ -562,10 +558,9 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * Draw the 3d objects in the popout.
    */
   _draw3dDebug() {
-    const drawTool = this.debugDrawTool; // Draw in the pop-up box.
-    if ( !drawTool ) return;
+    this._clear3dDebug();
+    const drawTool = this.popoutDraw;
     const colors = Draw.COLORS;
-    drawTool.clearDrawings();
 
     // Scale the target graphics to fit in the view window.
     const ptsArr = this.visibleTargetPoints.perspectiveTransform();

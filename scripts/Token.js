@@ -20,21 +20,20 @@ PATCHES.BASIC = {};
  * @param {object} change                           Differential data that was used to update the document
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
-
  */
 function updateToken(tokenD, change, _options, _userId) {
   // Token shape changed; invalidate cached shape.
-  const token = tokenD.object;
-  if ( (Object.hasOwn(change, "width") || Object.hasOwn(change, "height")) && token ) token._tokenShape = undefined;
+//   const token = tokenD.object;
+//   if ( (Object.hasOwn(change, "width") || Object.hasOwn(change, "height")) && token ) token._tokenShape = undefined;
 
   // Token moved; clear debug drawings.
-  if ( Object.hasOwn(change, "x")
-      || Object.hasOwn(change, "y")
-      || Object.hasOwn(change, "elevation") ) {
-    // Debug: console.debug("Token moved.");
-    Settings.clearDebugGraphics();
-    // Debug: console.debug("cleared graphics after token moved.");
-  }
+//   if ( Object.hasOwn(change, "x")
+//       || Object.hasOwn(change, "y")
+//       || Object.hasOwn(change, "elevation") ) {
+//     // Debug: console.debug("Token moved.");
+//     Settings.clearDebugGraphics();
+//     // Debug: console.debug("cleared graphics after token moved.");
+//   }
 }
 
 /**
@@ -58,7 +57,7 @@ PATCHES.BASIC.HOOKS = { updateToken, destroyToken };
  */
 function updateSource(wrapper, ...args) {
   // Debug: console.debug("Token source updated.");
-  Settings.clearDebugGraphics();
+  //Settings.clearDebugGraphics();
   // Debug: console.debug("Cleared graphics after token source updated.")
   return wrapper(...args);
 }

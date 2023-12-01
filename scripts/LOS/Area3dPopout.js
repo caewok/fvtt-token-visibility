@@ -1,6 +1,5 @@
 /* globals
 Application,
-Hooks,
 PIXI
 */
 "use strict";
@@ -9,27 +8,16 @@ PIXI
 // Base folder
 import { MODULE_ID } from "../const.js";
 
-export const AREA3D_POPOUTS = {};
-const AREA3D_OPTIONS = ["geometric", "webGL", "webGL2", "hybrid"];
-for ( const option of AREA3D_OPTIONS ) {
-  AREA3D_POPOUTS[option] = {
-    savedTop: null,
-    savedLeft: null,
-    app: null,
-    shown: false
-  };
-}
+export const OPEN_POPOUTS = new Set();
 
 export class Area3dPopout extends Application {
 
-  constructor(options = {}) {
-    const type = options.type ?? "geometric";
-    const savedData = AREA3D_POPOUTS[type];
-    options.top ??= savedData.savedTop;
-    options.left ??= savedData.savedLeft;
-    options.id ??= `area3dpopout_${type}`;
-    super(options);
-  }
+  #savedTop = null;
+
+  #savedLeft = null;
+
+  /** @type {PIXI.Application} */
+  pixiApp;
 
   /* -------------------------------------------- */
 
@@ -46,11 +34,10 @@ export class Area3dPopout extends Application {
     // Other possible options:
     // options.top = (window.innertop - this.h) / 2;
     // options.left = (window.innerleft - this.w) / 2;
-    options.id = "area3dpopout";
     options.template = `modules/${MODULE_ID}/templates/area3d_popout.html`;
     options.popOut = true;
     options.minimizable = true;
-    options.title ??= "Area3d Debug";
+    options.title ??= `${MODULE_ID} Debug`;
     return options;
   }
 
@@ -62,11 +49,23 @@ export class Area3dPopout extends Application {
 
   /** @override */
   render(force=false, options={}) {
-    super.render(force, options);
+    const pixiApp = this.pixiApp = new PIXI.Application({
+      width: 400,
+      height: 400,
+      view: document.getElementById(this.appId),
+      backgroundColor: 0xD3D3D3
+    });
 
-    const type = this.options.type ?? "geometric";
-    const savedData = AREA3D_POPOUTS[type];
-    savedData.shown = true;
+    // Center of window should be 0,0
+    pixiApp.stage.position.x = 200;  // 200 for width 400
+    pixiApp.stage.position.y = 200;  // 200 for height 400
+
+    // Scale to give a bit more room in the popout
+    pixiApp.stage.scale.x = 1;
+    pixiApp.stage.scale.y = 1;
+
+    super.render(force, options);
+    OPEN_POPOUTS.add(this);
 
     // Add pixi app
     // this.pixiApp = new PIXI.Application({
@@ -81,34 +80,32 @@ export class Area3dPopout extends Application {
   //   /* -------------------------------------------- */
   /** @override */
   close() {
-    const type = this.options.type ?? "geometric";
-    const savedData = AREA3D_POPOUTS[type];
-    savedData.shown = false;
-    savedData.savedTop = this.position.top;
-    savedData.savedLeft = this.position.left;
+    this.#savedTop = this.position.top;
+    this.#savedLeft = this.position.left;
     if ( !this.closing ) this.pixiApp?.destroy();
     super.close();
+    OPEN_POPOUTS.delete(this);
   }
 }
 
-Hooks.on("canvasReady", function() {
-  for ( const [key, obj] of Object.entries(AREA3D_POPOUTS) ) {
-    obj.app = new Area3dPopout({ title: `Area3d Debug: ${key}`, type: key });
-  }
-});
+// Hooks.on("canvasReady", function() {
+//   for ( const [key, obj] of Object.entries(AREA3D_POPOUTS) ) {
+//     obj.app = new Area3dPopout({ title: `Area3d Debug: ${key}`, type: key });
+//   }
+// });
 
-Hooks.on("renderArea3dPopout", function(app, _html, _data) {
-  const id = `${app.options.id}_canvas`;
-  app.pixiApp = new PIXI.Application({width: 400, height: 400, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
-
-  // Center of window should be 0,0
-  app.pixiApp.stage.position.x = 200;  // 200 for width 400
-  app.pixiApp.stage.position.y = 200;  // 200 for height 400
-
-  // Scale to give a bit more room in the popout
-  app.pixiApp.stage.scale.x = 1;
-  app.pixiApp.stage.scale.y = 1;
-});
+// Hooks.on("renderArea3dPopout", function(app, _html, _data) {
+//   const id = `${app.options.id}_canvas`;
+//   app.pixiApp = new PIXI.Application({width: 400, height: 400, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
+//
+//   // Center of window should be 0,0
+//   app.pixiApp.stage.position.x = 200;  // 200 for width 400
+//   app.pixiApp.stage.position.y = 200;  // 200 for height 400
+//
+//   // Scale to give a bit more room in the popout
+//   app.pixiApp.stage.scale.x = 1;
+//   app.pixiApp.stage.scale.y = 1;
+// });
 
 /* Testing
 api = game.modules.get("tokenvisibility").api

@@ -1,5 +1,6 @@
 /* globals
-game,
+Application,
+game
 */
 "use strict";
 
@@ -73,9 +74,9 @@ Draw.shape(thisShape, { color: Draw.COLORS.orange });
 Draw.shape(targetShape, { color: Draw.COLORS.red })
 
 */
-
+import { MODULE_ID } from "../const.js";
 import { AlternativeLOS } from "./AlternativeLOS.js";
-import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
+import { Area3dPopout } from "./Area3dPopout.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -116,7 +117,23 @@ export class Area3dLOS extends AlternativeLOS {
   }
 
   // ----- NOTE: Debugging methods ----- //
-  get popout() { return AREA3D_POPOUTS.geometric; }
+  #popout;
+
+  /** @type {string} */
+  get popoutTitle() { return `${MODULE_ID} Debug: ${this.viewer.name ?? ""}`; }
+
+  #updatePopoutTitle() {
+    if ( this.#popout.rendered ) {
+      // TODO: Fix title.
+    } else {
+    }
+  }
+
+  get popout() {
+    return this.#popout || (this.#popout = new Area3dPopout({ title: this.popoutTitle }));
+  }
+
+  get popoutIsRendered() { return this.#popout && this.#popout.state === Application.RENDER_STATES.RENDERED; }
 
   debug(hasLOS) {
     // Debug: console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
@@ -140,7 +157,7 @@ export class Area3dLOS extends AlternativeLOS {
    * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
    * Must be extended by subclasses. This version pops up a blank window.
    */
-  _draw3dDebug() {
+  async _draw3dDebug() {
   }
 
   /**
@@ -149,31 +166,35 @@ export class Area3dLOS extends AlternativeLOS {
    * Must be extended by subclasses.
    */
   _clear3dDebug() {
-
+    if ( !this.popoutIsRendered ) return;
+    this.#popout.pixiApp.stage.removeChildren();
   }
 
-  async enableDebug() { return this._enableDebugPopout(); }
+  /**
+   * Add a PIXI container object to the popout, causing it to render in the popout.
+   * Will force the popout to render if necessary, and is async for that purpose.
+   * @param {PIXI.Container} container
+   */
+  async _addChildToPopout(container) {
+    if ( !this.popoutIsRendered ) await this._openDebugPopout();
+    this.#popout.pixiApp.stage.addChild(container);
+  }
 
-  async disableDebug() { return this._closeDebugPopout(); }
+
+  /**
+   * Open the debug popout window, rendering if necessary.
+   */
+  async _openDebugPopout() { if ( this.popout.state < 2 ) return this.popout.render(true); }
 
   /**
    * For debugging.
    * Close the popout window.
    */
   async _closeDebugPopout() {
-    const app = this.popout.app;
-    if ( !app || app.closing ) return;
-    return app.close();
+    const popout = this.#popout; // Don't trigger creating new popout app on close.
+    if ( !popout || popout.state < Application.RENDER_STATES.RENDERING ) return;
+    this._clear3dDebug();
+    return popout.close();
   }
 
-  /**
-   * For debugging.
-   * Popout the debugging window if not already rendered.
-   * Clear drawings in that canvas.
-   * Clear other children.
-   */
-  async _enableDebugPopout() {
-    const popout = this.popout;
-    if ( popout.app._state < 2 ) popout.app.render(true);
-  }
 }

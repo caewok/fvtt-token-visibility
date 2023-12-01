@@ -76,7 +76,6 @@ Draw.shape(targetShape, { color: Draw.COLORS.red })
 */
 
 import { Area3dLOSGeometric } from "./Area3dLOSGeometric.js";
-import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
 
 // PlaceablePoints folder
@@ -115,6 +114,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
   #destroyed = false;
 
   destroy() {
+    super.destroy();
     if ( this.#destroyed ) return;
     this.targetGraphics.destroy();
     this.blockingGraphics.destroy();
@@ -310,7 +310,6 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
   }
 
   // ----- NOTE: Debugging methods ----- //
-  get popout() { return AREA3D_POPOUTS.webGL; }
 
   /**
    * For debugging.
@@ -324,24 +323,24 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     children.forEach(c => c.destroy());
   }
 
-  _draw3dDebug() {
-    const app = AREA3D_POPOUTS.webGL.app.pixiApp;
-    if ( !app || !app.stage ) return;
+  /** @type {PIXI.Sprite} */
+  #debugSprite;
 
-    // Remove sprite and add new one.
-    const children = app.stage.removeChildren();
-    children.forEach(c => c.destroy());
+  get debugSprite() {
+    if ( !this.#debugSprite || this.#debugSprite.destroyed ) {
+      const s = this.#debugSprite = PIXI.Sprite.from(this.renderTexture);
+      s.anchor = new PIXI.Point(0.5, 0.5); // Centered on the debug window.
+    }
+    return this.#debugSprite;
+  }
+
+  _draw3dDebug() {
+    this._clear3dDebug();
+    this._addChildToPopout(this.debugSprite);
 
     // Set the renderer and re-run
-    this.renderer = app.renderer;
+    this.renderer = this.popout.pixiApp.renderer;
     this.percentVisible(true);
-
-    // Add the new sprite
-    const s = new PIXI.Sprite(this.renderTexture);
-    s.anchor.set(0.5);
-    // Position already set to 0,0: s.position = new PIXI.Point(0, 0);
-    app.stage.addChild(s);
-
     this.renderer = canvas.app.renderer;
   }
 }
