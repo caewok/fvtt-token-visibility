@@ -37,7 +37,7 @@ import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
 import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 
-import { AREA3D_POPOUTS } from "./LOS/Area3dPopout.js";
+import { OPEN_POPOUTS } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 
@@ -112,7 +112,7 @@ Hooks.once("init", function() {
       AlphaCutoffFilter
     },
 
-    AREA3D_POPOUTS,
+    OPEN_POPOUTS,
 
     webgl: {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,

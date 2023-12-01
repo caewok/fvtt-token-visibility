@@ -76,10 +76,9 @@ export class LOSCalculator {
 
   destroy() { this.calc.destroy(); }
 
-  /**
-   * @typedef {object}  LOSCalculatorConfiguration
-   * Options that affect the one-off calculation.
-   */
+  clearDebug() { this.calc.clearDebug(); }
+
+  closeDebugPopout() { this.calc.closeDebugPopout(); }
 
   /**
    * Test if viewer token has LOS to a target token.
@@ -92,6 +91,7 @@ export class LOSCalculator {
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const useDebug = Settings.get(SETTINGS.DEBUG.LOS);
+
     // Debug: console.debug(`\n----- Visibility.prototype.hasLOS|${viewer.name}👀 => ${target.name}🎯 -----`);
 
     for ( const viewerPoint of viewerPoints ) {

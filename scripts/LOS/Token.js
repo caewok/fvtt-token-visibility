@@ -14,6 +14,26 @@ export const PATCHES = {};
 PATCHES.LOS = {};
 PATCHES.AREA3D = {};
 
+// ----- NOTE: Hooks ----- //
+
+/**
+ * Hook: updateToken
+ * If the token width/height changes, invalidate the tokenShape.
+ * @param {Document} tokenD                         The existing Document which was updated
+ * @param {object} change                           Differential data that was used to update the document
+ * @param {DocumentModificationContext} options     Additional options which modified the update request
+ * @param {string} userId                           The ID of the User who triggered the update workflow
+ */
+function updateToken(tokenD, change, _options, _userId) {
+  // Token shape changed; invalidate cached shape.
+  const token = tokenD.object;
+  if ( !token ) return;
+  if ( Object.hasOwn(change, "width")
+    || Object.hasOwn(change, "height") ) token._tokenShape = undefined;
+}
+
+PATCHES.LOS.HOOKS = { updateToken };
+
 // ----- NOTE: Area3d Hooks ----- //
 
 /**

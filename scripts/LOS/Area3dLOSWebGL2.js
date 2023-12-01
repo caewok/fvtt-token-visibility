@@ -6,7 +6,6 @@ PIXI
 "use strict";
 
 import { Area3dLOS } from "./Area3dLOS.js";
-import { AREA3D_POPOUTS } from "./Area3dPopout.js"; // Debugging pop-up
 
 // GLSL
 import { Grid3dGeometry } from "./Placeable3dGeometry.js";
@@ -258,6 +257,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   #destroyed = false;
 
   destroy() {
+    super.destroy();
     if ( this.#destroyed ) return;
 
     // Destroy all shaders and render texture
@@ -410,32 +410,24 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   // ----- NOTE: Debugging methods ----- //
-  get popout() { return AREA3D_POPOUTS.webGL2; }
 
-  _draw3dDebug() {
-    // For the moment, repeat webGL2 percent visible process so that shaders with
-    // colors to differentiate sides can be used.
-    // Avoids using a bunch of "if" statements in JS or in GLSL to accomplish this.
-    const app = this.popout.app?.pixiApp;
-    const stage = app?.stage;
-    if ( !stage ) return;
-    stage.removeChildren();
+  async _draw3dDebug() {
+    await super._draw3dDebug();
+    const renderer = this.popout.pixiApp.renderer;
 
     // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const { debugShaders, debugObstacleContainer, debugSprite, debugRenderTexture } = this;
+    this._addChildToPopout(debugSprite);
 
     const targetMesh = this.#buildTargetMesh(debugShaders);
     this.#buildObstacleContainer(debugObstacleContainer, debugShaders, this._buildTileDebugShader.bind(this));
-    app.renderer.render(targetMesh, { renderTexture: debugRenderTexture, clear: true });
-    app.renderer.render(debugObstacleContainer, { renderTexture: debugRenderTexture, clear: false });
-    stage.addChild(debugSprite);
-
+    renderer.render(targetMesh, { renderTexture: debugRenderTexture, clear: true });
+    renderer.render(debugObstacleContainer, { renderTexture: debugRenderTexture, clear: false });
     targetMesh.destroy();
     debugObstacleContainer.removeChildren().forEach(c => c.destroy());
 
     // For testing the mesh directly:
-    // stage.addChild(targetMesh);
-    // stage.addChild(c);
+    // canvas.stage.addChild(targetMesh);
 
     // Temporarily render the texture for debugging.
     // if ( !this.renderSprite || this.renderSprite.destroyed ) {
