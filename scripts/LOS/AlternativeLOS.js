@@ -887,7 +887,7 @@ export class AlternativeLOS {
   _controlTokenHook(token, controlled) {
     if ( controlled || this.viewer !== token ) return;
     this.clearDebug();
-    console.debug(`controlled ${this.viewer.name} debug\n`);
+    console.debug(`uncontrolled ${this.viewer.name} debug\n`);
   }
 
   /**
@@ -909,7 +909,7 @@ export class AlternativeLOS {
       || Object.hasOwn(change, "y")
       || Object.hasOwn(change, "elevation") ) {
         this.clearDebug();
-        console.debug(`update ${this.viewer.name} debug\n`);
+        console.debug(`update ${this.viewer.name} debug`);
     }
   }
 
@@ -922,7 +922,7 @@ export class AlternativeLOS {
     if ( token !== this.viewer ) return;
     if ( !flags.refreshPosition ) return;
     this.clearDebug();
-    console.debug(`refreshed ${this.viewer.name} debug\n`);
+    console.debug(`refreshed ${this.viewer.name} debug`, {...flags});
   }
 
   async debug(hasLOS) {
@@ -969,7 +969,7 @@ export class AlternativeLOS {
     this._drawVisionTriangle();
     this._drawVisibleTokenBorder(hasLOS);
     this._drawDetectedObjects();
-    console.debug(`Drawn ${this.viewer.name} debug`);
+    console.debug(`\n\nDrawn ${this.viewer.name} debug`);
   }
 
   /**
