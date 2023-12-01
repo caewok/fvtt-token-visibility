@@ -116,24 +116,15 @@ export class Settings {
   static KEYS = SETTINGS;
 
   /** @type {PIXI.Graphics} */
-  static #DEBUG_LOS;
-
-  /** @type {PIXI.Graphics} */
   static #DEBUG_RANGE;
-
-  static get DEBUG_LOS() { return canvas.tokens.children.find(c => c[`${MODULE_ID}_losDebug`]); }
 
   static get DEBUG_RANGE() { return canvas.tokens.children.find(c => c[`${MODULE_ID}_rangeDebug`]); }
 
   static initializeDebugGraphics() {
-    this.#DEBUG_LOS = new PIXI.Graphics();
     this.#DEBUG_RANGE = new PIXI.Graphics();
-    this.#DEBUG_LOS.eventMode = "passive"; // Allow targeting, selection to pass through.
     this.#DEBUG_RANGE.eventMode = "passive";
 
-    this.#DEBUG_LOS[`${MODULE_ID}_losDebug`] = true;
     this.#DEBUG_RANGE[`${MODULE_ID}_rangeDebug`] = true;
-    canvas.tokens.addChild(this.#DEBUG_LOS);
     canvas.tokens.addChild(this.#DEBUG_RANGE);
   }
 
@@ -145,20 +136,6 @@ export class Settings {
 
   static clearDebugGraphics() {
     this.DEBUG_RANGE.clear();
-    for ( const source of canvas.effects.visionSources ) {
-      const losCalc = source[MODULE_ID]?.losCalc;
-      if ( !losCalc ) continue;
-      losCalc.calc.clearDebug();
-    }
-  }
-
-  static updateLOSDebugGraphics(enable) {
-    for ( const source of canvas.effects.visionSources ) {
-      const losCalc = source[MODULE_ID]?.losCalc;
-      if ( !losCalc ) continue;
-      if ( enable ) losCalc.calc.enableDebug();
-      else losCalc.calc.disableDebug();
-    }
   }
 
   /**
@@ -253,8 +230,7 @@ export class Settings {
       scope: "world",
       config: true,
       type: Boolean,
-      default: false,
-      onChange: value => this.updateLOSDebugGraphics(value)
+      default: false
     });
 
     // ----- NOTE: Submenu ---- //

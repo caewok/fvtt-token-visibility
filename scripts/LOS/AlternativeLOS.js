@@ -869,9 +869,11 @@ export class AlternativeLOS {
    * Hooks to render/clear debug graphics when token is controlled/uncontrolled.
    */
   _initializeDebugHooks() {
-    const controlId = Hooks.on("controlToken", this._controlTokenHook.bind(this));
-    const updateId = Hooks.on("updateToken", this._updateTokenHook.bind(this));
-    this.#hookIds.push(controlId, updateId);
+    this.#hookIds.push(
+      Hooks.on("controlToken", this._controlTokenHook.bind(this)),
+      Hooks.on("refreshToken", this._refreshTokenHook.bind(this)),
+      Hooks.on("refreshToken", this._refreshTokenHook.bind(this))
+    );
   }
 
   /**
@@ -885,6 +887,7 @@ export class AlternativeLOS {
   _controlTokenHook(token, controlled) {
     if ( controlled || this.viewer !== token ) return;
     this.clearDebug();
+    console.debug(`controlled ${this.viewer.name} debug\n`);
   }
 
   /**
@@ -904,7 +907,22 @@ export class AlternativeLOS {
     // Token moved; clear drawings.
     if ( Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
-      || Object.hasOwn(change, "elevation") ) this.clearDebug();
+      || Object.hasOwn(change, "elevation") ) {
+        this.clearDebug();
+        console.debug(`update ${this.viewer.name} debug\n`);
+    }
+  }
+
+  /**
+   * If token position is refreshed (i.e., clone), then clear debug.
+   * @param {PlaceableObject} object    The object instance being refreshed
+   * @param {RenderFlag} flags
+   */
+  _refreshTokenHook(token, flags) {
+    if ( token !== this.viewer ) return;
+    if ( !flags.refreshPosition ) return;
+    this.clearDebug();
+    console.debug(`refreshed ${this.viewer.name} debug\n`);
   }
 
   async debug(hasLOS) {
@@ -916,7 +934,7 @@ export class AlternativeLOS {
   #debugGraphics;
 
   get debugGraphics() {
-    return this.#debugGraphics || (this.#debugGraphics = this._initializeDebugGraphics);
+    return this.#debugGraphics || (this.#debugGraphics = this._initializeDebugGraphics());
   }
 
   /** @type {Draw} */
@@ -928,14 +946,17 @@ export class AlternativeLOS {
 
   _initializeDebugGraphics() {
     const g = new PIXI.Graphics();
+    g.tokenvisibility_losDebug = this.viewer.id;
     g.eventMode = "passive"; // Allow targeting, selection to pass through.
     canvas.tokens.addChild(g);
+    this._initializeDebugHooks();
     return g;
   }
 
   clearDebug() {
     if ( !this.#debugGraphics ) return;
     this.#debugGraphics.clear();
+    console.debug(`Cleared ${this.viewer.name} debug`);
   }
 
   /**
@@ -944,11 +965,11 @@ export class AlternativeLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawCanvasDebug(hasLOS = true) {
-    this.clearDebug();
     this._drawLineOfSight();
     this._drawVisionTriangle();
     this._drawVisibleTokenBorder(hasLOS);
     this._drawDetectedObjects();
+    console.debug(`Drawn ${this.viewer.name} debug`);
   }
 
   /**
