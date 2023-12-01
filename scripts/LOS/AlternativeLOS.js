@@ -859,21 +859,19 @@ export class AlternativeLOS {
     canvas.tokens.removeChild(this.#debugGraphics);
     this.#debugGraphics.destroy();
     this.#debugGraphics = undefined;
-    this.#hookIds.forEach(id => Hooks.off(id));
-    this.#hookIds.length = 0;
+    this.#hookIds.forEach((id, fnName) => Hooks.off(fnName, id));
+    this.#hookIds.clear();
   }
 
-  #hookIds = [];
+  #hookIds = new Map();
 
   /**
    * Hooks to render/clear debug graphics when token is controlled/uncontrolled.
    */
   _initializeDebugHooks() {
-    this.#hookIds.push(
-      Hooks.on("controlToken", this._controlTokenHook.bind(this)),
-      Hooks.on("refreshToken", this._refreshTokenHook.bind(this)),
-      Hooks.on("refreshToken", this._refreshTokenHook.bind(this))
-    );
+    this.#hookIds.set("controlToken", Hooks.on("controlToken", this._controlTokenHook.bind(this)));
+    this.#hookIds.set("refreshToken", Hooks.on("refreshToken", this._refreshTokenHook.bind(this)));
+    this.#hookIds.set("updateToken", Hooks.on("updateToken", this._updateTokenHook.bind(this)));
   }
 
   /**
@@ -893,13 +891,11 @@ export class AlternativeLOS {
   /**
    * Hook: updateToken
    * If the token moves, clear all debug drawings.
-
    * @param {Document} tokenD                         The existing Document which was updated
    * @param {object} change                           Differential data that was used to update the document
    * @param {DocumentModificationContext} options     Additional options which modified the update request
    * @param {string} userId                           The ID of the User who triggered the update workflow
    */
-
   _updateTokenHook(tokenD, change, _options, _userId) {
     const token = tokenD.object;
     if ( token !== this.viewer ) return;
@@ -958,6 +954,8 @@ export class AlternativeLOS {
     this.#debugGraphics.clear();
     console.debug(`Cleared ${this.viewer.name} debug`);
   }
+
+  async closeDebugPopout() { return; }
 
   /**
    * For debugging.

@@ -334,8 +334,8 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     return this.#debugSprite;
   }
 
-  _draw3dDebug() {
-    this._clear3dDebug();
+  async _draw3dDebug() {
+    await super._draw3dDebug();
     this._addChildToPopout(this.debugSprite);
 
     // Set the renderer and re-run

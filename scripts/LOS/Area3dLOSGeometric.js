@@ -549,6 +549,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
   }
 
   _clear3dDebug() {
+    super._clear3dDebug();
     if ( !this.#popoutGraphics ) return;
     this.#popoutGraphics.clear();
   }
@@ -557,10 +558,12 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug() {
-    this._clear3dDebug();
+  async _draw3dDebug() {
+    await super._draw3dDebug();
     const drawTool = this.popoutDraw;
+    drawTool.clearDrawings();
     const colors = Draw.COLORS;
+    if ( !this.#viewIsSet ) this.calculateViewMatrix();
 
     // Scale the target graphics to fit in the view window.
     const ptsArr = this.visibleTargetPoints.perspectiveTransform();

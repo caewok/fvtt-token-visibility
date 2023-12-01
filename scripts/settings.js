@@ -134,8 +134,17 @@ export class Settings {
   //     if ( !this.#DEBUG_RANGE.destroyed() ) this.#DEBUG_RANGE.destroy();
   //   }
 
-  static clearDebugGraphics() {
+  static toggleRangeDebugGraphics(enabled = false) {
     this.DEBUG_RANGE.clear();
+  }
+
+  static toggleLOSDebugGraphics(enabled = false) {
+    for ( const token of canvas.tokens.placeables ) {
+      const calc = token[MODULE_ID]?.losCalc;
+      if ( !calc ) continue;
+      calc.clearDebug();
+      if ( !enabled ) calc.closeDebugPopout();
+    }
   }
 
   /**
@@ -221,7 +230,7 @@ export class Settings {
       config: true,
       type: Boolean,
       default: false,
-      onChange: _value => this.clearDebugGraphics()
+      onChange: value => this.toggleLOSDebugGraphics(value)
     });
 
     register(KEYS.DEBUG.LOS, {
@@ -230,7 +239,8 @@ export class Settings {
       scope: "world",
       config: true,
       type: Boolean,
-      default: false
+      default: false,
+      onChange: value => this.toggleLOSDebugGraphics(value)
     });
 
     // ----- NOTE: Submenu ---- //

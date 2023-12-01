@@ -42,17 +42,18 @@ export class Area3dPopout extends Application {
   }
 
   getData(options = {}) {
-    return { id: `${options.id}_canvas` };
+    return { id: `${this.id}_canvas` };
   }
 
   /* -------------------------------------------- */
 
   /** @override */
-  render(force=false, options={}) {
+  async _render(force=false, options={}) {
+    await super._render(force, options);
     const pixiApp = this.pixiApp = new PIXI.Application({
       width: 400,
       height: 400,
-      view: document.getElementById(this.appId),
+      view: document.getElementById(`${this.id}_canvas`),
       backgroundColor: 0xD3D3D3
     });
 
@@ -64,7 +65,6 @@ export class Area3dPopout extends Application {
     pixiApp.stage.scale.x = 1;
     pixiApp.stage.scale.y = 1;
 
-    super.render(force, options);
     OPEN_POPOUTS.add(this);
 
     // Add pixi app

@@ -120,24 +120,29 @@ export class Area3dLOS extends AlternativeLOS {
   #popout;
 
   /** @type {string} */
-  get popoutTitle() { return `${MODULE_ID} Debug: ${this.viewer.name ?? ""}`; }
+  get popoutTitle() {
+    // const moduleName = game.i18n.localize(`${MODULE_ID}.name`);
+    const moduleName = "ATV";
+    return `${moduleName} 3D Debug: ⏿ ${this.viewer.name ?? ""} → ◎ ${this.target.name ?? "?"}`;
+  }
 
   #updatePopoutTitle() {
-    if ( this.#popout.rendered ) {
-      // TODO: Fix title.
-    } else {
-    }
+    if ( !this.popoutIsRendered ) return;
+    const popout = this.popout;
+    const title = this.popoutTitle;
+    const elem = popout.element.find(".window-title");
+    elem[0].textContent = title
+    popout.options.title = title; // Just for consistency.
   }
 
   get popout() {
     return this.#popout || (this.#popout = new Area3dPopout({ title: this.popoutTitle }));
   }
 
-  get popoutIsRendered() { return this.#popout && this.#popout.state === Application.RENDER_STATES.RENDERED; }
+  get popoutIsRendered() { return this.#popout && this.#popout.rendered; }
 
   debug(hasLOS) {
     // Debug: console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
-    this._enableDebugPopout();
     super.debug(hasLOS);
 
     // Only draw in the popout for the targeted token(s).
@@ -158,6 +163,9 @@ export class Area3dLOS extends AlternativeLOS {
    * Must be extended by subclasses. This version pops up a blank window.
    */
   async _draw3dDebug() {
+    this._clear3dDebug();
+    this.#updatePopoutTitle();
+    await this._openDebugPopout(); // Go last so prior can be skipped if popout not active.
   }
 
   /**
@@ -184,15 +192,15 @@ export class Area3dLOS extends AlternativeLOS {
   /**
    * Open the debug popout window, rendering if necessary.
    */
-  async _openDebugPopout() { if ( this.popout.state < 2 ) return this.popout.render(true); }
+  async _openDebugPopout() { if ( this.popout._state < 2 ) await this.popout.render(true); }
 
   /**
    * For debugging.
    * Close the popout window.
    */
-  async _closeDebugPopout() {
+  async closeDebugPopout() {
     const popout = this.#popout; // Don't trigger creating new popout app on close.
-    if ( !popout || popout.state < Application.RENDER_STATES.RENDERING ) return;
+    if ( !popout || popout._state < Application.RENDER_STATES.RENDERING ) return;
     this._clear3dDebug();
     return popout.close();
   }

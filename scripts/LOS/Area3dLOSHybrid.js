@@ -4,7 +4,7 @@
 
 import { Area3dLOSGeometric } from "./Area3dLOSGeometric.js";
 import { Area3dLOSWebGL2 } from "./Area3dLOSWebGL2.js";
-import { addClassGetter } from "../geometry/util.js";
+import { addClassGetter, addClassMethod } from "../geometry/util.js";
 
 // Containers, Sprites, RenderTexture.baseTexture have a destroyed property.
 // Geometry is probably destroyed if it has a null index buffer.
@@ -31,7 +31,12 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
     addClassGetter(this.#webGL2Class, "visibleTargetShape", this.#getVisibleTargetShape.bind(this));
     addClassGetter(this.#webGL2Class, "visionPolygon", this.#getVisionPolygon.bind(this));
     addClassGetter(this.#webGL2Class, "blockingObjects", this.#getBlockingObjects.bind(this));
+
+    // Link getters and methods to share the popout.
     addClassGetter(this.#webGL2Class, "popout", this.#getPopout.bind(this));
+    addClassGetter(this.#webGL2Class, "popoutIsRendered", this.#getPopoutIsRendered.bind(this));
+    addClassMethod(this.#webGL2Class, "_addChildToPopout", this._addChildToPopout.bind(this));
+    addClassMethod(this.#webGL2Class, "_clear3dDebug", this._clear3dDebug.bind(this));
   }
 
   #getVisibleTargetShape() { return this.visibleTargetShape; }
@@ -41,6 +46,8 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
   #getBlockingObjects() { return this.blockingObjects; }
 
   #getPopout() { return this.popout; }
+
+  #getPopoutIsRendered() { return this.popoutIsRendered; }
 
   get webGL2() { return this.#webGL2Class; } // For debugging.
 
@@ -52,6 +59,11 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
   _clearCache() {
     super._clearCache();
     this.#webGL2Class._clearCache();
+  }
+
+  destroy() {
+    this.#webGL2Class.destroy();
+    super.destroy();
   }
 
   // Link setters so values between the two classes remain the same.
@@ -92,12 +104,12 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
    * For debugging
    * Switch drawing depending on the algorithm used.
    */
-  _draw3dDebug() {
-    const drawTool = this.debugDrawTool; // Draw in the pop-up box.
-    if ( !drawTool ) return;
-    drawTool.clearDrawings(); // Need to clear b/c webGL will not.
+  async _draw3dDebug() {
+//     const drawTool = this.popoutDraw; // Draw in the pop-up box.
+//     if ( !drawTool ) return;
+//     drawTool.clearDrawings(); // Need to clear b/c webGL will not.
 
-    if ( this.blockingObjects.tiles.size ) this.#webGL2Class._draw3dDebug();
-    else super._draw3dDebug();
+    if ( this.blockingObjects.tiles.size ) await this.#webGL2Class._draw3dDebug();
+    else await super._draw3dDebug();
   }
 }
