@@ -1,7 +1,9 @@
 /* globals
 Application,
 game
+Hooks,
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 /* Area 3d
@@ -119,6 +121,71 @@ export class Area3dLOS extends AlternativeLOS {
   // ----- NOTE: Debugging methods ----- //
   #popout;
 
+  #hookIds = new Map();
+
+  #renderHookIds = new Map();
+
+  _initializeDebugHooks() {
+    super._initializeDebugHooks();
+    this.#hookIds.set("renderArea3dPopout", Hooks.on("renderArea3dPopout", this._renderArea3dPopoutHook.bind(this)));
+    this.#hookIds.set("closeArea3dPopout", Hooks.on("closeArea3dPopout", this._closeArea3dPopoutHook.bind(this)));
+  }
+
+  destroy() {
+    this.closeDebugPopout();
+    this.#hookIds.forEach((id, fnName) => Hooks.off(fnName, id));
+    this.#hookIds.clear();
+    super.destroy();
+  }
+
+  /**
+   * If debug popout is rendered, update it when token is controlled or targeted.
+   */
+
+  /**
+   * Hook: controlToken
+   * If the token is controlled, refresh debug drawings.
+   * @event controlObject
+   * @category PlaceableObject
+   * @param {PlaceableObject} object The object instance which is selected/deselected.
+   * @param {boolean} controlled     Whether the PlaceableObject is selected or not.
+   */
+  _controlTokenHook(token, controlled) {
+    super._controlTokenHook(token, controlled);
+    if ( !controlled || !this.popoutIsRendered ) return;
+    this.debug(true);
+  }
+
+  /**
+   * Hook: targetToken
+   * If the token is targeted, refresh debug drawings.
+   */
+  _targetTokenHook(user, target, targeted) {
+    if ( user !== game.user || !targeted || !this.popoutIsRendered ) return;
+    this.target = target;
+    this.debug(true);
+  }
+
+  /** Add hooks on render.
+   * @param {Application} application     The Application instance being rendered
+   * @param {jQuery} html                 The inner HTML of the document that will be displayed and may be modified
+   * @param {object} data                 The object of data used when rendering the application
+   */
+  _renderArea3dPopoutHook(_app, _html, _id) {
+    this.#renderHookIds.set("controlToken", Hooks.on("controlToken", this._controlTokenHook.bind(this)));
+    this.#renderHookIds.set("targetToken", Hooks.on("targetToken", this._targetTokenHook.bind(this)));
+  }
+
+  /**
+   * Remove hooks on close.
+   * @param {Application} app                     The Application instance being closed
+   * @param {jQuery[]} html                       The application HTML when it is closed
+   */
+  _closeArea3dPopoutHook(_app, _html, _id) {
+    this.#renderHookIds.forEach((id, fnName) => Hooks.off(fnName, id));
+    this.#renderHookIds.clear();
+  }
+
   /** @type {string} */
   get popoutTitle() {
     const moduleName = game.i18n.localize(`${MODULE_ID}.nameAbbr`);
@@ -130,7 +197,7 @@ export class Area3dLOS extends AlternativeLOS {
     const popout = this.popout;
     const title = this.popoutTitle;
     const elem = popout.element.find(".window-title");
-    elem[0].textContent = title
+    elem[0].textContent = title;
     popout.options.title = title; // Just for consistency.
   }
 
