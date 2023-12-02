@@ -921,7 +921,7 @@ export class AlternativeLOS {
     console.debug(`refreshed ${this.viewer.name} debug`, {...flags});
   }
 
-  async debug(hasLOS) {
+  debug(hasLOS) {
     hasLOS ??= this.hasLOS();
     this._drawCanvasDebug(hasLOS);
   }

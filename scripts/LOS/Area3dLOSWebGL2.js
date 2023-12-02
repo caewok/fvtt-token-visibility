@@ -8,7 +8,7 @@ PIXI
 import { Area3dLOS } from "./Area3dLOS.js";
 
 // GLSL
-import { Grid3dGeometry } from "./Placeable3dGeometry.js";
+import { Grid3dGeometry, GEOMETRY_ID } from "./Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
 
 // Geometry folder
@@ -413,6 +413,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
   async _draw3dDebug() {
     await super._draw3dDebug();
+    if ( !this.popoutIsRendered ) return;
     const renderer = this.popout.pixiApp.renderer;
 
     // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
@@ -442,7 +443,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const { near, far, fov } = this.frustrum;
     targetShader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
     targetShader._initializePerspectiveMatrix(fov, 1, near, far);
-    return this.constructor.buildMesh(this.target[MODULE_ID].geomHandler.geometry, targetShader);
+    return this.constructor.buildMesh(this.target[GEOMETRY_ID].geometry, targetShader);
   }
 
   #buildObstacleContainer(container, shaders, tileMethod) {
@@ -456,7 +457,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       terrainWallShader._initializeLookAtMatrix(viewerPoint, targetCenter);
       terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const terrainWall of blockingObjects.terrainWalls ) {
-        const mesh = buildMesh(terrainWall[MODULE_ID].geomHandler.geometry, terrainWallShader);
+        const mesh = buildMesh(terrainWall[GEOMETRY_ID].geometry, terrainWallShader);
         container.addChild(mesh);
       }
     }
@@ -468,7 +469,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       obstacleShader._initializeLookAtMatrix(viewerPoint, targetCenter);
       obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
       for ( const obj of otherBlocking ) {
-        const mesh = buildMesh(obj[MODULE_ID].geomHandler.geometry, obstacleShader);
+        const mesh = buildMesh(obj[GEOMETRY_ID].geometry, obstacleShader);
         container.addChild(mesh);
       }
     }
@@ -477,7 +478,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( blockingObjects.tiles.size ) {
       for ( const tile of blockingObjects.tiles ) {
         const tileShader = tileMethod(fov, near, far, tile);
-        const mesh = buildMesh(tile[MODULE_ID].geomHandler.geometry, tileShader);
+        const mesh = buildMesh(tile[GEOMETRY_ID].geometry, tileShader);
         container.addChild(mesh);
       }
     }

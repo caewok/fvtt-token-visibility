@@ -91,6 +91,7 @@ export class LOSCalculator {
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const useDebug = Settings.get(SETTINGS.DEBUG.LOS);
+    if ( useDebug ) calc.openDebugPopout(); // Async
 
     // Debug: console.debug(`\n----- Visibility.prototype.hasLOS|${viewer.name}👀 => ${target.name}🎯 -----`);
 
@@ -115,7 +116,10 @@ export class LOSCalculator {
     const calc = this.calc;
     if ( target ) calc.target = target;
     calc.visionOffset = visionOffset
-    if ( Settings.get(SETTINGS.DEBUG.LOS ) ) calc.debug(true);
+    if ( Settings.get(SETTINGS.DEBUG.LOS ) ) {
+      calc.openDebugPopout(); // Async
+      calc.debug(true);
+    }
     return calc.percentVisible();
   }
 

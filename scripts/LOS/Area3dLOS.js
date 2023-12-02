@@ -162,10 +162,10 @@ export class Area3dLOS extends AlternativeLOS {
    * Draw debugging objects (typically, 3d view of the target) in a pop-up window.
    * Must be extended by subclasses. This version pops up a blank window.
    */
-  async _draw3dDebug() {
+  _draw3dDebug() {
     this._clear3dDebug();
     this.#updatePopoutTitle();
-    await this._openDebugPopout(); // Go last so prior can be skipped if popout not active.
+    this.openDebugPopout(); // Go last so prior can be skipped if popout not active.
   }
 
   /**
@@ -184,7 +184,8 @@ export class Area3dLOS extends AlternativeLOS {
    * @param {PIXI.Container} container
    */
   async _addChildToPopout(container) {
-    if ( !this.popoutIsRendered ) await this._openDebugPopout();
+    if ( !this.popoutIsRendered ) await this.openDebugPopout();
+    if ( !this.popoutIsRendered ) return;
     this.#popout.pixiApp.stage.addChild(container);
   }
 
@@ -192,7 +193,7 @@ export class Area3dLOS extends AlternativeLOS {
   /**
    * Open the debug popout window, rendering if necessary.
    */
-  async _openDebugPopout() { if ( this.popout._state < 2 ) await this.popout.render(true); }
+  async openDebugPopout() { if ( this.popout._state < 2 ) await this.popout._render(true); }
 
   /**
    * For debugging.
@@ -202,7 +203,7 @@ export class Area3dLOS extends AlternativeLOS {
     const popout = this.#popout; // Don't trigger creating new popout app on close.
     if ( !popout || popout._state < Application.RENDER_STATES.RENDERING ) return;
     this._clear3dDebug();
-    return popout.close();
+    return popout.close(); // Async
   }
 
 }

@@ -104,12 +104,12 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
    * For debugging
    * Switch drawing depending on the algorithm used.
    */
-  async _draw3dDebug() {
+  _draw3dDebug() {
 //     const drawTool = this.popoutDraw; // Draw in the pop-up box.
 //     if ( !drawTool ) return;
 //     drawTool.clearDrawings(); // Need to clear b/c webGL will not.
 
-    if ( this.blockingObjects.tiles.size ) await this.#webGL2Class._draw3dDebug();
-    else await super._draw3dDebug();
+    if ( this.blockingObjects.tiles.size ) this.#webGL2Class._draw3dDebug();
+    else super._draw3dDebug();
   }
 }

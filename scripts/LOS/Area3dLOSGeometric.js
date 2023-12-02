@@ -558,8 +558,9 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  async _draw3dDebug() {
-    await super._draw3dDebug();
+  _draw3dDebug() {
+    super._draw3dDebug();
+    if ( !this.popoutIsRendered ) return;
     const drawTool = this.popoutDraw;
     drawTool.clearDrawings();
     const colors = Draw.COLORS;
