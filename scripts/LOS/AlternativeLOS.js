@@ -4,7 +4,6 @@ ClipperLib,
 CONFIG,
 CONST,
 foundry,
-Hooks,
 LimitedAnglePolygon,
 PIXI,
 PointSourcePolygon,
@@ -234,14 +233,12 @@ export class AlternativeLOS {
    * @param {number} [threshold]    Percentage to be met to be considered visible
    * @returns {boolean}
    */
-  hasLOS(threshold, printResult = false) {
+  hasLOS(threshold) {
     // Debug: console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._clearCache();
 
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const percentVisible = this.percentVisible();
-    if ( printResult ) console.debug(`${this.viewer.name} sees ${Math.round(percentVisible * 100 * 10) / 10}% of ${this.target.name}.`);
-
 
     if ( typeof percentVisible === "undefined" ) return true; // Defaults to visible.
     if ( percentVisible.almostEqual(0) ) return false;
@@ -255,8 +252,13 @@ export class AlternativeLOS {
    */
   percentVisible() {
     // Simple case: target is within the vision angle of the viewer and no obstacles present.
-    return this._simpleVisibilityTest();
+    const percent = this._simpleVisibilityTest() ?? this._percentVisible();
+    this.updateDebug();
+    return percent;
   }
+
+  /** @override */
+  _percentVisible() { return 1; }
 
   /**
    * Test for whether target is within the vision angle of the viewer and no obstacles present.
@@ -859,70 +861,11 @@ export class AlternativeLOS {
     canvas.tokens.removeChild(this.#debugGraphics);
     this.#debugGraphics.destroy();
     this.#debugGraphics = undefined;
-    this.#hookIds.forEach((id, fnName) => Hooks.off(fnName, id));
-    this.#hookIds.clear();
+    this.disableDebug();
   }
 
-  #hookIds = new Map();
-
-  /**
-   * Hooks to render/clear debug graphics when token is controlled/uncontrolled.
-   */
-  _initializeDebugHooks() {
-    this.#hookIds.set("controlToken", Hooks.on("controlToken", this._controlTokenHook.bind(this)));
-    this.#hookIds.set("refreshToken", Hooks.on("refreshToken", this._refreshTokenHook.bind(this)));
-    this.#hookIds.set("updateToken", Hooks.on("updateToken", this._updateTokenHook.bind(this)));
-  }
-
-  /**
-   * Hook: controlToken
-   * If the token is uncontrolled, clear debug drawings.
-   * @event controlObject
-   * @category PlaceableObject
-   * @param {PlaceableObject} object The object instance which is selected/deselected.
-   * @param {boolean} controlled     Whether the PlaceableObject is selected or not.
-   */
-  _controlTokenHook(token, controlled) {
-    if ( controlled || this.viewer !== token ) return;
-    this.clearDebug();
-    // console.debug(`uncontrolled ${this.viewer.name} debug\n`);
-  }
-
-  /**
-   * Hook: updateToken
-   * If the token moves, clear all debug drawings.
-   * @param {Document} tokenD                         The existing Document which was updated
-   * @param {object} change                           Differential data that was used to update the document
-   * @param {DocumentModificationContext} options     Additional options which modified the update request
-   * @param {string} userId                           The ID of the User who triggered the update workflow
-   */
-  _updateTokenHook(tokenD, change, _options, _userId) {
-    const token = tokenD.object;
-    if ( token !== this.viewer ) return;
-
-    // Token moved; clear drawings.
-    if ( Object.hasOwn(change, "x")
-      || Object.hasOwn(change, "y")
-      || Object.hasOwn(change, "elevation") ) {
-        this.clearDebug();
-        // console.debug(`update ${this.viewer.name} debug`);
-    }
-  }
-
-  /**
-   * If token position is refreshed (i.e., clone), then clear debug.
-   * @param {PlaceableObject} object    The object instance being refreshed
-   * @param {RenderFlag} flags
-   */
-  _refreshTokenHook(token, flags) {
-    if ( token !== this.viewer ) return;
-    if ( !flags.refreshPosition ) return;
-    this.clearDebug();
-    // console.debug(`refreshed ${this.viewer.name} debug`, {...flags});
-  }
-
-  debug(hasLOS) {
-    this._drawCanvasDebug(hasLOS);
+  updateDebug() {
+    this._drawCanvasDebug();
   }
 
   /** @type {PIXI.Graphics} */
@@ -944,14 +887,13 @@ export class AlternativeLOS {
     g.tokenvisibility_losDebug = this.viewer.id;
     g.eventMode = "passive"; // Allow targeting, selection to pass through.
     canvas.tokens.addChild(g);
-    this._initializeDebugHooks();
     return g;
   }
 
   clearDebug() {
     if ( !this.#debugGraphics ) return;
     this.#debugGraphics.clear();
-    // console.debug(`Cleared ${this.viewer.name} debug`);
+    // Debug: console.debug(`Cleared ${this.viewer.name} debug`);
   }
 
   /**
@@ -959,12 +901,12 @@ export class AlternativeLOS {
    * Draw debugging objects on the main canvas.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawCanvasDebug(hasLOS) {
+  _drawCanvasDebug() {
     this._drawLineOfSight();
     this._drawVisionTriangle();
-    this._drawVisibleTokenBorder(hasLOS);
+    this._drawVisibleTokenBorder();
     this._drawDetectedObjects();
-    // console.debug(`\n\nDrawn ${this.viewer.name} debug`);
+    // Debug: console.debug(`\n\nDrawn ${this.viewer.name} debug`);
   }
 
   /**
@@ -980,10 +922,9 @@ export class AlternativeLOS {
    * Draw the constrained token border and visible shape, if any.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawVisibleTokenBorder(hasLOS) {
+  _drawVisibleTokenBorder() {
     const draw = this.debugDraw;
     let color = Draw.COLORS.blue;
-    if ( typeof hasLOS !== "undefined" ) color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
 
     // Fill in the constrained border on canvas
     draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});

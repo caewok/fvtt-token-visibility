@@ -348,11 +348,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
 
-  percentVisible() {
-    // Debug: console.debug(`percentVisible|${this.viewer.name}👀 => ${this.target.name}🎯`);
-    const percentVisible = this._simpleVisibilityTest();
-    if ( typeof percentVisible !== "undefined" ) return percentVisible;
-
+  _percentVisible() {
     performance.mark("startWebGL2");
     const { renderTexture, shaders, blockingObjects, obstacleContainer } = this;
     const { sumRedPixels, sumRedObstaclesPixels } = this.constructor;

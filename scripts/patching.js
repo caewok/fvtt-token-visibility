@@ -48,6 +48,7 @@ export function initializePatching() {
   PATCHER.registerGroup("BASIC");
   PATCHER.registerGroup("LOS");
   PATCHER.registerGroup("ConstrainedTokenBorder");
+  registerDebug();
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
   PATCHER.registerGroup("NO_LEVELS");
@@ -74,3 +75,7 @@ export function registerArea3d() {
       .forEach(token => token[MODULE_ID] = { geomHandler: new TokenGeometryHandler(token) });
   }
 }
+
+export function registerDebug() { PATCHER.registerGroup("DEBUG"); }
+
+export function deregisterDebug() { PATCHER.deregisterGroup("DEBUG"); }

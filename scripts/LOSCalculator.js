@@ -95,19 +95,25 @@ export class LOSCalculator {
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const useDebug = Settings.get(SETTINGS.DEBUG.LOS);
-    if ( useDebug ) calc.openDebugPopout(); // Async
-
-    // Debug: console.debug(`\n----- Visibility.prototype.hasLOS|${viewer.name}👀 => ${target.name}🎯 -----`);
-
+    if ( useDebug ) console.debug(`\n👀${calc.viewer.name} --> 🎯${calc.target.name}`);
+    let los = false;
     for ( const viewerPoint of viewerPoints ) {
       calc.visionOffset = viewerPoint.subtract(center);
-      if ( calc.hasLOS(threshold, useDebug) ) {
-        if ( useDebug ) calc.debug(true);
-        return true;
+
+      if ( useDebug ) {
+        const percent = calc.percentVisible();
+        console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t(@viewerPoint ${Math.round(viewerPoint.x)},${Math.round(viewerPoint.y)},${Math.round(viewerPoint.z)})`);
+      }
+
+      if ( (los = calc.hasLOS(threshold)) ) {
+        //if ( useDebug ) calc.debug(true);
+        los = true;
+        break;
       }
     }
-    if ( useDebug ) calc.debug(false);
-    return false;
+
+    if ( useDebug ) console.debug(`\tLOS? ${los}`);
+    return los;
   }
 
   /**
@@ -119,12 +125,15 @@ export class LOSCalculator {
   percentVisible(target, visionOffset = new Point3d()) {
     const calc = this.calc;
     if ( target ) calc.target = target;
-    calc.visionOffset = visionOffset
-    if ( Settings.get(SETTINGS.DEBUG.LOS ) ) {
-      calc.openDebugPopout(); // Async
-      calc.debug(true);
+    calc.visionOffset = visionOffset;
+    const percent = calc.percentVisible();
+    if ( Settings.get(SETTINGS.DEBUG.LOS) ) {
+      const viewerPoint = calc.viewerPoint;
+      console.debug(`\n👀${calc.viewer.name} --> 🎯${calc.target.name}`);
+      console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t(@viewerPoint ${Math.round(viewerPoint.x)},${Math.round(viewerPoint.y)},${Math.round(viewerPoint.z)})`);
     }
-    return calc.percentVisible();
+
+    return percent;
   }
 
   /**

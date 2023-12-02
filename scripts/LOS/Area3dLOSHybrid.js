@@ -92,10 +92,10 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
    * Determine percentage area by estimating the blocking shapes geometrically.
    * @returns {number}
    */
-  percentVisible() {
+  _percentVisible() {
     // Super and percentVisibleWebGL both run the basic visibility test.
-    if ( this.blockingObjects.tiles.size ) return this.#webGL2Class.percentVisible();
-    return super.percentVisible();
+    if ( this.blockingObjects.tiles.size ) return this.#webGL2Class._percentVisible();
+    return super._percentVisible();
   }
 
   // ----- NOTE: Debugging methods ----- //

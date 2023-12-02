@@ -136,16 +136,12 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {object{top: {PIXI.Polygon|undefined}, bottom: {PIXI.Polygon|undefined}}} shadowLOS
    * @returns {number}
    */
-  percentVisible() {
-    const percentVisible = this._simpleVisibilityTest();
-    if ( typeof percentVisible !== "undefined" ) return percentVisible;
-
+  _percentVisible() {
     const shadowLOS = this._buildShadowLOS();
     const constrained = this.target.constrainedTokenBorder;
     const targetPercentAreaBottom = shadowLOS.bottom ? this._calculatePercentSeen(shadowLOS.bottom, constrained) : 0;
     const targetPercentAreaTop = shadowLOS.top ? this._calculatePercentSeen(shadowLOS.top, constrained) : 0;
-    const percent = Math.max(targetPercentAreaBottom, targetPercentAreaTop);
-    return percent;
+    return Math.max(targetPercentAreaBottom, targetPercentAreaTop);
   }
 
   /**
@@ -438,8 +434,8 @@ export class Area2dLOS extends AlternativeLOS {
    * Draw debugging objects on the main canvas.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawCanvasDebug(hasLOS) {
-    super._drawCanvasDebug(hasLOS);
+  _drawCanvasDebug() {
+    super._drawCanvasDebug();
     this._drawCenterPoint();
     if ( !this.los ) this.shadowLOSForElevation(this.targetCenter.z);
     if ( this.los ) this._drawLOS(this.los);

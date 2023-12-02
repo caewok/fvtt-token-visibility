@@ -159,11 +159,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
    * Constructs a render texture to estimate the percentage.
    * @returns {number}
    */
-  percentVisible(debug = false) {
-    // See https://stackoverflow.com/questions/54415773/calling-grand-parent-function-in-javascript
-    const percentVisible = this._simpleVisibilityTest();
-    if ( typeof percentVisible !== "undefined" ) return percentVisible;
-
+  _percentVisible(debug = false) {
     if ( !this.viewIsSet ) this.calculateViewMatrix();
     const TARGET_COLOR = Draw.COLORS.red;
     const OBSTACLE_COLOR = Draw.COLORS.blue;

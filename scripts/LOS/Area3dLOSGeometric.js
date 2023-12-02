@@ -181,10 +181,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
    * Determine percentage area by estimating the blocking shapes geometrically.
    * @returns {number}
    */
-  percentVisible() {
-    const percentVisible = this._simpleVisibilityTest();
-    if ( typeof percentVisible !== "undefined" ) return percentVisible;
-
+  _percentVisible() {
     const { obscuredSides, sidePolys } = this._obscureSides();
     const obscuredSidesArea = obscuredSides.reduce((area, poly) =>
       area += poly.scaledArea({scalingFactor: this.constructor.SCALING_FACTOR}), 0);

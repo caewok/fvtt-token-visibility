@@ -125,8 +125,11 @@ export class Area3dLOS extends AlternativeLOS {
 
   #renderHookIds = new Map();
 
+  /**
+   * Add hook so that if this token is controlled, the debug window pops up.
+   */
+
   _initializeDebugHooks() {
-    super._initializeDebugHooks();
     this.#hookIds.set("renderArea3dPopout", Hooks.on("renderArea3dPopout", this._renderArea3dPopoutHook.bind(this)));
     this.#hookIds.set("closeArea3dPopout", Hooks.on("closeArea3dPopout", this._closeArea3dPopoutHook.bind(this)));
   }
@@ -144,16 +147,15 @@ export class Area3dLOS extends AlternativeLOS {
 
   /**
    * Hook: controlToken
-   * If the token is controlled, refresh debug drawings.
+   * If the token is controlled, open the debug popout.
    * @event controlObject
    * @category PlaceableObject
    * @param {PlaceableObject} object The object instance which is selected/deselected.
    * @param {boolean} controlled     Whether the PlaceableObject is selected or not.
    */
   _controlTokenHook(token, controlled) {
-    super._controlTokenHook(token, controlled);
-    if ( !controlled || !this.popoutIsRendered ) return;
-    this.debug(true);
+    if ( token !== this.viewer ) return;
+    if ( controlled ) this.openDebugPopout();
   }
 
   /**
@@ -173,7 +175,8 @@ export class Area3dLOS extends AlternativeLOS {
    * @param {jQuery} html                 The inner HTML of the document that will be displayed and may be modified
    * @param {object} data                 The object of data used when rendering the application
    */
-  _renderArea3dPopoutHook(_app, _html, _id) {
+  _renderArea3dPopoutHook(app, _html, _id) {
+    if ( app !== this.#popout ) return;
     this.#renderHookIds.set("controlToken", Hooks.on("controlToken", this._controlTokenHook.bind(this)));
     this.#renderHookIds.set("targetToken", Hooks.on("targetToken", this._targetTokenHook.bind(this)));
   }
@@ -183,7 +186,8 @@ export class Area3dLOS extends AlternativeLOS {
    * @param {Application} app                     The Application instance being closed
    * @param {jQuery[]} html                       The application HTML when it is closed
    */
-  _closeArea3dPopoutHook(_app, _html, _id) {
+  _closeArea3dPopoutHook(app, _html, _id) {
+    if ( app !== this.#popout ) return;
     this.#renderHookIds.forEach((id, fnName) => Hooks.off(fnName, id));
     this.#renderHookIds.clear();
   }
@@ -209,9 +213,9 @@ export class Area3dLOS extends AlternativeLOS {
 
   get popoutIsRendered() { return this.#popout && this.#popout.rendered; }
 
-  debug(hasLOS) {
+  updateDebug() {
     // Debug: console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
-    super.debug(hasLOS);
+    super.updateDebug();
 
     // Only draw in the popout for the targeted token(s).
     // Otherwise, it is really unclear to what the debug is referring.

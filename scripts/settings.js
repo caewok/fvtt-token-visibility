@@ -9,7 +9,8 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-import { registerArea3d } from "./patching.js";
+import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
+
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -139,31 +140,17 @@ export class Settings {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    if ( enabled ) this._enableLOSDebugGraphics();
-    else this._disableLOSDebugGraphics();
-  }
-
-  static #controlHookIds = new Map();
-
-  /**
-   * Add hook so the area3d debug window pops up when token is controlled.
-   */
-  static _enableLOSDebugGraphics() {
-    this.#controlHookIds.set("controlToken", Hooks.on("controlToken", this._controlTokenHook.bind(this)));
-  }
-
-  static _controlTokenHook(token, controlled) {
-    if ( !controlled ) return;
-    token.vision[MODULE_ID].losCalc.calc?.openDebugPopout(); // Async.
-  }
-
-  static _disableLOSDebugGraphics() {
-    this.#controlHookIds.forEach((id, fnName) => Hooks.off(fnName, id));
-    this.#controlHookIds.clear();
-    canvas.tokens.placeables.forEach(token => {
-      token.vision[MODULE_ID].losCalc.calc.clearDebug();
-      token.vision[MODULE_ID].losCalc.calc?.closeDebugPopout(); // Async.
-    });
+//     if ( enabled ) registerDebug();
+//     else {
+//       if ( canvas.tokens?.placeables ) {
+//         canvas.tokens.placeables.forEach(token => {
+//           const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+//           if ( !calc ) return;
+//           calc.clearDebug();
+//         });
+//       }
+//       deregisterDebug();
+//     }
   }
 
   /**
@@ -350,9 +337,6 @@ export class Settings {
       onChange: value => this.losAlgorithmChange(TARGET.ALGORITHM, value)
     });
 
-    // Register the Area3D methods on initial load.
-    if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
-
     register(TARGET.PERCENT, {
       name: localize(`${TARGET.PERCENT}.Name`),
       hint: localize(`${TARGET.PERCENT}.Hint`),
@@ -443,6 +427,14 @@ export class Settings {
       default: false,
       type: Boolean
     });
+
+    // ----- NOTE: Triggers based on starting settings ---- //
+    // Start debug
+    this.toggleLOSDebugGraphics(this.get(this.KEYS.DEBUG.LOS));
+
+    // Register the Area3D methods on initial load.
+    if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
+
   }
 
   static typesWebGL2 = new Set([
