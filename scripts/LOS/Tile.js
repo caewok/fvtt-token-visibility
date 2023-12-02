@@ -9,6 +9,7 @@ flattenObject
 import { MODULE_ID } from "../const.js";
 import { TilePixelCache } from "./PixelCache.js";
 import { TileGeometryHandler } from "./Placeable3dGeometry.js";
+import { GEOMETRY_ID } from "./Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.TILE = {};
@@ -62,8 +63,7 @@ PATCHES.AREA3D = {};
  * @param {PlaceableObject} object    The object instance being drawn
  */
 function drawTileArea3d(tile) {
-  const obj = tile[MODULE_ID] ??= {};
-  obj.geomHandler = new TileGeometryHandler(tile);
+  new TileGeometryHandler(tile);
 }
 
 /**
@@ -83,14 +83,14 @@ function updateTileArea3d(tileD, changed, _options, _userId) {
       || changeKeys.has("z")
       || changeKeys.has("overhead")) ) return;
 
-  tile[MODULE_ID].geomHandler.update();
+  tile[GEOMETRY_ID].update();
 }
 
 /**
  * Hook: destroyTile
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTileArea3d(tile) { tile[MODULE_ID].geomHandler.destroy(); }
+function destroyTileArea3d(tile) { tile[GEOMETRY_ID].destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawTile: drawTileArea3d,

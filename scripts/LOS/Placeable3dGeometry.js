@@ -698,16 +698,24 @@ export class Tile3dGeometry extends Wall3dGeometry {
 }
 
 
+export const GEOMETRY_ID = "_atvPlaceableGeometry";
+
 /**
  * Class to handle on-demand updating and destroying fo the geometry.
  * Only build when necessary; rebuild when destroyed.
+ * Geometry is stored on the object, at object.tokenvisibility.geometry.
  */
 class PlaceableGeometryHandler {
   /** @type {PlaceableObject} */
   object;
 
+
+  // If the object already has a geometry handler, that handler is returne
   constructor(object) {
+    const existingHandler = object[GEOMETRY_ID];
+    if ( existingHandler ) return existingHandler;
     this.object = object;
+    object[GEOMETRY_ID] = this;
   }
 
   /** @type {Placeable3dGeometry} */

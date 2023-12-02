@@ -9,6 +9,7 @@ PIXI
 import { MODULE_ID } from "../const.js";
 import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
 import { TokenGeometryHandler } from "./Placeable3dGeometry.js";
+import { GEOMETRY_ID } from "./Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.LOS = {};
@@ -42,8 +43,7 @@ PATCHES.LOS.HOOKS = { updateToken };
  * @param {PlaceableObject} object    The object instance being drawn
  */
 function drawTokenArea3d(token) {
-  const obj = token[MODULE_ID] ??= {};
-  obj.geomHandler = new TokenGeometryHandler(token);
+  new TokenGeometryHandler(token);
 }
 
 /**
@@ -55,14 +55,14 @@ function refreshTokenArea3d(token, flags) {
   // TODO: What other updates affect the view?
   //       Need to hook updateTokenDocument as well or instead?
   if ( !(flags.refreshPosition || flags.refreshElevation) ) return;
-  token[MODULE_ID].geomHandler.update();
+  token[GEOMETRY_ID].update();
 }
 
 /**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTokenArea3d(token) { token[MODULE_ID].geomHandler.destroy(); }
+function destroyTokenArea3d(token) { token[GEOMETRY_ID].destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawToken: drawTokenArea3d,
