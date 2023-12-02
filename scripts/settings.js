@@ -9,7 +9,7 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-import { registerArea3d, deregisterArea3d } from "./patching.js";
+import { registerArea3d } from "./patching.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -140,10 +140,10 @@ export class Settings {
 
   static toggleLOSDebugGraphics(enabled = false) {
     for ( const token of canvas.tokens.placeables ) {
-      const calc = token[MODULE_ID]?.losCalc;
-      if ( !calc ) continue;
-      calc.clearDebug();
-      if ( !enabled ) calc.closeDebugPopout();
+      const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+      if ( !losCalc ) continue;
+      losCalc.clearDebug();
+      if ( !enabled ) losCalc.closeDebugPopout();
     }
   }
 
@@ -333,7 +333,6 @@ export class Settings {
 
     // Register the Area3D methods on initial load.
     if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
-    else deregisterArea3d();
 
     register(TARGET.PERCENT, {
       name: localize(`${TARGET.PERCENT}.Name`),
@@ -435,13 +434,12 @@ export class Settings {
   static losAlgorithmChange(key, value) {
     this.cache.delete(key);
     if ( this.typesWebGL2.has(value) ) registerArea3d();
-    else deregisterArea3d();
 
-    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateAlgorithm());
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateAlgorithm());
   }
 
   static losSettingChange(key, _value) {
     this.cache.delete(key);
-    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateConfigurationSettings());
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateConfigurationSettings());
   }
 }

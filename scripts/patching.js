@@ -74,17 +74,3 @@ export function registerArea3d() {
       .forEach(token => token[MODULE_ID] = { geomHandler: new TokenGeometryHandler(token) });
   }
 }
-
-export function deregisterArea3d() {
-  // Destroy all the placeable geometries.
-  if ( canvas.walls ) {
-    const placeables = [
-      ...canvas.walls.placeables,
-      ...canvas.tiles.placeables,
-      ...canvas.tokens.placeables];
-    for ( const placeable of placeables ) placeable[MODULE_ID]?.geomHandler.destroy();
-  }
-
-  // Remove the unused methods, getters.
-  PATCHER.deregisterGroup("AREA3D");
-}
