@@ -48,7 +48,7 @@ export function initializePatching() {
   PATCHER.registerGroup("BASIC");
   PATCHER.registerGroup("LOS");
   PATCHER.registerGroup("ConstrainedTokenBorder");
-  registerDebug();
+  // registerDebug();
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
   PATCHER.registerGroup("NO_LEVELS");

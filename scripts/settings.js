@@ -140,17 +140,17 @@ export class Settings {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-//     if ( enabled ) registerDebug();
-//     else {
-//       if ( canvas.tokens?.placeables ) {
-//         canvas.tokens.placeables.forEach(token => {
-//           const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
-//           if ( !calc ) return;
-//           calc.clearDebug();
-//         });
-//       }
-//       deregisterDebug();
-//     }
+    if ( enabled ) registerDebug();
+    else {
+      if ( canvas.tokens?.placeables ) {
+        canvas.tokens.placeables.forEach(token => {
+          const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+          if ( !calc ) return;
+          calc.clearDebug();
+        });
+      }
+      deregisterDebug();
+    }
   }
 
   /**
@@ -236,7 +236,7 @@ export class Settings {
       config: true,
       type: Boolean,
       default: false,
-      onChange: value => this.toggleLOSDebugGraphics(value)
+      onChange: value => this.toggleRangeDebugGraphics(value)
     });
 
     register(KEYS.DEBUG.LOS, {
@@ -430,7 +430,7 @@ export class Settings {
 
     // ----- NOTE: Triggers based on starting settings ---- //
     // Start debug
-    this.toggleLOSDebugGraphics(this.get(this.KEYS.DEBUG.LOS));
+    if ( this.get(this.KEYS.DEBUG.LOS) ) registerDebug();
 
     // Register the Area3D methods on initial load.
     if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();

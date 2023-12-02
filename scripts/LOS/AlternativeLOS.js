@@ -253,7 +253,6 @@ export class AlternativeLOS {
   percentVisible() {
     // Simple case: target is within the vision angle of the viewer and no obstacles present.
     const percent = this._simpleVisibilityTest() ?? this._percentVisible();
-    this.updateDebug();
     return percent;
   }
 
