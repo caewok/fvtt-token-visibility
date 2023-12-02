@@ -438,7 +438,7 @@ export class Area2dLOS extends AlternativeLOS {
    * Draw debugging objects on the main canvas.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawCanvasDebug(hasLOS = true) {
+  _drawCanvasDebug(hasLOS) {
     super._drawCanvasDebug(hasLOS);
     this._drawCenterPoint();
     if ( !this.los ) this.shadowLOSForElevation(this.targetCenter.z);

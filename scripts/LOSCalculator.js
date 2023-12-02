@@ -74,11 +74,15 @@ export class LOSCalculator {
 
   set target(value) { this.calc.target = value; }
 
-  destroy() { this.calc.destroy(); }
+  destroy() { return this.calc.destroy(); }
 
-  clearDebug() { this.calc.clearDebug(); }
+  debug(hasLOS) { return this.calc.debug(hasLOS); }
 
-  closeDebugPopout() { this.calc.closeDebugPopout(); }
+  clearDebug() { return this.calc.clearDebug(); }
+
+  async closeDebugPopout() { return this.calc?.closeDebugPopout(); }
+
+  async openDebugPopout() { return this.calc?.openDebugPopout(); }
 
   /**
    * Test if viewer token has LOS to a target token.
