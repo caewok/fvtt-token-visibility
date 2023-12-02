@@ -139,12 +139,31 @@ export class Settings {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    for ( const token of canvas.tokens.placeables ) {
-      const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-      if ( !losCalc ) continue;
-      losCalc.clearDebug();
-      if ( !enabled ) losCalc.closeDebugPopout();
-    }
+    if ( enabled ) this._enableLOSDebugGraphics();
+    else this._disableLOSDebugGraphics();
+  }
+
+  static #controlHookIds = new Map();
+
+  /**
+   * Add hook so the area3d debug window pops up when token is controlled.
+   */
+  static _enableLOSDebugGraphics() {
+    this.#controlHookIds.set("controlToken", Hooks.on("controlToken", this._controlTokenHook.bind(this)));
+  }
+
+  static _controlTokenHook(token, controlled) {
+    if ( !controlled ) return;
+    token.vision[MODULE_ID].losCalc.calc?.openDebugPopout(); // Async.
+  }
+
+  static _disableLOSDebugGraphics() {
+    this.#controlHookIds.forEach((id, fnName) => Hooks.off(fnName, id));
+    this.#controlHookIds.clear();
+    canvas.tokens.placeables.forEach(token => {
+      token.vision[MODULE_ID].losCalc.calc.clearDebug();
+      token.vision[MODULE_ID].losCalc.calc?.closeDebugPopout(); // Async.
+    });
   }
 
   /**

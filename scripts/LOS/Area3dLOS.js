@@ -162,6 +162,8 @@ export class Area3dLOS extends AlternativeLOS {
    */
   _targetTokenHook(user, target, targeted) {
     if ( user !== game.user || !targeted || !this.popoutIsRendered ) return;
+    if ( this.viewer === target ) return; // Don't set target to self.
+    if ( !this.viewer.controlled ) return; // Don't change targets for uncontrolled tokens.
     this.target = target;
     this.debug(true);
   }
