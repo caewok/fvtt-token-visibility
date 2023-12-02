@@ -438,39 +438,21 @@ export class Area2dLOS extends AlternativeLOS {
    * Draw debugging objects on the main canvas.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawCanvasDebug(hasLOS = true, threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT)) {
+  _drawCanvasDebug(hasLOS = true) {
     super._drawCanvasDebug(hasLOS);
-    if ( this._drawCenterPoint(threshold) ) return;
+    this._drawCenterPoint();
     if ( !this.los ) this.shadowLOSForElevation(this.targetCenter.z);
     if ( this.los ) this._drawLOS(this.los);
     if ( this.shadows ) this._drawLOSShadows(this.shadows);
   }
 
-  _drawCenterPoint(threshold) {
-    const draw = new Draw(Settings.DEBUG_LOS);
+  _drawCenterPoint() {
+    const draw = this.debugDraw;
     const centerPointIsVisible = !this._hasCollision(this.viewerPoint, this.targetCenter);
-
-    // If less than 50% of the token area is required to be viewable, then
-    // if the center point is viewable, the token is viewable from that source.
-    if ( centerPointIsVisible && threshold < 0.50 ) {
-      draw.point(this.targetCenter, {
-        alpha: 1,
-        radius: 3,
-        color: Draw.COLORS.green });
-      return true;
-    }
-
-    // If more than 50% of the token area is required to be viewable, then
-    // the center point must be viewable for the token to be viewable from that source.
-    // (necessary but not sufficient)
-    if ( !centerPointIsVisible && threshold >= 0.50 ) {
-      draw.point(this.targetCenter, {
-        alpha: 1,
-        radius: 3,
-        color: Draw.COLORS.red });
-      return true;
-    }
-    return false;
+    draw.point(this.targetCenter, {
+      alpha: 1,
+      radius: 3,
+      color: centerPointIsVisible ? Draw.COLORS.green : Draw.COLORS.red  });
   }
 
   _drawLOSShadows(shadows) {
@@ -478,7 +460,7 @@ export class Area2dLOS extends AlternativeLOS {
     const width = 1;
     const fill = Draw.COLORS.gray;
     const fillAlpha = .5;
-    const draw = new Draw(Settings.DEBUG_LOS);
+    const draw = this.debugDraw;
     shadows.forEach(shadow => draw.shape(shadow, { color, width, fill, fillAlpha }));
   }
 
@@ -487,7 +469,7 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {PIXI.Polygon|ClipperPaths} los
    */
   _drawLOS(los) {
-    const draw = new Draw(Settings.DEBUG_LOS);
+    const draw = this.debugDraw;
     if ( los instanceof ClipperPaths ) los = los.simplify();
     if ( los instanceof ClipperPaths ) {
       const polys = los.toPolygons();
