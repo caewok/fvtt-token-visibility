@@ -1,5 +1,6 @@
 {
     "tokenvisibility.name": "Alt. Token Visibility",
+    "tokenvisibility.nameAbbr": "ATV",
     "tokenvisibility.settings.points-center": "Token center only (1 point)",
     "tokenvisibility.settings.points-two": "Token front-facing corners (2 points)",
     "tokenvisibility.settings.points-four": "Token corners (4 points)",

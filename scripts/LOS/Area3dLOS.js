@@ -121,9 +121,8 @@ export class Area3dLOS extends AlternativeLOS {
 
   /** @type {string} */
   get popoutTitle() {
-    // const moduleName = game.i18n.localize(`${MODULE_ID}.name`);
-    const moduleName = "ATV";
-    return `${moduleName} 3D Debug: ⏿ ${this.viewer.name ?? ""} → ◎ ${this.target.name ?? "?"}`;
+    const moduleName = game.i18n.localize(`${MODULE_ID}.nameAbbr`);
+    return `${moduleName} 3D Debug: ⏿ ${this.viewer?.name ?? ""} → ◎ ${this.target?.name ?? "?"}`;
   }
 
   #updatePopoutTitle() {
