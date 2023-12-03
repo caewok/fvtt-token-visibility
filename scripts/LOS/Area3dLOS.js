@@ -255,8 +255,7 @@ export class Area3dLOS extends AlternativeLOS {
    * Will force the popout to render if necessary, and is async for that purpose.
    * @param {PIXI.Container} container
    */
-  async _addChildToPopout(container) {
-    if ( !this.popoutIsRendered ) await this.openDebugPopout();
+  _addChildToPopout(container) {
     if ( !this.popoutIsRendered ) return;
     this.#popout.pixiApp.stage.addChild(container);
   }

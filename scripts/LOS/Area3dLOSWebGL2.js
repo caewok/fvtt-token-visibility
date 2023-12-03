@@ -421,8 +421,8 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
   // ----- NOTE: Debugging methods ----- //
 
-  async _draw3dDebug() {
-    await super._draw3dDebug();
+  _draw3dDebug() {
+    super._draw3dDebug();
     if ( !this.popoutIsRendered ) return;
     const renderer = this.popout.pixiApp.renderer;
 
