@@ -26,6 +26,8 @@ import { ClipperPaths } from "../geometry/ClipperPaths.js";
 // Points folder
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
+const NULL_SET = new Set(); // Set intended to signify no items, as a placeholder.
+
 /**
  * Base class to estimate line-of-sight between a source and a token using different methods.
  * The expectation is that the class will be initialized with a viewer token and target token,
@@ -645,7 +647,12 @@ export class AlternativeLOS {
     const { topZ, bottomZ } = target;
     const maxE = Math.max(viewerPoint.z, topZ);
     const minE = Math.min(viewerPoint.z, bottomZ);
-    const out = {};
+    const out = {
+      tiles: NULL_SET,
+      tokens: NULL_SET,
+      walls: NULL_SET
+    };
+
     if ( wallsBlock ) {
       out.walls = this
         ._filterWallsByVisionPolygon()
