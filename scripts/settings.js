@@ -7,7 +7,7 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
 
@@ -90,6 +90,8 @@ export const SETTINGS = {
       }
     }
   },
+
+  PRONE_STATUS_ID: "prone-status-id",
 
   CHANGELOG: "changelog",
   DEBUG: {
@@ -247,6 +249,16 @@ export class Settings {
       type: Boolean,
       default: false,
       onChange: value => this.toggleLOSDebugGraphics(value)
+    });
+
+    register(KEYS.PRONE_STATUS_ID, {
+      name: localize(`${KEYS.PRONE_STATUS_ID}.Name`),
+      hint: localize(`${KEYS.PRONE_STATUS_ID}.Hint`),
+      scope: "world",
+      config: true,
+      type: String,
+      default: CONFIG.GeometryLib.proneStatusId || "prone",
+      onChange: value => this.setProneStatusId(value)
     });
 
     // ----- NOTE: Submenu ---- //
@@ -452,5 +464,10 @@ export class Settings {
   static losSettingChange(key, _value) {
     this.cache.delete(key);
     canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateConfigurationSettings());
+  }
+
+  static setProneStatusId(value) {
+    CONFIG.GeometryLib.proneStatusId = value;
+    if ( MODULES_ACTIVE.TOKEN_COVER ) game.settings.set("tokencover", SETTINGS.PRONE_STATUS_ID, value);
   }
 }

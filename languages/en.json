@@ -63,6 +63,9 @@
     "tokenvisibility.settings.button-documentation.Label": "Open Documentation",
     "tokenvisibility.settings.button-issue.Label": "Report an Issue",
 
+    "tokenvisibility.settings.prone-status-id.Name": "'Prone' Status Id",
+    "tokenvisibility.settings.prone-status-id.Hint": "String indicating the id for the token 'prone' status. If set, prone tokens will be considered half-height for all vision calculations.",
+
     "tokenvisibility.template.settings-config.tabs.range": "Range",
     "tokenvisibility.template.settings-config.tabs.los_viewer": "Viewer LOS",
     "tokenvisibility.template.settings-config.tabs.los_target": "Target LOS",
