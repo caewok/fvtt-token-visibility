@@ -117,6 +117,7 @@ export class Grid3dGeometry extends Placeable3dGeometry {
     3, 6, 7 // BL (top) - BR (bottom) - BL (bottom)
   ]);
 
+
   static points(token) {
     // Construct a grid unit cube at the token center.
     const center = Point3d.fromTokenCenter(token);
@@ -710,7 +711,7 @@ class PlaceableGeometryHandler {
   object;
 
 
-  // If the object already has a geometry handler, that handler is returne
+  // If the object already has a geometry handler, that handler is returned
   constructor(object) {
     const existingHandler = object[GEOMETRY_ID];
     if ( existingHandler ) return existingHandler;

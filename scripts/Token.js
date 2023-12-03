@@ -76,7 +76,9 @@ function updateTokenDebugHook(tokenD, change, _options, _userId) {
   if ( !(Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
       || Object.hasOwn(change, "elevation")
-      || Object.hasOwn(change, "rotation")) ) return;
+      || Object.hasOwn(change, "rotation")
+      || Object.hasOwn(change, "width")
+      || Object.hasOwn(change, "height")) ) return;
 
   // Token moved
   const token = tokenD.object;
@@ -93,6 +95,40 @@ function refreshTokenDebugHook(token, flags) {
   if ( !flags.refreshPosition ) return;
   if ( token.controlled ) updateDebugForControlledToken(token);
   updateDebugForRelatedTokens(token);
+}
+
+/**
+ * Hook: createActiveEffect
+ * If the token prone status changes, invalidate the geometry.
+ * @param {ActiveEffect} effect         The effect being applied
+ * @param {object} options              Options passed through: { render: true }
+ * @param {string} userId               Id of the user triggering the change.
+ */
+function createActiveEffectDebugHook(effect, _options, _userId) {
+  const actor = effect.parent;
+  if ( !actor || !(actor instanceof Actor) ) return;
+  if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
+  actor.getActiveTokens().forEach(token => {
+    if ( token.controlled ) updateDebugForControlledToken(token);
+    updateDebugForRelatedTokens(token);
+  });
+}
+
+/**
+ * Hook: deleteActiveEffect
+ * If the token prone status changes, invalidate the geometry.
+ * @param {ActiveEffect} effect         The effect being applied
+ * @param {object} options              Options passed through: { render: true }
+ * @param {string} userId               Id of the user triggering the change.
+ */
+function deleteActiveEffectDebugHook(effect, _options, _userId) {
+  const actor = effect.parent;
+  if ( !actor || !(actor instanceof Actor) ) return;
+  if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
+  actor.getActiveTokens().forEach(token => {
+    if ( token.controlled ) updateDebugForControlledToken(token);
+    updateDebugForRelatedTokens(token);
+  });
 }
 
 function updateDebugForControlledToken(changedToken) {
@@ -130,5 +166,7 @@ PATCHES.DEBUG.HOOKS = {
   controlToken: controlTokenDebugHook,
   updateToken: updateTokenDebugHook,
   refreshToken: refreshTokenDebugHook,
-  targetToken: targetTokenDebugHook
+  targetToken: targetTokenDebugHook,
+  createActiveEffect: createActiveEffectDebugHook,
+  deleteActiveEffect: deleteActiveEffectDebugHook
 };

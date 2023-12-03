@@ -1,20 +1,18 @@
 /* globals
 canvas,
-PIXI
+PIXI,
+Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 // Patches for the Token class
 
-import { MODULE_ID } from "../const.js";
 import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
-import { TokenGeometryHandler } from "./Placeable3dGeometry.js";
-import { GEOMETRY_ID } from "./Placeable3dGeometry.js";
+import { GEOMETRY_ID, TokenGeometryHandler } from "./Placeable3dGeometry.js";
 
 export const PATCHES = {};
 PATCHES.LOS = {};
 PATCHES.AREA3D = {};
-
 
 
 // ----- NOTE: Hooks ----- //
@@ -49,6 +47,25 @@ function drawTokenArea3d(token) {
 }
 
 /**
+ * Hook: updateToken
+ * If the token shape or position changes, invalidate the geometry.
+ * @param {Document} tokenD                         The existing Document which was updated
+ * @param {object} change                           Differential data that was used to update the document
+ * @param {DocumentModificationContext} options     Additional options which modified the update request
+ * @param {string} userId                           The ID of the User who triggered the update workflow
+ */
+function updateTokenArea3d(tokenD, change, _options, _userId) {
+  // Token shape changed; invalidate cached shape.
+  const token = tokenD.object;
+  if ( !token ) return;
+  if ( Object.hasOwn(change, "width")
+    || Object.hasOwn(change, "height")
+    || Object.hasOwn(change, "x")
+    || Object.hasOwn(change, "y")
+    || Object.hasOwn(change, "elevation") ) token[GEOMETRY_ID].update();
+}
+
+/**
  * Hook: refreshToken
  * @param {PlaceableObject} object    The object instance being refreshed
  * @param {RenderFlags} flags         Flags being refreshed
@@ -61,6 +78,41 @@ function refreshTokenArea3d(token, flags) {
 }
 
 /**
+ * Hook: createActiveEffect
+ * If the token prone status changes, invalidate the geometry.
+ * @param {ActiveEffect} effect         The effect being applied
+ * @param {object} options              Options passed through: { render: true }
+ * @param {string} userId               Id of the user triggering the change.
+ */
+function createActiveEffectArea3d(effect, _options, _userId) {
+  const actor = effect.parent;
+  if ( !actor || !(actor instanceof Actor) ) return;
+  if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
+  actor.getActiveTokens().forEach(token => token[GEOMETRY_ID].update());
+  // Possible alternatives:
+  //   // Checking if the token is prone: token.isProne
+  //   // Check that the actor does not have additional prone status from something else.
+  //   if ( token.actor.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
+  //   token[GEOMETRY_ID].update();
+}
+
+
+/**
+ * Hook: deleteActiveEffect
+ * If the token prone status changes, invalidate the geometry.
+ * @param {ActiveEffect} effect         The effect being applied
+ * @param {object} options              Options passed through: { render: true }
+ * @param {string} userId               Id of the user triggering the change.
+ */
+function deleteActiveEffectArea3d(effect, _options, _userId) {
+  const actor = effect.parent;
+  if ( !actor || !(actor instanceof Actor) ) return;
+  if ( !effect.statuses.has(CONFIG.GeometryLib.proneStatusId) ) return;
+  actor.getActiveTokens().forEach(token => token[GEOMETRY_ID].update());
+}
+
+
+/**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
@@ -68,8 +120,11 @@ function destroyTokenArea3d(token) { token[GEOMETRY_ID].destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawToken: drawTokenArea3d,
+  updateToken: updateTokenArea3d,
   refreshToken: refreshTokenArea3d,
-  destroyToken: destroyTokenArea3d
+  destroyToken: destroyTokenArea3d,
+  createActiveEffect: createActiveEffectArea3d,
+  deleteActiveEffect: deleteActiveEffectArea3d
 };
 
 
