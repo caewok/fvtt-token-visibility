@@ -185,9 +185,23 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // this.#frustrum.far = this.#frustrumFar || farDistance;
 
     // Near distance has to be close to the viewer.
-    // We can assume we don't want to view anything within 1/2 grid unit?
-    this.#frustrum.near = this.#frustrumNear || canvas.dimensions.size * 0.5;
-
+    // We can assume we don't want to view anything within the viewer token.
+    // (If the viewer point is on the edge, we want basically everything.)
+    this.#frustrum.near = this.#frustrumNear;
+    if ( !this.#frustrum.near ) {
+//       const ix = this.viewer.bounds.segmentIntersections(this.viewerPoint, this.targetCenter)[0];
+//       if ( ix ) {
+//         // Estimate the z coordinate of the intersection by taking the ratio from viewer --> center.
+//         const distIx = PIXI.Point.distanceBetween(this.viewerPoint, ix);
+//         const distTarget = PIXI.Point.distanceBetween(this.viewerPoint, this.targetCenter);
+//         const ratio = distIx / distTarget;
+//         const z = this.viewerPoint.z + ((this.targetCenter.z - this.viewerPoint.z) * ratio);
+//         const dist = Point3d.distanceBetween(this.viewerPoint, new Point3d(ix.x, ix.y, z));
+//         this.#frustrum.near = dist || canvas.dimensions.size * 0.5;
+//         console.debug(`Frustum distance: ${dist}`);
+//       }
+      this.#frustrum.near ||= 1;
+    }
     this.#frustrum.initialized = true;
   }
 
