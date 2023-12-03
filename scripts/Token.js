@@ -35,11 +35,33 @@ PATCHES.BASIC.HOOKS = { destroyToken };
  * @param {PlaceableObject} object The object instance which is selected/deselected.
  * @param {boolean} controlled     Whether the PlaceableObject is selected or not.
  */
-function controlTokenDebugHook(token, controlled) {
+async function controlTokenDebugHook(token, controlled) {
   const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
   if ( !calc ) return;
   calc.clearDebug();
-  if ( controlled ) updateDebugForControlledToken(token);
+  if ( controlled ) {
+    if ( calc.openDebugPopout ) await calc.openDebugPopout();
+    updateDebugForControlledToken(token)
+  }
+}
+
+/**
+ * Hook: targetToken
+ * Check for other controlled tokens and update their Area3d debug popout to point at this target.
+ * @param {User} user        The User doing the targeting
+ * @param {Token} token      The targeted Token
+ * @param {boolean} targeted Whether the Token has been targeted or untargeted
+ */
+function targetTokenDebugHook(user, target, targeted) {
+  if ( !targeted || game.user !== user ) return;
+  canvas.tokens.placeables.forEach(token => {
+    if ( token === target || !token.controlled ) return;
+    const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+    if ( !calc || !calc._draw3dDebug ) return;
+    changedCalc._clearCache();
+    calc.target = target;
+    calc.updateDebug();
+  });
 }
 
 /**
@@ -106,5 +128,6 @@ function updateDebugForRelatedTokens(changedToken) {
 PATCHES.DEBUG.HOOKS = {
   controlToken: controlTokenDebugHook,
   updateToken: updateTokenDebugHook,
-  refreshToken: refreshTokenDebugHook
+  refreshToken: refreshTokenDebugHook,
+  targetToken: targetTokenDebugHook
 };

@@ -860,7 +860,7 @@ export class AlternativeLOS {
     canvas.tokens.removeChild(this.#debugGraphics);
     this.#debugGraphics.destroy();
     this.#debugGraphics = undefined;
-    this.disableDebug();
+    this.#debugDraw = undefined;
   }
 
   updateDebug() {
@@ -871,13 +871,15 @@ export class AlternativeLOS {
   #debugGraphics;
 
   get debugGraphics() {
-    return this.#debugGraphics || (this.#debugGraphics = this._initializeDebugGraphics());
+    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = this._initializeDebugGraphics();
+    return this.#debugGraphics;
   }
 
   /** @type {Draw} */
   #debugDraw;
 
   get debugDraw() {
+    if ( !this.#debugDraw || !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
     return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
   }
 
