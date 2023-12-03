@@ -75,7 +75,8 @@ function targetTokenDebugHook(user, target, targeted) {
 function updateTokenDebugHook(tokenD, change, _options, _userId) {
   if ( !(Object.hasOwn(change, "x")
       || Object.hasOwn(change, "y")
-      || Object.hasOwn(change, "elevation")) ) return;
+      || Object.hasOwn(change, "elevation")
+      || Object.hasOwn(change, "rotation")) ) return;
 
   // Token moved
   const token = tokenD.object;
