@@ -335,10 +335,14 @@ export class AlternativeLOS {
     const blockingObjs = this.#blockingObjects;
     const objsFound = this._filterSceneObjectsByVisionPolygon();
 
-    // Separate the terrain walls.
-    const { terrainWalls, walls } = blockingObjs;
+    // Remove old blocking objects.
+    const { terrainWalls, walls, tokens, tiles } = blockingObjs;
     terrainWalls.clear();
     walls.clear();
+    tokens.clear();
+    tiles.clear();
+
+    // Separate the terrain walls.
     objsFound.walls.forEach(w => {
       const s = w.document[type] === CONST.WALL_SENSE_TYPES.LIMITED ? terrainWalls : walls;
       s.add(w);
@@ -352,11 +356,8 @@ export class AlternativeLOS {
     }
 
     // Add tokens, tiles
-    if ( objsFound.tokens ) blockingObjs.tokens = objsFound.tokens;
-    else blockingObjs.tokens.clear();
-
-    if ( objsFound.tiles ) blockingObjs.tiles = objsFound.tiles;
-    else blockingObjs.tiles.clear();
+    objsFound.tokens.forEach(t => tokens.add(t));
+    objsFound.tiles.forEach(t => tiles.add(t));
 
     blockingObjs.initialized = true;
   }
