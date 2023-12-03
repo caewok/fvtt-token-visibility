@@ -58,7 +58,7 @@ function targetTokenDebugHook(user, target, targeted) {
     if ( token === target || !token.controlled ) return;
     const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
     if ( !calc || !calc._draw3dDebug ) return;
-    changedCalc._clearCache();
+    calc._clearCache();
     calc.target = target;
     calc.updateDebug();
   });
