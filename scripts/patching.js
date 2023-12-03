@@ -50,7 +50,7 @@ export function initializePatching() {
   PATCHER.registerGroup("ConstrainedTokenBorder");
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
-  PATCHER.registerGroup("NO_LEVELS");
+  //PATCHER.registerGroup("NO_LEVELS");
 
   // If Elevated Vision is present, we can rely on its tile cache.
   if ( !MODULES_ACTIVE.EV ) PATCHER.registerGroup("TILE");

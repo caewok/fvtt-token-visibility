@@ -14,8 +14,8 @@ import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 // Patches for the DetectionMode class
 export const PATCHES = {};
 PATCHES.BASIC = {};
-PATCHES.LEVELS = {};
-PATCHES.NO_LEVELS = {};
+// PATCHES.LEVELS = {};
+// PATCHES.NO_LEVELS = {};
 
 // ----- NOTE: Wraps ----- //
 
