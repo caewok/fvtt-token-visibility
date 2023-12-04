@@ -81,10 +81,6 @@ import { TokenPoints3d, UnitTokenPoints3d } from "./PlaceablesPoints/TokenPoints
 import { TilePoints3d } from "./PlaceablesPoints/TilePoints3d.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
-// Base folder
-import { Settings } from "../settings.js";
-import { buildTokenPoints } from "./util.js";
-
 // Geometry folder
 import { Draw } from "../geometry/Draw.js"; // For debugging
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
@@ -128,7 +124,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
   get visibleTargetPoints() {
     return this.#visibleTargetPoints
       || (this.#visibleTargetPoints = new TokenPoints3d(this.target,
-        { pad: -1, tokenBorder: this.config.visibleTargetShape }));
+        { pad: -1, tokenBorder: this.visibleTargetShape }));
   }
 
   #boundaryTargetPoints;
@@ -188,7 +184,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     let sidesArea = sidePolys.reduce((area, poly) =>
       area += poly.scaledArea({scalingFactor: this.constructor.SCALING_FACTOR}), 0);
 
-    if ( this.config.largeTarget ) sidesArea = Math.min(this._gridSquareArea() || 100_000, sidesArea);
+    if ( this.useLargeTarget ) sidesArea = Math.min(this._gridSquareArea() || 100_000, sidesArea);
 
     // Round the percent seen so that near-zero areas are 0.
     // Because of trimming walls near the vision triangle, a small amount of token area can poke through
@@ -279,7 +275,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     targetPoints.setViewMatrix(targetLookAtMatrix);
     visibleTargetPoints.setViewingPoint(viewerPoint);
     visibleTargetPoints.setViewMatrix(targetLookAtMatrix);
-    if ( this.config.largeTarget ) {
+    if ( this.useLargeTarget ) {
       const gridPoints = this.gridPoints;
       gridPoints.setViewingPoint(viewerPoint);
       gridPoints.setViewMatrix(targetLookAtMatrix);
@@ -400,7 +396,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     objs.tiles.forEach(t => tiles.add(new TilePoints3d(t, { viewerElevationZ: this.viewerPoint.z })));
 
     // Add Tokens
-    const tokenPoints = buildTokenPoints(objs.tokens, this.config);
+    const tokenPoints = this._buildTokenPoints(objs.tokens);
     tokenPoints.forEach(pts => tokens.add(pts));
 
     // Add Walls
@@ -428,11 +424,6 @@ export class Area3dLOSGeometric extends Area3dLOS {
     const { visionPolygon, target } = this;
     const edges = [...visionPolygon.iterateEdges()];
     const viewerLoc = this.viewerPoint;
-
-    if ( this.config.debug ) {
-      const draw = new Draw(Settings.DEBUG_LOS);
-      draw.shape(visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
-    }
 
     // Clear the existing arrays.
     blockingPoints.tiles.length = 0;
@@ -578,11 +569,11 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
-    if ( this.config.largeTarget ) this.gridPoints.drawTransformed(
+    if ( this.useLargeTarget ) this.gridPoints.drawTransformed(
       { color: colors.lightred, drawTool, fillAlpha: 0.4 });
 
     // Draw the detected objects in 3d, centered on 0,0
-    const pts = this.config.debugDrawObjects ? this.blockingObjectsPoints : this.blockingPoints;
+    const pts = this.getConfiguration("debugDrawObjects") ? this.blockingObjectsPoints : this.blockingPoints;
     pts.walls.forEach(w => w.drawTransformed({ color: colors.blue, fillAlpha: 0.5, drawTool }));
     pts.tiles.forEach(w => w.drawTransformed({ color: colors.yellow, fillAlpha: 0.3, drawTool }));
     pts.tokens.forEach(t => t.drawTransformed({ color: colors.orange, drawTool }));

@@ -137,6 +137,18 @@ export class LOSCalculator {
   }
 
   /**
+   * Update one or more specific settings in the calculator.
+   */
+  _updateConfiguration(config) {
+    // Remap settings to the calculator config.
+
+
+
+    this.calc.updateConfiguration(config);
+
+  }
+
+  /**
    * Update the calculator algorithm.
    */
   _updateAlgorithm(algorithm) {
@@ -150,9 +162,10 @@ export class LOSCalculator {
   }
 
   /**
-   * Update the calculator settings.
+   * Reset the calculator settings to the current settings.
+   * (Used in Settings after settings have changed.)
    */
-  _updateConfigurationSettings() {
+  _resetConfigurationSettings() {
     this.calc._configure();
     this.calc._clearCache();
   }

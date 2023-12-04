@@ -28,9 +28,9 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
   _tileDebugShaders = new Map();
 
-  constructor(viewer, target, config) {
-    super(viewer, target, config);
-    this.config.useDebugShaders ??= true;
+  _initializeConfiguration(config = {}) {
+    config.useDebugShaders ??= true;
+    super._initializeConfiguration(config);
   }
 
   _clearCache() {
@@ -67,7 +67,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   get debugShaders() {
-    if ( !this.config.useDebugShaders ) return this.shaders;
+    if ( !this.getConfiguration("useDebugShaders") ) return this.shaders;
     if ( !this.#debugShaders ) this._initializeDebugShaders();
     return this.#debugShaders;
   }
@@ -189,17 +189,18 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // (If the viewer point is on the edge, we want basically everything.)
     this.#frustrum.near = this.#frustrumNear;
     if ( !this.#frustrum.near ) {
-//       const ix = this.viewer.bounds.segmentIntersections(this.viewerPoint, this.targetCenter)[0];
-//       if ( ix ) {
-//         // Estimate the z coordinate of the intersection by taking the ratio from viewer --> center.
-//         const distIx = PIXI.Point.distanceBetween(this.viewerPoint, ix);
-//         const distTarget = PIXI.Point.distanceBetween(this.viewerPoint, this.targetCenter);
-//         const ratio = distIx / distTarget;
-//         const z = this.viewerPoint.z + ((this.targetCenter.z - this.viewerPoint.z) * ratio);
-//         const dist = Point3d.distanceBetween(this.viewerPoint, new Point3d(ix.x, ix.y, z));
-//         this.#frustrum.near = dist || canvas.dimensions.size * 0.5;
-//         console.debug(`Frustum distance: ${dist}`);
-//       }
+    //  Estimation of distance from the viewer point to the edge of the viewer token (fails)
+    //       const ix = this.viewer.bounds.segmentIntersections(this.viewerPoint, this.targetCenter)[0];
+    //       if ( ix ) {
+    //         // Estimate the z coordinate of the intersection by taking the ratio from viewer --> center.
+    //         const distIx = PIXI.Point.distanceBetween(this.viewerPoint, ix);
+    //         const distTarget = PIXI.Point.distanceBetween(this.viewerPoint, this.targetCenter);
+    //         const ratio = distIx / distTarget;
+    //         const z = this.viewerPoint.z + ((this.targetCenter.z - this.viewerPoint.z) * ratio);
+    //         const dist = Point3d.distanceBetween(this.viewerPoint, new Point3d(ix.x, ix.y, z));
+    //         this.#frustrum.near = dist || canvas.dimensions.size * 0.5;
+    //         console.debug(`Frustum distance: ${dist}`);
+    //       }
       this.#frustrum.near ||= 1;
     }
     this.#frustrum.initialized = true;
@@ -254,7 +255,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   }
 
   _buildTileDebugShader(fov, near, far, tile) {
-    if ( !this.config.useDebugShaders ) return this._buildTileShader(fov, near, far, tile);
+    if ( !this.getConfiguration("useDebugShaders") ) return this._buildTileShader(fov, near, far, tile);
     if ( !this._tileDebugShaders.has(tile) ) {
       const shader = Tile3dDebugShader.create(this.viewerPoint, this.targetCenter,
         { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
@@ -375,7 +376,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     // If largeTarget is enabled, use the visible area of a grid cube to be 100% visible.
     // #buildTargetMesh already initialized the shader matrices.
     let sumGridCube = 100_000;
-    if ( this.config.largeTarget ) {
+    if ( this.useLargeTarget ) {
       const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
       canvas.app.renderer.render(gridCubeMesh, { renderTexture, clear: true });
       const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);

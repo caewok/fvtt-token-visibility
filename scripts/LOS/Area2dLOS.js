@@ -10,7 +10,6 @@ PIXI
 import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
-import { buildTokenPoints } from "./util.js";
 import { Settings, SETTINGS } from "../Settings.js";
 import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
 
@@ -97,12 +96,12 @@ export class Area2dLOS extends AlternativeLOS {
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
 
     // Start with easy cases, in which the center point is determinative.
-    if ( !this.config.visibleTargetShape || this.config.visibleTargetShape instanceof PIXI.Rectangle ) {
+    const visibleTargetShape = this.visibleTargetShape;
+    if ( !visibleTargetShape || visibleTargetShape instanceof PIXI.Rectangle ) {
       const centerPointIsVisible = !this._hasCollision(this.viewerPoint, this.targetCenter);
       if ( printResult ) {
         console.debug(`${this.viewer.name} ${centerPointIsVisible ? "sees" : "doesn't see"} the center point of ${this.target.name}.`);
       }
-
 
       // If less than 50% of the token area is required to be viewable, then
       // if the center point is viewable, the token is viewable from that source.
@@ -253,12 +252,12 @@ export class Area2dLOS extends AlternativeLOS {
    * @returns {number}
    */
   _calculatePercentSeen(los, tokenShape) {
-    const visibleTargetShape = this._intersectShapeWithLOS(this.config.visibleTargetShape ?? tokenShape, los);
+    const visibleTargetShape = this._intersectShapeWithLOS(this.visibleTargetShape ?? tokenShape, los);
     if ( !visibleTargetShape.length ) return 0;
 
     // The denominator is the token area before considering blocking objects.
     let tokenArea = tokenShape.scaledArea({scalingFactor: Area2d.SCALING_FACTOR});
-    if ( this.config.largeTarget ) tokenArea = Math.min(this.constructor.gridSquareArea, tokenArea);
+    if ( this.useLargeTarget ) tokenArea = Math.min(this.constructor.gridSquareArea, tokenArea);
     if ( !tokenArea || tokenArea.almostEqual(0) ) return 0;
 
     let seenArea = 0;
@@ -310,7 +309,7 @@ export class Area2dLOS extends AlternativeLOS {
   _drawTokenShape(polygon, hasLOS) {
     const draw = new Draw(Settings.DEBUG_LOS);
     const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
-    const visibleShape = this.config.visibleTargetShape;
+    const visibleShape = this.visibleTargetShape;
     draw.shape(this.target.constrainedTokenBorder, { color });
     draw.shape(polygon, { color, fill: color, fillAlpha: 0.5});
     if ( visibleShape ) draw.shape(visibleShape, { color: Draw.COLORS.yellow });
@@ -351,7 +350,7 @@ export class Area2dLOS extends AlternativeLOS {
    */
   shadowLOSForElevation(targetElevation = 0) {
     const viewerPoint = this.viewerPoint;
-    const { type } = this.config;
+    const type = this.getConfiguration("type");
     const visionSource = this.viewer.vision;
 
     // Find the walls and, optionally, tokens, for the triangle between origin and target
@@ -397,7 +396,7 @@ export class Area2dLOS extends AlternativeLOS {
       if ( shadow ) shadows.push(shadow);
     }
 
-    const tokenPoints = buildTokenPoints(viewableObjs.tokens, this.config);
+    const tokenPoints = this._buildTokenPoints(viewableObjs.tokens);
 
     // Add token borders as shadows if tokens block
     for ( const token3d of tokenPoints ) {
@@ -448,7 +447,7 @@ export class Area2dLOS extends AlternativeLOS {
     draw.point(this.targetCenter, {
       alpha: 1,
       radius: 3,
-      color: centerPointIsVisible ? Draw.COLORS.green : Draw.COLORS.red  });
+      color: centerPointIsVisible ? Draw.COLORS.green : Draw.COLORS.red });
   }
 
   _drawLOSShadows(shadows) {

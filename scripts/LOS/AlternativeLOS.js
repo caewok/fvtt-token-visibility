@@ -4,6 +4,7 @@ ClipperLib,
 CONFIG,
 CONST,
 foundry,
+getObjectProperty,
 LimitedAnglePolygon,
 PIXI,
 PointSourcePolygon,
@@ -15,7 +16,7 @@ VisionSource
 
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
-import { insetPoints, lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
+import { insetPoints, lineIntersectionQuadrilateral3d, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
 import { Settings, SETTINGS } from "../settings.js";
 
 // Geometry folder
@@ -25,6 +26,7 @@ import { ClipperPaths } from "../geometry/ClipperPaths.js";
 
 // Points folder
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
+import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 
 const NULL_SET = new Set(); // Set intended to signify no items, as a placeholder.
 
@@ -60,7 +62,7 @@ export class AlternativeLOS {
    * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible.
    * @property {VisionSource} visionSource            Vision source of the viewer.
    */
-  config = {};
+  #config = {};
 
   /**
    * @param {Point3d|Token|VisionSource} viewer   Point or object with z, y, z|elevationZ properties
@@ -71,15 +73,15 @@ export class AlternativeLOS {
     if ( viewer instanceof VisionSource ) viewer = viewer.object;
     this.#viewer = viewer;
     this.#target = target;
-    this._configure(config);
+    this._initializeConfiguration(config);
   }
 
   /**
    * Initialize settings that will stick even as the viewer and target are modified.
    * @param {object} config   Properties intended to override defaults
    */
-  _configure(config = {}) {
-    const cfg = this.config;
+  _initializeConfiguration(config = {}) {
+    const cfg = this.#config;
     cfg.type = config.type ?? "sight";
     cfg.wallsBlock = config.wallsBlock ?? true;
     cfg.tilesBlock = config.tilesBlock ?? true;
@@ -91,11 +93,23 @@ export class AlternativeLOS {
     cfg.visionOffset = config.visionOffset ?? new Point3d();
   }
 
-  _updateConfiguration(config = {}) {
-    const cfg = this.config;
+  updateConfiguration(config = {}) {
+    const cfg = this.#config;
     for ( const [key, value] of Object.entries(config) ) cfg[key] = value;
     this._clearCache();
   }
+
+  getConfiguration(key) { return this.#config[key]; }
+
+  // Getters for some commonly used configurations.
+
+  /** @type {boolean} */
+  get useLargeTarget() { return this.#config.largeTarget; }
+
+  /** @type {}
+
+  // Really an internal getter as config values should be modified using updateConfiguration
+  // get config() { return this.#config; }
 
   _clearCache() {
     // Viewer
@@ -137,12 +151,12 @@ export class AlternativeLOS {
    */
   get viewerPoint() {
     return this.#viewerPoint
-      || (this.#viewerPoint = Point3d.fromTokenCenter(this.viewer).add(this.config.visionOffset));
+      || (this.#viewerPoint = Point3d.fromTokenCenter(this.viewer).add(this.#config.visionOffset));
   }
 
   /** @type {Point3d} */
   set visionOffset(value) {
-    this.config.visionOffset.copyPartial(value);
+    this.#config.visionOffset.copyPartial(value);
     this._clearCache();
   }
 
@@ -177,7 +191,7 @@ export class AlternativeLOS {
   #visibleTargetShape;
 
   get visibleTargetShape() {
-    if ( this.config.useLitTargetShape ) return this.constructor.constrainTargetShapeWithLights(this.target);
+    if ( this.#config.useLitTargetShape ) return this.constructor.constrainTargetShapeWithLights(this.target);
     return this.target.constrainedTokenBorder;
   }
 
@@ -272,7 +286,7 @@ export class AlternativeLOS {
     if ( this.viewer === this.target
       || this.viewerPoint.almostEqual(Point3d.fromTokenCenter(this.target)) ) return 1;
 
-    const visionSource = this.config.visionSource;
+    const visionSource = this.#config.visionSource;
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
     if ( !targetWithin ) return 0;
     if ( !this.hasPotentialObstacles && targetWithin === this.constructor.TARGET_WITHIN_ANGLE.INSIDE ) return 1;
@@ -333,7 +347,7 @@ export class AlternativeLOS {
    */
   _findBlockingObjects() {
     // Locate blocking objects for the vision triangle
-    const type = this.config.type;
+    const type = this.#config.type;
     const blockingObjs = this.#blockingObjects;
     const objsFound = this._filterSceneObjectsByVisionPolygon();
 
@@ -384,9 +398,9 @@ export class AlternativeLOS {
    * @returns {boolean} True if a wall blocks this ray
    */
   _hasWallCollision(startPt, endPt) {
-    if ( !this.config.wallsBlock ) return false;
+    if ( !this.#config.wallsBlock ) return false;
     const mode = "any";
-    const type = this.config.type;
+    const type = this.#config.type;
     return PointSourcePolygon.testCollision3d(startPt, endPt, { mode, type });
   }
 
@@ -397,7 +411,7 @@ export class AlternativeLOS {
    * @returns {boolean} True if a tile blocks this ray
    */
   _hasTileCollision(startPt, endPt) {
-    if ( !this.config.tilesBlock ) return false;
+    if ( !this.#config.tilesBlock ) return false;
     const ray = new Ray(startPt, endPt);
 
     // Ignore non-overhead tiles
@@ -414,7 +428,7 @@ export class AlternativeLOS {
     const oneMax = 1 + 1e-08;
 
     for ( const tile of tiles ) {
-      if ( this.config.type === "light" && tile.document.flags?.levels?.noCollision ) continue;
+      if ( this.#config.type === "light" && tile.document.flags?.levels?.noCollision ) continue;
 
       const { x, y, width, height, elevation } = tile.document;
       const elevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
@@ -446,7 +460,7 @@ export class AlternativeLOS {
    * @returns {boolean} True if a token blocks this ray
    */
   _hasTokenCollision(startPt, endPt) {
-    const { liveTokensBlock, deadTokensBlock } = this.config;
+    const { liveTokensBlock, deadTokensBlock } = this.#config;
     if ( !(liveTokensBlock || deadTokensBlock) ) return false;
 
     // Filter out the viewer and target token
@@ -455,7 +469,7 @@ export class AlternativeLOS {
     let tokens = canvas.tokens.quadtree.getObjects(ray.bounds, { collisionTest });
 
     // Build full- or half-height startPts3d from tokens
-    const tokenPts = buildTokenPoints(tokens, this.config);
+    const tokenPts = this._buildTokenPoints(tokens);
 
     // Set viewing position and test token sides for collisions
     for ( const pts of tokenPts ) {
@@ -469,6 +483,37 @@ export class AlternativeLOS {
       }
     }
     return false;
+  }
+
+
+  /**
+   * Given config options, build TokenPoints3d from tokens.
+   * The points will use either half- or full-height tokens, depending on config.
+   * @param {Token[]|Set<Token>} tokens
+   * @returns {TokenPoints3d[]}
+   */
+  _buildTokenPoints(tokens) {
+    if ( !tokens.length && !tokens.size ) return tokens;
+    const { liveTokensBlock, deadTokensBlock, proneTokensBlock } = this.#config;
+    if ( !(liveTokensBlock || deadTokensBlock) ) return [];
+
+    const hpAttribute = Settings.get(SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE);
+
+    // Filter live or dead tokens
+    if ( liveTokensBlock ^ deadTokensBlock ) tokens = tokens.filter(t => {
+      const hp = getObjectProperty(t.actor, hpAttribute);
+      if ( typeof hp !== "number" ) return true;
+
+      if ( liveTokensBlock && hp > 0 ) return true;
+      if ( deadTokensBlock && hp <= 0 ) return true;
+      return false;
+    });
+
+
+    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
+
+    // Pad (inset) to avoid triggering cover at corners. See issue 49.
+    return tokens.map(t => new TokenPoints3d(t, { pad: -1 }));
   }
 
 
@@ -641,7 +686,7 @@ export class AlternativeLOS {
       wallsBlock,
       liveTokensBlock,
       deadTokensBlock,
-      tilesBlock } = this.config;
+      tilesBlock } = this.#config;
 
     const { target, viewerPoint } = this;
     const { topZ, bottomZ } = target;
@@ -763,7 +808,7 @@ export class AlternativeLOS {
    */
   _testWallInclusion(wall) {
     // Ignore walls that are not blocking for the type
-    if (!wall.document[this.config.type] || wall.isOpen ) return false;
+    if (!wall.document[this.#config.type] || wall.isOpen ) return false;
 
     // Ignore one-directional walls facing away
     const side = wall.orientPoint(this.viewerPoint);
@@ -835,7 +880,7 @@ export class AlternativeLOS {
    * @returns {null|WallPoints3d[2]}
    */
   _constructLimitedAngleWallPoints3d() {
-    const visionSource = this.config.visionSource;
+    const visionSource = this.#config.visionSource;
     if ( !visionSource ) return;
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return null;
@@ -887,7 +932,9 @@ export class AlternativeLOS {
   #debugDraw;
 
   get debugDraw() {
-    if ( !this.#debugDraw || !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
+    if ( !this.#debugDraw
+      || !this.#debugGraphics
+      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
     return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
   }
 
@@ -938,8 +985,8 @@ export class AlternativeLOS {
     // Fill in the constrained border on canvas
     draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
 
-    // Separately fill in the visibile target shape
-    const visibleTargetShape = this.config.visibleTargetShape;
+    // Separately fill in the visible target shape
+    const visibleTargetShape = this.visibleTargetShape;
     if ( visibleTargetShape ) draw.shape(visibleTargetShape, { color: Draw.COLORS.yellow });
   }
 

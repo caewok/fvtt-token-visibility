@@ -51,9 +51,9 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
 
   get webGL2() { return this.#webGL2Class; } // For debugging.
 
-  _updateConfiguration(config = {}) {
-    super._updateConfiguration(config);
-    this.#webGL2Class._updateConfiguration(config);
+  updateConfiguration(config = {}) {
+    super.updateConfiguration(config);
+    this.#webGL2Class.updateConfiguration(config);
   }
 
   _clearCache() {
@@ -105,10 +105,6 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
    * Switch drawing depending on the algorithm used.
    */
   _draw3dDebug() {
-//     const drawTool = this.popoutDraw; // Draw in the pop-up box.
-//     if ( !drawTool ) return;
-//     drawTool.clearDrawings(); // Need to clear b/c webGL will not.
-
     if ( this.blockingObjects.tiles.size ) this.#webGL2Class._draw3dDebug();
     else super._draw3dDebug();
   }

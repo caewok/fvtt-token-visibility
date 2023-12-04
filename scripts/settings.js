@@ -463,7 +463,7 @@ export class Settings {
 
   static losSettingChange(key, _value) {
     this.cache.delete(key);
-    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateConfigurationSettings());
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._resetConfiguration());
   }
 
   static setProneStatusId(value) {

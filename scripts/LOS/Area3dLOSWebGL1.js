@@ -212,7 +212,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     // If large target, measure the viewable area of a unit grid shape.
     let sumGridCube = 100_000;
-    if ( this.config.largeTarget ) {
+    if ( this.useLargeTarget ) {
       const gridGraphics = new PIXI.Graphics();
       gridGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
       drawOpts.drawTool = new Draw(gridGraphics);
