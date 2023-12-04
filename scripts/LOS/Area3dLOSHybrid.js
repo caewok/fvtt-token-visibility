@@ -51,9 +51,9 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
 
   get webGL2() { return this.#webGL2Class; } // For debugging.
 
-  _updateConfiguration(config = {}) {
-    super._updateConfiguration(config);
-    this.#webGL2Class._updateConfiguration(config);
+  updateConfiguration(config = {}) {
+    super.updateConfiguration(config);
+    this.#webGL2Class.updateConfiguration(config);
   }
 
   _clearCache() {
@@ -92,10 +92,10 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
    * Determine percentage area by estimating the blocking shapes geometrically.
    * @returns {number}
    */
-  percentVisible() {
+  _percentVisible() {
     // Super and percentVisibleWebGL both run the basic visibility test.
-    if ( this.blockingObjects.tiles.size ) return this.#webGL2Class.percentVisible();
-    return super.percentVisible();
+    if ( this.blockingObjects.tiles.size ) return this.#webGL2Class._percentVisible();
+    return super._percentVisible();
   }
 
   // ----- NOTE: Debugging methods ----- //
@@ -104,12 +104,8 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
    * For debugging
    * Switch drawing depending on the algorithm used.
    */
-  async _draw3dDebug() {
-//     const drawTool = this.popoutDraw; // Draw in the pop-up box.
-//     if ( !drawTool ) return;
-//     drawTool.clearDrawings(); // Need to clear b/c webGL will not.
-
-    if ( this.blockingObjects.tiles.size ) await this.#webGL2Class._draw3dDebug();
-    else await super._draw3dDebug();
+  _draw3dDebug() {
+    if ( this.blockingObjects.tiles.size ) this.#webGL2Class._draw3dDebug();
+    else super._draw3dDebug();
   }
 }

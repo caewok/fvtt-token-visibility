@@ -159,11 +159,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
    * Constructs a render texture to estimate the percentage.
    * @returns {number}
    */
-  percentVisible(debug = false) {
-    // See https://stackoverflow.com/questions/54415773/calling-grand-parent-function-in-javascript
-    const percentVisible = this._simpleVisibilityTest();
-    if ( typeof percentVisible !== "undefined" ) return percentVisible;
-
+  _percentVisible(debug = false) {
     if ( !this.viewIsSet ) this.calculateViewMatrix();
     const TARGET_COLOR = Draw.COLORS.red;
     const OBSTACLE_COLOR = Draw.COLORS.blue;
@@ -216,7 +212,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
 
     // If large target, measure the viewable area of a unit grid shape.
     let sumGridCube = 100_000;
-    if ( this.config.largeTarget ) {
+    if ( this.useLargeTarget ) {
       const gridGraphics = new PIXI.Graphics();
       gridGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
       drawOpts.drawTool = new Draw(gridGraphics);
@@ -334,8 +330,10 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     return this.#debugSprite;
   }
 
-  async _draw3dDebug() {
-    await super._draw3dDebug();
+  _draw3dDebug() {
+    super._draw3dDebug();
+    if ( !this.popoutIsRendered ) return;
+
     this._addChildToPopout(this.debugSprite);
 
     // Set the renderer and re-run

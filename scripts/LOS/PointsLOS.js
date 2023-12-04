@@ -130,13 +130,11 @@ export class PointsLOS extends AlternativeLOS {
 
 
   _configure(config = {}) {
-    super._configure(config);
-    const cfg = this.config;
     const OPTS = SETTINGS.LOS.TARGET.POINT_OPTIONS;
-
-    cfg.pointAlgorithm = config.pointAlgorithm ?? Settings.get(OPTS.NUM_POINTS);
-    cfg.inset = config.inset ?? Settings.get(OPTS.INSET);
-    cfg.points3d = config.points3d ?? Settings.get(OPTS.POINTS3D);
+    config.pointAlgorithm ??= Settings.get(OPTS.NUM_POINTS);
+    config.inset ??= Settings.get(OPTS.INSET);
+    config.points3d ??= Settings.get(OPTS.POINTS3D);
+    super._configure(config);
   }
 
   _clearCache() {
@@ -155,18 +153,16 @@ export class PointsLOS extends AlternativeLOS {
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
    */
-  percentVisible() { return this._simpleVisibilityTest() ?? (1 - this._applyPercentageTest()); }
-
-  _applyPercentageTest() {
-    return this._testTargetPoints(this.targetPoints);
-  }
+  _percentVisible() { return (1 - this._testTargetPoints(this.targetPoints)); }
 
   /**
    * Convenience method that uses settings of this calculator to construct viewer points.
    * @returns {Points3d[]|undefined} Undefined if viewer cannot be ascertained
    */
   constructViewerPoints() {
-    const { pointAlgorithm, inset } = this.config;
+    const pointAlgorithm = this.getConfiguration("pointAlgorithm");
+    const inset = this.getConfiguration("inset");
+
     const tokenShape = this.viewer.bounds;
     return this.constructor._constructTokenPoints(this.viewer, { pointAlgorithm, inset, tokenShape });
   }
@@ -244,7 +240,7 @@ export class PointsLOS extends AlternativeLOS {
    */
   _testPointToPoints(targetPoints) {
     const viewerPoint = this.viewerPoint;
-    const visibleTargetShape = this.config.visibleTargetShape;
+    const visibleTargetShape = this.visibleTargetShape;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
@@ -331,10 +327,9 @@ export class PointsLOS extends AlternativeLOS {
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
-   * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawCanvasDebug(hasLOS = true) {
-    super._drawCanvasDebug(hasLOS);
+  _drawCanvasDebug() {
+    super._drawCanvasDebug();
     this._drawTargetPointsArray(this.targetPoints);
   }
 
@@ -371,7 +366,7 @@ export class PointsLOS extends AlternativeLOS {
   _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
     const draw = this.debugDraw;
     const viewerPoint = this.viewerPoint;
-    const visibleTargetShape = this.config.visibleTargetShape;
+    const visibleTargetShape = this.visibleTargetShape;
     const ln = targetPoints.length;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];

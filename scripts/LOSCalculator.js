@@ -74,11 +74,15 @@ export class LOSCalculator {
 
   set target(value) { this.calc.target = value; }
 
-  destroy() { this.calc.destroy(); }
+  destroy() { return this.calc.destroy(); }
 
-  clearDebug() { this.calc.clearDebug(); }
+  debug(hasLOS) { return this.calc.debug(hasLOS); }
 
-  closeDebugPopout() { this.calc.closeDebugPopout(); }
+  clearDebug() { return this.calc.clearDebug(); }
+
+  async closeDebugPopout() { return this.calc?.closeDebugPopout(); }
+
+  async openDebugPopout() { return this.calc?.openDebugPopout(); }
 
   /**
    * Test if viewer token has LOS to a target token.
@@ -91,18 +95,25 @@ export class LOSCalculator {
     const viewerPoints = calc.constructor.constructViewerPoints(viewer);
     const threshold = Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const useDebug = Settings.get(SETTINGS.DEBUG.LOS);
-
-    // Debug: console.debug(`\n----- Visibility.prototype.hasLOS|${viewer.name}👀 => ${target.name}🎯 -----`);
-
+    if ( useDebug ) console.debug(`\n👀${calc.viewer.name} --> 🎯${calc.target.name}`);
+    let los = false;
     for ( const viewerPoint of viewerPoints ) {
       calc.visionOffset = viewerPoint.subtract(center);
-      if ( calc.hasLOS(threshold, useDebug) ) {
-        if ( useDebug ) calc.debug(true);
-        return true;
+
+      if ( useDebug ) {
+        const percent = calc.percentVisible();
+        console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t(@viewerPoint ${Math.round(viewerPoint.x)},${Math.round(viewerPoint.y)},${Math.round(viewerPoint.z)})`);
+      }
+
+      if ( (los = calc.hasLOS(threshold)) ) {
+        //if ( useDebug ) calc.debug(true);
+        los = true;
+        break;
       }
     }
-    if ( useDebug ) calc.debug(false);
-    return false;
+
+    if ( useDebug ) console.debug(`\tLOS? ${los}`);
+    return los;
   }
 
   /**
@@ -114,9 +125,27 @@ export class LOSCalculator {
   percentVisible(target, visionOffset = new Point3d()) {
     const calc = this.calc;
     if ( target ) calc.target = target;
-    calc.visionOffset = visionOffset
-    if ( Settings.get(SETTINGS.DEBUG.LOS ) ) calc.debug(true);
-    return calc.percentVisible();
+    calc.visionOffset = visionOffset;
+    const percent = calc.percentVisible();
+    if ( Settings.get(SETTINGS.DEBUG.LOS) ) {
+      const viewerPoint = calc.viewerPoint;
+      console.debug(`\n👀${calc.viewer.name} --> 🎯${calc.target.name}`);
+      console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t(@viewerPoint ${Math.round(viewerPoint.x)},${Math.round(viewerPoint.y)},${Math.round(viewerPoint.z)})`);
+    }
+
+    return percent;
+  }
+
+  /**
+   * Update one or more specific settings in the calculator.
+   */
+  _updateConfiguration(config) {
+    // Remap settings to the calculator config.
+
+
+
+    this.calc.updateConfiguration(config);
+
   }
 
   /**
@@ -133,9 +162,10 @@ export class LOSCalculator {
   }
 
   /**
-   * Update the calculator settings.
+   * Reset the calculator settings to the current settings.
+   * (Used in Settings after settings have changed.)
    */
-  _updateConfigurationSettings() {
+  _resetConfigurationSettings() {
     this.calc._configure();
     this.calc._clearCache();
   }

@@ -7,9 +7,10 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-import { registerArea3d, deregisterArea3d } from "./patching.js";
+import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
+
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -90,6 +91,8 @@ export const SETTINGS = {
     }
   },
 
+  PRONE_STATUS_ID: "prone-status-id",
+
   CHANGELOG: "changelog",
   DEBUG: {
     RANGE: "debug-range",
@@ -139,11 +142,16 @@ export class Settings {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    for ( const token of canvas.tokens.placeables ) {
-      const calc = token[MODULE_ID]?.losCalc;
-      if ( !calc ) continue;
-      calc.clearDebug();
-      if ( !enabled ) calc.closeDebugPopout();
+    if ( enabled ) registerDebug();
+    else {
+      if ( canvas.tokens?.placeables ) {
+        canvas.tokens.placeables.forEach(token => {
+          const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+          if ( !calc ) return;
+          calc.clearDebug();
+        });
+      }
+      deregisterDebug();
     }
   }
 
@@ -230,7 +238,7 @@ export class Settings {
       config: true,
       type: Boolean,
       default: false,
-      onChange: value => this.toggleLOSDebugGraphics(value)
+      onChange: value => this.toggleRangeDebugGraphics(value)
     });
 
     register(KEYS.DEBUG.LOS, {
@@ -241,6 +249,16 @@ export class Settings {
       type: Boolean,
       default: false,
       onChange: value => this.toggleLOSDebugGraphics(value)
+    });
+
+    register(KEYS.PRONE_STATUS_ID, {
+      name: localize(`${KEYS.PRONE_STATUS_ID}.Name`),
+      hint: localize(`${KEYS.PRONE_STATUS_ID}.Hint`),
+      scope: "world",
+      config: true,
+      type: String,
+      default: CONFIG.GeometryLib.proneStatusId || "prone",
+      onChange: value => this.setProneStatusId(value)
     });
 
     // ----- NOTE: Submenu ---- //
@@ -330,10 +348,6 @@ export class Settings {
       tab: "losTarget",
       onChange: value => this.losAlgorithmChange(TARGET.ALGORITHM, value)
     });
-
-    // Register the Area3D methods on initial load.
-    if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
-    else deregisterArea3d();
 
     register(TARGET.PERCENT, {
       name: localize(`${TARGET.PERCENT}.Name`),
@@ -425,6 +439,14 @@ export class Settings {
       default: false,
       type: Boolean
     });
+
+    // ----- NOTE: Triggers based on starting settings ---- //
+    // Start debug
+    if ( this.get(this.KEYS.DEBUG.LOS) ) registerDebug();
+
+    // Register the Area3D methods on initial load.
+    if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
+
   }
 
   static typesWebGL2 = new Set([
@@ -435,13 +457,17 @@ export class Settings {
   static losAlgorithmChange(key, value) {
     this.cache.delete(key);
     if ( this.typesWebGL2.has(value) ) registerArea3d();
-    else deregisterArea3d();
 
-    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateAlgorithm());
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateAlgorithm());
   }
 
   static losSettingChange(key, _value) {
     this.cache.delete(key);
-    canvas.effects.visionSources.forEach(src => src[MODULE_ID]?.losCalc._updateConfigurationSettings());
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._resetConfiguration());
+  }
+
+  static setProneStatusId(value) {
+    CONFIG.GeometryLib.proneStatusId = value;
+    if ( MODULES_ACTIVE.TOKEN_COVER ) game.settings.set("tokencover", SETTINGS.PRONE_STATUS_ID, value);
   }
 }

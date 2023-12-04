@@ -34,7 +34,7 @@ export class Area3dPopout extends Application {
     // Other possible options:
     // options.top = (window.innertop - this.h) / 2;
     // options.left = (window.innerleft - this.w) / 2;
-    options.template = `modules/${MODULE_ID}/templates/area3d_popout.html`;
+    options.template = `modules/${MODULE_ID}/scripts/LOS/templates/area3d_popout.html`;
     options.popOut = true;
     options.minimizable = true;
     options.title ??= `${MODULE_ID} Debug`;

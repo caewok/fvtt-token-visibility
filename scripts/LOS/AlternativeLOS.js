@@ -4,7 +4,7 @@ ClipperLib,
 CONFIG,
 CONST,
 foundry,
-Hooks,
+getObjectProperty,
 LimitedAnglePolygon,
 PIXI,
 PointSourcePolygon,
@@ -16,7 +16,7 @@ VisionSource
 
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
-import { insetPoints, lineIntersectionQuadrilateral3d, buildTokenPoints, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
+import { insetPoints, lineIntersectionQuadrilateral3d, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
 import { Settings, SETTINGS } from "../settings.js";
 
 // Geometry folder
@@ -26,6 +26,9 @@ import { ClipperPaths } from "../geometry/ClipperPaths.js";
 
 // Points folder
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
+import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
+
+const NULL_SET = new Set(); // Set intended to signify no items, as a placeholder.
 
 /**
  * Base class to estimate line-of-sight between a source and a token using different methods.
@@ -59,7 +62,7 @@ export class AlternativeLOS {
    * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible.
    * @property {VisionSource} visionSource            Vision source of the viewer.
    */
-  config = {};
+  #config = {};
 
   /**
    * @param {Point3d|Token|VisionSource} viewer   Point or object with z, y, z|elevationZ properties
@@ -70,15 +73,15 @@ export class AlternativeLOS {
     if ( viewer instanceof VisionSource ) viewer = viewer.object;
     this.#viewer = viewer;
     this.#target = target;
-    this._configure(config);
+    this._initializeConfiguration(config);
   }
 
   /**
    * Initialize settings that will stick even as the viewer and target are modified.
    * @param {object} config   Properties intended to override defaults
    */
-  _configure(config = {}) {
-    const cfg = this.config;
+  _initializeConfiguration(config = {}) {
+    const cfg = this.#config;
     cfg.type = config.type ?? "sight";
     cfg.wallsBlock = config.wallsBlock ?? true;
     cfg.tilesBlock = config.tilesBlock ?? true;
@@ -90,11 +93,23 @@ export class AlternativeLOS {
     cfg.visionOffset = config.visionOffset ?? new Point3d();
   }
 
-  _updateConfiguration(config = {}) {
-    const cfg = this.config;
+  updateConfiguration(config = {}) {
+    const cfg = this.#config;
     for ( const [key, value] of Object.entries(config) ) cfg[key] = value;
     this._clearCache();
   }
+
+  getConfiguration(key) { return this.#config[key]; }
+
+  // Getters for some commonly used configurations.
+
+  /** @type {boolean} */
+  get useLargeTarget() { return this.#config.largeTarget; }
+
+  /** @type {}
+
+  // Really an internal getter as config values should be modified using updateConfiguration
+  // get config() { return this.#config; }
 
   _clearCache() {
     // Viewer
@@ -136,12 +151,12 @@ export class AlternativeLOS {
    */
   get viewerPoint() {
     return this.#viewerPoint
-      || (this.#viewerPoint = Point3d.fromTokenCenter(this.viewer).add(this.config.visionOffset));
+      || (this.#viewerPoint = Point3d.fromTokenCenter(this.viewer).add(this.#config.visionOffset));
   }
 
   /** @type {Point3d} */
   set visionOffset(value) {
-    this.config.visionOffset.copyPartial(value);
+    this.#config.visionOffset.copyPartial(value);
     this._clearCache();
   }
 
@@ -176,7 +191,7 @@ export class AlternativeLOS {
   #visibleTargetShape;
 
   get visibleTargetShape() {
-    if ( this.config.useLitTargetShape ) return this.constructor.constrainTargetShapeWithLights(this.target);
+    if ( this.#config.useLitTargetShape ) return this.constructor.constrainTargetShapeWithLights(this.target);
     return this.target.constrainedTokenBorder;
   }
 
@@ -234,14 +249,12 @@ export class AlternativeLOS {
    * @param {number} [threshold]    Percentage to be met to be considered visible
    * @returns {boolean}
    */
-  hasLOS(threshold, printResult = false) {
+  hasLOS(threshold) {
     // Debug: console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._clearCache();
 
     threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
     const percentVisible = this.percentVisible();
-    if ( printResult ) console.debug(`${this.viewer.name} sees ${Math.round(percentVisible * 100 * 10) / 10}% of ${this.target.name}.`);
-
 
     if ( typeof percentVisible === "undefined" ) return true; // Defaults to visible.
     if ( percentVisible.almostEqual(0) ) return false;
@@ -255,8 +268,12 @@ export class AlternativeLOS {
    */
   percentVisible() {
     // Simple case: target is within the vision angle of the viewer and no obstacles present.
-    return this._simpleVisibilityTest();
+    const percent = this._simpleVisibilityTest() ?? this._percentVisible();
+    return percent;
   }
+
+  /** @override */
+  _percentVisible() { return 1; }
 
   /**
    * Test for whether target is within the vision angle of the viewer and no obstacles present.
@@ -269,7 +286,7 @@ export class AlternativeLOS {
     if ( this.viewer === this.target
       || this.viewerPoint.almostEqual(Point3d.fromTokenCenter(this.target)) ) return 1;
 
-    const visionSource = this.config.visionSource;
+    const visionSource = this.#config.visionSource;
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
     if ( !targetWithin ) return 0;
     if ( !this.hasPotentialObstacles && targetWithin === this.constructor.TARGET_WITHIN_ANGLE.INSIDE ) return 1;
@@ -330,14 +347,18 @@ export class AlternativeLOS {
    */
   _findBlockingObjects() {
     // Locate blocking objects for the vision triangle
-    const type = this.config.type;
+    const type = this.#config.type;
     const blockingObjs = this.#blockingObjects;
     const objsFound = this._filterSceneObjectsByVisionPolygon();
 
-    // Separate the terrain walls.
-    const { terrainWalls, walls } = blockingObjs;
+    // Remove old blocking objects.
+    const { terrainWalls, walls, tokens, tiles } = blockingObjs;
     terrainWalls.clear();
     walls.clear();
+    tokens.clear();
+    tiles.clear();
+
+    // Separate the terrain walls.
     objsFound.walls.forEach(w => {
       const s = w.document[type] === CONST.WALL_SENSE_TYPES.LIMITED ? terrainWalls : walls;
       s.add(w);
@@ -351,11 +372,8 @@ export class AlternativeLOS {
     }
 
     // Add tokens, tiles
-    if ( objsFound.tokens ) blockingObjs.tokens = objsFound.tokens;
-    else blockingObjs.tokens.clear();
-
-    if ( objsFound.tiles ) blockingObjs.tiles = objsFound.tiles;
-    else blockingObjs.tiles.clear();
+    objsFound.tokens.forEach(t => tokens.add(t));
+    objsFound.tiles.forEach(t => tiles.add(t));
 
     blockingObjs.initialized = true;
   }
@@ -380,9 +398,9 @@ export class AlternativeLOS {
    * @returns {boolean} True if a wall blocks this ray
    */
   _hasWallCollision(startPt, endPt) {
-    if ( !this.config.wallsBlock ) return false;
+    if ( !this.#config.wallsBlock ) return false;
     const mode = "any";
-    const type = this.config.type;
+    const type = this.#config.type;
     return PointSourcePolygon.testCollision3d(startPt, endPt, { mode, type });
   }
 
@@ -393,7 +411,7 @@ export class AlternativeLOS {
    * @returns {boolean} True if a tile blocks this ray
    */
   _hasTileCollision(startPt, endPt) {
-    if ( !this.config.tilesBlock ) return false;
+    if ( !this.#config.tilesBlock ) return false;
     const ray = new Ray(startPt, endPt);
 
     // Ignore non-overhead tiles
@@ -410,7 +428,7 @@ export class AlternativeLOS {
     const oneMax = 1 + 1e-08;
 
     for ( const tile of tiles ) {
-      if ( this.config.type === "light" && tile.document.flags?.levels?.noCollision ) continue;
+      if ( this.#config.type === "light" && tile.document.flags?.levels?.noCollision ) continue;
 
       const { x, y, width, height, elevation } = tile.document;
       const elevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
@@ -442,7 +460,7 @@ export class AlternativeLOS {
    * @returns {boolean} True if a token blocks this ray
    */
   _hasTokenCollision(startPt, endPt) {
-    const { liveTokensBlock, deadTokensBlock } = this.config;
+    const { liveTokensBlock, deadTokensBlock } = this.#config;
     if ( !(liveTokensBlock || deadTokensBlock) ) return false;
 
     // Filter out the viewer and target token
@@ -451,7 +469,7 @@ export class AlternativeLOS {
     let tokens = canvas.tokens.quadtree.getObjects(ray.bounds, { collisionTest });
 
     // Build full- or half-height startPts3d from tokens
-    const tokenPts = buildTokenPoints(tokens, this.config);
+    const tokenPts = this._buildTokenPoints(tokens);
 
     // Set viewing position and test token sides for collisions
     for ( const pts of tokenPts ) {
@@ -465,6 +483,37 @@ export class AlternativeLOS {
       }
     }
     return false;
+  }
+
+
+  /**
+   * Given config options, build TokenPoints3d from tokens.
+   * The points will use either half- or full-height tokens, depending on config.
+   * @param {Token[]|Set<Token>} tokens
+   * @returns {TokenPoints3d[]}
+   */
+  _buildTokenPoints(tokens) {
+    if ( !tokens.length && !tokens.size ) return tokens;
+    const { liveTokensBlock, deadTokensBlock, proneTokensBlock } = this.#config;
+    if ( !(liveTokensBlock || deadTokensBlock) ) return [];
+
+    const hpAttribute = Settings.get(SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE);
+
+    // Filter live or dead tokens
+    if ( liveTokensBlock ^ deadTokensBlock ) tokens = tokens.filter(t => {
+      const hp = getObjectProperty(t.actor, hpAttribute);
+      if ( typeof hp !== "number" ) return true;
+
+      if ( liveTokensBlock && hp > 0 ) return true;
+      if ( deadTokensBlock && hp <= 0 ) return true;
+      return false;
+    });
+
+
+    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
+
+    // Pad (inset) to avoid triggering cover at corners. See issue 49.
+    return tokens.map(t => new TokenPoints3d(t, { pad: -1 }));
   }
 
 
@@ -637,13 +686,18 @@ export class AlternativeLOS {
       wallsBlock,
       liveTokensBlock,
       deadTokensBlock,
-      tilesBlock } = this.config;
+      tilesBlock } = this.#config;
 
     const { target, viewerPoint } = this;
     const { topZ, bottomZ } = target;
     const maxE = Math.max(viewerPoint.z, topZ);
     const minE = Math.min(viewerPoint.z, bottomZ);
-    const out = {};
+    const out = {
+      tiles: NULL_SET,
+      tokens: NULL_SET,
+      walls: NULL_SET
+    };
+
     if ( wallsBlock ) {
       out.walls = this
         ._filterWallsByVisionPolygon()
@@ -754,7 +808,7 @@ export class AlternativeLOS {
    */
   _testWallInclusion(wall) {
     // Ignore walls that are not blocking for the type
-    if (!wall.document[this.config.type] || wall.isOpen ) return false;
+    if (!wall.document[this.#config.type] || wall.isOpen ) return false;
 
     // Ignore one-directional walls facing away
     const side = wall.orientPoint(this.viewerPoint);
@@ -826,7 +880,7 @@ export class AlternativeLOS {
    * @returns {null|WallPoints3d[2]}
    */
   _constructLimitedAngleWallPoints3d() {
-    const visionSource = this.config.visionSource;
+    const visionSource = this.#config.visionSource;
     if ( !visionSource ) return;
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return null;
@@ -859,84 +913,28 @@ export class AlternativeLOS {
     canvas.tokens.removeChild(this.#debugGraphics);
     this.#debugGraphics.destroy();
     this.#debugGraphics = undefined;
-    this.#hookIds.forEach((id, fnName) => Hooks.off(fnName, id));
-    this.#hookIds.clear();
+    this.#debugDraw = undefined;
   }
 
-  #hookIds = new Map();
-
-  /**
-   * Hooks to render/clear debug graphics when token is controlled/uncontrolled.
-   */
-  _initializeDebugHooks() {
-    this.#hookIds.set("controlToken", Hooks.on("controlToken", this._controlTokenHook.bind(this)));
-    this.#hookIds.set("refreshToken", Hooks.on("refreshToken", this._refreshTokenHook.bind(this)));
-    this.#hookIds.set("updateToken", Hooks.on("updateToken", this._updateTokenHook.bind(this)));
-  }
-
-  /**
-   * Hook: controlToken
-   * If the token is uncontrolled, clear debug drawings.
-   * @event controlObject
-   * @category PlaceableObject
-   * @param {PlaceableObject} object The object instance which is selected/deselected.
-   * @param {boolean} controlled     Whether the PlaceableObject is selected or not.
-   */
-  _controlTokenHook(token, controlled) {
-    if ( controlled || this.viewer !== token ) return;
-    this.clearDebug();
-    console.debug(`uncontrolled ${this.viewer.name} debug\n`);
-  }
-
-  /**
-   * Hook: updateToken
-   * If the token moves, clear all debug drawings.
-   * @param {Document} tokenD                         The existing Document which was updated
-   * @param {object} change                           Differential data that was used to update the document
-   * @param {DocumentModificationContext} options     Additional options which modified the update request
-   * @param {string} userId                           The ID of the User who triggered the update workflow
-   */
-  _updateTokenHook(tokenD, change, _options, _userId) {
-    const token = tokenD.object;
-    if ( token !== this.viewer ) return;
-
-    // Token moved; clear drawings.
-    if ( Object.hasOwn(change, "x")
-      || Object.hasOwn(change, "y")
-      || Object.hasOwn(change, "elevation") ) {
-        this.clearDebug();
-        console.debug(`update ${this.viewer.name} debug`);
-    }
-  }
-
-  /**
-   * If token position is refreshed (i.e., clone), then clear debug.
-   * @param {PlaceableObject} object    The object instance being refreshed
-   * @param {RenderFlag} flags
-   */
-  _refreshTokenHook(token, flags) {
-    if ( token !== this.viewer ) return;
-    if ( !flags.refreshPosition ) return;
-    this.clearDebug();
-    console.debug(`refreshed ${this.viewer.name} debug`, {...flags});
-  }
-
-  async debug(hasLOS) {
-    hasLOS ??= this.hasLOS();
-    this._drawCanvasDebug(hasLOS);
+  updateDebug() {
+    this._drawCanvasDebug();
   }
 
   /** @type {PIXI.Graphics} */
   #debugGraphics;
 
   get debugGraphics() {
-    return this.#debugGraphics || (this.#debugGraphics = this._initializeDebugGraphics());
+    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = this._initializeDebugGraphics();
+    return this.#debugGraphics;
   }
 
   /** @type {Draw} */
   #debugDraw;
 
   get debugDraw() {
+    if ( !this.#debugDraw
+      || !this.#debugGraphics
+      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
     return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
   }
 
@@ -945,29 +943,26 @@ export class AlternativeLOS {
     g.tokenvisibility_losDebug = this.viewer.id;
     g.eventMode = "passive"; // Allow targeting, selection to pass through.
     canvas.tokens.addChild(g);
-    this._initializeDebugHooks();
     return g;
   }
 
   clearDebug() {
     if ( !this.#debugGraphics ) return;
     this.#debugGraphics.clear();
-    console.debug(`Cleared ${this.viewer.name} debug`);
+    // Debug: console.debug(`Cleared ${this.viewer.name} debug`);
   }
-
-  async closeDebugPopout() { return; }
 
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawCanvasDebug(hasLOS = true) {
+  _drawCanvasDebug() {
     this._drawLineOfSight();
     this._drawVisionTriangle();
-    this._drawVisibleTokenBorder(hasLOS);
+    this._drawVisibleTokenBorder();
     this._drawDetectedObjects();
-    console.debug(`\n\nDrawn ${this.viewer.name} debug`);
+    // Debug: console.debug(`\n\nDrawn ${this.viewer.name} debug`);
   }
 
   /**
@@ -983,15 +978,15 @@ export class AlternativeLOS {
    * Draw the constrained token border and visible shape, if any.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawVisibleTokenBorder(hasLOS = true) {
+  _drawVisibleTokenBorder() {
     const draw = this.debugDraw;
-    const color = hasLOS ? Draw.COLORS.green : Draw.COLORS.red;
+    let color = Draw.COLORS.blue;
 
     // Fill in the constrained border on canvas
     draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
 
-    // Separately fill in the visibile target shape
-    const visibleTargetShape = this.config.visibleTargetShape;
+    // Separately fill in the visible target shape
+    const visibleTargetShape = this.visibleTargetShape;
     if ( visibleTargetShape ) draw.shape(visibleTargetShape, { color: Draw.COLORS.yellow });
   }
 

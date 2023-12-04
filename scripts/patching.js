@@ -50,7 +50,7 @@ export function initializePatching() {
   PATCHER.registerGroup("ConstrainedTokenBorder");
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
-  PATCHER.registerGroup("NO_LEVELS");
+  //PATCHER.registerGroup("NO_LEVELS");
 
   // If Elevated Vision is present, we can rely on its tile cache.
   if ( !MODULES_ACTIVE.EV ) PATCHER.registerGroup("TILE");
@@ -75,16 +75,6 @@ export function registerArea3d() {
   }
 }
 
-export function deregisterArea3d() {
-  // Destroy all the placeable geometries.
-  if ( canvas.walls ) {
-    const placeables = [
-      ...canvas.walls.placeables,
-      ...canvas.tiles.placeables,
-      ...canvas.tokens.placeables];
-    for ( const placeable of placeables ) placeable[MODULE_ID]?.geomHandler.destroy();
-  }
+export function registerDebug() { PATCHER.registerGroup("DEBUG"); }
 
-  // Remove the unused methods, getters.
-  PATCHER.deregisterGroup("AREA3D");
-}
+export function deregisterDebug() { PATCHER.deregisterGroup("DEBUG"); }

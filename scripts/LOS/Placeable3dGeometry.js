@@ -117,6 +117,7 @@ export class Grid3dGeometry extends Placeable3dGeometry {
     3, 6, 7 // BL (top) - BR (bottom) - BL (bottom)
   ]);
 
+
   static points(token) {
     // Construct a grid unit cube at the token center.
     const center = Point3d.fromTokenCenter(token);
@@ -698,16 +699,24 @@ export class Tile3dGeometry extends Wall3dGeometry {
 }
 
 
+export const GEOMETRY_ID = "_atvPlaceableGeometry";
+
 /**
  * Class to handle on-demand updating and destroying fo the geometry.
  * Only build when necessary; rebuild when destroyed.
+ * Geometry is stored on the object, at object.tokenvisibility.geometry.
  */
 class PlaceableGeometryHandler {
   /** @type {PlaceableObject} */
   object;
 
+
+  // If the object already has a geometry handler, that handler is returned
   constructor(object) {
+    const existingHandler = object[GEOMETRY_ID];
+    if ( existingHandler ) return existingHandler;
     this.object = object;
+    object[GEOMETRY_ID] = this;
   }
 
   /** @type {Placeable3dGeometry} */
