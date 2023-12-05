@@ -16,7 +16,11 @@ VisionSource
 
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
-import { insetPoints, lineIntersectionQuadrilateral3d, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
+import {
+  insetPoints,
+  lineIntersectionQuadrilateral3d,
+  lineSegmentIntersectsQuadrilateral3d,
+  getObjectProperty } from "./util.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -90,7 +94,7 @@ export class AlternativeLOS {
 
     // Target
     cfg.largeTarget = config.largeTarget ?? false;
-    cfg.threshold = config.threshold ?? 1;
+    cfg.threshold = config.threshold ?? 0;
 
     // Token blocking
     cfg.deadTokensBlock = config.deadTokensBlock ?? false;
@@ -744,24 +748,24 @@ export class AlternativeLOS {
    * @return {Set<Token>}
    */
   _filterTokensByVisionPolygon() {
-    const { visionPolygon, target, viewerPoint, config } = this;
-    const viewer = config.visionSource?.object;
-
-    // Filter out the viewer and target from the token set.
-    const collisionTest = viewer
-      ? o => !(o.t === target || o.t === viewer)
-      : o => !(o.t === target || o.t.bounds.contains(viewerPoint.x, viewerPoint.y));
-    const tokens = canvas.tokens.quadtree.getObjects(visionPolygon._bounds, { collisionTest });
+    const { visionPolygon, target, viewer, viewerPoint } = this;
 
     // Filter by the precise triangle cone
     // For speed and simplicity, consider only token rectangular bounds
     const edges = visionPolygon._edges;
-    return tokens.filter(t => {
+    const collisionTest = o => {
+      const t = o.t;
       const tCenter = t.center;
       if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
       const tBounds = t.bounds;
       return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
-    });
+    };
+
+    // Filter out the viewer and target from the token set.
+    const tokens = canvas.tokens.quadtree.getObjects(visionPolygon._bounds, { collisionTest });
+    tokens.delete(target);
+    tokens.delete(viewer);
+    return tokens;
   }
 
   /**

@@ -75,11 +75,11 @@
     "tokenvisibility.settings.vision-height-multiplier.Name": "Vision Height Multiplier",
     "tokenvisibility.settings.vision-height-multiplier.Hint": "What percentage of token height is its vision located? 0% means the very bottom; 100% (1) means very top.",
 
-    "tokenvisibility.settings.live-tokens-block.Name": "Dead Tokens Block",
-    "tokenvisibility.settings.live-tokens-block.Hint": "If enabled, dead tokens block vision as would a token-shaped wall at that position.",
+    "tokenvisibility.settings.live-tokens-block.Name": "Live Tokens Block",
+    "tokenvisibility.settings.live-tokens-block.Hint": "If enabled, live tokens block vision as would a token-shaped wall at that position.",
 
-    "tokenvisibility.settings.dead-tokens-block.Name": "Live Tokens Block",
-    "tokenvisibility.settings.dead-tokens-block.Hint": "If enabled, live tokens block vision as would a token-shaped wall at that position.",
+    "tokenvisibility.settings.dead-tokens-block.Name": "Dead Tokens Block",
+    "tokenvisibility.settings.dead-tokens-block.Hint": "If enabled, dead tokens block vision as would a token-shaped wall at that position.",
 
     "tokenvisibility.settings.prone-tokens-block.Name": "Prone Tokens Block",
     "tokenvisibility.settings.prone-tokens-block.Hint": "If enabled, prone tokens block vision (based on their height as modified by the prone multiplier). If neither dead nor live tokens block, this does nothing.",

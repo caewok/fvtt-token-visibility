@@ -85,8 +85,10 @@ export class LOSCalculator {
 
     // Add in relevant settings.
     for ( const [settingsKey, configLabel] of Object.entries(SETTINGS_CONFIG_MAP) ) {
-      cfg[configLabel] = Setting.get(settingsKey);
+      cfg[configLabel] = Settings.get(settingsKey);
     }
+
+    return cfg;
   }
 
   /** @type {Token} */
