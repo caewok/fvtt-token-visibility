@@ -83,7 +83,6 @@ Hooks.once("init", function() {
      * the red/blue filled color.
      */
     useDebugShaders: true
-
   };
 
   game.modules.get(MODULE_ID).api = {
