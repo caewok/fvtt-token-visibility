@@ -17,7 +17,6 @@ VisionSource
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
 import { insetPoints, lineIntersectionQuadrilateral3d, lineSegmentIntersectsQuadrilateral3d } from "./util.js";
-import { Settings, SETTINGS } from "../settings.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -85,12 +84,20 @@ export class AlternativeLOS {
     cfg.type = config.type ?? "sight";
     cfg.wallsBlock = config.wallsBlock ?? true;
     cfg.tilesBlock = config.tilesBlock ?? true;
+
+    // Viewer
+    cfg.visionOffset = config.visionOffset ?? new Point3d();
+
+    // Target
+    cfg.largeTarget = config.largeTarget ?? false;
+    cfg.threshold = config.threshold ?? 1;
+
+    // Token blocking
     cfg.deadTokensBlock = config.deadTokensBlock ?? false;
     cfg.liveTokensBlock = config.liveTokensBlock ?? false;
     cfg.proneTokensBlock = config.proneTokensBlock ?? false;
     cfg.useLitTargetShape = config.useLitTargetShape ?? false;
-    cfg.largeTarget = config.largeTarget ?? Settings.get(SETTINGS.LOS.TARGET.LARGE);
-    cfg.visionOffset = config.visionOffset ?? new Point3d();
+    cfg.tokenHPAttribute = config.tokenHPAttribute; // Or undefined.
   }
 
   updateConfiguration(config = {}) {
@@ -105,11 +112,6 @@ export class AlternativeLOS {
 
   /** @type {boolean} */
   get useLargeTarget() { return this.#config.largeTarget; }
-
-  /** @type {}
-
-  // Really an internal getter as config values should be modified using updateConfiguration
-  // get config() { return this.#config; }
 
   _clearCache() {
     // Viewer
@@ -151,7 +153,7 @@ export class AlternativeLOS {
    */
   get viewerPoint() {
     return this.#viewerPoint
-      || (this.#viewerPoint = Point3d.fromTokenCenter(this.viewer).add(this.#config.visionOffset));
+      || (this.#viewerPoint = Point3d.fromTokenVisionHeight(this.viewer).add(this.#config.visionOffset));
   }
 
   /** @type {Point3d} */
@@ -249,11 +251,11 @@ export class AlternativeLOS {
    * @param {number} [threshold]    Percentage to be met to be considered visible
    * @returns {boolean}
    */
-  hasLOS(threshold) {
+  hasLOS() {
     // Debug: console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._clearCache();
 
-    threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
+    const threshold = this.#config.threshold;
     const percentVisible = this.percentVisible();
 
     if ( typeof percentVisible === "undefined" ) return true; // Defaults to visible.
@@ -494,23 +496,22 @@ export class AlternativeLOS {
    */
   _buildTokenPoints(tokens) {
     if ( !tokens.length && !tokens.size ) return tokens;
-    const { liveTokensBlock, deadTokensBlock, proneTokensBlock } = this.#config;
+    const { liveTokensBlock, deadTokensBlock } = this.#config;
     if ( !(liveTokensBlock || deadTokensBlock) ) return [];
 
-    const hpAttribute = Settings.get(SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE);
-
     // Filter live or dead tokens
-    if ( liveTokensBlock ^ deadTokensBlock ) tokens = tokens.filter(t => {
-      const hp = getObjectProperty(t.actor, hpAttribute);
-      if ( typeof hp !== "number" ) return true;
+    if ( liveTokensBlock ^ deadTokensBlock ) {
+      const tokenHPAttribute = this.#config.tokenHPAttribute;
+      tokens = tokens.filter(t => {
+        const hp = getObjectProperty(t.actor, tokenHPAttribute);
+        if ( typeof hp !== "number" ) return true;
+        if ( liveTokensBlock && hp > 0 ) return true;
+        if ( deadTokensBlock && hp <= 0 ) return true;
+        return false;
+      });
+    }
 
-      if ( liveTokensBlock && hp > 0 ) return true;
-      if ( deadTokensBlock && hp <= 0 ) return true;
-      return false;
-    });
-
-
-    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
+    if ( !this.#config.proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
 
     // Pad (inset) to avoid triggering cover at corners. See issue 49.
     return tokens.map(t => new TokenPoints3d(t, { pad: -1 }));
@@ -528,23 +529,31 @@ export class AlternativeLOS {
 
 
   // ----- NOTE: Static methods ----- //
+  static POINT_TYPES = {
+    CENTER: "points-center",
+    TWO: "points-two",
+    FOUR: "points-four", // Five without center
+    FIVE: "points-five", // Corners + center
+    EIGHT: "points-eight", // Nine without center
+    NINE: "points-nine" // Corners, midpoints, center
+  };
 
   static constructViewerPoints(viewer, opts = {}) {
-    opts.pointAlgorithm ??= Settings.get(SETTINGS.LOS.VIEWER.NUM_POINTS);
-    opts.inset ??= Settings.get(SETTINGS.LOS.VIEWER.INSET);
+    opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
+    opts.inset ??= 0;
     opts.viewer ??= viewer.bounds; // TODO: Should probably handle hex token shapes?
     return this._constructTokenPoints(viewer, opts);
   }
 
   static constructTargetPoints(target, opts = {}) {
-    opts.pointAlgorithm ??= Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
-    opts.inset ??= Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET);
+    opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
+    opts.inset ??= 0.75;
     opts.tokenShape ??= target.constrainedTokenBorder;
     return this._constructTokenPoints(target, opts);
   }
 
   static _constructTokenPoints(token, { tokenShape, pointAlgorithm, inset } = {}) {
-    const TYPES = SETTINGS.POINT_TYPES;
+    const TYPES = this.POINT_TYPES;
     const center = Point3d.fromTokenCenter(token);
 
     const tokenPoints = [];
