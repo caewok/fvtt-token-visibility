@@ -80,7 +80,8 @@ export class LOSCalculator {
     const cfg = {
       type: "sight",
       wallsBlock: true,
-      tilesBlock: true
+      tilesBlock: true,
+
     };
 
     // Add in relevant settings.

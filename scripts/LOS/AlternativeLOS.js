@@ -84,7 +84,8 @@ export class AlternativeLOS {
    * @param {object} config   Properties intended to override defaults
    */
   _initializeConfiguration(config = {}) {
-    const cfg = this.#config;
+    const cfg = this.#config = config;
+
     cfg.type = config.type ?? "sight";
     cfg.wallsBlock = config.wallsBlock ?? true;
     cfg.tilesBlock = config.tilesBlock ?? true;
@@ -1011,7 +1012,7 @@ export class AlternativeLOS {
     const draw = this.debugDraw;
     const colors = Draw.COLORS;
     const { walls, tiles, terrainWalls, tokens } = this.blockingObjects;
-    walls.forEach(w => draw.segment(w, { color: colors.blue, fillAlpha: 0.3 }));
+    walls.forEach(w => draw.segment(w, { color: colors.red, fillAlpha: 0.3 }));
     tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
     terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
     tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
