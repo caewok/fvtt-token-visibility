@@ -125,11 +125,11 @@ export class PointsLOS extends AlternativeLOS {
    * @property {boolean} points3d                     Use top/bottom target elevation when enabled
    */
 
-  _configure(config = {}) {
+  _initializeConfiguration(config = {}) {
     config.numTargetPoints ??= this.constructor.POINT_TYPES.CENTER;
     config.targetInset ??= 0.75;
     config.points3d ??= true;
-    super._configure(config);
+    super._initializeConfiguration(config);
   }
 
   _clearCache() {
@@ -166,11 +166,13 @@ export class PointsLOS extends AlternativeLOS {
    * - Grid. When set, points are constructed per grid space covered by the token.
    */
   _constructTargetPoints() {
-    const { target, config } = this;
-    const { largeTarget, pointAlgorithm, inset, points3d } = config;
+    const { target } = this;
+    const pointAlgorithm = this.getConfiguration("pointAlgorithm");
+    const inset = this.getConfiguration("inset");
+    const points3d = this.getConfiguration("points3d");
     const cfg = { pointAlgorithm, inset };
 
-    if ( largeTarget ) {
+    if ( this.useLargeTarget ) {
       // Construct points for each target subshape, defined by grid spaces under the target.
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
       const targetPointsArray = targetShapes.map(targetShape => {
