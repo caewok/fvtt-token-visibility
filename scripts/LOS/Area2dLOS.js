@@ -10,7 +10,6 @@ PIXI
 import { AlternativeLOS } from "./AlternativeLOS.js";
 
 // Base folder
-import { Settings, SETTINGS } from "../Settings.js";
 import { CWSweepInfiniteWallsOnly } from "../CWSweepInfiniteWallsOnly.js";
 
 // Geometry folder
@@ -91,17 +90,14 @@ export class Area2dLOS extends AlternativeLOS {
    * @param {number} [threshold]    Percentage area required
    * @returns {boolean}
    */
-  hasLOS(threshold, printResult = false) {
+  hasLOS() {
     this._clearCache();
-    threshold ??= Settings.get(SETTINGS.LOS.TARGET.PERCENT);
+    const threshold = this.getConfiguration("threshold");
 
     // Start with easy cases, in which the center point is determinative.
     const visibleTargetShape = this.visibleTargetShape;
     if ( !visibleTargetShape || visibleTargetShape instanceof PIXI.Rectangle ) {
       const centerPointIsVisible = !this._hasCollision(this.viewerPoint, this.targetCenter);
-      if ( printResult ) {
-        console.debug(`${this.viewer.name} ${centerPointIsVisible ? "sees" : "doesn't see"} the center point of ${this.target.name}.`);
-      }
 
       // If less than 50% of the token area is required to be viewable, then
       // if the center point is viewable, the token is viewable from that source.
@@ -126,7 +122,7 @@ export class Area2dLOS extends AlternativeLOS {
     //       if ( typeof bottomTest !== "undefined" || typeof topTest !== "undefined" ) return false;
     //     }
 
-    return super.hasLOS(threshold, printResult);
+    return super.hasLOS();
   }
 
   /**

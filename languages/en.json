@@ -64,7 +64,25 @@
     "tokenvisibility.settings.button-issue.Label": "Report an Issue",
 
     "tokenvisibility.settings.prone-status-id.Name": "'Prone' Status Id",
-    "tokenvisibility.settings.prone-status-id.Hint": "String indicating the id for the token 'prone' status. If set, prone tokens will be considered half-height for all vision calculations.",
+    "tokenvisibility.settings.prone-status-id.Hint": "String indicating the id for the token 'prone' status. If set, prone tokens may have a different height for all vision calculations, depending on the Prone Multiplier setting. Required if Prone Tokens Block is enabled.",
+
+    "tokenvisibility.settings.token-hp-attribute.Name": "Token HP Attribute",
+    "tokenvisibility.settings.token-hp-attribute.Hint": "String indicating where the hit points for a `token.actor` can be found. Required if Dead or Live Tokens Block are enabled.",
+
+    "tokenvisibility.settings.prone-multiplier.Name": "Prone Multiplier",
+    "tokenvisibility.settings.prone-multiplier.Hint": "What percentage of token height should be used for prone tokens. For example, if a token is 5 feet high, and the multiplier is set to 0.6, prone tokens would be considered 3 feet high. This affects the vision point for prone tokens as well as the shape used if prone tokens block vision.",
+
+    "tokenvisibility.settings.vision-height-multiplier.Name": "Vision Height Multiplier",
+    "tokenvisibility.settings.vision-height-multiplier.Hint": "What percentage of token height is its vision located? 0% means the very bottom; 100% (1) means very top.",
+
+    "tokenvisibility.settings.live-tokens-block.Name": "Live Tokens Block",
+    "tokenvisibility.settings.live-tokens-block.Hint": "If enabled, live tokens block vision as would a token-shaped wall at that position.",
+
+    "tokenvisibility.settings.dead-tokens-block.Name": "Dead Tokens Block",
+    "tokenvisibility.settings.dead-tokens-block.Hint": "If enabled, dead tokens block vision as would a token-shaped wall at that position.",
+
+    "tokenvisibility.settings.prone-tokens-block.Name": "Prone Tokens Block",
+    "tokenvisibility.settings.prone-tokens-block.Hint": "If enabled, prone tokens block vision (based on their height as modified by the prone multiplier). If neither dead nor live tokens block, this does nothing.",
 
     "tokenvisibility.template.settings-config.tabs.range": "Range",
     "tokenvisibility.template.settings-config.tabs.los_viewer": "Viewer LOS",
@@ -77,6 +95,9 @@
 
     "tokenvisibility.template.settings-config.target": "Target Line-of-Sight (LOS)",
     "tokenvisibility.template.settings-config.targetDescription": "The target is the token being perceived. These settings adjust how the target shape is considered programatically.",
+
+    "tokenvisibility.template.settings-config.tabs.other": "Other",
+    "tokenvisibility.template.settings-config.other": "Other Vision Settings",
 
     "tokenvisibility.settings.submenu.title": "Alternative Token Visibility Settings",
     "tokenvisibility.settings.submenu.Name": "ATV Settings",

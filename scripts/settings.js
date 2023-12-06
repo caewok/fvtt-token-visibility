@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 foundry,
 game,
 PIXI
@@ -7,9 +8,10 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, MODULES_ACTIVE } from "./const.js";
+import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
+import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 
 
 // Patches for the Setting class
@@ -49,14 +51,7 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
   SUBMENU: "submenu",
-  POINT_TYPES: {
-    CENTER: "points-center",
-    TWO: "points-two",
-    FOUR: "points-four", // Five without center
-    FIVE: "points-five", // Corners + center
-    EIGHT: "points-eight", // Nine without center
-    NINE: "points-nine" // Corners, midpoints, center
-  },
+  POINT_TYPES: AlternativeLOS.POINT_TYPES,
 
   RANGE: {
     ALGORITHM: "range-algorithm",
@@ -92,6 +87,14 @@ export const SETTINGS = {
   },
 
   PRONE_STATUS_ID: "prone-status-id",
+  TOKEN_HP_ATTRIBUTE: "token-hp-attribute",
+
+  PRONE_MULTIPLIER: "prone-multiplier",
+  VISION_HEIGHT_MULTIPLIER: "vision-height-multiplier",
+
+  LIVE_TOKENS_BLOCK: "live-tokens-block",
+  DEAD_TOKENS_BLOCK: "dead-tokens-block",
+  PRONE_TOKENS_BLOCK: "prone-tokens-block",
 
   CHANGELOG: "changelog",
   DEBUG: {
@@ -137,7 +140,7 @@ export class Settings {
   //     if ( !this.#DEBUG_RANGE.destroyed() ) this.#DEBUG_RANGE.destroy();
   //   }
 
-  static toggleRangeDebugGraphics(enabled = false) {
+  static toggleRangeDebugGraphics(_enabled) {
     this.DEBUG_RANGE.clear();
   }
 
@@ -251,16 +254,6 @@ export class Settings {
       onChange: value => this.toggleLOSDebugGraphics(value)
     });
 
-    register(KEYS.PRONE_STATUS_ID, {
-      name: localize(`${KEYS.PRONE_STATUS_ID}.Name`),
-      hint: localize(`${KEYS.PRONE_STATUS_ID}.Hint`),
-      scope: "world",
-      config: true,
-      type: String,
-      default: CONFIG.GeometryLib.proneStatusId || "prone",
-      onChange: value => this.setProneStatusId(value)
-    });
-
     // ----- NOTE: Submenu ---- //
 
     // ----- NOTE: Range tab ----- //
@@ -361,7 +354,8 @@ export class Settings {
       config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
       default: 0,
       type: Number,
-      tab: "losTarget"
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(TARGET.PERCENT, value)
     });
 
     register(PT_OPTS.NUM_POINTS, {
@@ -401,6 +395,95 @@ export class Settings {
       default: true,
       tab: "losTarget",
       onChange: value => this.losSettingChange(PT_OPTS.POINTS3D, value)
+    });
+
+    // ----- NOTE: Other tab ----- //
+
+    register(KEYS.LIVE_TOKENS_BLOCK, {
+      name: localize(`${KEYS.LIVE_TOKENS_BLOCK}.Name`),
+      hint: localize(`${KEYS.LIVE_TOKENS_BLOCK}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      onChange: value => this.losSettingChange(KEYS.LIVE_TOKENS_BLOCK, value),
+      tab: "other"
+    });
+
+    register(KEYS.DEAD_TOKENS_BLOCK, {
+      name: localize(`${KEYS.DEAD_TOKENS_BLOCK}.Name`),
+      hint: localize(`${KEYS.DEAD_TOKENS_BLOCK}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      onChange: value => this.losSettingChange(KEYS.DEAD_TOKENS_BLOCK, value),
+      tab: "other"
+    });
+
+    register(KEYS.PRONE_TOKENS_BLOCK, {
+      name: localize(`${KEYS.PRONE_TOKENS_BLOCK}.Name`),
+      hint: localize(`${KEYS.PRONE_TOKENS_BLOCK}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      onChange: value => this.losSettingChange(KEYS.PRONE_TOKENS_BLOCK, value),
+      tab: "other"
+    });
+
+    register(KEYS.PRONE_MULTIPLIER, {
+      name: localize(`${KEYS.PRONE_MULTIPLIER}.Name`),
+      hint: localize(`${KEYS.PRONE_MULTIPLIER}.Hint`),
+      scope: "world",
+      config: false,
+      type: Number,
+      range: {
+        max: 1,  // Prone equivalent to standing.
+        min: 0,  // Prone equivalent to (almost) not being there at all. Will set to a single pixel.
+        step: 0.1
+      },
+      default: 0.33,  // Same as Wall Height
+      onChange: value => CONFIG.GeometryLib.proneMultiplier = value,
+      tab: "other"
+    });
+
+    register(KEYS.VISION_HEIGHT_MULTIPLIER, {
+      name: localize(`${KEYS.VISION_HEIGHT_MULTIPLIER}.Name`),
+      hint: localize(`${KEYS.VISION_HEIGHT_MULTIPLIER}.Hint`),
+      scope: "world",
+      config: false,
+      type: Number,
+      range: {
+        max: 1,  // At token top.
+        min: 0,  // At token bottom.
+        step: 0.1
+      },
+      default: 0.9,
+      onChange: value => CONFIG.GeometryLib.proneMultiplier = value,
+      tab: "other"
+    });
+
+    register(KEYS.PRONE_STATUS_ID, {
+      name: localize(`${KEYS.PRONE_STATUS_ID}.Name`),
+      hint: localize(`${KEYS.PRONE_STATUS_ID}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      default: CONFIG.GeometryLib.proneStatusId || "prone",
+      onChange: value => CONFIG.GeometryLib.proneStatusId = value,
+      tab: "other"
+    });
+
+    register(KEYS.TOKEN_HP_ATTRIBUTE, {
+      name: localize(`${KEYS.TOKEN_HP_ATTRIBUTE}.Name`),
+      hint: localize(`${KEYS.TOKEN_HP_ATTRIBUTE}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      default: "system.attributes.hp.value",
+      tab: "other",
+      onChange: value => this.losSettingChange(KEYS.TOKEN_HP_ATTRIBUTE, value)
     });
 
     // ----- NOTE: Hidden settings ----- //
@@ -461,13 +544,10 @@ export class Settings {
     canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateAlgorithm());
   }
 
-  static losSettingChange(key, _value) {
+  static losSettingChange(key, value) {
     this.cache.delete(key);
-    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._resetConfiguration());
+    const cfg = { [key]: value };
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateConfiguration(cfg));
   }
 
-  static setProneStatusId(value) {
-    CONFIG.GeometryLib.proneStatusId = value;
-    if ( MODULES_ACTIVE.TOKEN_COVER ) game.settings.set("tokencover", SETTINGS.PRONE_STATUS_ID, value);
-  }
 }

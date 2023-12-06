@@ -5,7 +5,6 @@ PIXI
 
 import { EPSILON } from "../const.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
-import { Settings, SETTINGS } from "../settings.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 

@@ -76,7 +76,13 @@ Hooks.once("init", function() {
      * Should be between (0, 1).
      * @type {number}
      */
-    renderTextureResolution: 1
+    renderTextureResolution: 1,
+
+    /**
+     * For Area3D, debug tiles using the rendered tile texture in the window, as opposed to
+     * the red/blue filled color.
+     */
+    useDebugShaders: true
   };
 
   game.modules.get(MODULE_ID).api = {

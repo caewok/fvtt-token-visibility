@@ -22,7 +22,8 @@ import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.
 import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
 import { PATCHES as PATCHES_VisionSourceLOS } from "./LOS/VisionSource.js";
-import { PATCHES as PATCHES_Wall } from "./LOS/Wall.js";
+import { PATCHES as PATCHES_WallLOS } from "./LOS/Wall.js";
+import { PATCHES as PATCHES_Wall } from "./Wall.js";
 
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
@@ -38,7 +39,7 @@ const PATCHES = {
   Tile: PATCHES_Tile,
   Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
   VisionSource: foundry.utils.mergeObject(PATCHES_VisionSource, PATCHES_VisionSourceLOS),
-  Wall: PATCHES_Wall,
+  Wall: foundry.utils.mergeObject(PATCHES_Wall, PATCHES_WallLOS),
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
 

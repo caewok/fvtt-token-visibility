@@ -29,7 +29,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
   _tileDebugShaders = new Map();
 
   _initializeConfiguration(config = {}) {
-    config.useDebugShaders ??= true;
+    config.useDebugShaders ??= CONFIG[MODULE_ID].useDebugShaders ?? true;
     super._initializeConfiguration(config);
   }
 
