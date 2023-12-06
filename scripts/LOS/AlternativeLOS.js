@@ -161,6 +161,21 @@ export class AlternativeLOS {
       || (this.#viewerPoint = Point3d.fromTokenVisionHeight(this.viewer).add(this.#config.visionOffset));
   }
 
+  /**
+   * Set the line-of-sight to this point.
+   * Causes visionOffset config to change.
+   * @type {Point3d}
+   */
+  set viewerPoint(value) {
+    // See get viewerPoint:
+    // vp = center + offset
+    // offset = vp - center
+    const center = Point3d.fromTokenVisionHeight(this.viewer);
+    this.#config.visionOffset = value.subtract(center);
+    this.#viewerPoint = value; // TODO: This and viewerPoint and others should all be copyFrom or set.
+    this._clearCache();
+  }
+
   /** @type {Point3d} */
   set visionOffset(value) {
     this.#config.visionOffset.copyPartial(value);

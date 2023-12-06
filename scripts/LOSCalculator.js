@@ -36,7 +36,7 @@ const SETTINGS_CONFIG_MAP = {
   [SETTINGS.LIVE_TOKENS_BLOCK]: "liveTokensBlock",
   [SETTINGS.DEAD_TOKENS_BLOCK]: "deadTokensBlock",
   [SETTINGS.PRONE_TOKENS_BLOCK]: "proneTokensBlock",
-  [SETTINGS.TOKEN_HP_ATTRIBUTE]: "tokenHPAttribute",
+  [SETTINGS.TOKEN_HP_ATTRIBUTE]: "tokenHPAttribute"
 };
 
 
@@ -80,8 +80,7 @@ export class LOSCalculator {
     const cfg = {
       type: "sight",
       wallsBlock: true,
-      tilesBlock: true,
-
+      tilesBlock: true
     };
 
     // Add in relevant settings.
@@ -119,7 +118,6 @@ export class LOSCalculator {
   hasLOSTo(target) {
     const { viewer, calc } = this;
     if ( target ) calc.target = target;
-    const center = Point3d.fromTokenCenter(viewer);
 
     const pointAlgorithm = Settings.get(SETTINGS.LOS.VIEWER.NUM_POINTS);
     const inset = Settings.get(SETTINGS.LOS.VIEWER.INSET);
@@ -129,7 +127,7 @@ export class LOSCalculator {
     if ( useDebug ) console.debug(`\n👀${calc.viewer.name} --> 🎯${calc.target.name}`);
     let los = false;
     for ( const viewerPoint of viewerPoints ) {
-      calc.visionOffset = viewerPoint.subtract(center);
+      calc.viewerPoint = viewerPoint;
 
       if ( useDebug ) {
         const percent = calc.percentVisible();
@@ -137,7 +135,6 @@ export class LOSCalculator {
       }
 
       if ( (los = calc.hasLOS()) ) {
-        //if ( useDebug ) calc.debug(true);
         los = true;
         break;
       }
