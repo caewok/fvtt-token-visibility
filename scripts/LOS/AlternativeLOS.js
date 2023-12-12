@@ -308,6 +308,11 @@ export class AlternativeLOS {
     if ( this.viewer === this.target
       || this.viewerPoint.almostEqual(Point3d.fromTokenCenter(this.target)) ) return 1;
 
+    // Treat the scene background as fully blocking, so basement tokens don't pop-up unexpectedly.
+    const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
+    if ( (this.viewerPoint.z > backgroundElevation && this.target.topZ < backgroundElevation)
+      || (this.viewerPoint.z < backgroundElevation && this.target.bottomZ > backgroundElevation) ) return 1;
+
     const visionSource = this.#config.visionSource;
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
     if ( !targetWithin ) return 0;
