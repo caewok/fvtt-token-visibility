@@ -18,7 +18,7 @@ PATCHES.DEBUG = {};
  * @param {PlaceableObject} object    The object instance being destroyed
  */
 function destroyToken(token) {
-  const losCalc = token.vision?.[MODULE_ID].losCalc;
+  const losCalc = token.vision?.[MODULE_ID]?.losCalc;
   if ( !losCalc ) return;
   losCalc.destroy();
 }
