@@ -115,7 +115,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   get targetPoints() {
     return this.#targetPoints
-      || (this.#targetPoints = new TokenPoints3d(this.target));
+      || (this.#targetPoints = new TokenPoints3d(this.target, { pad: -1 }));
   }
 
   /** @type {Point3d} */
