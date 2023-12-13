@@ -311,7 +311,7 @@ export class AlternativeLOS {
     // Treat the scene background as fully blocking, so basement tokens don't pop-up unexpectedly.
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
     if ( (this.viewerPoint.z > backgroundElevation && this.target.topZ < backgroundElevation)
-      || (this.viewerPoint.z < backgroundElevation && this.target.bottomZ > backgroundElevation) ) return 1;
+      || (this.viewerPoint.z < backgroundElevation && this.target.bottomZ > backgroundElevation) ) return 0;
 
     const visionSource = this.#config.visionSource;
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
