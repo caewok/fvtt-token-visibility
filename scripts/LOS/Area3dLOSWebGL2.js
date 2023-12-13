@@ -237,6 +237,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     mesh.state.depthTest = true;
     mesh.state.culling = true;
     mesh.state.clockwiseFrontFace = true;
+    mesh.state.depthMask = true;
     return mesh;
   }
 
@@ -303,6 +304,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     if ( !this.#renderTexture || this.#renderTexture.baseTexture.destroyed ) {
       const cfg = this._renderTextureConfiguration();
       this.#renderTexture = PIXI.RenderTexture.create(cfg);
+      this.#renderTexture.framebuffer.enableDepth();
     }
     return this.#renderTexture;
   }
@@ -316,6 +318,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       cfg.width = 400;
       cfg.height = 400;
       this.#debugRenderTexture = PIXI.RenderTexture.create(cfg);
+      this.#debugRenderTexture.framebuffer.enableDepth();
     }
     return this.#debugRenderTexture;
   }
@@ -426,6 +429,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     super._draw3dDebug();
     if ( !this.popoutIsRendered ) return;
     const renderer = this.popout.pixiApp.renderer;
+    renderer.state.setDepthTest = true;
 
     // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const { debugShaders, debugObstacleContainer, debugSprite, debugRenderTexture } = this;
