@@ -1,7 +1,8 @@
 /* globals
 CONFIG,
 Hooks,
-libWrapper
+libWrapper,
+mergeObject
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -35,9 +36,39 @@ export class Patcher {
     this.#initializeRegistrationTracker();
   }
 
+  /**
+   * Add new patches to the existing Patcher.
+   * Will overwrite existing patches, deregistering the old.
+   * If the group is registered, register these additional patches.
+   * If not yet registered, initialize the group.
+   * @param {PATCHES} patches
+   */
+  addPatches(patches) {
+    // Cannot use mergeObject because it breaks for names like "PIXI.Circle".
+    for ( const [clName, patchClass] of Object.entries(patches) ) {
+      const clObj = this.patches[clName] ??= {};
+      for ( const [groupName, patchGroup] of Object.entries(patchClass) ) {
+        const groupObj = clObj[groupName] ??= {};
+        for ( const [typeName, patchType] of Object.entries(patchGroup) ) {
+          const typeObj = groupObj[typeName] ??= {};
+          for ( const [patchName, patch] of Object.entries(patchType) ) {
+            typeObj[patchName] = patch;
+
+          }
+        }
+        // Comparable to #initializeRegistrationTracker
+        if ( this.groupIsRegistered(groupName) ) {
+          this.deregisterGroup(groupName);
+          this.registerGroup(groupName);
+        } else this.initializeGroup(groupName);
+      }
+    }
+  }
+
   groupIsRegistered(groupName) {
     const regObj = this.regTracker[groupName];
-    return regObj.PATCHES.size || regObj.METHODS.size || regObj.HOOKS.size;
+    if ( !regObj ) return false;
+    return regObj.PATCHES?.size || regObj.METHODS?.size || regObj.HOOKS?.size;
   }
 
   /**

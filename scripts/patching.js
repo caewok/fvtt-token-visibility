@@ -8,6 +8,7 @@ import { Patcher } from "./Patcher.js";
 import { MODULES_ACTIVE, MODULE_ID } from "./const.js";
 import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
 
+import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
@@ -29,6 +30,7 @@ import { PATCHES as PATCHES_Wall } from "./Wall.js";
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
 
 const PATCHES = {
+  Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,
   ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
   DetectionMode: PATCHES_DetectionMode,
