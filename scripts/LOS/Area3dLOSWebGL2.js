@@ -429,7 +429,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     super._draw3dDebug();
     if ( !this.popoutIsRendered ) return;
     const renderer = this.popout.pixiApp.renderer;
-    renderer.state.setDepthTest = true;
+    //renderer.state.setDepthTest = true;
 
     // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const { debugShaders, debugObstacleContainer, debugSprite, debugRenderTexture } = this;
