@@ -192,6 +192,10 @@ export class LOSCalculator {
     this.calc = new cl(this.viewer, this.target, this.config);
   }
 
+  _forceWebGL2() { this._updateAlgorithm(SETTINGS.LOS.TARGET.TYPE.AREA3D_WEBGL2); }
+
+  _forceGeometric() { this._updateAlgorithm(SETTINGS.LOS.TARGET.TYPE.AREA3D_GEOMETRIC); }
+
   /**
    * Reset the calculator settings to the current settings.
    * (Used in Settings after settings have changed.)
