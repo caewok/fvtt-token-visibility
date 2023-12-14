@@ -98,6 +98,7 @@
 
     "tokenvisibility.template.settings-config.tabs.other": "Other",
     "tokenvisibility.template.settings-config.other": "Other Vision Settings",
+    "tokenvisibility.template.settings-config.otherDescription": "Miscellaneous settings that affect how token line-of-sight is calculated.",
 
     "tokenvisibility.settings.submenu.title": "Alternative Token Visibility Settings",
     "tokenvisibility.settings.submenu.Name": "ATV Settings",
