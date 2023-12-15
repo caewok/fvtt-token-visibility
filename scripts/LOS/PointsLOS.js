@@ -150,16 +150,6 @@ export class PointsLOS extends AlternativeLOS {
    */
   _percentVisible() { return (1 - this._testTargetPoints(this.targetPoints)); }
 
-  /**
-   * Convenience method that uses settings of this calculator to construct viewer points.
-   * @returns {Points3d[]|undefined} Undefined if viewer cannot be ascertained
-   */
-  constructViewerPoints() {
-    const pointAlgorithm = this.getConfiguration("pointAlgorithm");
-    const inset = this.getConfiguration("inset");
-    const tokenShape = this.viewer.bounds;
-    return this.constructor._constructTokenPoints(this.viewer, { pointAlgorithm, inset, tokenShape });
-  }
 
   /**
    * Similar to _constructViewerPoints but with a complication:
@@ -167,8 +157,8 @@ export class PointsLOS extends AlternativeLOS {
    */
   _constructTargetPoints() {
     const { target } = this;
-    const pointAlgorithm = this.getConfiguration("pointAlgorithm");
-    const inset = this.getConfiguration("inset");
+    const pointAlgorithm = this.getConfiguration("numTargetPoints");
+    const inset = this.getConfiguration("targetInset");
     const points3d = this.getConfiguration("points3d");
     const cfg = { pointAlgorithm, inset };
 
