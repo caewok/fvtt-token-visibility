@@ -542,17 +542,6 @@ export class AlternativeLOS {
     return tokens.map(t => new TokenPoints3d(t, { pad: -1 }));
   }
 
-
-  /**
-   * Convenience method that uses settings of this calculator to construct viewer points.
-   * @returns {Points3d[]|undefined} Undefined if viewer cannot be ascertained
-   */
-  constructViewerPoints() {
-    const { pointAlgorithm, inset } = this;
-    return this.constructor.constructTokenPoints(this.viewer, { pointAlgorithm, inset });
-  }
-
-
   // ----- NOTE: Static methods ----- //
   static POINT_TYPES = {
     CENTER: "points-center",
