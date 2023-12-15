@@ -443,7 +443,7 @@ export class Settings {
         min: 0,  // Prone equivalent to (almost) not being there at all. Will set to a single pixel.
         step: 0.1
       },
-      default: 0.33,  // Same as Wall Height
+      default: CONFIG.GeometryLib.proneMultiplier ?? 0.33, // Same as Wall Height
       onChange: value => CONFIG.GeometryLib.proneMultiplier = value,
       tab: "other"
     });
@@ -459,8 +459,8 @@ export class Settings {
         min: 0,  // At token bottom.
         step: 0.1
       },
-      default: 0.9,
-      onChange: value => CONFIG.GeometryLib.proneMultiplier = value,
+      default: CONFIG.GeometryLib.visionHeightMultiplier ?? 0.9,
+      onChange: value => CONFIG.GeometryLib.visionHeightMultiplier = value,
       tab: "other"
     });
 
@@ -474,6 +474,11 @@ export class Settings {
       onChange: value => CONFIG.GeometryLib.proneStatusId = value,
       tab: "other"
     });
+
+    // Make sure these are linked at the start.
+    CONFIG.GeometryLib.proneMultiplier = this.get(KEYS.PRONE_MULTIPLIER);
+    CONFIG.GeometryLib.visionHeightMultiplier = this.get(KEYS.VISION_HEIGHT_MULTIPLIER);
+    CONFIG.GeometryLib.proneStatusId = this.get(KEYS.PRONE_STATUS_ID);
 
     register(KEYS.TOKEN_HP_ATTRIBUTE, {
       name: localize(`${KEYS.TOKEN_HP_ATTRIBUTE}.Name`),
