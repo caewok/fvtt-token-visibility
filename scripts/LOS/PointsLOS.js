@@ -162,7 +162,8 @@ export class PointsLOS extends AlternativeLOS {
     const points3d = this.getConfiguration("points3d");
     const cfg = { pointAlgorithm, inset };
 
-    if ( this.getConfiguration("numTargetPoints") === this.constructor.POINT_TYPES.TWO ) {
+    if ( this.getConfiguration("numTargetPoints") === this.constructor.POINT_TYPES.TWO
+      || this.getConfiguration("numTargetPoints") === this.constructor.POINT_TYPES.THREE ) {
       cfg.isTarget = true;
       cfg.viewerPoint = this.viewerPoint;
     }
