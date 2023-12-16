@@ -162,6 +162,11 @@ export class PointsLOS extends AlternativeLOS {
     const points3d = this.getConfiguration("points3d");
     const cfg = { pointAlgorithm, inset };
 
+    if ( this.getConfiguration("numTargetPoints") === this.constructor.POINT_TYPES.TWO ) {
+      cfg.isTarget = true;
+      cfg.viewerPoint = this.viewerPoint;
+    }
+
     if ( this.useLargeTarget ) {
       // Construct points for each target subshape, defined by grid spaces under the target.
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);

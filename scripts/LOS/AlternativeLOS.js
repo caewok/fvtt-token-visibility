@@ -566,7 +566,7 @@ export class AlternativeLOS {
     return this._constructTokenPoints(target, opts);
   }
 
-  static _constructTokenPoints(token, { tokenShape, pointAlgorithm, inset } = {}) {
+  static _constructTokenPoints(token, { tokenShape, pointAlgorithm, inset, isTarget, viewerPoint } = {}) {
     const TYPES = this.POINT_TYPES;
     const center = Point3d.fromTokenCenter(token);
 
@@ -584,13 +584,20 @@ export class AlternativeLOS {
     insetPoints(cornerPoints, center, inset);
 
     // If two points, keep only the front-facing points.
+    // For targets, keep the closest two points to the viewer point.
     if ( pointAlgorithm === TYPES.TWO ) {
-      // Token rotation is 0º for due south, while Ray is 0º for due east.
-      // Token rotation is 90º for due west, while Ray is 90º for due south.
-      // Use the Ray version to divide the token into front and back.
-      const angle = Math.toRadians(token.document.rotation);
-      const dirPt = PIXI.Point.fromAngle(center, angle, 100);
-      cornerPoints = cornerPoints.filter(pt => foundry.utils.orient2dFast(center, dirPt, pt) <= 0);
+      if ( isTarget && viewerPoint ) {
+        cornerPoints.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewerPoint, pt));
+        cornerPoints.sort((a, b) => a._dist - b._dist);
+        cornerPoints.splice(2);
+      } else {
+        // Token rotation is 0º for due south, while Ray is 0º for due east.
+        // Token rotation is 90º for due west, while Ray is 90º for due south.
+        // Use the Ray version to divide the token into front and back.
+        const angle = Math.toRadians(token.document.rotation);
+        const dirPt = PIXI.Point.fromAngle(center, angle, 100);
+        cornerPoints = cornerPoints.filter(pt => foundry.utils.orient2dFast(center, dirPt, pt) <= 0);
+      }
     }
 
     tokenPoints.push(...cornerPoints);
