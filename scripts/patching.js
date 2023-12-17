@@ -45,7 +45,8 @@ const PATCHES = {
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
 
-export const PATCHER = new Patcher(PATCHES);
+export const PATCHER = new Patcher();
+PATCHER.addPatchesFromRegistrationObject(PATCHES);
 
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
