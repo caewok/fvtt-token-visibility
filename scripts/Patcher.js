@@ -225,10 +225,10 @@ export class Patcher {
   static splitClassMethodString(str) {
     str = str.split(".");
     const methodName = str.pop();
-    const isStatic = str.at(-1) === "prototype";
-    if ( isStatic ) str.pop();
+    const notStatic = str.at(-1) === "prototype";
+    if ( notStatic ) str.pop();
     const className = str.join(".");
-    return { className, isStatic, methodName };
+    return { className, isStatic: !notStatic, methodName };
   }
 }
 
@@ -237,7 +237,7 @@ export class Patcher {
 // Key to force the Patch constructor to be private.
 const secretToken = Symbol("secretToken");
 
-class PatchAbstract {
+class AbstractPatch {
 
   /** @type {object} */
   config = {};
@@ -254,33 +254,57 @@ class PatchAbstract {
   /**
    * @param {string} target     The hook or class.method that is being patched
    * @param {function} patchFn  The function to use for the patch
-   * @param {object} [opts]     Optional parameters that modify the patch
-   * @param {string} [opts.group]         Group or category to assign the patch
    */
   constructor(token, target, patchFn) {
     // Needed so that create can be the primary function.
-    if ( token !== secretToken ) console.error(`${PatchAbstract} constructor is private! Use static "create" method.`);
+    if ( token !== secretToken ) console.error("AbstractPatch constructor is private! Use static `create` method.");
     this.target = target;
     this.patchFn = patchFn;
   }
 
+  /**
+   * Instantiate a patch object. Use this instead of the constructor in order to configure it.
+   * @param {string} target     The hook or class.method that is being patched
+   * @param {function} patchFn  The function to use for the patch
+   * @param {object} [config]     Optional parameters that modify the patch
+   * @returns {AbstractPatch}
+   */
   static create(target, patchFn, config) {
     const obj = new this(secretToken, target, patchFn);
     obj._configure(config);
     return obj;
   }
 
+  /**
+   * Instantiate many patches using the same underlying configuration.
+   * Each patch in the object are described by { target: patchFn }.
+   * @param {object} obj        Each patch in the object are described by { target: patchFn }
+   * @param {object} [config]     Optional parameters that modify the patch
+   * @returns {AbstractPatch[]}
+   */
+  static createFromObject(obj, config) {
+    const patches = [];
+    for ( const [target, patchFn] of Object.entries(obj) ) patches.push(this.create(target, patchFn, config));
+    return patches;
+  }
+
+  /**
+   * Configure this patch with optional settings that affect how the patch is applied.
+   * @param {object} config
+   */
   _configure(config = {}) {
     const cfg = this.config;
     cfg.group = config.group || "BASIC";
   }
 
+  /** @type {boolean} */
   get isRegistered() { return Boolean(this.regId); }
 
+  /** @type {string} */
   get group() { return this.config.group; }
 }
 
-export class HookPatch extends PatchAbstract {
+export class HookPatch extends AbstractPatch {
 
   /**
    * Register this hook.
@@ -300,7 +324,7 @@ export class HookPatch extends PatchAbstract {
   }
 }
 
-export class MethodPatch extends PatchAbstract {
+export class MethodPatch extends AbstractPatch {
 
   /** @type {function} */
   prevMethod;
@@ -368,13 +392,7 @@ export class MethodPatch extends PatchAbstract {
   }
 }
 
-export class LibWrapperPatch extends PatchAbstract {
-
-  /** @type {libWrapper.PERF_FAST|PERF_AUTO|PERF_NORMAL} */
-  perf_mode = libWrapper.PERF_AUTO;
-
-  /** @type {libWrapper.WRAPPED, MIXED, OVERRIDE} */
-  libWrapperType = libWrapper.WRAPPED;
+export class LibWrapperPatch extends AbstractPatch {
 
   /**
    * @param {object} [config]               Optional parameters that modify the patch
@@ -396,8 +414,8 @@ export class LibWrapperPatch extends PatchAbstract {
     }
 
     cfg.isStatic = Boolean(config.isStatic);
-    cfg.libWrapperType = config.libWrapperType || libWrapper.WRAPPED;
-    cfg.perf_mode = config.perf_mode || libWrapper.PERF_AUTO;
+    cfg.libWrapperType = config.libWrapperType || "WRAPPER";
+    cfg.perf_mode = config.perf_mode || "AUTO";
     this.className = config.className;
   }
 
