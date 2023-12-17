@@ -406,7 +406,7 @@ export class Area2dLOS extends AlternativeLOS {
           pts[3], // TopB
           pts[1], // BottomA
           pts[2],  // BottomB
-          origin,
+          viewerPoint,
           targetElevation
         );
         if ( shadow ) shadows.push(shadow);
