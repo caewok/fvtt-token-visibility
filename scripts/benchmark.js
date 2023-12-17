@@ -274,11 +274,6 @@ async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
   await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
   const calc = new LOSCalculator();
 
-  // Unneeded b/c the settings change accomplishes this already...
-  // TODO: Keep benchmark from changing the settings everywhere.
-  //   calc._updateAlgorithm();
-  //   calc._updateConfigurationSettings();
-
   await QBenchmarkLoopFn(n, benchLOS, label, calc, viewers, targets);
   calc.destroy();
 }
