@@ -12,6 +12,7 @@ import { MODULE_ID } from "./const.js";
 import { registerGeometry } from "./geometry/registration.js";
 import { registerElevationConfig } from "./geometry/elevation_configs.js";
 import { initializePatching, PATCHER } from "./patching.js";
+import { Patcher, HookPatch, MethodPatch, LibWrapperPatch } from "./Patcher.js";
 import { Settings, SETTINGS } from "./settings.js";
 
 // For API
@@ -126,7 +127,8 @@ Hooks.once("init", function() {
       Placeable3dDebugShader, Tile3dDebugShader
     },
 
-    PATCHER
+    PATCHER,
+    Patcher, HookPatch, MethodPatch, LibWrapperPatch
   };
 });
 
