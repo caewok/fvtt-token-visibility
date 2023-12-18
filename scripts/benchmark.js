@@ -8,6 +8,7 @@ PIXI
 
 "use strict";
 
+import { MODULE_ID } from "./const.js";
 import { QBenchmarkLoopFn } from "./benchmark_functions.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -20,6 +21,8 @@ import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 import { LOSCalculator } from "./LOSCalculator.js";
+
+import { registerArea3d } from "./patching.js";
 
 /* Use
 api = game.modules.get("tokenvisibility").api
@@ -218,6 +221,7 @@ function benchRange(viewers, targets) {
 export async function benchTokenLOS(n = 100) {
   console.log("\n");
   const { viewers, targets } = getTokens();
+  registerArea3d(); // Required for Area3d algorithms to work.
   console.log("Percent visible using different LOS algorithms.");
   summarizeTokenVisibility(viewers, targets);
 
@@ -227,23 +231,24 @@ export async function benchTokenLOS(n = 100) {
 
   const algs = SETTINGS.LOS.TARGET.TYPES;
   const nPts = SETTINGS.POINT_TYPES;
+  const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
 
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.CENTER);
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.NINE);
   await runLOSTest(n, viewers, targets, algs.AREA2D, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, false);
+  await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, false);
 
   console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
-  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
+  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.NINE);
   await runLOSTest(n, viewers, targets, algs.AREA2D, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL1, true);
+  await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, true);
 
@@ -272,18 +277,16 @@ async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
   }
   await Settings.set(SETTINGS.LOS.TARGET.ALGORITHM, algorithm);
   await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
-  const calc = new LOSCalculator();
-
-  await QBenchmarkLoopFn(n, benchLOS, label, calc, viewers, targets);
-  calc.destroy();
+  await QBenchmarkLoopFn(n, benchLOS, label, viewers, targets);
 }
 
-function benchLOS(calc, viewers, targets) {
+function benchLOS(viewers, targets) {
   const out = [];
   for ( const viewer of viewers ) {
+    const losCalc = viewer.vision?.[MODULE_ID]?.losCalc ?? new LOSCalculator(viewer, undefined);
     for ( const target of targets ) {
       if ( viewer === target ) continue;
-      out.push(calc.hasLOS(viewer, target));
+      out.push(losCalc.hasLOSTo(target));
     }
   }
   return out;
