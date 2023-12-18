@@ -83,7 +83,7 @@ function updateTileArea3d(tileD, changed, _options, _userId) {
       || changeKeys.has("z")
       || changeKeys.has("overhead")) ) return;
 
-  tile[GEOMETRY_ID].update();
+  tileD.object?.[GEOMETRY_ID]?.update();
 }
 
 /**

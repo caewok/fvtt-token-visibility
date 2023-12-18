@@ -13,6 +13,7 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { Plane } from "../geometry/3d/Plane.js";
 
 // Base folder
 import { MODULE_ID } from "../const.js";
@@ -368,59 +369,129 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
 
   _percentVisible() {
     performance.mark("startWebGL2");
-    const { renderTexture, shaders, blockingObjects, obstacleContainer } = this;
+    const { renderTexture, shaders, blockingObjects } = this;
     const { sumRedPixels, sumRedObstaclesPixels } = this.constructor;
-
-    // Build target mesh to measure the target viewable area.
-    // TODO: This will always calculate the full area, even if a wall intersects the target.
-    performance.mark("targetMesh");
-    const targetMesh = this.#buildTargetMesh(shaders);
+    const renderer = canvas.app.renderer;
 
     // If largeTarget is enabled, use the visible area of a grid cube to be 100% visible.
     // #buildTargetMesh already initialized the shader matrices.
-    let sumGridCube = 100_000;
+    let sumGridCube = Number.POSITIVE_INFINITY;
     if ( this.useLargeTarget ) {
       const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
-      canvas.app.renderer.render(gridCubeMesh, { renderTexture, clear: true });
-      const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);
-      sumGridCube = sumRedPixels(gridCubeCache) || 100_000;
+      renderer.render(gridCubeMesh, { renderTexture, clear: true });
+      const gridCubeCache = renderer.extract._rawPixels(renderTexture);
+      sumGridCube = sumRedPixels(gridCubeCache) || Number.POSITIVE_INFINITY;
       gridCubeMesh.destroy();
     }
 
-    // Build mesh of all obstacles in viewable triangle.
-    performance.mark("obstacleMesh");
-    this.#buildObstacleContainer(obstacleContainer, shaders, this._buildTileShader.bind(this));
-
-    performance.mark("renderTargetMesh");
-    canvas.app.renderer.render(targetMesh, { renderTexture, clear: true });
+    // Build target mesh to measure the target viewable area.
+    // TODO: This will always calculate the full area, even if a wall intersects the target.
+    performance.mark("renderTarget");
+    this.#renderTarget(renderer, renderTexture, shaders);
 
     // Calculate visible area of the target.
     performance.mark("targetCache");
     const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumTarget = sumRedPixels(targetCache);
 
-    performance.mark("renderObstacleMesh");
-    canvas.app.renderer.render(obstacleContainer, { renderTexture, clear: false });
+    // Render obstacles. Render opaque first.
+    performance.mark("obstacleMesh");
+    this.#renderOpaqueObstacles(renderer, renderTexture, shaders);
+    this.#renderTransparentObstacles(renderer, renderTexture, shaders, this._buildTileShader.bind(this));
 
     // Calculate target area remaining after obstacles.
     performance.mark("obstacleCache");
     const obstacleSum = blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
-    const obstacleCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+    const obstacleCache = renderer.extract._rawPixels(renderTexture);
     const sumWithObstacles = obstacleSum(obstacleCache);
 
+    // Cleanup and calculate final percentage visible.
+    const denom = Math.min(sumGridCube, sumTarget);
     performance.mark("endWebGL2");
+    return sumWithObstacles / denom;
+  }
+
+  #renderTarget(renderer, renderTexture, shaders, clear = true) {
+    const targetMesh = this.#buildTargetMesh(shaders);
+    renderer.render(targetMesh, { renderTexture, clear });
+  }
+
+  /**
+   * Render the opaque blocking walls and token shapes to the render texture.
+   * @param {PIXI.Renderer} renderer
+   * @param {PIXI.RenderTexture} renderTexture
+   * @param {PIXI.Shader[]} shaders
+   */
+  #renderOpaqueObstacles(renderer, renderTexture, shaders) {
+    // Walls/Tokens
+    const blockingObjects = this.blockingObjects;
+    const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
+    if ( !otherBlocking.size ) return;
+
+    const { viewerPoint, targetCenter, frustrum, obstacleContainer } = this;
+    const buildMesh = this.constructor.buildMesh;
+    const { near, far, fov } = frustrum;
+    const obstacleShader = shaders.obstacle;
+    obstacleShader._initializeLookAtMatrix(viewerPoint, targetCenter);
+    obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
+    for ( const obj of otherBlocking ) {
+      const mesh = buildMesh(obj[GEOMETRY_ID].geometry, obstacleShader);
+      obstacleContainer.addChild(mesh);
+    }
+
+    renderer.render(obstacleContainer, { renderTexture, clear: false });
     const children = obstacleContainer.removeChildren();
     children.forEach(c => c.destroy());
+  }
 
-    // The grid area can be less than target area if the target is smaller than a grid.
-    // Example: target may not be 1 unit high or may only be half a grid wide.
-    const denom = Math.min(sumGridCube, sumTarget);
-    // Debug: console.debug(`${this.viewer.name} viewing ${this.target.name}:
-    // Seen: ${sumWithObstacles}; Full Target: ${sumTarget}; Grid: ${sumGridCube}.
-    // ${Math.round(sumWithObstacles/sumTarget * 100 * 10) / 10}% |
-    // ${Math.round(sumWithObstacles/sumGridCube * 100 * 10)/ 10}%`)
+  /**
+   * Render the obstacles with transparency: tiles and terrain walls.
+   * So that transparency works with depth, render furthest to closest from the viewer.
+   * @param {PIXI.Renderer} renderer
+   * @param {PIXI.RenderTexture} renderTexture
+   * @param {PIXI.Shader[]} shaders
+   */
+  #renderTransparentObstacles(renderer, renderTexture, shaders, tileMethod) {
+    let blockingObjects = this.blockingObjects;
+    const nTerrainWalls = blockingObjects.terrainWalls.size;
+    const nTiles = blockingObjects.tiles.size;
+    if ( !nTerrainWalls && !nTiles ) return;
 
-    return sumWithObstacles / denom;
+    // Build mesh from each obstacle and
+    // measure distance along ray from viewer point to target center.
+    const buildMesh = this.constructor.buildMesh;
+    const { viewerPoint, targetCenter, frustrum } = this;
+    const rayDir = targetCenter.subtract(viewerPoint);
+    const { near, far, fov } = frustrum;
+    const meshes = [];
+    if ( nTerrainWalls ) {
+      const terrainWallShader = shaders.terrainWall;
+      terrainWallShader._initializeLookAtMatrix(viewerPoint, targetCenter);
+      terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
+      blockingObjects.terrainWalls.forEach(wall => {
+        const mesh = buildMesh(wall[GEOMETRY_ID].geometry, terrainWallShader);
+        const plane = Plane.fromWall(wall);
+        mesh._atvIx = plane.rayIntersection(viewerPoint, rayDir);
+        if ( mesh._atvIx > 0 ) meshes.push(mesh);
+        else mesh.destroy();
+      });
+    }
+
+    if ( nTiles ) {
+      blockingObjects.tiles.forEach(tile => {
+        const tileShader = tileMethod(fov, near, far, tile);
+        const mesh = buildMesh(tile[GEOMETRY_ID].geometry, tileShader);
+        const plane = new Plane(new Point3d(0, 0, tile.elevationZ));
+        mesh._atvIx = plane.rayIntersection(viewerPoint, rayDir);
+        if ( mesh._atvIx > 0 ) meshes.push(mesh);
+        else mesh.destroy();
+      });
+    }
+
+    // Sort meshes and render each in turn
+    meshes.sort((a, b) => b._atvIx - a._atvIx);
+    for ( const mesh of meshes ) renderer.render(mesh, { renderTexture, clear: false });
+    meshes.forEach(mesh => mesh.destroy());
   }
 
   // ----- NOTE: Debugging methods ----- //
@@ -429,28 +500,18 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     super._draw3dDebug();
     if ( !this.popoutIsRendered ) return;
     const renderer = this.popout.pixiApp.renderer;
-    //renderer.state.setDepthTest = true;
+    // renderer.state.setDepthTest = true;
 
     // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
-    const { debugShaders, debugObstacleContainer, debugSprite, debugRenderTexture } = this;
+    const { debugShaders, debugSprite, debugRenderTexture } = this;
     this._addChildToPopout(debugSprite);
 
-    const targetMesh = this.#buildTargetMesh(debugShaders);
-    this.#buildObstacleContainer(debugObstacleContainer, debugShaders, this._buildTileDebugShader.bind(this));
-    renderer.render(targetMesh, { renderTexture: debugRenderTexture, clear: true });
-    renderer.render(debugObstacleContainer, { renderTexture: debugRenderTexture, clear: false });
-    targetMesh.destroy();
-    debugObstacleContainer.removeChildren().forEach(c => c.destroy());
+    // Build target mesh to measure the target viewable area.
+    this.#renderTarget(renderer, debugRenderTexture, debugShaders);
 
-    // For testing the mesh directly:
-    // canvas.stage.addChild(targetMesh);
-
-    // Temporarily render the texture for debugging.
-    // if ( !this.renderSprite || this.renderSprite.destroyed ) {
-    //  this.renderSprite ??= PIXI.Sprite.from(this._renderTexture);
-    //  this.renderSprite.scale = new PIXI.Point(1, -1); // Flip y-axis.
-    //  canvas.stage.addChild(this.renderSprite);
-    // }
+    // Render obstacles. Render opaque first.
+    this.#renderOpaqueObstacles(renderer, debugRenderTexture, debugShaders);
+    this.#renderTransparentObstacles(renderer, debugRenderTexture, debugShaders, this._buildTileDebugShader.bind(this));
   }
 
   #buildTargetMesh(shaders) {
@@ -459,43 +520,5 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     targetShader._initializeLookAtMatrix(this.viewerPoint, this.targetCenter);
     targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     return this.constructor.buildMesh(this.target[GEOMETRY_ID].geometry, targetShader);
-  }
-
-  #buildObstacleContainer(container, shaders, tileMethod) {
-    const { viewerPoint, targetCenter, frustrum, blockingObjects } = this;
-    const buildMesh = this.constructor.buildMesh;
-    const { near, far, fov } = frustrum;
-
-    // Limited angle walls
-    if ( blockingObjects.terrainWalls.size ) {
-      const terrainWallShader = shaders.terrainWall;
-      terrainWallShader._initializeLookAtMatrix(viewerPoint, targetCenter);
-      terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
-      for ( const terrainWall of blockingObjects.terrainWalls ) {
-        const mesh = buildMesh(terrainWall[GEOMETRY_ID].geometry, terrainWallShader);
-        container.addChild(mesh);
-      }
-    }
-
-    // Walls/Tokens
-    const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
-    if ( otherBlocking.size ) {
-      const obstacleShader = shaders.obstacle;
-      obstacleShader._initializeLookAtMatrix(viewerPoint, targetCenter);
-      obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
-      for ( const obj of otherBlocking ) {
-        const mesh = buildMesh(obj[GEOMETRY_ID].geometry, obstacleShader);
-        container.addChild(mesh);
-      }
-    }
-
-    // Tiles
-    if ( blockingObjects.tiles.size ) {
-      for ( const tile of blockingObjects.tiles ) {
-        const tileShader = tileMethod(fov, near, far, tile);
-        const mesh = buildMesh(tile[GEOMETRY_ID].geometry, tileShader);
-        container.addChild(mesh);
-      }
-    }
   }
 }
