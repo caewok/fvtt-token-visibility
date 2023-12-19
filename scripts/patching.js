@@ -63,20 +63,10 @@ export function initializePatching() {
 export function registerArea3d() {
   PATCHER.registerGroup("AREA3D");
 
-  // Create placeable geometry handlers.
-  if ( canvas.walls ) {
-    canvas.walls.placeables
-      .filter(wall => !wall[MODULE_ID])
-      .forEach(wall => wall[MODULE_ID] = { geomHandler: new WallGeometryHandler(wall) });
-
-    canvas.tiles.placeables
-      .filter(tile => !tile[MODULE_ID])
-      .forEach(tile => tile[MODULE_ID] = { geomHandler: new TileGeometryHandler(tile) });
-
-    canvas.tokens.placeables
-      .filter(token => !token[MODULE_ID])
-      .forEach(token => token[MODULE_ID] = { geomHandler: new TokenGeometryHandler(token) });
-  }
+  // Create placeable geometry handlers for placeables already in the scene.
+  WallGeometryHandler.registerPlaceables();
+  TileGeometryHandler.registerPlaceables();
+  TokenGeometryHandler.registerPlaceables();
 }
 
 export function registerDebug() { PATCHER.registerGroup("DEBUG"); }
