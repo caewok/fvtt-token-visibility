@@ -210,11 +210,40 @@ export class AlternativeLOS {
       || (this.#targetCenter = Point3d.fromTokenCenter(this.target));
   }
 
+  /**
+   * The target shape, constrained by overlapping walls and (if `useLitTargetShape`) overlapping lights.
+   * @type {PIXI.Polygon|PIXI.Rectangle|undefined}
+   */
   #visibleTargetShape;
 
   get visibleTargetShape() {
-    if ( this.#config.useLitTargetShape ) return this.constructor.constrainTargetShapeWithLights(this.target);
-    return this.target.constrainedTokenBorder;
+    if ( !this.#visibleTargetShape ) {
+      if ( this.#config.useLitTargetShape ) this.#visibleTargetShape = this._constructLitTargetShape();
+      else this.#visibleTargetShape = this.target.constrainedTokenBorder;
+    }
+    return this.#visibleTargetShape;
+  }
+
+  /**
+   * Use the lights that overlap the target shape to construct the shape.
+   * @returns {PIXI.Polygon|PIXI.Rectangle|undefined} If no overlap, returns undefined.
+   *   If 2+ lights create holes or multiple polygons, the convex hull is returned.
+   *   (Because cannot currently handle 2+ distinct target shapes.)
+   */
+  _constructLitTargetShape() {
+    const shape = this.constructor.constrainTargetShapeWithLights(this.target);
+    if ( !(shape instanceof ClipperPaths )) return shape;
+
+    // Multiple polygons present. Ignore holes. Return remaining polygon or
+    // construct one from convex hull of remaining polygons.
+    const polys = shape.toPolygons().filter(poly => !poly.isHole);
+    if ( polys.length === 0 ) return undefined;
+    if ( polys.length === 1 ) return polys[0];
+
+    // Construct convex hull.
+    const pts = [];
+    for ( const poly of polys ) pts.push(...poly.iteratePoints({ close: false }));
+    return PIXI.Polygon.convexHull(pts);
   }
 
   // ----- NOTE: Other getters / setters ----- //
@@ -313,6 +342,9 @@ export class AlternativeLOS {
     if ( (this.viewerPoint.z > backgroundElevation && this.target.topZ < backgroundElevation)
       || (this.viewerPoint.z < backgroundElevation && this.target.bottomZ > backgroundElevation) ) return 0;
 
+    // If considering lighting on the target, return 0 if no lighting.
+    if ( this.#config.useLitTargetShape & typeof this.visibleTargetShape === "undefined" ) return 0;
+
     const visionSource = this.#config.visionSource;
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
     if ( !targetWithin ) return 0;
@@ -331,7 +363,7 @@ export class AlternativeLOS {
   /**
    * Take a token and intersects it with a set of lights.
    * @param {Token} token
-   * @returns {PIXI.Polygon|PIXI.Rectangle|ClipperPaths}
+   * @returns {PIXI.Polygon|PIXI.Rectangle|ClipperPaths|undefined}
    */
   static constrainTargetShapeWithLights(token) {
     const tokenBorder = token.constrainedTokenBorder;
@@ -351,7 +383,7 @@ export class AlternativeLOS {
       // If the token overlaps the light, then we may need to intersect the shape.
       if ( tokenBorder.overlaps(lightShape) ) lightShapes.push(lightShape);
     }
-    if ( !lightShapes.length ) return tokenBorder;
+    if ( !lightShapes.length ) return undefined;
 
     const paths = ClipperPaths.fromPolygons(lightShapes);
     const tokenPath = ClipperPaths.fromPolygons(tokenBorder instanceof PIXI.Rectangle

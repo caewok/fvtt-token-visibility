@@ -68,7 +68,7 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
 
   // Configure the line-of-sight calculator.
   const losCalc = visionSource[MODULE_ID].losCalc;
-  losCalc.calc.updateConfiguration({ useLitTargetShape, type: visionSource.constructor.sourceType });
+  losCalc._updateConfiguration({ useLitTargetShape, type: visionSource.constructor.sourceType });
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
   hasLOS = losCalc.hasLOSTo(target);
