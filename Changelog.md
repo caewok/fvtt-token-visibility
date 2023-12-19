@@ -1,6 +1,8 @@
 ## 0.6.0
 Split Alternative Token Visibility from Alternative Token Cover. This module handles token visibility only. All cover-related features moveed to Alternative Token Cover.
 
+Refactor the settings menu. Split viewer from target settings. Add two and three-point settings. Allow multiple viewer points to be used with Area2d and Area3d. Handle tile transparency with Area3d algorithm. A lot of backend work on patches and visibility calculator.
+
 ## 0.5.8
 - Correctly ignore tokens if the token cover settings do not consider tokens to be cover. Closes issue #58.
 
