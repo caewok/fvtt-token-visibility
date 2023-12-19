@@ -767,7 +767,7 @@ export class WallGeometryHandler extends PlaceableGeometryHandler {
 
   static registerPlaceables() {
     const walls = canvas.walls?.placeables;
-    if ( walls ) return;
+    if ( !walls ) return;
     walls.forEach(wall => new this(wall));
   }
 }
@@ -787,7 +787,7 @@ export class TokenGeometryHandler extends PlaceableGeometryHandler {
 
   static registerPlaceables() {
     const tokens = canvas.tokens?.placeables;
-    if ( tokens ) return;
+    if ( !tokens ) return;
     tokens.forEach(token => new this(token));
   }
 }
@@ -812,7 +812,7 @@ export class TileGeometryHandler extends PlaceableGeometryHandler {
 
   static registerPlaceables() {
     const tiles = canvas.tiles?.placeables;
-    if ( tiles ) return;
+    if ( !tiles ) return;
     tiles.forEach(tile => new this(tile));
   }
 }
