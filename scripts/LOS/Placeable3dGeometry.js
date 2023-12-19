@@ -764,6 +764,12 @@ export class WallGeometryHandler extends PlaceableGeometryHandler {
    * @returns {Wall3dGeometry}
    */
   _buildGeometry() { return new Wall3dGeometry(this.wall); }
+
+  static registerPlaceables() {
+    const walls = canvas.walls?.placeables;
+    if ( walls ) return;
+    walls.forEach(wall => new this(wall));
+  }
 }
 
 export class TokenGeometryHandler extends PlaceableGeometryHandler {
@@ -777,6 +783,12 @@ export class TokenGeometryHandler extends PlaceableGeometryHandler {
   _buildGeometry() {
     const cl = canvas.grid.isHex ? ConstrainedTokenHex3dGeometry : ConstrainedToken3dGeometry;
     return new cl(this.token);
+  }
+
+  static registerPlaceables() {
+    const tokens = canvas.tokens?.placeables;
+    if ( tokens ) return;
+    tokens.forEach(token => new this(token));
   }
 }
 
@@ -796,5 +808,11 @@ export class TileGeometryHandler extends PlaceableGeometryHandler {
   update() {
     if ( !this.tile.document.overhead ) return;
     super.update();
+  }
+
+  static registerPlaceables() {
+    const tiles = canvas.tiles?.placeables;
+    if ( tiles ) return;
+    tiles.forEach(tile => new this(tile));
   }
 }
