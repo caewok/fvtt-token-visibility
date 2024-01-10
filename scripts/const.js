@@ -11,11 +11,13 @@ export const ISSUE_URL = "https://github.com/caewok/fvtt-token-visibility/issues
 
 export const MODULES_ACTIVE = {
   LEVELS: false,
-  TOKEN_COVER: false
+  TOKEN_COVER: false,
+  ELEVATED_VISION: false
 };
 
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
   MODULES_ACTIVE.LEVELS = game.modules.get("levels")?.active;
   MODULES_ACTIVE.TOKEN_COVER = game.modules.get("tokencover")?.active;
+  MODULES_ACTIVE.ELEVATED_VISION = game.modules.get("elevatedvision")?.active;
 });
