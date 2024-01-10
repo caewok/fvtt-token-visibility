@@ -1,19 +1,19 @@
 {
   "id": "tokenvisibility",
   "title": "Alternative Token Visibility",
-  "version": "This is auto replaced",
-  "library": false,
-  "socket": true,
+  "version": "#{VERSION}#",
+  "library": "false",
+  "socket": "false",
   "manifestPlusVersion": "1.0.0",
   "compatibility": {
     "minimum": "11.299",
-    "verified": "11.311"
+    "verified": "11.315"
   },
   "authors": [
     {
       "name": "caewok",
       "url": "https://github.com/caewok",
-      "discord": "caewok#9192"
+      "discord": "caewok"
     }
   ],
   "relationships": {
@@ -25,38 +25,17 @@
         "compatibility": {
           "verified": "1.12.8"
         }
-      },
-
-      {
-        "id": "socketlib",
-        "type": "module",
-        "manifest": "https://raw.githubusercontent.com/manuelVo/foundryvtt-socketlib/master/module.json",
-        "compatibility": {
-          "verified": "1.0.12"
-        }
       }
     ]
   },
+
+  "scripts": [
+    "scripts/LOS/pixi_projection/pixi-projection.js",
+    "scripts/LOS/gl_matrix/gl-matrix.js "
+  ],
+
   "esmodules": [
     "scripts/module.js"
-  ],
-  "packs": [
-    {
-      "name": "tokenvision_macros",
-      "label": "ATV Macros",
-      "path": "packs/macros",
-      "type": "Macro",
-      "private": false
-    },
-    {
-      "name": "tokenvision_items_sfrpg",
-      "label": "ATV Items",
-      "path": "packs/items/sfrpg",
-      "type": "Item",
-      "private": false,
-      "system": "sfrpg"
-    }
-
   ],
   "languages": [
     {
@@ -67,9 +46,9 @@
       "description": "Alternative token visibility rules"
     }
   ],
-  "url": "This is auto replaced",
-  "manifest": "This is auto replaced",
-  "download": "This is auto replaced",
+  "url": "#{URL}#",
+  "manifest": "#{MANIFEST}#",
+  "download": "#{DOWNLOAD}#",
   "license": "LICENSE",
   "readme": "README.md"
 }

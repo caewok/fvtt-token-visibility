@@ -1,55 +1,36 @@
 /* globals
-foundry,
 canvas,
+CONFIG,
+DetectionModeBasicSight,
 game,
-_token
+PIXI
 */
 
 "use strict";
 
+import { MODULE_ID } from "./const.js";
+import { QBenchmarkLoopFn } from "./benchmark_functions.js";
+import { Settings, SETTINGS } from "./settings.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
 import { randomUniform } from "./random.js";
-import { SETTINGS, getSetting, setSetting } from "./settings.js";
-import { CoverCalculator } from "./CoverCalculator.js";
 
-/*
-Rectangle intersection vs just testing all four edges
-api = game.modules.get('tokenvisibility').api;
-randomRectangle = api.random.randomRectangle;
-randomSegment = api.random.randomSegment;
-QBenchmarkLoopWithSetupFn = api.bench.QBenchmarkLoopWithSetupFn;
+import { PointsLOS } from "./LOS/PointsLOS.js";
+import { Area2dLOS } from "./LOS/Area2dLOS.js";
+import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
+import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
+import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
+import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
+import { LOSCalculator } from "./LOSCalculator.js";
 
-function setupFn() {
-  rect = randomRectangle({minWidth: 1000});
-  segment = randomSegment();
-  return [rect, segment];
-}
+import { registerArea3d } from "./patching.js";
 
-edges = ["leftEdge",  "topEdge", "rightEdge", "bottomEdge"];
-function intersectSides(rect, segment) {
-  for (let i = 0; i < 4; i += 1 ) {
-    const edge = rect[edges[i]];
-    if ( foundry.utils.lineSegmentIntersects(edge.A, edge.B, segment.A, segment.B) ) { return true; }
-  }
-  return false;
-}
+/* Use
+api = game.modules.get("tokenvisibility").api
+await api.bench.benchAll();
 
-intersectRectangle = function(rect, segment) {
-  return rect.lineSegmentIntersects(segment.A, segment.B);
-}
-
-function testFn() {
-  args = setupFn();
-  return [...args, intersectSides(...args), intersectRectangle(...args)]
-//   return intersectSides(...args) === intersectRectangle(...args)
-}
-res = Array.fromRange(1000).map(elem => testFn())
-res.every(elem => elem)
-
-
-iterations = 10000
-await QBenchmarkLoopWithSetupFn(iterations, setupFn, intersectSides, "intersectSides")
-await QBenchmarkLoopWithSetupFn(iterations, setupFn, intersectRectangle, "intersectRectangle")
-
+await api.benchTokenRange(1000)
+await api.benchTokenLOS(100)
+await api.benchTokenVisibility(1000)
 */
 
 /**
@@ -62,381 +43,252 @@ await QBenchmarkLoopWithSetupFn(iterations, setupFn, intersectRectangle, "inters
 export async function benchAll(n = 100) {
   await benchTokenRange(n);
   await benchTokenLOS(n);
-  await benchCover(n);
+  await benchTokenVisibility(n);
 }
 
-export async function benchCurrent(n = 100) {
-  game.modules.get("tokenvisibility").api.debug = false;
+// ----- NOTE: Setup and summaries ----- //
 
-  const controlled = _token;
-  if ( !controlled ) {
-    console.error("Must select a single token to benchmark range.");
-    return;
+/**
+ * Set controlled tokens to viewers and targeted tokens to targets.
+ * If none available, fall back to all tokens
+ */
+function getTokens() {
+  let targets = [...game.user.targets];
+  let viewers = canvas.tokens.controlled;
+  if ( !targets.length ) targets = canvas.tokens.placeables;
+  if ( !viewers.length) viewers = canvas.tokens.placeables;
+  return { viewers, targets };
+}
+
+/**
+ * Construct a table of token percent visibility using the various methods.
+ */
+function summarizeTokenVisibility(viewers, targets) {
+  const calcs = {
+    calcPoints: new PointsLOS(),
+    calcArea2d: new Area2dLOS(),
+    calcArea3dGeometric: new Area3dLOSGeometric(),
+    calcArea3dWebGL1: new Area3dLOSWebGL(),
+    calcArea3dWebGL2: new Area3dLOSWebGL2(),
+    calcArea3dLOSHybrid: new Area3dLOSHybrid()
+  };
+
+  const summary = {};
+  for ( const viewer of viewers ) {
+    Object.values(calcs).forEach(calc => calc.viewer = viewer);
+    for ( const target of targets ) {
+      if ( viewer === target ) continue;
+      const label = `${viewer.name} --> ${target.name}`;
+      summary[label] = {};
+      Object.entries(calcs).forEach(([name, calc]) => {
+        calc.target = target;
+        summary[label][name] = Math.round(calc.percentVisible() * 100 * 10) / 10;
+      });
+    }
   }
 
-  const tokens = canvas.tokens.placeables.filter(t => !t.controlled);
-  console.log(`Benching current settings for ${tokens.length} tokens.`);
-  console.log(`Range: ${getSetting(SETTINGS.RANGE.ALGORITHM)}
-LOS: ${getSetting(SETTINGS.LOS.ALGORITHM)} | Percent: ${getSetting(SETTINGS.LOS.PERCENT_AREA)*100}%
-Cover: ${getSetting(SETTINGS.COVER.ALGORITHM)}`);
-
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Visibility", tokens);
-  await QBenchmarkLoopFn(n, coverTestFn, "Cover", controlled, tokens);
+  console.table(summary);
+  Object.values(calcs).forEach(calc => calc.destroy());
 }
 
+/**
+ * Construct a table of token elevations and distances
+ */
+function summarizeTokenRange(viewers, targets) {
+  const gridFn = CONFIG.GeometryLib.utils.pixelsToGridUnits;
+  const summary = {};
+  for ( const viewer of viewers ) {
+    for ( const target of targets ) {
+      if ( viewer === target ) continue;
+      const distance2d = PIXI.Point.distanceBetween(viewer.center, target.center);
+      const distance3d = Point3d.distanceBetween(
+        Point3d.fromTokenCenter(viewer),
+        Point3d.fromTokenCenter(target));
+      summary[`${viewer.name} --> ${target.name}`] = {
+        viewerElevation: viewer.elevationE,
+        targetElevation: target.elevationE,
+        distance2d: Math.round(gridFn(distance2d) * 10) / 10,
+        distance3d: Math.round(gridFn(distance3d) * 10) / 10
+      };
+    }
+  }
+  console.table(summary);
+}
+
+// ----- NOTE: Visibility testing -----
+
+export async function benchTokenVisibility(n = 100) {
+  const { targets } = getTokens();
+  console.log(`\nBenchmarking visibility of ${targets.length} targets from user's current perspective and settings.`);
+
+  await storeDebugStatus();
+  await QBenchmarkLoopFn(n, benchVisibility, "Visibility", targets);
+  await revertDebugStatus();
+}
+
+function benchVisibility(targets) {
+  const out = [];
+  for ( const target of targets ) {
+    out.push(testVisibility(target));
+  }
+  return out;
+}
+
+function testVisibility(target) {
+  const tolerance = target.document.iconSize / 4;
+
+  // Randomize a bit to try to limit caching
+  const center = {
+    x: target.center.x + Math.round(randomUniform(-10, 10)),
+    y: target.center.y + Math.round(randomUniform(-10, 10))
+  };
+
+  return canvas.effects.visibility.testVisibility(center, { tolerance, object: target });
+}
+
+// ----- NOTE: Range testing -----
 
 export async function benchTokenRange(n = 100) {
-  game.modules.get("tokenvisibility").api.debug = false;
+  console.log("\n");
+  const { viewers, targets } = getTokens();
+  console.log("Elevation and distance summary.");
+  summarizeTokenRange(viewers, targets);
 
-  const default_settings = {
-    range_algorithm: getSetting(SETTINGS.RANGE.ALGORITHM),
-    los_algorithm: getSetting(SETTINGS.LOS.ALGORITHM),
-    range_3d: getSetting(SETTINGS.RANGE.DISTANCE3D),
-    points_3d: getSetting(SETTINGS.RANGE.POINTS3D)
-  };
+  console.log("\nBenchmarking token range");
+  await storeDebugStatus();
+  storeRangeSettings();
 
-  const controlled = _token;
-  if ( !controlled ) {
-    console.error("Must select a single token to benchmark range.");
-    return;
-  }
+  console.log("\n");
+  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.CENTER, false);
+  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.NINE, false);
 
-  const tokens = canvas.tokens.placeables.filter(t => !t.controlled);
-  console.log(`\nBenching token visibility range for ${tokens.length} tokens.`);
+  console.log("\n");
+  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.CENTER, true);
+  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.NINE, true);
 
-  // Set to default LOS for test
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.POINTS);
-
-  console.log("\n2D range measurements");
-  await setSetting(SETTINGS.RANGE.DISTANCE3D, false);
-  await setSetting(SETTINGS.RANGE.POINTS3D, false);
-
-  // Foundry
-  await setSetting(SETTINGS.RANGE.ALGORITHM, SETTINGS.RANGE.TYPES.NINE);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Range 9-point (Foundry)", tokens);
-
-  // Center only
-  await setSetting(SETTINGS.RANGE.ALGORITHM, SETTINGS.RANGE.TYPES.CENTER);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Range Center Only", tokens);
-
-  // Foundry 3d
-  await setSetting(SETTINGS.RANGE.ALGORITHM, SETTINGS.RANGE.TYPES.FIVE);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Range 5-point", tokens);
-
-  console.log("\n3D range measurements");
-  await setSetting(SETTINGS.RANGE.DISTANCE3D, true);
-  await setSetting(SETTINGS.RANGE.POINTS3D, true);
-
-  // Foundry
-  await setSetting(SETTINGS.RANGE.ALGORITHM, SETTINGS.RANGE.TYPES.NINE);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Range 9-point (Foundry)", tokens);
-
-  // Center only
-  await setSetting(SETTINGS.RANGE.ALGORITHM, SETTINGS.RANGE.TYPES.CENTER);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Range Center Only", tokens);
-
-  // Foundry 3d
-  await setSetting(SETTINGS.RANGE.ALGORITHM, SETTINGS.RANGE.TYPES.FIVE);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Range 5-point", tokens);
-
-  // Reset
-  await setSetting(SETTINGS.RANGE.ALGORITHM, default_settings.range_algorithm);
-  await setSetting(SETTINGS.LOS.ALGORITHM, default_settings.los_algorithm);
-  await setSetting(SETTINGS.RANGE.DISTANCE3D, default_settings.range_3d);
-  await setSetting(SETTINGS.RANGE.POINTS3D, default_settings.points_3d);
+  await revertDebugStatus();
+  await revertRangeSettings();
 }
+
+async function runRangeTest(n, viewers, targets, algorithm, d3 = false) {
+  const label = (`Range: ${algorithm}, 3d: ${d3}`);
+  await Settings.set(SETTINGS.RANGE.ALGORITHM, algorithm);
+  await Settings.set(SETTINGS.RANGE.POINTS3D, d3);
+  await Settings.set(SETTINGS.RANGE.DISTANCE3D, d3);
+  await QBenchmarkLoopFn(n, benchRange, label, viewers, targets);
+}
+
+const userSettings = { debug: {}, range: {}, los: {}};
+async function storeDebugStatus() {
+  userSettings.debug.range = Settings.get(SETTINGS.DEBUG.RANGE);
+  userSettings.debug.los = Settings.get(SETTINGS.DEBUG.LOS);
+  await Settings.set(SETTINGS.DEBUG.RANGE, false);
+  await Settings.set(SETTINGS.DEBUG.LOS, false);
+}
+
+async function revertDebugStatus() {
+  await Settings.set(SETTINGS.DEBUG.RANGE, userSettings.debug.range);
+  await Settings.set(SETTINGS.DEBUG.LOS, userSettings.debug.los);
+}
+
+function storeRangeSettings() {
+  userSettings.range.algorithm = Settings.get(SETTINGS.RANGE.ALGORITHM);
+  userSettings.range.points3d = Settings.get(SETTINGS.RANGE.POINTS3D);
+  userSettings.range.distance3d = Settings.get(SETTINGS.RANGE.DISTANCE3D);
+}
+
+async function revertRangeSettings() {
+  const { algorithm, points3d, distance3d } = userSettings.range;
+  await Settings.set(SETTINGS.RANGE.ALGORITHM, algorithm);
+  await Settings.set(SETTINGS.RANGE.POINTS3D, points3d);
+  await Settings.set(SETTINGS.RANGE.DISTANCE3D, distance3d);
+}
+
+function benchRange(viewers, targets) {
+  const out = [];
+  const testFn = DetectionModeBasicSight.prototype._testRange;
+  for ( const viewer of viewers ) {
+    for ( const target of targets ) {
+      if ( viewer === target ) continue;
+      out.push(testFn(viewer.vision, "sight", target));
+    }
+  }
+  return out;
+}
+
+// ----- NOTE: LOS testing -----
 
 export async function benchTokenLOS(n = 100) {
-  game.modules.get("tokenvisibility").api.debug = false;
+  console.log("\n");
+  const { viewers, targets } = getTokens();
+  registerArea3d(); // Required for Area3d algorithms to work.
+  console.log("Percent visible using different LOS algorithms.");
+  summarizeTokenVisibility(viewers, targets);
 
-  const default_settings = {
-    range_algorithm: getSetting(SETTINGS.RANGE.ALGORITHM),
-    los_algorithm: getSetting(SETTINGS.LOS.ALGORITHM),
-    los_percent_area: getSetting(SETTINGS.LOS.PERCENT_AREA)
-  };
+  console.log("\nBenchmarking token los");
+  await storeDebugStatus();
+  storeLOSSettings();
 
-  const controlled = _token;
-  if ( !controlled ) {
-    console.error("Must select a single token to benchmark LOS.");
-    return;
-  }
+  const algs = SETTINGS.LOS.TARGET.TYPES;
+  const nPts = SETTINGS.POINT_TYPES;
+  const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
 
-  const tokens = canvas.tokens.placeables.filter(t => !t.controlled);
-  console.log(`\nBenching token visibility LOS for ${tokens.length} tokens.`);
+  await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.CENTER);
+  await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.NINE);
+  await runLOSTest(n, viewers, targets, algs.AREA2D, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, false);
+  await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, false);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, false);
 
-  // Set to default Range for test
-  await setSetting(SETTINGS.RANGE.ALGORITHM, SETTINGS.RANGE.TYPES.NINE);
+  console.log("\n");
+  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
+  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.NINE);
+  await runLOSTest(n, viewers, targets, algs.AREA2D, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, true);
+  await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, true);
+  await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, true);
 
-  // Foundry (Points)
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.POINTS);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "LOS Points", tokens);
-
-  // Area 3d (Does not vary based on area percentage.)
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA3D);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Area3d", tokens);
-
-  // ***** Area Percentage = 0 ***********
-  console.log("\nArea percentage 0");
-  await setSetting(SETTINGS.LOS.PERCENT_AREA, 0);
-
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Area", tokens);
-
-  // ***** Area Percentage = .25 ***********
-  console.log("\nArea percentage .25");
-  await setSetting(SETTINGS.LOS.PERCENT_AREA, .25);
-
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Area", tokens);
-
-  // ***** Area Percentage = .5 ***********
-  console.log("\nArea percentage .5");
-  await setSetting(SETTINGS.LOS.PERCENT_AREA, .5);
-
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Area", tokens);
-
-  // ***** Area Percentage = .75 ***********
-  console.log("\nArea percentage .75");
-  await setSetting(SETTINGS.LOS.PERCENT_AREA, 0.75);
-
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Area", tokens);
-
-  // ***** Area Percentage = 1 ***********
-  console.log("\nArea percentage 1");
-  await setSetting(SETTINGS.LOS.PERCENT_AREA, 1);
-
-  await setSetting(SETTINGS.LOS.ALGORITHM, SETTINGS.LOS.TYPES.AREA);
-  await QBenchmarkLoopFn(n, visibilityTestFn, "Area", tokens);
-
-  // Reset
-  await setSetting(SETTINGS.RANGE.ALGORITHM, default_settings.range_algorithm);
-  await setSetting(SETTINGS.LOS.ALGORITHM, default_settings.los_algorithm);
-  await setSetting(SETTINGS.LOS.PERCENT_AREA, default_settings.los_percent_area);
+  await revertDebugStatus();
+  await revertLOSSettings();
 }
 
-
-export async function benchCover(n = 100) {
-  game.modules.get("tokenvisibility").api.debug = false;
-
-  const default_settings = {
-    cover_algorithm: getSetting(SETTINGS.COVER.ALGORITHM)
-  };
-
-  const controlled = _token;
-  if ( !controlled ) {
-    console.error("Must select a single token to benchmark cover.");
-    return;
-  }
-
-  const tokens = canvas.tokens.placeables.filter(t => !t.controlled);
-  console.log(`\nBenching token cover for ${tokens.length} tokens.`);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CENTER_CENTER);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Center", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CENTER_CORNERS_TARGET);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Corners Target", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CORNER_CORNERS_TARGET);
-  await QBenchmarkLoopFn(n, coverTestFn, "Corner-->Corners Target", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CENTER_CORNERS_GRID);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Select Grid Corners Target", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.CORNER_CORNERS_GRID);
-  await QBenchmarkLoopFn(n, coverTestFn, "Corners-->Select Grid Corners Target (dnd5e)", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.AREA);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Area", controlled, tokens);
-
-  await setSetting(SETTINGS.COVER.ALGORITHM, SETTINGS.COVER.TYPES.AREA3D);
-  await QBenchmarkLoopFn(n, coverTestFn, "Center-->Area 3d", controlled, tokens);
-
-  // Reset
-  await setSetting(SETTINGS.COVER.ALGORITHM, default_settings.cover_algorithm);
+function storeLOSSettings() {
+  userSettings.los.algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
+  userSettings.los.points = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
+  userSettings.los.large = Settings.get(SETTINGS.LOS.TARGET.LARGE);
 }
 
+async function revertLOSSettings() {
+  const { algorithm, points, large } = userSettings.los;
+  await Settings.set(SETTINGS.LOS.TARGET.ALGORITHM, algorithm);
+  await Settings.set(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS, points);
+  await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
+}
 
-function visibilityTestFn(tokens) {
+async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
+  let label = (`LOS: ${algorithm}, largeToken: ${large}`);
+  if ( algorithm === SETTINGS.LOS.TARGET.TYPES.POINTS ) {
+    await Settings.set(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS, nPoints);
+    label += `, ${nPoints}`;
+  }
+  await Settings.set(SETTINGS.LOS.TARGET.ALGORITHM, algorithm);
+  await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
+  await QBenchmarkLoopFn(n, benchLOS, label, viewers, targets);
+}
+
+function benchLOS(viewers, targets) {
   const out = [];
-
-  // Avoid caching the constrained token shape
-  for ( const token of tokens ) token._constrainedTokenShape = undefined;
-
-  for ( const token of tokens ) {
-    const tolerance = token.document.iconSize / 4;
-
-    // Randomize a bit to try to limit caching
-    const center = {
-      x: token.center.x + Math.round(randomUniform(-10, 10)),
-      y: token.center.y + Math.round(randomUniform(-10, 10))
-    };
-
-    out.push(canvas.effects.visibility.testVisibility(center, { tolerance, object: token }));
+  for ( const viewer of viewers ) {
+    const losCalc = viewer.vision?.[MODULE_ID]?.losCalc ?? new LOSCalculator(viewer, undefined);
+    for ( const target of targets ) {
+      if ( viewer === target ) continue;
+      out.push(losCalc.hasLOSTo(target));
+    }
   }
   return out;
 }
 
-function coverTestFn(controlled, targets) {
-  const out = [];
-
-  // Avoid caching the constrained token shape
-  for ( const token of targets ) token._constrainedTokenShape = undefined;
-
-  for ( const target of targets ) {
-    const coverCalc = new CoverCalculator(controlled, target);
-    out.push(coverCalc.targetCover());
-  }
-  return out;
-}
-
-/**
- * For a given numeric array, calculate one or more quantiles.
- * @param {Number[]}  arr  Array of numeric values to calculate.
- * @param {Number[]}  q    Array of quantiles, each between 0 and 1.
- * @return {Object} Object with each quantile number as a property.
- *                  E.g., { ".1": 100, ".5": 150, ".9": 190 }
- */
-function quantile(arr, q) {
-  arr.sort((a, b) => a - b);
-  if (!q.length) { return q_sorted(arr, q); }
-
-  const out = {};
-  for (let i = 0; i < q.length; i += 1) {
-    const q_i = q[i];
-    out[q_i] = q_sorted(arr, q_i);
-  }
-
-  return out;
-}
-
-/**
- * Re-arrange an array based on a given quantile.
- * Used by quantile function to identify locations of elements at specified quantiles.
- * @param {Number[]}  arr  Array of numeric values to calculate.
- * @param {Number}    q    Quantile to locate. E.g., .1, or .5 (median).
- */
-function q_sorted(arr, q) {
-  const pos = (arr.length - 1) * q;
-  const base = Math.floor(pos);
-  const rest = pos - base;
-  if (arr[base + 1] !== undefined) {
-    return arr[base] + (rest * (arr[base + 1] - arr[base]));
-  }
-  return arr[base];
-}
-
-/**
- * Round a decimal number to a specified number of digits.
- * @param {Number}  n       Number to round.
- * @param {Number}  digits  Digits to round to.
- */
-function precision(n, digits = 2) {
-  return Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits);
-}
-
-/**
-  * Benchmark a method of a class.
-  * Includes a 5% warmup (at least 1 iteration) and prints 10%/50%/90% quantiles along
-  * with the mean timing.
-  * @param {number} iterations    Number of repetitions. Will add an additional 5% warmup.
-  * @param {Object} thisArg       Class or other object that contains the method.
-  * @param {string} name          Function name to benchmark
-  * @param {Object} ...args       Additional arguments to pass to function
-  * @return {Number[]}            Array with the time elapsed for each iteration.
-  */
-export async function QBenchmarkLoop(iterations, thisArg, fn_name, ...args) {
-  const name = `${thisArg.name || thisArg.constructor.name}.${fn_name}`;
-  const fn = (...args) => thisArg[fn_name](...args);
-  return await QBenchmarkLoopFn(iterations, fn, name, ...args);
-}
-
-/**
-  * Benchmark a function
-  * Includes a 5% warmup (at least 1 iteration) and prints 10%/50%/90% quantiles along
-  * with the mean timing.
-  * @param {number} iterations    Number of repetitions. Will add an additional 5% warmup.
-  * @param {Function} fn            Function to benchmark
-  * @param {string} name          Description to print to console
-  * @param {Object} ...args       Additional arguments to pass to function
-  * @return {Number[]}            Array with the time elapsed for each iteration.
-  */
-export async function QBenchmarkLoopFn(iterations, fn, name, ...args) {
-  const timings = [];
-  const num_warmups = Math.ceil(iterations * .05);
-
-  for (let i = -num_warmups; i < iterations; i += 1) {
-    const t0 = performance.now();
-    fn(...args);
-    const t1 = performance.now();
-    if (i >= 0) { timings.push(t1 - t0); }
-  }
-
-  const sum = timings.reduce((prev, curr) => prev + curr);
-  const q = quantile(timings, [.1, .5, .9]);
-
-  console.log(`${name} | ${iterations} iterations | ${precision(sum, 4)}ms | ${precision(sum / iterations, 4)}ms per | 10/50/90: ${precision(q[.1], 6)} / ${precision(q[.5], 6)} / ${precision(q[.9], 6)}`);
-
-  return timings;
-}
-
-/**
- * Benchmark a function using a setup function called outside the timing loop.
- * The setup function must pass any arguments needed to the function to be timed.
- * @param {number} iterations     Number of repetitions. Will add an additional 5% warmup.
- * @param {Function} setupFn      Function to call prior to each loop of the benchmark.
- * @param {Function} fn             Function to benchmark
- * @param {string} name           Description to print to console
- * @param {Object} ...args        Additional arguments to pass to setup function
- * @return {Number[]}             Array with the time elapsed for each iteration.
- */
-export async function QBenchmarkLoopWithSetupFn(iterations, setupFn, fn, name, ...setupArgs) {
-  const timings = [];
-  const num_warmups = Math.ceil(iterations * .05);
-
-  for (let i = -num_warmups; i < iterations; i += 1) {
-    const args = setupFn(...setupArgs);
-    const t0 = performance.now();
-    fn(...args);
-    const t1 = performance.now();
-    if (i >= 0) { timings.push(t1 - t0); }
-  }
-
-  const sum = timings.reduce((prev, curr) => prev + curr);
-  const q = quantile(timings, [.1, .5, .9]);
-
-  console.log(`${name} | ${iterations} iterations | ${precision(sum, 4)}ms | ${precision(sum / iterations, 4)}ms per | 10/50/90: ${precision(q[.1], 6)} / ${precision(q[.5], 6)} / ${precision(q[.9], 6)}`);
-
-  return timings;
-}
-
-/**
- * Helper function to run foundry.utils.benchmark a specified number of iterations
- * for a specified function, printing the results along with the specified name.
- * @param {Number}    iterations  Number of iterations to run the benchmark.
- * @param {Function}  fn          Function to test
- * @param ...args                 Arguments passed to fn.
- */
-export async function benchmarkLoopFn(iterations, fn, name, ...args) {
-  const f = () => fn(...args);
-  Object.defineProperty(f, "name", {value: `${name}`, configurable: true});
-  await foundry.utils.benchmark(f, iterations, ...args);
-}
-
-/**
- * Helper function to run foundry.utils.benchmark a specified number of iterations
- * for a specified function in a class, printing the results along with the specified name.
- * A class object must be passed to call the function and is used as the label.
- * Otherwise, this is identical to benchmarkLoopFn.
- * @param {Number}    iterations  Number of iterations to run the benchmark.
- * @param {Object}    thisArg     Instantiated class object that has the specified fn.
- * @param {Function}  fn          Function to test
- * @param ...args                 Arguments passed to fn.
- */
-export async function benchmarkLoop(iterations, thisArg, fn, ...args) {
-  const f = () => thisArg[fn](...args);
-  Object.defineProperty(f, "name", {value: `${thisArg.name || thisArg.constructor.name}.${fn}`, configurable: true});
-  await foundry.utils.benchmark(f, iterations, ...args);
-}

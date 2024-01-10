@@ -1,36 +1,36 @@
 /* globals
+canvas,
+CONFIG,
+foundry,
 game,
-duplicate,
-CONFIG
+PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { log } from "./util.js";
-import { MODULE_ID, MODULES_ACTIVE, COVER } from "./const.js";
-import { STATUS_EFFECTS } from "./status_effects.js";
-import {
-  LowCoverEffectConfig,
-  MediumCoverEffectConfig,
-  HighCoverEffectConfig } from "./EnhancedEffectConfig.js";
+import { MODULE_ID } from "./const.js";
+import { SettingsSubmenu } from "./SettingsSubmenu.js";
+import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
+import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 
-// Non-caching alt:
-// export function getSetting(settingName) {
-//   return game.settings.get(MODULE_ID, settingName);
-// }
 
-// For caching to work, need to clean the cache whenever a setting below changes.
-// Need function for onChange.
-export const settingsCache = new Map();
-export function getSetting(settingName) {
-  const cached = settingsCache.get(settingName);
-  if ( cached === undefined ) {
-    const value = game.settings.get(MODULE_ID, settingName);
-    settingsCache.set(settingName, value);
-    return value;
-  }
-  return cached;
+// Patches for the Setting class
+export const PATCHES = {};
+PATCHES.BASIC = {};
+
+// ----- NOTE: Hooks ----- //
+
+/**
+ * Wipe the settings cache on update
+ */
+function updateSetting(document, change, options, userId) {  // eslint-disable-line no-unused-vars
+  const [module, ...arr] = document.key.split(".");
+  const key = arr.join("."); // If the key has periods, multiple will be returned by split.
+  if ( module === MODULE_ID && Settings.cache.has(key) ) Settings.cache.delete(key);
 }
+
+PATCHES.BASIC.HOOKS = { updateSetting };
+
 
 /* Testing cached settings
 function fnDefault(settingName) {
@@ -48,99 +48,59 @@ await api.bench.QBenchmarkLoopFn(N, getSetting, "cached","cover-token-live")
 await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 */
 
-export async function setSetting(settingName, value) {
-  settingsCache.delete(settingName);
-  return game.settings.set(MODULE_ID, settingName, value);
-}
-
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
+  SUBMENU: "submenu",
+  POINT_TYPES: AlternativeLOS.POINT_TYPES,
 
   RANGE: {
     ALGORITHM: "range-algorithm",
-    TYPES: {
-      CENTER: "range-points-center",
-      FIVE: "range-points-five",
-      NINE: "range-points-nine"
-    },
     POINTS3D: "range-points-3d",
     DISTANCE3D: "range-distance-3d"
   },
 
   LOS: {
-    ALGORITHM: "los-algorithm",
-    TYPES: {
-      POINTS: "los-points",
-      CORNERS: "los-corners",
-      AREA: "los-area",
-      AREA3D: "los-area-3d"
+    VIEWER: {
+      NUM_POINTS: "los-points-viewer",
+      INSET: "los-inset-viewer"
     },
 
-    PERCENT_AREA: "los-percent-area"
-  },
-
-  COVER: {
-    ALGORITHM: "cover-algorithm",
-    TYPES: {
-      CENTER_CORNERS_TARGET: "cover-center-to-target-corners",
-      CORNER_CORNERS_TARGET: "cover-corner-to-target-corners",
-      CENTER_CORNERS_GRID: "cover-center-to-target-grid-corners",
-      CORNER_CORNERS_GRID: "cover-corner-to-target-grid-corners",
-      CENTER_CENTER: "cover-center-to-center",
-      AREA: "cover-area",
-      AREA3D: "cover-area-3d"
-    },
-
-    EFFECTS: "cover-effects",
-
-    MENU: {
-      LOW: "menu-cover-effects-low",
-      MEDIUM: "menu-cover-effects-medium",
-      HIGH: "menu-cover-effects-high"
-    },
-
-    TRIGGER_CENTER: "cover-trigger-center",
-
-    TRIGGER_PERCENT: {
-      LOW: "cover-trigger-percent-low",
-      MEDIUM: "cover-trigger-percent-medium",
-      HIGH: "cover-trigger-percent-high"
-    },
-
-    MIDIQOL: {
-      COVERCHECK: "midiqol-covercheck",
-      COVERCHECK_CHOICES: {
-        NONE: "midiqol-covercheck-none",
-        USER: "midiqol-covercheck-user",
-        USER_CANCEL: "midiqol-covercheck-user-cancel",
-        GM: "midiqol-covercheck-gm",
-        AUTO: "midiqol-covercheck-auto"
-      },
-      COVERCHECK_IF_CHANGED: "midiqol-covercheck-if-changed"
-    },
-
-    COMBAT_AUTO: "cover-combat-auto",
-    CHAT: "cover-chat-message",
-
-    DEAD_TOKENS: {
-      ALGORITHM: "cover-token-dead",
-      ATTRIBUTE: "cover-token-dead-attribute"
-    },
-
-    LIVE_TOKENS: {
-      ALGORITHM: "cover-token-live",
-      ATTRIBUTE: "cover-token-prone-attribute",
+    TARGET: {
+      ALGORITHM: "los-algorithm",
+      PERCENT: "los-percent",
+      LARGE: "los-large-target",
       TYPES: {
-        NONE: "cover-token-live-none",
-        HALF: "cover-token-live-half",
-        FULL: "cover-token-live-full"
+        POINTS: "los-points",
+        AREA2D: "los-area-2d",
+        AREA3D: "los-area-3d",
+        AREA3D_GEOMETRIC: "los-area-3d-geometric",
+        AREA3D_WEBGL1: "los-area-3d-webgl1",
+        AREA3D_WEBGL2: "los-area-3d-webgl2",
+        AREA3D_HYBRID: "los-area-3d-hybrid"
+      },
+      POINT_OPTIONS: {
+        NUM_POINTS: "los-points-target",
+        INSET: "los-inset-target",
+        POINTS3D: "los-points-3d"
       }
-    },
-
-    PRONE: "cover-prone"
+    }
   },
+
+  PRONE_STATUS_ID: "prone-status-id",
+  TOKEN_HP_ATTRIBUTE: "token-hp-attribute",
+
+  PRONE_MULTIPLIER: "prone-multiplier",
+  VISION_HEIGHT_MULTIPLIER: "vision-height-multiplier",
+
+  LIVE_TOKENS_BLOCK: "live-tokens-block",
+  DEAD_TOKENS_BLOCK: "dead-tokens-block",
+  PRONE_TOKENS_BLOCK: "prone-tokens-block",
 
   CHANGELOG: "changelog",
+  DEBUG: {
+    RANGE: "debug-range",
+    LOS: "debug-los"
+  },
 
   WELCOME_DIALOG: {
     v020: "welcome-dialog-v0-20",
@@ -149,494 +109,450 @@ export const SETTINGS = {
 
   MIGRATION: {
     v032: "migration-v032",
-    v054: "migration-v054"
+    v054: "migration-v054",
+    v060: "migration-v060"
   }
 };
 
+export class Settings {
+  /** @type {Map<string, *>} */
+  static cache = new Map();
 
-/* Range testing types:
-1. Center point -- Only test the center point of tokens.
-2. Foundry -- Use the Foundry 8 points.
-3. 3d Foundry -- Add additional points to top and bottom, 27 total
+  /** @type {object} */
+  static KEYS = SETTINGS;
 
-For 3d, test points in 3 dimensions.
-*/
+  /** @type {PIXI.Graphics} */
+  static #DEBUG_RANGE;
 
-/* LOS testing types:
-1. Points --- Use the same points from range, test if contained in LOS polygon.
-3. Area -- Use token area.
+  static get DEBUG_RANGE() { return canvas.tokens.children.find(c => c[`${MODULE_ID}_rangeDebug`]); }
 
-For area, provide a slider for 0–100% of token area.
-Each token should have a setting for bounds scale for vision.
+  static initializeDebugGraphics() {
+    this.#DEBUG_RANGE = new PIXI.Graphics();
+    this.#DEBUG_RANGE.eventMode = "passive";
 
-For 3d points, don't test los contains for extra 3d Foundry points. (They would obv. be the same. )
-For 3d points, do test wall collisions for non-infinite walls.
-(Infinite walls included in LOS.)
-*/
+    this.#DEBUG_RANGE[`${MODULE_ID}_rangeDebug`] = true;
+    canvas.tokens.addChild(this.#DEBUG_RANGE);
+  }
 
-/* Cover testing types:
-1. Center to 4 Corners -- from the center point of the token to 4 corners
-Half trigger: 1 (hex: 1)
-3/4 trigger: 3 (hex: 4)
-2. Corner to Four Corner -- DMG rules; vision from each occupied grid point
-Half trigger: 1 (hex: 1)
-3/4 trigger: 3 (hex: 4)
-3. Center to Center -- PF2e version
-3/4 (standard)
-4. Area
-Half trigger: % area
-3/4 trigger: % area
-full trigger: % area
+  // Don't need to destroy b/c they are destroyed as part of canvas.tokens.
+  //   static destroyDebugGraphics() {
+  //     if ( !this.#DEBUG_LOS.destroyed() ) this.#DEBUG_LOS.destroy();
+  //     if ( !this.#DEBUG_RANGE.destroyed() ) this.#DEBUG_RANGE.destroy();
+  //   }
 
-3D versions ( same triggers )
-5. Center to cube corners
-6. Cube corner to cube corners
-7. 3d Area
+  static toggleRangeDebugGraphics(_enabled) {
+    this.DEBUG_RANGE.clear();
+  }
 
-
-Other settings:
-GM can provide the name of an active effect to apply when covered. Applies to the token with cover.
-- low active effect
-- medium active effect
-- high active effect
-
-Cover Names:
-Generic: low, medium, high
-PF2e: lesser, standard, greater
-dnd5e: half, 3/4, full
-
-*/
-
-export function registerSettings() {
-  log("Registering token visibility settings.");
-
-  const RTYPES = SETTINGS.RANGE.TYPES;
-  const LTYPES = SETTINGS.LOS.TYPES;
-  const CTYPES = SETTINGS.COVER.TYPES;
-  const coverNames = getCoverNames();
-
-  game.settings.register(MODULE_ID, SETTINGS.RANGE.ALGORITHM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.ALGORITHM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.ALGORITHM}.Hint`),
-    scope: "world",
-    config: true,
-    type: String,
-    choices: {
-      [RTYPES.CENTER]: game.i18n.localize(`${MODULE_ID}.settings.${RTYPES.CENTER}`),
-      [RTYPES.FIVE]: game.i18n.localize(`${MODULE_ID}.settings.${RTYPES.FIVE}`),
-      [RTYPES.NINE]: game.i18n.localize(`${MODULE_ID}.settings.${RTYPES.NINE}`)
-    },
-    default: RTYPES.NINE
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.RANGE.POINTS3D, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.POINTS3D}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.POINTS3D}.Hint`),
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.RANGE.DISTANCE3D, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.DISTANCE3D}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.RANGE.DISTANCE3D}.Hint`),
-    scope: "world",
-    config: !MODULES_ACTIVE.LEVELS && !MODULES_ACTIVE.PERFECT_VISION,
-    type: Boolean,
-    default: true
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.LOS.ALGORITHM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.ALGORITHM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.ALGORITHM}.Hint`),
-    scope: "world",
-    config: true,
-    type: String,
-    choices: {
-      [LTYPES.POINTS]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.POINTS}`),
-      [LTYPES.CORNERS]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.CORNERS}`),
-      [LTYPES.AREA]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.AREA}`),
-      [LTYPES.AREA3D]: game.i18n.localize(`${MODULE_ID}.settings.${LTYPES.AREA3D}`)
-    },
-    default: LTYPES.POINTS
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.LOS.PERCENT_AREA, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.PERCENT_AREA}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.LOS.PERCENT_AREA}.Hint`),
-    range: {
-      max: 1,
-      min: 0,
-      step: 0.05
-    },
-    scope: "world",
-    config: true, // () => getSetting(SETTINGS.LOS.ALGORITHM) !== LTYPES.POINTS,
-    default: 0,
-    type: Number
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.COVER.ALGORITHM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.ALGORITHM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.ALGORITHM}.Hint`),
-    scope: "world",
-    config: true,
-    type: String,
-    choices: {
-      [CTYPES.CENTER_CENTER]: game.i18n.localize(`${MODULE_ID}.settings.${CTYPES.CENTER_CENTER}`),
-      [CTYPES.CENTER_CORNERS_TARGET]: game.i18n.localize(`${MODULE_ID}.settings.${CTYPES.CENTER_CORNERS_TARGET}`),
-      [CTYPES.CORNER_CORNERS_TARGET]: game.i18n.localize(`${MODULE_ID}.settings.${CTYPES.CORNER_CORNERS_TARGET}`),
-      [CTYPES.CENTER_CORNERS_GRID]: game.i18n.localize(`${MODULE_ID}.settings.${CTYPES.CENTER_CORNERS_GRID}`),
-      [CTYPES.CORNER_CORNERS_GRID]: game.i18n.localize(`${MODULE_ID}.settings.${CTYPES.CORNER_CORNERS_GRID}`),
-      [CTYPES.AREA]: game.i18n.localize(`${MODULE_ID}.settings.${CTYPES.AREA}`),
-      [CTYPES.AREA3D]: game.i18n.localize(`${MODULE_ID}.settings.${CTYPES.AREA3D}`)
-    },
-    default: game.system.id === "pf2e" ? CTYPES.CENTER_CENTER : CTYPES.CORNER_CORNERS_TARGET
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.COVER.TRIGGER_CENTER, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_CENTER}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_CENTER}.Hint`),
-    scope: "world",
-    config: true, // () => getSetting(SETTINGS.COVER.ALGORITHM) === CTYPES.CENTER_CENTER,
-    default: coverNames.MEDIUM,
-    type: String,
-    choices: {
-      LOW: coverNames.LOW,
-      MEDIUM: coverNames.MEDIUM,
-      HIGH: coverNames.HIGH
+  static toggleLOSDebugGraphics(enabled = false) {
+    if ( enabled ) registerDebug();
+    else {
+      if ( canvas.tokens?.placeables ) {
+        canvas.tokens.placeables.forEach(token => {
+          const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+          if ( !calc ) return;
+          calc.clearDebug();
+        });
+      }
+      deregisterDebug();
     }
-  });
+  }
 
-  game.settings.register(MODULE_ID, SETTINGS.COVER.TRIGGER_PERCENT.LOW, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_PERCENT.LOW}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_PERCENT.LOW}.Hint`),
-    range: {
-      max: 1,
-      min: 0.1,
-      step: 0.05
-    },
-    scope: "world",
-    config: true,
-    default: .5,
-    type: Number
-  });
+  /**
+   * Retrive a specific setting.
+   * Cache the setting.  For caching to work, need to clean the cache whenever a setting below changes.
+   * @param {string} key
+   * @returns {*}
+   */
+  static get(key) {
+    // TODO: Bring back a working cache.
 
-  game.settings.register(MODULE_ID, SETTINGS.COVER.TRIGGER_PERCENT.MEDIUM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_PERCENT.MEDIUM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_PERCENT.MEDIUM}.Hint`),
-    range: {
-      max: 1,
-      min: 0.1,
-      step: 0.05
-    },
-    scope: "world",
-    config: true,
-    default: .75,
-    type: Number
-  });
+    const cached = this.cache.get(key);
+    if ( typeof cached !== "undefined" ) {
+      const origValue = game.settings.get(MODULE_ID, key);
+      if ( origValue !== cached ) {
+        console.debug(`Settings cache fail: ${origValue} !== ${cached} for key ${key}`);
+        return origValue;
+      }
 
-  game.settings.register(MODULE_ID, SETTINGS.COVER.TRIGGER_PERCENT.HIGH, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_PERCENT.HIGH}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.TRIGGER_PERCENT.HIGH}.Hint`),
-    range: {
-      max: 1,
-      min: 0.1,
-      step: 0.05
-    },
-    scope: "world",
-    config: true,
-    default: 1,
-    type: Number
-  });
+      return cached;
 
+    }
+    const value = game.settings.get(MODULE_ID, key);
+    this.cache.set(key, value);
+    return value;
+  }
 
-  const skipCoverMenus = game.system.id === "sfrpg";
-  const skipLowMenu = skipCoverMenus || dFredsHasCover("LOW");
-  const skipMediumMenu = skipCoverMenus || dFredsHasCover("MEDIUM");
-  const skipHighMenu = skipCoverMenus || dFredsHasCover("HIGH");
+  /**
+   * Set a specific setting.
+   * @param {string} key
+   * @param {*} value
+   * @returns {Promise<boolean>}
+   */
+  static async set(key, value) {
+    this.cache.delete(key);
+    return game.settings.set(MODULE_ID, key, value);
+  }
 
-  if ( !skipLowMenu ) {
-    game.settings.registerMenu(MODULE_ID, SETTINGS.COVER.MENU.LOW, {
-      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MENU.LOW}.Name`),
-      label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MENU.LOW}.Label`),
-      icon: "fas fa-shield-halved",
-      type: LowCoverEffectConfig,
+  /**
+   * Register a specific setting.
+   * @param {string} key        Passed to registerMenu
+   * @param {object} options    Passed to registerMenu
+   */
+  static register(key, options) { game.settings.register(MODULE_ID, key, options); }
+
+  /**
+   * Register a submenu.
+   * @param {string} key        Passed to registerMenu
+   * @param {object} options    Passed to registerMenu
+   */
+  static registerMenu(key, options) { game.settings.registerMenu(MODULE_ID, key, options); }
+
+  /**
+   * Register all settings
+   */
+  static registerAll() {
+    const { KEYS, register, registerMenu } = this;
+    const localize = key => game.i18n.localize(`${MODULE_ID}.settings.${key}`);
+    const PT_TYPES = KEYS.POINT_TYPES;
+    const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
+    const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
+    const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES, { POINTS: 0, AREA2D: 0, AREA3D: 0 });
+    const losChoices = {};
+    const ptChoices = {};
+    const rangeChoices = {};
+    Object.values(RTYPES).forEach(type => rangeChoices[type] = localize(type));
+    Object.values(LTYPES).forEach(type => losChoices[type] = localize(type));
+    Object.values(PT_TYPES).forEach(type => ptChoices[type] = localize(type));
+
+    // ----- Main Settings Menu ----- //
+    registerMenu(KEYS.SUBMENU, {
+      name: localize(`${KEYS.SUBMENU}.Name`),
+      label: localize(`${KEYS.SUBMENU}.Label`),
+      icon: "fas fa-user-gear",
+      type: SettingsSubmenu,
       restricted: true
     });
-  }
 
-  if ( !skipMediumMenu ) {
-    game.settings.registerMenu(MODULE_ID, SETTINGS.COVER.MENU.MEDIUM, {
-      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MENU.MEDIUM}.Name`),
-      label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MENU.MEDIUM}.Label`),
-      icon: "fas fa-shield-heart",
-      type: MediumCoverEffectConfig,
-      restricted: true
+    register(KEYS.DEBUG.RANGE, {
+      name: localize(`${KEYS.DEBUG.RANGE}.Name`),
+      hint: localize(`${KEYS.DEBUG.RANGE}.Hint`),
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: false,
+      onChange: value => this.toggleRangeDebugGraphics(value)
     });
-  }
 
-  if ( !skipHighMenu ) {
-    game.settings.registerMenu(MODULE_ID, SETTINGS.COVER.MENU.HIGH, {
-      name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MENU.HIGH}.Name`),
-      hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MENU.HIGH}.Hint`),
-      label: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MENU.HIGH}.Label`),
-      icon: "fas fa-shield",
-      type: HighCoverEffectConfig,
-      restricted: true
+    register(KEYS.DEBUG.LOS, {
+      name: localize(`${KEYS.DEBUG.LOS}.Name`),
+      hint: localize(`${KEYS.DEBUG.LOS}.Hint`),
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: false,
+      onChange: value => this.toggleLOSDebugGraphics(value)
     });
+
+    // ----- NOTE: Submenu ---- //
+
+    // ----- NOTE: Range tab ----- //
+
+    register(KEYS.RANGE.ALGORITHM, {
+      name: localize(`${KEYS.RANGE.ALGORITHM}.Name`),
+      hint: localize(`${KEYS.RANGE.ALGORITHM}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: rangeChoices,
+      default: RTYPES.NINE,
+      tab: "range"
+    });
+
+    register(KEYS.RANGE.POINTS3D, {
+      name: localize(`${KEYS.RANGE.POINTS3D}.Name`),
+      hint: localize(`${KEYS.RANGE.POINTS3D}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "range"
+    });
+
+    register(KEYS.RANGE.DISTANCE3D, {
+      name: localize(`${KEYS.RANGE.DISTANCE3D}.Name`),
+      hint: localize(`${KEYS.RANGE.DISTANCE3D}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "range"
+    });
+
+    // ----- NOTE: Line-of-sight viewer tab ----- //
+    const VIEWER = KEYS.LOS.VIEWER;
+    register(VIEWER.NUM_POINTS, {
+      name: localize(`${VIEWER.NUM_POINTS}.Name`),
+      hint: localize(`${VIEWER.NUM_POINTS}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: ptChoices,
+      default: PT_TYPES.CENTER,
+      tab: "losViewer"
+    });
+
+    register(VIEWER.INSET, {
+      name: localize(`${VIEWER.INSET}.Name`),
+      hint: localize(`${VIEWER.INSET}.Hint`),
+      range: {
+        max: 0.99,
+        min: 0,
+        step: 0.01
+      },
+      scope: "world",
+      config: false,
+      default: 0.75,
+      type: Number,
+      tab: "losViewer"
+    });
+
+    // ----- NOTE: Line-of-sight target tab ----- //
+    const TARGET = KEYS.LOS.TARGET;
+    register(TARGET.LARGE, {
+      name: localize(`${TARGET.LARGE}.Name`),
+      hint: localize(`${TARGET.LARGE}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(TARGET.LARGE, value)
+    });
+
+    register(TARGET.ALGORITHM, {
+      name: localize(`${TARGET.ALGORITHM}.Name`),
+      hint: localize(`${TARGET.ALGORITHM}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: losChoices,
+      default: LTYPES.NINE,
+      tab: "losTarget",
+      onChange: value => this.losAlgorithmChange(TARGET.ALGORITHM, value)
+    });
+
+    register(TARGET.PERCENT, {
+      name: localize(`${TARGET.PERCENT}.Name`),
+      hint: localize(`${TARGET.PERCENT}.Hint`),
+      range: {
+        max: 1,
+        min: 0,
+        step: 0.05
+      },
+      scope: "world",
+      config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
+      default: 0,
+      type: Number,
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(TARGET.PERCENT, value)
+    });
+
+    register(PT_OPTS.NUM_POINTS, {
+      name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
+      hint: localize(`${PT_OPTS.NUM_POINTS}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      choices: ptChoices,
+      default: PT_TYPES.NINE,
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(PT_OPTS.NUM_POINTS, value)
+    });
+
+    register(PT_OPTS.INSET, {
+      name: localize(`${PT_OPTS.INSET}.Name`),
+      hint: localize(`${PT_OPTS.INSET}.Hint`),
+      range: {
+        max: 0.99,
+        min: 0,
+        step: 0.01
+      },
+      scope: "world",
+      config: false, // () => getSetting(KEYS.LOS.ALGORITHM) !== LTYPES.POINTS,
+      default: 0.75,
+      type: Number,
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(PT_OPTS.INSET, value)
+    });
+
+    register(PT_OPTS.POINTS3D, {
+      name: localize(`${PT_OPTS.POINTS3D}.Name`),
+      hint: localize(`${PT_OPTS.POINTS3D}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: true,
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(PT_OPTS.POINTS3D, value)
+    });
+
+    // ----- NOTE: Other tab ----- //
+
+    register(KEYS.LIVE_TOKENS_BLOCK, {
+      name: localize(`${KEYS.LIVE_TOKENS_BLOCK}.Name`),
+      hint: localize(`${KEYS.LIVE_TOKENS_BLOCK}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      onChange: value => this.losSettingChange(KEYS.LIVE_TOKENS_BLOCK, value),
+      tab: "other"
+    });
+
+    register(KEYS.DEAD_TOKENS_BLOCK, {
+      name: localize(`${KEYS.DEAD_TOKENS_BLOCK}.Name`),
+      hint: localize(`${KEYS.DEAD_TOKENS_BLOCK}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      onChange: value => this.losSettingChange(KEYS.DEAD_TOKENS_BLOCK, value),
+      tab: "other"
+    });
+
+    register(KEYS.PRONE_TOKENS_BLOCK, {
+      name: localize(`${KEYS.PRONE_TOKENS_BLOCK}.Name`),
+      hint: localize(`${KEYS.PRONE_TOKENS_BLOCK}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      onChange: value => this.losSettingChange(KEYS.PRONE_TOKENS_BLOCK, value),
+      tab: "other"
+    });
+
+    register(KEYS.PRONE_MULTIPLIER, {
+      name: localize(`${KEYS.PRONE_MULTIPLIER}.Name`),
+      hint: localize(`${KEYS.PRONE_MULTIPLIER}.Hint`),
+      scope: "world",
+      config: false,
+      type: Number,
+      range: {
+        max: 1,  // Prone equivalent to standing.
+        min: 0,  // Prone equivalent to (almost) not being there at all. Will set to a single pixel.
+        step: 0.1
+      },
+      default: CONFIG.GeometryLib.proneMultiplier ?? 0.33, // Same as Wall Height
+      onChange: value => CONFIG.GeometryLib.proneMultiplier = value,
+      tab: "other"
+    });
+
+    register(KEYS.VISION_HEIGHT_MULTIPLIER, {
+      name: localize(`${KEYS.VISION_HEIGHT_MULTIPLIER}.Name`),
+      hint: localize(`${KEYS.VISION_HEIGHT_MULTIPLIER}.Hint`),
+      scope: "world",
+      config: false,
+      type: Number,
+      range: {
+        max: 1,  // At token top.
+        min: 0,  // At token bottom.
+        step: 0.1
+      },
+      default: CONFIG.GeometryLib.visionHeightMultiplier ?? 0.9,
+      onChange: value => CONFIG.GeometryLib.visionHeightMultiplier = value,
+      tab: "other"
+    });
+
+    register(KEYS.PRONE_STATUS_ID, {
+      name: localize(`${KEYS.PRONE_STATUS_ID}.Name`),
+      hint: localize(`${KEYS.PRONE_STATUS_ID}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      default: CONFIG.GeometryLib.proneStatusId || "prone",
+      onChange: value => CONFIG.GeometryLib.proneStatusId = value,
+      tab: "other"
+    });
+
+    // Make sure these are linked at the start.
+    CONFIG.GeometryLib.proneMultiplier = this.get(KEYS.PRONE_MULTIPLIER);
+    CONFIG.GeometryLib.visionHeightMultiplier = this.get(KEYS.VISION_HEIGHT_MULTIPLIER);
+    CONFIG.GeometryLib.proneStatusId = this.get(KEYS.PRONE_STATUS_ID);
+
+    register(KEYS.TOKEN_HP_ATTRIBUTE, {
+      name: localize(`${KEYS.TOKEN_HP_ATTRIBUTE}.Name`),
+      hint: localize(`${KEYS.TOKEN_HP_ATTRIBUTE}.Hint`),
+      scope: "world",
+      config: false,
+      type: String,
+      default: "system.attributes.hp.value",
+      tab: "other",
+      onChange: value => this.losSettingChange(KEYS.TOKEN_HP_ATTRIBUTE, value)
+    });
+
+    // ----- NOTE: Hidden settings ----- //
+
+    register(KEYS.AREA3D_USE_SHADOWS, {
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false
+    });
+
+    register(KEYS.WELCOME_DIALOG.v030, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+    register(KEYS.MIGRATION.v032, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+    register(KEYS.MIGRATION.v054, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+    register(KEYS.MIGRATION.v060, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
+
+    // ----- NOTE: Triggers based on starting settings ---- //
+    // Start debug
+    if ( this.get(this.KEYS.DEBUG.LOS) ) registerDebug();
+
+    // Register the Area3D methods on initial load.
+    if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
+
   }
 
-  game.settings.register(MODULE_ID, SETTINGS.COVER.COMBAT_AUTO, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.COMBAT_AUTO}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.COMBAT_AUTO}.Hint`),
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true
-  });
+  static typesWebGL2 = new Set([
+    SETTINGS.LOS.TARGET.TYPES.AREA3D,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID]);
 
-  game.settings.register(MODULE_ID, SETTINGS.COVER.CHAT, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.CHAT}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.CHAT}.Hint`),
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true
-  });
+  static losAlgorithmChange(key, value) {
+    this.cache.delete(key);
+    if ( this.typesWebGL2.has(value) ) registerArea3d();
 
-  const MIDICHOICES = SETTINGS.COVER.MIDIQOL.COVERCHECK_CHOICES;
-  const useCoverCheck = game.system.id === "dnd5e" || MODULES_ACTIVE.MIDI_QOL;
-  game.settings.register(MODULE_ID, SETTINGS.COVER.MIDIQOL.COVERCHECK, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MIDIQOL.COVERCHECK}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MIDIQOL.COVERCHECK}.Hint`),
-    scope: "world",
-    config: useCoverCheck,
-    type: String,
-    choices: {
-      [MIDICHOICES.NONE]: game.i18n.localize(`${MODULE_ID}.settings.${MIDICHOICES.NONE}`),
-      [MIDICHOICES.USER]: game.i18n.localize(`${MODULE_ID}.settings.${MIDICHOICES.USER}`),
-      [MIDICHOICES.USER_CANCEL]: game.i18n.localize(`${MODULE_ID}.settings.${MIDICHOICES.USER_CANCEL}`),
-      [MIDICHOICES.GM]: game.i18n.localize(`${MODULE_ID}.settings.${MIDICHOICES.GM}`),
-      [MIDICHOICES.AUTO]: game.i18n.localize(`${MODULE_ID}.settings.${MIDICHOICES.AUTO}`)
-    },
-    default: MIDICHOICES.NONE
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.COVER.MIDIQOL.COVERCHECK_IF_CHANGED, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MIDIQOL.COVERCHECK_IF_CHANGED}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.MIDIQOL.COVERCHECK_IF_CHANGED}.Hint`),
-    scope: "world",
-    config: useCoverCheck,
-    type: Boolean,
-    default: false
-  });
-
-  const LIVECHOICES = SETTINGS.COVER.LIVE_TOKENS.TYPES;
-  game.settings.register(MODULE_ID, SETTINGS.COVER.LIVE_TOKENS.ALGORITHM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.LIVE_TOKENS.ALGORITHM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.LIVE_TOKENS.ALGORITHM}.Hint`),
-    scope: "world",
-    config: true,
-    type: String,
-    choices: {
-      [LIVECHOICES.NONE]: game.i18n.localize(`${MODULE_ID}.settings.${LIVECHOICES.NONE}`),
-      [LIVECHOICES.FULL]: game.i18n.localize(`${MODULE_ID}.settings.${LIVECHOICES.FULL}`),
-      [LIVECHOICES.HALF]: game.i18n.localize(`${MODULE_ID}.settings.${LIVECHOICES.HALF}`)
-    },
-    default: LIVECHOICES.FULL
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.COVER.DEAD_TOKENS.ALGORITHM, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.DEAD_TOKENS.ALGORITHM}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.DEAD_TOKENS.ALGORITHM}.Hint`),
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.COVER.PRONE, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.PRONE}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.PRONE}.Hint`),
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.DEAD_TOKENS.ATTRIBUTE}.Hint`),
-    scope: "world",
-    config: true,
-    type: String,
-    default: "system.attributes.hp.value"
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE, {
-    name: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE}.Name`),
-    hint: game.i18n.localize(`${MODULE_ID}.settings.${SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE}.Hint`),
-    scope: "world",
-    config: true,
-    type: String,
-    default: "prone",
-    onChange: value => CONFIG.GeometryLib.proneStatusId = value
-  });
-
-  // ----- HIDDEN SETTINGS ----- //
-  game.settings.register(MODULE_ID, SETTINGS.COVER.EFFECTS, {
-    scope: "world",
-    config: false,
-    default: STATUS_EFFECTS
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.AREA3D_USE_SHADOWS, {
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: false
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.WELCOME_DIALOG.v030, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.MIGRATION.v032, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
-
-  game.settings.register(MODULE_ID, SETTINGS.MIGRATION.v054, {
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean
-  });
-
-  log("Done registering settings.");
-}
-
-function getCoverNames() {
-  const statusEffects = STATUS_EFFECTS[game.system.id] || STATUS_EFFECTS.generic;
-
-  return {
-    LOW: statusEffects.LOW.label,
-    MEDIUM: statusEffects.MEDIUM.label,
-    HIGH: statusEffects.HIGH.label
-  };
-}
-
-/* Status effects
-Stored in two places:
-- SETTINGS.COVER.EFFECTS[][LOW, MEDIUM, HIGH]
---> by game system
-
-- CONFIG.statusEffects
---> only current game system
-
-When first loading the scene:
-- Retrieve current status effect for the game system. Update CONFIG.statusEffects.
-
-When user updates an effect:
-- Store the updated effect to SETTINGS.COVER.EFFECTS for the type and game system
-- Update CONFIG.statusEffects
-
-*/
-
-/**
- * Retrieve from GM settings the cover effect for the provided type for this game system.
- * @param {string} type   LOW, MEDIUM, or HIGH
- * @returns {object} Status effect
- */
-export function getCoverEffect(type = "LOW") {
-  const allStatusEffects = getSetting(SETTINGS.COVER.EFFECTS);
-  const statusEffects = allStatusEffects[game.system.id] || allStatusEffects.generic;
-  return statusEffects[type];
-}
-
-/**
- * Helper function to get the cover effect name from settings.
- * @param {string} type   LOW, MEDIUM, HIGH
- * @returns {string} Label for the cover effect
- */
-export function getCoverName(type = "LOW") {
-  if ( type === "NONE" ) return game.i18n.localize("None");
-  if ( type === "TOTAL" ) return game.i18n.localize("tokenvisibility.phrases.Total");
-
-  const effect = getCoverEffect(type);
-  return game.i18n.localize(effect.name ?? effect.label);
-}
-
-/**
- * Store to GM settings the cover effect value provided for the provided type for this game system.
- * Also updates CONFIG.statusEffects array.
- * @param {string} type   LOW, MEDIUM, or HIGH
- * @param {object} value  Status effect
- */
-export async function setCoverEffect(type, value) {
-  if ( !type ) {
-    console.error("setCoverEffect type must be defined.");
-    return;
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateAlgorithm());
   }
 
-  const allStatusEffects = getSetting(SETTINGS.COVER.EFFECTS);
-  let systemId = game.system.id;
-  if ( (systemId === "dnd5e" || systemId === "sw5e")
-    && game.modules.get("midi-qol")?.active ) systemId = `${systemId}_midiqol`;
-
-  if ( !Object.hasOwn(allStatusEffects, systemId) ) allStatusEffects[systemId] = duplicate(allStatusEffects.generic);
-
-  allStatusEffects[systemId][type] = value;
-  await setSetting(SETTINGS.COVER.EFFECTS, allStatusEffects);
-  updateConfigStatusEffects(type);
-}
-
-/**
- * Confirm if DFred's has the given cover type.
- * @param {"LOW"|"MEDIUM"|"HIGH"} key
- * @returns {boolean}
- */
-function dFredsHasCover(key) {
-  if ( !MODULES_ACTIVE.DFREDS_CE ) return false;
-  return Boolean(game.dfreds.effectInterface.findEffectByName(COVER.DFRED_NAMES[key]));
-}
-
-/**
- * Update the CONFIG.statusEffects array with the provided type, taken from GM settings.
- * @type {string} type    LOW, MEDIUM, or HIGH. If not defined, will update all three.
- */
-export function updateConfigStatusEffects(type) {
-  // Skip if using DFred's CE
-  if ( dFredsHasCover(type) ) return;
-
-  if ( !type ) {
-    // Update all types
-    updateConfigStatusEffects("LOW");
-    updateConfigStatusEffects("MEDIUM");
-    updateConfigStatusEffects("HIGH");
-    return;
+  static losSettingChange(key, value) {
+    this.cache.delete(key);
+    const cfg = { [key]: value };
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateConfiguration(cfg));
   }
 
-  const coverEffect = getCoverEffect(type);
-  coverEffect.id = `${MODULE_ID}.cover.${type}`;
-  const currIdx = CONFIG.statusEffects.findIndex(effect => effect.id === coverEffect.id);
-  coverEffect.name ??= coverEffect.label ?? coverEffect.id; // Ensure name is always present.
-
-  if ( !~currIdx ) CONFIG.statusEffects.push(coverEffect);
-  else CONFIG.statusEffects[currIdx] = coverEffect;
 }
-
-/*
-Should probably switch to CSS:
-https://ptb.discord.com/channels/170995199584108546/956243957816377414/1029782382225670201
-No built-in way to do this. I would probably have config: true for all the settings,
-then use a renderSettingsConfig hook to selectively hide the elements with CSS only and
-add a listener which toggles that CSS hidden state.
-
-*/

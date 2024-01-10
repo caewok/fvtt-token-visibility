@@ -6,9 +6,8 @@ Dialog
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { SETTINGS, getSetting, setSetting } from "./settings.js";
-const CHANGELOG = SETTINGS.CHANGELOG;
+import { MODULE_ID, DOCUMENTATION_URL } from "./const.js";
+import { SETTINGS, Settings } from "./settings.js";
 
 // From Perfect Vision
 // https://github.com/dev7355608/perfect-vision/blob/cdf03ae7e4b5969efaee8e742bf9dd11d18ba8b7/scripts/changelog.js
@@ -21,7 +20,7 @@ Hooks.once("ready", () => {
 
   game.settings.register(
     MODULE_ID,
-    CHANGELOG,
+    SETTINGS.CHANGELOG,
     {
       scope: "client",
       config: false,
@@ -67,6 +66,23 @@ Hooks.once("ready", () => {
             the corner of another token, which mimics the dnd5e DMG rule. This is equivalent to the corner-to-corner
             cover option.`
     })
+
+    .addEntry({
+      version: "0.6.0",
+      title: "Split Token Visibility from Token Cover",
+      body: `\
+          To simplify the module and improve debugging, I have split out token cover from
+          token visibility. There are now two modules: [Alternative Token Visibility](https://github.com/caewok/fvtt-token-visibility) and
+          [Alternative Token Cover](https://github.com/caewok/fvtt-token-cover). You can use one module without
+          the other, or both in combination.
+
+          - **Refactored Settings:** New settings configuration submenu and reorganized settings. Sorry, I did not attempt
+            to transfer over your old settings!
+          - **Revised Area3d Algorithm:** Area3d and Points algorithms both now handle handle transparent tiles. Area3d will
+            automatically switch to webGL to render a 3d view with tiles when necessary to determine visibility.
+          `
+    })
+
     .build()
     ?.render(true);
 });
@@ -85,7 +101,7 @@ class ChangelogBuilder {
 
   build() {
     const converter = new showdown.Converter();
-    const curr = getSetting(CHANGELOG);
+    const curr = Settings.get(SETTINGS.CHANGELOG);
     const next = this.#entries.length;
     let content = "";
 
@@ -128,12 +144,12 @@ class ChangelogBuilder {
         view_documentation: {
           icon: `<i class="fas fa-book"></i>`,
           label: "View documentation",
-          callback: () => window.open("https://github.com/caewok/fvtt-token-visibility/blob/master/README.md")
+          callback: () => window.open(DOCUMENTATION_URL)
         },
         dont_show_again: {
           icon: `<i class="fas fa-times"></i>`,
           label: "Don't show again",
-          callback: () => setSetting(CHANGELOG, next)
+          callback: () => Settings.get(SETTINGS.CHANGELOG, next)
         }
       },
       default: "dont_show_again"

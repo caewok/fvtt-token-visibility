@@ -1,65 +1,74 @@
 /* globals
-game,
+canvas
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { Patcher } from "./Patcher.js";
-import { MODULES_ACTIVE } from "./const.js";
+import { MODULES_ACTIVE, MODULE_ID } from "./const.js";
+import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
 
-import { PATCHES as PATCHES_ActiveEffect } from "./ActiveEffect.js";
+import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
-import { PATCHES as PATCHES_Combat } from "./Combat.js";
-import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
-import { PATCHES as PATCHES_DrawingConfig} from "./DrawingConfig.js";
-import { PATCHES as PATCHES_Item } from "./Item.js";
-import { PATCHES as PATCHES_LightSource } from "./LightSource.js";
-import { PATCHES as PATCHES_PointSourcePolygon } from "./PointSourcePolygon.js";
-import { PATCHES as PATCHES_Setting } from "./Setting.js";
+import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
+import { PATCHES as PATCHES_Setting } from "./Settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 
+// LOS
+import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
+import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
+import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
+import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
+import { PATCHES as PATCHES_VisionSourceLOS } from "./LOS/VisionSource.js";
+import { PATCHES as PATCHES_WallLOS } from "./LOS/Wall.js";
+import { PATCHES as PATCHES_Wall } from "./Wall.js";
+
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
 
-// Midiqol
-import { PATCHES as PATCHES_Midiqol } from "./Midiqol.js";
-
 const PATCHES = {
-  ActiveEffect: PATCHES_ActiveEffect,
+  Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,
-  Combat: PATCHES_Combat,
   ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
   DetectionMode: PATCHES_DetectionMode,
-  DrawingConfig: PATCHES_DrawingConfig,
-  Item: PATCHES_Item,
-  LightSource: PATCHES_LightSource,
+  DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
-  Token: PATCHES_Token,
-  VisionSource: PATCHES_VisionSource,
-  "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,
-  Midiqol: PATCHES_Midiqol
+  Tile: PATCHES_Tile,
+  Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
+  VisionSource: foundry.utils.mergeObject(PATCHES_VisionSource, PATCHES_VisionSourceLOS),
+  Wall: foundry.utils.mergeObject(PATCHES_Wall, PATCHES_WallLOS),
+  "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
 
-export const PATCHER = new Patcher(PATCHES);
+export const PATCHER = new Patcher();
+PATCHER.addPatchesFromRegistrationObject(PATCHES);
 
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
+  PATCHER.registerGroup("LOS");
   PATCHER.registerGroup("ConstrainedTokenBorder");
 
-  if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
-  else PATCHER.registerGroup("NO_LEVELS");
+  // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
+  //PATCHER.registerGroup("NO_LEVELS");
 
-  if ( game.system.id === "dnd5e" ) {
-    if ( MODULES_ACTIVE.MIDI_QOL ) PATCHER.registerGroup("DND5E_MIDI")
-    else PATCHER.registerGroup("DND5E_NO_MIDI");
-  }
-
-  if ( game.system.id === "sfrpg" ) PATCHER.registerGroup("sfrpg");
-
-  if ( game.system.id !== "pf2e" ) PATCHER.registerGroup("NOT_PF2E");
+  // If Elevated Vision is present, we can rely on its tile cache.
+  if ( !MODULES_ACTIVE.ELEVATED_VISION ) PATCHER.registerGroup("TILE");
 }
+
+export function registerArea3d() {
+  PATCHER.registerGroup("AREA3D");
+
+  // Create placeable geometry handlers for placeables already in the scene.
+  WallGeometryHandler.registerPlaceables();
+  TileGeometryHandler.registerPlaceables();
+  TokenGeometryHandler.registerPlaceables();
+}
+
+export function registerDebug() { PATCHER.registerGroup("DEBUG"); }
+
+export function deregisterDebug() { PATCHER.deregisterGroup("DEBUG"); }
