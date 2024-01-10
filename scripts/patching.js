@@ -57,7 +57,7 @@ export function initializePatching() {
   //PATCHER.registerGroup("NO_LEVELS");
 
   // If Elevated Vision is present, we can rely on its tile cache.
-  if ( !MODULES_ACTIVE.EV ) PATCHER.registerGroup("TILE");
+  if ( !MODULES_ACTIVE.ELEVATED_VISION ) PATCHER.registerGroup("TILE");
 }
 
 export function registerArea3d() {
