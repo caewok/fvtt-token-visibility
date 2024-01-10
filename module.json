@@ -1,19 +1,19 @@
 {
   "id": "tokenvisibility",
   "title": "Alternative Token Visibility",
-  "version": "This is auto replaced",
-  "library": false,
-  "socket": true,
+  "version": "#{VERSION}#",
+  "library": "false",
+  "socket": "false",
   "manifestPlusVersion": "1.0.0",
   "compatibility": {
     "minimum": "11.299",
-    "verified": "11.311"
+    "verified": "11.315"
   },
   "authors": [
     {
       "name": "caewok",
       "url": "https://github.com/caewok",
-      "discord": "caewok#9192"
+      "discord": "caewok"
     }
   ],
   "relationships": {
@@ -46,9 +46,9 @@
       "description": "Alternative token visibility rules"
     }
   ],
-  "url": "This is auto replaced",
-  "manifest": "This is auto replaced",
-  "download": "This is auto replaced",
+  "url": "#{URL}#",
+  "manifest": "#{MANIFEST}#",
+  "download": "#{DOWNLOAD}#",
   "license": "LICENSE",
   "readme": "README.md"
 }
