@@ -30,7 +30,7 @@ async function renderSettingsConfig(app, html, data) {
 
   const template = `modules/${MODULE_ID}/templates/settings-buttons.html`;
   const myHTML = await renderTemplate(template, data);
-  settings.last().after(myHTML);
+  settings.last().children().last().after(myHTML);
   app.setPosition(app.position);
 
   activateListenersSettingsConfig(app, html);
