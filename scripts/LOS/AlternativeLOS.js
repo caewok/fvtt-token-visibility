@@ -16,11 +16,14 @@ VisionSource
 
 // Base folder
 import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
+
+// LOS folder
 import {
   insetPoints,
   lineIntersectionQuadrilateral3d,
   lineSegmentIntersectsQuadrilateral3d,
-  getObjectProperty } from "./util.js";
+  getObjectProperty,
+  log } from "./util.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -102,7 +105,7 @@ export class AlternativeLOS {
     cfg.liveTokensBlock = config.liveTokensBlock ?? false;
     cfg.proneTokensBlock = config.proneTokensBlock ?? false;
     cfg.useLitTargetShape = config.useLitTargetShape ?? false;
-    cfg.tokenHPAttribute = config.tokenHPAttribute; // Or undefined.
+    cfg.tokenHPAttribute = config.tokenHPAttribute ?? CONFIG.GeometryLib.tokenHPId; // Or undefined.
   }
 
   updateConfiguration(config = {}) {
@@ -301,7 +304,7 @@ export class AlternativeLOS {
    * @returns {boolean}
    */
   hasLOS() {
-    // Debug: console.debug(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    log(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
     this._clearCache();
 
     const threshold = this.#config.threshold;
@@ -823,9 +826,12 @@ export class AlternativeLOS {
 
     // Filter by the precise triangle cone
     // For speed and simplicity, consider only token rectangular bounds
+    // Remove clone of the viewing object, if any. See Token Cover issue #9
+    // hasPreview doesn't seem to work; the viewer in particular does not show up.
     const edges = visionPolygon._edges;
     const collisionTest = o => {
       const t = o.t;
+      if ( t.id === viewer.id ) return false;
       const tCenter = t.center;
       if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
       const tBounds = t.bounds;
@@ -1033,7 +1039,7 @@ export class AlternativeLOS {
   clearDebug() {
     if ( !this.#debugGraphics ) return;
     this.#debugGraphics.clear();
-    // Debug: console.debug(`Cleared ${this.viewer.name} debug`);
+    log(`Cleared ${this.viewer.name} debug`);
   }
 
   /**
@@ -1046,7 +1052,7 @@ export class AlternativeLOS {
     this._drawVisionTriangle();
     this._drawVisibleTokenBorder();
     this._drawDetectedObjects();
-    // Debug: console.debug(`\n\nDrawn ${this.viewer.name} debug`);
+    log(`\n\nDrawn ${this.viewer.name} debug`);
   }
 
   /**
