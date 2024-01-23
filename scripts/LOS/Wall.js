@@ -33,7 +33,7 @@ function drawWallArea3d(wall) {
 function updateWallArea3d(wallD, changed, _options, _userId) {
   const changeKeys = new Set(Object.keys(flattenObject(changed)));
   if ( !changeKeys.has("c") ) return;
-  wall[MODULE_ID].geomHandler.update();
+  wallD.object[MODULE_ID].geomHandler.update();
 }
 
 /**
