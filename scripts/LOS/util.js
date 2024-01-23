@@ -9,6 +9,17 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 
 
 /**
+ * Log if this module's debug config is enabled.
+ */
+export function log(...args) {
+  try {
+    if ( CONFIG[MODULE_ID].debug ) console.debug(MODULE_ID, "|", ...args);
+  } catch(e) {
+    // Empty
+  }
+}
+
+/**
  * Fast rounding for positive numbers
  * @param {number} n
  * @returns {number}
