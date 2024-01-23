@@ -5,7 +5,6 @@ Fix for case sensitive import failing. Closes issue #73.
 Possible fix for algorithm not defined when using older scenes. Issue #74.
 Update lib geometry to v0.2.13.
 
-
 ## 0.6.0
 Split Alternative Token Visibility from Alternative Token Cover. This module handles token visibility only. All cover-related features moveed to Alternative Token Cover.
 
