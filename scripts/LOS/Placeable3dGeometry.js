@@ -7,6 +7,7 @@ PolygonMesher
 "use strict";
 
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { log } from "./util.js";
 
 const vec3 = glMatrix.vec3;
 
@@ -294,9 +295,7 @@ export class ConstrainedToken3dGeometry extends Token3dGeometry {
 
     // Is the map always the same?
     for ( const [key, value] of indicesMap.entries()) {
-      if ( key !== value ) {
-        console.debug("indicesMap key ≠ value", {key, value});
-      }
+      if ( key !== value ) log("indicesMap key ≠ value", {key, value});
     }
 
     const topIndices = triangulatedFace.indices.map(i => indicesMap.get(i));

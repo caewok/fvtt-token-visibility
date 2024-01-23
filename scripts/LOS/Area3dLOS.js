@@ -76,9 +76,15 @@ Draw.shape(thisShape, { color: Draw.COLORS.orange });
 Draw.shape(targetShape, { color: Draw.COLORS.red })
 
 */
+
+// Base folder
 import { MODULE_ID } from "../const.js";
+
+
+// This LOS folder
 import { AlternativeLOS } from "./AlternativeLOS.js";
 import { Area3dPopout } from "./Area3dPopout.js";
+import { log } from "./util.js";
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -164,7 +170,7 @@ export class Area3dLOS extends AlternativeLOS {
   get popoutIsRendered() { return this.#popout && this.#popout.rendered; }
 
   updateDebug() {
-    // Debug: console.debug(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    log(`debug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     super.updateDebug();
 
     // Only draw in the popout for the targeted token(s).
@@ -174,7 +180,7 @@ export class Area3dLOS extends AlternativeLOS {
   }
 
   clearDebug() {
-    // Debug: console.debug(`clearDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    log(`clearDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     super.clearDebug();
     this._clear3dDebug();
   }

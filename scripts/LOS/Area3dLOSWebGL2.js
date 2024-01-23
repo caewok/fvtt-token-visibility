@@ -6,6 +6,7 @@ PIXI
 "use strict";
 
 import { Area3dLOS } from "./Area3dLOS.js";
+import { log } from "./util.js";
 
 // GLSL
 import { Grid3dGeometry, GEOMETRY_ID } from "./Placeable3dGeometry.js";
@@ -502,7 +503,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     const renderer = this.popout.pixiApp.renderer;
     // renderer.state.setDepthTest = true;
 
-    // Debug: console.debug(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
+    log(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const { debugShaders, debugSprite, debugRenderTexture } = this;
     this._addChildToPopout(debugSprite);
 

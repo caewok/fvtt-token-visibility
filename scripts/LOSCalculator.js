@@ -36,7 +36,6 @@ const SETTINGS_CONFIG_MAP = {
   [SETTINGS.LIVE_TOKENS_BLOCK]: "liveTokensBlock",
   [SETTINGS.DEAD_TOKENS_BLOCK]: "deadTokensBlock",
   [SETTINGS.PRONE_TOKENS_BLOCK]: "proneTokensBlock",
-  [SETTINGS.TOKEN_HP_ATTRIBUTE]: "tokenHPAttribute"
 };
 
 
