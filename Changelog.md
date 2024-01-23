@@ -1,5 +1,6 @@
 ## 0.6.2
 Ignore riders and mounts if Rideable module is present for purposes of blocking vision.
+Fix for documentation/bug report buttons showing up in other module settings. Closes issue #78.
 
 ## 0.6.1
 Improve compatibility between ATV and ATC.
