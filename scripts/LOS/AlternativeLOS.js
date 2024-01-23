@@ -842,6 +842,14 @@ export class AlternativeLOS {
     const tokens = canvas.tokens.quadtree.getObjects(visionPolygon._bounds, { collisionTest });
     tokens.delete(target);
     tokens.delete(viewer);
+
+    // Filter all mounts and riders of both viewer and target
+    const api = MODULES_ACTIVE.API.RIDEABLE;
+    if ( api ) {
+      const mountsAndRiders = tokens.filter(token => !api.RidingConnection(token, viewer)
+          && !api.RidingConnection(token, target));
+      mountsAndRiders.forEach(t => tokens.delete(t));
+    }
     return tokens;
   }
 
