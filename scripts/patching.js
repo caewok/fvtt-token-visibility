@@ -12,7 +12,7 @@ import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
-import { PATCHES as PATCHES_Setting } from "./Settings.js";
+import { PATCHES as PATCHES_Setting } from "./settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";

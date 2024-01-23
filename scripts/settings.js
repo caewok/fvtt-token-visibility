@@ -481,7 +481,7 @@ export class Settings {
       scope: "world",
       config: false,
       type: String,
-      default: CONFIG.GeometryLib.proneStatusId || "system.attributes.hp.value",
+      default: CONFIG.GeometryLib.tokenHPId || "system.attributes.hp.value",
       tab: "other",
       onChange: value => CONFIG.GeometryLib.tokenHPId = value
     });

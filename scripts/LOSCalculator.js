@@ -72,7 +72,8 @@ export class LOSCalculator {
   constructor(viewer, target) {
     const algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
     const cfg = this.constructor.initialConfiguration();
-    this.calc = new this.constructor.ALGORITHM_CLASS[algorithm](viewer, target, cfg);
+    const cl = this.constructor.ALGORITHM_CLASS[algorithm] ?? PointsLOS;
+    this.calc = new cl(viewer, target, cfg);
   }
 
   static initialConfiguration() {

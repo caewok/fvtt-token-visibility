@@ -1,5 +1,8 @@
 ## 0.6.1
 Improve compatibility between ATV and ATC.
+Fix for welcome dialog not going away. Closes issue #75.
+Fix for case sensitive import failing. Closes issue #73.
+Possible fix for algorithm not defined when using older scenes. Issue #74.
 Update lib geometry to v0.2.13.
 
 ## 0.6.0

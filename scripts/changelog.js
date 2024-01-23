@@ -7,7 +7,7 @@ Dialog
 "use strict";
 
 import { MODULE_ID, DOCUMENTATION_URL } from "./const.js";
-import { SETTINGS, Settings } from "./settings.js";
+import { Settings } from "./settings.js";
 
 // From Perfect Vision
 // https://github.com/dev7355608/perfect-vision/blob/cdf03ae7e4b5969efaee8e742bf9dd11d18ba8b7/scripts/changelog.js
@@ -20,7 +20,7 @@ Hooks.once("ready", () => {
 
   game.settings.register(
     MODULE_ID,
-    SETTINGS.CHANGELOG,
+    Settings.KEYS.CHANGELOG,
     {
       scope: "client",
       config: false,
@@ -101,7 +101,7 @@ class ChangelogBuilder {
 
   build() {
     const converter = new showdown.Converter();
-    const curr = Settings.get(SETTINGS.CHANGELOG);
+    const curr = Settings.get(Settings.KEYS.CHANGELOG);
     const next = this.#entries.length;
     let content = "";
 
@@ -149,7 +149,7 @@ class ChangelogBuilder {
         dont_show_again: {
           icon: `<i class="fas fa-times"></i>`,
           label: "Don't show again",
-          callback: () => Settings.get(SETTINGS.CHANGELOG, next)
+          callback: () => Settings.set(Settings.KEYS.CHANGELOG, next)
         }
       },
       default: "dont_show_again"
