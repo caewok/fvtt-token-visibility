@@ -101,13 +101,19 @@ export class PointsLOS extends AlternativeLOS {
     if ( this.useLargeTarget ) {
       // Construct points for each target subshape, defined by grid spaces under the target.
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
-      const targetPointsArray = targetShapes.map(targetShape => {
-        cfg.tokenShape = targetShape;
-        const targetPoints = this.constructor._constructTokenPoints(target, cfg);
-        if ( points3d ) return this.constructor.elevatePoints(target, targetPoints);
-        return targetPoints;
-      });
-      return targetPointsArray;
+
+      // Issue #8: possible for targetShapes to be undefined or not an array??
+      if ( targetShapes ) {
+        const targetPointsArray = targetShapes.map(targetShape => {
+          cfg.tokenShape = targetShape;
+          const targetPoints = this.constructor._constructTokenPoints(target, cfg);
+          if ( points3d ) return this.constructor.elevatePoints(target, targetPoints);
+          return targetPoints;
+        });
+        return targetPointsArray;
+      }
+
+
     }
 
     // Construct points under this constrained token border.
