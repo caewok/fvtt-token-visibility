@@ -4,7 +4,6 @@ ClipperLib,
 CONFIG,
 CONST,
 foundry,
-getObjectProperty,
 LimitedAnglePolygon,
 PIXI,
 PointSourcePolygon,
@@ -80,6 +79,9 @@ export class AlternativeLOS {
     this.#viewer = viewer;
     this.#target = target;
     this._initializeConfiguration(config);
+
+    // Hide initialized property so we can iterate the object.
+    Object.defineProperty(this.#blockingObjects, "initialized", { enumerable: false});
   }
 
   /**
@@ -356,11 +358,15 @@ export class AlternativeLOS {
   }
 
   /**
+   * Test if we have one or more potentially blocking objects. Does not check for whether
+   * the objects in fact block but does require two terrain walls to count.
    * @returns {boolean} True if some blocking placeable within the vision triangle.
+   *
    */
   hasPotentialObstacles() {
-    const objs = this.#blockingObjects;
-    return objs.walls.size || objs.tokens.size || objs.tiles.size;
+    const { terrainWalls, ...otherObjects } = this.blockingObjects;
+    if ( terrainWalls.size > 1 ) return true;
+    return Object.values(otherObjects).some(objSet => objSet.size);
   }
 
   /**
@@ -411,31 +417,34 @@ export class AlternativeLOS {
     // Locate blocking objects for the vision triangle
     const type = this.#config.type;
     const blockingObjs = this.#blockingObjects;
-    const objsFound = this._filterSceneObjectsByVisionPolygon();
+    const objsFound = this._filterSceneObjectsByVisionPolygon(); // Returns tiles, tokens, walls.
 
     // Remove old blocking objects.
-    const { terrainWalls, walls, tokens, tiles } = blockingObjs;
-    terrainWalls.clear();
-    walls.clear();
-    tokens.clear();
-    tiles.clear();
+    Object.values(blockingObjs).forEach(objs => objs.clear());
 
-    // Separate the terrain walls.
-    objsFound.walls.forEach(w => {
-      const s = w.document[type] === CONST.WALL_SENSE_TYPES.LIMITED ? terrainWalls : walls;
-      s.add(w);
+    // Add new blocking objects to their respective set.
+    // Walls must be separated into terrain and normal.
+    const { walls, ...otherObjs } = objsFound;
+    walls.forEach(foundObjs => {
+      foundObjs.forEach(w => {
+        const objName = w.document[type] === CONST.WALL_SENSE_TYPES.LIMITED ? "terrainWalls" : "walls";
+        blockingObjs[objName].add(w);
+      });
     });
+
+    // Add other blocking objects to their respective set.
+    Object.entries(otherObjs).forEach(([key, foundObjs]) => {
+      const blockingSet = blockingObjs[key];
+      foundObjs.forEach(obj => blockingSet.add(obj));
+    });
+
 
     // Add walls for limited angle sight, if necessary.
     const limitedAngleWalls = this._constructLimitedAngleWallPoints3d();
     if ( limitedAngleWalls ) {
-      walls.add(limitedAngleWalls[0]);
-      walls.add(limitedAngleWalls[1]);
+      blockingObjs.walls.add(limitedAngleWalls[0]);
+      blockingObjs.walls.add(limitedAngleWalls[1]);
     }
-
-    // Add tokens, tiles
-    objsFound.tokens.forEach(t => tokens.add(t));
-    objsFound.tiles.forEach(t => tiles.add(t));
 
     blockingObjs.initialized = true;
   }
@@ -467,18 +476,19 @@ export class AlternativeLOS {
   }
 
   /**
-   * Does the ray between two points collide with a tile?
+   * Does the ray between two points collide with a tile within the vision triangle?
    * @param {Point3d} startPt       Starting point of this ray
    * @param {Point3d} endPt         End point of this ray
    * @returns {boolean} True if a tile blocks this ray
    */
   _hasTileCollision(startPt, endPt) {
     if ( !this.#config.tilesBlock ) return false;
-    const ray = new Ray(startPt, endPt);
 
     // Ignore non-overhead tiles
-    const collisionTest = (o, _rect) => o.t.document.overhead;
-    const tiles = canvas.tiles.quadtree.getObjects(ray.bounds, { collisionTest });
+    // Use blockingObjects b/c more limited and we can modify it if necessary.
+    // const collisionTest = (o, _rect) => o.t.document.overhead;
+    // const tiles = canvas.tiles.quadtree.getObjects(ray.bounds, { collisionTest });
+    const tiles = this.blockingObjects.tiles.filter(t => t.document.overhead);
 
     // Because tiles are parallel to the XY plane, we need not test ones obviously above or below.
     const maxE = Math.max(startPt.z, endPt.z);
@@ -516,7 +526,7 @@ export class AlternativeLOS {
   }
 
   /**
-   * Does the ray between two points collide with a token?
+   * Does the ray between two points collide with a token within the vision triangle?
    * @param {Point3d} startPt       Starting point of this ray
    * @param {Point3d} endPt         End point of this ray
    * @returns {boolean} True if a token blocks this ray
@@ -525,10 +535,18 @@ export class AlternativeLOS {
     const { liveTokensBlock, deadTokensBlock } = this.#config;
     if ( !(liveTokensBlock || deadTokensBlock) ) return false;
 
+
+    // Use blockingObjects b/c more limited and we can modify it if necessary.
     // Filter out the viewer and target token
-    const collisionTest = o => !(o.t.bounds.contains(startPt.x, startPt.y) || o.t.bounds.contains(endPt.x, endPt.y));
-    const ray = new Ray(startPt, endPt);
-    let tokens = canvas.tokens.quadtree.getObjects(ray.bounds, { collisionTest });
+    // const collisionTest = o => !(o.t.bounds.contains(startPt.x, startPt.y) || o.t.bounds.contains(endPt.x, endPt.y));
+    // const ray = new Ray(startPt, endPt);
+    // let tokens = canvas.tokens.quadtree.getObjects(ray.bounds, { collisionTest });
+    let tokens = this.blockingObjects.tokens.filter(t =>
+      t.constrainedTokenBorder.lineSegmentIntersects(startPt, endPt, { inside: true }));
+
+    // Filter out the viewer and target token
+    tokens.delete(this.viewer);
+    tokens.delete(this.target);
 
     // Build full- or half-height startPts3d from tokens
     const tokenPts = this._buildTokenPoints(tokens);
@@ -574,7 +592,7 @@ export class AlternativeLOS {
     if ( !this.#config.proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
 
     // Pad (inset) to avoid triggering cover at corners. See issue 49.
-    return tokens.map(t => new TokenPoints3d(t, { pad: -1 }));
+    return tokens.map(t => new TokenPoints3d(t, { pad: -2 }));
   }
 
   // ----- NOTE: Static methods ----- //
@@ -638,7 +656,7 @@ export class AlternativeLOS {
     }
 
     if ( pointAlgorithm === TYPES.THREE ) {
-       if ( isTarget && viewerPoint ) {
+      if ( isTarget && viewerPoint ) {
         tokenPoints.shift(); // Remove the center point.
         cornerPoints.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewerPoint, pt));
         cornerPoints.sort((a, b) => a._dist - b._dist);
@@ -822,7 +840,7 @@ export class AlternativeLOS {
    * @return {Set<Token>}
    */
   _filterTokensByVisionPolygon() {
-    const { visionPolygon, target, viewer, viewerPoint } = this;
+    const { visionPolygon, target, viewer } = this;
 
     // Filter by the precise triangle cone
     // For speed and simplicity, consider only token rectangular bounds
