@@ -124,16 +124,25 @@ export class AlternativeLOS {
   get useLargeTarget() { return this.#config.largeTarget; }
 
   _clearCache() {
-    // Viewer
-    this.#viewerPoint = undefined;
+    this._clearViewerCache();
+    this._clearTargetCache();
+  }
 
-    // Target
-    this.#targetCenter = undefined;
+  _clearViewerCache() {
+    this.#viewerPoint.x = null;
+
+    // Affected by both viewer and target
+    this._visionPolygon = undefined; // Requires viewer, target.
+    this.#blockingObjects.initialized = false; // Requires visionPolygon.
+  }
+
+  _clearTargetCache() {
+    this.#targetCenter.x = null;
     this.#visibleTargetShape = undefined;
 
-    // Other
-    this._visionPolygon = undefined;
-    this.#blockingObjects.initialized = false;
+    // Affected by both viewer and target
+    this._visionPolygon = undefined; // Requires viewer, target.
+    this.#blockingObjects.initialized = false; // Requires visionPolygon.
   }
 
   // ----- NOTE: Viewer properties ----- //
@@ -152,18 +161,21 @@ export class AlternativeLOS {
     if ( value instanceof VisionSource ) value = value.object;
     if ( value === this.#viewer ) return;
     this.#viewer = value;
-    this._clearCache();
+    this._clearViewerCache();
   }
 
-  #viewerPoint;
+  #viewerPoint = new Point3d(null); // Set x = null to indicate uninitialized.
 
   /**
    * The line-of-sight is calculated from this point.
    * @type {Point3d}
    */
   get viewerPoint() {
-    return this.#viewerPoint
-      || (this.#viewerPoint = Point3d.fromTokenVisionHeight(this.viewer).add(this.#config.visionOffset));
+    if ( this.#viewerPoint.x == null ) {
+      Point3d.fromTokenVisionHeight(this.viewer, this.#viewerPoint)
+        .add(this.#config.visionOffset, this.#viewerPoint);
+    }
+    return this.#viewerPoint;
   }
 
   /**
@@ -175,16 +187,15 @@ export class AlternativeLOS {
     // See get viewerPoint:
     // vp = center + offset
     // offset = vp - center
-    const center = Point3d.fromTokenVisionHeight(this.viewer);
-    this.#config.visionOffset = value.subtract(center);
-    this.#viewerPoint = value; // TODO: This and viewerPoint and others should all be copyFrom or set.
-    this._clearCache();
+    Point3d.fromTokenVisionHeight(this.viewer, this.#config.visionOffset); // Center
+    value.subtract(this.#config.visionOffset, this.#config.visionOffset); // Value - center
+    this._clearViewerCache(); // Will clear viewerPoint.
   }
 
   /** @type {Point3d} */
   set visionOffset(value) {
     this.#config.visionOffset.copyPartial(value);
-    this._clearCache();
+    this._clearViewerCache(); // Affects viewerPoint.
   }
 
   // ----- NOTE: Target properties ----- //
@@ -204,15 +215,15 @@ export class AlternativeLOS {
   set target(value) {
     if ( value === this.#target ) return;
     this.#target = value;
-    this._clearCache();
+    this._clearTargetCache();
   }
 
   /** @type {Point3d} */
-  #targetCenter;
+  #targetCenter = new Point3d(null); // Set x=null to indicate uninitialized.
 
   get targetCenter() {
-    return this.#targetCenter
-      || (this.#targetCenter = Point3d.fromTokenCenter(this.target));
+    if ( this.#targetCenter.x == null ) Point3d.fromTokenCenter(this.target, this.#targetCenter);
+    return this.#targetCenter;
   }
 
   /**

@@ -35,13 +35,22 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     super._initializeConfiguration(config);
   }
 
-  _clearCache() {
-    super._clearCache();
+  _clearViewerCache() {
+    super._clearViewerCache();
+
+    // Affected by both viewer and target.
     this.#frustrum.initialized = false;
     this.#targetDistance3dProperties.initialized = false;
 
-    // Target may have been changed.
+  }
+
+  _clearTargetCache() {
+    super._clearTargetCache();
     if ( this.#gridCubeGeometry ) this.#gridCubeGeometry.object = this.target;
+
+    // Affected by both viewer and target.
+    this.#frustrum.initialized = false;
+    this.#targetDistance3dProperties.initialized = false;
   }
 
   /** @type {object} */

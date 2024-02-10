@@ -106,12 +106,25 @@ export class Area3dLOSGeometric extends Area3dLOS {
    */
   static SCALING_FACTOR = 100;
 
-  _clearCache() {
-    super._clearCache();
+  _clearViewerCache() {
+    super._clearViewerCache();
+
+    // Affected by both viewer and target
+    this.#boundaryTargetPoints = undefined;
+    this.#viewIsSet = false;
+    this.#lookAtMatrices.initialized = false;
+    this.#blockingObjectsPoints.initialized = false;
+    this.#blockingPoints.initialized = false;
+  }
+
+  _clearTargetCache() {
+    super._clearTargetCache();
     this.#targetPoints = undefined;
     this.#visibleTargetPoints = undefined;
-    this.#boundaryTargetPoints = undefined;
     this.#gridPoints = undefined;
+
+    // Affected by both viewer and target
+    this.#boundaryTargetPoints = undefined;
     this.#viewIsSet = false;
     this.#lookAtMatrices.initialized = false;
     this.#blockingObjectsPoints.initialized = false;
