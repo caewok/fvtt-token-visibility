@@ -307,7 +307,6 @@ export class AlternativeLOS {
    */
   hasLOS() {
     log(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
-    this._clearCache();
 
     const threshold = this.#config.threshold;
     const percentVisible = this.percentVisible();
@@ -336,8 +335,6 @@ export class AlternativeLOS {
    * @returns {0|1|undefined} Undefined if obstacles present or target intersects the vision rays.
    */
   _simpleVisibilityTest() {
-    this._clearCache();
-
     // To avoid obvious errors.
     if ( this.viewer === this.target
       || this.viewerPoint.almostEqual(Point3d.fromTokenCenter(this.target)) ) return 1;

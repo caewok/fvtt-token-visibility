@@ -25,6 +25,7 @@ export class LOSCalculator extends AbstractCalculator {
   hasLOSTo(target) {
     const { viewer, calc } = this;
     if ( target ) calc.target = target;
+    calc._clearCache();
 
     const pointAlgorithm = Settings.get(Settings.KEYS.LOS.VIEWER.NUM_POINTS);
     const inset = Settings.get(Settings.KEYS.LOS.VIEWER.INSET);
