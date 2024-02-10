@@ -452,7 +452,9 @@ export class Area3dLOSGeometric extends Area3dLOS {
     }
 
     // Add points to the respective blockingPoints array.
-    Object.entries(nonTokens).forEach(([key, pts]) => addVisibleSplitsFn(key, pts));
+    Object.entries(nonTokens)
+      .forEach(([key, objSet]) => objSet
+        .forEach(pts => addVisibleSplitsFn(key, pts)));
 
     Object.values(tokens).forEach(token => {
       const topBottom = token._viewableTopBottom(viewerLoc);
