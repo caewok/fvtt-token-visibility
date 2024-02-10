@@ -309,6 +309,13 @@ export class AlternativeLOS {
     return this.#blockingObjects;
   }
 
+
+  /**
+   * Manually update blocking objects. Used when interested in the delta of visibility with
+   * or without 1+ objects. E.g., when measuring token-provided cover.
+   */
+  _blockingObjectsChanged() { this.#blockingObjects.initialized = true; }
+
   // ------ NOTE: Primary methods to be overridden by subclass -----
 
   /**

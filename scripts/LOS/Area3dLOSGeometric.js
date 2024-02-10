@@ -131,6 +131,18 @@ export class Area3dLOSGeometric extends Area3dLOS {
     this.#blockingPoints.initialized = false;
   }
 
+  /**
+   * Manually update blocking objects. Used when interested in the delta of visibility with
+   * or without 1+ objects. E.g., when measuring token-provided cover.
+   * Because the blockingObjects changed, we must recalculate the derived blocking points.
+   */
+  _blockingObjectsChanged() {
+    super._blockingObjectsChanged();
+    this.#viewIsSet = false;
+    this.#blockingObjectsPoints.initialized = false;
+    this.#blockingPoints.initialized = false;
+  }
+
   // ----- NOTE: Target properties ----- //
 
   /** @type {Point3d} */
