@@ -305,8 +305,8 @@ export class Area3dLOSGeometric extends Area3dLOS {
     }
 
     // Set the matrix to look at blocking point objects from the viewer.
-    Object.values(this.blockingPoints).forEach(objSet =>
-      objSet.forEach(pts => pts.setViewMatrix(targetLookAtMatrix)));
+    Object.values(this.blockingPoints).forEach(objArr =>
+      objArr.forEach(pts => pts.setViewMatrix(targetLookAtMatrix)));
 
     // Set the matrix for drawing other debug objects
     Object.values(this.blockingObjectsPoints).forEach(objSet =>
@@ -456,12 +456,12 @@ export class Area3dLOSGeometric extends Area3dLOS {
       .forEach(([key, objSet]) => objSet
         .forEach(pts => addVisibleSplitsFn(key, pts)));
 
-    Object.values(tokens).forEach(token => {
+    tokens.forEach(token => {
       const topBottom = token._viewableTopBottom(viewerLoc);
-      if ( topBottom ) addVisibleSplitsFn("token", topBottom);
+      if ( topBottom ) addVisibleSplitsFn("tokens", topBottom);
 
       const sides = token._viewableSides(viewerLoc);
-      sides.forEach(pts => addVisibleSplitsFn("token", pts));
+      sides.forEach(pts => addVisibleSplitsFn("tokens", pts));
     });
 
     this.#blockingPoints.initialized = true;

@@ -425,7 +425,7 @@ export class AlternativeLOS {
     // Locate blocking objects for the vision triangle
     const type = this.#config.type;
     const blockingObjs = this.#blockingObjects;
-    const objsFound = this._filterSceneObjectsByVisionPolygon(); // Returns tiles, tokens, walls.
+    const objsFound = this._filterSceneObjectsByVisionPolygon(); // Returns three sets: tiles, tokens, walls.
 
     // Remove old blocking objects.
     Object.values(blockingObjs).forEach(objs => objs.clear());
@@ -433,11 +433,9 @@ export class AlternativeLOS {
     // Add new blocking objects to their respective set.
     // Walls must be separated into terrain and normal.
     const { walls, ...otherObjs } = objsFound;
-    walls.forEach(foundObjs => {
-      foundObjs.forEach(w => {
-        const objName = w.document[type] === CONST.WALL_SENSE_TYPES.LIMITED ? "terrainWalls" : "walls";
-        blockingObjs[objName].add(w);
-      });
+    walls.forEach(w => {
+      const objName = w.document[type] === CONST.WALL_SENSE_TYPES.LIMITED ? "terrainWalls" : "walls";
+      blockingObjs[objName].add(w);
     });
 
     // Add other blocking objects to their respective set.
@@ -445,7 +443,6 @@ export class AlternativeLOS {
       const blockingSet = blockingObjs[key];
       foundObjs.forEach(obj => blockingSet.add(obj));
     });
-
 
     // Add walls for limited angle sight, if necessary.
     const limitedAngleWalls = this._constructLimitedAngleWallPoints3d();
