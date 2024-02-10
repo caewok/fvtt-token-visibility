@@ -133,10 +133,9 @@ export class Area2dLOS extends AlternativeLOS {
    */
   _percentVisible() {
     const shadowLOS = this._buildShadowLOS();
+    if ( !shadowLOS ) return 0;
     const constrained = this.target.constrainedTokenBorder;
-    const targetPercentAreaBottom = shadowLOS.bottom ? this._calculatePercentSeen(shadowLOS.bottom, constrained) : 0;
-    const targetPercentAreaTop = shadowLOS.top ? this._calculatePercentSeen(shadowLOS.top, constrained) : 0;
-    return Math.max(targetPercentAreaBottom, targetPercentAreaTop);
+    return this._calculatePercentSeen(shadowLOS, constrained);
   }
 
   /**
@@ -189,29 +188,17 @@ export class Area2dLOS extends AlternativeLOS {
    * line-of-sight polygons with shadows set to the top or bottom elevations for the target.
    * Viewer looking up: bottom of target
    * Viewer looking down: top of target
-   * Viewer looking head-on: both. (Yes, slightly unrealistic.)
+   * Viewer looking head-on: bottom. (Yes, slightly unrealistic.)
    * Target has no defined height: return top.
-   * @returns {object{top: {PIXI.Polygon|undefined}, bottom: {PIXI.Polygon|undefined}}}
+   * @returns {PIXI.Polygon|undefined}
    */
   _buildShadowLOS() {
     const viewerZ = this.viewerPoint.z;
-    const { topZ, bottomZ } = this.target;
-
-    // Test top and bottom of target shape.
-    let bottom;
-    let top;
-    const inBetween = (viewerZ <= topZ) && (viewerZ >= bottomZ);
-
-    // If target has no height, return one shadowed LOS polygon based on target elevation.
-    if ( !(topZ - bottomZ) ) return { top: this.shadowLOSForElevation(topZ) };
-
-    // Looking up at bottom
-    if ( inBetween || (viewerZ < bottomZ) ) bottom = this.shadowLOSForElevation(bottomZ);
-
-    // Looking down at top
-    if ( inBetween || (viewerZ > topZ) ) top = this.shadowLOSForElevation(topZ);
-
-    return (top && bottom && objectsEqual(top.points, bottom.points)) ? { top } : { bottom, top };
+    const { topZ, bottomZ, elevationZ } = this.target;
+    const shadowZ = !(topZ - bottomZ) ? elevationZ // Target has no height
+      : viewerZ > topZ ? topZ // Viewer is above the top of the target.
+        : bottomZ; // Viewer is below top of target.
+    return this.shadowLOSForElevation(shadowZ);
   }
 
   /**
@@ -400,12 +387,12 @@ export class Area2dLOS extends AlternativeLOS {
       // This allows the back walls to shadow if viewer is above/below.
       const sidePoints = token3d._allSides();
       sidePoints.forEach(pts => {
-        pts = pts.points; // [topA, bottomA, bottomB, topB]
+        pts = pts.points; // [topA, topB, bottomB, bottomA]
         const shadow = Shadow.constructFromPoints3d(
           pts[0], // TopA
-          pts[3], // TopB
-          pts[1], // BottomA
-          pts[2],  // BottomB
+          pts[1], // TopB
+          pts[2], // BottomB
+          pts[3], // BottomA
           viewerPoint,
           targetElevation
         );
