@@ -606,7 +606,7 @@ export class AlternativeLOS {
     if ( !this.#config.proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
 
     // Pad (inset) to avoid triggering cover at corners. See issue 49.
-    return tokens.map(t => new TokenPoints3d(t, { pad: -2 }));
+    return tokens.map(t => new TokenPoints3d(t, { pad: -2, type: this.config.type }));
   }
 
   // ----- NOTE: Static methods ----- //

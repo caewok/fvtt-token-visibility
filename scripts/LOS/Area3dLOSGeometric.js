@@ -150,7 +150,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   get targetPoints() {
     return this.#targetPoints
-      || (this.#targetPoints = new TokenPoints3d(this.target, { pad: -1 }));
+      || (this.#targetPoints = new TokenPoints3d(this.target, { pad: -1, type: this.config.type }));
   }
 
   /** @type {Point3d} */
@@ -159,7 +159,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
   get visibleTargetPoints() {
     return this.#visibleTargetPoints
       || (this.#visibleTargetPoints = new TokenPoints3d(this.target,
-        { pad: -1, tokenBorder: this.visibleTargetShape }));
+        { pad: -1, tokenBorder: this.visibleTargetShape, type: this.config.type }));
   }
 
   #boundaryTargetPoints;
@@ -192,7 +192,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     // Transform to TokenPoints3d and calculate viewable area.
     // Really only an estimate b/c the view will shift depending on where on the large token
     // we are looking.
-    return new UnitTokenPoints3d(this.target);
+    return new UnitTokenPoints3d(this.target, { type: this.config.type });
   }
 
   /**
