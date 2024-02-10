@@ -192,6 +192,7 @@ export class TokenPoints3d {
 
     const keys = borderPolygon.viewablePoints(viewingPoint, { returnKeys: true });
     const nSides = keys.length - 1;
+    if ( !nSides ) return [];
     const sides = Array(nSides);
     for ( let i = 0; i < nSides; i += 1 ) {
       const t0 = topPoints[keys[i]];
