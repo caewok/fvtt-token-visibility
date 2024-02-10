@@ -118,6 +118,8 @@ export class AlternativeLOS {
 
   getConfiguration(key) { return this.#config[key]; }
 
+  get config() { return this.#config; }
+
   // Getters for some commonly used configurations.
 
   /** @type {boolean} */

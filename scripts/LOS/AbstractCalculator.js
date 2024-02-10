@@ -135,9 +135,10 @@ export class AbstractCalculator {
     const clName = this.calc.constructor.name;
     if ( clName === this.constructor.ALGORITHM_CLASS_NAME[algorithm] ) return;
 
+    const config = { ...this.calc.config };
     const cl = this.constructor.ALGORITHM_CLASS[algorithm];
     this.calc.destroy();
-    this.calc = new cl(this.viewer, this.target, this.config);
+    this.calc = new cl(this.viewer, this.target, config);
   }
 
   _forceWebGL2() { this._updateAlgorithm(Settings.KEYS.LOS.TARGET.TYPE.AREA3D_WEBGL2); }
