@@ -7,7 +7,6 @@ Token
 
 // Patches for the Token class
 
-import { ConstrainedTokenBorder } from "./ConstrainedTokenBorder.js";
 import { GEOMETRY_ID, TokenGeometryHandler } from "./Placeable3dGeometry.js";
 
 export const PATCHES = {};

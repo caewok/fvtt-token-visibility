@@ -36,8 +36,6 @@ import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
-import { ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
-
 import { OPEN_POPOUTS } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
@@ -104,7 +102,6 @@ Hooks.once("init", function() {
     },
 
     util,
-    ConstrainedTokenBorder,
     range,
 
     points3d: {
