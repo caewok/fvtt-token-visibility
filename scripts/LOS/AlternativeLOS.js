@@ -878,9 +878,9 @@ export class AlternativeLOS {
     // Filter all mounts and riders of both viewer and target
     const api = MODULES_ACTIVE.API.RIDEABLE;
     if ( api ) {
-      const mountsAndRiders = tokens.filter(token => !api.RidingConnection(token, viewer)
-          && !api.RidingConnection(token, target));
-      mountsAndRiders.forEach(t => tokens.delete(t));
+      tokens
+        .filter(t => api.RidingConnection(t, viewer) || api.RidingConnection(t, target))
+        .forEach(t => tokens.delete(t));
     }
     return tokens;
   }
