@@ -103,7 +103,7 @@ export class PointsLOS extends AlternativeLOS {
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
 
       // Issue #8: possible for targetShapes to be undefined or not an array??
-      if ( targetShapes ) {
+      if ( targetShapes && targetShapes.length ) {
         const targetPointsArray = targetShapes.map(targetShape => {
           cfg.tokenShape = targetShape;
           const targetPoints = this.constructor._constructTokenPoints(target, cfg);

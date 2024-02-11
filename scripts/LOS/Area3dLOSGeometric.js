@@ -88,6 +88,16 @@ import { Matrix } from "../geometry/Matrix.js";
 
 export class Area3dLOSGeometric extends Area3dLOS {
 
+  constructor(...args) {
+    super(...args);
+
+    // Hide initialized property so we can iterate the object.
+    Object.defineProperty(this.#blockingPoints, "initialized", { enumerable: false});
+    Object.defineProperty(this.#blockingObjectsPoints, "initialized", { enumerable: false});
+
+
+  }
+
   /** @type {Shadow[]} */
   wallShadows = [];
 
@@ -96,14 +106,39 @@ export class Area3dLOSGeometric extends Area3dLOS {
    */
   static SCALING_FACTOR = 100;
 
-  _clearCache() {
-    super._clearCache();
-    this.#targetPoints = undefined;
-    this.#visibleTargetPoints = undefined;
+  _clearViewerCache() {
+    super._clearViewerCache();
+
+    // Affected by both viewer and target
     this.#boundaryTargetPoints = undefined;
-    this.#gridPoints = undefined;
     this.#viewIsSet = false;
     this.#lookAtMatrices.initialized = false;
+    this.#blockingObjectsPoints.initialized = false;
+    this.#blockingPoints.initialized = false;
+  }
+
+  _clearTargetCache() {
+    super._clearTargetCache();
+    this.#targetPoints = undefined;
+    this.#visibleTargetPoints = undefined;
+    this.#gridPoints = undefined;
+
+    // Affected by both viewer and target
+    this.#boundaryTargetPoints = undefined;
+    this.#viewIsSet = false;
+    this.#lookAtMatrices.initialized = false;
+    this.#blockingObjectsPoints.initialized = false;
+    this.#blockingPoints.initialized = false;
+  }
+
+  /**
+   * Manually update blocking objects. Used when interested in the delta of visibility with
+   * or without 1+ objects. E.g., when measuring token-provided cover.
+   * Because the blockingObjects changed, we must recalculate the derived blocking points.
+   */
+  _blockingObjectsChanged() {
+    super._blockingObjectsChanged();
+    this.#viewIsSet = false;
     this.#blockingObjectsPoints.initialized = false;
     this.#blockingPoints.initialized = false;
   }
@@ -115,7 +150,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
 
   get targetPoints() {
     return this.#targetPoints
-      || (this.#targetPoints = new TokenPoints3d(this.target, { pad: -1 }));
+      || (this.#targetPoints = new TokenPoints3d(this.target, { pad: -1, type: this.config.type }));
   }
 
   /** @type {Point3d} */
@@ -124,7 +159,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
   get visibleTargetPoints() {
     return this.#visibleTargetPoints
       || (this.#visibleTargetPoints = new TokenPoints3d(this.target,
-        { pad: -1, tokenBorder: this.visibleTargetShape }));
+        { pad: -1, tokenBorder: this.visibleTargetShape, type: this.config.type }));
   }
 
   #boundaryTargetPoints;
@@ -157,7 +192,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     // Transform to TokenPoints3d and calculate viewable area.
     // Really only an estimate b/c the view will shift depending on where on the large token
     // we are looking.
-    return new UnitTokenPoints3d(this.target);
+    return new UnitTokenPoints3d(this.target, { type: this.config.type });
   }
 
   /**
@@ -282,18 +317,12 @@ export class Area3dLOSGeometric extends Area3dLOS {
     }
 
     // Set the matrix to look at blocking point objects from the viewer.
-    const blockingPoints = this.blockingPoints;
-    blockingPoints.tiles.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-    blockingPoints.tokens.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-    blockingPoints.walls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-    blockingPoints.terrainWalls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
+    Object.values(this.blockingPoints).forEach(objArr =>
+      objArr.forEach(pts => pts.setViewMatrix(targetLookAtMatrix)));
 
     // Set the matrix for drawing other debug objects
-    const blockingObjectsPoints = this.blockingObjectsPoints;
-    blockingObjectsPoints.tiles.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-    blockingObjectsPoints.tokens.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-    blockingObjectsPoints.walls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
-    blockingObjectsPoints.terrainWalls.forEach(pts => pts.setViewMatrix(targetLookAtMatrix));
+    Object.values(this.blockingObjectsPoints).forEach(objSet =>
+      objSet.forEach(pts => pts.setViewMatrix(targetLookAtMatrix)));
 
     this.#viewIsSet = true;
   }
@@ -386,11 +415,9 @@ export class Area3dLOSGeometric extends Area3dLOS {
     const objs = this.blockingObjects;
 
     // Clear any prior objects from the respective sets
+    Object.values(this.#blockingObjectsPoints).forEach(objSet => objSet.clear());
+
     const { terrainWalls, tiles, tokens, walls } = this.#blockingObjectsPoints;
-    terrainWalls.clear();
-    tiles.clear();
-    tokens.clear();
-    walls.clear();
 
     // Add Tiles
     objs.tiles.forEach(t => tiles.add(new TilePoints3d(t, { viewerElevationZ: this.viewerPoint.z })));
@@ -426,41 +453,27 @@ export class Area3dLOSGeometric extends Area3dLOS {
     const viewerLoc = this.viewerPoint;
 
     // Clear the existing arrays.
-    blockingPoints.tiles.length = 0;
-    blockingPoints.tokens.length = 0;
-    blockingPoints.walls.length = 0;
-    blockingPoints.terrainWalls.length = 0;
+    Object.values(blockingPoints).forEach(objArr => objArr.length = 0);
 
-    // Vertical points
-    blockingObjectsPoints.walls.forEach(pts => {
+    // Tokens have both vertical and horizontal points and must be handled separately.
+    const { tokens, ...nonTokens } = blockingObjectsPoints;
+
+    const addVisibleSplitsFn = (key, pts) => {
       const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
-      if ( res.length ) blockingPoints.walls.push(...res);
-    });
+      if ( res.length ) blockingPoints[key].push(...res);
+    }
 
-    blockingObjectsPoints.terrainWalls.forEach(pts => {
-      const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
-      if ( res.length ) blockingPoints.terrainWalls.push(...res);
-    });
+    // Add points to the respective blockingPoints array.
+    Object.entries(nonTokens)
+      .forEach(([key, objSet]) => objSet
+        .forEach(pts => addVisibleSplitsFn(key, pts)));
 
-    // Horizontal points
-    blockingObjectsPoints.tiles.forEach(pts => {
-      const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
-      if ( res.length ) blockingPoints.tiles.push(...res);
-    });
-
-    // Tokens have both horizontal and vertical.
-    blockingObjectsPoints.tokens.forEach(token => {
+    tokens.forEach(token => {
       const topBottom = token._viewableTopBottom(viewerLoc);
-      if ( topBottom ) {
-        const res = topBottom._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
-        if ( res.length ) blockingPoints.tokens.push(...res);
-      }
+      if ( topBottom ) addVisibleSplitsFn("tokens", topBottom);
 
       const sides = token._viewableSides(viewerLoc);
-      sides.forEach(pts => {
-        const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
-        if ( res.length ) blockingPoints.tokens.push(...res);
-      });
+      sides.forEach(pts => addVisibleSplitsFn("tokens", pts));
     });
 
     this.#blockingPoints.initialized = true;
