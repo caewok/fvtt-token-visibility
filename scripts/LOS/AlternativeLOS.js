@@ -359,6 +359,9 @@ export class AlternativeLOS {
     if ( this.viewer === this.target
       || this.viewerPoint.almostEqual(Point3d.fromTokenCenter(this.target)) ) return 1;
 
+    // If directly overlapping.
+    if ( this.tokensOverlap(this.viewer, this.target) ) return 1;
+
     // Treat the scene background as fully blocking, so basement tokens don't pop-up unexpectedly.
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
     if ( (this.viewerPoint.z > backgroundElevation && this.target.topZ < backgroundElevation)
@@ -371,7 +374,31 @@ export class AlternativeLOS {
     const targetWithin = visionSource ? this.constructor.targetWithinLimitedAngleVision(visionSource, this.target) : 1;
     if ( !targetWithin ) return 0;
     if ( !this.hasPotentialObstacles && targetWithin === this.constructor.TARGET_WITHIN_ANGLE.INSIDE ) return 1;
+
+    // Target is not lit.
+    if ( this.#config.useLitTargetShape ) {
+      const shape = this.visibleTargetShape;
+      if ( !shape ) return 0;
+      if ( shape instanceof PIXI.Polygon && shape.points < 6 ) return 0;
+    }
+
     return undefined;  // Must be extended by subclass.
+  }
+
+  /**
+   * Test if the token constrained borders overlap and tokens are at same elevation.
+   * Used to allow vision when tokens are nearly on top of one another.
+   * @param {Token} token1
+   * @param {Token} token2
+   * @param {number} [pad=-2]     Increase or decrease the borders. By default, shrink the
+   *   borders to avoid false positives for adjacent tokens.
+   * @returns {boolean}
+   */
+  tokensOverlap(token1, token2, pad = -1) {
+    if ( token1.elevationE !== token2.elevationE ) return false;
+    const border1 = token1.constrainedTokenBorder.pad(-2);
+    const border2 = token2.constrainedTokenBorder.pad(-2);
+    return border1.overlaps(border2);
   }
 
   /**
@@ -875,7 +902,11 @@ export class AlternativeLOS {
     tokens.delete(target);
     tokens.delete(viewer);
 
-    // Filter all mounts and riders of both viewer and target
+    // Filter tokens that directly overlaps the viewer.
+    // Example: viewer is on a dragon.
+    tokens.filter(t => this.tokensOverlap(viewer, t)).forEach(t => tokens.delete(t));
+
+    // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
     const api = MODULES_ACTIVE.API.RIDEABLE;
     if ( api ) {
       tokens
