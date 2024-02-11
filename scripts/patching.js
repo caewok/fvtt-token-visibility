@@ -18,7 +18,6 @@ import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 
 // LOS
-import { PATCHES as PATCHES_ConstrainedTokenBorder } from "./LOS/ConstrainedTokenBorder.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
 import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
@@ -32,7 +31,6 @@ import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js
 const PATCHES = {
   Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,
-  ConstrainedTokenBorder: PATCHES_ConstrainedTokenBorder,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   PointSourcePolygon: PATCHES_PointSourcePolygon,
@@ -51,7 +49,6 @@ PATCHER.addPatchesFromRegistrationObject(PATCHES);
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
   PATCHER.registerGroup("LOS");
-  PATCHER.registerGroup("ConstrainedTokenBorder");
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
   //PATCHER.registerGroup("NO_LEVELS");

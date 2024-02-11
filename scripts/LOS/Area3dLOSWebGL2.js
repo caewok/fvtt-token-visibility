@@ -35,13 +35,22 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     super._initializeConfiguration(config);
   }
 
-  _clearCache() {
-    super._clearCache();
+  _clearViewerCache() {
+    super._clearViewerCache();
+
+    // Affected by both viewer and target.
     this.#frustrum.initialized = false;
     this.#targetDistance3dProperties.initialized = false;
 
-    // Target may have been changed.
+  }
+
+  _clearTargetCache() {
+    super._clearTargetCache();
     if ( this.#gridCubeGeometry ) this.#gridCubeGeometry.object = this.target;
+
+    // Affected by both viewer and target.
+    this.#frustrum.initialized = false;
+    this.#targetDistance3dProperties.initialized = false;
   }
 
   /** @type {object} */
@@ -138,30 +147,47 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     return this.#frustrum;
   }
 
+  /** @type {Point3d[]} */
+  static #tokenBoundaryPoints = {
+    // Top
+    TTL: new Point3d(),
+    TTR: new Point3d(),
+    TBR: new Point3d(),
+    TBL: new Point3d(),
+
+    // Bottom
+    BTL: new Point3d(),
+    BTR: new Point3d(),
+    BBR: new Point3d(),
+    BBL: new Point3d()
+  };
+
   _calculateTargetDistance3dProperties() {
     const { viewerPoint, target } = this;
-    const props = this.#targetDistance3dProperties;
 
     // Use the full token shape, not constrained shape, so that the angle captures the whole token.
     const { topZ, bottomZ, bounds } = target;
-    const tokenBoundaryPts = [
-      new Point3d(bounds.left, bounds.top, topZ),
-      new Point3d(bounds.right, bounds.top, topZ),
-      new Point3d(bounds.right, bounds.bottom, topZ),
-      new Point3d(bounds.left, bounds.bottom, topZ),
+    const tokenBoundaryPoints = this.constructor.#tokenBoundaryPoints;
 
-      new Point3d(bounds.left, bounds.top, bottomZ),
-      new Point3d(bounds.right, bounds.top, bottomZ),
-      new Point3d(bounds.right, bounds.bottom, bottomZ),
-      new Point3d(bounds.left, bounds.bottom, bottomZ)
-    ];
+    // Top
+    tokenBoundaryPoints.TTL.set(bounds.left, bounds.top, topZ);
+    tokenBoundaryPoints.TTR.set(bounds.right, bounds.top, topZ);
+    tokenBoundaryPoints.TBR.set(bounds.right, bounds.bottom, topZ);
+    tokenBoundaryPoints.TBL.set(bounds.left, bounds.bottom, topZ);
 
-    const distances = tokenBoundaryPts.map(pt => Point3d.distanceBetween(viewerPoint, pt));
+    // Bottom
+    tokenBoundaryPoints.BTL.set(bounds.left, bounds.top, bottomZ);
+    tokenBoundaryPoints.BTR.set(bounds.right, bounds.top, bottomZ);
+    tokenBoundaryPoints.BBR.set(bounds.right, bounds.bottom, bottomZ);
+    tokenBoundaryPoints.BBL.set(bounds.left, bounds.bottom, bottomZ);
+
+    const distances = Object.values(tokenBoundaryPoints).map(pt => Point3d.distanceBetween(viewerPoint, pt));
     const distMinMax = Math.minMax(...distances);
 
+    const props = this.#targetDistance3dProperties;
     props.farDistance = distMinMax.max;
     props.nearDistance = distMinMax.min;
-    props.diagonal = Point3d.distanceBetween(tokenBoundaryPts[0], tokenBoundaryPts[6]);
+    props.diagonal = Point3d.distanceBetween(tokenBoundaryPoints.TTL, tokenBoundaryPoints.BBR);
     props.initialized = true;
   }
 
@@ -501,7 +527,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
     super._draw3dDebug();
     if ( !this.popoutIsRendered ) return;
     const renderer = this.popout.pixiApp.renderer;
-    // renderer.state.setDepthTest = true;
+    // Testing: renderer.state.setDepthTest = true;
 
     log(`_draw3dDebug|${this.viewer.name}👀 => ${this.target.name}🎯`);
     const { debugShaders, debugSprite, debugRenderTexture } = this;

@@ -56,9 +56,14 @@ export class Area3dLOSHybrid extends Area3dLOSGeometric {
     this.#webGL2Class.updateConfiguration(config);
   }
 
-  _clearCache() {
-    super._clearCache();
-    this.#webGL2Class._clearCache();
+  _clearTargetCache() {
+    super._clearTargetCache();
+    this.#webGL2Class._clearTargetCache();
+  }
+
+  _clearViewerCache() {
+    super._clearViewerCache();
+    this.#webGL2Class._clearViewerCache();
   }
 
   destroy() {
