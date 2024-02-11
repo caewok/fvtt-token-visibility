@@ -1,3 +1,15 @@
+## 0.6.3
+
+Refactor the LOSCalculator to rely on an abstract class shared with ATC.
+Add handling of setters in Patcher.
+Refactor some class properties so they can be enumerated.
+Allow blocking objects to be updated without clearing cache so variations can be compared. (E.g., with or without specific tokens blocking.)
+Fixes for Area2d test for tokens blocking.
+Pass through type of vision/movement when creating token points.
+Fix for token obstacles getting deleted when Rideable is active.
+Don't treat tokens as blocking if they overlap the viewer or target. Closes issue #72.
+Update lib geometry to v0.2.16.
+
 ## 0.6.2
 Ignore riders and mounts if Rideable module is present for purposes of blocking vision.
 Fix for documentation/bug report buttons showing up in other module settings. Closes issue #78.
