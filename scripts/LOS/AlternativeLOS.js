@@ -17,12 +17,14 @@ VisionSource
 import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
 
 // LOS folder
+import { testWallsForIntersections } from "./PointSourcePolygon.js";
 import {
   insetPoints,
   lineIntersectionQuadrilateral3d,
   lineSegmentIntersectsQuadrilateral3d,
   getObjectProperty,
   log } from "./util.js";
+
 
 // Geometry folder
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -492,7 +494,7 @@ export class AlternativeLOS {
 
 
   /**
-   * Does the ray between two points collide with an object?
+   * Does the ray between two points collide with an object within the vision triangle?
    * @param {Point3d} startPt      Starting point of this ray
    * @param {Point3d} endPt         End point of this ray
    * @returns {boolean} True if an object blocks this ray
@@ -504,16 +506,19 @@ export class AlternativeLOS {
   }
 
   /**
-   * Does the ray between two points collide with a wall?
+   * Does the ray between two points collide with a wall within the vision triangle?
    * @param {Point3d} startPt      Starting point of this ray
    * @param {Point3d} endPt         End point of this ray
    * @returns {boolean} True if a wall blocks this ray
    */
   _hasWallCollision(startPt, endPt) {
     if ( !this.#config.wallsBlock ) return false;
-    const mode = "any";
-    const type = this.#config.type;
-    return PointSourcePolygon.testCollision3d(startPt, endPt, { mode, type });
+    const walls = [...this.blockingObjects.walls, ...this.blockingObjects.terrainWalls];
+    return testWallsForIntersections(startPt, endPt, walls, "any", this.config.type);
+
+//     const mode = "any";
+//     const type = this.#config.type;
+//     return PointSourcePolygon.testCollision3d(startPt, endPt, { mode, type });
   }
 
   /**

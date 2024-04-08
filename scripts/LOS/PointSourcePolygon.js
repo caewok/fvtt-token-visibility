@@ -97,7 +97,7 @@ PATCHES.LOS.METHODS = {
  *                                  If undefined, all walls will be treated as NORMAL restriction.
  * @returns {boolean|object[]|object}
  */
-function testWallsForIntersections(origin, destination, walls, mode, type) {
+export function testWallsForIntersections(origin, destination, walls, mode, type) {
   origin = new Point3d(origin.x, origin.y, origin.z);
   destination = new Point3d(destination.x, destination.y, destination.z);
   const direction = destination.subtract(origin);
