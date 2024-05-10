@@ -244,8 +244,8 @@ export class PointsLOS extends AlternativeLOS {
    */
   static gridShapesUnderToken(token) {
     if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) {
-      console.error("gridShapesUnderTarget called on gridless scene!");
-      return token.bounds;
+      // console.error("gridShapesUnderTarget called on gridless scene!");
+      return [token.bounds];
     }
     return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
