@@ -115,7 +115,7 @@ function deleteActiveEffectArea3d(effect, _options, _userId) {
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
-function destroyTokenArea3d(token) { token[GEOMETRY_ID].destroy(); }
+function destroyTokenArea3d(token) { token[GEOMETRY_ID]?.destroy(); }
 
 PATCHES.AREA3D.HOOKS = {
   drawToken: drawTokenArea3d,
