@@ -1,5 +1,5 @@
 [![Version (latest)](https://img.shields.io/github/v/release/caewok/fvtt-token-visibility)](https://github.com/caewok/fvtt-token-visibility/releases/latest)
-[![Foundry Version](https://img.shields.io/badge/dynamic/json.svg?url=https://github.com/caewok/fvtt-token-visibility/releases/latest/download/module.json&label=Foundry%20Version&query=$.compatibleCoreVersion&colorB=blueviolet)](https://github.com/caewok/fvtt-token-visibility/releases/latest)
+[![Foundry Version](https://img.shields.io/badge/dynamic/json.svg?url=https://github.com/caewok/fvtt-token-visibility/releases/latest/download/module.json&label=Foundry%20Version&query=$.compatibility.verified&colorB=blueviolet)](https://github.com/caewok/fvtt-token-visibility/releases/latest)
 [![License](https://img.shields.io/github/license/caewok/fvtt-token-visibility)](LICENSE)
 
 # Alternative Token Visibility
@@ -34,10 +34,10 @@ Add this [Manifest URL](https://github.com/caewok/fvtt-token-visibility/releases
 - [Token Lean](https://github.com/WesBelmont/token-lean). Useful when you want players to be able to "peer" over limited-height walls.
 
 ## Levels
-Token Visibility is intended to work with the [Levels](https://github.com/theripper93/Levels) module. Both the Points and the Area3d algorithms will ignore transparent portions of tiles as expected in Levels. The Area2d algorithm treats overhead tiles as blocking regardless of transparency and thus may not work in all cases with Levels. 
+Token Visibility is intended to work with the [Levels](https://github.com/theripper93/Levels) module. Both the Points and the Area3d algorithms will ignore transparent portions of tiles as expected in Levels. The Area2d algorithm treats overhead tiles as blocking regardless of transparency and thus may not work in all cases with Levels.
 
 # Token Height
-Token height, for purposes of measuring vision, can be changed using the [Wall Height](https://github.com/theripper93/wall-height) module. Token height is otherwise set based on scale of the token—namely,the number of grid squares it occupies. 
+Token height, for purposes of measuring vision, can be changed using the [Wall Height](https://github.com/theripper93/wall-height) module. Token height is otherwise set based on scale of the token—namely,the number of grid squares it occupies.
 
 Note that very large tokens can be quite tall, and may poke through an overhead tile. Depending on your settings, this may cause large tokens to be visible if a sufficient portion of the token is visible.
 
@@ -63,7 +63,7 @@ Settings relevant to the target token.
 <img width="699" alt="ATV Settings - Target LOS" src="https://github.com/caewok/fvtt-token-visibility/assets/1267134/584a7715-e536-4b3d-92f3-5afae1314242">
 
 ## Percent Threshold
-The percent threshold governs how much of a target token must be viewable for a viewing token to be considered to have line-of-sight to the target. For the Points algorithm, this is the percent of points that are visible on the target. For the Area2d and Area3d algorithms, this is the percent area visible compared to what the target area would be with no obstacles. Note that targets against a wall will have their token shape trimmed accordingly, so that they are not visible through the wall. 
+The percent threshold governs how much of a target token must be viewable for a viewing token to be considered to have line-of-sight to the target. For the Points algorithm, this is the percent of points that are visible on the target. For the Area2d and Area3d algorithms, this is the percent area visible compared to what the target area would be with no obstacles. Note that targets against a wall will have their token shape trimmed accordingly, so that they are not visible through the wall.
 
 ### Large Token Subtargeting
 If enabled, tokens larger than a grid square will be considered visible if at least one grid square's worth of the token is visible. For the Points algorithm, each grid square that the target occupies is tested separately as if it were a single token. For the Area2d and Area3d algorithms, the percentage area required is based on the size of a single grid square instead of the size of the entire target. The result is that tokens larger than a grid square can be more than 100% visible.
@@ -71,13 +71,13 @@ If enabled, tokens larger than a grid square will be considered visible if at le
 This setting is slightly less performant but very useful for larger tokens. For example, without large token subtargeting, 3 grid squares of a dragon could be visible and—depending on your percentage threshold setting—this may still be insufficient to "see" the dragon.
 
 ### Points Algorithm
-The points algorithm tests whether a 3d ray from the viewing point to a point on the target token is blocked by an obstacle. As with the viewer, the offset determines how close each point is to the center of the target token. The percentage threshold determines how many visible points on the target are required for the viewer to be considered to have line-of-sight to the target. If 3d points are enabled, additional points at the top and bottom of the target token will be tested. 
+The points algorithm tests whether a 3d ray from the viewing point to a point on the target token is blocked by an obstacle. As with the viewer, the offset determines how close each point is to the center of the target token. The percentage threshold determines how many visible points on the target are required for the viewer to be considered to have line-of-sight to the target. If 3d points are enabled, additional points at the top and bottom of the target token will be tested.
 
 ### Area2d Algorithm
 The Area2d algorithm tests how much of the overhead target token shape is visible. It usually is very performant, but less intuitive and less accurate than the Area3d algorithm. It treats all overhead tiles as opaque.
 
 ### Area3d Algorithm
-The Area3d algorithm constructs a simplistic 3d model of the scene from the point of view of the viewing token looking toward the target token. It then measures the visible area of the 3d target. This can be faster than the Points algorithm in certain scenes. 
+The Area3d algorithm constructs a simplistic 3d model of the scene from the point of view of the viewing token looking toward the target token. It then measures the visible area of the 3d target. This can be faster than the Points algorithm in certain scenes.
 
 If overhead tiles are encountered within the viewing triangle, the Area3d algorithm switches to webGL to construct its 3d model. This allows it to take into account transparent portions of the overhead tile. The webGL is much slower, however, so it only uses it when necessary. (The slowdown is primarily because the webGL scene must be converted back into pixels that Javascript can then summarize to determine the viewable area.)
 
@@ -93,7 +93,7 @@ Other settings that affect the line-of-sight calculation.
 
 <img width="699" alt="ATV Settings - Other" src="https://github.com/caewok/fvtt-token-visibility/assets/1267134/8cbc98d8-9dc7-4e67-b5d1-d23c0e6c2c9f">
 
-Optionally, you can have live or dead tokens block vision. Prone tokens can also optionally block vision. For these settings to work, you must tell ATV what the prone status is for your system, and where to find the hit points attribute. (It is assumed that 0 or below means "dead" for purposes of defining dead tokens.) 
+Optionally, you can have live or dead tokens block vision. Prone tokens can also optionally block vision. For these settings to work, you must tell ATV what the prone status is for your system, and where to find the hit points attribute. (It is assumed that 0 or below means "dead" for purposes of defining dead tokens.)
 
 The vision height multiplier allows you to change the height at which a viewing token observes the scene. Think of this as the height of the eyes of the token above the ground, as a percentage of the total token height.
 
