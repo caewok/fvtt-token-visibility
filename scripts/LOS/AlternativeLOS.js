@@ -976,8 +976,8 @@ export class AlternativeLOS {
     // Filter by the precise triangle cone.
     const edges = visionPolygon._edges;
     return walls.filter(w => {
-      if ( visionPolygon.contains(w.A.x, w.A.y) || visionPolygon.contains(w.B.x, w.B.y) ) return true;
-      return edges.some(e => foundry.utils.lineSegmentIntersects(w.A, w.B, e.A, e.B));
+      if ( visionPolygon.contains(w.edge.a.x, w.edge.a.y) || visionPolygon.contains(w.edge.b.x, w.edge.b.y) ) return true;
+      return edges.some(e => foundry.utils.lineSegmentIntersects(w.edge.a, w.edge.b, e.A, e.B));
     });
   }
 
