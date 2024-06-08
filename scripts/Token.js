@@ -46,7 +46,7 @@ function initializeVisionSource(wrapped, options) {
   const obj = this.vision[MODULE_ID] ??= {};
   if ( obj.losCalc ) {
     obj.losCalc._updateAlgorithm();
-    obj.losCalc.updateConfigurationSettings();
+    obj.losCalc.updateConfiguration();
   } else obj.losCalc = new LOSCalculator(this, undefined);
 }
 
