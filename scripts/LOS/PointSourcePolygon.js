@@ -105,7 +105,7 @@ export function testWallsForIntersections(origin, destination, walls, mode, type
   const collisions = [];
   for ( let wall of walls ) {
     // Check the 2d overhead first.
-    if ( !foundry.utils.lineSegmentIntersects(origin, destination, wall.A, wall.B) ) continue;
+    if ( !foundry.utils.lineSegmentIntersects(origin, destination, wall.edge.a, wall.edge.b) ) continue;
 
     const wallPoints = Point3d.fromWall(wall, { finite: true });
     const t = Plane.rayIntersectionQuad3dLD(
@@ -145,11 +145,11 @@ function originalTestWallInclusion(wall, bounds) {
   const {type, boundaryShapes, useThreshold, wallDirectionMode } = this.config;
 
   // First test for inclusion in our overall bounding box
-  if ( !bounds.lineSegmentIntersects(wall.A, wall.B, { inside: true }) ) return false;
+  if ( !bounds.lineSegmentIntersects(wall.edge.a, wall.edge.b, { inside: true }) ) return false;
 
   // Specific boundary shapes may impose additional requirements
   for ( const shape of boundaryShapes ) {
-    if ( shape._includeEdge && !shape._includeEdge(wall.A, wall.B) ) return false;
+    if ( shape._includeEdge && !shape._includeEdge(wall.edge.a, wall.edge.b) ) return false;
   }
 
   // Ignore walls which are nearly collinear with the origin
