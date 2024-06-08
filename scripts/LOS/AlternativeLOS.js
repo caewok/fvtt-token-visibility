@@ -556,7 +556,7 @@ export class AlternativeLOS {
     // Use blockingObjects b/c more limited and we can modify it if necessary.
     // const collisionTest = (o, _rect) => o.t.document.overhead;
     // const tiles = canvas.tiles.quadtree.getObjects(ray.bounds, { collisionTest });
-    const tiles = this.blockingObjects.tiles.filter(t => t.document.overhead);
+    const tiles = this.blockingObjects.tiles.filter(t => t.document.elevation >= t.document.parent?.foregroundElevation);
 
     // Because tiles are parallel to the XY plane, we need not test ones obviously above or below.
     const maxE = Math.max(startPt.z, endPt.z);
@@ -950,7 +950,7 @@ export class AlternativeLOS {
     const alphaThreshold = CONFIG[MODULE_ID].alphaThreshold;
     return tiles.filter(t => {
       // Only overhead tiles count for blocking vision
-      if ( !t.document.overhead ) return false;
+      if ( t.document.elevation < t.document.parent?.foregroundElevation ) return false;
 
       // Check remainder against the vision polygon shape
       // const tBounds = t.bounds;
