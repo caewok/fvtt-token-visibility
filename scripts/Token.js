@@ -1,17 +1,23 @@
 /* globals
+Actor,
+canvas,
+CONFIG
+game
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 // Patches for the Token class
 
 import { MODULE_ID } from "./const.js";
-import { Settings } from "./settings.js";
+import { LOSCalculator } from "./LOSCalculator.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
 PATCHES.DEBUG = {};
 
 // ----- NOTE: Hooks ----- //
+
+
 
 /**
  * Hook: destroyToken
@@ -24,6 +30,27 @@ function destroyToken(token) {
 }
 
 PATCHES.BASIC.HOOKS = { destroyToken };
+
+// ----- NOTE: Wraps ----- //
+
+/**
+ * Wrap Token.prototype.initializeVisionSource
+ * Add los calculator.
+ * Update the VisionSource instance associated with this Token.
+ * @param {object} [options]        Options which affect how the vision source is updated
+ * @param {boolean} [options.deleted]   Indicate that this vision source has been deleted.
+ */
+function initializeVisionSource(wrapped, options) {
+  wrapped(options);
+  if ( !this.vision ) return;
+  const obj = this.vision[MODULE_ID] ??= {};
+  if ( obj.losCalc ) {
+    obj.losCalc._updateAlgorithm();
+    obj.losCalc.updateConfigurationSettings();
+  } else obj.losCalc = new LOSCalculator(this, undefined);
+}
+
+PATCHES.BASIC.WRAPS = { initializeVisionSource };
 
 // ----- NOTE: Debug Hooks ----- //
 

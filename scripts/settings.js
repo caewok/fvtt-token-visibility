@@ -553,7 +553,7 @@ export class Settings {
   static losSettingChange(key, value) {
     this.cache.delete(key);
     const cfg = { [key]: value };
-    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateConfiguration(cfg));
+    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc.updateConfiguration(cfg));
   }
 
 }

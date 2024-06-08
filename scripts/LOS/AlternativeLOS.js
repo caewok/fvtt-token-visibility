@@ -6,8 +6,7 @@ CONST,
 foundry,
 LimitedAnglePolygon,
 PIXI,
-Ray,
-VisionSource
+Ray
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -91,7 +90,7 @@ export class AlternativeLOS {
    * @param {AlternativeLOSConfig} config
    */
   constructor(viewer, target, config) {
-    if ( viewer instanceof VisionSource ) viewer = viewer.object;
+    if ( viewer instanceof foundry.canvas.sources.PointVisionSource ) viewer = viewer.object;
     this.#viewer = viewer;
     this.#target = target;
     this._initializeConfiguration(config);
@@ -185,7 +184,7 @@ export class AlternativeLOS {
   get viewer() { return this.#viewer; }
 
   set viewer(value) {
-    if ( value instanceof VisionSource ) value = value.object;
+    if ( value instanceof foundry.canvas.sources.PointVisionSource ) value = value.object;
     if ( value === this.#viewer ) return;
     this.#viewer = value;
     this._clearViewerCache();
@@ -447,7 +446,7 @@ export class AlternativeLOS {
     const tokenBorder = token.constrainedTokenBorder;
 
     // If the global light source is present, then we can use the whole token.
-    if ( canvas.effects.illumination.globalLight ) return tokenBorder;
+    if ( canvas.environment.globalLightSource.active ) return tokenBorder;
 
     // Cannot really use quadtree b/c it doesn't contain all light sources.
     const lightShapes = [];
