@@ -100,7 +100,7 @@ PATCHES.BASIC.MIXES = { _testPoint };
 //   const tokenBorder = token.constrainedTokenBorder;
 //
 //   // If the global light source is present, then we can use the whole token.
-//   if ( canvas.effects.illumination.globalLight ) return undefined;
+//   if ( canvas.environment.globalLightSource.active ) return undefined;
 //
 //   // Cannot really use quadtree b/c it doesn't contain all light sources.
 //   const lightShapes = [];
