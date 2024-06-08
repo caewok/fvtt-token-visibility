@@ -991,7 +991,7 @@ export class AlternativeLOS {
     if (!wall.document[this.#config.type] || wall.isOpen ) return false;
 
     // Ignore one-directional walls facing away
-    const side = wall.orientPoint(this.viewerPoint);
+    const side = wall.edge.orientPoint(this.viewerPoint);
     return !wall.document.dir || (side !== wall.document.dir);
   }
 
