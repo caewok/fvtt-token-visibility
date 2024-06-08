@@ -10,7 +10,6 @@ import { MODULE_ID } from "./const.js";
 
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
-import { registerElevationConfig } from "./geometry/elevation_configs.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import { Patcher, HookPatch, MethodPatch, LibWrapperPatch } from "./Patcher.js";
 import { Settings, SETTINGS } from "./settings.js";
@@ -131,7 +130,6 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   Settings.registerAll();
-  registerElevationConfig("TileConfig", "Alt. Token Visibility");
   console.debug(`${MODULE_ID}|registered settings`);
 });
 

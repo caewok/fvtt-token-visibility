@@ -1,3 +1,9 @@
+## 0.7.0
+Foundry v12 compatibility.
+
+### KNOWN ISSUES
+Debug viewers are only partially working. No viewer pop-out for 3d. Limited testing as a result.
+
 ## 0.6.3
 
 Refactor the LOSCalculator to rely on an abstract class shared with ATC.

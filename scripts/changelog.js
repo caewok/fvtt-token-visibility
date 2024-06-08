@@ -83,6 +83,16 @@ Hooks.once("ready", () => {
           `
     })
 
+    .addEntry({
+      version: "0.7.0",
+      title: "Foundry v12 compatibility",
+      body: `\
+          Updated for Foundry v12. If you need v11 compatibility, use the v0.6 series.
+
+          Limited testing thus far. The debug viewer needs work.`
+    })
+
+
     .build()
     ?.render(true);
 });

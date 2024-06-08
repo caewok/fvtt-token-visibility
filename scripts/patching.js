@@ -21,7 +21,6 @@ import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
 import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
-import { PATCHES as PATCHES_VisionSourceLOS } from "./LOS/VisionSource.js";
 import { PATCHES as PATCHES_WallLOS } from "./LOS/Wall.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
 
@@ -38,7 +37,7 @@ const PATCHES = {
   SettingsConfig: PATCHES_SettingsConfig,
   Tile: PATCHES_Tile,
   Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
-  VisionSource: foundry.utils.mergeObject(PATCHES_VisionSource, PATCHES_VisionSourceLOS),
+  "foundry.canvas.sources.PointVisionSource": PATCHES_VisionSource,
   Wall: foundry.utils.mergeObject(PATCHES_Wall, PATCHES_WallLOS),
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
@@ -54,7 +53,7 @@ export function initializePatching() {
   //PATCHER.registerGroup("NO_LEVELS");
 
   // If Elevated Vision is present, we can rely on its tile cache.
-  if ( !MODULES_ACTIVE.ELEVATED_VISION ) PATCHER.registerGroup("TILE");
+  // if ( !MODULES_ACTIVE.ELEVATED_VISION ) PATCHER.registerGroup("TILE");
 }
 
 export function registerArea3d() {
