@@ -1,6 +1,5 @@
 /* globals
 canvas,
-ClipperLib,
 CONFIG,
 CONST,
 foundry,
@@ -13,10 +12,11 @@ Token
 "use strict";
 
 // Base folder
-import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
+import { MODULES_ACTIVE } from "../const.js";
 
 // LOS folder
 import { testWallsForIntersections } from "./PointSourcePolygon.js";
+import { VisionPolygon } from "./VisionPolygon.js";
 import {
   insetPoints,
   lineIntersectionQuadrilateral3d,
@@ -314,12 +314,7 @@ export class AlternativeLOS {
   // Make consistent with visible token border.
   // For speed and simplicity, may want to have a target rectangle bounds and a target border.
   get visionPolygon() {
-    if ( !this._visionPolygon ) {
-      this._visionPolygon = this.constructor.visionPolygon(this.viewerPoint, this.target);
-      this._visionPolygon._edges = [...this._visionPolygon.iterateEdges()];
-      this._visionPolygon._bounds = this._visionPolygon.getBounds();
-    }
-    return this._visionPolygon;
+    return (this._visionPolygon ??= VisionPolygon.build(this.viewerPoint, this.target));
   }
 
   /**
@@ -783,55 +778,6 @@ export class AlternativeLOS {
   }
 
   /**
-   * Vision Polygon for the view point --> target.
-   * From the given token location, get the edge-most viewable points of the target.
-   * Construct a triangle between the two target points and the token center.
-   * If viewing head-on (only two key points), the portion of the target between
-   * viewer and target center (typically, a rectangle) is added on to the triangle.
-   * @param {PIXI.Point|Point3d} viewingPoint
-   * @param {Token} target
-   * @returns {PIXI.Polygon} Triangle between view point and target. Will be clockwise.
-   */
-  static visionPolygon(viewingPoint, target, border) {
-    border ??= target.constrainedTokenBorder;
-    const keyPoints = border.viewablePoints(viewingPoint, { outermostOnly: false });
-    if ( !keyPoints ) return border.toPolygon();
-
-    let out;
-    switch ( keyPoints.length ) {
-      case 0:
-      case 1:
-        out = border.toPolygon();
-        break;
-      case 2: {
-        const k0 = keyPoints[0];
-        const k1 = keyPoints[1];
-        const center = target.center;
-
-        // Build a rectangle between center and key points.
-        // Intersect against the border
-        const X = Math.minMax(k0.x, k1.x, center.x);
-        const Y = Math.minMax(k0.y, k1.y, center.y);
-        const rect = new PIXI.Rectangle(X.min, Y.min, X.max - X.min, Y.max - Y.min);
-        const intersect = border instanceof PIXI.Rectangle ? rect : rect.intersectPolygon(border);
-
-        // Union the triangle with this border
-        const triangle = new PIXI.Polygon([viewingPoint, k0, k1]);
-
-        // WA requires a polygon with a positive orientation.
-        if ( !triangle.isPositive ) triangle.reverseOrientation();
-        out = intersect.intersectPolygon(triangle, { clipType: ClipperLib.ClipType.ctUnion });
-        break;
-      }
-      default:
-        out = new PIXI.Polygon([viewingPoint, keyPoints[0], keyPoints.at(-1)]);
-    }
-
-    if ( !out.isClockwise ) out.reverseOrientation();
-    return out;
-  }
-
-  /**
    * Helper that constructs 3d points for the points of a token shape (rectangle or polygon).
    * Uses the elevation provided as the z-value.
    * @param {PIXI.Polygon|PIXI.Rectangle} tokenShape
@@ -877,49 +823,47 @@ export class AlternativeLOS {
    */
   _filterSceneObjectsByVisionPolygon() {
     const {
-      type,
       wallsBlock,
       liveTokensBlock,
       deadTokensBlock,
       tilesBlock } = this.#config;
-
-    const { target, viewerPoint } = this;
-    const { topZ, bottomZ } = target;
-    const maxE = Math.max(viewerPoint.z, topZ);
-    const minE = Math.min(viewerPoint.z, bottomZ);
     const out = {
       tiles: NULL_SET,
       tokens: NULL_SET,
       walls: NULL_SET
     };
 
-    if ( wallsBlock ) {
-      out.walls = this
-        ._filterWallsByVisionPolygon()
-        .filter(w => (w.topZ > minE) && (w.bottomZ < maxE)); // Filter walls too low or too high.
-    }
-
-    if ( tilesBlock ) {
-      out.tiles = this
-        ._filterTilesByVisionPolygon()
-        .filter(t => { // Filter tiles that are definitely too low or too high
-          const tZ = t.elevationZ;
-          return (tZ < maxE) && (tZ > minE);
-        });
-
-      // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
-      if ( MODULES_ACTIVE.LEVELS && type === "sight" ) {
-        out.tiles = out.tiles.filter(t => !t.document?.flags?.levels?.noCollision);
-      }
-    }
-
-    if ( liveTokensBlock || deadTokensBlock ) {
-      out.tokens = this
-        ._filterTokensByVisionPolygon()
-        .filter(t => (t.topZ > minE) && (t.bottomZ < maxE)); // Filter tokens too low or too high.
-    }
-
+    if ( wallsBlock ) out.walls = this._filterWallsByVisionPolygon();
+    if ( tilesBlock ) out.tiles = this._filterTilesByVisionPolygon();
+    if ( liveTokensBlock || deadTokensBlock ) out.tokens = this._filterTokensByVisionPolygon();
     return out;
+  }
+
+  /**
+   * Filter walls in the scene by a triangle representing the view from viewingPoint to
+   * target (or other two points). Only considers 2d top-down view.
+   * @return {Set<Wall>}
+   */
+  _filterWallsByVisionPolygon() {
+    const walls = canvas.walls.quadtree
+        .getObjects(this.visionPolygon._bounds)
+        .filter(w => this._testWallInclusion(w));
+    return this.visionPolygon.filterWalls(walls);
+  }
+
+  /**
+   * Filter tiles in the scene by a triangle representing the view from viewingPoint to
+   * target (or other two points). Only considers 2d top-down view.
+   * @return {Set<Tile>}
+   */
+  _filterTilesByVisionPolygon() {
+    let tiles = canvas.tiles.quadtree.getObjects(this.visionPolygon._bounds);
+
+    // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
+    if ( MODULES_ACTIVE.LEVELS && this.config.type === "sight" ) {
+      tiles = tiles.filter(t => !t.document?.flags?.levels?.noCollision);
+    }
+    return this.visionPolygon.filterTiles(tiles);
   }
 
   /**
@@ -932,85 +876,27 @@ export class AlternativeLOS {
   _filterTokensByVisionPolygon() {
     const { visionPolygon, target, viewer } = this;
 
-    // Filter by the precise triangle cone
-    // For speed and simplicity, consider only token rectangular bounds
-    // Remove clone of the viewing object, if any. See Token Cover issue #9
-    // hasPreview doesn't seem to work; the viewer in particular does not show up.
-    const edges = visionPolygon._edges;
-    const collisionTest = o => {
-      const t = o.t;
-      if ( t.id === viewer.id ) return false;
-      const tCenter = t.center;
-      if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
-      const tBounds = t.bounds;
-      return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
-    };
+    let tokens = canvas.tokens.quadtree.getObjects(this.visionPolygon._bounds);
 
     // Filter out the viewer and target from the token set.
-    const tokens = canvas.tokens.quadtree.getObjects(visionPolygon._bounds, { collisionTest });
     tokens.delete(target);
     tokens.delete(viewer);
 
     // Filter tokens that directly overlaps the viewer.
     // Example: viewer is on a dragon.
-    if ( viewer instanceof Token ) tokens.filter(t => this.tokensOverlap(viewer, t)).forEach(t => tokens.delete(t));
+    if ( viewer instanceof Token ) tokens = tokens.filter(t => this.tokensOverlap(viewer, t))
+
+    // Filter tokens that directly overlaps the viewer.
+    // Example: viewer is on a dragon.
+    if ( viewer instanceof Token ) tokens = tokens.filter(t => this.tokensOverlap(viewer, t));
 
     // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
     const api = MODULES_ACTIVE.API.RIDEABLE;
-    if ( api ) {
-      tokens
-        .filter(t => api.RidingConnection(t, viewer) || api.RidingConnection(t, target))
-        .forEach(t => tokens.delete(t));
-    }
-    return tokens;
-  }
+    if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer)
+      || api.RidingConnection(t, target));
 
-  /**
-   * Filter tiles in the scene by a triangle representing the view from viewingPoint to
-   * token (or other two points). Only considers 2d top-down view.
-   * @return {Set<Tile>}
-   */
-  _filterTilesByVisionPolygon(visionPolygon) {
-    visionPolygon ??= this.visionPolygon;
-    const tiles = canvas.tiles.quadtree.getObjects(visionPolygon._bounds);
-
-    // Filter by the precise triangle shape
-    // Also filter by overhead tiles
-    const edges = visionPolygon._edges;
-    const alphaThreshold = CONFIG[MODULE_ID].alphaThreshold;
-    return tiles.filter(t => {
-      // Only overhead tiles count for blocking vision
-      // TODO: Need more nuanced understanding of overhead tiles and what should block.
-      if ( t.document.elevation < t.document.parent?.foregroundElevation ) return false;
-
-      // Check remainder against the vision polygon shape
-      // const tBounds = t.bounds;
-
-      // Use the alpha bounding box. This might be a polygon if the tile is rotated.
-      const tBounds = t.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
-      const tCenter = tBounds.center;
-      if ( visionPolygon.contains(tCenter.x, tCenter.y) ) return true;
-      return edges.some(e => tBounds.lineSegmentIntersects(e.A, e.B, { inside: true }));
-    });
-  }
-
-  /**
-   * Filter walls in the scene by a triangle representing the view from viewingPoint to some
-   * token (or other two points). Only considers 2d top-down view.
-   * @return {Set<Wall>}
-   */
-  _filterWallsByVisionPolygon() {
-    const visionPolygon = this.visionPolygon;
-    let walls = canvas.walls.quadtree.getObjects(visionPolygon._bounds);
-    walls = walls.filter(w => this._testWallInclusion(w));
-
-    // Filter by the precise triangle cone.
-    const edges = visionPolygon._edges;
-    return walls.filter(wall => {
-      const { a, b } = wall.edge;
-      if ( visionPolygon.contains(a.x, a.y) || visionPolygon.contains(b.x, b.y) ) return true;
-      return edges.some(e => foundry.utils.lineSegmentIntersects(a, b, e.A, e.B));
-    });
+    // Filter by the precise triangle cone
+    return visionPolygon.filterTokens(tokens);
   }
 
   /**
