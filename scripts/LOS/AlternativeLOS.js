@@ -844,10 +844,10 @@ export class AlternativeLOS {
    * target (or other two points). Only considers 2d top-down view.
    * @return {Set<Wall>}
    */
-  _filterWallsByVisionPolygon() {
-    const walls = canvas.walls.quadtree
+  _filterWallsByVisionPolygon(walls) {
+    walls ??= canvas.walls.quadtree
         .getObjects(this.visionPolygon._bounds)
-        .filter(w => this._testWallInclusion(w));
+        .filter(w => w.document[this.config.type] ); // Ignore walls that are not blocking for the type.
     return this.visionPolygon.filterWalls(walls);
   }
 
@@ -856,8 +856,8 @@ export class AlternativeLOS {
    * target (or other two points). Only considers 2d top-down view.
    * @return {Set<Tile>}
    */
-  _filterTilesByVisionPolygon() {
-    let tiles = canvas.tiles.quadtree.getObjects(this.visionPolygon._bounds);
+  _filterTilesByVisionPolygon(tiles) {
+    tiles ??= canvas.tiles.quadtree.getObjects(this.visionPolygon._bounds);
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
     if ( MODULES_ACTIVE.LEVELS && this.config.type === "sight" ) {
@@ -873,10 +873,9 @@ export class AlternativeLOS {
    * token under the viewer point.
    * @return {Set<Token>}
    */
-  _filterTokensByVisionPolygon() {
+  _filterTokensByVisionPolygon(tokens) {
     const { visionPolygon, target, viewer } = this;
-
-    let tokens = canvas.tokens.quadtree.getObjects(this.visionPolygon._bounds);
+    tokens ??= canvas.tokens.quadtree.getObjects(visionPolygon._bounds);
 
     // Filter out the viewer and target from the token set.
     tokens.delete(target);
@@ -897,20 +896,6 @@ export class AlternativeLOS {
 
     // Filter by the precise triangle cone
     return visionPolygon.filterTokens(tokens);
-  }
-
-  /**
-   * Test whether a wall should be included as potentially blocking from point of view of
-   * token.
-   * Comparable to ClockwiseSweep.prototype._testWallInclusion but less thorough.
-   */
-  _testWallInclusion(wall) {
-    // Ignore walls that are not blocking for the type
-    if (!wall.document[this.#config.type] || wall.isOpen ) return false;
-
-    // Ignore one-directional walls facing away
-    const side = wall.edge.orientPoint(this.viewerPoint);
-    return !wall.document.dir || (side !== wall.document.dir);
   }
 
   /** @type {enum} */
