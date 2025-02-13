@@ -80,7 +80,6 @@ Draw.shape(targetShape, { color: Draw.COLORS.red })
 // Base folder
 import { MODULE_ID } from "../const.js";
 
-
 // This LOS folder
 import { AlternativeLOS } from "./AlternativeLOS.js";
 import { Area3dPopout } from "./Area3dPopout.js";

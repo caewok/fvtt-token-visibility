@@ -713,7 +713,7 @@ class PlaceableGeometryHandler {
   // If the object already has a geometry handler, that handler is returned
   constructor(object) {
     const existingHandler = object[GEOMETRY_ID];
-    if ( existingHandler ) return existingHandler;
+    if ( existingHandler ) return existingHandler;  // eslint-disable-line no-constructor-return
     this.object = object;
     object[GEOMETRY_ID] = this;
   }
@@ -780,7 +780,7 @@ export class TokenGeometryHandler extends PlaceableGeometryHandler {
    * @returns {ConstrainedToken3dGeometry|ConstrainedTokenHex3dGeometry}
    */
   _buildGeometry() {
-    const cl = canvas.grid.isHex ? ConstrainedTokenHex3dGeometry : ConstrainedToken3dGeometry;
+    const cl = canvas.grid.isHexagonal ? ConstrainedTokenHex3dGeometry : ConstrainedToken3dGeometry;
     return new cl(this.token);
   }
 

@@ -66,7 +66,6 @@ newPoints.forEach(pt => Draw.point(pt, { color: Draw.COLORS.blue}))
 // Can set a view matrix and transform points accordingly.
 
 
-
 /**
  * Represent a Foundry object as a set of 3d points
  */

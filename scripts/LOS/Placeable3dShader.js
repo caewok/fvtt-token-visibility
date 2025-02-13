@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 glMatrix,
 PIXI
 */
@@ -53,7 +54,7 @@ void main() {
 
   static create(viewerPt, targetPt, defaultUniforms = {}) {
     defaultUniforms.uOffsetMatrix = mat4.create();
-    mat4.fromScaling(defaultUniforms.uOffsetMatrix , [-1, 1, 1]);
+    mat4.fromScaling(defaultUniforms.uOffsetMatrix, [-1, 1, 1]);
     const res = super.create(defaultUniforms);
     res._initializeLookAtMatrix(viewerPt, targetPt);
     res._calculatePerspectiveMatrix();
@@ -69,7 +70,7 @@ void main() {
 
   #near = 50;
 
-  #far = 1000; // null;
+  #far = 1000; // Null;
 
   setColor(r = 0, g = 0, b = 1, a = 1) { this.uniforms.uColor = [r, g, b, a]; }
 
@@ -152,7 +153,7 @@ void main() {
     // Apparently, the glMatrix lookAt is the one to use to move the target to look at the camera.
 
     mat4.lookAt(this.uniforms.uLookAtMatrix, this.#eye, this.#center, this.#up);
-    // mat4.targetTo(this.uniforms.uLookAtMatrix, this.#center, this.#eye, this.#up);
+    // Mat4.targetTo(this.uniforms.uLookAtMatrix, this.#center, this.#eye, this.#up);
     this.uniformGroup.update();
   }
 }

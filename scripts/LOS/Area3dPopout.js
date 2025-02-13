@@ -1,5 +1,6 @@
 /* globals
 Application,
+document,
 PIXI
 */
 "use strict";
@@ -41,7 +42,7 @@ export class Area3dPopout extends Application {
     return options;
   }
 
-  getData(options = {}) {
+  getData(_options = {}) {
     return { id: `${this.id}_canvas` };
   }
 
@@ -96,7 +97,8 @@ export class Area3dPopout extends Application {
 
 // Hooks.on("renderArea3dPopout", function(app, _html, _data) {
 //   const id = `${app.options.id}_canvas`;
-//   app.pixiApp = new PIXI.Application({width: 400, height: 400, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
+//   app.pixiApp = new PIXI.Application({
+// width: 400, height: 400, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
 //
 //   // Center of window should be 0,0
 //   app.pixiApp.stage.position.x = 200;  // 200 for width 400

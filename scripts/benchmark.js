@@ -28,9 +28,9 @@ import { registerArea3d } from "./patching.js";
 api = game.modules.get("tokenvisibility").api
 await api.bench.benchAll();
 
-await api.benchTokenRange(1000)
-await api.benchTokenLOS(100)
-await api.benchTokenVisibility(1000)
+await api.bench.benchTokenRange(1000)
+await api.bench.benchTokenLOS(100)
+await api.bench.TokenVisibility(1000)
 */
 
 /**

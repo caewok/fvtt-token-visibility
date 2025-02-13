@@ -248,7 +248,7 @@ export class UnitTokenPoints3d extends TokenPoints3d {
     const size = canvas.dimensions.size;
     const size_1_2 = size * 0.5;
 
-    let tokenBorder = canvas.grid.isHex
+    let tokenBorder = canvas.grid.isHexagonal
       ? new PIXI.Polygon(canvas.grid.grid.getBorderPolygon(1, 1, 0))
       : new PIXI.Rectangle(0, 0, size, size);
     tokenBorder = tokenBorder.translate(center.x - size_1_2, center.y - size_1_2);
@@ -259,7 +259,7 @@ export class UnitTokenPoints3d extends TokenPoints3d {
       bottomZ: center.z - size_1_2,
       center: token.center,
       name: token.name
-    }
+    };
 
     super(fakeToken, opts);
     this.#token = token;

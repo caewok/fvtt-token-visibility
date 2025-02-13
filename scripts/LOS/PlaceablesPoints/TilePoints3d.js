@@ -1,5 +1,6 @@
 /* globals
-CONFIG
+CONFIG,
+foundry
 */
 "use strict";
 
@@ -115,7 +116,7 @@ export class TilePoints3d extends HorizontalPoints3d {
       if ( ix ) {
         const ixPoint = new Point3d(ix.x, ix.y, -0.1);
         const newIdx = (otherIdx + 2) % 4;
-        this._tPoints.splice(newIdx, 0, ixPoint)
+        this._tPoints.splice(newIdx, 0, ixPoint);
       } else {
         console.warn("_clipPlanePoints resulted in less than 4 points");
         this._tPoints = oldPoints;

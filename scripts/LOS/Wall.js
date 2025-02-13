@@ -1,5 +1,5 @@
 /* globals
-flattenObject
+foundry
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
@@ -31,7 +31,7 @@ function drawWallArea3d(wall) {
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
 function updateWallArea3d(wallD, changed, _options, _userId) {
-  const changeKeys = new Set(Object.keys(flattenObject(changed)));
+  const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
   if ( !changeKeys.has("c") ) return;
   wallD.object[MODULE_ID].geomHandler.update();
 }

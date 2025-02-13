@@ -117,6 +117,8 @@ Hooks.once("init", function() {
 
     OPEN_POPOUTS,
 
+    Settings,
+
     webgl: {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,

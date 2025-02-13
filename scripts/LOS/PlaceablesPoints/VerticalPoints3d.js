@@ -91,7 +91,8 @@ export class VerticalPoints3d extends PlanePoints3d {
       // If A and B are collinear to this edge, not within a *convex* polygon (part of the same edge)
       if ( !oA && !oB ) {
         // Collinear, so either A|B and edge overlap or they are one after the other.
-        // if ( !aOnSegment && !bOnSegment && !isOnSegment(A, B, edge.A, 1e-08) && !isOnSegment(A, B, edge.B) ) return false;
+        // if ( !aOnSegment && !bOnSegment && !isOnSegment(A, B, edge.A, 1e-08)
+        //   && !isOnSegment(A, B, edge.B) ) return false;
         // return true; // They overlap.
         return false;
       }
@@ -161,9 +162,9 @@ export class VerticalPoints3d extends PlanePoints3d {
     // First, split top and bottom
     const { bottomZ, topZ } = target;
     const { object, points } = this;
-    const pTop = new this.constructor(object, duplicate(points));
-    const pBottom = new this.constructor(object, duplicate(points));
-    const pMiddle = new this.constructor(object, duplicate(points));
+    const pTop = new this.constructor(object, foundry.utils.duplicate(points));
+    const pBottom = new this.constructor(object, foundry.utils.duplicate(points));
+    const pMiddle = new this.constructor(object, foundry.utils.duplicate(points));
 
     pTop.bottomA.z = pTop.bottomB.z = topZ;
     pBottom.topA.z = pBottom.topB.z = bottomZ;
@@ -206,7 +207,7 @@ export class VerticalPoints3d extends PlanePoints3d {
 
     if ( !Acontained && ixsA ) {
       // A endpoint is outside token. Cut wall at the A --> ix point.
-      const pA = new this.constructor(object, duplicate(points));
+      const pA = new this.constructor(object, foundry.utils.duplicate(points));
       const { x, y } = ixsA;
       pA.topB.x = pA.bottomB.x = x;
       pA.topB.y = pA.bottomB.y = y;
@@ -226,7 +227,7 @@ export class VerticalPoints3d extends PlanePoints3d {
 
     if ( !Bcontained && ixsB ) {
       // B endpoint is outside token. Cut wall at the B --> ix point
-      const pB = new this.constructor(object, duplicate(points));
+      const pB = new this.constructor(object, foundry.utils.duplicate(points));
       const { x, y } = ixsB;
       pB.topA.x = pB.bottomA.x = x;
       pB.topA.y = pB.bottomA.y = y;

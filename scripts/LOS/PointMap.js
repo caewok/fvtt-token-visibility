@@ -1,3 +1,7 @@
+/* globals
+PIXI
+*/
+"use strict";
 
 export class PointSet extends Set {
 
@@ -67,6 +71,5 @@ export class PointKeyMap extends Map {
     return super.delete(point.key);
   }
 }
-
 
 

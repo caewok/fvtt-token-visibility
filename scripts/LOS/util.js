@@ -1,11 +1,24 @@
 /* globals
+CONFIG,
 PIXI
 */
 "use strict";
 
-import { EPSILON } from "../const.js";
+import { EPSILON, MODULE_ID } from "../const.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+
+/**
+ * Define a null set class and null set which always contains 0 elements.
+ * The class removes the add method.
+ */
+class NullSet extends Set {
+  add(value) {
+   console.error(`${MODULE_ID}|Attempted to add ${value} to a NullSet.`, value);
+   return this;
+  }
+}
+export const NULL_SET = new NullSet();
 
 
 /**

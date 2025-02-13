@@ -255,7 +255,7 @@ export class HorizontalPoints3d extends PlanePoints3d {
         return splits;
       }
       splits.inside = splits.inside.toPolygon();
-      const outside =  thisShape.difference(targetShape)?.thisDiff; // Can be null
+      const outside = thisShape.difference(targetShape)?.thisDiff; // Can be null
       if ( outside ) splits.outside = splits.outside.map(rect => rect.toPolygon());
 
     } else {

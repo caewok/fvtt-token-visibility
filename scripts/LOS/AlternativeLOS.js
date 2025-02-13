@@ -6,7 +6,8 @@ CONST,
 foundry,
 LimitedAnglePolygon,
 PIXI,
-Ray
+Ray,
+Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -21,7 +22,8 @@ import {
   lineIntersectionQuadrilateral3d,
   lineSegmentIntersectsQuadrilateral3d,
   getObjectProperty,
-  log } from "./util.js";
+  log,
+  NULL_SET } from "./util.js";
 
 
 // Geometry folder
@@ -33,7 +35,6 @@ import { ClipperPaths } from "../geometry/ClipperPaths.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 
-const NULL_SET = new Set(); // Set intended to signify no items, as a placeholder.
 
 export const POINT_TYPES = {
   CENTER: "points-center",
@@ -43,8 +44,12 @@ export const POINT_TYPES = {
   FIVE: "points-five", // Corners + center
   EIGHT: "points-eight", // Nine without center
   NINE: "points-nine" // Corners, midpoints, center
-}
+};
 
+/**
+ * @typedef Viewer    Token|MeasuredTemplate|AmbientLight|AmbientSound|Point3d
+ * The object that is viewing / attacking.
+ */
 
 /**
  * Base class to estimate line-of-sight between a source and a token using different methods.
@@ -78,14 +83,14 @@ export class AlternativeLOS {
    * @property {boolean} largeTarget                  Use special handling for targets larger than grid square
    * @property {number} threshold                     Numeric threshold for determining LOS from percent visible
    * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible
-   * @property {VisionSource} visionSource            Vision source of the viewer
+   * @property {PointVisionSource} visionSource            Vision source of the viewer
    * @property {boolean} useLitTargetShape            Should the illuminated target shape be used?
    * @property {string} tokenHPAttribute              Location of the token's hit points property
    */
   #config = {};
 
   /**
-   * @param {Point3d|Token|VisionSource} viewer   Point or object with z, y, z|elevationZ properties
+   * @param {Point3d|Token|PointVisionSource} viewer   Point or object with z, y, z|elevationZ properties
    * @param {Token} target
    * @param {AlternativeLOSConfig} config
    */
@@ -174,10 +179,10 @@ export class AlternativeLOS {
   // ----- NOTE: Viewer properties ----- //
 
   /**
-   * The token that is considered the "viewer" of the target.
+   * The token or other object that is considered the "viewer" of the target.
    * By default, the viewer is assumed to view from its center point, although this can
    * be changed by setting config.visionOffset.
-   * @type {Token}
+   * @type {Viewer}
    */
   #viewer;
 
@@ -198,9 +203,13 @@ export class AlternativeLOS {
    */
   get viewerPoint() {
     if ( this.#viewerPoint.x == null ) {
-      Point3d.fromTokenVisionHeight(this.viewer, this.#viewerPoint)
-        .add(this.#config.visionOffset, this.#viewerPoint);
+      const viewer = this.viewer;
+      if ( viewer instanceof Token ) Point3d.fromTokenVisionHeight(viewer, this.#viewerPoint);
+      else if ( viewer instanceof Point3d ) this.#viewerPoint.copyFrom(viewer);
+      else this.#viewerPoint.set(viewer.document.x, viewer.document.y, viewer.elevationZ);
+
     }
+    this.#viewerPoint.add(this.#config.visionOffset, this.#viewerPoint);
     return this.#viewerPoint;
   }
 
@@ -384,7 +393,7 @@ export class AlternativeLOS {
       || this.viewerPoint.almostEqual(Point3d.fromTokenCenter(this.target)) ) return 1;
 
     // If directly overlapping.
-    if ( this.tokensOverlap(this.viewer, this.target) ) return 1;
+    if ( (this.viewer instanceof Token) && this.tokensOverlap(this.viewer, this.target) ) return 1;
 
     // Treat the scene background as fully blocking, so basement tokens don't pop-up unexpectedly.
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
@@ -537,10 +546,6 @@ export class AlternativeLOS {
     if ( !this.#config.wallsBlock ) return false;
     const walls = [...this.blockingObjects.walls, ...this.blockingObjects.terrainWalls];
     return testWallsForIntersections(startPt, endPt, walls, "any", this.config.type);
-
-//     const mode = "any";
-//     const type = this.#config.type;
-//     return PointSourcePolygon.testCollision3d(startPt, endPt, { mode, type });
   }
 
   /**
@@ -556,7 +561,9 @@ export class AlternativeLOS {
     // Use blockingObjects b/c more limited and we can modify it if necessary.
     // const collisionTest = (o, _rect) => o.t.document.overhead;
     // const tiles = canvas.tiles.quadtree.getObjects(ray.bounds, { collisionTest });
-    const tiles = this.blockingObjects.tiles.filter(t => t.document.elevation >= t.document.parent?.foregroundElevation);
+    // TODO: Need more nuanced understanding of overhead tiles and what should block.
+    const tiles = this.blockingObjects.tiles.filter(t =>
+      t.document.elevation >= t.document.parent?.foregroundElevation);
 
     // Because tiles are parallel to the XY plane, we need not test ones obviously above or below.
     const maxE = Math.max(startPt.z, endPt.z);
@@ -586,7 +593,7 @@ export class AlternativeLOS {
       if ( t === null || t < zeroMin || t > oneMax ) continue;
       const ix = new Point3d();
       startPt.add(rayVector.multiplyScalar(t, ix), ix);
-      if ( !tile.mesh?.containsPixel(ix.x, ix.y, 0.99) ) continue; // Transparent, so no collision.
+      if ( !tile.mesh?.containsCanvasPoint(ix.x, ix.y, 0.99 + 1e-06) ) continue; // Transparent, so no collision.
 
       return true;
     }
@@ -666,13 +673,26 @@ export class AlternativeLOS {
   // ----- NOTE: Static methods ----- //
   static POINT_TYPES = POINT_TYPES;
 
+  /**
+   * @param {Viewer} viewer     Token or other object doing the viewing / attacking
+   * @param {object} [opts={}]  Passed to _constructTokenPoints
+   * @returns {Point3d[]}
+   */
   static constructViewerPoints(viewer, opts = {}) {
-    opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
-    opts.inset ??= 0;
-    opts.viewer ??= viewer.bounds; // TODO: Should probably handle hex token shapes?
-    return this._constructTokenPoints(viewer, opts);
+    if ( viewer instanceof Point3d ) return [viewer.clone()];
+    else if ( viewer instanceof Token ) {
+      opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
+      opts.inset ??= 0;
+      opts.viewer ??= viewer.bounds; // TODO: Should probably handle hex token shapes?
+      return this._constructTokenPoints(viewer, opts);
+    } else return [new Point3d(viewer.document.x, viewer.document.y, viewer.elevationZ)];
   }
 
+  /**
+   * @param {Token} target
+   * @param {object} [opts={}]  Passed to _constructTokenPoints
+   * @returns {Point3d[]}
+   */
   static constructTargetPoints(target, opts = {}) {
     opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
     opts.inset ??= 0.75;
@@ -680,6 +700,16 @@ export class AlternativeLOS {
     return this._constructTokenPoints(target, opts);
   }
 
+  /**
+   * @param {Token} token
+   * @param {object} [opts]
+   * @param {PIXI.Polygon|PIXI.Rectangle} [opts.tokenShape]
+   * @param {POINT_TYPES} [opts.pointAlgorithm]
+   * @param {number} [opts.inset]
+   * @param {boolean} [opts.isTarget]
+   * @param {Point3d} [opts.viewerPoint]
+   * @returns {Point3d[]}
+   */
   static _constructTokenPoints(token, { tokenShape, pointAlgorithm, inset, isTarget, viewerPoint } = {}) {
     const TYPES = this.POINT_TYPES;
     const center = Point3d.fromTokenCenter(token);
@@ -923,7 +953,7 @@ export class AlternativeLOS {
 
     // Filter tokens that directly overlaps the viewer.
     // Example: viewer is on a dragon.
-    tokens.filter(t => this.tokensOverlap(viewer, t)).forEach(t => tokens.delete(t));
+    if ( viewer instanceof Token ) tokens.filter(t => this.tokensOverlap(viewer, t)).forEach(t => tokens.delete(t));
 
     // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
     const api = MODULES_ACTIVE.API.RIDEABLE;
@@ -950,6 +980,7 @@ export class AlternativeLOS {
     const alphaThreshold = CONFIG[MODULE_ID].alphaThreshold;
     return tiles.filter(t => {
       // Only overhead tiles count for blocking vision
+      // TODO: Need more nuanced understanding of overhead tiles and what should block.
       if ( t.document.elevation < t.document.parent?.foregroundElevation ) return false;
 
       // Check remainder against the vision polygon shape
@@ -975,9 +1006,10 @@ export class AlternativeLOS {
 
     // Filter by the precise triangle cone.
     const edges = visionPolygon._edges;
-    return walls.filter(w => {
-      if ( visionPolygon.contains(w.edge.a.x, w.edge.a.y) || visionPolygon.contains(w.edge.b.x, w.edge.b.y) ) return true;
-      return edges.some(e => foundry.utils.lineSegmentIntersects(w.edge.a, w.edge.b, e.A, e.B));
+    return walls.filter(wall => {
+      const { a, b } = wall.edge;
+      if ( visionPolygon.contains(a.x, a.y) || visionPolygon.contains(b.x, b.y) ) return true;
+      return edges.some(e => foundry.utils.lineSegmentIntersects(a, b, e.A, e.B));
     });
   }
 
@@ -1004,7 +1036,7 @@ export class AlternativeLOS {
 
   /**
    * Test if any part of the target is within the limited angle vision of the token.
-   * @param {VisionSource} visionSource
+   * @param {PointVisionSource} visionSource
    * @param {PIXI.Rectangle|PIXI.Polygon} targetShape
    * @returns {boolean}
    */

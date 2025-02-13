@@ -461,7 +461,7 @@ export class Area3dLOSGeometric extends Area3dLOS {
     const addVisibleSplitsFn = (key, pts) => {
       const res = pts._getVisibleSplits(target, visionPolygon, { edges, viewerLoc });
       if ( res.length ) blockingPoints[key].push(...res);
-    }
+    };
 
     // Add points to the respective blockingPoints array.
     Object.entries(nonTokens)

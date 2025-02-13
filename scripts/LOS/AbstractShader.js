@@ -1,6 +1,5 @@
 /* globals
 foundry,
-mergeObject,
 PIXI
 */
 "use strict";
@@ -48,7 +47,8 @@ export class AbstractShader extends PIXI.Shader {
    */
   static create(defaultUniforms) {
     const program = PIXI.Program.from(this.vertexShader, this.fragmentShader);
-    const uniforms = mergeObject(this.defaultUniforms, defaultUniforms, {inplace: false, insertKeys: true});
+    const uniforms = foundry.utils.mergeObject(this.defaultUniforms, defaultUniforms,
+      { inplace: false, insertKeys: true });
     return new this(program, uniforms);
   }
 

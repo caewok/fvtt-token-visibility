@@ -9,8 +9,14 @@ import { Area3dLOSWebGL } from "./Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./Area3dLOSHybrid.js";
 
+
 /**
- * Class that handles calculating line-of-sight between two tokens based on current settings.
+ * @typedef Viewer    Token|MeasuredTemplate|AmbientLight|AmbientSound|Point3d
+ * The object that is viewing / attacking.
+ */
+
+/**
+ * Class that handles calculating line-of-sight between two tokens, or an object and a token, based on current settings.
  * Abstract version does not have anything LOS-specific beyond what can be used by
  * CoverCalculator in Alt. Token Cover.
  */
@@ -42,7 +48,7 @@ export class AbstractCalculator {
   calc;
 
   /**
-   * @param {Token} viewer        The token that is viewing / attacking
+   * @param {Viewer} viewer        The token or other object that is viewing / attacking
    * @param {Token} target        The token that is being seen / defending
    * @param {object} opts         Options that affect the calculation
    * @param {string} [opts.algorithm]     LOS algorithm to use
@@ -61,7 +67,7 @@ export class AbstractCalculator {
     return cfg;
   }
 
-  /** @type {Token} */
+  /** @type {Viewer} */
   get viewer() { return this.calc.viewer; }
 
   set viewer(value) { this.calc.viewer = value; }
