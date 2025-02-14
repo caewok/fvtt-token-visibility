@@ -15,7 +15,6 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { randomUniform } from "./random.js";
 
 import { PointsLOS } from "./LOS/PointsLOS.js";
-import { Area2dLOS } from "./LOS/Area2dLOS.js";
 import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
@@ -66,7 +65,6 @@ function getTokens() {
 function summarizeTokenVisibility(viewers, targets) {
   const calcs = {
     calcPoints: new PointsLOS(),
-    calcArea2d: new Area2dLOS(),
     calcArea3dGeometric: new Area3dLOSGeometric(),
     calcArea3dWebGL1: new Area3dLOSWebGL(),
     calcArea3dWebGL2: new Area3dLOSWebGL2(),
@@ -235,7 +233,6 @@ export async function benchTokenLOS(n = 100) {
 
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.CENTER);
   await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.NINE);
-  await runLOSTest(n, viewers, targets, algs.AREA2D, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D, false);
   await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, false);
   await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, false);
@@ -245,7 +242,6 @@ export async function benchTokenLOS(n = 100) {
   console.log("\n");
   await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
   await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.NINE);
-  await runLOSTest(n, viewers, targets, algs.AREA2D, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D, true);
   await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, true);
   await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, true);

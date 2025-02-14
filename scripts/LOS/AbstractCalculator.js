@@ -3,7 +3,6 @@
 "use strict";
 
 import { PointsLOS } from "./PointsLOS.js";
-import { Area2dLOS } from "./Area2dLOS.js";
 import { Area3dLOSGeometric } from "./Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./Area3dLOSWebGL2.js";
@@ -25,7 +24,6 @@ export class AbstractCalculator {
   /** @enum {AlternativeLOS} */
   static ALGORITHM_CLASS = {
     "los-points": PointsLOS,
-    "los-area-2d": Area2dLOS,
     "los-area-3d": Area3dLOSHybrid,
     "los-area-3d-geometric": Area3dLOSGeometric,
     "los-area-3d-webgl1": Area3dLOSWebGL,
@@ -36,7 +34,6 @@ export class AbstractCalculator {
   /** @enum {string} */
   static ALGORITHM_CLASS_NAME = {
     "los-points": "PointsLOS",
-    "los-area-2d": "Area2dLOS",
     "los-area-3d": "Area3dLOSHybrid",
     "los-area-3d-geometric": "Area3dLOSGeometric",
     "los-area-3d-webgl1": "Area3dLOSWebGL",
