@@ -13,6 +13,7 @@ Token
 
 // Base folder
 import { MODULES_ACTIVE } from "../const.js";
+import { Settings } from "../settings.js";
 
 // LOS folder
 import { testWallsForIntersections } from "./PointSourcePolygon.js";
@@ -111,23 +112,25 @@ export class AlternativeLOS {
   _initializeConfiguration(config = {}) {
     const cfg = this.#config = config;
 
-    cfg.type = config.type ?? "sight";
-    cfg.wallsBlock = config.wallsBlock ?? true;
-    cfg.tilesBlock = config.tilesBlock ?? true;
+    cfg.type ??= "sight";
+    cfg.wallsBlock ??= true;
+    cfg.tilesBlock ??= true;
 
     // Viewer
-    cfg.visionOffset = config.visionOffset ?? new Point3d();
+    cfg.visionOffset ??= new Point3d();
 
     // Target
-    cfg.largeTarget = config.largeTarget ?? false;
-    cfg.threshold = config.threshold ?? 0;
+    const KEYS = Settings.KEYS;
+    const TARGET = KEYS.LOS.TARGET;
+    cfg.largeTarget ??= Settings.get(TARGET.LARGE) ?? false;
+    cfg.threshold ||= 0;
 
     // Token blocking
-    cfg.deadTokensBlock = config.deadTokensBlock ?? false;
-    cfg.liveTokensBlock = config.liveTokensBlock ?? false;
-    cfg.proneTokensBlock = config.proneTokensBlock ?? false;
-    cfg.useLitTargetShape = config.useLitTargetShape ?? false;
-    cfg.tokenHPAttribute = config.tokenHPAttribute ?? CONFIG.GeometryLib.tokenHPId; // Or undefined.
+    cfg.deadTokensBlock ??= Settings.get(KEYS.DEAD_TOKENS_BLOCK) ?? false;
+    cfg.liveTokensBlock ??= Settings.get(KEYS.LIVE_TOKENS_BLOCK) ?? false;
+    cfg.proneTokensBlock ??= Settings.get(KEYS.PRONE_TOKENS_BLOCK) ?? false;
+    cfg.useLitTargetShape ??= false;
+    cfg.tokenHPAttribute ??= Settings.get(KEYS.TOKEN_HP_ATTRIBUTE) ?? CONFIG.GeometryLib.tokenHPId; // Or undefined.
   }
 
   /**
@@ -209,8 +212,7 @@ export class AlternativeLOS {
       else this.#viewerPoint.set(viewer.document.x, viewer.document.y, viewer.elevationZ);
 
     }
-    this.#viewerPoint.add(this.#config.visionOffset, this.#viewerPoint);
-    return this.#viewerPoint;
+    return this.#viewerPoint.add(this.#config.visionOffset);
   }
 
   /**
@@ -1093,6 +1095,6 @@ export class AlternativeLOS {
    */
   _drawVisionTriangle() {
     const draw = this.debugDraw;
-    draw.shape(this.visionPolygon, { fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
+    draw.shape(this.visionPolygon, { width: 0, fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
   }
 }
