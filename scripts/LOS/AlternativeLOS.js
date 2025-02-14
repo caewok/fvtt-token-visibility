@@ -16,12 +16,10 @@ import { MODULES_ACTIVE } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
-import { testWallsForIntersections } from "./PointSourcePolygon.js";
+
 import { VisionPolygon } from "./VisionPolygon.js";
 import {
   insetPoints,
-  lineIntersectionQuadrilateral3d,
-  lineSegmentIntersectsQuadrilateral3d,
   getObjectProperty,
   log,
   NULL_SET } from "./util.js";
@@ -521,121 +519,6 @@ export class AlternativeLOS {
   }
 
 
-  /**
-   * Does the ray between two points collide with an object within the vision triangle?
-   * @param {Point3d} startPt      Starting point of this ray
-   * @param {Point3d} endPt         End point of this ray
-   * @returns {boolean} True if an object blocks this ray
-   */
-  _hasCollision(startPt, endPt) {
-    return this._hasWallCollision(startPt, endPt)
-      || this._hasTileCollision(startPt, endPt)
-      || this._hasTokenCollision(startPt, endPt);
-  }
-
-  /**
-   * Does the ray between two points collide with a wall within the vision triangle?
-   * @param {Point3d} startPt      Starting point of this ray
-   * @param {Point3d} endPt         End point of this ray
-   * @returns {boolean} True if a wall blocks this ray
-   */
-  _hasWallCollision(startPt, endPt) {
-    if ( !this.#config.wallsBlock ) return false;
-    const walls = [...this.blockingObjects.walls, ...this.blockingObjects.terrainWalls];
-    return testWallsForIntersections(startPt, endPt, walls, "any", this.config.type);
-  }
-
-  /**
-   * Does the ray between two points collide with a tile within the vision triangle?
-   * @param {Point3d} startPt       Starting point of this ray
-   * @param {Point3d} endPt         End point of this ray
-   * @returns {boolean} True if a tile blocks this ray
-   */
-  _hasTileCollision(startPt, endPt) {
-    if ( !this.#config.tilesBlock ) return false;
-
-    // Ignore non-overhead tiles
-    // Use blockingObjects b/c more limited and we can modify it if necessary.
-    // const collisionTest = (o, _rect) => o.t.document.overhead;
-    // const tiles = canvas.tiles.quadtree.getObjects(ray.bounds, { collisionTest });
-    // TODO: Need more nuanced understanding of overhead tiles and what should block.
-    const tiles = this.blockingObjects.tiles.filter(t =>
-      t.document.elevation >= t.document.parent?.foregroundElevation);
-
-    // Because tiles are parallel to the XY plane, we need not test ones obviously above or below.
-    const maxE = Math.max(startPt.z, endPt.z);
-    const minE = Math.min(startPt.z, endPt.z);
-
-    // Precalculate
-    const rayVector = endPt.subtract(startPt);
-    const zeroMin = 1e-08;
-    const oneMax = 1 + 1e-08;
-
-    for ( const tile of tiles ) {
-      if ( this.#config.type === "light" && tile.document.flags?.levels?.noCollision ) continue;
-
-      const { x, y, width, height, elevation } = tile.document;
-      const elevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
-
-      if ( elevationZ < minE || elevationZ > maxE ) continue;
-
-      const r0 = new Point3d(x, y, elevationZ);
-      const r1 = new Point3d(x + width, y, elevationZ);
-      const r2 = new Point3d(x + width, y + height, elevationZ);
-      const r3 = new Point3d(x, y + height, elevationZ);
-
-      // Need to test the tile intersection point for transparency (Levels holes).
-      // Otherwise, could just use lineSegmentIntersectsQuadrilateral3d
-      const t = lineIntersectionQuadrilateral3d(startPt, rayVector, r0, r1, r2, r3);
-      if ( t === null || t < zeroMin || t > oneMax ) continue;
-      const ix = new Point3d();
-      startPt.add(rayVector.multiplyScalar(t, ix), ix);
-      if ( !tile.mesh?.containsCanvasPoint(ix.x, ix.y, 0.99 + 1e-06) ) continue; // Transparent, so no collision.
-
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Does the ray between two points collide with a token within the vision triangle?
-   * @param {Point3d} startPt       Starting point of this ray
-   * @param {Point3d} endPt         End point of this ray
-   * @returns {boolean} True if a token blocks this ray
-   */
-  _hasTokenCollision(startPt, endPt) {
-    const { liveTokensBlock, deadTokensBlock } = this.#config;
-    if ( !(liveTokensBlock || deadTokensBlock) ) return false;
-
-
-    // Use blockingObjects b/c more limited and we can modify it if necessary.
-    // Filter out the viewer and target token
-    // const collisionTest = o => !(o.t.bounds.contains(startPt.x, startPt.y) || o.t.bounds.contains(endPt.x, endPt.y));
-    // const ray = new Ray(startPt, endPt);
-    // let tokens = canvas.tokens.quadtree.getObjects(ray.bounds, { collisionTest });
-    let tokens = this.blockingObjects.tokens.filter(t =>
-      t.constrainedTokenBorder.lineSegmentIntersects(startPt, endPt, { inside: true }));
-
-    // Filter out the viewer and target token
-    tokens.delete(this.viewer);
-    tokens.delete(this.target);
-
-    // Build full- or half-height startPts3d from tokens
-    const tokenPts = this._buildTokenPoints(tokens);
-
-    // Set viewing position and test token sides for collisions
-    for ( const pts of tokenPts ) {
-      const sides = pts._viewableFaces(startPt);
-      for ( const side of sides ) {
-        if ( lineSegmentIntersectsQuadrilateral3d(startPt, endPt,
-          side.points[0],
-          side.points[1],
-          side.points[2],
-          side.points[3]) ) return true;
-      }
-    }
-    return false;
-  }
 
 
   /**

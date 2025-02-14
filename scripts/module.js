@@ -29,7 +29,6 @@ import { HorizontalPoints3d } from "./LOS/PlaceablesPoints/HorizontalPoints3d.js
 
 import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 import { PointsLOS } from "./LOS/PointsLOS.js";
-import { Area2dLOS } from "./LOS/Area2dLOS.js";
 import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
 import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
@@ -93,7 +92,6 @@ Hooks.once("init", function() {
     losCalcMethods: {
       AlternativeLOS,
       PointsLOS,
-      Area2dLOS,
       Area3dLOSGeometric,
       Area3dLOSWebGL,
       Area3dLOSWebGL2,

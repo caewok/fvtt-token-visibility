@@ -27,9 +27,8 @@
     "tokenvisibility.settings.los-large-target.Name": "Large Token Subtargeting",
     "tokenvisibility.settings.los-large-target.Hint": "If the target token is larger than the grid square, consider the token visible if at least one grid square worth of token is visible.",
 
-    "tokenvisibility.settings.los-points": "Target points",
-    "tokenvisibility.settings.los-area-2d": "Target area 2d",
-    "tokenvisibility.settings.los-area-3d": "Target area 3d",
+    "tokenvisibility.settings.los-points": "Points",
+    "tokenvisibility.settings.los-area-3d": "3d",
 
     "tokenvisibility.settings.los-points-viewer.Name": "Points",
     "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Beware that this can dramatically increase the number of tests needed to determine visibility. Foundry default is 'Center' (one point)",
