@@ -88,6 +88,17 @@ export class PointsLOS extends AlternativeLOS {
    */
   _percentVisible() { return (1 - this._testTargetPoints(this.targetPoints)); }
 
+  /**
+   * @param {Token} target
+   * @param {object} [opts={}]  Passed to _constructTokenPoints
+   * @returns {Point3d[]}
+   */
+  static constructTargetPoints(target, opts = {}) {
+    opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
+    opts.inset ??= 0.75;
+    opts.tokenShape ??= target.constrainedTokenBorder;
+    return this._constructTokenPoints(target, opts);
+  }
 
   /**
    * Similar to _constructViewerPoints but with a complication:
@@ -120,8 +131,6 @@ export class PointsLOS extends AlternativeLOS {
         });
         return targetPointsArray;
       }
-
-
     }
 
     // Construct points under this constrained token border.
