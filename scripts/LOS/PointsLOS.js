@@ -13,6 +13,9 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
 
+// Base folder
+import { Settings } from "../settings.js";
+
 /**
  * Estimate line-of-sight between a source and a token using different point-to-point methods.
  */
@@ -56,9 +59,10 @@ export class PointsLOS extends AlternativeLOS {
    */
 
   _initializeConfiguration(config = {}) {
-    config.numTargetPoints ??= this.constructor.POINT_TYPES.CENTER;
-    config.targetInset ??= 0.75;
-    config.points3d ??= true;
+    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+    config.numTargetPoints ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? this.constructor.POINT_TYPES.CENTER;
+    config.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+    config.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false
     super._initializeConfiguration(config);
   }
 
@@ -171,10 +175,24 @@ export class PointsLOS extends AlternativeLOS {
     const visibleTargetShape = this.visibleTargetShape;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
+    const debugDraw = this.config.debug ? this.debugDraw : undefined;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
       const outsideVisibleShape = visibleTargetShape
         && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
+
+      if ( this.config.debug ) {
+        let color;
+        const tokenCollision = this._hasTokenCollision(viewerPoint, targetPoint);
+        const edgeCollision = this._hasWallCollision(viewerPoint, targetPoint)
+          || this._hasTileCollision(viewerPoint, targetPoint);
+
+        if ( outsideVisibleShape ) color = Draw.COLORS.gray;
+        else if ( tokenCollision && !edgeCollision ) color = Draw.COLORS.yellow;
+        else if ( edgeCollision ) color = Draw.COLORS.red;
+        else color = Draw.COLORS.green;
+        debugDraw.segment({ A: viewerPoint, B: targetPoint }, { alpha: 0.1, width: 1, color });
+      }
 
       numPointsBlocked += ( outsideVisibleShape
         || this._hasTokenCollision(viewerPoint, targetPoint)
@@ -257,61 +275,15 @@ export class PointsLOS extends AlternativeLOS {
    * Draw debugging objects on the main canvas.
    */
   _drawCanvasDebug() {
+    this.config.debug = true;
     super._drawCanvasDebug();
-    this._drawTargetPointsArray(this.targetPoints);
+
+    // this._drawTargetPointsArray(this.targetPoints);
   }
 
-  /**
-   * For debugging.
-   * Draw all the points.
-   * Mirrors _testTargetPoints
-   */
-  _drawTargetPointsArray(targetPointsArray) {
-    let minBlocked = 1;
-    let minTargetPoints = []; // Debugging
-    for ( const targetPoints of targetPointsArray ) {
-      const percentBlocked = this._testPointToPoints(targetPoints);
-
-      // We can escape early if this is completely visible.
-      if ( !percentBlocked ) {
-        minTargetPoints = targetPoints;
-        break;
-      }
-
-      this._drawPointToPoints(targetPoints, { alpha: 0.1 });
-      if ( percentBlocked < minBlocked ) minTargetPoints = targetPoints;
-      minBlocked = Math.min(minBlocked, percentBlocked);
-    }
-    this._drawPointToPoints(minTargetPoints, { width: 2 });
+  clearDebug() {
+    super.clearDebug();
+    this.config.debug = false;
   }
 
-
-  /**
-   * For debugging.
-   * Color lines from point to points as yellow, red, or green depending on collisions.
-   * @param {Point3d[]} targetPoints    Array of points on the target to test
-   */
-  _drawPointToPoints(targetPoints, { alpha = 1, width = 1 } = {}) {
-    const draw = this.debugDraw;
-    const viewerPoint = this.viewerPoint;
-    const visibleTargetShape = this.visibleTargetShape;
-    const ln = targetPoints.length;
-    for ( let i = 0; i < ln; i += 1 ) {
-      const targetPoint = targetPoints[i];
-      const outsideVisibleShape = visibleTargetShape
-        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
-
-      const tokenCollision = this._hasTokenCollision(viewerPoint, targetPoint);
-      const edgeCollision = this._hasWallCollision(viewerPoint, targetPoint)
-        || this._hasTileCollision(viewerPoint, targetPoint);
-
-      let color;
-      if ( outsideVisibleShape ) color = Draw.COLORS.gray;
-      else if ( tokenCollision && !edgeCollision ) color = Draw.COLORS.yellow;
-      else if ( edgeCollision ) color = Draw.COLORS.red;
-      else color = Draw.COLORS.green;
-
-      draw.segment({ A: viewerPoint, B: targetPoint }, { alpha, width, color });
-    }
-  }
 }
