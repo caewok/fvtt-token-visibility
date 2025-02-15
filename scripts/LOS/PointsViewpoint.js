@@ -11,7 +11,7 @@ PIXI
 import { Settings } from "../settings.js";
 
 // LOS folder
-import { AbstractViewpointLOS } from "./AbstractViewpointLOS.js";
+import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { testWallsForIntersections } from "./PointSourcePolygon.js";
 import {
@@ -27,11 +27,11 @@ import { Draw } from "../geometry/Draw.js";
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
-export class PointsViewpointLOS extends AbstractViewpointLOS {
+export class PointsViewpoint extends AbstractViewpoint {
   /**
    * Sets configuration to the current settings.
-   * @param {ViewpointLOSConfig} [cfg]
-   * @returns {ViewpointLOSConfig}
+   * @param {ViewpointConfig} [cfg]
+   * @returns {ViewpointConfig}
    */
   initializeConfig(cfg = {}) {
     // Configs specific to the Points algorithm.
@@ -48,9 +48,8 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
    */
-  _percentVisible(target) {
-    const targetPoints = this.constructTargetPoints(target);
-    this.findBlockingObjects(target); // TODO: Cache this.
+  _percentVisible() {
+    const targetPoints = this.constructTargetPoints();
     return (1 - this._testTargetPoints(targetPoints));
   }
 
@@ -100,6 +99,7 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
         else if ( edgeCollision ) color = Draw.COLORS.red;
         else color = Draw.COLORS.green;
         debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.3, width: 1, color });
+        console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
       }
 
       numPointsBlocked += ( outsideVisibleShape
@@ -118,11 +118,12 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
    * @param {Token} target
    * @returns {Points3d[][]}
    */
-  constructTargetPoints(target) {
+  constructTargetPoints() {
+    const target = this.viewerLOS.target;
     const { pointAlgorithm, targetInset, points3d } = this.config;
     const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
 
-    if ( this.useLargeTarget ) {
+    if ( this.viewerLOS.config.largeTarget ) {
       // Construct points for each target subshape, defined by grid spaces under the target.
       const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
 
@@ -235,7 +236,7 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
 
     // Filter out the viewer and target token
     tokens.delete(this.viewerLOS.viewer);
-    tokens.delete(this.target);
+    tokens.delete(this.viewerLOS.target);
 
     // Build full- or half-height startPts3d from tokens
     const tokenPts = this._buildTokenPoints(tokens);

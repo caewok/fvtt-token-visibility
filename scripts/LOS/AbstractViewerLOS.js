@@ -16,8 +16,8 @@ import { Settings } from "../settings.js";
 import { tokensOverlap } from "./util.js";
 
 // Viewpoint algorithms.
-import { AbstractViewpointLOS } from "./AbstractViewpointLOS.js";
-import { PointsViewpointLOS } from "./PointsViewpointLOS.js";
+import { AbstractViewpoint } from "./AbstractViewpoint.js";
+import { PointsViewpoint } from "./PointsViewpoint.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -49,14 +49,13 @@ import { Draw } from "../geometry/Draw.js";
  * @property {Settings.KEYS.POINT_TYPES} viewerPoints   Algorithm defining the viewer viewpoints
  * @property {class} viewpointClass                 Class of the viewpoints
  */
-
 export class AbstractViewerLOS {
   /** @type {enum<string>} */
   static get POINT_TYPES() { return Settings.KEYS.POINT_TYPES; }
 
   /** @type {enum<class>} */
   static VIEWPOINT_CLASSES = {
-    "los-points": PointsViewpointLOS
+    "los-points": PointsViewpoint
   };
 
   /** @type {Token} */
@@ -65,7 +64,7 @@ export class AbstractViewerLOS {
   /** @type {ViewerLOSConfig} */
   config = {};
 
-  /** @type {AbstractViewpointLOS} */
+  /** @type {AbstractViewpoint} */
   viewpoints = [];
 
   /**
@@ -105,7 +104,7 @@ export class AbstractViewerLOS {
     // Viewpoints.
     cfg.viewerPoints = Settings.get(KEYS.LOS.VIEWER.NUM_POINTS);
     cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[Settings.get(KEYS.LOS.TARGET.ALGORITHM)]
-      ?? AbstractViewpointLOS;
+      ?? AbstractViewpoint;
 
     return cfg;
   }
@@ -116,7 +115,7 @@ export class AbstractViewerLOS {
    */
   initializeViewpoints() {
     const cl = this.config.viewpointClass;
-    return AbstractViewpointLOS.constructTokenPoints(this.viewer, {
+    return AbstractViewpoint.constructTokenPoints(this.viewer, {
       pointAlgorithm: this.config.viewerPoints,
       inset: this.config.inset
     }).map(pt => new cl(this, pt));
@@ -128,8 +127,7 @@ export class AbstractViewerLOS {
    * @param {Settings.KEYS.LOS.TARGET.TYPES} alg
    */
   _updateAlgorithm(alg) {
-    this.config.viewpointClass = this.constructor.VIEWPOINT_CLASSES[alg]
-      ?? AbstractViewpointLOS;
+    this.config.viewpointClass = this.constructor.VIEWPOINT_CLASSES[alg] ?? AbstractViewpoint;
     this.viewpoints = this.initializeViewpoints();
   }
 
@@ -154,8 +152,7 @@ export class AbstractViewerLOS {
   set target(value) {
     if ( value === this.#target ) return;
     this.#target = value;
-    this._clearTargetCache();
-    this.setVisibleTargetShape(this.#target);
+    this.clearCache();
   }
 
   /** @type {Point3d} */
@@ -169,17 +166,20 @@ export class AbstractViewerLOS {
    */
   #visibleTargetShape;
 
-  get visibleTargetShape() { return this.#visibleTargetShape; }
+  get visibleTargetShape() { return (this.#visibleTargetShape ??= this._calculateVisibleTargetShape(this.target)); }
 
-  setVisibleTargetShape(target) {
-    this.#visibleTargetShape  = this.config.useLitTargetShape
+  _calculateVisibleTargetShape(target) {
+    return this.config.useLitTargetShape
       ? this._constructLitTargetShape(target) : target.constrainedTokenBorder;
   }
 
   /**
-   * Clear cached items related to the target or target position.
+   * Clear cached items related that must be reset when the viewpoint or target changes.
    */
-  _clearTargetCache() { }
+  clearCache() {
+    this.#visibleTargetShape = undefined;
+    this.viewpoints.forEach(vp => vp.clearCache());
+  }
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
@@ -187,7 +187,7 @@ export class AbstractViewerLOS {
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
   _simpleVisibilityTest(target) {
-    this.target = target;
+    this.target = target; // Important so the cache is reset.
     const viewer = this.viewer;
 
     // To avoid obvious errors.
@@ -224,7 +224,7 @@ export class AbstractViewerLOS {
    */
   hasLOS(target, threshold) {
     threshold ??= this.config.threshold;
-    const percent = this.percentVisible(target);
+    const percent = this.percentVisible(target); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
     if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
@@ -236,7 +236,7 @@ export class AbstractViewerLOS {
    * @returns {number}
    */
   percentVisible(target) {
-    this.target = target;
+    this.target = target;  // Important so the cache is reset.
     if ( this.config.debug ) this._drawCanvasDebug();
     const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target);
     if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
@@ -413,6 +413,7 @@ export class AbstractViewerLOS {
 
   clearDebug() {
     if ( !this.#debugGraphics ) return;
+    console.log("Clearing debug.")
     this.#debugGraphics.clear();
   }
 
@@ -445,5 +446,6 @@ export class AbstractViewerLOS {
 
     // Separately fill in the visible target shape
     if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color: Draw.COLORS.yellow });
+    console.log("Drawing visible token border.")
   }
 }

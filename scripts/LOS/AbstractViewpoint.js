@@ -10,7 +10,7 @@ Token
 "use strict";
 
 // Base folder
-import { MODULES_ACTIVE } from "../const.js";
+import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
@@ -27,7 +27,7 @@ import { Draw } from "../geometry/Draw.js";
  * An eye belong to a specific viewer.
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  */
-export class AbstractViewpointLOS {
+export class AbstractViewpoint {
 
   /** @type {ViewerLOS} */
   viewerLOS;
@@ -46,12 +46,15 @@ export class AbstractViewpointLOS {
     this.viewerLOS = viewerLOS;
     this.viewpointDiff = viewpoint.subtract(viewerLOS.viewer.center);
     this.config = this.initializeConfig();
+
+    // Hide initialized property so we can iterate the object.
+    Object.defineProperty(this.#blockingObjects, "initialized", { enumerable: false});
   }
 
   /**
    * Sets configuration to the current settings.
-   * @param {ViewpointLOSConfig} [cfg]
-   * @returns {ViewpointLOSConfig}
+   * @param {ViewpointConfig} [cfg]
+   * @returns {ViewpointConfig}
    */
   initializeConfig(cfg = {}) { return cfg; }
 
@@ -75,21 +78,30 @@ export class AbstractViewpointLOS {
    * @param {Token} target
    * @returns {number}
    */
-  percentVisible(target) {
-    const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target);
+  percentVisible() {
+    const percent = this._simpleVisibilityTest() ?? this._percentVisible();
     if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t(@viewerPoint ${Math.round(this.viewpoint.x)},${Math.round(this.viewpoint.y)},${Math.round(this.viewpoint.z)})`)
     return percent;
   }
 
   /** @override */
-  _percentVisible(_target) { return 1; }
+  _percentVisible() { return 1; }
+
+  /**
+   * Clear any cached values related to the target or target location.
+   */
+  clearCache() {
+    this.#blockingObjects.initialized = false;
+  }
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
    * @param {Token} target
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
-  _simpleVisibilityTest(target) {
+  _simpleVisibilityTest() {
+    const target = this.viewerLOS.target;
+
     // If directly overlapping.
     if ( target.bounds.contains(this.viewpoint) ) return 1;
 
@@ -111,8 +123,7 @@ export class AbstractViewpointLOS {
    * @returns {boolean} True if some blocking placeable within the vision triangle.
    *
    */
-  hasPotentialObstacles(target) {
-    this.findBlockingObjects(target); // TODO: Cache this.
+  hasPotentialObstacles() {
     const { terrainWalls, ...otherObjects } = this.blockingObjects;
     if ( terrainWalls.size > 1 ) return true;
     return Object.values(otherObjects).some(objSet => objSet.size);
@@ -127,12 +138,18 @@ export class AbstractViewpointLOS {
    * @property {Set<Token>}   tokens
    * @property {Set<Wall>}    walls
    */
-  blockingObjects = {
+  #blockingObjects = {
     terrainWalls: new Set(),
     tiles: new Set(),
     tokens: new Set(),
-    walls: new Set()
+    walls: new Set(),
+    initialized: false
   };
+
+  get blockingObjects() {
+    if ( !this.#blockingObjects.initialized ) this.findBlockingObjects();
+    return this.#blockingObjects;
+  }
 
   /**
    * Filter relevant objects in the scene using the vision triangle.
@@ -143,11 +160,14 @@ export class AbstractViewpointLOS {
    *   - @property {Set<Tile>} tiles
    *   - @property {Set<Token>} tokens
    */
-  findBlockingObjects(target) {
+  findBlockingObjects() {
+    const target = this.viewerLOS.target;
+    if ( !target ) throw Error(`${MODULE_ID}|AbstractViewpoint|findBlockingObjects target is undefined!`);
+
     const blocking = this.viewerLOS.config.block;
 
     // Remove old blocking objects.
-    const blockingObjs = this.blockingObjects;
+    const blockingObjs = this.#blockingObjects;
     Object.values(blockingObjs).forEach(objs => objs.clear());
 
     const visionPolygon = VisionPolygon.build(this.viewpoint, target);
@@ -162,6 +182,7 @@ export class AbstractViewpointLOS {
         blockingObjs.terrainWalls.add(w);
       }
     });
+    this.#blockingObjects.initialized = true;
     return blockingObjs;
   }
 
@@ -336,7 +357,10 @@ export class AbstractViewpointLOS {
   /**
    * Clean up memory-intensive objects.
    */
-  destroy() {}
+  destroy() {
+    this.clearCache();
+    Object.values(this.#blockingObjects).forEach(objs => objs.clear());
+  }
 
   /* ----- NOTE: Debug ----- */
 
@@ -346,6 +370,7 @@ export class AbstractViewpointLOS {
    */
   _drawLineOfSight() {
     this.viewerLOS.debugDraw.segment({ A: this.viewpoint, B: this.viewerLOS.target.center });
+    console.log("Drawing line of sight.")
   }
 
   /**
@@ -353,6 +378,8 @@ export class AbstractViewpointLOS {
    * Draw outlines for the various objects that can be detected on the canvas.
    */
   _drawDetectedObjects() {
+    if ( !this.#blockingObjects.initialized ) return;
+
     const draw = this.viewerLOS.debugDraw;
     const colors = Draw.COLORS;
     const { walls, tiles, terrainWalls, tokens } = this.blockingObjects;
@@ -360,6 +387,7 @@ export class AbstractViewpointLOS {
     tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
     terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
     tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
+    console.log("Drawing detected objects.")
   }
 
   /**
@@ -369,5 +397,6 @@ export class AbstractViewpointLOS {
   _drawVisionTriangle() {
     const draw = this.viewerLOS.debugDraw;
     draw.shape(this.visionPolygon, { width: 0, fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
+    console.log("Drawing vision triangle.")
   }
 }
