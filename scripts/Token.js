@@ -25,8 +25,7 @@ PATCHES.DEBUG = {};
  */
 function destroyToken(token) {
   const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-  if ( !losCalc ) return;
-  losCalc.destroy();
+  losCalc?.destroy();
 }
 
 PATCHES.BASIC.HOOKS = { destroyToken };
@@ -44,10 +43,7 @@ function initializeVisionSource(wrapped, options) {
   wrapped(options);
   if ( !this.vision ) return;
   const obj = this.vision[MODULE_ID] ??= {};
-  if ( obj.losCalc ) {
-    obj.losCalc._updateAlgorithm();
-    obj.losCalc.updateConfiguration();
-  } else obj.losCalc = new LOSCalculator(this, undefined);
+  obj.losCalc ??= new LOSCalculator(this);
 }
 
 PATCHES.BASIC.WRAPS = { initializeVisionSource };
@@ -63,13 +59,12 @@ PATCHES.BASIC.WRAPS = { initializeVisionSource };
  * @param {boolean} controlled     Whether the PlaceableObject is selected or not.
  */
 async function controlTokenDebugHook(token, controlled) {
-  const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
-  if ( !calc ) return;
-  calc.clearDebug();
-  if ( controlled ) {
-    if ( calc.openDebugPopout ) await calc.openDebugPopout();
-    updateDebugForControlledToken(token)
-  }
+  const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+  losCalc?.clearDebug();
+//   if ( controlled ) {
+//     if ( calc.openDebugPopout ) await calc.openDebugPopout();
+//     updateDebugForControlledToken(token)
+//   }
 }
 
 /**
@@ -80,15 +75,15 @@ async function controlTokenDebugHook(token, controlled) {
  * @param {boolean} targeted Whether the Token has been targeted or untargeted
  */
 function targetTokenDebugHook(user, target, targeted) {
-  if ( !targeted || game.user !== user ) return;
-  canvas.tokens.placeables.forEach(token => {
-    if ( token === target || !token.controlled ) return;
-    const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
-    if ( !calc || !calc._draw3dDebug ) return;
-    calc._clearCache();
-    calc.target = target;
-    calc.updateDebug();
-  });
+//   if ( !targeted || game.user !== user ) return;
+//   canvas.tokens.placeables.forEach(token => {
+//     if ( token === target || !token.controlled ) return;
+//     const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+//     if ( !calc ) return;
+//     calc._clearCache();
+//     calc.target = target;
+//     // calc.updateDebug();
+//   });
 }
 
 /**
@@ -191,9 +186,9 @@ function updateDebugForRelatedTokens(changedToken) {
 
 PATCHES.DEBUG.HOOKS = {
   controlToken: controlTokenDebugHook,
-  updateToken: updateTokenDebugHook,
-  refreshToken: refreshTokenDebugHook,
-  targetToken: targetTokenDebugHook,
-  createActiveEffect: createActiveEffectDebugHook,
-  deleteActiveEffect: deleteActiveEffectDebugHook
+  // updateToken: updateTokenDebugHook,
+  // refreshToken: refreshTokenDebugHook,
+  // targetToken: targetTokenDebugHook,
+  // createActiveEffect: createActiveEffectDebugHook,
+  // deleteActiveEffect: deleteActiveEffectDebugHook
 };

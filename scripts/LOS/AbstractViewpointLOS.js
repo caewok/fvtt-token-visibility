@@ -15,8 +15,10 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { VisionPolygon } from "./VisionPolygon.js";
+
 import {
-  insetPoints } from "./util.js";
+  insetPoints,
+  tokensOverlap } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -142,20 +144,16 @@ export class AbstractViewpointLOS {
    *   - @property {Set<Token>} tokens
    */
   findBlockingObjects(target) {
-    const {
-      wallsBlock,
-      liveTokensBlock,
-      deadTokensBlock,
-      tilesBlock } = this.viewerLOS.config;
+    const blocking = this.viewerLOS.config.block;
 
     // Remove old blocking objects.
     const blockingObjs = this.blockingObjects;
     Object.values(blockingObjs).forEach(objs => objs.clear());
 
     const visionPolygon = VisionPolygon.build(this.viewpoint, target);
-    if ( wallsBlock ) blockingObjs.walls = this._filterWallsByVisionPolygon(visionPolygon);
-    if ( tilesBlock ) blockingObjs.tiles = this._filterTilesByVisionPolygon(visionPolygon);
-    if ( liveTokensBlock || deadTokensBlock ) blockingObjs.tokens = this._filterTokensByVisionPolygon(visionPolygon, target);
+    if ( blocking.walls ) blockingObjs.walls = this._filterWallsByVisionPolygon(visionPolygon);
+    if ( blocking.tiles ) blockingObjs.tiles = this._filterTilesByVisionPolygon(visionPolygon);
+    if ( blocking.tokens.live || blocking.tokens.dead ) blockingObjs.tokens = this._filterTokensByVisionPolygon(visionPolygon, target);
 
     // Separate walls into terrain and normal.
     blockingObjs.walls.forEach(w => {
@@ -211,11 +209,11 @@ export class AbstractViewpointLOS {
 
     // Filter tokens that directly overlaps the viewer.
     // Example: viewer is on a dragon.
-    if ( viewer instanceof Token ) tokens = tokens.filter(t => this.tokensOverlap(viewer, t))
+    if ( viewer instanceof Token ) tokens = tokens.filter(t => tokensOverlap(viewer, t))
 
     // Filter tokens that directly overlaps the viewer.
     // Example: viewer is on a dragon.
-    if ( viewer instanceof Token ) tokens = tokens.filter(t => this.tokensOverlap(viewer, t));
+    if ( viewer instanceof Token ) tokens = tokens.filter(t => tokensOverlap(viewer, t));
 
     // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
     const api = MODULES_ACTIVE.API.RIDEABLE;

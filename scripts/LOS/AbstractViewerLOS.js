@@ -12,6 +12,9 @@ Ray
 // Base folder.
 import { Settings } from "../settings.js";
 
+// LOS folder
+import { tokensOverlap } from "./util.js";
+
 // Viewpoint algorithms.
 import { AbstractViewpointLOS } from "./AbstractViewpointLOS.js";
 import { PointsViewpointLOS } from "./PointsViewpointLOS.js";
@@ -99,7 +102,8 @@ export class AbstractViewerLOS {
     cfg.block.tokens.live ??= Settings.get(KEYS.LIVE_TOKENS_BLOCK);
     cfg.block.tokens.prone ??= Settings.get(KEYS.PRONE_TOKENS_BLOCK);
 
-    // Class (algorithm) of the viewpoints.
+    // Viewpoints.
+    cfg.viewerPoints = Settings.get(KEYS.LOS.VIEWER.NUM_POINTS);
     cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[Settings.get(KEYS.LOS.TARGET.ALGORITHM)]
       ?? AbstractViewpointLOS;
 
@@ -190,7 +194,7 @@ export class AbstractViewerLOS {
     if ( viewer === target ) return 1;
 
     // If directly overlapping.
-    if ( this.tokensOverlap(viewer, target) ) return 1;
+    if ( tokensOverlap(viewer, target) ) return 1;
 
     // Target is not within the limited angle vision of the viewer.
     if ( viewer.vision && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return 0;
@@ -223,7 +227,7 @@ export class AbstractViewerLOS {
     const percent = this.percentVisible(target);
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
-    if ( this.config.debug ) console.debug(`${Math.round(percent * 100 * 10)/10}%\t👀${this.viewer.name} --> 🎯${target.name} has los? ${hasLOS}`);
+    if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
 
@@ -235,7 +239,7 @@ export class AbstractViewerLOS {
     this.target = target;
     if ( this.config.debug ) this._drawCanvasDebug();
     const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target);
-    if ( this.config.debug ) console.debug(`${Math.round(percent * 100 * 10)/10}%\t👀${this.viewer.name} --> 🎯${target.name}`);
+    if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
@@ -246,23 +250,6 @@ export class AbstractViewerLOS {
       if ( max === 1 ) return max;
     }
     return max;
-  }
-
-  /**
-   * Test if the token constrained borders overlap and tokens are at same elevation.
-   * Used to allow vision when tokens are nearly on top of one another.
-   * @param {Token} token1
-   * @param {Token} token2
-   * @param {number} [pad=-2]     Increase or decrease the borders. By default, shrink the
-   *   borders to avoid false positives for adjacent tokens.
-   * @returns {boolean}
-   */
-  tokensOverlap(token1, token2, pad = -2) {
-    if ( token1.elevationE !== token2.elevationE ) return false;
-    if ( token1.center.equals(token2.center) ) return true;
-    const border1 = token1.constrainedTokenBorder.pad(pad);
-    const border2 = token2.constrainedTokenBorder.pad(pad);
-    return border1.overlaps(border2);
   }
 
   /**

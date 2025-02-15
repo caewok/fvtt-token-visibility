@@ -16,7 +16,8 @@ import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { testWallsForIntersections } from "./PointSourcePolygon.js";
 import {
   lineIntersectionQuadrilateral3d,
-  lineSegmentIntersectsQuadrilateral3d } from "./util.js";
+  lineSegmentIntersectsQuadrilateral3d,
+  getObjectProperty } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -82,7 +83,7 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
     const visibleTargetShape = this.viewerLOS.visibleTargetShape;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
-    const debugDraw = this.viewerLOS.config.debug ? this.debugDraw : undefined;
+    const debugDraw = this.viewerLOS.config.debug ? this.viewerLOS.debugDraw : undefined;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
       const outsideVisibleShape = visibleTargetShape
@@ -98,7 +99,7 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
         else if ( tokenCollision && !edgeCollision ) color = Draw.COLORS.yellow;
         else if ( edgeCollision ) color = Draw.COLORS.red;
         else color = Draw.COLORS.green;
-        debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.1, width: 1, color });
+        debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.3, width: 1, color });
       }
 
       numPointsBlocked += ( outsideVisibleShape
@@ -155,7 +156,7 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
    * @returns {boolean} True if a wall blocks this ray
    */
   _hasWallCollision(startPt, endPt) {
-    if ( !this.viewerLOS.config.wallsBlock ) return false;
+    if ( !this.viewerLOS.config.block.walls ) return false;
     const walls = [...this.blockingObjects.walls, ...this.blockingObjects.terrainWalls];
     return testWallsForIntersections(startPt, endPt, walls, "any", this.viewerLOS.config.type);
   }
@@ -167,7 +168,7 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
    * @returns {boolean} True if a tile blocks this ray
    */
   _hasTileCollision(startPt, endPt) {
-    if ( !this.viewerLOS.config.tilesBlock ) return false;
+    if ( !this.viewerLOS.config.block.tiles ) return false;
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
 
     // Ignore non-overhead tiles
@@ -220,7 +221,7 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
    * @returns {boolean} True if a token blocks this ray
    */
   _hasTokenCollision(startPt, endPt) {
-    const { liveTokensBlock, deadTokensBlock } = this.viewerLOS.config;
+    const { live: liveTokensBlock, dead: deadTokensBlock } = this.viewerLOS.config.block.tokens;
     if ( !(liveTokensBlock || deadTokensBlock) ) return false;
 
 
@@ -251,6 +252,35 @@ export class PointsViewpointLOS extends AbstractViewpointLOS {
       }
     }
     return false;
+  }
+
+  /**
+   * Given config options, build TokenPoints3d from tokens.
+   * The points will use either half- or full-height tokens, depending on config.
+   * @param {Token[]|Set<Token>} tokens
+   * @returns {TokenPoints3d[]}
+   */
+  _buildTokenPoints(tokens) {
+    if ( !tokens.length && !tokens.size ) return tokens;
+    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = this.viewerLOS.config.block.tokens;
+    if ( !(liveTokensBlock || deadTokensBlock) ) return [];
+
+    // Filter live or dead tokens
+    if ( liveTokensBlock ^ deadTokensBlock ) {
+      const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
+      tokens = tokens.filter(t => {
+        const hp = getObjectProperty(t.actor, tokenHPAttribute);
+        if ( typeof hp !== "number" ) return true;
+        if ( liveTokensBlock && hp > 0 ) return true;
+        if ( deadTokensBlock && hp <= 0 ) return true;
+        return false;
+      });
+    }
+
+    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
+
+    // Pad (inset) to avoid triggering cover at corners. See issue 49.
+    return tokens.map(t => new TokenPoints3d(t, { pad: -2, type: this.viewerLOS.config.type }));
   }
 
   /* ----- NOTE: Static methods ----- */
