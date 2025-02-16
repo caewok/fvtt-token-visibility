@@ -6,7 +6,7 @@
 // Base folder
 
 // LOS folder
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
+import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
 import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
 import { testWallsForIntersections } from "./PointSourcePolygon.js";
 
@@ -17,7 +17,7 @@ import { addClassGetter, addClassMethod } from "../geometry/util.js";
 // Debug
 
 
-export class Area3dHybridViewpoint extends AbstractViewpoint {
+export class Area3dHybridViewpoint extends Area3dGeometricViewpoint {
 
   /**
    * The main class inherits from Geometric. This stored WebGL2 object handles tiles.
