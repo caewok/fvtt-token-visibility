@@ -137,13 +137,22 @@ export class Settings extends ModuleSettingsAbstract {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    if ( enabled ) registerDebug();
+    if ( enabled ) {
+      registerDebug();
+      canvas.tokens.placeables.forEach(token => {
+          const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+          if ( !losCalc ) return;
+          losCalc.config.debug = true;
+      });
+    }
     else {
       if ( canvas.tokens?.placeables ) {
         canvas.tokens.placeables.forEach(token => {
-          const calc = token.vision?.[MODULE_ID]?.losCalc;
-          if ( !calc ) return;
-          calc.clearDebug();
+          const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+          if ( !losCalc ) return;
+          losCalc.clearDebug();
+          losCalc?.closeDebugPopout();
+          losCalc.config.debug = false;
         });
       }
       deregisterDebug();

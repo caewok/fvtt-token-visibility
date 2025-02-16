@@ -37,9 +37,7 @@ export class Area3dViewerLOS extends AbstractViewerLOS {
    * @returns {number}
    */
   _percentVisible(target) {
-    if ( this.config.debug ) {
-      this._clear3dDebug();
-    }
+    if ( this.config.debug ) this._clear3dDebug();
     const percent = super._percentVisible(target);
     if ( this.config.debug ) this._draw3dDebug();
     return percent;

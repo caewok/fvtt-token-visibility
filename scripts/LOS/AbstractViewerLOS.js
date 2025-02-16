@@ -87,7 +87,7 @@ export class AbstractViewerLOS {
     // Basic configs.
     cfg.type ??= "sight";
     cfg.useLitTargetShape ??= true;
-    cfg.threshold ??= 0;
+    cfg.threshold ??= Settings.get(KEYS.LOS.TARGET.PERCENT);
     cfg.debug ??= Settings.get(KEYS.DEBUG.LOS);
 
     // Blocking canvas objects.

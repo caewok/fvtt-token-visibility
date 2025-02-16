@@ -56,8 +56,13 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * Clear any cached values related to the target or target location.
    */
   clearCache() {
+    super.clearCache();
     this.#blockingPoints.initialized = false;
+    Object.values(this.#blockingPoints).forEach(objArr => objArr.length = 0);
+
     this.#blockingObjectsPoints.initialized = false;
+    Object.values(this.#blockingObjectsPoints).forEach(objSet => objSet.clear());
+
     this.#targetLookAtMatrix = undefined;
     this.#targetPoints = undefined;
     this.#visibleTargetPoints = undefined;
