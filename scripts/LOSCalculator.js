@@ -6,6 +6,7 @@ import { Settings } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 // import { AbstractCalculator } from "./LOS/AbstractCalculator.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
+import { Area3dViewerLOS } from "./LOS/Area3dViewerLOS.js";
 
 /** Testing
 api = game.modules.get("tokenvisibility").api
@@ -14,11 +15,23 @@ api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEB
 api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC)
 */
 
+export function buildLOSCalculator(token) {
+  const typesArea3d = new Set([
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL1,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID
+  ]);
+
+  const is3d = typesArea3d.has(Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM));
+  return is3d ? new Area3dViewerLOS(token) : new AbstractViewerLOS(token);
+}
 
 /**
  * Class that handles calculating line-of-sight between two tokens based on current settings.
  */
-export class LOSCalculator extends AbstractViewerLOS {}
+export class LOSCalculator {}
 
 
 // export class LOSCalculator extends AbstractCalculator {

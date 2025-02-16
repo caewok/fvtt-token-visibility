@@ -11,8 +11,7 @@ import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
-import { Area3dViewerLOS } from "./LOS/Area3dViewerLOS.js";
+import { buildLOSCalculator } from "./LOSCalculator.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -495,13 +494,11 @@ export class Settings extends ModuleSettingsAbstract {
   static losAlgorithmChange(key, value) {
     this.cache.delete(key);
     if ( this.typesWebGL2.has(value) ) registerArea3d();
-
-    let cl = this.typesArea3d.has(value) ? Area3dViewerLOS : AbstractViewerLOS;
     canvas.tokens.placeables.forEach(token => {
       if ( !token.vision ) return;
       const obj = token.vision[MODULE_ID] ??= {};
       obj.losCalc?.destroy();
-      obj.losCalc = new cl(token);
+      obj.losCalc = buildLOSCalculator(token);
     });
   }
 

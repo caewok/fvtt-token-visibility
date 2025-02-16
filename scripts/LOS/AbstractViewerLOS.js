@@ -150,7 +150,6 @@ export class AbstractViewerLOS {
   get target() { return this.#target; }
 
   set target(value) {
-    if ( value === this.#target ) return;
     this.#target = value;
     this.clearCache();
   }
@@ -174,11 +173,12 @@ export class AbstractViewerLOS {
   }
 
   /**
-   * Clear cached items related that must be reset when the viewpoint or target changes.
+   * Clear cached items that must be reset when the viewpoint or target moves.
    */
   clearCache() {
     this.#visibleTargetShape = undefined;
     this.viewpoints.forEach(vp => vp.clearCache());
+    console.debug("Cleared AbstractViewerLOS cache.");
   }
 
   /**

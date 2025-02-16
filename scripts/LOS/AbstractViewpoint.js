@@ -44,7 +44,7 @@ export class AbstractViewpoint {
    */
   constructor(viewerLOS, viewpoint) {
     this.viewerLOS = viewerLOS;
-    this.viewpointDiff = viewpoint.subtract(viewerLOS.viewer.center);
+    this.viewpointDiff = viewpoint.subtract(viewerLOS.center);
     this.config = this.initializeConfig();
 
     // Hide initialized property so we can iterate the object.
@@ -59,7 +59,7 @@ export class AbstractViewpoint {
   initializeConfig(cfg = {}) { return cfg; }
 
   /** @type {Point3d} */
-  get viewpoint() { return this.viewerLOS.viewer.center.add(this.viewpointDiff); }
+  get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
 
   /**
    * The viewable area between viewer and target.
@@ -80,7 +80,7 @@ export class AbstractViewpoint {
    */
   percentVisible() {
     const percent = this._simpleVisibilityTest() ?? this._percentVisible();
-    if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t(@viewerPoint ${Math.round(this.viewpoint.x)},${Math.round(this.viewpoint.y)},${Math.round(this.viewpoint.z)})`)
+    if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewerPoint ${this.viewpoint.toString()}`)
     return percent;
   }
 
@@ -92,6 +92,7 @@ export class AbstractViewpoint {
    */
   clearCache() {
     this.#blockingObjects.initialized = false;
+    console.debug("Cleared AbstractViewpoint cache.");
   }
 
   /**
@@ -148,6 +149,8 @@ export class AbstractViewpoint {
 
   get blockingObjects() {
     if ( !this.#blockingObjects.initialized ) this.findBlockingObjects();
+    console.debug(`Blocking: \n\twalls: ${this.#blockingObjects.walls.size}\n\ttiles: ${this.#blockingObjects.tiles.size}\n\ttokens: #{this.#blockingObjects.tokens.size}`);
+
     return this.#blockingObjects;
   }
 
@@ -378,7 +381,7 @@ export class AbstractViewpoint {
    * Draw outlines for the various objects that can be detected on the canvas.
    */
   _drawDetectedObjects() {
-    if ( !this.#blockingObjects.initialized ) return;
+    // if ( !this.#blockingObjects.initialized ) return;
 
     const draw = this.viewerLOS.debugDraw;
     const colors = Draw.COLORS;

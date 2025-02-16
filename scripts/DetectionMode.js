@@ -72,6 +72,14 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
   hasLOS = losCalc.hasLOS(target);
+
+  const vc = losCalc.center;
+  const tc = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(losCalc.target);
+  console.debug(`${losCalc.viewer.name} -> ${losCalc.target.name} ${vc.toString()}->${tc.toString()}`);
+  for ( const vp of losCalc.viewpoints ) {
+    console.debug(`\t${vp.viewpoint.toString()}: ${vp.percentVisible()}%`);
+  }
+
   test.los.set(visionSource, hasLOS);
   return hasLOS;
 }

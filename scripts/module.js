@@ -50,6 +50,18 @@ import * as range from "./visibility_range.js";
 import "./changelog.js";
 
 Hooks.once("init", function() {
+  // Load bitmap font
+  // See https://www.adammarcwilliams.co.uk/creating-bitmap-text-pixi/
+  // https://pixijs.com/8.x/examples/text/bitmap-text
+  // PIXI.Assets.load('https://pixijs.com/assets/bitmap-font/desyrel.xml'); // Async.
+
+  PIXI.BitmapFont.from(`${MODULE_ID}_area3dPercentLabel`, {
+    fill: "#333333",
+    fontWeight: 'bold',
+  }, {
+    chars: [['0', '9'], ' .%']
+  });
+
   registerGeometry();
   initializePatching();
 
@@ -131,6 +143,8 @@ Hooks.once("init", function() {
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
+
+  CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
 });
 
 Hooks.on("canvasReady", function() {
