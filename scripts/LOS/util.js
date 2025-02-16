@@ -291,3 +291,23 @@ function lineTriangleIntersectionLocation(rayVector, edge1, edge2, s, f, h) {
   // If t > 0, t is on the ray.
   // if t < 1, t is between rayOrigin and B, where rayVector = B.subtract(A)
 }
+
+export function sumRedPixels(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+  return sumTarget;
+}
+
+export function sumRedObstaclesPixels(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) {
+    const px = pixels[i];
+    if ( px < 128 ) continue;
+    sumTarget += Boolean(targetCache.pixels[i]);
+  }
+  return sumTarget;
+}

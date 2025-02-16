@@ -167,7 +167,8 @@ export class Settings extends ModuleSettingsAbstract {
     const PT_TYPES = KEYS.POINT_TYPES;
     const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
     const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
-    const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES, { POINTS: 0, AREA3D: 0 });
+    const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES,
+      { POINTS: 0, AREA3D_GEOMETRIC: 0, AREA3D_WEBGL2: 0, AREA3D_WEBGL1: 0, AREA3D_WEBGL2: 0, AREA3D_HYBRID: 0,  });
     const losChoices = {};
     const ptChoices = {};
     const rangeChoices = {};

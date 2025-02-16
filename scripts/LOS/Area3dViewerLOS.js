@@ -11,6 +11,9 @@ import { MODULE_ID } from "../const.js";
 
 // Viewpoint algorithms.
 import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
+import { Area3dWebGL1Viewpoint } from "./Area3dWebGL1Viewpoint.js";
+import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
+import { Area3dHybridViewpoint } from "./Area3dHybridViewpoint.js";
 import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
 
 // Debug
@@ -27,9 +30,9 @@ export class Area3dViewerLOS extends AbstractViewerLOS {
   static VIEWPOINT_CLASSES = {
     "los-area-3d": Area3dGeometricViewpoint,
     "los-area-3d-geometric": Area3dGeometricViewpoint,
-    //"los-area-3d-webgl1": Area3dWebGL1Viewpoint
-    //"los-area-3d-webgl2": Area3dWebGL2Viewpoint
-    //"los-area-3d-hybrid": Area3dHybridViewpoint
+    "los-area-3d-webgl1": Area3dWebGL1Viewpoint,
+    "los-area-3d-webgl2": Area3dWebGL2Viewpoint,
+    "los-area-3d-hybrid": Area3dHybridViewpoint
   };
 
   /**

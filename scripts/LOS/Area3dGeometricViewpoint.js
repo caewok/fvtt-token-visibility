@@ -1,4 +1,5 @@
 /* globals
+CONFIG,
 PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -15,13 +16,7 @@ import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
-import { testWallsForIntersections } from "./PointSourcePolygon.js";
-import { Area3dPopout } from "./Area3dPopout.js";
-import {
-  lineIntersectionQuadrilateral3d,
-  lineSegmentIntersectsQuadrilateral3d,
-  getObjectProperty } from "./util.js";
+import { getObjectProperty } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -157,7 +152,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
   get visibleTargetPoints() {
     return (this.#visibleTargetPoints ??= new TokenPoints3d(this.viewerLOS.target,
-        { pad: -1, tokenBorder: this.visibleTargetShape, type: this.viewerLOS.config.type }));
+        { pad: -1, tokenBorder: this.viewerLOS.visibleTargetShape, type: this.viewerLOS.config.type }));
   }
 
   /* ----- NOTE: Blocking objects ----- */
