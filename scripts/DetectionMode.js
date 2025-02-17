@@ -7,7 +7,6 @@ Token
 import { MODULE_ID } from "./const.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
 import { SETTINGS, Settings } from "./settings.js";
 import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 
@@ -101,6 +100,7 @@ function _testRange(wrapped, visionSource, mode, target, test) {
   // See https://github.com/foundryvtt/foundryvtt/issues/8505
   if ( mode.range <= 0 ) return false;
 
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
   const testPoints = rangeTestPointsForToken(target);
   const visionOrigin = Point3d.fromPointSource(visionSource);
   const radius = visionSource.object.getLightRadius(mode.range);

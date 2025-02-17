@@ -23,9 +23,25 @@ export function buildLOSCalculator(token) {
     Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
     Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID
   ]);
-
   const is3d = typesArea3d.has(Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM));
   return is3d ? new Area3dViewerLOS(token) : new AbstractViewerLOS(token);
+}
+
+export function buildCustomLOSCalculator(token, algorithm) {
+  const typesArea3d = new Set([
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL1,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
+    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID
+  ]);
+  const is3d = typesArea3d.has(algorithm);
+
+  // For non-3d, only points currently.
+  if ( !is3d ) return new AbstractViewerLOS(token);
+  const losCalc = new Area3dViewerLOS(token);
+  losCalc._updateAlgorithm(algorithm);
+  return losCalc;
 }
 
 /**

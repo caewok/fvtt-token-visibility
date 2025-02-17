@@ -88,6 +88,7 @@ export class AbstractViewerLOS {
     cfg.type ??= "sight";
     cfg.useLitTargetShape ??= true;
     cfg.threshold ??= Settings.get(KEYS.LOS.TARGET.PERCENT);
+    cfg.largeTarget ??= Settings.get(KEYS.LOS.TARGET.LARGE);
     cfg.debug ??= Settings.get(KEYS.DEBUG.LOS);
 
     // Blocking canvas objects.
@@ -178,7 +179,6 @@ export class AbstractViewerLOS {
   clearCache() {
     this.#visibleTargetShape = undefined;
     this.viewpoints.forEach(vp => vp.clearCache());
-    console.debug("Cleared AbstractViewerLOS cache.");
   }
 
   /**
@@ -373,7 +373,7 @@ export class AbstractViewerLOS {
    * Destroy any PIXI objects and remove hooks upon destroying.
    */
   destroy() {
-    if ( !this.#debugGraphics?._destroyed ) this.#debugGraphics.destroy();
+    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
     this.#debugGraphics = undefined;
     this.#debugDraw = undefined;
 

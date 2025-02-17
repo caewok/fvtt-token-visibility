@@ -93,7 +93,6 @@ export class AbstractViewpoint {
   clearCache() {
     this.#blockingObjects.initialized = false;
     Object.values(this.#blockingObjects).forEach(objs => objs.clear());
-    console.debug("Cleared AbstractViewpoint cache.");
   }
 
   /**
@@ -150,8 +149,8 @@ export class AbstractViewpoint {
 
   get blockingObjects() {
     if ( !this.#blockingObjects.initialized ) this.findBlockingObjects();
-    console.debug(`Blocking: \n\twalls: ${this.#blockingObjects.walls.size}\n\ttiles: ${this.#blockingObjects.tiles.size}\n\ttokens: ${this.#blockingObjects.tokens.size}`);
-    console.debug(`Blocking walls: ${[...this.#blockingObjects.walls].map(w => w.id).join(", ")}`);
+    // console.debug(`Blocking: \n\twalls: ${this.#blockingObjects.walls.size}\n\ttiles: ${this.#blockingObjects.tiles.size}\n\ttokens: ${this.#blockingObjects.tokens.size}`);
+    // console.debug(`Blocking walls: ${[...this.#blockingObjects.walls].map(w => w.id).join(", ")}`);
 
     return this.#blockingObjects;
   }

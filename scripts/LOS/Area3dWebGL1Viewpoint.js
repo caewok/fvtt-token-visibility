@@ -14,6 +14,7 @@ import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
 import { VisionPolygon } from "./VisionPolygon.js";
 import { AlphaCutoffFilter } from "./AlphaCutoffFilter.js";
 import { sumRedPixels, sumRedObstaclesPixels } from "./util.js";
+import { UnitTokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -53,7 +54,7 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
     this.tileContainer.destroy();
     this.blockingContainer.destroy();
     this.renderTexture.destroy();
-    if ( !this.#debugSprite?._destroyed ) this.#debugSprite.destroy();
+    if ( this.#debugSprite && !this.#debugSprite.destroyed ) this.#debugSprite.destroy();
     this.#destroyed = true;
   }
 
@@ -142,7 +143,11 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
       const gridGraphics = new PIXI.Graphics();
       gridGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
       drawOpts.drawTool = new Draw(gridGraphics);
-      this.gridPoints.drawTransformed(drawOpts);
+
+      const gridPoints = new UnitTokenPoints3d(this.viewerLOS.target, { type: this.viewerLOS.config.type });
+      gridPoints.setViewingPoint(this.viewpoint);
+      gridPoints.setViewMatrix(this.targetLookAtMatrix);
+      gridPoints.drawTransformed(drawOpts);
       renderer.render(gridGraphics, { renderTexture, clear: true });
       const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);
       sumGridCube = sumRedPixels(gridCubeCache) || 100_000;

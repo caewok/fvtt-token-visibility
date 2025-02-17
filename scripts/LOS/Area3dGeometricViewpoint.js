@@ -61,7 +61,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     this.#targetLookAtMatrix = undefined;
     this.#targetPoints = undefined;
     this.#visibleTargetPoints = undefined;
-    console.debug("Cleared Area3dGeometricViewpoint cache.");
   }
 
   // ----- NOTE: Visibility testing ----- //
@@ -208,6 +207,18 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
   get targetLookAtMatrix() {
     return (this.#targetLookAtMatrix ??= this._calculateViewerCameraMatrix().Minv);
+  }
+
+
+  /**
+   * Build generic grid shape
+   * @returns {TokenPoints3d}
+   */
+  _buildGridShape() {
+    // Transform to TokenPoints3d and calculate viewable area.
+    // Really only an estimate b/c the view will shift depending on where on the large token
+    // we are looking.
+    return new UnitTokenPoints3d(this.target, { type: this.config.type });
   }
 
   /**
@@ -411,8 +422,8 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     this.clearCache();
     Object.values(this.#blockingObjectsPoints).forEach(objSet => objSet.clear());
     Object.values(this.#blockingPoints).forEach(objArr => objArr.length = 0);
-    if ( !this.#popoutGraphics?._destroyed ) this.#popoutGraphics.destroy();
-    if ( !this.#percentVisibleLabel?._destroyed ) this.#percentVisibleLabel.destroy();
+    if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) this.#popoutGraphics.destroy();
+    if ( this.#percentVisibleLabel && !this.#percentVisibleLabel.destroyed ) this.#percentVisibleLabel.destroy();
     this.#popoutGraphics = undefined;
     this.#popoutDraw = undefined;
     super.destroy();
@@ -500,8 +511,10 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
     // Draw the target in 3d, centered on 0,0
     this.visibleTargetPoints.drawTransformed({ color: colors.black, drawTool });
-    if ( this.viewerLOS.config.largeTarget ) this.gridPoints.drawTransformed(
-      { color: colors.lightred, drawTool, fillAlpha: 0.4 });
+    if ( this.viewerLOS.config.largeTarget ) {
+      const gridPoints = new UnitTokenPoints3d(this.viewerLOS.target, { type: this.viewerLOS.config.type });
+      gridPoints.drawTransformed({ color: colors.lightred, drawTool, fillAlpha: 0.4 });
+    }
 
     // Draw the detected objects in 3d, centered on 0,0
     const pts = this.blockingPoints;
