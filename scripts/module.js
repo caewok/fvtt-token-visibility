@@ -47,8 +47,9 @@ import { extractPixels } from "./LOS/extract-pixels.js";
 import * as range from "./visibility_range.js";
 
 import { BVH2d, BVH3d } from "./LOS/BVH.js";
-import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken } from "./LOS/BlockingObject.js";
+import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriangle2d, BaryTriangle3d, BaryTriangle3dNormal } from "./LOS/BlockingObject.js";
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
+import { VisionPolygon } from "./LOS/VisionPolygon.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -132,7 +133,11 @@ Hooks.once("init", function() {
     bvh: {
       BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken,
       BVH2d, BVH3d,
-      Ray2d, Ray3d
+      Ray2d, Ray3d,
+      BaryTriangle2d,
+      BaryTriangle3d,
+      BaryTriangle3dNormal,
+      VisionPolygon
     },
 
     OPEN_POPOUTS,

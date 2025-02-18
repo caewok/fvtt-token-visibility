@@ -6,7 +6,7 @@ PIXI
 "use strict";
 
 import { Draw } from "../geometry/Draw.js";
-import { Ray3d } from "./Ray.js";
+import { Ray3d, Ray2d } from "./Ray.js";
 import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken } from "./BlockingObject.js";
 
 /* Bounded Volume Hierarchy (BVH)
@@ -429,14 +429,13 @@ export class BVH2d {
    * @param {int} nodeIdx
    * @returns {*[]}
    */
-  hasIntersection(a, b, c, top, bottom, nodeIdx = 0, out = []) {
+  hasVisionTriangleIntersection(a, b, c, top, bottom, nodeIdx = 0, out = []) {
     const node = this.nodes[nodeIdx];
     if ( !node.hasVisionTriangleIntersection(a, b, c, top, bottom) ) return false;
     if ( node.isLeaf ) {
       // TODO: Check the object intersection?
       out.push(node.object);
       return true;
-    }
     } else {
       // Recurse.
       if ( this.hasIntersection(ray, node.leftFirst) ) return true;
@@ -720,9 +719,10 @@ function barycentricPointInsideTriangle(bary) {
 
 
 /* Testing
+Draw = CONFIG.GeometryLib.Draw;
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("tokenvisibility").api
-let { BVH3d, BlockingEdge, Ray3d } = api.bvh
+let { BVH3d, BlockingEdge, Ray3d, VisionPolygon, BaryTriangle2d, BaryTriangle3d, BaryTriangle3dNormal } = api.bvh
 
 objData = [...canvas.edges.values()].filter(edge => edge.type === "wall").map(edge => new BlockingEdge(edge))
 objIdx = Array.fromRange(objData.length)
@@ -733,8 +733,11 @@ bvh.drawBounds()
 bvh.displayHierarchy()
 
 // Test ray
-a = Point3d.fromTokenCenter(_token)
-b = Point3d.fromTokenCenter(game.user.targets.first())
+viewer = _token
+target = game.user.targets.first()
+
+a = Point3d.fromTokenCenter(viewer)
+b = Point3d.fromTokenCenter(target)
 r = Ray3d.fromPoints(a, b)
 
 bvh.nodes.map(n => n.hasBoundsIntersection(r))
@@ -772,6 +775,30 @@ await foundry.utils.benchmark(collisionTest, N, a, b)
 await foundry.utils.benchmark(bvhTestNonRecursive, N, r)
 await foundry.utils.benchmark(bvhTest, N, r)
 await foundry.utils.benchmark(quadTest, N, a, b)
+
+
+// Barycentric quad test
+visionPoly = VisionPolygon.build(viewer, target)
+
+pts = [...visionPoly.iteratePoints({close: false})]
+
+
+tri = BaryTriangle2d.fromPoints(pts[2], pts[0], pts[1])
+
+
+a = Point3d.fromObject(pts[2])
+b = Point3d.fromObject(pts[0])
+c = Point3d.fromObject(pts[1])
+pt = Point3d.fromTokenCenter(_token)
+tri2 = BaryTriangle3d.fromPoints(a, b, c)
+tri3 = BaryTriangle3dNormal.fromPoints(a, c, b)
+
+Draw.shape(new PIXI.Polygon(a, b, c))
+
+tri.pointInsideTriangle(pt)
+tri2.pointInsideTriangle(pt)
+tri3.pointInsideTriangle(pt)
+
 
 */
 

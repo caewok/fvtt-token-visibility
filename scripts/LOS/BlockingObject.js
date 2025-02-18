@@ -412,3 +412,158 @@ export class BlockingToken extends AbstractBlockingObject {
    */
   drawObject(opts) { return this.drawBounds(opts); }
 }
+
+/**
+ * Store a basic triangle that can be tested for barycentric inclusion.
+ * Stores the relevant barycentric values.
+ */
+export class BaryTriangle2d {
+
+  /** @type {PIXI.Point} */
+  a = new PIXI.Point();
+
+  /** @type {PIXI.Point} */
+  b = new PIXI.Point();
+
+  /** @type {PIXI.Point} */
+  c = new PIXI.Point();
+
+  static fromPoints(a, b, c) {
+    const tri = new this();
+    tri.a.copyFrom(a);
+    tri.b.copyFrom(b);
+    tri.c.copyFrom(c);
+    tri._storeBaryData();
+    return tri;
+  }
+
+  #v0 = new PIXI.Point();
+
+  #v1 = new PIXI.Point();
+
+  #v2 = new PIXI.Point();
+
+  #d00 = 0;
+
+  #d01 = 0;
+
+  #d11 = 0;
+
+  _storeBaryData() {
+    this.b.subtract(this.a, this.#v0);
+    this.c.subtract(this.a, this.#v1);
+
+    this.#d00 = this.#v0.dot(this.#v0);
+    this.#d01 = this.#v0.dot(this.#v1);
+    this.#d11 = this.#v1.dot(this.#v1);
+  }
+
+  /**
+   * Calculate barycentric position within a given triangle
+   * For point p and triangle abc, return the barycentric uvw as a vec3 or vec2.
+   * See https://ceng2.ktu.edu.tr/~cakir/files/grafikler/Texture_Mapping.pdf
+   * @param {vec3|vec2} p
+   * @param {vec3|vec2} a
+   * @param {vec3|vec2} b
+   * @param {vec3|vec2} c
+   * @returns {vec3}
+   */
+  barycentric(p) {
+    const v0 = this.#v0;
+    const v1 = this.#v1;
+    const v2 = p.subtract(this.a, this.a.constructor._tmp3);
+    const d00 = this.#d00;
+    const d01 = this.#d01;
+    const d11 = this.#d11;
+    const d20 = v2.dot(v0);
+    const d21 = v2.dot(v1);
+
+    const denom = ((d00 * d11) - (d01 * d01));
+    // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0);
+
+    const denomInv = 1.0 / denom; // Fixed for given triangle
+    const v = ((d11 * d20) - (d01 * d21)) * denomInv;
+    const w = ((d00 * d21) - (d01 * d20)) * denomInv;
+    const u = 1.0 - v - w;
+    return { u, v, w };
+  }
+
+  /**
+   * Test if a barycentric coordinate is within its defined triangle.
+   * @param {PIX.Point} p     Barycentric coordinate; x,y,z => u,v,w
+   * @returns {bool} True if inside
+   */
+  pointInsideTriangle(p) {
+    const { u, v, w } = this.barycentric(p)
+    return u >= 0.0 && v >= 0.0 && (v + w) <= 1.0;
+  }
+}
+
+// This does nothing beyond BaryTriangle2d.
+export class BaryTriangle3d extends BaryTriangle2d {
+  /** @type {Point3d} */
+  a = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {Point3d} */
+  b = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {Point3d} */
+  c = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {Point3d} */
+  #v0 = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {Point3d} */
+  #v1 = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {Point3d} */
+  #v2 = new CONFIG.GeometryLib.threeD.Point3d();
+}
+
+
+export class BaryTriangle3dNormal extends BaryTriangle3d {
+
+  /** @type {Point3d} */
+  #normal = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {number} */
+  #normalM2 = 0;
+
+  /** @type {Point3d} */
+  #dCB = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {Point3d} */
+  #dAC = new CONFIG.GeometryLib.threeD.Point3d();
+
+  /** @type {Point3d} */
+  #dBA = new CONFIG.GeometryLib.threeD.Point3d();
+
+  _storeBaryData() {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const dBA = this.b.subtract(this.a, Point3d._tmp2);
+    const dCA = this.c.subtract(this.a, Point3d._tmp3);
+    dBA.cross(dCA, this.#normal);
+    this.#normalM2 = this.#normal.magnitudeSquared();
+
+    // Store differences between the points.
+    this.c.subtract(this.b, this.#dCB);
+    this.a.subtract(this.c, this.#dAC);
+    this.b.subtract(this.a, this.#dBA);
+  }
+
+  barycentric(p) {
+    const dPB = p.subtract(this.b, Point3d._tmp3);
+    const nA = this.#dCB.cross(dPB, Point3d._tmp3);
+    const u = this.#normal.dot(nA) / this.#normalM2;
+
+    const dPC = p.subtract(this.c, Point3d._tmp3);
+    const nB = this.#dAC.cross(dPC, Point3d._tmp3);
+    const v = this.#normal.dot(nB) / this.#normalM2;
+
+    const dPA = p.subtract(this.a, Point3d._tmp3);
+    const nC = this.#dBA.cross(dPA, Point3d._tmp3);
+    const w = this.#normal.dot(nC) / this.#normalM2;
+    return { u, v, w };
+  }
+}
+
