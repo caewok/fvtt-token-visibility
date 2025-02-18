@@ -306,7 +306,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const { tokens, ...nonTokens } = blockingObjectsPoints;
 
     const addVisibleSplitsFn = (key, pts) => {
-      const res = pts._getVisibleSplits(this.viewerLOS.target, visionPolygon, { edges, viewpoint });
+      const res = pts._getVisibleSplits(this.viewerLOS.target, visionPolygon, { edges, viewerLoc: viewpoint });
       if ( res.length ) blockingPoints[key].push(...res);
     };
 

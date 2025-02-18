@@ -220,19 +220,32 @@ export class VisionTriangle {
   /** @type {PIXI.Point} */
   c = new PIXI.Point();
 
-  /** @type {number} */
-  maxElevation = Number.POSITIVE_INFINITY;
+  /** @type {VPElevation} */
+  elevation = {
+    min: Number.NEGATIVE_INFINITY,
+    max: Number.POSITIVE_INFINITY
+  };
 
-  /** @type {number} */
-  minElevation = Number.NEGATIVE_INFINITY;
+  /** @type {PIXI.Rectangle} */
+  bounds = new PIXI.Rectangle;
 
   constructor(a, b, c, maxElevation = Number.POSITIVE_INFINITY, minElevation = Number.NEGATIVE_INFINITY) {
     this.a.copyFrom(a);
     this.b.copyFrom(b);
     this.c.copyFrom(c);
-    this.maxElevation = maxElevation;
-    this.minElevation = minElevation;
-    this._storeBaryData();
+    this.elevation.max = maxElevation;
+    this.elevation.min = minElevation;
+    this.setBounds();
+  }
+
+  setBounds() {
+    const { a, b, c } = this;
+    const xMinMax = Math.minMax(a.x, b.x, c.x);
+    const yMinMax = Math.minMax(a.y, b.y, c.y);
+    this.bounds.x = xMinMax.min;
+    this.bounds.y = yMinMax.min;
+    this.bounds.width = xMinMax.max - xMinMax.min;
+    this.bounds.height = yMinMax.max - yMinMax.min;
   }
 
   /**
@@ -303,90 +316,12 @@ export class VisionTriangle {
     );
   }
 
-  #v0 = new PIXI.Point();
-
-  #v1 = new PIXI.Point();
-
-  #d00 = 0;
-
-  #d01 = 0;
-
-  #d11 = 0;
-
-  _storeBaryData() {
-    this.b.subtract(this.a, this.#v0);
-    this.c.subtract(this.a, this.#v1);
-
-    this.#d00 = this.#v0.dot(this.#v0);
-    this.#d01 = this.#v0.dot(this.#v1);
-    this.#d11 = this.#v1.dot(this.#v1);
-  }
-
   /**
-   * Calculate barycentric position within a given triangle
-   * For point p and triangle abc, return the barycentric uvw as a vec3 or vec2.
-   * See https://ceng2.ktu.edu.tr/~cakir/files/grafikler/Texture_Mapping.pdf
-   * @param {vec3|vec2} p
-   * @param {vec3|vec2} a
-   * @param {vec3|vec2} b
-   * @param {vec3|vec2} c
-   * @returns {vec3}
-   */
-  barycentric(p) {
-    const v0 = this.#v0;
-    const v1 = this.#v1;
-    const v2 = p.subtract(this.a, this.a.constructor._tmp3);
-    const d00 = this.#d00;
-    const d01 = this.#d01;
-    const d11 = this.#d11;
-    const d20 = v2.dot(v0);
-    const d21 = v2.dot(v1);
-
-    const denom = ((d00 * d11) - (d01 * d01));
-    // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0);
-
-    const denomInv = 1.0 / denom; // Fixed for given triangle
-    const v = ((d11 * d20) - (d01 * d21)) * denomInv;
-    const w = ((d00 * d21) - (d01 * d20)) * denomInv;
-    const u = 1.0 - v - w;
-    return { u, v, w };
-  }
-
-  /**
-   * Test if a barycentric coordinate is within its defined triangle.
-   * @param {PIX.Point} p     Barycentric coordinate; x,y,z => u,v,w
-   * @returns {bool} True if inside
+   * Test if a point is inside the triangle in 2d.
+   * @param {Point} p
+   * @returns {boolean}
    */
   pointInsideTriangle(p) {
-    const { u, v, w } = this.barycentric(p)
-    return u >= 0.0 && v >= 0.0 && (v + w) <= 1.0;
-  }
-
-  pointInsideTriangleFast(p) {
-    const v0 = this.#v0;
-    const v1 = this.#v1;
-    const v2 = p.subtract(this.a, this.a.constructor._tmp3);
-    const d00 = this.#d00;
-    const d01 = this.#d01;
-    const d11 = this.#d11;
-    const d20 = v2.dot(v0);
-    const d21 = v2.dot(v1);
-
-    const denom = ((d00 * d11) - (d01 * d01));
-    // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0);
-
-    const denomInv = 1.0 / denom; // Fixed for given triangle
-    const v = ((d11 * d20) - (d01 * d21)) * denomInv;
-    if ( v < 0 ) return false;
-
-    const w = ((d00 * d21) - (d01 * d20)) * denomInv;
-    if ( w < 0 ) return false;
-    if ( v + w > 1 ) return false;
-    return true;
-  }
-
-  // Fastest.
-  pointInsideTriangleOrient(p) {
     const orient2d = foundry.utils.orient2dFast;
 
     // All orientations must be the same sign or 0.
@@ -395,11 +330,99 @@ export class VisionTriangle {
     return (oAB * oBC >= 0) && (oAB * orient2d(this.c, this.a, p) >= 0);
   }
 
-  pointWithinElevation(p) { return p.z <= this.maxElevation && p.z >= this.minElevation; }
-
   draw(opts = {}) {
     Draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
   }
+
+  containsWall(wall) {
+    // Ignore one-directional walls facing away from the viewpoint.
+    if ( wall.document.dir
+      && (wall.edge.orientPoint(this.a) === wall.document.dir) ) return false;
+
+    // Is the wall within the elevation box?
+    let { top, bottom } = wall.edge.elevationLibGeometry.a;
+    top ??= Number.POSITIVE_INFINITY;
+    bottom ??= Number.NEGATIVE_INFINITY;
+    if ( wall.top < this.elevation.min || wall.bottom > this.elevation.max ) return false;
+
+    // Ignore walls not within the elevation vision rectangle.
+    const { a, b } = wall.edge;
+    if ( this.pointInsideTriangle(a) || this.pointInsideTriangle(b) ) return true;
+
+    // Does the wall intersect the triangle?
+    // Don't really care about the back of the vision triangle? (b|c)
+    // Wall would cut through token, end inside triangle.
+    const lsi = foundry.utils.lineSegmentIntersects;
+    return ( lsi(this.a, this.b, a, b) || lsi(this.a, this.c, a, b) );
+  }
+
+  containsTile(tile) {
+    const tileE = tile.document.elevation;
+
+    // Only overhead tiles count for blocking vision
+    if ( tileE < tile.document.parent?.foregroundElevation ) return false;
+
+    // Ignore tiles that are not within the elevation vision rectangle.
+    if ( tileE < this.elevation.min || tileE > this.elevation.max ) return false;
+
+    // Use the alpha bounding box. This might be a polygon if the tile is rotated.
+    const tBounds = tile.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
+    const tCenter = tBounds.center;
+    if ( this.pointInsideTriangle(tCenter) ) return true;
+    return tBounds.lineSegmentIntersects(this.a, this.b, { inside: true })
+      || tBounds.lineSegmentIntersects(this.a, this.c, { inside: true });
+  }
+
+  containsToken(token) {
+    // Ignore tokens not within the elevation vision rectangle.
+    if ( token.topE < this.elevation.min || token.bottomE > this.elevation.max ) return false;
+
+    // Even for constrained tokens, the token center should remain within the token border.
+    const tCenter = token.center;
+    if ( this.pointInsideTriangle(tCenter) ) return true;
+
+    // Full test of token border.
+    const tBounds = token.constrainedTokenBorder;
+    return tBounds.lineSegmentIntersects(this.a, this.b, { inside: true })
+      || tBounds.lineSegmentIntersects(this.a, this.c, { inside: true });
+  }
+
+  /**
+   * Find walls in the scene by a triangle representing the view from viewingPoint to some
+   * token (or other two points). Checks for one-directional walls; ignores those facing away from viewpoint.
+   * Pass an includes function to test others.
+   * @return {Set<Wall>}
+   */
+  findWalls() {
+    const collisionTest = o => this.containsWall(o.t);
+    return canvas.walls.quadtree.getObjects(this.bounds, { collisionTest });
+  }
+
+  filterWalls(walls) { return walls.filter(w => this.containsWall(w)); }
+
+  /**
+   * Find tiles in the scene by a triangle representing the view from viewingPoint to
+   * token (or other two points). Only considers 2d top-down view.
+   * @return {Set<Tile>}
+   */
+  findTiles() {
+    const collisionTest = o => this.containsTile(o.t);
+    return canvas.tiles.quadtree.getObjects(this.bounds, { collisionTest });
+  }
+
+  filterTiles(tiles) { return tiles.filter(t => this.containsTile(t)); }
+
+  /**
+   * Filter tokens in the scene by a triangle representing the view from viewingPoint to
+   * token (or other two points). Only considers 2d top-down view.
+   * @return {Set<Token>}
+   */
+  findTokens() {
+    const collisionTest = o => this.containsToken(o.t);
+    return canvas.tokens.quadtree.getObjects(this.bounds, { collisionTest });
+  }
+
+  filterTokens(tokens) { return tokens.filter(t => this.containsToken(t)); }
 }
 
 /* Testing

@@ -14,7 +14,7 @@ import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
-import { VisionPolygon } from "./VisionPolygon.js";
+import { VisionPolygon, VisionTriangle } from "./VisionPolygon.js";
 
 import {
   insetPoints,
@@ -174,10 +174,10 @@ export class AbstractViewpoint {
     const blockingObjs = this.#blockingObjects;
     Object.values(blockingObjs).forEach(objs => objs.clear());
 
-    const visionPolygon = VisionPolygon.build(this.viewpoint, target);
+    const visionPolygon = VisionTriangle.build(this.viewpoint, target);
     if ( blocking.walls ) blockingObjs.walls = this._filterWallsByVisionPolygon(visionPolygon);
     if ( blocking.tiles ) blockingObjs.tiles = this._filterTilesByVisionPolygon(visionPolygon);
-    if ( blocking.tokens.live || blocking.tokens.dead ) blockingObjs.tokens = this._filterTokensByVisionPolygon(visionPolygon, target);
+    if ( blocking.tokens.live || blocking.tokens.dead ) blockingObjs.tokens = this._filterTokensByVisionPolygon(visionPolygon);
 
     // Separate walls into terrain and normal.
     blockingObjs.walls.forEach(w => {
@@ -195,11 +195,11 @@ export class AbstractViewpoint {
    * target (or other two points). Only considers 2d top-down view.
    * @return {Set<Wall>}
    */
-  _filterWallsByVisionPolygon(visionPolygon, walls) {
-    walls ??= canvas.walls.quadtree
-        .getObjects(visionPolygon._bounds)
-        .filter(w => w.document[this.viewerLOS.config.type] ); // Ignore walls that are not blocking for the type.
-    return visionPolygon.filterWalls(walls);
+  _filterWallsByVisionPolygon(visionPolygon) {
+    return visionPolygon.findWalls()
+      // Ignore walls that are not blocking for the type.
+      // Ignore walls with open doors.
+      .filter(w => w.document[this.viewerLOS.config.type] && !w.isOpen);
   }
 
   /**
@@ -207,14 +207,14 @@ export class AbstractViewpoint {
    * target (or other two points). Only considers 2d top-down view.
    * @return {Set<Tile>}
    */
-  _filterTilesByVisionPolygon(visionPolygon, tiles) {
-    tiles ??= canvas.tiles.quadtree.getObjects(visionPolygon._bounds);
+  _filterTilesByVisionPolygon(visionPolygon) {
+    const tiles = visionPolygon.findTiles();
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
     if ( MODULES_ACTIVE.LEVELS && this.viewerLOS.config.type === "sight" ) {
-      tiles = tiles.filter(t => !t.document?.flags?.levels?.noCollision);
+      return tiles.filter(t => !t.document?.flags?.levels?.noCollision);
     }
-    return visionPolygon.filterTiles(tiles);
+    return tiles;
   }
 
   /**
@@ -224,9 +224,10 @@ export class AbstractViewpoint {
    * token under the viewer point.
    * @return {Set<Token>}
    */
-  _filterTokensByVisionPolygon(visionPolygon, target, tokens) {
+  _filterTokensByVisionPolygon(visionPolygon) {
     const viewer = this.viewerLOS.viewer;
-    tokens ??= canvas.tokens.quadtree.getObjects(visionPolygon._bounds);
+    const target = this.viewerLOS.target;
+    let tokens = visionPolygon.findTokens();
 
     // Filter out the viewer and target from the token set.
     tokens.delete(target);
@@ -236,17 +237,12 @@ export class AbstractViewpoint {
     // Example: viewer is on a dragon.
     if ( viewer instanceof Token ) tokens = tokens.filter(t => tokensOverlap(viewer, t))
 
-    // Filter tokens that directly overlaps the viewer.
-    // Example: viewer is on a dragon.
-    if ( viewer instanceof Token ) tokens = tokens.filter(t => tokensOverlap(viewer, t));
-
     // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
     const api = MODULES_ACTIVE.API.RIDEABLE;
-    if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer)
-      || api.RidingConnection(t, target));
+    if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer) || api.RidingConnection(t, target));
 
     // Filter by the precise triangle cone
-    return visionPolygon.filterTokens(tokens);
+    return tokens;
   }
 
   /**
