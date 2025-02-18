@@ -120,8 +120,33 @@ export class BVHNode2d {
     return this.objCount * this.objCount * bmax.constructor.distanceSquaredBetween(bmax, bmin);
   }
 
-  // ----- NOTE: Debugging ----- //
+  // ----- NOTE: Vision triangle ----- //
 
+  /**
+   * Get the subset of objects between two rays that form a "vision triangle" from a viewer.
+   * It is assumed that anything beyond the triangle or above/below the elevation is unneeded.
+   * @param {Ray2d} rCCW        CCW ray; must share origin with rCW
+   * @param {Ray2d} rCW         CW ray; must share origin with rCCW
+   * @param {number} top
+   * @param {number} bottom
+   */
+  hasVisionTriangleIntersection(a, b, c, top = Number.POSITIVE_INFINITY, bottom = Number.NEGATIVE_INFINITY) {
+    const { min, max } = this.aabb;
+    const minE = min.z ?? 0;
+    const maxE = max.z ?? 0;
+    if ( minE > top || maxE < bottom ) return false;
+
+    // Either 1+ rays intersect, the bounds are between the rays, or there is overlap.
+    const aabb = this.aabb;
+    if ( Ray2d.fromPoints(a, b).intersectsAABB(aabb.min.to2d(), aabb.max.to2d())
+      || Ray2d.fromPoints(a, c).intersectsAABB(aabb.min.to2d(), aabb.max.to2d()) ) return true;
+
+    // If no intersection, then the entire bounds lies within the triangle.
+    const bary0 = barycentric(this.centroid.to2d(), a, b, c);
+    return barycentricPointInsideTriangle(bary0);
+  }
+
+  // ----- NOTE: Debugging ----- //
   /** @type {PIXI.Rectangle} */
   get boundsRect() {
     const aabb = this.aabb;
@@ -192,7 +217,6 @@ export class BVH2d {
     bvh.rebuild();
     return bvh;
   }
-
 
   /**
    * Subdivide the BVH tree.
@@ -393,6 +417,36 @@ export class BVH2d {
     return false;
   }
 
+  // ----- NOTE: Vision triangle ----- //
+
+  /**
+   * Get all objects that have a vision triangle intersection.
+   * @param {PIXI.Point} a      Origin point of the vision triangle
+   * @param {PIXI.Point} b      CCW endpoint
+   * @param {PIXI.Point} c      CW endpoint
+   * @param {number} top        Maximum elevation
+   * @param {number} bottom     Minimum elevation
+   * @param {int} nodeIdx
+   * @returns {*[]}
+   */
+  hasIntersection(a, b, c, top, bottom, nodeIdx = 0, out = []) {
+    const node = this.nodes[nodeIdx];
+    if ( !node.hasVisionTriangleIntersection(a, b, c, top, bottom) ) return false;
+    if ( node.isLeaf ) {
+      // TODO: Check the object intersection?
+      out.push(node.object);
+      return true;
+    }
+    } else {
+      // Recurse.
+      if ( this.hasIntersection(ray, node.leftFirst) ) return true;
+      if ( this.hasIntersection(ray, node.leftFirst + 1) ) return true;
+    }
+    return false;
+  }
+
+  // ----- NOTE: Updating ----- //
+
   /**
    * Add an object to the bvh.
    * Causes a full recalculation of the bvh.
@@ -590,8 +644,6 @@ function isEven(n) { return n % 2 === 0; }
  */
 function isOdd(n) { return n % 2 !== 0; }
 
-
-
 /**
  * Remove a set of positive indices from an array, in place.
  * Using negative indices will fail silently. Indices larger than the array are ignored.
@@ -603,6 +655,67 @@ function arrayMultiDelete(arr, indices) {
   indices = [...indices];
   indices.sort((a, b) => b - a);
   indices.forEach(i => arr.splice(i, 1));
+}
+
+/**
+ * Test whether a vertex lies between two boundary rays.
+ * If the angle is greater than 180, test for points between rMax and rMin (inverse).
+ * Otherwise, keep vertices that are between the rays directly.
+ * @param {PIXI.Point} point        The candidate point
+ * @param {PolygonRay} rMin         The counter-clockwise bounding ray
+ * @param {PolygonRay} rMax         The clockwise bounding ray
+ * @param {number} angle            The angle being tested, in degrees
+ * @returns {boolean}               Is the vertex between the two rays?
+ */
+function pointBetweenRays(point, rMin, rMax) {
+  const ccw = foundry.utils.orient2dFast;
+  /*
+  if ( angle > 180 ) {
+    const outside = (ccw(rMax.A, rMax.B, point) <= 0) && (ccw(rMin.A, rMin.B, point) >= 0);
+    return !outside;
+  }
+  */
+  return (ccw(rMin.A, rMin.B, point) <= 0) && (ccw(rMax.A, rMax.B, point) >= 0);
+}
+
+/**
+ * Calculate barycentric position within a given triangle
+ * For point p and triangle abc, return the barycentric uvw as a vec3 or vec2.
+ * See https://ceng2.ktu.edu.tr/~cakir/files/grafikler/Texture_Mapping.pdf
+ * @param {vec3|vec2} p
+ * @param {vec3|vec2} a
+ * @param {vec3|vec2} b
+ * @param {vec3|vec2} c
+ * @returns {vec3}
+ */
+function barycentric(p, a, b, c) {
+  const v0 = b.subtract(a, a.constructor._tmp); // Fixed for given triangle
+  const v1 = c.subtract(a, a.constructor._tmp2); // Fixed for given triangle
+  const v2 = p.subtract(a, a.constructor._tmp3);
+
+  const d00 = v0.dot(v0); // Fixed for given triangle
+  const d01 = v0.dot(v1); // Fixed for given triangle
+  const d11 = v1.dot(v1); // Fixed for given triangle
+  const d20 = v2.dot(v0);
+  const d21 = v2.dot(v1);
+
+  const denom = ((d00 * d11) - (d01 * d01));
+  // TODO: Is this test needed? if ( denom == 0.0 ) return new vec3(-1.0);
+
+  const denomInv = 1.0 / denom; // Fixed for given triangle
+  const v = ((d11 * d20) - (d01 * d21)) * denomInv;
+  const w = ((d00 * d21) - (d01 * d20)) * denomInv;
+  const u = 1.0 - v - w;
+  return { u, v, w };
+}
+
+/**
+ * Test if a barycentric coordinate is within its defined triangle.
+ * @param {vec3} bary     Barycentric coordinate; x,y,z => u,v,w
+ * @returns {bool} True if inside
+ */
+function barycentricPointInsideTriangle(bary) {
+  return bary.u >= 0.0 && bary.v >= 0.0 && (bary.v + bary.w) <= 1.0;
 }
 
 
