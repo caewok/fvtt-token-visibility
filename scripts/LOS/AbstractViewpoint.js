@@ -80,7 +80,7 @@ export class AbstractViewpoint {
    */
   percentVisible() {
     const percent = this._simpleVisibilityTest() ?? this._percentVisible();
-    if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewerPoint ${this.viewpoint.toString()}`)
+    if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
 

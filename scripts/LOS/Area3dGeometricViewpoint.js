@@ -106,7 +106,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
     // Combine terrain walls
     const combinedTerrainWalls = blockingPoints.terrainWalls.length > 1
-      ? WallPoints3d.combineTerrainWalls(blockingPoints.terrainWalls, this.viewerPoint, {
+      ? WallPoints3d.combineTerrainWalls(blockingPoints.terrainWalls, this.viewpoint, {
         scalingFactor: this.constructor.SCALING_FACTOR
       }) : undefined;
 
@@ -267,7 +267,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const { terrainWalls, tiles, tokens, walls } = this.#blockingObjectsPoints;
 
     // Add Tiles
-    objs.tiles.forEach(t => tiles.add(new TilePoints3d(t, { viewerElevationZ: this.viewerPoint.z })));
+    objs.tiles.forEach(t => tiles.add(new TilePoints3d(t, { viewerElevationZ: this.viewpoint.z })));
 
     // Add Tokens
     const tokenPoints = this._buildTokenPoints(objs.tokens);
