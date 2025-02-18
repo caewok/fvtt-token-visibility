@@ -208,7 +208,7 @@ export class PointsViewpoint extends AbstractViewpoint {
       if ( t === null || t < zeroMin || t > oneMax ) continue;
       const ix = new Point3d();
       startPt.add(rayVector.multiplyScalar(t, ix), ix);
-      if ( !tile.mesh?.containsCanvasPoint(ix.x, ix.y, 0.99 + 1e-06) ) continue; // Transparent, so no collision.
+      if ( !tile.mesh?.containsCanvasPoint(ix) ) continue; // Transparent, so no collision.
 
       return true;
     }
