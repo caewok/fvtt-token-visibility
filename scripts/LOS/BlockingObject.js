@@ -28,6 +28,7 @@ class AbstractBlockingObject {
 
   constructor(object) {
     this.object = object;
+    this.updateBounds();
   }
 
   // ---- NOTE: Property getters ----- //
@@ -39,13 +40,19 @@ class AbstractBlockingObject {
 
   /**
    * @type {AABB} */
-  #aabb = {
+  aabb = {
     min: new CONFIG.GeometryLib.threeD.Point3d(),
     max: new CONFIG.GeometryLib.threeD.Point3d()
   }
 
+  /** @type {Point3d} */
+  centroid = new CONFIG.GeometryLib.threeD.Point3d();
+
   /** @override */
-  get aabb() { return this.#aabb; }
+  updateBounds() {
+    const { min, max } = this.aabb;
+    min.add(max, this.centroid).multiplyScalar(0.5, this.centroid);
+  }
 
   // ----- NOTE: Collisions ----- //
 
@@ -70,11 +77,7 @@ class AbstractBlockingObject {
 
   // ----- NOTE: Debugging ----- //
 
-  /** @type {Point3d} */
-  get centroid() {
-    const { min, max } = this.aabb;
-    return min.add(max).multiplyScalar(0.5);
-  }
+
 
   /** @type {PIXI.Rectangle} */
   get boundsRect() {
@@ -248,14 +251,15 @@ export class BlockingEdge extends AbstractPlanarBlockingObject {
     return normal;
   }
 
-  get aabb() {
-    const aabb = super.aabb;
+  updateBounds() {
     const { a, b, top, bottom } = this;
     const xMinMax = Math.minMax(a.x, b.x);
     const yMinMax = Math.minMax(a.y, b.y);
-    aabb.min.set(xMinMax.min, yMinMax.min, bottom);
-    aabb.max.set(xMinMax.max, yMinMax.max, top);
-    return aabb;
+
+    const { min, max } = this.aabb;
+    min.set(xMinMax.min, yMinMax.min, bottom);
+    max.set(xMinMax.max, yMinMax.max, top);
+    super.updateBounds();
   }
 
   // ----- NOTE: Collisions ----- //
@@ -552,6 +556,7 @@ export class BaryTriangle3dNormal extends BaryTriangle3d {
   }
 
   barycentric(p) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const dPB = p.subtract(this.b, Point3d._tmp3);
     const nA = this.#dCB.cross(dPB, Point3d._tmp3);
     const u = this.#normal.dot(nA) / this.#normalM2;
