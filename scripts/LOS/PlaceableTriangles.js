@@ -1,10 +1,9 @@
 /* globals
+canvas,
 CONFIG,
 PIXI
 */
 "use strict";
-
-import { MODULE_ID } from "../const.js";
 
 // Geometry folder
 import { Draw } from "../geometry/Draw.js";
@@ -96,7 +95,7 @@ export class Triangle {
    * @param {Point3d} p
    * @returns {boolean}
    */
-  isFacing(p) { orient3dFast(this.a, this.b, this.c, p) > 0; }
+  isFacing(p) { return orient3dFast(this.a, this.b, this.c, p) > 0; }
 
   /**
    * Reverse the orientation of this triangle by swapping a and c.
@@ -147,6 +146,14 @@ export class Triangle {
     const cmp = (a, b) => a < b;
     return this.constructor.clipPlanePoints([this.a, this.b, this.c], -0.1, "z", cmp);
   }
+
+  /**
+   * Test if a ray intersects the triangle. Does not consider whether this triangle is facing.
+   * @param {Ray3d} ray
+   * @param {Point3d} [ix]
+   * @returns {boolean}
+   */
+
 
   /**
    * Convert a 3d point to 2d using a perspective transform by dividing by z.
@@ -599,7 +606,8 @@ export class AbstractPlaceableTriangles {
   _translateM = CONFIG.GeometryLib.MatrixFlat.identity(4);
 
   get translateM() {
-    const { x, y, elevationZ } = this.placeable;
+    const elevationZ = this.placeable.elevationZ;
+    const { x, y } = this.placeable.document;
     return CONFIG.GeometryLib.MatrixFlat.translation(x, y, elevationZ, this._translateM);
   }
 
@@ -794,7 +802,7 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
   _setUnconstrainedPrototypes() {
     const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
     const token = this.token;
-    const unconstrainedShape = token.shape; // Token shape TL = 0,0
+    const unconstrainedShape = token.tokenBorder; // Token shape does not work prior to canvas ready
     this._polygons[SIDES] = new PolygonVerticalTriangles(unconstrainedShape);
 
     // Top and bottom are simpler if the shape is a rectangle.
@@ -848,28 +856,30 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
   _initializePolyGroup(polys) {
     const MatrixFlat = CONFIG.GeometryLib.MatrixFlat;
     const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
+    const { topZ, bottomZ } = this.token;
 
+    const verticalHeight = topZ - bottomZ;
+
+    // Side, top, and bottom shapes are all at TL = 0, 0.
+    // Except for square top, bottom, which are centered at 0,0.
     // Side triangles are scaled by the token height and move so bottom is at elevation 0.
     // The start centered in the z direction but are scaled by height, so need to move up half-height
-    const { topZ, bottomZ } = this.token;
-    const verticalHeight = topZ - bottomZ;
     MatrixFlat.translation(0, 0, verticalHeight * 0.5, this._translateSidePrototypeM)
     MatrixFlat.scale(1, 1, verticalHeight, this._scaleSidePrototypeM);
     this._scaleSidePrototypeM.multiply4x4(this._translateSidePrototypeM, this._sidePrototypeM);
 
     // Bottom is at elevation 0; top is at token height.
-
-
-    // If the top and bottom are squares, must scale them by token width/height.
-    // Must also move them so TL is 0, 0.
+    // Must also move top and bottom so TL is 0, 0.
     if ( polys[TOP] instanceof Square2dTriangles ) {
-      const { width, height } = this.token.shape;
-      MatrixFlat.translation(width * 0.5, height * 0.5, verticalHeight, this._topPrototypeM);
-      MatrixFlat.scale(width, height, 1, this._bottomPrototypeM);
+      const { width, height } = this.token.document;
+      const wSize = width * canvas.dimensions.size;
+      const hSize = height * canvas.dimensions.size
+      MatrixFlat.translation(wSize * 0.5, hSize * 0.5, verticalHeight, this._topPrototypeM);
+      MatrixFlat.scale(wSize, hSize, 1, this._bottomPrototypeM);
       this._bottomPrototypeM.multiply4x4(this._topPrototypeM, this._topPrototypeM);
     } else {
       MatrixFlat.translation(0, 0, verticalHeight, this._topPrototypeM);
-      MatrixFlat.identity(4, 4, this._bottomPrototypeM)
+      MatrixFlat.identity(4, 4, this._bottomPrototypeM);
     }
 
     polys[SIDES].initialize(this._sidePrototypeM);
@@ -889,8 +899,7 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
     // or vice-versa.
     // If update is getting called unnecessarily, caching would need to happen.
     if ( this.token.isConstrainedTokenBorder ) {
-      this._setConstrainedPrototypes();
-      this._initializePolyGroup(this._constrainedPolygons);
+      this.initialize();
       this._constrainedPolygons.forEach(poly => poly.update(M));
     } else this._polygons.forEach(poly => poly.update(M)); // Unconstrained.
   }
@@ -981,5 +990,7 @@ tokenTri.drawPrototypes({ color: Draw.COLORS.blue })
 tokenTri.draw({ color: Draw.COLORS.blue })
 tokenTri.drawSplayed({ color: Draw.COLORS.red })
 
+Draw = CONFIG.GeometryLib.Draw
+tokenTri = _token._atvShapeTriangles.triObject
 
 */

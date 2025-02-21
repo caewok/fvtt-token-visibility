@@ -52,7 +52,7 @@ import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
 import { Triangle, DirectionalWallTriangles, WallTriangles, TileTriangles, TokenTriangles, PolygonVerticalTriangles, Polygon2dTriangles } from "./LOS/PlaceableTriangles.js";
-
+import { PlaceableTrianglesHandler } from "./LOS/PlaceableTrianglesHandler.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -173,6 +173,11 @@ Hooks.once("setup", function() {
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   Settings.initializeDebugGraphics();
+
+  // Update triangles for all placeables.
+  canvas.tiles.placeables.forEach(tile => tile[PlaceableTrianglesHandler.ID].update());
+  canvas.walls.placeables.forEach(wall => wall[PlaceableTrianglesHandler.ID].update());
+  canvas.tokens.placeables.forEach(token => token[PlaceableTrianglesHandler.ID].update());
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

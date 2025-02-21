@@ -5,8 +5,8 @@ CONFIG
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 // Patches for the Token class
-
 import { GEOMETRY_ID, TokenGeometryHandler } from "./Placeable3dGeometry.js";
+import { TokenTrianglesHandler } from "./PlaceableTrianglesHandler.js";
 
 export const PATCHES = {};
 PATCHES.LOS = {};
@@ -14,6 +14,14 @@ PATCHES.AREA3D = {};
 
 
 // ----- NOTE: Hooks ----- //
+
+/**
+ * Hook: drawToken
+ * @param {PlaceableObject} object    The object instance being drawn
+ */
+function drawToken(token) {
+  new TokenTrianglesHandler(token);
+}
 
 /**
  * Hook: updateToken
@@ -24,14 +32,31 @@ PATCHES.AREA3D = {};
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
 function updateToken(tokenD, change, _options, _userId) {
-  // Token shape changed; invalidate cached shape.
   const token = tokenD.object;
   if ( !token ) return;
-  if ( Object.hasOwn(change, "width")
-    || Object.hasOwn(change, "height") ) token._tokenShape = undefined;
+  const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
+
+  // Token shape changed; invalidate cached shape.
+  if ( changeKeys.has("width") || changeKeys.has("height") ) token._tokenShape = undefined;
+
+  token[TokenTrianglesHandler.ID].update(changeKeys);
+  // TODO: Only run if other modules are not present.
+  // Default to ATV, ATC, then Elevation Shadows.
 }
 
-PATCHES.LOS.HOOKS = { updateToken };
+/**
+ * Hook: destroyToken
+ * @param {PlaceableObject} object    The object instance being destroyed
+ */
+function destroyToken(token) {
+  token[TokenTrianglesHandler.ID] = null; // Currently, no destroy method to call.
+}
+
+PATCHES.LOS.HOOKS = {
+  drawToken,
+  updateToken,
+  destroyToken
+};
 
 // ----- NOTE: Area3d Hooks ----- //
 
@@ -52,15 +77,13 @@ function drawTokenArea3d(token) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-function updateTokenArea3d(tokenD, change, _options, _userId) {
+function updateTokenArea3d(tokenD, changed, _options, _userId) {
   // Token shape changed; invalidate cached shape.
   const token = tokenD.object;
   if ( !token ) return;
-  if ( Object.hasOwn(change, "width")
-    || Object.hasOwn(change, "height")
-    || Object.hasOwn(change, "x")
-    || Object.hasOwn(change, "y")
-    || Object.hasOwn(change, "elevation") ) token[GEOMETRY_ID].update();
+
+  const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
+  token[GEOMETRY_ID].update(changeKeys)
 }
 
 /**

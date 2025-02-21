@@ -701,7 +701,7 @@ export class Tile3dGeometry extends Wall3dGeometry {
 export const GEOMETRY_ID = "_atvPlaceableGeometry";
 
 /**
- * Class to handle on-demand updating and destroying fo the geometry.
+ * Class to handle on-demand updating and destroying of the geometry.
  * Only build when necessary; rebuild when destroyed.
  * Geometry is stored on the object, at object.tokenvisibility.geometry.
  */
@@ -734,9 +734,12 @@ class PlaceableGeometryHandler {
 
   /**
    * Update the existing geometry, if one has been built. Ignore otherwise.
+   * @param {Set<string>} changes         Change keys for the source.
    */
-  update() {
+  static UPDATE_TRIGGERS = [];
+  update(changes) {
     if ( !this.#geometry ) return;
+    if ( !this.constructor.UPDATE_TRIGGERS.some(t => changes.has(t)) ) return;
     this.geometry.updateObjectPoints();
     this.geometry.updateVertices();
   }
@@ -764,6 +767,8 @@ export class WallGeometryHandler extends PlaceableGeometryHandler {
    */
   _buildGeometry() { return new Wall3dGeometry(this.wall); }
 
+  static UPDATE_TRIGGERS = ["c"];
+
   static registerPlaceables() {
     const walls = canvas.walls?.placeables;
     if ( !walls ) return;
@@ -784,6 +789,8 @@ export class TokenGeometryHandler extends PlaceableGeometryHandler {
     return new cl(this.token);
   }
 
+  static UPDATE_TRIGGERS = ["height", "width", "x", "y", "elevation"];
+
   static registerPlaceables() {
     const tokens = canvas.tokens?.placeables;
     if ( !tokens ) return;
@@ -800,6 +807,8 @@ export class TileGeometryHandler extends PlaceableGeometryHandler {
    * @returns {ConstrainedToken3dGeometry|ConstrainedTokenHex3dGeometry}
    */
   _buildGeometry() { return new Tile3dGeometry(this.tile); }
+
+  static UPDATE_TRIGGERS = ["height", "width", "texture", "x", "y", "z", "overhead"];
 
   /**
    * If not overhead, don't update.
