@@ -31,7 +31,7 @@ function drawToken(token) {
  * @param {DocumentModificationContext} options     Additional options which modified the update request
  * @param {string} userId                           The ID of the User who triggered the update workflow
  */
-function updateToken(tokenD, change, _options, _userId) {
+function updateToken(tokenD, changed, _options, _userId) {
   const token = tokenD.object;
   if ( !token ) return;
   const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));

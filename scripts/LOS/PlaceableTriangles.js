@@ -149,11 +149,50 @@ export class Triangle {
 
   /**
    * Test if a ray intersects the triangle. Does not consider whether this triangle is facing.
-   * @param {Ray3d} ray
-   * @param {Point3d} [ix]
-   * @returns {boolean}
+   * Möller-Trumbore intersection algorithm for a triangle.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @returns {t|null}
    */
+  intersection(rayOrigin, rayDirection) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const { a, b, c } = this;
 
+    // Calculate the edge vectors of the triangle
+    // Not really worth caching these values.
+    const edge1 = b.subtract(a, Point3d._tmp2);
+    const edge2 = c.subtract(a, Point3d._tmp3);
+
+    // Calculate the determinant of the triangle
+    const pvec = rayDirection.cross(edge2, Point3d._tmp1);
+
+    // If the determinant is near zero, ray lies in plane of triangle
+    const det = edge1.dot(pvec);
+    if (det > -Number.EPSILON && det < Number.EPSILON) return null;  // Ray is parallel to triangle
+    const invDet = 1 / det;
+
+    // Calculate the intersection point using barycentric coordinates
+    const tvec = rayOrigin.subtract(a, Point3d._tmp);
+    const u = invDet * tvec.dot(pvec);
+    if (u < 0 || u > 1) return null;  // Intersection point is outside of triangle
+
+    const qvec = tvec.cross(edge1, Point3d._tmp2);
+    const v = invDet * rayDirection.dot(qvec);
+    if (v < 0 || u + v > 1) return null;  // Intersection point is outside of triangle
+
+    // Calculate the distance to the intersection point
+    const t = invDet * edge2.dot(qvec);
+    if ( t <= Number.EPSILON ) return null;
+
+    const tile = this.tile;
+    if ( !tile || !tile.mesh ) return t;
+
+    // Test tile transparency.
+    // TODO: Do we need to check if t is in range?
+    const ix = rayOrigin.add(rayDirection.multiplyScalar(t, Point3d._tmp3), Point3d._tmp3);
+    if ( !tile.mesh.containsCanvasPoint(ix) ) return null; // Transparent, so no collision.
+    return t;
+  }
 
   /**
    * Convert a 3d point to 2d using a perspective transform by dividing by z.
@@ -759,6 +798,14 @@ export class TileTriangles extends AbstractPlaceableTriangles {
   get rotatePrototypeM() {
     return CONFIG.GeometryLib.MatrixFlat.rotationZ(Math.toRadians(this.tile.document.rotation));
   }
+
+  initialize() {
+    super.initialize();
+
+    // Add tile so alpha transparency can be tested for intersections.
+    const tile = this.tile;
+    this.polygons.forEach(poly => poly.triangles.forEach(tri => tri.tile = tile));
+  }
 }
 
 export class TokenTriangles extends AbstractPlaceableTriangles {
@@ -767,6 +814,10 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
     TOP: 1,
     BOTTOM: 2
   };
+
+  // Pad (inset) to avoid triggering cover at corners. See issue 49.
+  /** @type {number} */
+  static pad = -2;
 
   /** @type {Token} */
   get token() { return this.placeable; }
@@ -802,7 +853,7 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
   _setUnconstrainedPrototypes() {
     const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
     const token = this.token;
-    const unconstrainedShape = token.tokenBorder; // Token shape does not work prior to canvas ready
+    const unconstrainedShape = token.tokenBorder.pad(this.constructor.PAD); // Token shape does not work prior to canvas ready
     this._polygons[SIDES] = new PolygonVerticalTriangles(unconstrainedShape);
 
     // Top and bottom are simpler if the shape is a rectangle.
@@ -823,7 +874,7 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
     const token = this.token;
 
     // Make a new shape so we can translate it. (Translate fails with the constrainedTokenBorder.)
-    const constrainedBorder = new PIXI.Polygon(token.constrainedTokenBorder.points);
+    const constrainedBorder = (new PIXI.Polygon(token.constrainedTokenBorder.points)).pad(this.constructor.PAD);
     const constrainedShape = constrainedBorder.translate(-token.x, -token.y);
     this._constrainedPolygons[SIDES] = new PolygonVerticalTriangles(constrainedShape);
     this._constrainedPolygons[TOP] = new Polygon2dTriangles(constrainedShape);
@@ -872,8 +923,8 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
     // Must also move top and bottom so TL is 0, 0.
     if ( polys[TOP] instanceof Square2dTriangles ) {
       const { width, height } = this.token.document;
-      const wSize = width * canvas.dimensions.size;
-      const hSize = height * canvas.dimensions.size
+      const wSize = (width * canvas.dimensions.size) + this.constructor.PAD;
+      const hSize = (height * canvas.dimensions.size) + this.constructor.PAD
       MatrixFlat.translation(wSize * 0.5, hSize * 0.5, verticalHeight, this._topPrototypeM);
       MatrixFlat.scale(wSize, hSize, 1, this._bottomPrototypeM);
       this._bottomPrototypeM.multiply4x4(this._topPrototypeM, this._topPrototypeM);

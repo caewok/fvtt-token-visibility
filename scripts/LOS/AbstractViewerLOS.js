@@ -299,12 +299,10 @@ export class AbstractViewerLOS {
     }
     if ( !lightShapes.length ) return undefined;
 
-    const paths = CONFIG.GeometryLib.ClipperPaths.fromPolygons(lightShapes);
-    const tokenPath = CONFIG.GeometryLibClipperPaths.fromPolygons(tokenBorder instanceof PIXI.Rectangle
-      ? [tokenBorder.toPolygon()] : [tokenBorder]);
-    const combined = paths
+    const ClipperPaths = CONFIG.GeometryLib.ClipperPaths;
+    const combined = ClipperPaths.fromPolygons(lightShapes)
       .combine()
-      .intersectPaths(tokenPath)
+      .intersectPaths(ClipperPaths.fromPolygons([tokenBorder.toPolygon()]))
       .clean()
       .simplify();
     return combined;

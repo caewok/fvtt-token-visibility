@@ -13,11 +13,8 @@ import { Settings } from "../settings.js";
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
-import { testWallsForIntersections } from "./PointSourcePolygon.js";
-import {
-  lineIntersectionQuadrilateral3d,
-  lineSegmentIntersectsQuadrilateral3d,
-  getObjectProperty } from "./util.js";
+import { getObjectProperty } from "./util.js";
+import { PlaceableTrianglesHandler } from "./PlaceableTrianglesHandler.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -49,6 +46,7 @@ export class PointsViewpoint extends AbstractViewpoint {
    * @returns {number}
    */
   _percentVisible() {
+    this.filterPotentiallyBlockingTriangles();
     const targetPoints = this.constructTargetPoints();
     return (1 - this._testTargetPoints(targetPoints));
   }
@@ -88,24 +86,23 @@ export class PointsViewpoint extends AbstractViewpoint {
       const outsideVisibleShape = visibleTargetShape
         && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
 
-      if ( this.viewerLOS.config.debug ) {
-        let color;
-        const tokenCollision = this._hasTokenCollision(viewpoint, targetPoint);
-        const edgeCollision = this._hasWallCollision(viewpoint, targetPoint)
-          || this._hasTileCollision(viewpoint, targetPoint);
+      // For the intersection test, 0 can be treated as no intersection b/c we don't need
+      // intersections at the origin.
+      // Note: cannot use Point3d._tmp with intersection.
+      // TODO: Does intersection return t values if the intersection is outside the viewpoint --> target?
+      let nCollisions = 0;
+      let hasCollision = this.triangles.some(tri => tri.intersection(viewpoint, targetPoint.subtract(viewpoint)))
+        || this.terrainTriangles.some(tri => {
+        nCollisions += Boolean(tri.intersection(viewpoint, targetPoint.subtract(viewpoint)));
+        return nCollisions >= 2;
+      });
+      numPointsBlocked += hasCollision;
 
-        if ( outsideVisibleShape ) color = Draw.COLORS.gray;
-        else if ( tokenCollision && !edgeCollision ) color = Draw.COLORS.yellow;
-        else if ( edgeCollision ) color = Draw.COLORS.red;
-        else color = Draw.COLORS.green;
+      if ( this.viewerLOS.config.debug ) {
+        const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
         debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.3, width: 1, color });
         console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
       }
-
-      numPointsBlocked += ( outsideVisibleShape
-        || this._hasTokenCollision(viewpoint, targetPoint)
-        || this._hasWallCollision(viewpoint, targetPoint)
-        || this._hasTileCollision(viewpoint, targetPoint) );
     }
     return numPointsBlocked / ln;
   }
@@ -148,125 +145,50 @@ export class PointsViewpoint extends AbstractViewpoint {
 
   /* ----- NOTE: Collision testing ----- */
 
-  // TODO: Use a separate class and triangles to test collisions of various objects.
+  /** @param {Triangle[]} */
+  triangles = [];
+
+  terrainTriangles = [];
 
   /**
-   * Does the ray between two points collide with a wall within the vision triangle?
-   * @param {Point3d} startPt      Starting point of this ray
-   * @param {Point3d} endPt         End point of this ray
-   * @returns {boolean} True if a wall blocks this ray
+   * Filter the triangles that might block the viewer from the target.
    */
-  _hasWallCollision(startPt, endPt) {
-    if ( !this.viewerLOS.config.block.walls ) return false;
-    const walls = [...this.blockingObjects.walls, ...this.blockingObjects.terrainWalls];
-    return testWallsForIntersections(startPt, endPt, walls, "any", this.viewerLOS.config.type);
+  filterPotentiallyBlockingTriangles() {
+    this.triangles.length = 0;
+    this.terrainTriangles.length = 0;
+    this._filterPotentiallyBlockingWallTriangles();
+    this._filterPotentiallyBlockingTileTriangles();
+    this._filterPotentiallyBlockingTokenTriangles();
   }
 
-  /**
-   * Does the ray between two points collide with a tile within the vision triangle?
-   * @param {Point3d} startPt       Starting point of this ray
-   * @param {Point3d} endPt         End point of this ray
-   * @returns {boolean} True if a tile blocks this ray
-   */
-  _hasTileCollision(startPt, endPt) {
-    if ( !this.viewerLOS.config.block.tiles ) return false;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+  _filterPlaceableTrianglesByViewpoint(placeable) {
+    return placeable[PlaceableTrianglesHandler.ID].triangles
+      .filter(tri => tri.isFacing(this.viewpoint));
+  }
 
-    // Ignore non-overhead tiles
-    // Use blockingObjects b/c more limited and we can modify it if necessary.
-    // const collisionTest = (o, _rect) => o.t.document.overhead;
-    // const tiles = canvas.tiles.quadtree.getObjects(ray.bounds, { collisionTest });
-    // TODO: Need more nuanced understanding of overhead tiles and what should block.
-    const tiles = this.blockingObjects.tiles.filter(t =>
-      t.document.elevation >= t.document.parent?.foregroundElevation);
-
-    // Because tiles are parallel to the XY plane, we need not test ones obviously above or below.
-    const maxE = Math.max(startPt.z, endPt.z);
-    const minE = Math.min(startPt.z, endPt.z);
-
-    // Precalculate
-    const rayVector = endPt.subtract(startPt);
-    const zeroMin = 1e-08;
-    const oneMax = 1 + 1e-08;
-
-    for ( const tile of tiles ) {
-      if ( this.viewerLOS.config.type === "light" && tile.document.flags?.levels?.noCollision ) continue;
-
-      const { x, y, width, height, elevation } = tile.document;
-      const elevationZ = CONFIG.GeometryLib.utils.gridUnitsToPixels(elevation);
-
-      if ( elevationZ < minE || elevationZ > maxE ) continue;
-
-      const r0 = new Point3d(x, y, elevationZ);
-      const r1 = new Point3d(x + width, y, elevationZ);
-      const r2 = new Point3d(x + width, y + height, elevationZ);
-      const r3 = new Point3d(x, y + height, elevationZ);
-
-      // Need to test the tile intersection point for transparency (Levels holes).
-      // Otherwise, could just use lineSegmentIntersectsQuadrilateral3d
-      const t = lineIntersectionQuadrilateral3d(startPt, rayVector, r0, r1, r2, r3);
-      if ( t === null || t < zeroMin || t > oneMax ) continue;
-      const ix = new Point3d();
-      startPt.add(rayVector.multiplyScalar(t, ix), ix);
-      if ( !tile.mesh?.containsCanvasPoint(ix) ) continue; // Transparent, so no collision.
-
-      return true;
+  _filterPotentiallyBlockingWallTriangles() {
+    if ( !this.viewerLOS.config.block.walls ) return;
+    for ( const wall of this.blockingObjects.walls ) {
+      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(wall));
     }
-    return false;
-  }
 
-  /**
-   * Does the ray between two points collide with a token within the vision triangle?
-   * @param {Point3d} startPt       Starting point of this ray
-   * @param {Point3d} endPt         End point of this ray
-   * @returns {boolean} True if a token blocks this ray
-   */
-  _hasTokenCollision(startPt, endPt) {
-    const { live: liveTokensBlock, dead: deadTokensBlock } = this.viewerLOS.config.block.tokens;
-    if ( !(liveTokensBlock || deadTokensBlock) ) return false;
-
-
-    // Use blockingObjects b/c more limited and we can modify it if necessary.
-    // Filter out the viewer and target token
-    // const collisionTest = o => !(o.t.bounds.contains(startPt.x, startPt.y) || o.t.bounds.contains(endPt.x, endPt.y));
-    // const ray = new Ray(startPt, endPt);
-    // let tokens = canvas.tokens.quadtree.getObjects(ray.bounds, { collisionTest });
-    let tokens = this.blockingObjects.tokens.filter(t =>
-      t.constrainedTokenBorder.lineSegmentIntersects(startPt, endPt, { inside: true }));
-
-    // Filter out the viewer and target token
-    tokens.delete(this.viewerLOS.viewer);
-    tokens.delete(this.viewerLOS.target);
-
-    // Build full- or half-height startPts3d from tokens
-    const tokenPts = this._buildTokenPoints(tokens);
-
-    // Set viewing position and test token sides for collisions
-    for ( const pts of tokenPts ) {
-      const sides = pts._viewableFaces(startPt);
-      for ( const side of sides ) {
-        if ( lineSegmentIntersectsQuadrilateral3d(startPt, endPt,
-          side.points[0],
-          side.points[1],
-          side.points[2],
-          side.points[3]) ) return true;
-      }
+    for ( const wall of this.blockingObjects.terrainWalls ) {
+      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(wall));
     }
-    return false;
   }
 
-  /**
-   * Given config options, build TokenPoints3d from tokens.
-   * The points will use either half- or full-height tokens, depending on config.
-   * @param {Token[]|Set<Token>} tokens
-   * @returns {TokenPoints3d[]}
-   */
-  _buildTokenPoints(tokens) {
-    if ( !tokens.length && !tokens.size ) return tokens;
+  _filterPotentiallyBlockingTileTriangles() {
+    if ( !this.viewerLOS.config.block.tiles ) return;
+    for ( const tile of this.blockingObjects.tiles ) {
+      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(tile));
+    }
+  }
+
+  _filterPotentiallyBlockingTokenTriangles() {
+    let tokens = this.blockingObjects.tokens;
     const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = this.viewerLOS.config.block.tokens;
-    if ( !(liveTokensBlock || deadTokensBlock) ) return [];
 
-    // Filter live or dead tokens
+    // Filter live or dead tokens.
     if ( liveTokensBlock ^ deadTokensBlock ) {
       const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
       tokens = tokens.filter(t => {
@@ -278,11 +200,14 @@ export class PointsViewpoint extends AbstractViewpoint {
       });
     }
 
+    // Filter prone tokens.
     if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
 
-    // Pad (inset) to avoid triggering cover at corners. See issue 49.
-    return tokens.map(t => new TokenPoints3d(t, { pad: -2, type: this.viewerLOS.config.type }));
+    for ( const token of tokens ) {
+      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(token));
+    }
   }
+
 
   /* ----- NOTE: Static methods ----- */
 
