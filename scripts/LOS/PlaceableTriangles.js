@@ -159,12 +159,12 @@ export class Triangle {
     const { a, b, c } = this;
 
     // Calculate the edge vectors of the triangle
-    // Not really worth caching these values.
-    const edge1 = b.subtract(a, Point3d._tmp2);
-    const edge2 = c.subtract(a, Point3d._tmp3);
+    // Not really worth caching these values, as it would require updating them if a,b,c change.
+    const edge1 = b.subtract(a, Point3d._tmp1);
+    const edge2 = c.subtract(a, Point3d._tmp2);
 
     // Calculate the determinant of the triangle
-    const pvec = rayDirection.cross(edge2, Point3d._tmp1);
+    const pvec = rayDirection.cross(edge2, Point3d._tmp3);
 
     // If the determinant is near zero, ray lies in plane of triangle
     const det = edge1.dot(pvec);
@@ -176,7 +176,7 @@ export class Triangle {
     const u = invDet * tvec.dot(pvec);
     if (u < 0 || u > 1) return null;  // Intersection point is outside of triangle
 
-    const qvec = tvec.cross(edge1, Point3d._tmp2);
+    const qvec = tvec.cross(edge1, Point3d._tmp3); // The tmp value cannot be tvec or edge1.
     const v = invDet * rayDirection.dot(qvec);
     if (v < 0 || u + v > 1) return null;  // Intersection point is outside of triangle
 
@@ -189,7 +189,8 @@ export class Triangle {
 
     // Test tile transparency.
     // TODO: Do we need to check if t is in range?
-    const ix = rayOrigin.add(rayDirection.multiplyScalar(t, Point3d._tmp3), Point3d._tmp3);
+    const ix = Point3d._tmp3;
+    rayOrigin.add(rayDirection.multiplyScalar(t, ix), ix);
     if ( !tile.mesh.containsCanvasPoint(ix) ) return null; // Transparent, so no collision.
     return t;
   }
@@ -397,27 +398,23 @@ export class Square2dTriangles extends AbstractPolygonTriangles {
  */
 export class Square2dDoubleTriangles extends Square2dTriangles {
   /** @type {Triangle[]} */
-  _prototypeTriangles = Array(2); // Triangles prior to any update.
+  _prototypeTriangles = Array(4); // Triangles prior to any update.
 
   /** @type {Triangle[]} */
   _triangles = Array(4); // Triangles after update.
 
-  _initialize() {
-    super._initialize();
+  /**
+   * Define the unit prototype triangles.
+   * @param {MatrixFlat<4x4>} M     Matrix used to initially modify the prototype triangles.
+   */
+  _setPrototypes(M) {
+    super._setPrototypes(M);
 
     // Need two more triangles flipped to face the other direction.
-    this._triangles[2] = this._triangles[0].clone();
-    this._triangles[3] = this._triangles[1].clone();
-  }
-
-  update(M) {
-    super.update(M);
-
-    // Copy and flip the remaining two.
-    this._triangles[0].clone(this._triangles[2]);
-    this._triangles[1].clone(this._triangles[3]);
-    this._triangles[2].reverseOrientation();
-    this._triangles[3].reverseOrientation();
+    this._prototypeTriangles[2] = this._prototypeTriangles[0].clone();
+    this._prototypeTriangles[3] = this._prototypeTriangles[1].clone();
+    this._prototypeTriangles[2].reverseOrientation();
+    this._prototypeTriangles[3].reverseOrientation();
   }
 }
 
@@ -716,6 +713,17 @@ export class DirectionalWallTriangles extends AbstractPlaceableTriangles {
    */
   update() { }
 
+  get wallElevation() {
+    let { top, bottom } = this.wall.edge.elevationLibGeometry.a;
+    top ??= 1e05;
+    bottom ??= -1e05;
+    top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
+    bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
+    return { top, bottom };
+  }
+
+  get wallLength() { return PIXI.Point.distanceBetween(this.wall.edge.a, this.wall.edge.b); }
+
   /* ----- NOTE: Transformation matrices ----- */
 
   get translatePrototypeM() {
@@ -725,10 +733,15 @@ export class DirectionalWallTriangles extends AbstractPlaceableTriangles {
     wall.edge.a.add(wall.edge.b, ctr).multiplyScalar(0.5, ctr);
 
     // Add in a translate to move back to 0,0 if the elevations do not match.
-    let { top, bottom } = wall.edge.elevationLibGeometry.a;
-    top ??= 1e06;
-    bottom ??= -1e06;
-    const z = top !== bottom ? bottom + ((top - bottom) * 0.5): 0;
+    // E.g., top = 20, bottom = -1e06. Wall is 20 + 1e06 = 1000020 high.
+    //   Before translation, it is at 1000020 * 0.5 = 500010 top / -500010 bottom.
+    //   Move 500010 - 20 down (-(topHeight - top) == top - topHeight.
+    // E.g., top = 1e06, bottom = -20. Wall is 20 + 1e06 = 1000020 high.
+    //   Before translation, it is at 1000020 * 0.5 = 500010 top / -500010 bottom.
+    //   Move 500010 - 1e06 down (move up).
+    const { top, bottom } = this.wallElevation;
+    const topHeight = (top - bottom) * 0.5;
+    const z = top !== bottom ? (top - topHeight) : 0;
     return CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, z);
   }
 
@@ -738,12 +751,9 @@ export class DirectionalWallTriangles extends AbstractPlaceableTriangles {
    * And elevation by its top and bottom elevations.
    */
   get scalePrototypeM() {
-    const wall = this.wall;
-    const length = PIXI.Point.distanceBetween(wall.edge.a, wall.edge.b);
-    let { top, bottom } = wall.edge.elevationLibGeometry.a;
-    top ??= 1e06;
-    bottom ??= -1e06;
-    return CONFIG.GeometryLib.MatrixFlat.scale(length, 1, (top - bottom) * 0.5 || 1);
+    const length = this.wallLength;
+    const { top, bottom } = this.wallElevation;
+    return CONFIG.GeometryLib.MatrixFlat.scale(length, 1, (top - bottom) || 1);
   }
 
   /**
