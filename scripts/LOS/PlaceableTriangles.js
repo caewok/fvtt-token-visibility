@@ -90,6 +90,11 @@ export class Triangle {
   }
 
   /**
+   * Convert to PIXI.Polygon. Ignores z values.
+   */
+  toPolygon() { return new PIXI.Polygon(this.a, this.b, this.c); }
+
+  /**
    * Does this triangle face a given point?
    * Defined as counter-clockwise.
    * @param {Point3d} p
@@ -115,6 +120,20 @@ export class Triangle {
   }
 
   /**
+   * Transform the points using a transformation matrix.
+   * @param {number} [multiplier=1]   Multiplier to use to vary the scale of the points.
+   * @param {Triangle} [tri]    The triangle to modify
+   * @returns {Triangle} The modified tri.
+   */
+  perspectiveTransform(multiplier = 1, tri) {
+    tri ??= new this.constructor();
+    this.constructor.perspectiveTransform(this.a, multiplier, tri.a);
+    this.constructor.perspectiveTransform(this.b, multiplier, tri.b);
+    this.constructor.perspectiveTransform(this.c, multiplier, tri.c);
+    return tri;
+  }
+
+  /**
    * View from a given position.
    * Transforms and clips the points, then applies perspective transform.
    * @param {Matrix} M    The view matrix.
@@ -122,7 +141,7 @@ export class Triangle {
    */
   viewAndClip(M) {  // TODO: Set different multiplier?
     // For speed, skip the new triangle construction and copy some of the methods here directly.
-    const tPts = new Array[3];
+    const tPts = new Array(3);
     tPts[0] = M.multiplyPoint3d(this.a, Point3d._tmp1);
     tPts[1] = M.multiplyPoint3d(this.b, Point3d._tmp2);
     tPts[2] = M.multiplyPoint3d(this.c, Point3d._tmp3);
@@ -364,6 +383,10 @@ export class Square2dTriangles extends AbstractPolygonTriangles {
     BL --- BR
   */
 
+  /** @type {boolean} */
+  flipped = false;
+
+
   /**
    * Unit size 1 in each direction, centered on 0,0,0.
    * @type {object<Point3d>}
@@ -389,6 +412,10 @@ export class Square2dTriangles extends AbstractPolygonTriangles {
     const { TL, TR, BR, BL } = this.constructor.PROTOTYPE_POINTS;
     this.prototypeTriangles[0] = Triangle.fromPoints(BR, TR, TL);
     this.prototypeTriangles[1] = Triangle.fromPoints(BL, BR, TL);
+    if ( this.flipped ) {
+      this.prototypeTriangles[0].reverseOrientation();
+      this.prototypeTriangles[1].reverseOrientation();
+    }
     super._setPrototypes(M);
   }
 }
@@ -493,7 +520,7 @@ export class Polygon2dTriangles extends AbstractPolygonTriangles  {
     super();
 
     // Set polygon counter-clockwise, which will make the prototype triangles face up.
-    this.polygon = polygon;
+    this.polygon = polygon instanceof PIXI.Polygon ? polygon : polygon.toPolygon();
     if ( this.polygon.isClockwise ) this.polygon.reverseOrientation();
   }
 
@@ -503,7 +530,27 @@ export class Polygon2dTriangles extends AbstractPolygonTriangles  {
       const tri = Triangle.fromPartialPoints(center, edge.A, edge.B);
       this._prototypeTriangles.push(tri);
     }
+    if ( this.flipped ) this.prototypeTriangles.forEach(tri => tri.reverseOrientation());
     super._setPrototypes(M);
+  }
+}
+
+export class Polygon2dDoubleTriangles extends Polygon2dTriangles {
+
+  /**
+   * Define the unit prototype triangles.
+   * @param {MatrixFlat<4x4>} M     Matrix used to initially modify the prototype triangles.
+   */
+  _setPrototypes(M) {
+    super._setPrototypes(M);
+
+    // Need two more triangles flipped to face the other direction.
+    const ln = this._prototypeTriangles.length;
+    this._prototypeTriangles.length *= 2;
+    for ( let i = 0, j = ln; i < ln; i += 1, j += 1 ) {
+      this._prototypeTriangles[j] = this._prototypeTriangles[i].clone();
+      this._prototypeTriangles[j].reverseOrientation();
+    }
   }
 }
 
@@ -539,7 +586,7 @@ export class PolygonVerticalTriangles extends AbstractPolygonTriangles {
   constructor(polygon) {
     super();
     // Set polygon counter-clockwise, which will make the prototype triangles face up.
-    this.polygon = polygon;
+    this.polygon = polygon instanceof PIXI.Polygon ? polygon : polygon.toPolygon();
     if ( this.polygon.isClockwise ) this.polygon.reverseOrientation();
 
     // Remove unused arrays.
@@ -827,7 +874,7 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
 
   // Pad (inset) to avoid triggering cover at corners. See issue 49.
   /** @type {number} */
-  static pad = -2;
+  static PAD = -2;
 
   /** @type {Token} */
   get token() { return this.placeable; }
@@ -848,19 +895,10 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
   _constrainedPolygons = Array(3);
 
   /**
-   * Define the prototypes for the placeable shape.
+   * Define the prototypes for the unconstrained placeable shape.
    * @override
    */
   _setPrototypes() {
-    this._setUnconstrainedPrototypes();
-    if ( this.token.isConstrainedTokenBorder ) this._setConstrainedPrototypes();
-  }
-
-  /**
-   * Define the prototypes for the unconstrained token shape.
-   *
-   */
-  _setUnconstrainedPrototypes() {
     const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
     const token = this.token;
     const unconstrainedShape = token.tokenBorder.pad(this.constructor.PAD); // Token shape does not work prior to canvas ready
@@ -874,95 +912,147 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
       this._polygons[TOP] = new Polygon2dTriangles(unconstrainedShape);
       this._polygons[BOTTOM] = new Polygon2dTriangles(unconstrainedShape);
     }
+    this._polygons[BOTTOM].flipped = true; // Face away from the token center.
+  }
+
+  /** @type {MatrixFlat<4x4>[3]} */
+  _translateConstrainedM = [
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4),  // Side
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4),  // Top
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4)   //  Bottom
+  ];
+
+  get translateConstrainedM() {
+    const MatrixFlat = CONFIG.GeometryLib.MatrixFlat;
+    const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
+    const { topZ, bottomZ } = this.token;
+    MatrixFlat.translation(0, 0, -topZ * 0.5, this._translateConstrainedM[SIDES]);
+    MatrixFlat.translation(0, 0, topZ, this._translateConstrainedM[TOP]);
+    MatrixFlat.translation(0, 0, bottomZ, this._translateConstrainedM[BOTTOM]);
+    return this._translateConstrainedM;
   }
 
   /**
-   * Define the constrained token shapes.
+   * Create the constrained placeable shape.
+   * This shape is recreated each time because there is no single prototype.
+   * It is dependent on the token location and intersecting walls.
    */
-  _setConstrainedPrototypes() {
+  setConstrainedPolygons() {
     const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
     const token = this.token;
-
-    // Make a new shape so we can translate it. (Translate fails with the constrainedTokenBorder.)
-    const constrainedBorder = (new PIXI.Polygon(token.constrainedTokenBorder.points)).pad(this.constructor.PAD);
-    const constrainedShape = constrainedBorder.translate(-token.x, -token.y);
+    const constrainedShape = token.constrainedTokenBorder.pad(this.constructor.PAD);
     this._constrainedPolygons[SIDES] = new PolygonVerticalTriangles(constrainedShape);
     this._constrainedPolygons[TOP] = new Polygon2dTriangles(constrainedShape);
     this._constrainedPolygons[BOTTOM] = new Polygon2dTriangles(constrainedShape);
+    this._constrainedPolygons[BOTTOM].flipped = true; // Face away from the token center.
+
+    // Set the elevation for the constrained polygon. Already at token location.
+    const tM = this.translateConstrainedM;
+    this._constrainedPolygons[SIDES].initialize(tM[SIDES]);
+    this._constrainedPolygons[TOP].initialize(tM[TOP]);
+    this._constrainedPolygons[BOTTOM].initialize(tM[BOTTOM]);
   }
 
   /**
    * Initialize all polygons with the prototype scale, rotate, translate matrix.
    */
   _initialize() {
-    this._initializePolyGroup(this._polygons);
-    if ( this.token.isConstrainedTokenBorder ) this._initializePolyGroup(this._constrainedPolygons);
+    const M = this.prototypeM;
+    for ( const loc of Object.values(this.constructor.LOCATIONS) ) this._polygons[loc].initialize(M[loc]);
   }
 
   // Store the prototype matrices because they are reused during update of the constrained polygon.
-  /** @type {MatrixFlat<4x4>} */
-  _translateSidePrototypeM = CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+  /** @type {MatrixFlat<4x4>[3]} */
+  _translatePrototypeM = [
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4),  // Side
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4),  // Top
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4)   //  Bottom
+  ];
 
-  _scaleSidePrototypeM = CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+  /** @type {MatrixFlat<4x4>[3]} */
+  _scalePrototypeM = [
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4),  // Side
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4),  // Top
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4)   //  Bottom
+  ];
 
-  _topPrototypeM = CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+  /** @type {MatrixFlat<4x4>[3]} */
+  _prototypeM = [
+    CONFIG.GeometryLib.MatrixFlat.identity(4, 4),  // Side
+    CONFIG.GeometryLib.MatrixFlat.identity(4, 4),  // Top
+    CONFIG.GeometryLib.MatrixFlat.empty(4, 4)   //  Bottom
+  ];
 
-  _sidePrototypeM = CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+  /** @type {MatrixFlat<4x4>[3]} */
+  get prototypeM() {
+    const sM = this.scalePrototypeM;
+    const tM = this.translatePrototypeM;
+    for ( const loc of Object.values(this.constructor.LOCATIONS) ) sM[loc].multiply4x4(tM[loc], this._prototypeM[loc]);
+    return this._prototypeM;
+  }
 
-  _bottomPrototypeM = CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
-
-  /**
-   * Initialize all polygons with the prototype scale, rotate, translate matrix.
-   */
-  _initializePolyGroup(polys) {
+  /** @type {MatrixFlat<4x4>[3]} */
+  get translatePrototypeM() {
     const MatrixFlat = CONFIG.GeometryLib.MatrixFlat;
     const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
     const { topZ, bottomZ } = this.token;
-
+    const { x, y } = this.token.document;
     const verticalHeight = topZ - bottomZ;
 
-    // Side, top, and bottom shapes are all at TL = 0, 0.
-    // Except for square top, bottom, which are centered at 0,0.
-    // Side triangles are scaled by the token height and move so bottom is at elevation 0.
-    // The start centered in the z direction but are scaled by height, so need to move up half-height
-    MatrixFlat.translation(0, 0, verticalHeight * 0.5, this._translateSidePrototypeM)
-    MatrixFlat.scale(1, 1, verticalHeight, this._scaleSidePrototypeM);
-    this._scaleSidePrototypeM.multiply4x4(this._translateSidePrototypeM, this._sidePrototypeM);
+    // Sides start at the token location, centered at elevation 0.
+    MatrixFlat.translation(-x, -y, verticalHeight * 0.5, this._translatePrototypeM[SIDES]);
 
-    // Bottom is at elevation 0; top is at token height.
-    // Must also move top and bottom so TL is 0, 0.
-    if ( polys[TOP] instanceof Square2dTriangles ) {
+    if ( this._polygons[TOP] instanceof Square2dTriangles ) {
+      // Top and bottom start centered at 0,0.
+      const { width, height } = this.token.document;
+      const wSize = (width * canvas.dimensions.size) + this.constructor.PAD;
+      const hSize = (height * canvas.dimensions.size) + this.constructor.PAD;
+      MatrixFlat.translation(wSize * 0.5, hSize * 0.5, verticalHeight, this._translatePrototypeM[TOP]);
+      MatrixFlat.translation(wSize * 0.5, hSize * 0.5, 0, this._translatePrototypeM[BOTTOM]);
+    } else {
+      // Top and bottom start at the token location, elevation 0.
+      MatrixFlat.translation(-x, -y, verticalHeight, this._translatePrototypeM[TOP]);
+      MatrixFlat.translation(-x, -y, 0, this._translatePrototypeM[BOTTOM]);
+    }
+    return this._translatePrototypeM;
+  }
+
+  /** @type {MatrixFlat<4x4>[3]} */
+  get scalePrototypeM() {
+    const MatrixFlat = CONFIG.GeometryLib.MatrixFlat;
+    const { SIDES, TOP, BOTTOM } = this.constructor.LOCATIONS;
+    const { topZ, bottomZ } = this.token;
+    const verticalHeight = topZ - bottomZ;
+    MatrixFlat.scale(1, 1, verticalHeight, this._scalePrototypeM[SIDES]);
+
+    if ( this._polygons[TOP] instanceof Square2dTriangles ) {
       const { width, height } = this.token.document;
       const wSize = (width * canvas.dimensions.size) + this.constructor.PAD;
       const hSize = (height * canvas.dimensions.size) + this.constructor.PAD
-      MatrixFlat.translation(wSize * 0.5, hSize * 0.5, verticalHeight, this._topPrototypeM);
-      MatrixFlat.scale(wSize, hSize, 1, this._bottomPrototypeM);
-      this._bottomPrototypeM.multiply4x4(this._topPrototypeM, this._topPrototypeM);
+      MatrixFlat.scale(wSize, hSize, 1, this._scalePrototypeM[TOP]);
+      MatrixFlat.scale(wSize, hSize, 1, this._scalePrototypeM[BOTTOM]);
     } else {
-      MatrixFlat.translation(0, 0, verticalHeight, this._topPrototypeM);
-      MatrixFlat.identity(4, 4, this._bottomPrototypeM);
+      MatrixFlat.identity(this._scalePrototypeM[TOP]);
+      MatrixFlat.identity(this._scalePrototypeM[BOTTOM]);
     }
-
-    polys[SIDES].initialize(this._sidePrototypeM);
-    polys[TOP].initialize(this._topPrototypeM);
-    polys[BOTTOM].initialize(this._bottomPrototypeM);
+    return this._scalePrototypeM;
   }
 
   /**
    * Update all polygons with the scale, rotate, translate matrix.
    */
   update() {
-    const M = this.updateM;
-
     // If constrained, then rebuild the constrained polygon.
     // This assumes update only gets called when there is a token change.
     // Also assumes update would get called before switching from constrained to unconstrained
     // or vice-versa.
     // If update is getting called unnecessarily, caching would need to happen.
-    if ( this.token.isConstrainedTokenBorder ) {
-      this.initialize();
-      this._constrainedPolygons.forEach(poly => poly.update(M));
-    } else this._polygons.forEach(poly => poly.update(M)); // Unconstrained.
+    if ( this.token.isConstrainedTokenBorder ) this.setConstrainedPolygons();
+    else super.update();
+
+    // Debugging: confirm facing.
+    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.token);
+    if ( this.triangles.some(tri => tri.isFacing(ctr)) ) console.error(`Token ${this.token.name} ${this.token.id} has misconfigured triangles.`);
   }
 }
 

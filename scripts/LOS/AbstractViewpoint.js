@@ -15,6 +15,7 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { VisionPolygon, VisionTriangle } from "./VisionPolygon.js";
+import { PlaceableTrianglesHandler } from "./PlaceableTrianglesHandler.js";
 
 import {
   insetPoints,
@@ -241,8 +242,28 @@ export class AbstractViewpoint {
     const api = MODULES_ACTIVE.API.RIDEABLE;
     if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer) || api.RidingConnection(t, target));
 
-    // Filter by the precise triangle cone
+    // Filter live or dead tokens.
+    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = this.viewerLOS.config.block.tokens;
+    if ( liveTokensBlock ^ deadTokensBlock ) {
+      const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
+      tokens = tokens.filter(t => {
+        const hp = getObjectProperty(t.actor, tokenHPAttribute);
+        if ( typeof hp !== "number" ) return true;
+        if ( liveTokensBlock && hp > 0 ) return true;
+        if ( deadTokensBlock && hp <= 0 ) return true;
+        return false;
+      });
+    }
+
+    // Filter prone tokens.
+    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
+
     return tokens;
+  }
+
+  _filterPlaceableTrianglesByViewpoint(placeable) {
+    return placeable[PlaceableTrianglesHandler.ID].triangles
+      .filter(tri => tri.isFacing(this.viewpoint));
   }
 
   /**

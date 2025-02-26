@@ -60,11 +60,12 @@ PATCHES.BASIC.WRAPS = { initializeVisionSource };
  */
 async function controlTokenDebugHook(token, controlled) {
   const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-  losCalc?.clearDebug();
-//   if ( losCalc.is3d ) {
-//     if ( controlled ) await losCalc.openDebugPopout();
-//     else await losCalc.closeDebugPopout();
-//   }
+  if ( !losCalc ) return;
+  losCalc.clearDebug();
+  if ( losCalc.is3d ) {
+    if ( controlled ) await losCalc.openDebugPopout();
+    else await losCalc.closeDebugPopout();
+  }
 }
 
 /**

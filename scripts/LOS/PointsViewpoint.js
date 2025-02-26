@@ -13,8 +13,6 @@ import { Settings } from "../settings.js";
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
-import { getObjectProperty } from "./util.js";
-import { PlaceableTrianglesHandler } from "./PlaceableTrianglesHandler.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -85,6 +83,7 @@ export class PointsViewpoint extends AbstractViewpoint {
       const targetPoint = targetPoints[i];
       const outsideVisibleShape = visibleTargetShape
         && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
+      if ( outsideVisibleShape ) continue;
 
       // For the intersection test, 0 can be treated as no intersection b/c we don't need
       // intersections at the origin.
@@ -156,58 +155,12 @@ export class PointsViewpoint extends AbstractViewpoint {
   filterPotentiallyBlockingTriangles() {
     this.triangles.length = 0;
     this.terrainTriangles.length = 0;
-    this._filterPotentiallyBlockingWallTriangles();
-    this._filterPotentiallyBlockingTileTriangles();
-    this._filterPotentiallyBlockingTokenTriangles();
+    const { terrainWalls, tiles, tokens, walls } = this.blockingObjects;
+    this.terrainTriangles.push(...this._filterPlaceableTrianglesByViewpoint(terrainWalls))
+    this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(walls));
+    this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(tokens));
+    this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(tiles));
   }
-
-  _filterPlaceableTrianglesByViewpoint(placeable) {
-    return placeable[PlaceableTrianglesHandler.ID].triangles
-      .filter(tri => tri.isFacing(this.viewpoint));
-  }
-
-  _filterPotentiallyBlockingWallTriangles() {
-    if ( !this.viewerLOS.config.block.walls ) return;
-    for ( const wall of this.blockingObjects.walls ) {
-      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(wall));
-    }
-
-    for ( const wall of this.blockingObjects.terrainWalls ) {
-      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(wall));
-    }
-  }
-
-  _filterPotentiallyBlockingTileTriangles() {
-    if ( !this.viewerLOS.config.block.tiles ) return;
-    for ( const tile of this.blockingObjects.tiles ) {
-      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(tile));
-    }
-  }
-
-  _filterPotentiallyBlockingTokenTriangles() {
-    let tokens = this.blockingObjects.tokens;
-    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = this.viewerLOS.config.block.tokens;
-
-    // Filter live or dead tokens.
-    if ( liveTokensBlock ^ deadTokensBlock ) {
-      const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
-      tokens = tokens.filter(t => {
-        const hp = getObjectProperty(t.actor, tokenHPAttribute);
-        if ( typeof hp !== "number" ) return true;
-        if ( liveTokensBlock && hp > 0 ) return true;
-        if ( deadTokensBlock && hp <= 0 ) return true;
-        return false;
-      });
-    }
-
-    // Filter prone tokens.
-    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
-
-    for ( const token of tokens ) {
-      this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(token));
-    }
-  }
-
 
   /* ----- NOTE: Static methods ----- */
 

@@ -44,6 +44,30 @@ function updateToken(tokenD, changed, _options, _userId) {
   // Default to ATV, ATC, then Elevation Shadows.
 }
 
+
+/**
+ * Hook Token refresh
+ * Adjust elevation as the token moves.
+ * Adjust cover calculations as the token moves.
+ * @param {PlaceableObject} object    The object instance being refreshed
+ * @param {RenderFlags} flags         Render flags associated with the refresh
+ */
+function refreshToken(token, flags) {
+  // TODO: Change to using a dirty flag to mark changes.
+  const changeKeys = new Set();
+  if ( flags.refreshPosition ) {
+    changeKeys.add("x");
+    changeKeys.add("y");
+  }
+  if ( flags.refreshElevation ) changeKeys.add("elevation");
+  if ( flags.refreshSize ) {
+    changeKeys.add("width");
+    changeKeys.add("height");
+    token._tokenShape = undefined;
+  }
+  if ( changeKeys.size ) token[TokenTrianglesHandler.ID].update(changeKeys);
+}
+
 /**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
@@ -55,7 +79,8 @@ function destroyToken(token) {
 PATCHES.LOS.HOOKS = {
   drawToken,
   updateToken,
-  destroyToken
+  destroyToken,
+  refreshToken
 };
 
 // ----- NOTE: Area3d Hooks ----- //

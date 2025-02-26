@@ -51,7 +51,20 @@ import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriang
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
-import { Triangle, DirectionalWallTriangles, WallTriangles, TileTriangles, TokenTriangles, PolygonVerticalTriangles, Polygon2dTriangles } from "./LOS/PlaceableTriangles.js";
+import {
+  Triangle,
+  DirectionalWallTriangles,
+  WallTriangles,
+  TileTriangles,
+  TokenTriangles,
+  Square2dTriangles,
+  Square2dDoubleTriangles,
+  SquareVerticalTriangles,
+  SquareVerticalDoubleTriangles,
+  Polygon2dTriangles,
+  Polygon2dDoubleTriangles,
+  PolygonVerticalTriangles
+ } from "./LOS/PlaceableTriangles.js";
 import { PlaceableTrianglesHandler } from "./LOS/PlaceableTrianglesHandler.js";
 
 // Other self-executing hooks
@@ -145,7 +158,18 @@ Hooks.once("init", function() {
     },
 
     triangles: {
-      Triangle, DirectionalWallTriangles, WallTriangles, TileTriangles, TokenTriangles, PolygonVerticalTriangles, Polygon2dTriangles,
+      Triangle,
+      DirectionalWallTriangles,
+      WallTriangles,
+      TileTriangles,
+      TokenTriangles,
+      Square2dTriangles,
+      Square2dDoubleTriangles,
+      SquareVerticalTriangles,
+      SquareVerticalDoubleTriangles,
+      Polygon2dTriangles,
+      Polygon2dDoubleTriangles,
+      PolygonVerticalTriangles
     },
 
     OPEN_POPOUTS,
