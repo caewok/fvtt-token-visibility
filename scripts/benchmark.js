@@ -9,7 +9,7 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { QBenchmarkLoopFn } from "./benchmark_functions.js";
+import { QBenchmarkLoopFn } from "./geometry/Benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
 import { buildCustomLOSCalculator } from "./LOSCalculator.js";
@@ -214,7 +214,7 @@ export async function benchTokenLOS(n = 100) {
   registerArea3d(); // Required for Area3d algorithms to work.
   console.log("Percent visible using different LOS algorithms.");
 
-  summarizeTokenVisibility(viewers, targets);
+  // summarizeTokenVisibility(viewers, targets);
 
   console.log("\nBenchmarking token los");
   await storeDebugStatus();
@@ -227,19 +227,31 @@ export async function benchTokenLOS(n = 100) {
   await runLOSTest(n, viewers, targets, POINTS, false, NINE);
   await runLOSTest(n, viewers, targets, AREA3D, false);
   await runLOSTest(n, viewers, targets, AREA3D_GEOMETRIC, false);
-  await runLOSTest(nSmall, viewers, targets, AREA3D_WEBGL1, false);
+  await runLOSTest(n, viewers, targets, AREA3D_WEBGL1, false);
   await runLOSTest(n, viewers, targets, AREA3D_WEBGL2, false);
-  await runLOSTest(n, viewers, targets, AREA3D_HYBRID, false);
+//   await runLOSTest(n, viewers, targets, AREA3D_HYBRID, false);
 
   console.log("\n");
   await runLOSTest(n, viewers, targets, POINTS, true, CENTER);
   await runLOSTest(n, viewers, targets, POINTS, true, NINE);
   await runLOSTest(n, viewers, targets, AREA3D, true);
   await runLOSTest(n, viewers, targets, AREA3D_GEOMETRIC, true);
-  await runLOSTest(nSmall, viewers, targets, AREA3D_WEBGL1, true);
+  await runLOSTest(n, viewers, targets, AREA3D_WEBGL1, true);
   await runLOSTest(n, viewers, targets, AREA3D_WEBGL2, true);
-  await runLOSTest(n, viewers, targets, AREA3D_HYBRID, true);
+//   await runLOSTest(n, viewers, targets, AREA3D_HYBRID, true);
 
+  await revertDebugStatus();
+}
+
+export async function benchTokenLOSAlgorithm(n = 100, { algorithm, large = false, nPoints } = {}) {
+  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
+
+  const { viewers, targets } = getTokens();
+  registerArea3d(); // Required for Area3d algorithms to work.
+
+  await storeDebugStatus();
+  await runLOSTest(n, viewers, targets, algorithm, large, nPoints);
   await revertDebugStatus();
 }
 
@@ -252,15 +264,18 @@ async function revertLOSSettings() {
 }
 
 async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
+
+  let viewpoints = 0;
   const calcs = viewers.map(viewer => {
     const losCalc = buildCustomLOSCalculator(viewer, algorithm);
     losCalc.config.largeTarget = large;
     if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) losCalc.viewpoints
       .forEach(viewpoint => viewpoint.config.pointAlgorithm = nPoints);
+    viewpoints += losCalc.viewpoints.length;
     return losCalc;
   });
 
-  let label = (`LOS: ${algorithm}, largeToken: ${large}`);
+  let label = (`LOS: ${algorithm}, largeToken: ${large} (${viewers.length} viewers, ${viewpoints} viewpoints, ${targets.length} targets)`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
   await QBenchmarkLoopFn(n, benchLOS, label, calcs, targets);
 }
