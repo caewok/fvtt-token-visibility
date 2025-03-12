@@ -98,23 +98,33 @@ export class TinyWebGpuDemo {
     canvas.appendChild(injectedStyle);
 
     this.pane = new Pane({
+      container: canvas,
+      document,
       title: "WebGPU Test",
     });
 
     this.camera = new OrbitCamera(this.canvas);
+  }
 
+  async initialize() {
+    await this.#initWebGPU();
+
+    // Make sure the resize callback has a chance to fire at least once now that the device is
+    // initialized.
     this.resizeObserver = new ResizeObserverHelper(this.canvas, (width, height) => {
       if (width == 0 || height == 0) { return; }
       this.#canvasResolution = { width, height };
       this.#updateResolution();
     });
+    this.resizeObserver.callback(this.canvas.width, this.canvas.height);
 
+  }
+
+  render() {
     let lastFrameTime;
-
     const frameCallback = (t) => {
-      if (this.#deviceIsLost) {
-        return; // Stop processing frames if the device is lost.
-      }
+      // Stop processing frames if the device is lost.
+      if (this.#deviceIsLost) return;
 
       requestAnimationFrame(frameCallback);
 
@@ -137,20 +147,10 @@ export class TinyWebGpuDemo {
       this.#fps[this.#fpsIndex++ % this.#fps.length] = frameTime - lastFrameTime;
       lastFrameTime = frameTime;
     };
-
-    this.#initWebGPU().then(() => {
-      // Make sure the resize callback has a chance to fire at least once now that the device is
-      // initialized.
-      this.resizeObserver.callback(this.canvas.width, this.canvas.height);
-      // Start the render loop.
-      lastFrameTime = performance.now();
-      requestAnimationFrame(frameCallback);
-    }).catch((error) => {
-      // If something goes wrong during initialization, put up a really simple error message.
-      this.setError(error, 'initializing WebGPU');
-      throw error;
-    });
+    lastFrameTime = performance.now();
+    requestAnimationFrame(frameCallback);
   }
+
 
   buildFrustum(projection, view, frustum) {
     mat4.mul(mat, projection, view);
