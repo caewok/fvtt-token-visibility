@@ -8,8 +8,7 @@ PIXI
 
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { QBenchmarkLoopFn } from "./geometry/Benchmark.js";
+import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep } from "./geometry/Benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
 import { buildCustomLOSCalculator } from "./LOSCalculator.js";
@@ -31,10 +30,10 @@ await api.bench.TokenVisibility(1000)
  * - test visibility of all other tokens
  */
 
-export async function benchAll(n = 100) {
-  await benchTokenRange(n);
-  await benchTokenLOS(n);
-  await benchTokenVisibility(n);
+export async function benchAll(n = 100, sleep = false) {
+  await benchTokenRange(n, sleep);
+  await benchTokenLOS(n, sleep);
+  await benchTokenVisibility(n, sleep);
 }
 
 // ----- NOTE: Setup and summaries ----- //
@@ -99,12 +98,13 @@ function summarizeTokenRange(viewers, targets) {
 
 // ----- NOTE: Visibility testing -----
 
-export async function benchTokenVisibility(n = 100) {
+export async function benchTokenVisibility(n = 100, sleep = false) {
   const { targets } = getTokens();
   console.log(`\nBenchmarking visibility of ${targets.length} targets from user's current perspective and settings.`);
 
   await storeDebugStatus();
-  await QBenchmarkLoopFn(n, benchVisibility, "Visibility", targets);
+  const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
+  await fn(n, benchVisibility, "Visibility", targets);
   await revertDebugStatus();
 }
 
@@ -130,7 +130,7 @@ function testVisibility(target) {
 
 // ----- NOTE: Range testing -----
 
-export async function benchTokenRange(n = 100) {
+export async function benchTokenRange(n = 100, sleep = false) {
   console.log("\n");
   const { viewers, targets } = getTokens();
 
@@ -140,27 +140,31 @@ export async function benchTokenRange(n = 100) {
   console.log("\nBenchmarking token range");
   await storeDebugStatus();
   storeRangeSettings();
-
+  const opts = { sleep };
   console.log("\n");
-  const { CENTER, NINE } = Settings.KEYS.POINT_TYPES;
-  await runRangeTest(n, viewers, targets, CENTER, false);
-  await runRangeTest(n, viewers, targets, NINE, false);
-
-  console.log("\n");
-  await runRangeTest(n, viewers, targets, CENTER, true);
-  await runRangeTest(n, viewers, targets, NINE, true);
-
+  for ( const d3 of [false, true] ) {
+    opts.d3 = d3;
+    for ( const algorithm of Object.values(Settings.KEYS.POINT_TYPES) ) {
+      opts.algorithm = algorithm;
+      await runRangeTest(n, viewers, targets, opts);
+    }
+    console.log("\n");
+  }
   await revertDebugStatus();
   await revertRangeSettings();
 }
 
-async function runRangeTest(n, viewers, targets, algorithm, d3 = false) {
+async function runRangeTest(n, viewers, targets, { algorithm, d3 = false, sleep = false } = {}) {
+  algorithm ??= Settings.KEYS.POINT_TYPES.CENTER;
+
   const label = (`Range: ${algorithm}, 3d: ${d3}`);
   const { ALGORITHM, POINTS3D, DISTANCE3D } = Settings.KEYS.RANGE;
   await Settings.set(ALGORITHM, algorithm);
   await Settings.set(POINTS3D, d3);
   await Settings.set(DISTANCE3D, d3);
-  await QBenchmarkLoopFn(n, benchRange, label, viewers, targets);
+
+  const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
+  await fn(n, benchRange, label, viewers, targets);
 }
 
 const userSettings = { debug: {}, range: {}, los: {}};
@@ -208,7 +212,7 @@ function benchRange(viewers, targets) {
 
 // ----- NOTE: LOS testing -----
 
-export async function benchTokenLOS(n = 100) {
+export async function benchTokenLOS(n = 100, sleep = false) {
   console.log("\n");
   const { viewers, targets } = getTokens();
   registerArea3d(); // Required for Area3d algorithms to work.
@@ -219,31 +223,38 @@ export async function benchTokenLOS(n = 100) {
   console.log("\nBenchmarking token los");
   await storeDebugStatus();
 
-  const { POINTS, AREA3D, AREA3D_GEOMETRIC, AREA3D_WEBGL1, AREA3D_WEBGL2, AREA3D_HYBRID } = Settings.KEYS.LOS.TARGET.TYPES;
-  const { CENTER, NINE } = Settings.KEYS.POINT_TYPES;
-  const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
+  const { POINTS, AREA3D_HYBRID } = Settings.KEYS.LOS.TARGET.TYPES;
+  const { CENTER, TWO, THREE, FOUR, FIVE, EIGHT, NINE } = Settings.KEYS.POINT_TYPES;
+  // const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
+  const opts = { nPoints: CENTER, sleep };
 
-  await runLOSTest(n, viewers, targets, POINTS, false, CENTER);
-  await runLOSTest(n, viewers, targets, POINTS, false, NINE);
-  await runLOSTest(n, viewers, targets, AREA3D, false);
-  await runLOSTest(n, viewers, targets, AREA3D_GEOMETRIC, false);
-  await runLOSTest(n, viewers, targets, AREA3D_WEBGL1, false);
-  await runLOSTest(n, viewers, targets, AREA3D_WEBGL2, false);
-//   await runLOSTest(n, viewers, targets, AREA3D_HYBRID, false);
+  // Count viewpoints.
+  const viewpointCases = { [CENTER]: 1, [TWO]: 2, [THREE]: 3, [FOUR]: 4, [FIVE]: 5, [EIGHT]: 8, [NINE]: 9 }
+  const viewpoints = viewpointCases[Settings.get(Settings.KEYS.LOS.VIEWER.NUM_POINTS)]
+  console.log(`${viewers.length} viewers, ${viewpoints} viewpoints, ${targets.length} targets`)
 
-  console.log("\n");
-  await runLOSTest(n, viewers, targets, POINTS, true, CENTER);
-  await runLOSTest(n, viewers, targets, POINTS, true, NINE);
-  await runLOSTest(n, viewers, targets, AREA3D, true);
-  await runLOSTest(n, viewers, targets, AREA3D_GEOMETRIC, true);
-  await runLOSTest(n, viewers, targets, AREA3D_WEBGL1, true);
-  await runLOSTest(n, viewers, targets, AREA3D_WEBGL2, true);
-//   await runLOSTest(n, viewers, targets, AREA3D_HYBRID, true);
+  console.log("\n")
+  for ( const large of [false, true] ) {
+    opts.large = large;
+    for ( const algorithm of Object.values(Settings.KEYS.LOS.TARGET.TYPES) ) {
+      if ( algorithm === AREA3D_HYBRID ) continue; // Skip for the moment b/c it is failing.
+      opts.algorithm = algorithm;
+      await runLOSTest(n, viewers, targets, opts);
+
+      // For points test, run additional test using 9 points vs just 1.
+      if ( algorithm === POINTS ) {
+        opts.nPoints = NINE;
+        await runLOSTest(n, viewers, targets, opts);
+        opts.nPoints = CENTER;
+      }
+    }
+    console.log("\n")
+  }
 
   await revertDebugStatus();
 }
 
-export async function benchTokenLOSAlgorithm(n = 100, { algorithm, large = false, nPoints } = {}) {
+export async function benchTokenLOSAlgorithm(n = 100, { algorithm, large = false, nPoints, sleep = false } = {}) {
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
   nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
 
@@ -251,7 +262,7 @@ export async function benchTokenLOSAlgorithm(n = 100, { algorithm, large = false
   registerArea3d(); // Required for Area3d algorithms to work.
 
   await storeDebugStatus();
-  await runLOSTest(n, viewers, targets, algorithm, large, nPoints);
+  await runLOSTest(n, viewers, targets, { algorithm, large, nPoints, sleep });
   await revertDebugStatus();
 }
 
@@ -263,21 +274,20 @@ async function revertLOSSettings() {
   await Settings.set(LARGE, large);
 }
 
-async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
+async function runLOSTest(n, viewers, targets, { algorithm, large = false, nPoints, sleep = false } = {}) {
 
-  let viewpoints = 0;
   const calcs = viewers.map(viewer => {
     const losCalc = buildCustomLOSCalculator(viewer, algorithm);
     losCalc.config.largeTarget = large;
     if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) losCalc.viewpoints
       .forEach(viewpoint => viewpoint.config.pointAlgorithm = nPoints);
-    viewpoints += losCalc.viewpoints.length;
     return losCalc;
   });
 
-  let label = (`LOS: ${algorithm}, largeToken: ${large} (${viewers.length} viewers, ${viewpoints} viewpoints, ${targets.length} targets)`);
+  let label = (`LOS: ${algorithm}, largeToken: ${large}`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
-  await QBenchmarkLoopFn(n, benchLOS, label, calcs, targets);
+  const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
+  await fn(n, benchLOS, label, calcs, targets);
 }
 
 function benchLOS(calcs, targets) {
