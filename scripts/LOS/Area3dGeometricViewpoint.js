@@ -10,6 +10,7 @@ PIXI
 import { MODULE_ID } from "../const.js";
 
 // LOS folder
+import { minMaxPolygonCoordinates } from "./util.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PolygonVerticalTriangles, Polygon2dTriangles, Square2dTriangles } from "./PlaceableTriangles.js";
 
@@ -90,61 +91,52 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    *   obscuredSides: The unobscured portions of the sidePolys
    */
   _obscuredArea() {
-    const lookAtM = this.targetLookAtMatrix;
     const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
     if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size) ) return { targetArea: 1, obscuredArea: 0 };
 
-    // Build the target shape.
-    const targetTriangles = this._filterPlaceableTrianglesByViewpoint(this.viewerLOS.target);
-    const targetPolys = this._targetPolys = targetTriangles
-      .map(tri => tri.transform(lookAtM))
-      .map(tri => tri.perspectiveTransform())
-      .map(tri => tri.toPolygon());
+    // Construct polygons representing the perspective view of the target and blocking objects.
+    const lookAtM = this.targetLookAtMatrix;
+    const targetPolys = this._targetPolys = this._calculateTargetPerspectivePolygons(lookAtM);
+    const blockingPolys = this._blockingPolys = this._calculateBlockingPerspectivePolygons(
+      [...walls, ...tiles, ...tokens], lookAtM);
+    const blockingTerrainPolys = this._blockingTerrainPolys = this._calculateBlockingPerspectivePolygons(terrainWalls, lookAtM);
 
-    // Determine multiplier to set the target to be 100x100.
-    // Can we determine this without checking every point?
-    let maxValue = Number.NEGATIVE_INFINITY;
-    targetPolys.forEach(poly => maxValue = Math.max(maxValue, ...poly.points.map(pt => Math.abs(pt))));
-    const multiplier = 100 / maxValue;
-    targetPolys.forEach(poly => poly.points = poly.points.map(pt => pt * multiplier));
 
-    // TODO: View and clip? Reuse triangle?
-    const targetPaths = ClipperPaths.fromPolygons(targetPolys, {scalingFactor: this.constructor.SCALING_FACTOR})
-      .union()
-      .clean();
 
-    // Terrain walls: Color differently and set to 0.5 alpha so that two combined can be marked at pixel level?
-    const terrainTriangles = [...terrainWalls].flatMap(w => this._filterPlaceableTrianglesByViewpoint(w));
-    const blockingTerrainPolys = this._blockingTerrainPolys = terrainTriangles
-      .map(tri => tri.transform(lookAtM))
-      .map(tri => tri.perspectiveTransform(multiplier))
-      .map(tri => tri.toPolygon());
-    // TODO: Combine terrain polys
+    // TODO: union, combine, joinPaths, or add? Use clean?
 
-    // Combine terrain wall points.
-    const blockingTerrainPaths = ClipperPaths.fromPolygons(blockingTerrainPolys, {scalingFactor: this.constructor.SCALING_FACTOR})
-      .union()
-      .clean();
+//     const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor })
+//       .union()
+//       .clean();
+//     const blockingTerrainPaths = ClipperPaths.fromPolygons(blockingTerrainPolys, { scalingFactor })
+//       .union()
+//       .clean();
+//     const blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor })
+//       .union()
+//       .clean();
 
-    // Transform all the triangles.
-    const triangles = [
-      ...[...walls].flatMap(w => this._filterPlaceableTrianglesByViewpoint(w)),
-      ...[...tokens].flatMap(t => this._filterPlaceableTrianglesByViewpoint(t)),
-      ...[...tiles].flatMap(t => this._filterPlaceableTrianglesByViewpoint(t))
-    ];
+    // TODO: Finish implementing.
+    if ( this.viewerLOS.config.largeTarget ) {
+      // Construct the grid shape at this perspective.
+      const ctr = this.viewerLOS.target.center;
+      const grid3dShape = this.constructor.grid3dShape;
+      const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
+      grid3dShape.forEach(shape => shape.update(translateM));
+      const multiplier = 100 / this.maxTargetValue;
+      const gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
+        .filter(tri => tri.isFacing(this.viewpoint))
+        .map(tri => tri.transform(lookAtM))
+        .map(tri => tri.perspectiveTransform(multiplier))
+        .map(tri => tri.toPolygon());
+    }
 
-    // Combine all the point shapes.
-    const blockingPolys = this._blockingPolys = triangles
-      .map(tri => tri.transform(lookAtM))
-      .map(tri => tri.perspectiveTransform(multiplier))
-      .map(tri => tri.toPolygon());
-    const blockingPaths = ClipperPaths.fromPolygons(blockingPolys, {scalingFactor: this.constructor.SCALING_FACTOR})
-      .union()
-      .clean();
+    // Use Clipper to calculate area of the polygon shapes.
+    const scalingFactor = this.constructor.SCALING_FACTOR;
+    const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor });
+    const blockingTerrainPaths = ClipperPaths.fromPolygons(blockingTerrainPolys, { scalingFactor });
+    const blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor });
 
     // TODO: Combine terrain polygons with other blocking.
-
-
 
     // Construct the obscured shape by taking the difference between the target polygons and
     // the blocking polygons.
@@ -155,6 +147,50 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     return { targetArea, obscuredArea: diff.area };
   }
 
+  maxTargetValue = 1;
+
+  _calculateTargetPerspectivePolygons(lookAtM, scale = 100) {
+    lookAtM ??= this.targetLookAtMatrix;
+
+    // Build the target shape.
+    // Determine multiplier to set the target to be 100x100.
+    // TODO: View and clip? Reuse triangle?
+    const targetTriangles = this._filterPlaceableTrianglesByViewpoint(this.viewerLOS.target);
+    this.maxTargetValue = Number.NEGATIVE_INFINITY;
+    return targetTriangles
+      .map(tri => {
+        const out = tri.transform(lookAtM);
+        this.maxTargetValue = Math.max(
+          this.maxTargetValue,
+          Math.abs(out.a.x),
+          Math.abs(out.b.x),
+          Math.abs(out.c.x),
+          Math.abs(out.a.y),
+          Math.abs(out.b.y),
+          Math.abs(out.c.y));
+        return out;
+      }).map(tri => tri.perspectiveTransform(scale / this.maxTargetValue).toPolygon());
+  }
+
+  _calculateBlockingPerspectivePolygons(objects, lookAtM, scale = 100) {
+    lookAtM ??= this.targetLookAtMatrix;
+    const blockingPolys = [];
+    const multiplier = scale / this.maxTargetValue;
+    for ( const obj of objects ) {
+      const polys = this._calculateBlockingPerspectivePolygon(obj, lookAtM, multiplier);
+      blockingPolys.push(...polys);
+    }
+    return blockingPolys;
+  }
+
+  _calculateBlockingPerspectivePolygon(object, lookAtM, multiplier) {
+    lookAtM ??= this.targetLookAtMatrix;
+    multiplier ??= 100 / this.maxTargetValue;
+    return this._filterPlaceableTrianglesByViewpoint(object)
+      .map(tri => tri.transform(lookAtM).perspectiveTransform(multiplier).toPolygon());
+  }
+
+
   // ----- NOTE: Target properties ----- //
 
 
@@ -162,7 +198,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
 
   /** @type {AbstractPolygonTriangles[3]} */
-  static #grid3dShape = Array(3);
+  static _grid3dShape;
 
   static get grid3dShape() {
     const SIDES = 0;
@@ -170,30 +206,30 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const BOTTOM = 2;
 
     // Need a getter b/c the grid shape changes when loading new scenes.
-    if ( this.#grid3dShape ) return this.#grid3dShape;
+    if ( this._grid3dShape ) return this._grid3dShape;
 
     const size = canvas.grid.size;
     const size_1_2 = size * 0.5;
-
-    if ( canvas.grid.isHex ) {
+    this._grid3dShape = Array(3);
+    if ( canvas.grid.isHexagonal ) {
       const poly = new PIXI.Polygon(canvas.grid.getShape());
-      this.#grid3dShape[SIDES] = new PolygonVerticalTriangles(poly);
-      this.#grid3dShape[TOP] = new Polygon2dTriangles(poly);
-      this.#grid3dShape[BOTTOM] = new Polygon2dTriangles(poly);
+      this._grid3dShape[SIDES] = new PolygonVerticalTriangles(poly);
+      this._grid3dShape[TOP] = new Polygon2dTriangles(poly);
+      this._grid3dShape[BOTTOM] = new Polygon2dTriangles(poly);
 
       // Already set to correct size.
       // Move the top and bottom squares to correct elevation.
       const translateTopM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, size_1_2);
       const translateBottomM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, -size_1_2);
-      this.#grid3dShape[TOP].initialize(translateTopM); // Should be centered at 0,0.
-      this.#grid3dShape[BOTTOM].initialize(translateBottomM);
+      this._grid3dShape[TOP].initialize(translateTopM); // Should be centered at 0,0.
+      this._grid3dShape[BOTTOM].initialize(translateBottomM);
 
     } else {
       // For gridless, canvas.grid.getShape() does not work.
       const rect = new PIXI.Rectangle(-size_1_2, -size_1_2, size, size);
-      this.#grid3dShape[SIDES] = new PolygonVerticalTriangles(rect);
-      this.#grid3dShape[TOP] = new Square2dTriangles();
-      this.#grid3dShape[BOTTOM] = new Square2dTriangles();
+      this._grid3dShape[SIDES] = new PolygonVerticalTriangles(rect);
+      this._grid3dShape[TOP] = new Square2dTriangles();
+      this._grid3dShape[BOTTOM] = new Square2dTriangles();
 
       // Move the top and bottom squares to correct elevation.
       // Set size for the squares.
@@ -202,10 +238,10 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
       const translateBottomM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, -size_1_2);
       const topM = scaleM.multiply4x4(translateTopM);
       const bottomM = scaleM.multiply4x4(translateBottomM);
-      this.#grid3dShape[TOP].initialize(topM); // Should be centered at 0,0.
-      this.#grid3dShape[BOTTOM].initialize(bottomM);
+      this._grid3dShape[TOP].initialize(topM); // Should be centered at 0,0.
+      this._grid3dShape[BOTTOM].initialize(bottomM);
     }
-    return this.#grid3dShape;
+    return this._grid3dShape;
   }
 
   /**
@@ -213,15 +249,17 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * @returns {number}
    */
    _gridSquareArea(lookAtM) {
-     const ctr = this.token.center;
-     const gridShape = this.constructor.gridShape;
-     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.token.bottomZ);
-     gridShape.update(translateM);
-     const gridTriangles = gridShape.triangles
-      .filter(tri => tri.isFacing(this.viewpoint));
-     const gridPolys = this._gridPolys = gridTriangles
-      .map(tri => tri.viewAndClip(lookAtM))
-      .map(pts => new PIXI.Polygon(pts));
+     lookAtM ??= this.targetLookAtMatrix;
+     const ctr = this.viewerLOS.target.center;
+     const grid3dShape = this.constructor.grid3dShape;
+     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
+     grid3dShape.forEach(shape => shape.update(translateM));
+     const multiplier = 100 / this.maxTargetValue;
+     const gridPolys = this._gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
+      .filter(tri => tri.isFacing(this.viewpoint))
+      .map(tri => tri.transform(lookAtM))
+      .map(tri => tri.perspectiveTransform(multiplier))
+      .map(tri => tri.toPolygon());
      const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();
      return gridPaths.area;
@@ -308,24 +346,13 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const colors = Draw.COLORS;
 
     // Scale the target graphics to fit in the view window.
-    let xMin = Number.POSITIVE_INFINITY;
-    let yMin = Number.POSITIVE_INFINITY;
-    let xMax = Number.NEGATIVE_INFINITY;
-    let yMax = Number.NEGATIVE_INFINITY;
-    for ( const poly of this._targetPolys ) {
-      for ( let i = 0, n = poly.points.length; i < n; i += 2 ) {
-        xMin = Math.min(poly.points[i], xMin);
-        yMin = Math.min(poly.points[i+1], yMin);
-        xMax = Math.max(poly.points[i], xMax);
-        yMax = Math.max(poly.points[i+1], yMax);
-      }
-    }
+    const { xMinMax, yMinMax } = minMaxPolygonCoordinates(this._targetPolys);
     const maxCoord = 200;
     const scale = Math.min(1,
-      maxCoord / xMax,
-      -maxCoord / xMin,
-      maxCoord / yMax,
-      -maxCoord / yMin
+      maxCoord / xMinMax.max,
+      -maxCoord / xMinMax.min,
+      maxCoord / yMinMax.max,
+      -maxCoord / yMinMax.min
     );
     drawTool.g.scale = new PIXI.Point(scale, scale);
 
