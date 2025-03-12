@@ -357,7 +357,7 @@ export class Area3dLOSWebGL2 extends Area3dLOS {
       resolution: renderTextureResolution,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
-      alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
+      alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA,
       width: renderTextureSize,
       height: renderTextureSize
     };

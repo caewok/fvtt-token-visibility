@@ -108,7 +108,7 @@ export class Area3dLOSWebGL extends Area3dLOSGeometric {
     resolution: 1,
     scaleMode: PIXI.SCALE_MODES.NEAREST,
     multisample: PIXI.MSAA_QUALITY.NONE,
-    alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA
+    alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA
   });
 
   #destroyed = false;

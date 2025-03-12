@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 PIXI
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -14,7 +15,6 @@ import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
 import { VisionPolygon } from "./VisionPolygon.js";
 import { AlphaCutoffFilter } from "./AlphaCutoffFilter.js";
 import { sumRedPixels, sumRedObstaclesPixels } from "./util.js";
-import { UnitTokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -36,11 +36,13 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
 
   terrainGraphics = new PIXI.Graphics();
 
+  gridGraphics = new PIXI.Graphics();
+
   renderTexture = PIXI.RenderTexture.create({
     resolution: 1,
     scaleMode: PIXI.SCALE_MODES.NEAREST,
     multisample: PIXI.MSAA_QUALITY.NONE,
-    alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA
+    alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA
   });
 
   #destroyed = false;
@@ -51,6 +53,7 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
     this.targetGraphics.destroy();
     this.blockingGraphics.destroy();
     this.terrainGraphics.destroy();
+    this.gridGraphics.destroy();
     this.tileContainer.destroy();
     this.blockingContainer.destroy();
     this.renderTexture.destroy();
@@ -88,10 +91,10 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
    * @returns {number}
    */
   _percentVisible() {
-    this.calculateViewMatrix();
+    const lookAtM = this.targetLookAtMatrix;
     const TARGET_COLOR = Draw.COLORS.red;
     const OBSTACLE_COLOR = Draw.COLORS.blue;
-    const blockingPoints = this.blockingPoints;
+    const blockingObjs = this.blockingObjects;
     const renderer = this.renderer;
 
     // Set width = 0 to avoid drawing a border line. The border line will use antialiasing
@@ -100,80 +103,73 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
       color: TARGET_COLOR,
       width: 0,
       fill: TARGET_COLOR,
-      fillAlpha: 1,
-      drawTool: undefined
+      fillAlpha: 1
     };
 
     const blockingContainer = this.blockingContainer;
     const targetGraphics = this.targetGraphics;
 
-    // Translate the points to fit in the render texture.
-    const txPtsArray = this.targetPoints.faces.map(face => face.perspectiveTransform());
-    const xValues = [];
-    const yValues = [];
-    for ( const ptArray of txPtsArray ) {
-      for ( const pt of ptArray ) {
-        xValues.push(pt.x);
-        yValues.push(pt.y);
-      }
-    }
-    const xMinMax = Math.minMax(...xValues);
-    const yMinMax = Math.minMax(...yValues);
-    let rtWidth = xMinMax.max - xMinMax.min;
-    let rtHeight = yMinMax.max - yMinMax.min;
-    if ( this.#debug ) {
-      rtWidth = Math.max(rtWidth, 400);
-      rtHeight = Math.max(rtHeight, 400);
-    }
-
     // Center everything.
     const renderTexture = this.renderTexture;
-    renderTexture.resize(rtWidth, rtHeight, true);
-    targetGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
-    blockingContainer.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
+    renderTexture.resize(100, 100, true);
+    targetGraphics.position = new PIXI.Point(50, 50);
+    blockingContainer.position = new PIXI.Point(50, 50);
 
     // Draw the target shape.
     targetGraphics.clear();
-    drawOpts.drawTool = new Draw(targetGraphics);
-    this.targetPoints.drawTransformed(drawOpts);
+    const draw = new Draw(targetGraphics);
+    const targetPolys = this._calculateTargetPerspectivePolygons(lookAtM);
+    targetPolys.forEach(poly => draw.shape(poly, drawOpts));
+
 
     // If large target, measure the viewable area of a unit grid shape.
     let sumGridCube = 100_000;
     if ( this.viewerLOS.config.largeTarget ) {
-      const gridGraphics = new PIXI.Graphics();
-      gridGraphics.position = new PIXI.Point(rtWidth * 0.5, rtHeight * 0.5);
-      drawOpts.drawTool = new Draw(gridGraphics);
+      // Construct the grid shape at this perspective.
+      const ctr = this.viewerLOS.target.center;
+      const grid3dShape = this.constructor.grid3dShape;
+      const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
+      grid3dShape.forEach(shape => shape.update(translateM));
+      const gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
+        .filter(tri => tri.isFacing(this.viewpoint))
+        .map(tri => tri.transform(lookAtM))
+        .map(tri => tri.perspectiveTransform(100 / this.multiplier))
+        .map(tri => tri.toPolygon());
 
-      const gridPoints = new UnitTokenPoints3d(this.viewerLOS.target, { type: this.viewerLOS.config.type });
-      gridPoints.setViewingPoint(this.viewpoint);
-      gridPoints.setViewMatrix(this.targetLookAtMatrix);
-      gridPoints.drawTransformed(drawOpts);
+      // Draw the grid shape to a PIXI.Graphics container.
+      const gridGraphics = this.gridGraphics;
+      gridGraphics.clear();
+      this.gridGraphics.position = new PIXI.Point(50, 50);
+      const draw = new Draw(gridGraphics);
+      gridPolys.forEach(poly => draw.shape(poly, drawOpts))
+
+      // Render the grid shape drawing and calculate the rendered area.
       renderer.render(gridGraphics, { renderTexture, clear: true });
       const gridCubeCache = canvas.app.renderer.extract._rawPixels(renderTexture);
       sumGridCube = sumRedPixels(gridCubeCache) || 100_000;
-      gridGraphics.destroy();
     }
 
     // Draw walls and other tokens.
-    if ( blockingPoints.walls.length || blockingPoints.tokens.length ) {
+    if ( blockingObjs.walls.size || blockingObjs.tokens.size ) {
+      // Set up the graphics objects.
       const blockingGraphics = this.blockingGraphics;
       blockingGraphics.clear();
       blockingContainer.addChild(blockingGraphics);
-      drawOpts.drawTool = new Draw(blockingGraphics);
+      const draw = new Draw(blockingGraphics);
       drawOpts.color = OBSTACLE_COLOR;
       drawOpts.fill = OBSTACLE_COLOR;
 
-      // Draw wall obstacles, if any
-      blockingPoints.walls.forEach(w => w.drawTransformed(drawOpts));
-
-      // Draw token obstacles, if any
-      blockingPoints.tokens.forEach(t => t.drawTransformed(drawOpts));
+      // Draw the blocking shapes.
+      const blockingPolys = this._calculateBlockingPerspectivePolygons(
+        [...blockingObjs.walls, ...blockingObjs.tokens], lookAtM);
+      blockingPolys.forEach(poly => draw.shape(poly, drawOpts));
     }
 
     // Draw terrain walls.
     // Use a separate container with an AlphaCutoffFilter.
     // For an additive blend, can set each terrain to alpha 0.4. Any overlap will be over 0.5.
-    if ( blockingPoints.terrainWalls.length ) {
+    if ( blockingObjs.terrainWalls.size ) {
+      // Set up graphics object.
       const terrainGraphics = this.terrainGraphics;
       terrainGraphics.clear();
       blockingContainer.addChild(terrainGraphics);
@@ -181,7 +177,10 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
       drawOpts.color = OBSTACLE_COLOR;
       drawOpts.fill = OBSTACLE_COLOR;
       drawOpts.fillAlpha = 0.5;
-      blockingPoints.terrainWalls.forEach(w => w.drawTransformed(drawOpts));
+
+      // Draw the blocking shapes.
+      const blockingTerrainPolys = this._calculateBlockingPerspectivePolygons(blockingObjs.terrainWalls, lookAtM);
+      blockingTerrainPolys.forEach(poly => draw.shape(poly, drawOpts));
     }
 
     // Draw tiles.
@@ -191,25 +190,36 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
     const Sprite2d = PIXI.projection.Sprite2d;
 
     // TODO: Does _blockingObjectsPoints work for tiles under a target token?
-    for ( const tilePts of this.blockingObjectsPoints.tiles ) {
+    for ( const tile of blockingObjs.tiles ) {
       blockingContainer.addChild(tileContainer);
       // TODO: Need to cutoff tiles at the z=0 point. And need to have the uv coordinates reflect this.
       // Any chance mapSprite will do this?
-      const containerSprite = new Sprite2d(tilePts.object.texture);
+      const containerSprite = new Sprite2d(tile.texture);
       containerSprite.filters = [tileFilter];
       tileContainer.addChild(containerSprite);
-      const perspectivePoints = tilePts.perspectiveTransform();
+
+      // Determine the polygon transform.
+      // TODO: Fix to use the tile rectangle.
+      const polys = this._calculateBlockingPerspectivePolygon(tile, lookAtM);
+      const perspectivePoints = [];
+      for ( const poly of polys ) {
+        const pts = poly.points;
+        for ( let i = 0, n = pts.length; i < n; i += 2 ) {
+          perspectivePoints.push(new PIXI.Point(pts[i], pts[i + 1]));
+        }
+      }
       containerSprite.proj.mapSprite(containerSprite, perspectivePoints);
 
       // Adjust the uvs points if the tile is cutoff behind the viewer.
+      // TODO: Fix
       containerSprite.calculateVertices(); // Force uvs to be calculated.
-      const tileUVs = tilePts.uvs;
-      for ( let i = 0; i < 8; i += 1 ) containerSprite.uvs[i] = tileUVs[i];
+      // const tileUVs = tilePts.uvs;
+      // for ( let i = 0; i < 8; i += 1 ) containerSprite.uvs[i] = tileUVs[i];
     }
 
     // Set blend mode to remove red covered by the blue.
     blockingContainer.blendMode = PIXI.BLEND_MODES.DST_OUT;
-    const obstacleSum = blockingPoints.terrainWalls.length ? sumRedObstaclesPixels : sumRedPixels;
+    const obstacleSum = blockingObjs.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
 
     // Render only the target shape and calculate its rendered visible area.
     renderer.render(targetGraphics, { renderTexture, clear: true });

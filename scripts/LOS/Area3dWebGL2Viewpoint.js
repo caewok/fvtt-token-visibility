@@ -305,7 +305,7 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
   #renderTexture;
 
   get renderTexture() {
-    if ( !this.#renderTexture || this.#renderTexture.baseTexture.destroyed ) {
+    if ( !this.#renderTexture || this.#renderTexture.destroyed ) {
       const cfg = this._renderTextureConfiguration();
       this.#renderTexture = PIXI.RenderTexture.create(cfg);
       this.#renderTexture.framebuffer.enableDepth();
@@ -317,7 +317,7 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
   #debugRenderTexture;
 
   get debugRenderTexture() {
-    if ( !this.#debugRenderTexture || this.#debugRenderTexture.baseTexture.destroyed ) {
+    if ( !this.#debugRenderTexture || this.#debugRenderTexture.destroyed ) {
       const cfg = this._renderTextureConfiguration();
       cfg.width = 400;
       cfg.height = 400;
@@ -333,7 +333,7 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
       resolution: renderTextureResolution,
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
-      alphaMode: PIXI.NO_PREMULTIPLIED_ALPHA,
+      alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA,
       width: renderTextureSize,
       height: renderTextureSize
     };
