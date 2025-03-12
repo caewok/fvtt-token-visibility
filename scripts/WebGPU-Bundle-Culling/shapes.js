@@ -69,6 +69,63 @@ export class BoxGeometryDesc {
   }
 }
 
+/**
+ * Describe a wall by its vertices, normals, and uvs.
+ * By default, 1x1 wall centered at origin 0,0,0.
+ */
+export class WallGeometryDesc {
+  /** @type {string} */
+  label = "";
+
+  /** @type {VertexParameterDescription} */
+  position = {};
+
+  /** @type {VertexParameterDescription} */
+  normal = {};
+
+  /** @type {VertexParameterDescription} */
+  texcoord0 = {};
+
+  constructor(opts = {}) {
+    const w = (opts.width ?? 1) * 0.5;
+    const h = (opts.height ?? 1) * 0.5;
+    const d = (opts.depth ?? 0) * 0.5;
+
+    const x = opts.x ?? 0;
+    const y = opts.y ?? 0;
+    const z = opts.z ?? 0;
+
+    const arr = [
+      // Position     Normal     UV
+      // Side
+      x+w, y-h, z+d,  0, -1, 0,  1, 1,
+      x-w, y-h, z+d,  0, -1, 0,  0, 1,
+      x-w, y-h, z-d,  0, -1, 0,  0, 0,
+      x+w, y-h, z-d,  0, -1, 0,  1, 0,
+      x+w, y-h, z+d,  0, -1, 0,  1, 1,
+      x-w, y-h, z-d,  0, -1, 0,  0, 0,
+    ];
+
+    if ( !opts.directional ) {
+      arr.push(
+        // Side
+        x-w, y+h, z+d,  0, 1, 0,   1, 1,
+        x+w, y+h, z+d,  0, 1, 0,   0, 1,
+        x+w, y+h, z-d,  0, 1, 0,   0, 0,
+        x-w, y+h, z-d,  0, 1, 0,   1, 0,
+        x-w, y+h, z+d,  0, 1, 0,   1, 1,
+        x+w, y+h, z-d,  0, 1, 0,   0, 0,
+      );
+    }
+
+    const values = new Float32Array(arr);
+    this.label = opts.label ?? `GeometryWall ${opts.directional ? "Directional" : ""}`;
+    this.position = { values, stride: 32 };
+    this.normal = { values, stride: 32, offset: 12 };
+    this.texcoord0 = { values, stride: 32, offset: 24 };
+  }
+}
+
 // Big swaths of this code lifted with love from Three.js
 export class SphereGeometryDesc {
   constructor(device, options = {}) {

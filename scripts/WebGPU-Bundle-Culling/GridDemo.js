@@ -1,4 +1,7 @@
 /* globals
+canvas,
+CONFIG,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -11,7 +14,8 @@ import { QueryArgs } from './query-args.js';
 import { TinyWebGpuDemo } from './TinyWebGPUDemo.js'
 import { AttribLocation, Geometry } from './Geometry.js'
 import { TimestampHelper } from './TimestampHelper.js'
-import { BoxGeometryDesc, SphereGeometryDesc, CylinderGeometryDesc, ConeGeometryDesc } from './shapes.js'
+import { BoxGeometryDesc, WallGeometryDesc } from './shapes.js'
+
 
 const tempMat = mat4.create();
 const tempQuat = quat.create();
@@ -157,7 +161,7 @@ export class GridDemo extends TinyWebGpuDemo {
   indexBuffer = null;
   instanceArray = null;
   geometries = [];
-  materials = [];
+  materials = new Map();
   drawables = [];
   pipeline = null;
   culledPipeline = null;
@@ -241,32 +245,17 @@ export class GridDemo extends TinyWebGpuDemo {
       }]
     });
 
-    // 12 different simple materials
-    this.materials.push(this.createMaterialBindGroup(1, 1, 1));
-    this.materials.push(this.createMaterialBindGroup(1, 0, 0));
-    this.materials.push(this.createMaterialBindGroup(0, 1, 0));
-    this.materials.push(this.createMaterialBindGroup(0, 0, 1));
-    this.materials.push(this.createMaterialBindGroup(1, 1, 0));
-    this.materials.push(this.createMaterialBindGroup(1, 0, 1));
-    this.materials.push(this.createMaterialBindGroup(0, 1, 1));
+    // Colors of obstacles
+    this.materials.set("target", this.createMaterialBindGroup(1, 0, 0, 1, "Target")); // Red target token.
+    this.materials.set("obstacle", this.createMaterialBindGroup(0, 0, 1, 1, "Obstacle")); // Blue generic obstacle.
 
-    this.materials.push(this.createMaterialBindGroup(0.5, 0.5, 0.5));
-    this.materials.push(this.createMaterialBindGroup(0.5, 0, 0));
-    this.materials.push(this.createMaterialBindGroup(0, 0.5, 0));
-    this.materials.push(this.createMaterialBindGroup(0, 0, 0.5));
-    this.materials.push(this.createMaterialBindGroup(0.5, 0.5, 0));
-    this.materials.push(this.createMaterialBindGroup(0.5, 0, 0.5));
-    this.materials.push(this.createMaterialBindGroup(0, 0.5, 0.5));
-
-    // Four different geometry types
+    // Geometry for tokens, walls
     this.geometries = Geometry.CreateBatch(device, [
-      new BoxGeometryDesc(),
-      new SphereGeometryDesc(),
-      new CylinderGeometryDesc(),
-      new ConeGeometryDesc(),
+      new BoxGeometryDesc({ label: "Token" }),
+      new WallGeometryDesc({ label: "Wall" }),
     ]);
 
-    const maxDrawableVariants = this.geometries.length * this.materials.length;
+    const maxDrawableVariants = this.geometries.length * this.materials.size;
     this.options.drawableVariants = Math.min(QueryArgs.getInt("drawableVariants", maxDrawableVariants), maxDrawableVariants);
     this.totalInstances = this.options.instancesPerDrawable * this.options.drawableVariants;
 
@@ -390,6 +379,7 @@ export class GridDemo extends TinyWebGpuDemo {
     });
 
     // Build a bunch of instances with every geometry and material combination
+    /*
     function createInstanceData() {
       const scale = Math.random() + 0.5;
       const axis = vec3.fromValues(
@@ -408,6 +398,7 @@ export class GridDemo extends TinyWebGpuDemo {
         rotationSpeed: Math.random() * 2 - 1,
       };
     }
+    */
 
     this.instanceArray = new Float32Array(MAX_INSTANCES_PER_DRAWABLE * INSTANCE_ELEMENT_LENGTH);
 
@@ -418,105 +409,113 @@ export class GridDemo extends TinyWebGpuDemo {
     if (!SPLIT_INDIRECT_ARGS_BUFFER) {
       indirectBuffer = this.device.createBuffer({
         label: 'Instance indirect',
-        size: 20 * this.materials.length * this.geometries.length,
+        size: 20 * this.materials.size * this.geometries.length,
         usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         mappedAtCreation: true,
       });
       indirectArgs = new Uint32Array(indirectBuffer.getMappedRange());
     }
 
-    for (const material of this.materials) {
-      for (const geometry of this.geometries) {
-        let instances = [];
+    const combinations = [
+      // ["target", "Token"],
+      ["obstacle", "Token"],
+      ["obstacle", "Wall"],
+    ];
 
-        for (let i = 0; i < MAX_INSTANCES_PER_DRAWABLE; ++i) {
-          instances.push(createInstanceData());
-        }
+    for ( const [materialLabel, geometryLabel] of combinations ) {
+      const geometry = this.geometries.find(geom => geom.label === geometryLabel);
+      const material = this.materials.get(materialLabel);
 
-        // Sort the instances so the closest ones to the center are drawn
-        // first to improve overdraw
-        instances.sort((a, b) => vec3.length(a.pos) - vec3.length(b.pos));
+      let instances;
+      switch ( geometryLabel ) {
+        case "Token": instances = this.createTokenInstances(); break;
+        case "Wall": instances = this.createWallInstances(); break;
+      }
 
-        const instanceBuffer = this.device.createBuffer({
-          label: 'Instance',
-          size: this.instanceArray.byteLength,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-        });
+      // TODO: Delete or change to sort around the camera position.
+      // Sort the instances so the closest ones to the center are drawn
+      // first to improve overdraw
+      instances.sort((a, b) => vec3.length(a.pos) - vec3.length(b.pos));
 
-        const indirectOffset = indirectBufferOffset;
-        if (SPLIT_INDIRECT_ARGS_BUFFER) {
-          indirectBuffer = this.device.createBuffer({
-            label: 'Instance indirect',
-            size: 20,
-            usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            mappedAtCreation: true,
-          });
-          const indirectArgs = new Uint32Array(indirectBuffer.getMappedRange());
-          indirectArgs[0] = geometry.drawCount;
-          indirectArgs[1] = MAX_INSTANCES_PER_DRAWABLE;
-          if (geometry.indexBinding) {
-            indirectArgs[2] = geometry.indexBinding.firstIndex;
-          }
-          indirectBuffer.unmap();
-        } else {
-          const index = (indirectOffset / 20) * 5;
-          indirectArgs[index] = geometry.drawCount;
-          indirectArgs[index+1] = MAX_INSTANCES_PER_DRAWABLE;
-          if (geometry.indexBinding) {
-            indirectArgs[index+2] = geometry.indexBinding.firstIndex;
-          }
-          indirectBufferOffset += 20;
-        }
+      const instanceBuffer = this.device.createBuffer({
+        label: 'Instance',
+        size: this.instanceArray.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+      });
 
-        const culledInstanceBuffer = this.device.createBuffer({
-          label: 'Culled Instance',
-          size: (MAX_INSTANCES_PER_DRAWABLE * Uint32Array.BYTES_PER_ELEMENT) + 4,
-          usage: GPUBufferUsage.STORAGE,
+      const indirectOffset = indirectBufferOffset;
+      if (SPLIT_INDIRECT_ARGS_BUFFER) {
+        indirectBuffer = this.device.createBuffer({
+          label: 'Instance indirect',
+          size: 20,
+          usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
           mappedAtCreation: true,
         });
-        const culledInstanceArray = new Uint32Array(culledInstanceBuffer.getMappedRange(0, 4));
-        culledInstanceArray[0] = indirectOffset / 20;
-        culledInstanceBuffer.unmap();
-
-        const instanceBindGroup = this.device.createBindGroup({
-          label: 'Instance',
-          layout: instanceBindGroupLayout,
-          entries: [{
-            binding: 0,
-            resource: { buffer: instanceBuffer }
-          }, {
-            binding: 1,
-            resource: { buffer: culledInstanceBuffer }
-          }],
-        });
-
-        const culledInstanceBindGroup = this.device.createBindGroup({
-          label: 'Culled Instance',
-          layout: culledInstanceBindGroupLayout,
-          entries: [{
-            binding: 0,
-            resource: { buffer: instanceBuffer }
-          }, {
-            binding: 1,
-            resource: { buffer: culledInstanceBuffer }
-          }, {
-            binding: 2,
-            resource: { buffer: indirectBuffer }
-          }],
-        });
-
-        this.drawables.push({
-          material,
-          geometry,
-          instances,
-          instanceCount: MAX_INSTANCES_PER_DRAWABLE,
-          instanceBuffer,
-          indirectBuffer,
-          indirectOffset,
-          instanceBindGroup,
-          culledInstanceBindGroup,
-        });
+        const indirectArgs = new Uint32Array(indirectBuffer.getMappedRange());
+        indirectArgs[0] = geometry.drawCount;
+        indirectArgs[1] = MAX_INSTANCES_PER_DRAWABLE;
+        if (geometry.indexBinding) {
+          indirectArgs[2] = geometry.indexBinding.firstIndex;
+        }
+        indirectBuffer.unmap();
+      } else {
+        const index = (indirectOffset / 20) * 5;
+        indirectArgs[index] = geometry.drawCount;
+        indirectArgs[index+1] = MAX_INSTANCES_PER_DRAWABLE;
+        if (geometry.indexBinding) {
+          indirectArgs[index+2] = geometry.indexBinding.firstIndex;
+        }
+        indirectBufferOffset += 20;
       }
+
+      const culledInstanceBuffer = this.device.createBuffer({
+        label: 'Culled Instance',
+        size: (MAX_INSTANCES_PER_DRAWABLE * Uint32Array.BYTES_PER_ELEMENT) + 4,
+        usage: GPUBufferUsage.STORAGE,
+        mappedAtCreation: true,
+      });
+      const culledInstanceArray = new Uint32Array(culledInstanceBuffer.getMappedRange(0, 4));
+      culledInstanceArray[0] = indirectOffset / 20;
+      culledInstanceBuffer.unmap();
+
+      const instanceBindGroup = this.device.createBindGroup({
+        label: 'Instance',
+        layout: instanceBindGroupLayout,
+        entries: [{
+          binding: 0,
+          resource: { buffer: instanceBuffer }
+        }, {
+          binding: 1,
+          resource: { buffer: culledInstanceBuffer }
+        }],
+      });
+
+      const culledInstanceBindGroup = this.device.createBindGroup({
+        label: 'Culled Instance',
+        layout: culledInstanceBindGroupLayout,
+        entries: [{
+          binding: 0,
+          resource: { buffer: instanceBuffer }
+        }, {
+          binding: 1,
+          resource: { buffer: culledInstanceBuffer }
+        }, {
+          binding: 2,
+          resource: { buffer: indirectBuffer }
+        }],
+      });
+
+      this.drawables.push({
+        material,
+        geometry,
+        instances,
+        instanceCount: instances.length,
+        instanceBuffer,
+        indirectBuffer,
+        indirectOffset,
+        instanceBindGroup,
+        culledInstanceBindGroup,
+      });
     }
 
     if (!SPLIT_INDIRECT_ARGS_BUFFER) {
@@ -536,7 +535,7 @@ export class GridDemo extends TinyWebGpuDemo {
       expanded: false,
     });
     perfPane.addBinding(this, 'resolutionScale', { min: 0.25, max: 1.0, step: 0.25 })
-      .on('change', (ev) => {
+      .on('change', _ev => {
         this.updateProjection(this.canvas.width, this.canvas.height);
       });
     perfPane.addBinding(this.options, 'drawableVariants', {
@@ -552,7 +551,7 @@ export class GridDemo extends TinyWebGpuDemo {
     this.pane.addBinding(this.options, 'renderMode', { options: RenderModes });
     this.pane.addBinding(this.options, 'animateScene');
     this.pane.addBinding(this.options, 'showOverhead')
-      .on('change', (ev) => {
+      .on('change', _ev => {
         this.updateProjection(this.canvas.width, this.canvas.height);
       });
 
@@ -561,9 +560,9 @@ export class GridDemo extends TinyWebGpuDemo {
     }).on('click', () => { window.open('https://github.com/toji/webgpu-bundle-culling'); });
   }
 
-  createMaterialBindGroup(r, g, b) {
+  createMaterialBindGroup(r, g, b, name) {
     const materialBuffer = this.device.createBuffer({
-      label: `Material (${r}, ${g}, ${b})`,
+      label: `Material ${name} (${r}, ${g}, ${b})`,
       size: Float32Array.BYTES_PER_ELEMENT * 4,
       usage: GPUBufferUsage.UNIFORM,
       mappedAtCreation: true,
@@ -576,7 +575,7 @@ export class GridDemo extends TinyWebGpuDemo {
     materialBuffer.unmap();
 
     return this.device.createBindGroup({
-      label: `Material (${r}, ${g}, ${b})`,
+      label: `Material ${name} (${r}, ${g}, ${b})`,
       layout: this.materialBindGroupLayout,
       entries: [{
         binding: 0,
@@ -584,6 +583,74 @@ export class GridDemo extends TinyWebGpuDemo {
       }],
     });
   }
+
+  createWallInstances() {
+    // TODO: Version that handles other wall types, e.g. terrain (region) walls.
+    return canvas.walls.placeables.map(wall => this.constructor.wallInstance(wall));
+  }
+
+  createTokenInstances() {
+    // TODO: Version that excludes viewer, sets target.
+    return canvas.tokens.placeables.map(token => this.constructor.tokenInstance(token));
+  }
+
+  static wallInstance(wall) { return this.edgeInstance(wall.edge); }
+
+  static edgeInstance(edge) {
+    // Move edge from its center point.
+    const ctr = this.edgeCenter(edge);
+
+    // Add in a translate to move back to 0,0 if the elevations do not match.
+    // E.g., top = 20, bottom = -1e06. Wall is 20 + 1e06 = 1000020 high.
+    //   Before translation, it is at 1000020 * 0.5 = 500010 top / -500010 bottom.
+    //   Move 500010 - 20 down (-(topHeight - top) == top - topHeight.
+    // E.g., top = 1e06, bottom = -20. Wall is 20 + 1e06 = 1000020 high.
+    //   Before translation, it is at 1000020 * 0.5 = 500010 top / -500010 bottom.
+    //   Move 500010 - 1e06 down (move up).
+    const { top, bottom } = this.edgeElevation(edge);
+    const topHeight = (top - bottom) * 0.5;
+    const z = top !== bottom ? (top - topHeight) : 0;
+    const pos = vec3.fromValues(ctr.x, ctr.y, z);
+
+    // Scale wall by its length from its center points.
+    const scale = vec3.fromValues(this.edgeLength(edge), 1, (top - bottom) || 1);
+
+    // Rotate along the z axis to match the wall direction.
+    const q = quat.create()
+    quat.setAxisAngle(q, vec3.fromValues(0, 0, 1), this.edgeAngle(edge));
+    return { pos, scale, q };
+  }
+
+  static edgeElevation(edge) {
+    let { top, bottom } = edge.elevationLibGeometry.a;
+    top ??= 1e05;
+    bottom ??= -1e05;
+    top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
+    bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
+    return { top, bottom };
+  }
+
+  static edgeCenter(edge) {
+    const ctr = new PIXI.Point();
+    return edge.a.add(edge.b, ctr).multiplyScalar(0.5, ctr);
+  }
+
+  static edgeLength(edge) { return PIXI.Point.distanceBetween(edge.a, edge.b); }
+
+  static edgeAngle(edge) {
+    const delta = edge.b.subtract(edge.a, PIXI.Point._tmp3);
+    return Math.atan2(delta.y, delta.x);
+  }
+
+  static tokenInstance(token) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const size = canvas.dimensions.size;
+    const pos = vec3.fromValues(...Point3d.fromTokenCenter(token));
+    const scale = vec3.fromValues(token.document.w * size, token.document.h * size, token.topZ - token.bottomZ);
+    const q = quat.create()
+    return { pos, scale, q };
+  }
+
 
   updateProjection(width, height) {
     if (this.options.showOverhead && this.options.showPerspective) {
@@ -614,6 +681,21 @@ export class GridDemo extends TinyWebGpuDemo {
 
   updateInstanceBuffer(timestamp, animating = false) {
     for (const drawable of this.drawables) {
+      // TODO: Only update on placeable change.
+      let instances;
+      switch ( drawable.geometry.label ) {
+        case "Token": instances = this.createTokenInstances(); break;
+        case "Wall": instances = this.createWallInstances(); break;
+      }
+
+      for ( let i = 0, n = instances.length; i < n; i += 1 ) {
+        const instance = drawable.instances[i];
+        mat4.fromRotationTranslationScale(tempMat, instance.q, instance.pos, instance.scale);
+        const arrayOffset = i * INSTANCE_ELEMENT_LENGTH;
+        this.instanceArray.set(tempMat, arrayOffset);
+      }
+
+      /*
       // When animating don't animate EVERY instance. Eats up too much JS time, especially on mobile.
       // Because the scene is sorted to draw the nearest geometry first, it will look like most of the
       // scene is animating from the users POV.
@@ -626,10 +708,11 @@ export class GridDemo extends TinyWebGpuDemo {
         const arrayOffset = i * INSTANCE_ELEMENT_LENGTH;
         this.instanceArray.set(tempMat, arrayOffset);
       }
+      */
 
       this.device.queue.writeBuffer(
         drawable.instanceBuffer, 0, this.instanceArray, 0,
-        instanceCount * INSTANCE_ELEMENT_LENGTH
+        instances.length * INSTANCE_ELEMENT_LENGTH
       );
     }
   }

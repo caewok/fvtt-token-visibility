@@ -213,6 +213,7 @@ function buildGeometryBatch(device, descArray) {
       vertexBindings,
       indexBinding,
       drawCount,
+      label: desc.label,
     });
   }
 
@@ -288,6 +289,7 @@ export class Geometry {
     this.vertexBindings = geom.vertexBindings;
     this.indexBinding = geom.indexBinding;
     this.drawCount = geom.drawCount;
+    this.label = geomOrDesc.label;
   }
 
   static CreateBatch(device, descArray) {

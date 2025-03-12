@@ -98,9 +98,7 @@ export class TinyWebGpuDemo {
     canvas.appendChild(injectedStyle);
 
     this.pane = new Pane({
-      container: canvas,
-      document,
-      title: "WebGPU Test",
+      container: document.getElementById(canvas.id)
     });
 
     this.camera = new OrbitCamera(this.canvas);

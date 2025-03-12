@@ -37,7 +37,7 @@ vp = losCalc.viewpoints[0]
 
 device = await WebGPUDevice.getDevice()
 
-popout = new Area3dPopoutCanvas()
+popout = new Area3dPopoutCanvas({ width: 800, height: 800, resizable: true })
 await popout._render(true);
 presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 popout.context.configure({
@@ -46,6 +46,9 @@ popout.context.configure({
 });
 
 demo = new GridDemo(device, popout.canvas)
+await demo.initialize();
+demo.render();
+
 popout.close()
 
 
