@@ -1,6 +1,6 @@
 /* globals
 Application,
-document,
+foundry,
 PIXI
 */
 "use strict";
@@ -88,6 +88,112 @@ export class Area3dPopout extends Application {
     OPEN_POPOUTS.delete(this);
   }
 }
+
+export class Area3dPopoutV2 extends foundry.applications.api.ApplicationV2 {
+
+  static DEFAULT_OPTIONS = {
+    window: {
+      title: `${MODULE_ID} Debug`,
+    },
+    position: {
+      width: 400,
+      height: 400,
+    }
+  };
+
+  #savedTop = null;
+
+  #savedLeft = null;
+
+  static TEMPLATE = `modules/${MODULE_ID}/scripts/LOS/templates/area3d_popout.html`;
+
+
+  /* -------------------------------------------- */
+  close() {
+    this.#savedTop = this.position.top;
+    this.#savedLeft = this.position.left;
+    super.close();
+  }
+
+  async _renderHTML(_context, _options) {
+    // let html = await renderTemplate(this.constructor.template, {});
+    // return html;
+    return document.createElement("canvas");
+  }
+
+  _replaceHTML(result, content, _options) {
+    content.replaceChildren(result);
+  }
+}
+
+export class Area3dPopoutCanvas extends Application {
+
+  #savedTop = null;
+
+  #savedLeft = null;
+
+  /** @type {PIXI.Application} */
+  pixiApp;
+
+  static async supportsWebGPU() {
+    if ( !navigator.gpu ) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    return Boolean(adapter);
+  }
+
+  /* -------------------------------------------- */
+
+  /** @override */
+  static get defaultOptions() {
+    const options = super.defaultOptions;
+
+    // Default positioning
+    // If width calc is necessary:
+    // let h = window.innerHeight * 0.9,
+    // w = Math.min(window.innerWidth * 0.9, 1200);
+    // options.top = area3dPopoutData.savedTop;
+    // options.left = area3dPopoutData.savedLeft;
+    // Other possible options:
+    // options.top = (window.innertop - this.h) / 2;
+    // options.left = (window.innerleft - this.w) / 2;
+    options.template = `modules/${MODULE_ID}/scripts/LOS/templates/area3d_popout.html`;
+    options.popOut = true;
+    options.minimizable = true;
+    options.title ??= `${MODULE_ID} Debug`;
+
+
+
+    return options;
+  }
+
+  get canvas() { return document.getElementById(`${this.id}_canvas`); }
+
+  getData(_options = {}) {
+    return { id: `${this.id}_canvas` };
+  }
+
+  /* -------------------------------------------- */
+
+  /** @override */
+  async _render(force=false, options={}) {
+    await super._render(force, options);
+    this.contextType = options.contextType ?? (await this.constructor.supportsWebGPU()) ? "webgpu" : "webgl";
+    this.context = this.canvas.getContext(this.contextType);
+    OPEN_POPOUTS.add(this);
+    return this;
+  }
+
+  //   /* -------------------------------------------- */
+  /** @override */
+  close() {
+    this.#savedTop = this.position.top;
+    this.#savedLeft = this.position.left;
+    if ( !this.closing ) this.pixiApp?.destroy();
+    super.close();
+    OPEN_POPOUTS.delete(this);
+  }
+}
+
 
 // Hooks.on("canvasReady", function() {
 //   for ( const [key, obj] of Object.entries(AREA3D_POPOUTS) ) {
