@@ -10,8 +10,8 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
-import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
+import { buildLOSCalculator } from "./LOSCalculator.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -38,7 +38,15 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
   SUBMENU: "submenu",
-  POINT_TYPES: AlternativeLOS.POINT_TYPES,
+  POINT_TYPES: {
+    CENTER: "points-center",
+    TWO: "points-two",
+    THREE: "points-three", //
+    FOUR: "points-four", // Five without center
+    FIVE: "points-five", // Corners + center
+    EIGHT: "points-eight", // Nine without center
+    NINE: "points-nine" // Corners, midpoints, center
+  },
 
   RANGE: {
     ALGORITHM: "range-algorithm",
@@ -129,13 +137,22 @@ export class Settings extends ModuleSettingsAbstract {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    if ( enabled ) registerDebug();
+    if ( enabled ) {
+      registerDebug();
+      canvas.tokens.placeables.forEach(token => {
+          const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+          if ( !losCalc ) return;
+          losCalc.config.debug = true;
+      });
+    }
     else {
       if ( canvas.tokens?.placeables ) {
         canvas.tokens.placeables.forEach(token => {
-          const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
-          if ( !calc ) return;
-          calc.clearDebug();
+          const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+          if ( !losCalc ) return;
+          losCalc.clearDebug();
+          losCalc?.closeDebugPopout();
+          losCalc.config.debug = false;
         });
       }
       deregisterDebug();
@@ -150,7 +167,8 @@ export class Settings extends ModuleSettingsAbstract {
     const PT_TYPES = KEYS.POINT_TYPES;
     const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
     const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
-    const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES, { POINTS: 0, AREA3D: 0 });
+    const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES,
+      { POINTS: 0, AREA3D_GEOMETRIC: 0, AREA3D_WEBGL2: 0, AREA3D_WEBGL1: 0, AREA3D_WEBGL2: 0, AREA3D_HYBRID: 0,  });
     const losChoices = {};
     const ptChoices = {};
     const rangeChoices = {};
@@ -468,7 +486,6 @@ export class Settings extends ModuleSettingsAbstract {
 
     // Register the Area3D methods on initial load.
     if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
-
   }
 
   static typesWebGL2 = new Set([
@@ -476,17 +493,31 @@ export class Settings extends ModuleSettingsAbstract {
     SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
     SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID]);
 
+  static typesArea3d = new Set([
+    SETTINGS.LOS.TARGET.TYPES.AREA3D,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL1,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
+    SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID
+  ])
+
   static losAlgorithmChange(key, value) {
     this.cache.delete(key);
     if ( this.typesWebGL2.has(value) ) registerArea3d();
-
-    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc._updateAlgorithm());
+    canvas.tokens.placeables.forEach(token => {
+      if ( !token.vision ) return;
+      const obj = token.vision[MODULE_ID] ??= {};
+      obj.losCalc?.destroy();
+      obj.losCalc = buildLOSCalculator(token);
+    });
   }
 
   static losSettingChange(key, value) {
     this.cache.delete(key);
-    const cfg = { [key]: value };
-    canvas.tokens.placeables.forEach(token => token.vision?.[MODULE_ID]?.losCalc.updateConfiguration(cfg));
+    canvas.tokens.placeables.forEach(token => {
+      const calc = token.vision?.[MODULE_ID]?.losCalc;
+      if ( !calc ) return;
+      calc.config[key] = value;
+    });
   }
-
 }

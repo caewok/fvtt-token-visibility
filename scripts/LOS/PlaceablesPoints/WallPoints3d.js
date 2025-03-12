@@ -55,7 +55,7 @@ export class WallPoints3d extends VerticalPoints3d {
     for ( let i = 0; i < iLn; i += 1 ) {
       // Consider wall I  the AB segment
       const wi = walls[i];
-      const { A, B } = wi.object;
+      const { a:A, b:B } = wi.object.edge;
 
       const ccwABV = ccw(A, B, viewerLoc);
       if ( !ccwABV ) continue; // Wall and viewer are collinear
@@ -63,7 +63,7 @@ export class WallPoints3d extends VerticalPoints3d {
       for ( let j = i + 1; j < nWalls; j += 1 ) {
         // Consider wall J the CD segment
         const wj = walls[j];
-        const { A: C, B: D } = wj.object;
+        const { a:C, b:D } = wj.object.edge;
 
         const ccwCDV = ccw(C, D, viewerLoc);
         if ( !ccwCDV ) continue; // Wall and viewer are collinear
@@ -152,8 +152,8 @@ function ccw(a, b, c) {
  * @returns {null|object{wiPath: ClipperPaths, wjPath: ClipperPaths}}
  */
 function handleTerrainWallsCross(wi, wj, ccwABV, ccwCDV, { scalingFactor = 1 } = {}) {
-  const { A, B } = wi.object;
-  const { A: C, B: D } = wj.object;
+  const { a:A, b:B } = wi.object.edge;
+  const { a:C, b:D } = wj.object.edge;
 
   const ix = foundry.utils.lineLineIntersection(A, B, C, D);
   if ( !ix ) {

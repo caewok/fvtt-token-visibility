@@ -46,10 +46,43 @@ import { extractPixels } from "./LOS/extract-pixels.js";
 
 import * as range from "./visibility_range.js";
 
+import { BVH2d, BVH3d } from "./LOS/BVH.js";
+import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriangle2d, BaryTriangle3d, BaryTriangle3dNormal } from "./LOS/BlockingObject.js";
+import { Ray2d, Ray3d } from "./LOS/Ray.js";
+import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
+
+import {
+  Triangle,
+  DirectionalWallTriangles,
+  WallTriangles,
+  TileTriangles,
+  TokenTriangles,
+  Square2dTriangles,
+  Square2dDoubleTriangles,
+  SquareVerticalTriangles,
+  SquareVerticalDoubleTriangles,
+  Polygon2dTriangles,
+  Polygon2dDoubleTriangles,
+  PolygonVerticalTriangles
+ } from "./LOS/PlaceableTriangles.js";
+import { PlaceableTrianglesHandler } from "./LOS/PlaceableTrianglesHandler.js";
+
 // Other self-executing hooks
 import "./changelog.js";
 
 Hooks.once("init", function() {
+  // Load bitmap font
+  // See https://www.adammarcwilliams.co.uk/creating-bitmap-text-pixi/
+  // https://pixijs.com/8.x/examples/text/bitmap-text
+  // PIXI.Assets.load('https://pixijs.com/assets/bitmap-font/desyrel.xml'); // Async.
+
+  PIXI.BitmapFont.from(`${MODULE_ID}_area3dPercentLabel`, {
+    fill: "#333333",
+    fontWeight: 'bold',
+  }, {
+    chars: [['0', '9'], ' .%']
+  });
+
   registerGeometry();
   initializePatching();
 
@@ -113,6 +146,32 @@ Hooks.once("init", function() {
       AlphaCutoffFilter
     },
 
+    bvh: {
+      BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken,
+      BVH2d, BVH3d,
+      Ray2d, Ray3d,
+      BaryTriangle2d,
+      BaryTriangle3d,
+      BaryTriangle3dNormal,
+      VisionPolygon,
+      VisionTriangle
+    },
+
+    triangles: {
+      Triangle,
+      DirectionalWallTriangles,
+      WallTriangles,
+      TileTriangles,
+      TokenTriangles,
+      Square2dTriangles,
+      Square2dDoubleTriangles,
+      SquareVerticalTriangles,
+      SquareVerticalDoubleTriangles,
+      Polygon2dTriangles,
+      Polygon2dDoubleTriangles,
+      PolygonVerticalTriangles
+    },
+
     OPEN_POPOUTS,
 
     Settings,
@@ -131,11 +190,18 @@ Hooks.once("init", function() {
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
+
+  CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
 });
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   Settings.initializeDebugGraphics();
+
+  // Update triangles for all placeables.
+  canvas.tiles.placeables.forEach(tile => tile[PlaceableTrianglesHandler.ID].update());
+  canvas.walls.placeables.forEach(wall => wall[PlaceableTrianglesHandler.ID].update());
+  canvas.tokens.placeables.forEach(token => token[PlaceableTrianglesHandler.ID].update());
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

@@ -12,7 +12,7 @@ foundry
  * @return {Object} Object with each quantile number as a property.
  *                  E.g., { ".1": 100, ".5": 150, ".9": 190 }
  */
-function quantile(arr, q) {
+export function quantile(arr, q) {
   arr.sort((a, b) => a - b);
   if (!q.length) { return q_sorted(arr, q); }
 

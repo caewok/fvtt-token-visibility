@@ -8,7 +8,9 @@ PIXI
 "use strict";
 
 // Base folder
-import {  MODULE_ID } from "../const.js";
+import { MODULE_ID } from "../const.js";
+
+import { Draw } from "../geometry/Draw.js";
 
 /**
  * The viewable area between viewer and target.
@@ -200,3 +202,283 @@ export class VisionPolygon extends PIXI.Polygon {
     });
   }
 }
+
+
+/**
+ * The viewable area between viewer and target.
+ * Triangle
+ *
+ */
+export class VisionTriangle {
+
+  /** @type {PIXI.Point} */
+  a = new PIXI.Point();
+
+  /** @type {PIXI.Point} */
+  b = new PIXI.Point();
+
+  /** @type {PIXI.Point} */
+  c = new PIXI.Point();
+
+  /** @type {VPElevation} */
+  elevation = {
+    min: Number.NEGATIVE_INFINITY,
+    max: Number.POSITIVE_INFINITY
+  };
+
+  /** @type {PIXI.Rectangle} */
+  bounds = new PIXI.Rectangle;
+
+  constructor(a, b, c, maxElevation = Number.POSITIVE_INFINITY, minElevation = Number.NEGATIVE_INFINITY) {
+    this.a.copyFrom(a);
+    this.b.copyFrom(b);
+    this.c.copyFrom(c);
+    this.elevation.max = maxElevation;
+    this.elevation.min = minElevation;
+    this.setBounds();
+  }
+
+  setBounds() {
+    const { a, b, c } = this;
+    const xMinMax = Math.minMax(a.x, b.x, c.x);
+    const yMinMax = Math.minMax(a.y, b.y, c.y);
+    this.bounds.x = xMinMax.min;
+    this.bounds.y = yMinMax.min;
+    this.bounds.width = xMinMax.max - xMinMax.min;
+    this.bounds.height = yMinMax.max - yMinMax.min;
+  }
+
+  /**
+   * Vision Polygon for the view point --> target.
+   * From the given token location, get the edge-most viewable points of the target.
+   * Construct a triangle between the two target points and the token center.
+   * If viewing head-on (only two key points), the portion of the target between
+   * viewer and target center (typically, a rectangle) is added on to the triangle.
+   * @param {PIXI.Point|Point3d} viewpoint
+   * @param {Token} target
+   * @param {PIXI.Polygon|PIXI.Rectangle} targetBorder
+   * @returns {VisionPolygon}
+   */
+  static build(viewpoint, target, targetBorder) {
+    targetBorder ??= target.constrainedTokenBorder;
+    const keyPoints = targetBorder.viewablePoints(viewpoint, { outermostOnly: false }) ?? [];
+    let b;
+    let c;
+    switch ( keyPoints.length ) {
+      case 0:
+      case 1: {
+        const iter = targetBorder.toPolygon().iteratePoints({close: false});
+        b = iter.next().value;
+        c = iter.next().value;
+        break;
+      }
+      case 2: {
+        const k0 = keyPoints[0];
+        const k1 = keyPoints[1];
+        const center = target.center;
+
+        // Extend the triangle rays from viewpoint so they intersect the perpendicular line from the center.
+        const dir = viewpoint.to2d().subtract(center, PIXI.Point._tmp3);
+        const perpDir = PIXI.Point._tmp2.set(-dir.y, dir.x);
+        const perpPt = center.add(perpDir, perpDir); // Project along the perpDir.
+        b = foundry.utils.lineLineIntersection(viewpoint, k0, center, perpPt);
+        c = foundry.utils.lineLineIntersection(viewpoint, k1, center, perpPt);
+        if ( !(b && c) ) {
+          const iter = targetBorder.toPolygon().iteratePoints({close: false});
+          b = iter.next().value;
+          c = iter.next().value;
+        }
+        break;
+      }
+      default:
+        b = keyPoints[0];
+        c = keyPoints.at(-1);
+    }
+    return new this(viewpoint, b, c, this.elevationMin(viewpoint, target), this.elevationMax(viewpoint, target));
+  }
+
+  /**
+   * Determine the minimum and maximum elevations for a given viewpoint and target.
+   * @param {Point3d} viewpoint
+   * @param {Token} target
+   * @returns {number}
+   */
+  static elevationMin(viewpoint, target) {
+    return Math.min(
+      viewpoint?.z ?? Number.NEGATIVE_INFINITY,
+      target?.bottomZ ?? Number.NEGATIVE_INFINITY
+    );
+  }
+  static elevationMax(viewpoint, target) {
+    return Math.max(
+      viewpoint?.z ?? Number.POSITIVE_INFINITY,
+      target?.topZ ?? Number.POSITIVE_INFINITY
+    );
+  }
+
+  /**
+   * Test if a point is inside the triangle in 2d.
+   * @param {Point} p
+   * @returns {boolean}
+   */
+  pointInsideTriangle(p) {
+    const orient2d = foundry.utils.orient2dFast;
+
+    // All orientations must be the same sign or 0.
+    const oAB = orient2d(this.a, this.b, p);
+    const oBC = orient2d(this.b, this.c, p);
+    return (oAB * oBC >= 0) && (oAB * orient2d(this.c, this.a, p) >= 0);
+  }
+
+  draw(opts = {}) {
+    Draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
+  }
+
+  containsWall(wall) {
+    // Ignore one-directional walls facing away from the viewpoint.
+    if ( wall.document.dir
+      && (wall.edge.orientPoint(this.a) === wall.document.dir) ) return false;
+
+    // Is the wall within the elevation box?
+    let { top, bottom } = wall.edge.elevationLibGeometry.a;
+    top ??= Number.POSITIVE_INFINITY;
+    bottom ??= Number.NEGATIVE_INFINITY;
+    if ( wall.top < this.elevation.min || wall.bottom > this.elevation.max ) return false;
+
+    // Ignore walls not within the elevation vision rectangle.
+    const { a, b } = wall.edge;
+    if ( this.pointInsideTriangle(a) || this.pointInsideTriangle(b) ) return true;
+
+    // Does the wall intersect the triangle?
+    // Don't really care about the back of the vision triangle? (b|c)
+    // Wall would cut through token, end inside triangle.
+    const lsi = foundry.utils.lineSegmentIntersects;
+    return ( lsi(this.a, this.b, a, b) || lsi(this.a, this.c, a, b) );
+  }
+
+  containsTile(tile) {
+    const tileE = tile.document.elevation;
+
+    // Only overhead tiles count for blocking vision
+    if ( tileE < tile.document.parent?.foregroundElevation ) return false;
+
+    // Ignore tiles that are not within the elevation vision rectangle.
+    if ( tileE < this.elevation.min || tileE > this.elevation.max ) return false;
+
+    // Use the alpha bounding box. This might be a polygon if the tile is rotated.
+    const tBounds = tile.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
+    const tCenter = tBounds.center;
+    if ( this.pointInsideTriangle(tCenter) ) return true;
+    return tBounds.lineSegmentIntersects(this.a, this.b, { inside: true })
+      || tBounds.lineSegmentIntersects(this.a, this.c, { inside: true });
+  }
+
+  containsToken(token) {
+    // Ignore tokens not within the elevation vision rectangle.
+    if ( token.topE < this.elevation.min || token.bottomE > this.elevation.max ) return false;
+
+    // Even for constrained tokens, the token center should remain within the token border.
+    const tCenter = token.center;
+    if ( this.pointInsideTriangle(tCenter) ) return true;
+
+    // Full test of token border.
+    const tBounds = token.constrainedTokenBorder;
+    return tBounds.lineSegmentIntersects(this.a, this.b, { inside: true })
+      || tBounds.lineSegmentIntersects(this.a, this.c, { inside: true });
+  }
+
+  /**
+   * Find walls in the scene by a triangle representing the view from viewingPoint to some
+   * token (or other two points). Checks for one-directional walls; ignores those facing away from viewpoint.
+   * Pass an includes function to test others.
+   * @return {Set<Wall>}
+   */
+  findWalls() {
+    const collisionTest = o => this.containsWall(o.t);
+    return canvas.walls.quadtree.getObjects(this.bounds, { collisionTest });
+  }
+
+  filterWalls(walls) { return walls.filter(w => this.containsWall(w)); }
+
+  /**
+   * Find tiles in the scene by a triangle representing the view from viewingPoint to
+   * token (or other two points). Only considers 2d top-down view.
+   * @return {Set<Tile>}
+   */
+  findTiles() {
+    const collisionTest = o => this.containsTile(o.t);
+    return canvas.tiles.quadtree.getObjects(this.bounds, { collisionTest });
+  }
+
+  filterTiles(tiles) { return tiles.filter(t => this.containsTile(t)); }
+
+  /**
+   * Filter tokens in the scene by a triangle representing the view from viewingPoint to
+   * token (or other two points). Only considers 2d top-down view.
+   * @return {Set<Token>}
+   */
+  findTokens() {
+    const collisionTest = o => this.containsToken(o.t);
+    return canvas.tokens.quadtree.getObjects(this.bounds, { collisionTest });
+  }
+
+  filterTokens(tokens) { return tokens.filter(t => this.containsToken(t)); }
+}
+
+/* Testing
+
+Draw = CONFIG.GeometryLib.Draw;
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+api = game.modules.get("tokenvisibility").api
+let { VisionPolygon, VisionTriangle } = api.bvh
+
+viewer = _token
+target = game.user.targets.first()
+
+visionPoly = VisionPolygon.build(Point3d.fromTokenCenter(viewer), target)
+visionTri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)
+Draw.shape(visionPoly)
+visionTri.draw({ color: Draw.COLORS.blue })
+
+pt = _token.center
+
+fn = function(ptTest, pt) {
+  const dir = PIXI.Point._tmp.set(Math.random(), Math.random());
+  dir.multiplyScalar(200, dir);
+  return ptTest(pt.add(dir, PIXI.Point._tmp));
+}
+
+
+for ( let i = 0; i < 100; i += 1 ) {
+  const dir = PIXI.Point._tmp.set(Math.random(), Math.random());
+  dir.multiplyScalar(200, dir);
+  const newPt = pt.add(dir, PIXI.Point._tmp);
+  const a = visionTri.pointInsideTriangle(newPt);
+  const b = visionTri.pointInsideTriangleFast(newPt);
+  const c = visionTri.pointInsideTriangleOrient(newPt);
+  console.log(`${i}\t${newPt.x.toFixed(2)},${newPt.y.toFixed(2)}\t ${a} ${b} ${c}`)
+  if ( a !== b || a !== c ) {
+    console.error("Failed!", { a, b, c, newPt })
+    break;
+  }
+}
+
+
+
+
+N = 1000
+await foundry.utils.benchmark(VisionPolygon.build.bind(VisionPolygon), N, Point3d.fromTokenCenter(viewer), target, target.constrainedTokenBorder)
+await foundry.utils.benchmark(VisionTriangle.build.bind(VisionTriangle), N, Point3d.fromTokenCenter(viewer), target, target.constrainedTokenBorder)
+
+N = 10000
+await foundry.utils.benchmark(visionPoly.contains.bind(visionPoly), N, pt)
+await foundry.utils.benchmark(visionTri.pointInsideTriangle.bind(visionTri), N, pt)
+await foundry.utils.benchmark(visionTri.pointInsideTriangleFast.bind(visionTri), N, pt)
+await foundry.utils.benchmark(visionTri.pointInsideTriangleOrient.bind(visionTri), N, pt)
+
+await foundry.utils.benchmark(fn, N, visionPoly.contains.bind(visionPoly), pt)
+await foundry.utils.benchmark(fn, N, visionTri.pointInsideTriangle.bind(visionTri), pt)
+await foundry.utils.benchmark(fn, N, visionTri.pointInsideTriangleFast.bind(visionTri), pt)
+await foundry.utils.benchmark(fn, N, visionTri.pointInsideTriangleOrient.bind(visionTri), pt)
+
+*/

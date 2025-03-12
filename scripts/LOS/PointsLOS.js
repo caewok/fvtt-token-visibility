@@ -88,6 +88,17 @@ export class PointsLOS extends AlternativeLOS {
    */
   _percentVisible() { return (1 - this._testTargetPoints(this.targetPoints)); }
 
+  /**
+   * @param {Token} target
+   * @param {object} [opts={}]  Passed to _constructTokenPoints
+   * @returns {Point3d[]}
+   */
+  static constructTargetPoints(target, opts = {}) {
+    opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
+    opts.inset ??= 0.75;
+    opts.tokenShape ??= target.constrainedTokenBorder;
+    return this._constructTokenPoints(target, opts);
+  }
 
   /**
    * Similar to _constructViewerPoints but with a complication:
@@ -120,8 +131,6 @@ export class PointsLOS extends AlternativeLOS {
         });
         return targetPointsArray;
       }
-
-
     }
 
     // Construct points under this constrained token border.
@@ -343,7 +352,7 @@ export class PointsLOS extends AlternativeLOS {
       if ( t === null || t < zeroMin || t > oneMax ) continue;
       const ix = new Point3d();
       startPt.add(rayVector.multiplyScalar(t, ix), ix);
-      if ( !tile.mesh?.containsCanvasPoint(ix.x, ix.y, 0.99 + 1e-06) ) continue; // Transparent, so no collision.
+      if ( !tile.mesh?.containsCanvasPoint(ix) ) continue; // Transparent, so no collision.
 
       return true;
     }

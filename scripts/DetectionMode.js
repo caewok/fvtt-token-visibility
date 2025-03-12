@@ -7,7 +7,6 @@ Token
 import { MODULE_ID } from "./const.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
 import { SETTINGS, Settings } from "./settings.js";
 import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
 
@@ -68,10 +67,20 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
 
   // Configure the line-of-sight calculator.
   const losCalc = visionSource[MODULE_ID].losCalc;
-  losCalc.updateConfiguration({ useLitTargetShape, type: visionSource.constructor.sourceType });
+  losCalc.config.useLitTargetShape = useLitTargetShape;
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-  hasLOS = losCalc.hasLOSTo(target);
+  hasLOS = losCalc.hasLOS(target);
+
+  const vc = losCalc.center;
+  const tc = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(losCalc.target);
+  /*
+  console.debug(`${losCalc.viewer.name} -> ${losCalc.target.name} ${vc.toString()}->${tc.toString()}`);
+  for ( const vp of losCalc.viewpoints ) {
+    console.debug(`\t${vp.viewpoint.toString()}: ${vp.percentVisible()}%`);
+  }
+  */
+
   test.los.set(visionSource, hasLOS);
   return hasLOS;
 }
@@ -93,6 +102,7 @@ function _testRange(wrapped, visionSource, mode, target, test) {
   // See https://github.com/foundryvtt/foundryvtt/issues/8505
   if ( mode.range <= 0 ) return false;
 
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
   const testPoints = rangeTestPointsForToken(target);
   const visionOrigin = Point3d.fromPointSource(visionSource);
   const radius = visionSource.object.getLightRadius(mode.range);

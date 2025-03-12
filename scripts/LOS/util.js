@@ -5,7 +5,6 @@ PIXI
 "use strict";
 
 import { EPSILON, MODULE_ID } from "../const.js";
-import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 /**
@@ -27,7 +26,7 @@ export const NULL_SET = new NullSet();
 export function log(...args) {
   try {
     if ( CONFIG[MODULE_ID].debug ) console.debug(MODULE_ID, "|", ...args);
-  } catch(e) {
+  } catch(_e) {
     // Empty
   }
 }
@@ -39,6 +38,23 @@ export function log(...args) {
  */
 export function roundFastPositive(n) { return (n + 0.5) << 0; }
 
+
+/**
+ * Test if the token constrained borders overlap and tokens are at same elevation.
+ * Used to allow vision when tokens are nearly on top of one another.
+ * @param {Token} token1
+ * @param {Token} token2
+ * @param {number} [pad=-2]     Increase or decrease the borders. By default, shrink the
+ *   borders to avoid false positives for adjacent tokens.
+ * @returns {boolean}
+ */
+export function tokensOverlap(token1, token2, pad = -2) {
+  if ( token1.elevationE !== token2.elevationE ) return false;
+  if ( token1.center.equals(token2.center) ) return true;
+  const border1 = token1.constrainedTokenBorder.pad(pad);
+  const border2 = token2.constrainedTokenBorder.pad(pad);
+  return border1.overlaps(border2);
+}
 
 /**
  * Trim line segment to its intersection points with a rectangle.
@@ -274,4 +290,24 @@ function lineTriangleIntersectionLocation(rayVector, edge1, edge2, s, f, h) {
   // A.add(rayVector.multiplyScalar(t, outPoint), outPoint);
   // If t > 0, t is on the ray.
   // if t < 1, t is between rayOrigin and B, where rayVector = B.subtract(A)
+}
+
+export function sumRedPixels(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+  return sumTarget;
+}
+
+export function sumRedObstaclesPixels(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) {
+    const px = pixels[i];
+    if ( px < 128 ) continue;
+    sumTarget += Boolean(targetCache.pixels[i]);
+  }
+  return sumTarget;
 }

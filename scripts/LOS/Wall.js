@@ -7,9 +7,53 @@ foundry
 
 import { MODULE_ID } from "../const.js";
 import { WallGeometryHandler } from "./Placeable3dGeometry.js";
+import { WallTrianglesHandler } from "./PlaceableTrianglesHandler.js";
 
 export const PATCHES = {};
+PATCHES.LOS = {};
 PATCHES.AREA3D = {};
+
+// ----- NOTE: Basic hooks ----- //
+
+/**
+ * Hook drawWall
+ * @param {PlaceableObject} object    The object instance being drawn
+ */
+function drawWall(wall) {
+  new WallTrianglesHandler(wall);
+}
+
+/**
+ * Hook: updateWall
+ * @param {Document} document                       The existing Document which was updated
+ * @param {object} change                           Differential data that was used to update the document
+ * @param {DocumentModificationContext} options     Additional options which modified the update request
+ * @param {string} userId                           The ID of the User who triggered the update workflow
+ */
+function updateWall(wallD, changed, _options, _userId) {
+  const wall = wallD.object;
+  if ( !wall ) return;
+  const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
+  object[WallTrianglesHandler.ID].update(changeKeys);
+  // TODO: Only run if other modules are not present.
+  // Default to ATV, ATC, then Elevation Shadows.
+}
+
+/**
+ * Hook: destroyWall
+ * @param {PlaceableObject} object    The object instance being destroyed
+ */
+function destroyWall(wall) {
+  wall[WallTrianglesHandler.ID] = null; // Currently, no destroy method to call.
+}
+
+
+PATCHES.LOS.HOOKS = {
+  drawWall,
+  updateWall,
+  destroyWall
+};
+
 
 // ----- NOTE: Area3d Hooks ----- //
 
@@ -32,8 +76,7 @@ function drawWallArea3d(wall) {
  */
 function updateWallArea3d(wallD, changed, _options, _userId) {
   const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
-  if ( !changeKeys.has("c") ) return;
-  wallD.object[MODULE_ID].geomHandler.update();
+  wallD.object[MODULE_ID].geomHandler.update(changeKeys);
 }
 
 /**

@@ -34,17 +34,6 @@ import { ClipperPaths } from "../geometry/ClipperPaths.js";
 import { WallPoints3d } from "./PlaceablesPoints/WallPoints3d.js";
 import { TokenPoints3d } from "./PlaceablesPoints/TokenPoints3d.js";
 
-
-export const POINT_TYPES = {
-  CENTER: "points-center",
-  TWO: "points-two",
-  THREE: "points-three", //
-  FOUR: "points-four", // Five without center
-  FIVE: "points-five", // Corners + center
-  EIGHT: "points-eight", // Nine without center
-  NINE: "points-nine" // Corners, midpoints, center
-};
-
 /**
  * @typedef Viewer    Token|MeasuredTemplate|AmbientLight|AmbientSound|Point3d
  * The object that is viewing / attacking.
@@ -348,11 +337,7 @@ export class AlternativeLOS {
 
   // ------ NOTE: Primary methods to be overridden by subclass -----
 
-  /**
-   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * @param {number} [threshold]    Percentage to be met to be considered visible
-   * @returns {boolean}
-   */
+  d
   hasLOS() {
     log(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
 
@@ -551,7 +536,7 @@ export class AlternativeLOS {
   }
 
   // ----- NOTE: Static methods ----- //
-  static POINT_TYPES = POINT_TYPES;
+  static get POINT_TYPES() { return Settings.KEYS.POINT_TYPES; };
 
   /**
    * @param {Viewer} viewer     Token or other object doing the viewing / attacking
@@ -566,18 +551,6 @@ export class AlternativeLOS {
       opts.viewer ??= viewer.bounds; // TODO: Should probably handle hex token shapes?
       return this._constructTokenPoints(viewer, opts);
     } else return [new Point3d(viewer.document.x, viewer.document.y, viewer.elevationZ)];
-  }
-
-  /**
-   * @param {Token} target
-   * @param {object} [opts={}]  Passed to _constructTokenPoints
-   * @returns {Point3d[]}
-   */
-  static constructTargetPoints(target, opts = {}) {
-    opts.pointAlgorithm ??= this.POINT_TYPES.CENTER;
-    opts.inset ??= 0.75;
-    opts.tokenShape ??= target.constrainedTokenBorder;
-    return this._constructTokenPoints(target, opts);
   }
 
   /**
