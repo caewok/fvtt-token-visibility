@@ -34,7 +34,7 @@ import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
-import { OPEN_POPOUTS } from "./LOS/Area3dPopout.js";
+import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 
@@ -50,6 +50,16 @@ import { BVH2d, BVH3d } from "./LOS/BVH.js";
 import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriangle2d, BaryTriangle3d, BaryTriangle3dNormal } from "./LOS/BlockingObject.js";
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
+
+// WebGPU testing.
+import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
+import { Geometry } from "./LOS/WebGPU/GeometryObstacles.js";
+import { WebGPUSceneObstacles } from "./LOS/WebGPU/WebGPUSceneObstacles.js";
+import {
+  mat2, mat2d, mat3, mat4,
+  quat, quat2,
+  vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
+import { GridDemo } from "./WebGPU-Bundle-Culling/GridDemo.js";
 
 import {
   Triangle,
@@ -172,7 +182,26 @@ Hooks.once("init", function() {
       PolygonVerticalTriangles
     },
 
+    webgpu: {
+      WebGPUDevice,
+      WebGPUShader,
+      WebGPUBuffer,
+      WebGPUTexture,
+      Geometry,
+      WebGPUSceneObstacles,
+      GridDemo,
+
+    },
+
+    glmatrix: {
+      mat2, mat2d, mat3, mat4,
+      quat, quat2,
+      vec2, vec3, vec4
+    },
+
     OPEN_POPOUTS,
+    Area3dPopout,
+    Area3dPopoutCanvas,
 
     Settings,
 

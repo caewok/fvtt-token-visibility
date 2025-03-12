@@ -566,13 +566,22 @@ export class PolygonVerticalTriangles extends AbstractPolygonTriangles {
    * Triangles before update/transformation.
    * @type {Triangle[]}
    */
-  get prototypeTriangles() { return this.verticalSquares.flatMap(s => s.prototypeTriangles); }
+  get prototypeTriangles() {
+    // Faster than flatMap. See https://jsbench.me/v2m7mdkg9w/2.
+    const res = [];
+    for ( let i = 0, n = this.verticalSquares.length; i < n; i += 1 ) res.push(...this.verticalSquares[i].prototypeTriangles);
+    return res;
+  }
 
   /**
    * Triangles after update/transformation.
    * @type {Triangle[]}
    */
-  get triangles() { return this.verticalSquares.flatMap(s => s.triangles); }
+  get triangles() {
+    const res = [];
+    for ( let i = 0, n = this.verticalSquares.length; i < n; i += 1 ) res.push(...this.verticalSquares[i].triangles);
+    return res;
+  }
 
   /** @type {SquareVerticalTriangles} */
   verticalSquares = [];
@@ -647,7 +656,11 @@ export class AbstractPlaceableTriangles {
   get polygons() { return this._polygons; }
 
   /** @type {Triangle[]} */
-  get triangles() { return this.polygons.flatMap(poly => poly.triangles); };
+  get triangles() {
+    const res = [];
+    for ( let i = 0, n = this.polygons.length; i < n; i += 1 ) res.push(...this.polygons[i].triangles);
+    return res;
+  };
 
   constructor(placeable) {
     this.placeable = placeable;
@@ -880,7 +893,12 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
   get token() { return this.placeable; }
 
   /** @type {Polygon2dTriangles|PolygonVerticalTriangles|Square2dTriangles} */
-  get polygons() { return this.token.isConstrainedTokenBorder ? this._constrainedPolygons : this._polygons; }
+  get polygons() {
+    // TODO: Fix so this gets called in initialization; update.
+    if ( this.token.isConstrainedTokenBorder ) this.setConstrainedPolygons();
+
+    return this.token.isConstrainedTokenBorder ? this._constrainedPolygons : this._polygons;
+  }
 
   get sides() { return this.polygons[this.constructor.LOCATIONS.SIDES]; }
 
