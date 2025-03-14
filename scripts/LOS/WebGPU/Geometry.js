@@ -165,7 +165,7 @@ export class Geometry {
     for ( const layout of vertexBufferLayouts ) {
       vertexBindings.push({
         buffer: null, // Populated after.
-        offset: layout.attributes.offset,
+        offset: layout.attributes[0].offset,
         size: layout.size,
       });
       buffers.push({
