@@ -34,7 +34,7 @@ import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
-import { OPEN_POPOUTS } from "./LOS/Area3dPopout.js";
+import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 
@@ -66,6 +66,16 @@ import {
   PolygonVerticalTriangles
  } from "./LOS/PlaceableTriangles.js";
 import { PlaceableTrianglesHandler } from "./LOS/PlaceableTrianglesHandler.js";
+
+import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
+import { Camera } from "./LOS/WebGPU/Camera.js";
+import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
+import { Geometry } from "./LOS/WebGPU/Geometry.js";
+import { RenderWalls } from "./LOS/WebGPU/RenderWalls.js";
+import {
+  mat2, mat2d, mat3, mat4,
+  quat, quat2,
+  vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -172,7 +182,7 @@ Hooks.once("init", function() {
       PolygonVerticalTriangles
     },
 
-    OPEN_POPOUTS,
+    OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,
 
     Settings,
 
@@ -180,6 +190,23 @@ Hooks.once("init", function() {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,
       Placeable3dDebugShader, Tile3dDebugShader
+    },
+
+    webgpu: {
+      WebGPUDevice,
+      WebGPUShader,
+      WebGPUBuffer,
+      WebGPUTexture,
+      Camera,
+      Geometry,
+      GeometryWallDesc,
+      RenderWalls,
+    },
+
+    glmatrix: {
+      mat2, mat2d, mat3, mat4,
+      quat, quat2,
+      vec2, vec3, vec4
     },
 
     PATCHER,
