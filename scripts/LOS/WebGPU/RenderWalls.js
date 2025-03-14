@@ -164,28 +164,42 @@ export class RenderWalls {
     // Define pipelines.
     // TODO: Make async.
     // this.modules.render = await this.modules.render;
+//     this.pipelines.render = device.createRenderPipeline({
+//       label: "Render",
+//       layout: device.createPipelineLayout({ bindGroupLayouts: [
+//         this.bindGroupLayouts.camera,
+//       ]}),
+//       vertex: {
+//         module: this.modules.render,
+//         entryPoint: "vertexMain",
+//         buffers: this.constructor.VERTEX_LAYOUT,
+//       },
+//       fragment: {
+//         module: this.modules.render,
+//         entryPoint: "fragmentMain",
+//         targets: [{
+//           format: WebGPUDevice.presentationFormat,
+//         }],
+//       },
+//       depthStencil: {
+//         format: this.depthFormat,
+//         depthWriteEnabled: true,
+//         depthCompare: "less-equal",
+//       }
+//     });
+
     this.pipelines.render = device.createRenderPipeline({
-      label: "Render",
-      layout: device.createPipelineLayout({ bindGroupLayouts: [
-        this.bindGroupLayouts.camera,
-      ]}),
+      label: 'our hardcoded red triangle pipeline',
+      layout: 'auto',
       vertex: {
+        entryPoint: 'vs',
         module: this.modules.render,
-        entryPoint: "vertexMain",
-        buffers: this.constructor.VERTEX_LAYOUT,
       },
       fragment: {
+        entryPoint: 'fs',
         module: this.modules.render,
-        entryPoint: "fragmentMain",
-        targets: [{
-          format: WebGPUDevice.presentationFormat,
-        }],
+        targets: [{ format: presentationFormat }],
       },
-      depthStencil: {
-        format: this.depthFormat,
-        depthWriteEnabled: true,
-        depthCompare: "less-equal",
-      }
     });
 
     // Define bind groups.
@@ -217,40 +231,6 @@ export class RenderWalls {
     // this.camera.setTargetTokenFrustrum(target);
     this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.arrayBuffer);
      */
-    const module = device.createShaderModule({
-      label: 'our hardcoded red triangle shaders',
-      code: `
-        @vertex fn vs(
-          @builtin(vertex_index) vertexIndex : u32
-        ) -> @builtin(position) vec4f {
-          let pos = array(
-            vec2f( 0.0,  0.5),  // top center
-            vec2f(-0.5, -0.5),  // bottom left
-            vec2f( 0.5, -0.5)   // bottom right
-          );
-
-          return vec4f(pos[vertexIndex], 0.0, 1.0);
-        }
-
-        @fragment fn fs() -> @location(0) vec4f {
-          return vec4f(1.0, 0.0, 0.0, 1.0);
-        }
-      `,
-    });
-
-    const pipeline = device.createRenderPipeline({
-      label: 'our hardcoded red triangle pipeline',
-      layout: 'auto',
-      vertex: {
-        entryPoint: 'vs',
-        module,
-      },
-      fragment: {
-        entryPoint: 'fs',
-        module,
-        targets: [{ format: WebGPUDevice.presentationFormat }],
-      },
-    });
 
     const renderPassDescriptor = {
       label: 'our basic canvas renderPass',
@@ -269,8 +249,7 @@ export class RenderWalls {
     const commandEncoder = device.createCommandEncoder({ label: "Render walls" });
     // const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
-    renderPass.setPipeline(pipeline);
-    // renderPass.setPipeline(this.pipelines.render);
+    renderPass.setPipeline(this.pipelines.render);
     // renderPass.setBindGroup(0, this.bindGroups.camera);
     // renderPass.setVertexBuffer(0, this.buffers.position);
     // renderPass.setIndexBuffer(this.buffers.indices, "uint16");
