@@ -6,36 +6,39 @@ CONFIG,
 
 import { vec3, mat4 } from "../gl_matrix/index.js";
 
-const tmpMat = mat4.create();
-const tmpVec3 = vec3.create();
-
 export class Camera {
 
   static UP = vec3.fromValues(0, 1, 0);
 
-  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * 56; // Total of projection + view + frustum.
+  /**
+   * @typedef {object} CameraStruct
+   * @param {mat4x4f} perspectiveM          The perspective matrix
+   * @param {mat4x4f} lookAtM               Matrix to shift world around a camera location
+   * @param {mat4x4f} offsetM               Offset required to switch from Foundry coordinates
+   */
+
+  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * 16 * 16 * 16; // Total size of CameraStruct
 
   // TODO: Combine so that the buffer stores the camera values instead of repeating them.
   // Could use MatrixFlat to store the buffer views.
   // Need to update MatrixFlat to handle the WebGPU perspectiveZO.
 
   /** @type {ArrayBuffer} */
-  #cameraArrayBuffer = new ArrayBuffer(this.constructor.CAMERA_BUFFER_SIZE);
+  #arrayBuffer = new ArrayBuffer(this.constructor.CAMERA_BUFFER_SIZE);
 
   /** @type {Float32Array(16)|mat4} */
-  #perspectiveMatrix = new Float32Array(this.#cameraArrayBuffer, 0, 16);
-
-  /** @type {Float32Array(16)|mat4} */
-  #viewMatrix = new Float32Array(this.#cameraArrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16);
-
-  /** @type {boolean} */
-  #dirtyFrustum = true;
+  #M = {
+    perspective: new Float32Array(this.#arrayBuffer, 0, 16),
+    lookAt: new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16),
+    offset: new Float32Array(this.#arrayBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 16),
+  };
 
   /** @type {boolean} */
-  #dirtyView = true;
-
-  /** @type {boolean} */
-  #dirtyPerspective = true;
+  #dirty = {
+    perspective: true,
+    lookAt: true,
+    offset: true,
+  };
 
   constructor({ cameraPosition, targetPosition } = {}) {
     if ( cameraPosition ) this.cameraPosition = cameraPosition;
@@ -75,134 +78,75 @@ export class Camera {
    * @prop {number} zFar     Distance from the viewer to the far clipping plane (always positive)
    */
   #perspectiveParameters = {
-    fov: Math.toRadians(60),
+    fov: Math.toRadians(90),
     aspect: 1,
-    zNear: 1, // Or 0.1?
-    zFar: 100,
+    zNear: 50,
+    zFar: 1000,
   }
 
   /** @type {MatrixFlat<4x4>} */
   get perspectiveMatrix() {
-    if ( this.#dirtyPerspective ) {
-      mat4.perspectiveZO(this.#perspectiveMatrix, ...Object.values(this.#perspectiveParameters));
-      // this.#projectionBuffer.set()
-
-      this.#dirtyPerspective = false;
+    if ( this.#dirty.perspective ) {
+      // mat4.perspective or perspectiveZO?
+      mat4.perspectiveZO(this.#M.perspective, ...Object.values(this.#perspectiveParameters));
+      this.#dirty.perspective = false;
     }
-    return this.#perspectiveMatrix;
+    return this.#M.perspective;
   }
 
   set perspectiveParameters(params = {}) {
-    this.#dirtyPerspective ||= true;
-    this.#dirtyFrustum ||= true;
+    this.#dirty.perspective ||= true;
     for ( const [key, value] of Object.entries(params) ) {
       this.#perspectiveParameters[key] = value;
     }
   }
 
   /** @type {Float32Array|mat4} */
-  get viewMatrix() {
-    if ( this.#dirtyView ) {
-      mat4.lookAt(this.#viewMatrix, this.#cameraPosition, this.#targetPosition, this.constructor.UP);
-      this.#dirtyView = false;
+  get lookAtMatrix() {
+    if ( this.#dirty.lookAt ) {
+      mat4.lookAt(this.#M.lookAt, this.cameraPosition, this.targetPosition, this.constructor.UP);
+      this.#dirty.lookAt = false;
     }
-    return this.#viewMatrix;
+    return this.#M.lookAt;
+  }
+
+  /** @type {Float32Array|mat4} */
+  get offsetMatrix() {
+    if ( this.#dirty.offset ) {
+      mat4.fromScaling(this.#M.offset, [-1, 1, 1]);
+      this.#dirty.offset = false;
+    }
+    return this.#M.offset;
   }
 
   /** @type {ArrayBuffer} */
-  get cameraArrayBuffer() {
+  get arrayBuffer() {
     // Ensure no updates required.
-    const tmp0 = this.viewMatrix;         /* eslint-disable-line no-unused-vars */
-    const tmp1 = this.perspectiveMatrix;  /* eslint-disable-line no-unused-vars */
-    const tmp2 = this.frustum;           /* eslint-disable-line no-unused-vars */
-    return this.#cameraArrayBuffer;
+    const tmp0 = this.perspectiveMatrix;      /* eslint-disable-line no-unused-vars */
+    const tmp1 = this.lookAtMatrix;           /* eslint-disable-line no-unused-vars */
+    const tmp2 = this.offsetMatrix;           /* eslint-disable-line no-unused-vars */
+    return this.#arrayBuffer;
   }
 
   /** @type {Float32Array(3)|vec3} */
-  #cameraPosition = vec3.create();
+  #positions = {
+    camera: vec3.create(),
+    target: vec3.create(),
+  };
 
-  /** @type {Float32Array(3)|vec3} */
-  #targetPosition = vec3.create();
+  get cameraPosition() { return this.#positions.camera; }
 
-  get cameraPosition() { return this.#cameraPosition; }
-
-  get targetPosition() { return this.#targetPosition; }
+  get targetPosition() { return this.#positions.target; }
 
   set cameraPosition(value) {
     if ( !(value instanceof Float32Array) ) value = [value.x, value.y, value.z];
-    this.#dirtyView ||= true;
-    this.#dirtyFrustum ||= true;
-    this.#cameraPosition.set(value);
+    this.#dirty.lookAt ||= true;
+    this.#positions.camera.set(value);
   }
 
   set targetPosition(value) {
     if ( !(value instanceof Float32Array) ) value = [value.x, value.y, value.z];
-    this.#dirtyView ||= true;
-    this.#dirtyFrustum ||= true;
-    this.#targetPosition.set(value);
+    this.#dirty.lookAt ||= true;
+    this.#positions.target.set(value);
   }
-
-  /** @type {object<Float32Array(4)|vec4>} */
-  #frustum = {
-    left: new Float32Array(this.#cameraArrayBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 4),
-    right: new Float32Array(this.#cameraArrayBuffer, 36 * Float32Array.BYTES_PER_ELEMENT, 4),
-    top: new Float32Array(this.#cameraArrayBuffer, 40 * Float32Array.BYTES_PER_ELEMENT, 4),
-    bottom: new Float32Array(this.#cameraArrayBuffer, 44 * Float32Array.BYTES_PER_ELEMENT, 4),
-    near: new Float32Array(this.#cameraArrayBuffer, 48 * Float32Array.BYTES_PER_ELEMENT, 4),
-    far: new Float32Array(this.#cameraArrayBuffer, 52 * Float32Array.BYTES_PER_ELEMENT, 4),
-  };
-
-  get frustum() {
-    if ( this.#dirtyFrustum ) {
-      mat4.mul(tmpMat, this.perspectiveMatrix, this.viewMatrix);
-      let invLVec = vec3.create();
-      let invL;
-
-      // Left clipping plane
-      vec3.set(tmpVec3, tmpMat[3] + tmpMat[0], tmpMat[7] + tmpMat[4], tmpMat[11] + tmpMat[8]);
-      invL = 1 / vec3.length(tmpVec3);
-      invLVec = vec3.fromValues(invL, invL, invL);
-      this.#frustum.left.set(vec3.multiply(tmpVec3, tmpVec3, invLVec));
-      this.#frustum.left.set([(tmpMat[15] + tmpMat[12]) * invL], 3)
-
-      // Right clipping plane
-      vec3.set(tmpVec3, tmpMat[3] - tmpMat[0], tmpMat[7] - tmpMat[4], tmpMat[11] - tmpMat[8]);
-      invL = 1 / vec3.length(tmpVec3);
-      invLVec = vec3.fromValues(invL, invL, invL);
-      this.#frustum.right.set(vec3.multiply(tmpVec3, tmpVec3, invLVec));
-      this.#frustum.right.set([(tmpMat[15] - tmpMat[12]) * invL], 3)
-
-       // Top clipping plane
-      vec3.set(tmpVec3, tmpMat[3] - tmpMat[1], tmpMat[7] - tmpMat[5], tmpMat[11] - tmpMat[9]);
-      invL = 1 / vec3.length(tmpVec3);
-      invLVec = vec3.fromValues(invL, invL, invL);
-      this.#frustum.top.set(vec3.multiply(tmpVec3, tmpVec3, invLVec));
-      this.#frustum.top.set([(tmpMat[15] - tmpMat[13]) * invL], 3)
-
-      // Bottom clipping plane
-      vec3.set(tmpVec3, tmpMat[3] + tmpMat[1], tmpMat[7] + tmpMat[5], tmpMat[11] + tmpMat[9]);
-      invL = 1 / vec3.length(tmpVec3);
-      invLVec = vec3.fromValues(invL, invL, invL);
-      this.#frustum.bottom.set(vec3.multiply(tmpVec3, tmpVec3, invLVec));
-      this.#frustum.bottom.set([(tmpMat[15] + tmpMat[13]) * invL], 3)
-
-      // Near clipping plane
-      vec3.set(tmpVec3, tmpMat[2], tmpMat[6], tmpMat[10]);
-      invL = 1 / vec3.length(tmpVec3);
-      invLVec = vec3.fromValues(invL, invL, invL);
-      this.#frustum.near.set(vec3.multiply(tmpVec3, tmpVec3, invLVec));
-      this.#frustum.left.set([tmpMat[14] * invL], 3)
-
-      // Far clipping plane
-      vec3.set(tmpVec3, tmpMat[3] - tmpMat[2], tmpMat[7] - tmpMat[6], tmpMat[11] - tmpMat[10]);
-      invL = 1 / vec3.length(tmpVec3);
-      invLVec = vec3.fromValues(invL, invL, invL);
-      this.#frustum.far.set(vec3.multiply(tmpVec3, tmpVec3, invLVec));
-      this.#frustum.far.set([(tmpMat[15] - tmpMat[14]) * invL], 3)
-
-      this.#dirtyFrustum = false;
-    }
-    return this.#frustum;
-  }
-
 }

@@ -1,8 +1,7 @@
 /* globals
 canvas,
 CONFIG,
-CONST,
-PIXI
+CONST
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -10,8 +9,6 @@ PIXI
 // Base folder
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { Geometry } from "./Geometry.js";
-import { GeometryWallDesc } from "./GeometryWall.js";
 
 export class RenderWalls {
   /** @type {GPUDevice} */
@@ -41,26 +38,29 @@ export class RenderWalls {
   /** @type {object<GPUBuffer>} */
   buffers = {};
 
+  // See https://webgpufundamentals.org/webgpu/lessons/resources/wgsl-offset-computer.html
   static BINDGROUP_OPTS = {
-    INSTANCE: {
-      label: "Instance",
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: "read-only-storage" },
-      }]
-    },
-
     CAMERA: {
-      label: "Camera BindGroupLayout",
+      label: "Camera",
       entries: [{
         binding: 0, // Camera/Frame uniforms
         visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
         buffer: {},
       }]
     },
-  }
+  };
 
+  static VERTEX_LAYOUT = [{
+    // See https://toji.dev/webgpu-best-practices/compute-vertex-data.html
+    // 3 floats, tightly packed.
+    arrayStride: Float32Array.BYTES_PER_ELEMENT * 3,
+    stepMode: "vertex",
+    attributes: [{
+      format: "float32x3",
+      offset: 0,
+      shaderLocation: 0, // pos
+    }]
+  }];
 
   // See https://webgpufundamentals.org/webgpu/lessons/resources/wgsl-offset-computer.html
   /*
@@ -84,19 +84,82 @@ export class RenderWalls {
     this.senseType = senseType;
   }
 
+  /** @type {Float32Array} */
+  edgeVertexPositions;
+
+  /** @type {Uint16Array} */
+  edgeVertexIndices;
+
   async initialize() {
     const device = this.device ??= await WebGPUDevice.getDevice();
 
     // Define shader.
     this.modules.render = await WebGPUShader.fromGLSLFile(device, "wall", "Wall Render");
 
+    // Define edges.
+    // For now, pull geometry data from the edge.
+    const edges = [...canvas.edges.values()].filter(edge => this.includeEdge(edge));
+
+    // Combine edges to single buffer.
+    this.edgeVertexPositions = new Float32Array(edges.length * 3 * 4);
+    this.edgeVertexIndices = new Uint16Array(edges.length * 3 * 4);
+    let offset = 0;
+    let offsetV = 0; // To increment the vertices for each subsequent edge.
+    for ( const edge of edges ) {
+      const geom = edge.object._atvPlaceableGeometry.geometry;
+      const vBuff = geom.getBuffer("aVertex").data;
+      const iBuff = geom.indexBuffer.data;
+      this.edgeVertexPositions.set(vBuff, offset);
+      this.edgeVertexIndices.set(iBuff.map(elem => elem + offsetV), offset);
+      offset += 12;
+      offsetV += 4
+    }
+
+    // Add 1 to each vertex to make a vec4. To avoid the vec3 sizing issue.
+    /*
+    this.edgeVertexPositions = new Float32Array(edges.length * 4 * 4);
+    this.edgeVertexIndices = new Uint16Array(edges.length * 3 * 4);
+    let posOffset = 0;
+    let idxOffset = 0;
+    for ( const edge of edges ) {
+      const geom = edge.object._atvPlaceableGeometry.geometry;
+      const vBuff = geom.getBuffer("aVertex").data;
+      const iBuff = geom.indexBuffer.data;
+      for ( let oldI = 0, newP = 0, newI = 0; oldI < 12; oldI += 3, newP += 4, newI += 3 ) {
+        this.edgeVertexPositions.set(vBuff.slice(oldI, oldI + 3), newP);
+        this.edgeVertexPositions.set([1], newP + 3);
+        this.edgeVertexIndices.set(vIndex.slice(oldI, oldI + 3), newI);
+        this.edgeVertexIndices.set([1], newI + 2);
+      }
+    }
+    */
+
+    // Vertex and index buffers.
+    this.buffers.position = device.createBuffer({
+      label: "Vertices",
+      size: this.edgeVertexPositions.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(this.buffers.position, 0, this.edgeVertexPositions);
+
+    this.buffers.indices = device.createBuffer({
+      label: "Indices",
+      size: this.edgeVertexIndices.byteLength,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(this.buffers.indices, 0, this.edgeVertexIndices);
+
+    // Uniform buffers.
+    this.buffers.camera = device.createBuffer({
+      label: "Camera",
+      size: Camera.CAMERA_BUFFER_SIZE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    // Will be written to GPU prior to render, because the camera view will change.
+
     // Define bind group layouts.
     const BG_OPTS = this.constructor.BINDGROUP_OPTS;
     this.bindGroupLayouts.camera = device.createBindGroupLayout(BG_OPTS.CAMERA);
-    this.bindGroupLayouts.instance = device.createBindGroupLayout(BG_OPTS.INSTANCE);
-
-    // Determine the wall geometry.
-    this.geometry = new Geometry(device, new GeometryWallDesc());
 
     // Define pipelines.
     // TODO: Make async.
@@ -105,12 +168,11 @@ export class RenderWalls {
       label: "Render",
       layout: device.createPipelineLayout({ bindGroupLayouts: [
         this.bindGroupLayouts.camera,
-        this.bindGroupLayouts.instance,
       ]}),
       vertex: {
         module: this.modules.render,
         entryPoint: "vertexMain",
-        buffers: this.geometry.buffers,
+        buffers: this.constructor.VERTEX_LAYOUT,
       },
       fragment: {
         module: this.modules.render,
@@ -126,39 +188,13 @@ export class RenderWalls {
       }
     });
 
-    // Identify edges in the scene.
-    this.initializeEdges();
-
-    // Define buffers and instances.
-    this.buffers.camera = this.device.createBuffer({
-      label: "Camera",
-      size: Camera.CAMERA_BUFFER_SIZE,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-
-    this.buffers.instance = this.device.createBuffer({
-      label: "Instance",
-      size: this.numEdges * this.constructor.INSTANCE_ELEMENT_LENGTH,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-    })
-    this.updateInstanceBuffer();
-
     // Define bind groups.
-    this.bindGroups.camera = this.device.createBindGroup({
+    this.bindGroups.camera = device.createBindGroup({
       label: "Camera",
       layout: this.bindGroupLayouts.camera,
       entries: [{
         binding: 0,
         resource: { buffer: this.buffers.camera }
-      }],
-    });
-
-    this.bindGroups.instance = this.device.createBindGroup({
-      label: "Instance",
-      layout: this.bindGroupLayouts.instance,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.buffers.instance }
       }],
     });
 
@@ -175,63 +211,22 @@ export class RenderWalls {
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustrum(target);
-    this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.cameraArrayBuffer);
+    // this.camera.setTargetTokenFrustrum(target);
+    this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.arrayBuffer);
 
-    const commandEncoder = this.device.createCommandEncoder();
-    commandEncoder.pushDebugGroup("Outside Render Pass");
+    const commandEncoder = this.device.createCommandEncoder({ label: "Render walls" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
-    renderPass.pushDebugGroup('Inside Render Pass');
-    this.drawScene(renderPass);
-    renderPass.popDebugGroup();
+    renderPass.setPipeline(this.pipelines.render);
+    renderPass.setBindGroup(0, this.bindGroups.camera);
+    renderPass.setVertexBuffer(0, this.buffers.position);
+    renderPass.setIndexBuffer(this.buffers.indices, "uint16");
+    renderPass.drawIndexed(this.edgeVertexIndices.length);
     renderPass.end();
-    commandEncoder.popDebugGroup();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  /**
-   * Render every drawable in the scene.
-   * @param {GPURenderEncoder} renderEncoder
-   */
-  drawScene(renderEncoder) {
-    renderEncoder.pushDebugGroup("Draw Scene");
-    renderEncoder.setBindGroup(0, this.bindGroups.camera);
-    renderEncoder.setPipeline(this.pipelines.render);
-    renderEncoder.setBindGroup(1, this.bindGroups.instance);
-    this.geometry.setBuffers(renderEncoder);
-
-    // TODO: use culling.
-    // Instanced for now.
-    this.geometry.draw(renderEncoder, this.numEdges);
-    renderEncoder.popDebugGroup();
-  }
-
-
   // ----- Wall placeable handling ----- //
-
-  /** @type {Map<string, Edge>} */
-  edges = new Map();
-
-  /** @type {Map<string, number>} */
-  #edgeInstanceIndices = new Map();
-
-  /** @type {number} */
-  get numEdges() { return this.edges.size; }
-
-  /**
-   * Initialize all edges.
-   */
-  initializeEdges() {
-    this.edges.clear();
-    const edges = [...canvas.edges.values()].filter(edge => this.includeEdge(edge));
-    this.instanceArrayBuffer = new ArrayBuffer(edges.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
-    edges.forEach((edge, idx) => {
-      this.edges.set(edge.id, edge);
-      this.#edgeInstanceIndices.set(edge.id, idx);
-      this.updateEdgeInstanceData(edge.id, idx, edge);
-    });
-  }
 
   edgeTypes = new Set(["wall"]);
 
@@ -243,119 +238,6 @@ export class RenderWalls {
     if ( edge[this.senseType] === CONST.WALL_SENSE_TYPES.NONE ) return false;
     if ( !this.edgeTypes.has(edge.type) ) return false;
     return true;
-  }
-
-
-  // ----- Instances ----- //
-
-  /**
-   * @typedef {object} EdgeInstanceData
-   * @prop {Float32Array[2]} position         From wall center (vec2f)
-   * @prop {Float32Array[2]} elevation        In pixel units (vec2f)
-   * @prop {Float32Array[1]} rotation         In radians (float)
-   * @prop {Float32Array[1]} length           2d length from vertex A to B (float)
-   */
-
-  /**
-   * Update the instance array of a specific edge.
-   * @param {string} edgeId       Id of the edge
-   * @param {number} [idx]        Optional edge id; will be looked up using edgeId otherwise
-   * @param {Edge} [edge]         The edge associated with the id; will be looked up otherwise
-   */
-  updateEdgeInstanceData(edgeId, idx, edge) {
-    edge ??= this.edges.get(edgeId);
-    const pos = this.constructor.edgeCenter(edge);
-    const elev = this.constructor.edgeElevation(edge);
-    const rot = this.constructor.edgeAngle(edge);
-    const ln = this.constructor.edgeLength(edge);
-    const dat = this.getEdgeInstanceData(edgeId, idx);
-    dat.position.set([pos.x, pos.y]);
-    dat.elevation.set([elev.top, elev.bottom]);
-    dat.rotation.set([rot]);
-    dat.length.set([ln]);
-  }
-
-  /**
-   * Retrieve the array views associated with a given edge.
-   * @param {string} edgeId       Id of the edge
-   * @param {number} [idx]        Optional edge id; will be looked up using edgeId otherwise
-   */
-  getEdgeInstanceData(edgeId, idx) {
-    idx ??= this.#edgeInstanceIndices.get(edgeId);
-    const i = idx * this.constructor.INSTANCE_ELEMENT_LENGTH;
-    return {
-      position: new Float32Array(this.instanceArrayBuffer, i, 2),       // vec2f
-      elevation: new Float32Array(this.instanceArrayBuffer, i + 8, 2),  // vec2f
-      rotation: new Float32Array(this.instanceArrayBuffer, i + 16, 1),  // f32
-      length: new Float32Array(this.instanceArrayBuffer, i + 20, 1),    // f32
-      buffer: new Float32Array(this.instanceArrayBuffer, i, 6)          // combined
-    };
-  }
-
-  /**
-   * Update the instance buffer on the GPU for all instances.
-   */
-  updateInstanceBuffer() {
-    this.device.queue.writeBuffer(
-      this.buffers.instance, 0, this.instanceArrayBuffer, // 0 , this.constructor.INSTANCE_ELEMENT_LENGTH * this.numEdges
-    );
-  }
-
-  /**
-   * Update the instance buffer on the GPU for a specific edge.
-   * @param {string} edgeId
-   * @param {Float32Array} dat      Buffer from edgeInstanceData method
-   * @param {number} [idx]          Instance index of this edge
-   */
-  partialUpdateInstanceBuffer(edgeId, idx) {
-    idx ??= this.#edgeInstanceIndices.get(edgeId);
-    const dat = this.getEdgeInstanceData(edgeId, idx);
-    this.device.queue.writeBuffer(
-      this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_LENGTH, dat.buffer,
-    );
-  }
-
-  /**
-   * Determine the top and bottom edge elevations. Null values will be given large constants.
-   * @param {Edge} edge
-   * @returns {object}
-   * - @prop {number} top         1e05 if null
-   * - @prop {number} bottom      -1e05 if null
-   */
-  static edgeElevation(edge) {
-    let { top, bottom } = edge.elevationLibGeometry.a;
-    top ??= 1e05;
-    bottom ??= -1e05;
-    top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
-    bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
-    return { top, bottom };
-  }
-
-  /**
-   * Determine the 2d center point of the edge.
-   * @param {Edge} edge
-   * @returns {PIXI.Point}
-   */
-  static edgeCenter(edge) {
-    const ctr = new PIXI.Point();
-    return edge.a.add(edge.b, ctr).multiplyScalar(0.5, ctr);
-  }
-
-  /**
-   * Determine the 2d length of the edge.
-   * @param {Edge} edge
-   * @returns {number}
-   */
-  static edgeLength(edge) { return PIXI.Point.distanceBetween(edge.a, edge.b); }
-
-  /**
-   * Angle of the edge on the 2d canvas.
-   * @param {Edge} edge
-   * @returns {number} Angle in radians
-   */
-  static edgeAngle(edge) {
-    const delta = edge.b.subtract(edge.a, PIXI.Point._tmp3);
-    return Math.atan2(delta.y, delta.x);
   }
 
   // ----- NOTE: Rendering ----- //
@@ -381,7 +263,7 @@ export class RenderWalls {
      // Appropriate target will be populated in onFrame
     view: undefined,
     resolveTarget: undefined,
-    clearValue: this.clearColor,
+    clearValue: { r: 0, g: 0, b: 0, a: 1 },
     loadOp: "clear",
     storeOp: "discard",
   };
@@ -406,6 +288,7 @@ export class RenderWalls {
       size: [this.renderSize.width, this.renderSize.height, 1],
       dimension: "2d",
       format: WebGPUDevice.presentationFormat,
+
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC, // Unneeded: GPUTextureUsage.TEXTURE_BINDING,
     });
     this.allocateRenderTargets();
@@ -454,7 +337,6 @@ export class RenderWalls {
 
     this.colorAttachment.resolveTarget = undefined;
     this.colorAttachment.view = this.renderTexture.createView();
-    this.colorAttachment.clearValue = this.clearColor;
 
     this.renderPassDescriptor.colorAttachments[0] = this.colorAttachment;
     this.renderPassDescriptor.depthStencilAttachment.view = this.depthTexture.createView();

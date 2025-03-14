@@ -95,7 +95,9 @@ export class WebGPUShader {
    */
   static fromCodeString(device, code, label = "", params = {}) {
     if ( !foundry.utils.isEmpty(params) ) code = interpolate(code, params);
-    return device.createShaderModule({ label, code });
+    const out = device.createShaderModule({ label, code });
+    out._sourceCode = code;
+    return out;
   }
 }
 
