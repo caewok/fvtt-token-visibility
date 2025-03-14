@@ -109,6 +109,11 @@ popout.context.configure({
 
 renderWalls = new RenderWalls(device);
 await renderWalls.initialize();
+await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, popout)
+
+
+renderWalls = new RenderWalls(device);
+await renderWalls.initialize();
 renderWalls.setRenderTextureToCanvas(popout.context);
 await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target)
 

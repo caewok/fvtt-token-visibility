@@ -207,20 +207,76 @@ export class RenderWalls {
    * @param {Point3d} viewerLocation
    * @param {Token} target
    */
-  async renderScene(viewerLocation, target) {
+  async renderScene(viewerLocation, target, popout) {
+    const device = this.device ??= await WebGPUDevice.getDevice();
+
+    /*
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
     // this.camera.setTargetTokenFrustrum(target);
     this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.arrayBuffer);
+     */
+    const module = device.createShaderModule({
+      label: 'our hardcoded red triangle shaders',
+      code: `
+        @vertex fn vs(
+          @builtin(vertex_index) vertexIndex : u32
+        ) -> @builtin(position) vec4f {
+          let pos = array(
+            vec2f( 0.0,  0.5),  // top center
+            vec2f(-0.5, -0.5),  // bottom left
+            vec2f( 0.5, -0.5)   // bottom right
+          );
 
-    const commandEncoder = this.device.createCommandEncoder({ label: "Render walls" });
-    const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
-    renderPass.setPipeline(this.pipelines.render);
-    renderPass.setBindGroup(0, this.bindGroups.camera);
-    renderPass.setVertexBuffer(0, this.buffers.position);
-    renderPass.setIndexBuffer(this.buffers.indices, "uint16");
-    renderPass.drawIndexed(this.edgeVertexIndices.length);
+          return vec4f(pos[vertexIndex], 0.0, 1.0);
+        }
+
+        @fragment fn fs() -> @location(0) vec4f {
+          return vec4f(1.0, 0.0, 0.0, 1.0);
+        }
+      `,
+    });
+
+    const pipeline = device.createRenderPipeline({
+      label: 'our hardcoded red triangle pipeline',
+      layout: 'auto',
+      vertex: {
+        entryPoint: 'vs',
+        module,
+      },
+      fragment: {
+        entryPoint: 'fs',
+        module,
+        targets: [{ format: WebGPUDevice.presentationFormat }],
+      },
+    });
+
+    const renderPassDescriptor = {
+      label: 'our basic canvas renderPass',
+      colorAttachments: [
+        {
+          // view: <- to be filled out when we render
+          clearValue: [0.3, 0.3, 0.3, 1],
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    };
+    renderPassDescriptor.colorAttachments[0].view =
+      popout.context.getCurrentTexture().createView();
+
+    const commandEncoder = device.createCommandEncoder({ label: "Render walls" });
+    // const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
+    const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
+    renderPass.setPipeline(pipeline);
+    // renderPass.setPipeline(this.pipelines.render);
+    // renderPass.setBindGroup(0, this.bindGroups.camera);
+    // renderPass.setVertexBuffer(0, this.buffers.position);
+    // renderPass.setIndexBuffer(this.buffers.indices, "uint16");
+
+    renderPass.draw(3);
+    // renderPass.drawIndexed(this.edgeVertexIndices.length);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();
