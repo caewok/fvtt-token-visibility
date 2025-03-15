@@ -101,23 +101,29 @@ device = await WebGPUDevice.getDevice()
 
 popout = new Area3dPopoutCanvas({ width: 400, height: 400, resizable: true })
 await popout._render(true);
+
+/*
 presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 popout.context.configure({
   device,
   format: presentationFormat,
 });
+*/
 
 renderWalls = new RenderWalls(device);
 await renderWalls.initialize();
-await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, popout)
-
-
-renderWalls = new RenderWalls(device);
-await renderWalls.initialize();
-renderWalls.setRenderTextureToCanvas(popout.context);
+renderWalls.setRenderTextureToCanvas(popout.context)
 await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target)
 
 
+renderWalls = new RenderWalls(device);
+await renderWalls.initialize();
+renderWalls.setRenderTextureToCanvas(popout.context)
+
+renderWalls.setRenderTextureToCanvas(popout.context);
+await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target)
+
+renderWalls.renderTexture = popout.context.getCurrentTexture()
 
 popout.close()
 

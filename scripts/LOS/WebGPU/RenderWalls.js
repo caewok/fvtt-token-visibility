@@ -198,7 +198,7 @@ export class RenderWalls {
       fragment: {
         entryPoint: 'fs',
         module: this.modules.render,
-        targets: [{ format: presentationFormat }],
+        targets: [{ format: WebGPUDevice.presentationFormat }],
       },
     });
 
@@ -213,6 +213,8 @@ export class RenderWalls {
     });
 
     // this.pipelines.render = await this.pipelines.render;
+
+    this.setDepthTexture();
   }
 
   /**
@@ -221,7 +223,7 @@ export class RenderWalls {
    * @param {Point3d} viewerLocation
    * @param {Token} target
    */
-  async renderScene(viewerLocation, target, popout) {
+  async renderScene(viewerLocation, target) {
     const device = this.device ??= await WebGPUDevice.getDevice();
 
     /*
@@ -232,23 +234,40 @@ export class RenderWalls {
     this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.arrayBuffer);
      */
 
+    /*
+    if ( context ) {
+      context.configure({
+        device: this.device,
+        format: WebGPUDevice.presentationFormat,
+      });
+      // Storing context.getCurrentTexture() does not work.
+      this.colorAttachment.view = context.getCurrentTexture().createView();
+    } else this.colorAttachment.view = renderTexture.createView();
+    */
+    // this.renderPassDescriptor.colorAttachments[0].view = popout.context.getCurrentTexture().createView();
+
+    /*
     const renderPassDescriptor = {
       label: 'our basic canvas renderPass',
       colorAttachments: [
         {
-          // view: <- to be filled out when we render
+          view: renderTexture.createView(),
           clearValue: [0.3, 0.3, 0.3, 1],
           loadOp: 'clear',
           storeOp: 'store',
         },
       ],
+
     };
-    renderPassDescriptor.colorAttachments[0].view =
-      popout.context.getCurrentTexture().createView();
+    */
+
+    // Must set the canvas context immediately prior to render.
+    if ( this.#context ) this.colorAttachment.view = this.#context.getCurrentTexture().createView();
+
 
     const commandEncoder = device.createCommandEncoder({ label: "Render walls" });
     // const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
-    const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
+    const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     renderPass.setPipeline(this.pipelines.render);
     // renderPass.setBindGroup(0, this.bindGroups.camera);
     // renderPass.setVertexBuffer(0, this.buffers.position);
@@ -287,61 +306,63 @@ export class RenderWalls {
   #renderTexture;
 
   get renderTexture() {
-    if ( !this.#renderTexture ) this.setRenderTextureToNewTexture();
+    // if ( !this.#renderTexture ) this.setRenderTextureToInternalTexture();
     return this.#renderTexture;
   }
 
-  set renderTexture(value) { this.#renderTexture = value; }
+  set renderTexture(value) {
+    this.#renderTexture = value;
+    this.colorAttachment.view = this.renderTexture.createView();
+    this.#context = undefined;
+  }
+
+  #context;
+
+  setRenderTextureToCanvas(context) {
+    this.#context = context;
+    this.#context.configure({
+      device: this.device,
+      format: WebGPUDevice.presentationFormat,
+    });
+  }
+
+  removeCanvasRenderTexture() { this.#context = undefined; }
 
   /** @type {object} */
   colorAttachment = {
      // Appropriate target will be populated in onFrame
     view: undefined,
-    resolveTarget: undefined,
-    clearValue: { r: 0, g: 0, b: 0, a: 1 },
+    clearValue: [0.3, 0.3, 0.3, 1],
     loadOp: "clear",
-    storeOp: "discard",
+    storeOp: "store",
+  };
+
+  /** @type {object} */
+  depthStencilAttachment = {
+    view: undefined,
+    depthClearValue: 1.0,
+    depthLoadOp: "clear",
+    depthStoreOp: "discard",
   };
 
   /** @type {object} */
   renderPassDescriptor = {
-    colorAttachments: [],
-    depthStencilAttachment: {
-      view: undefined,
-      depthClearValue: 1.0,
-      depthLoadOp: "clear",
-      depthStoreOp: "discard"
-    }
+    label: "Wall RenderPass",
+    colorAttachments: [this.colorAttachment],
+    // depthStencilAttachment: this.depthStencilAttachment,
   };
 
   /**
-   * Create a new texture to store the render.
+   * Create a render texture that can be used to store the output of this render.
+   * @returns {GPUTexture}
    */
-  setRenderTextureToNewTexture() {
-   // TODO: Set alphaMode to "opaque"?
-    this.#renderTexture = this.device.createTexture({
+  createRenderTexture() {
+    return this.device.createTexture({
       size: [this.renderSize.width, this.renderSize.height, 1],
       dimension: "2d",
       format: WebGPUDevice.presentationFormat,
-
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC, // Unneeded: GPUTextureUsage.TEXTURE_BINDING,
     });
-    this.allocateRenderTargets();
-  }
-
-  /**
-   * Set the render destination to a scene context, primarily for debugging.
-   * @param {}
-   */
-  setRenderTextureToCanvas(context) {
-    // TODO: Set alphaMode to "opaque"?
-    context.configure({
-      device: this.device,
-      format: WebGPUDevice.presentationFormat,
-    });
-    this.#renderTexture = context.getCurrentTexture();
-    this.renderSize = { width: this.#renderTexture.width, height: this.#renderTexture.height };
-    this.allocateRenderTargets();
   }
 
   /** @type {object<width: {number}, height: {number}>} */
@@ -355,13 +376,14 @@ export class RenderWalls {
     this.allocateRenderTargets();
   }
 
-  allocateRenderTargets() {
+  setDepthTexture() {
     const size = this.renderSize;
 
     if ( this.depthTexture ) {
       this.depthTexture.destroy();
       this.depthTexture = undefined;
     }
+
 
     this.depthTexture = this.device.createTexture({
       size,
@@ -370,11 +392,7 @@ export class RenderWalls {
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
 
-    this.colorAttachment.resolveTarget = undefined;
-    this.colorAttachment.view = this.renderTexture.createView();
-
-    this.renderPassDescriptor.colorAttachments[0] = this.colorAttachment;
-    this.renderPassDescriptor.depthStencilAttachment.view = this.depthTexture.createView();
+    this.depthStencilAttachment.view = this.depthTexture.createView();
   }
 }
 
