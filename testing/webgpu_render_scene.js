@@ -116,10 +116,8 @@ renderWalls.sampleCount = 4
 renderWalls.sampleCount = 1
 renderWalls.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderWalls.initialize();
-
 renderWalls.setRenderTextureToCanvas(popout.canvas)
-
-await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target)
+await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, vp)
 
 
 renderWalls = new RenderWalls(device);
