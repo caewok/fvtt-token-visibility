@@ -9,6 +9,7 @@ CONST
 // Base folder
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
+import { vec4, mat4 } from "../gl_matrix/index.js";
 
 export class RenderWalls {
   /** @type {GPUDevice} */
@@ -102,7 +103,7 @@ export class RenderWalls {
 
     // Combine edges to single buffer.
     this.edgeVertexPositions = new Float32Array(edges.length * 3 * 4);
-    this.edgeVertexIndices = new Uint16Array(edges.length * 3 * 4);
+    this.edgeVertexIndices = new Uint16Array(edges.length * 3 * 4); // Note this is always a multiple of 4.
     let offset = 0;
     let offsetV = 0; // To increment the vertices for each subsequent edge.
     for ( const edge of edges ) {
@@ -114,6 +115,11 @@ export class RenderWalls {
       offset += 12;
       offsetV += 4
     }
+
+    // Can compare against defined matrices.
+    // vp = viewer.vision.tokenvisibility.losCalc.viewpoints[0]
+    // vp.shaders.obstacle
+    // vp.shaders.obstacle.uniforms
 
     // Add 1 to each vertex to make a vec4. To avoid the vec3 sizing issue.
     /*
@@ -133,6 +139,57 @@ export class RenderWalls {
       }
     }
     */
+
+    // For debugging, manually apply the camera matrices.
+    /*
+    for ( let i = 0, n = this.edgeVertexPositions.length; i < n; i += 3 ) {
+      const tmpMat = mat4.create();
+      const cameraPos = vec4.create();
+      const newV = vec4.create();
+      const v = this.edgeVertexPositions.slice(i, i + 3);
+      vec4.transformMat4(cameraPos, v, this.camera.lookAtMatrix);
+      mat4.multiply(tmpMat, this.camera.perspectiveMatrix, this.camera.offsetMatrix);
+      vec4.transformMat4(newV, cameraPos, tmpMat);
+      this.edgeVertexPositions.set(newV, i);
+    }
+    */
+
+    // Using Point3d and MatrixFlat
+    /*
+    const camera = this.camera;
+    const edgeVertexPositions = this.edgeVertexPositions;
+    Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    MatrixFlat = CONFIG.GeometryLib.MatrixFlat;
+    lookAtM = MatrixFlat.fromColumnMajorArray(camera.lookAtMatrix, 4, 4)
+    perspectiveM = MatrixFlat.fromColumnMajorArray(camera.perspectiveMatrix, 4, 4)
+    offsetM = MatrixFlat.fromColumnMajorArray(camera.offsetMatrix, 4, 4)
+
+    pParams = camera.perspectiveParameters;
+    MatrixFlat.perspective(pParams.fov, pParams.aspect, pParams.near, pParams.far)
+
+    oldVertices = [];
+    newVertices = [];
+    for ( let i = 0, n = edgeVertexPositions.length; i < n; i += 3 ) {
+      const v = new Point3d(...edgeVertexPositions.slice(i, i + 3));
+      const cameraPos = lookAtM.multiplyPoint3d(v);
+      const newV = offsetM.multiply(perspectiveM).multiplyPoint3d(cameraPos);
+      oldVertices.push(v)
+      newVertices.push(newV)
+    }
+    */
+
+    // For debugging, make a triangle.
+    /*
+    this.edgeVertexPositions = new Float32Array([
+      0.0, 0.5, 0.0,
+      -0.5, -0.5, 0.0,
+      0.5, -0.5, 0.0,
+    ]);
+    this.edgeVertexIndices = new Uint16Array([
+      0, 1, 2, 0 // Multiple of 4.
+    ]);
+    */
+
 
     // Vertex and index buffers.
     this.buffers.position = device.createBuffer({
@@ -164,40 +221,19 @@ export class RenderWalls {
     // Define pipelines.
     // TODO: Make async.
     // this.modules.render = await this.modules.render;
-//     this.pipelines.render = device.createRenderPipeline({
-//       label: "Render",
-//       layout: device.createPipelineLayout({ bindGroupLayouts: [
-//         this.bindGroupLayouts.camera,
-//       ]}),
-//       vertex: {
-//         module: this.modules.render,
-//         entryPoint: "vertexMain",
-//         buffers: this.constructor.VERTEX_LAYOUT,
-//       },
-//       fragment: {
-//         module: this.modules.render,
-//         entryPoint: "fragmentMain",
-//         targets: [{
-//           format: WebGPUDevice.presentationFormat,
-//         }],
-//       },
-//       depthStencil: {
-//         format: this.depthFormat,
-//         depthWriteEnabled: true,
-//         depthCompare: "less-equal",
-//       }
-//     });
-
     this.pipelines.render = device.createRenderPipeline({
-      label: 'our hardcoded red triangle pipeline',
-      layout: 'auto',
+      label: "Render",
+      layout: device.createPipelineLayout({ bindGroupLayouts: [
+        this.bindGroupLayouts.camera,
+      ]}),
       vertex: {
-        entryPoint: 'vs',
         module: this.modules.render,
+        entryPoint: "vertexMain",
+        buffers: this.constructor.VERTEX_LAYOUT,
       },
       fragment: {
-        entryPoint: 'fs',
         module: this.modules.render,
+        entryPoint: "fragmentMain",
         targets: [{ format: WebGPUDevice.presentationFormat }],
       },
       depthStencil: {
@@ -205,8 +241,8 @@ export class RenderWalls {
         depthWriteEnabled: true,
         depthCompare: "less-equal",
       },
-      multisample: {
-        count: this.sampleCount ?? 1
+        multisample: {
+        count: this.sampleCount ?? 1,
       }
     });
 
@@ -230,16 +266,25 @@ export class RenderWalls {
    * @param {Point3d} viewerLocation
    * @param {Token} target
    */
-  async renderScene(viewerLocation, target) {
+  async renderScene(viewerLocation, target, vp) {
     const device = this.device ??= await WebGPUDevice.getDevice();
-
-    /*
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
+
+    // For debugging, copy from existing viewer viewpoint uniforms.
+    this.camera.perspectiveParameters = {
+      fov: vp.shaders.obstacle.fovy,
+      aspect: 1,
+      zNear: vp.shaders.obstacle.near,
+      zFar: vp.shaders.obstacle.far,
+    };
+    // vp.shaders.obstacle.uniforms.uLookAtMatrix
+    // vp.shaders.obstacle.uniforms.uPerspectiveMatrix
+    // vp.shaders.obstacle.uniforms.uOffsetMatrix
+
     // this.camera.setTargetTokenFrustrum(target);
     this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.arrayBuffer);
-     */
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -252,12 +297,13 @@ export class RenderWalls {
     const commandEncoder = device.createCommandEncoder({ label: "Render walls" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     renderPass.setPipeline(this.pipelines.render);
-    // renderPass.setBindGroup(0, this.bindGroups.camera);
-    // renderPass.setVertexBuffer(0, this.buffers.position);
-    // renderPass.setIndexBuffer(this.buffers.indices, "uint16");
+    renderPass.setBindGroup(0, this.bindGroups.camera);
+    renderPass.setVertexBuffer(0, this.buffers.position);
+    renderPass.setIndexBuffer(this.buffers.indices, "uint16");
 
-    renderPass.draw(3);
-    // renderPass.drawIndexed(this.edgeVertexIndices.length);
+    // renderPass.draw(3);
+    // renderPass.drawIndexed(3);
+    renderPass.drawIndexed(this.edgeVertexIndices.length);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();

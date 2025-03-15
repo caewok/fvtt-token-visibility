@@ -8,7 +8,7 @@ import { vec3, mat4 } from "../gl_matrix/index.js";
 
 export class Camera {
 
-  static UP = vec3.fromValues(0, 1, 0);
+  static UP = vec3.fromValues(0, 0, 1);
 
   /**
    * @typedef {object} CameraStruct
@@ -92,6 +92,11 @@ export class Camera {
       this.#dirty.perspective = false;
     }
     return this.#M.perspective;
+  }
+
+  get perspectiveParameters() {
+    // Copy so they cannot be modified here.
+    return { ...this.#perspectiveParameters };
   }
 
   set perspectiveParameters(params = {}) {

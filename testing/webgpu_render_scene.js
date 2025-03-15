@@ -133,7 +133,14 @@ renderWalls.renderTexture = popout.context.getCurrentTexture()
 
 popout.close()
 
-renderWalls.camera.
+renderWalls.camera.cameraPosition = Point3d.fromTokenCenter(viewer)
+renderWalls.camera.targetPosition = Point3d.fromTokenCenter(target)
+renderWalls.camera.setTargetTokenFrustrum(target)
+renderWalls.camera.cameraPosition
+renderWalls.camera.targetPosition
+renderWalls.camera.lookAtMatrix
+renderWalls.camera.perspectiveMatrix
+renderWalls.camera.offsetMatrix
 
 
 
