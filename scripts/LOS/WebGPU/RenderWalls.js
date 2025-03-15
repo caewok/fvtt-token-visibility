@@ -200,6 +200,14 @@ export class RenderWalls {
         module: this.modules.render,
         targets: [{ format: WebGPUDevice.presentationFormat }],
       },
+      depthStencil: {
+        format: this.depthFormat,
+        depthWriteEnabled: true,
+        depthCompare: "less-equal",
+      },
+      multisample: {
+        count: this.sampleCount ?? 1
+      }
     });
 
     // Define bind groups.
@@ -212,9 +220,8 @@ export class RenderWalls {
       }],
     });
 
+    this.#allocateRenderTargets();
     // this.pipelines.render = await this.pipelines.render;
-
-    this.setDepthTexture();
   }
 
   /**
@@ -234,39 +241,15 @@ export class RenderWalls {
     this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.arrayBuffer);
      */
 
-    /*
-    if ( context ) {
-      context.configure({
-        device: this.device,
-        format: WebGPUDevice.presentationFormat,
-      });
-      // Storing context.getCurrentTexture() does not work.
-      this.colorAttachment.view = context.getCurrentTexture().createView();
-    } else this.colorAttachment.view = renderTexture.createView();
-    */
-    // this.renderPassDescriptor.colorAttachments[0].view = popout.context.getCurrentTexture().createView();
-
-    /*
-    const renderPassDescriptor = {
-      label: 'our basic canvas renderPass',
-      colorAttachments: [
-        {
-          view: renderTexture.createView(),
-          clearValue: [0.3, 0.3, 0.3, 1],
-          loadOp: 'clear',
-          storeOp: 'store',
-        },
-      ],
-
-    };
-    */
-
     // Must set the canvas context immediately prior to render.
-    if ( this.#context ) this.colorAttachment.view = this.#context.getCurrentTexture().createView();
-
+    const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
+    if ( this.sampleCount > 1 ) this.colorAttachment.resolveTarget = view;
+    else {
+      this.colorAttachment.view = view;
+      this.colorAttachment.resolveTarget = undefined;
+    }
 
     const commandEncoder = device.createCommandEncoder({ label: "Render walls" });
-    // const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     renderPass.setPipeline(this.pipelines.render);
     // renderPass.setBindGroup(0, this.bindGroups.camera);
@@ -296,6 +279,9 @@ export class RenderWalls {
 
   // ----- NOTE: Rendering ----- //
 
+  /** @type {number} */
+  sampleCount = 1; // Must be set prior to initialization.
+
   /** @type {string} */
   depthFormat = "depth24plus";
 
@@ -305,25 +291,46 @@ export class RenderWalls {
   /** @type {GPUTexture} */
   #renderTexture;
 
+  /** @type {GPUTexture} */
+  msaaColorTexture;
+
   get renderTexture() {
-    // if ( !this.#renderTexture ) this.setRenderTextureToInternalTexture();
-    return this.#renderTexture;
+    return this.#renderTexture || (this.#renderTexture = this._createRenderTexture());
   }
 
   set renderTexture(value) {
     this.#renderTexture = value;
-    this.colorAttachment.view = this.renderTexture.createView();
     this.#context = undefined;
+  }
+
+  #allocateRenderTargets() {
+    const sampleCount = this.sampleCount;
+
+    // Update the multi-sample texture if needed.
+    if ( this.msaaColorTexture ) this.msaaColorTexture = this.msaaColorTexture.destroy(); // Sets to undefined.
+    if ( sampleCount > 1 ) this.msaaColorTexture = this._createMSAAColorTexture();
+
+    // Update the depth texture.
+    if ( this.depthTexture ) this.depthTexture = this.depthTexture.destroy();
+    this.depthTexture = this._createDepthTexture();
+    this.depthStencilAttachment.view = this.depthTexture.createView();
+
+    this.colorAttachment.view = sampleCount > 1 ? this.msaaColorTexture.createView() : undefined;
+    this.colorAttachment.resolveTarget = undefined;
+    this.colorAttachment.storeOp = sampleCount > 1 ? "discard" : "store";
   }
 
   #context;
 
-  setRenderTextureToCanvas(context) {
+  setRenderTextureToCanvas(canvas) {
+    const context = canvas.getContext("webgpu");
+    if ( !context ) throw new Error("setRenderTextureToCanvas|Canvas does not have a valid webgpu context!");
     this.#context = context;
     this.#context.configure({
       device: this.device,
       format: WebGPUDevice.presentationFormat,
     });
+    this.renderSize = { width: canvas.width, height: canvas.height };
   }
 
   removeCanvasRenderTexture() { this.#context = undefined; }
@@ -332,7 +339,8 @@ export class RenderWalls {
   colorAttachment = {
      // Appropriate target will be populated in onFrame
     view: undefined,
-    clearValue: [0.3, 0.3, 0.3, 1],
+    resolveTarget: undefined,
+    clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
     loadOp: "clear",
     storeOp: "store",
   };
@@ -349,19 +357,48 @@ export class RenderWalls {
   renderPassDescriptor = {
     label: "Wall RenderPass",
     colorAttachments: [this.colorAttachment],
-    // depthStencilAttachment: this.depthStencilAttachment,
+    depthStencilAttachment: this.depthStencilAttachment,
   };
 
   /**
    * Create a render texture that can be used to store the output of this render.
    * @returns {GPUTexture}
    */
-  createRenderTexture() {
+  _createRenderTexture() {
     return this.device.createTexture({
+      label: "Render Tex",
       size: [this.renderSize.width, this.renderSize.height, 1],
       dimension: "2d",
       format: WebGPUDevice.presentationFormat,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC, // Unneeded: GPUTextureUsage.TEXTURE_BINDING,
+    });
+  }
+
+  /**
+   * Create a depth texture that can be used to store depth for this render.
+   * @returns {GPUTexture}
+   */
+  _createDepthTexture() {
+    return this.device.createTexture({
+      label: "Render Depth",
+      size: this.renderSize,
+      sampleCount: this.sampleCount,
+      format: this.depthFormat,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+  }
+
+  /**
+   * Creates a mult-sample anti-aliased texture for rendering.
+   * @returns {GPUTexture}
+   */
+  _createMSAAColorTexture() {
+    return this.device.createTexture({
+      label: "MSAA Color Tex",
+      size: this.renderSize,
+      sampleCount: this.sampleCount,
+      format: WebGPUDevice.presentationFormat,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
   }
 
@@ -373,26 +410,7 @@ export class RenderWalls {
   set renderSize(value) {
     this.#renderSize.width = value.width;
     this.#renderSize.height = value.height;
-    this.allocateRenderTargets();
-  }
-
-  setDepthTexture() {
-    const size = this.renderSize;
-
-    if ( this.depthTexture ) {
-      this.depthTexture.destroy();
-      this.depthTexture = undefined;
-    }
-
-
-    this.depthTexture = this.device.createTexture({
-      size,
-      sampleCount: this.sampleCount,
-      format: this.depthFormat,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-
-    this.depthStencilAttachment.view = this.depthTexture.createView();
+    this.#allocateRenderTargets();
   }
 }
 

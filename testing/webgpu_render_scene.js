@@ -102,17 +102,23 @@ device = await WebGPUDevice.getDevice()
 popout = new Area3dPopoutCanvas({ width: 400, height: 400, resizable: true })
 await popout._render(true);
 
-/*
+
 presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 popout.context.configure({
   device,
   format: presentationFormat,
 });
-*/
+
 
 renderWalls = new RenderWalls(device);
+
+renderWalls.sampleCount = 4
+renderWalls.sampleCount = 1
+renderWalls.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderWalls.initialize();
-renderWalls.setRenderTextureToCanvas(popout.context)
+
+renderWalls.setRenderTextureToCanvas(popout.canvas)
+
 await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target)
 
 
