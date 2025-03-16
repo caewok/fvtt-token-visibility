@@ -5,13 +5,6 @@
 "use strict";
 
 /**
- * @typedef {object} VertexParameterDescription
- * @prop {TypedArray} values
- * @prop {number} stride
- * @prop {number} offset
- */
-
-/**
  * Describe a wall by its vertices, normals, and uvs.
  * By default, 1x1 wall centered at origin 0,0,0.
  */
@@ -19,17 +12,18 @@ export class GeometryWallDesc {
   /** @type {string} */
   label = "";
 
-  /** @type {VertexParameterDescription} */
-  position = {};
+  /** @type {number} */
+  numVertices = 0;
 
-  /** @type {VertexParameterDescription} */
-  normal = {};
+  /** @type {Float32Array[]} */
+  verticesData = Array(1);
 
-  /** @type {VertexParameterDescription} */
-  texcoord0 = {};
+  /** @type {object} */
+  buffersLayout = Array(1);
 
   /**
    * @param {object} [opts]
+   * @param {string} [opts.label]    Label for this structure
    * @param {number} [opts.length]   Length of the wall
    * @param {number} [opts.height]   Height of wall in z direction
    * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
@@ -65,11 +59,38 @@ export class GeometryWallDesc {
       );
     }
 
-    const values = new Float32Array(arr);
-    this.label = opts.label ?? `GeometryWall ${opts.directional ? "Directional" : ""}`;
-    this.position = { values, stride: 32 };
-    this.normal = { values, stride: 32, offset: 12 };
-    this.uv0 = { values, stride: 32, offset: 24 };
+    // For formats, see https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat.
+    // Each entry in verticesData corresponds to an entry in buffersLayout.
+    // See https://webgpufundamentals.org/webgpu/lessons/webgpu-vertex-buffers.html
+    // TODO: For directional walls, make Normal an instance buffer.
+    // TODO: Better way to define shaderLocation so it can be passed to the shader code?
+    this.numVertices = opts.directional ? 6 : 12;
+    this.verticesData[0] = new Float32Array(arr);
+    this.buffersLayout[0] = {
+      arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 2 normal, 2 uv.
+      stepMode: "vertex",
+      attributes: [
+        // Position
+        {
+          format: "float32x3",
+          offset: 0,
+          shaderLocation: 0,
+        },
+        // Normal
+        {
+          format: "float32x3",
+          offset: Float32Array.BYTES_PER_ELEMENT * 3,
+          shaderLocation: 1,
+        },
+        // UV0
+        {
+          format: "float32x2",
+          offset: Float32Array.BYTES_PER_ELEMENT * 6,
+          shaderLocation: 2,
+        }
+      ]
+    };
+
   }
 }
 

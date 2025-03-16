@@ -80,8 +80,8 @@ export class Camera {
   #perspectiveParameters = {
     fov: Math.toRadians(90),
     aspect: 1,
-    zNear: 50,
-    zFar: 1000,
+    zNear: 1,
+    zFar: null,
   }
 
   /** @type {MatrixFlat<4x4>} */

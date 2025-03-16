@@ -1,5 +1,7 @@
 struct VertexIn {
   @location(0) pos: vec3f,
+  @location(1) norm: vec3f,
+  @location(2) uv0: vec2f,
   @builtin(vertex_index) vertexIndex: u32,
   @builtin(instance_index) instanceIndex: u32,
 }
@@ -14,6 +16,87 @@ struct CameraUniforms {
   offsetM: mat4x4f,
 }
 @group(0) @binding(0) var<uniform> camera: CameraUniforms;
+
+struct Instance {
+  pos: vec2f,
+  elev: vec2f,
+  rot: f32,
+  len: f32,
+}
+@group(1) @binding(0) var<storage, read> instances: array<Instance>;
+
+
+/**
+ * Construct a matrix representing a translation by given x,y,z.
+ * @param {vec3f} v
+ * @returns {mat4x4f}
+ */
+fn translationMatrix(v: vec3f) -> mat4x4f {
+  // Column-wise
+  // See glMatrix mat4.
+  return mat4x4f(
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    v.x, v.y, v.z, 1
+  );
+
+  /*
+  [1, 0, 0, 0],
+  [0, 1, 0, 0],
+  [0, 0, 1, 0],
+  [x, y, z, 1]
+  */
+}
+
+/**
+ * Construct a matrix representing a a scaling along x, y, z.
+ * Note that to avoid scaling, must set each value to 1 (not 0).
+ * @param {vec3f} v
+ * @returns {mat4x4f}
+ */
+fn scaleMatrix(v: vec3f) -> mat4x4f {
+  // Column-wise
+  // See glMatrix mat4.
+  return mat4x4f(
+    v.x, 0, 0, 0,
+    0, v.y, 0, 0,
+    0, 0, v.z, 0,
+    0, 0, 0, 1
+  );
+
+  /*
+  [x, 0, 0, 0],
+  [0, y, 0, 0],
+  [0, 0, z, 0],
+  [0, 0, 0, 1]
+  */
+}
+
+/**
+ * Construct a matrix representing rotation around the z axis.
+ * @param {f32} angle
+ */
+fn rotationZMatrix(angle: f32) -> mat4x4f {
+  let c = cos(angle);
+  let s = sin(angle);
+
+  // Column-wise
+  // See glMatrix mat4.
+  return mat4x4f(
+    c, s, 0, 0,
+    -s, c, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1
+  );
+
+  /*
+  [c, s, 0, 0],
+  [-s, c, 0, 0],
+  [0, 0, 1, 0],
+  [0, 0, 0, 1]
+  */
+}
 
 // ----- Vertex shader ----- //
 @vertex fn vertexMain(in: VertexIn) -> VertexOut {
@@ -31,8 +114,26 @@ struct CameraUniforms {
 
   // For debugging using vertices set between -1 and 1.
   // out.pos = vec4f(in.pos, 1.0);
+  let instanceIndex = in.instanceIndex;
+  let model = instances[instanceIndex];
 
-  let cameraPos = camera.lookAtM * vec4f(in.pos, 1.0);
+  // Construct the model matrix.
+  // Add in translate to center to 0,0 if elevations do not match.
+  // e.g., bottom elevation -1e05, top elevation 200.
+  let top = model.elev.x;
+  let bottom = model.elev.y;
+  var z = 0.0;
+  var scaleZ = 1.0;
+  if ( top != bottom ) {
+    z = ((0.5 * top) + (0.5 * bottom));
+    scaleZ = top - bottom;
+  }
+  let tMat = translationMatrix(vec3f(model.pos, z));
+  let sMat = scaleMatrix(vec3f(model.len, 1.0, scaleZ));
+  let rMat = rotationZMatrix(model.rot);
+  let modelMat = tMat * rMat * sMat;
+
+  let cameraPos = camera.lookAtM * modelMat * vec4f(in.pos, 1.0);
   out.pos = camera.offsetM * camera.perspectiveM * cameraPos;
 
   return out;
