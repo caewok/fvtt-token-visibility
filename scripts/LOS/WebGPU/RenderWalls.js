@@ -13,6 +13,8 @@ import { Camera } from "./Camera.js";
 import { vec4, mat4 } from "../gl_matrix/index.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
 
+const vec3Tmp = vec4.create();
+
 export class RenderWalls {
   /** @type {GPUDevice} */
   device;
@@ -65,16 +67,12 @@ export class RenderWalls {
 
   // See https://webgpufundamentals.org/webgpu/lessons/resources/wgsl-offset-computer.html
   /*
-  const InstanceDataValues = new ArrayBuffer(24);
+  const InstanceDataValues = new ArrayBuffer(64);
   const InstanceDataViews = {
-    position: new Float32Array(InstanceDataValues, 0, 2),
-    elevation: new Float32Array(InstanceDataValues, 8, 2),
-    rotation: new Float32Array(InstanceDataValues, 16, 1),
-    length: new Float32Array(InstanceDataValues, 20, 1),
+    model: new Float32Array(InstanceDataValues)
   };
   */
-  static INSTANCE_ELEMENT_LENGTH = 24;
-
+  static INSTANCE_ELEMENT_LENGTH = 64;
   /**
    * @param {GPUDevice} device
    * @param {object} opts
@@ -293,6 +291,12 @@ export class RenderWalls {
 
   // ----- Instances ----- //
 
+  #translationM = mat4.create();
+
+  #scaleM = mat4.create();
+
+  #rotationM = mat4.create();
+
   /**
    * @typedef {object} EdgeInstanceData
    * @prop {Float32Array[2]} position         From wall center (vec2f)
@@ -310,15 +314,93 @@ export class RenderWalls {
   updateEdgeInstanceData(edgeId, idx, edge) {
     edge ??= this.edges.get(edgeId);
     const pos = this.constructor.edgeCenter(edge);
-    const elev = this.constructor.edgeElevation(edge);
+    const { top, bottom } = this.constructor.edgeElevation(edge);
     const rot = this.constructor.edgeAngle(edge);
     const ln = this.constructor.edgeLength(edge);
-    const dat = this.getEdgeInstanceData(edgeId, idx);
-    dat.position.set([pos.x, pos.y]);
-    dat.elevation.set([elev.top, elev.bottom]);
-    dat.rotation.set([rot]);
-    dat.length.set([ln]);
+
+    // Add in translate to center to 0,0 if elevations do not match.
+    // e.g., bottom elevation -1e05, top elevation 200.
+    let z = 0.0;
+    let scaleZ = 1.0;
+    if ( top != bottom ) {
+      z = ((0.5 * top) + (0.5 * bottom));
+      scaleZ = top - bottom;
+    }
+
+    // Move from center of wall.
+    const translateVec = vec3Tmp;
+    translateVec[0] = pos.x;
+    translateVec[1] = pos.y;
+    translateVec[2] = z;
+    mat4.fromTranslation(this.#translationM, translateVec)
+
+    // Scale by its length and elevation (height).
+    const scaleVec = vec3Tmp;
+    scaleVec[0] = ln;
+    scaleVec[1] = 1.0;
+    scaleVec[2] = scaleZ;
+    mat4.fromScaling(this.#scaleM, scaleVec);
+
+    // Rotate around Z axis.
+    mat4.fromZRotation(this.#rotationM, rot);
+
+    // Combine and update the instance matrix. Multiplies right-to-left.
+    // scale --> rotate --> translate.
+    const M = this.getEdgeInstanceData(edgeId, idx);
+    mat4.identity(M);
+    mat4.multiply(M, this.#rotationM, this.#scaleM);
+    mat4.multiply(M, this.#translationM, M);
+
+    return {
+      translation: this.#translationM,
+      scale: this.#scaleM,
+      rotation: this.#rotationM,
+      out: M
+    };
   }
+
+  /*
+  edge = renderWalls.edges.get("kDONy9fhzUd0jFyi")
+  pos = renderWalls.constructor.edgeCenter(edge);
+  let edgeElev = renderWalls.constructor.edgeElevation(edge);
+
+  rot = renderWalls.constructor.edgeAngle(edge);
+  ln = renderWalls.constructor.edgeLength(edge);
+  let z = 0.0;
+  let scaleZ = 1.0;
+  if ( edgeElev.top != edgeElev.bottom ) {
+    z = ((0.5 * edgeElev.top) + (0.5 * edgeElev.bottom));
+    scaleZ = edgeElev.top - edgeElev.bottom;
+  }
+
+  MatrixFlat = CONFIG.GeometryLib.MatrixFlat;
+  Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
+  tMat = MatrixFlat.translation(pos.x, pos.y, z)
+  rMat = MatrixFlat.rotationZ(rot)
+  sMat = MatrixFlat.scale(ln, 1.0, scaleZ)
+  outMat = sMat.multiply(rMat).multiply(tMat)
+  tMat.print()
+  rMat.print()
+  sMat.print()
+  outMat.print()
+
+  rMat.multiplyPoint3d(new Point3d(0.5, 0, 0.5))
+  rMat.multiplyPoint3d(new Point3d(-0.5, 0, 0.5))
+  rMat.multiplyPoint3d(new Point3d(-0.5, 0, -0.5))
+
+  outMat.multiplyPoint3d(new Point3d(0.5, 0, 0.5))
+  outMat.multiplyPoint3d(new Point3d(-0.5, 0, 0.5))
+  outMat.multiplyPoint3d(new Point3d(-0.5, 0, -0.5))
+
+  renderWalls.updateEdgeInstanceData("kDONy9fhzUd0jFyi")
+  dat = renderWalls.getEdgeInstanceData("kDONy9fhzUd0jFyi")
+
+  mat4.identity(M);
+  mat4.multiply(M, dat.rotationM, dat.scaleM);
+  mat4.multiply(M, dat.translationM, M);
+
+  */
 
   /**
    * Retrieve the array views associated with a given edge.
@@ -328,13 +410,7 @@ export class RenderWalls {
   getEdgeInstanceData(edgeId, idx) {
     idx ??= this.#edgeInstanceIndices.get(edgeId);
     const i = idx * this.constructor.INSTANCE_ELEMENT_LENGTH;
-    return {
-      position: new Float32Array(this.instanceArrayBuffer, i, 2),       // vec2f
-      elevation: new Float32Array(this.instanceArrayBuffer, i + 8, 2),  // vec2f
-      rotation: new Float32Array(this.instanceArrayBuffer, i + 16, 1),  // f32
-      length: new Float32Array(this.instanceArrayBuffer, i + 20, 1),    // f32
-      buffer: new Float32Array(this.instanceArrayBuffer, i, 6)          // combined
-    };
+    return new Float32Array(this.instanceArrayBuffer, i, 16);
   }
 
   /**
@@ -345,9 +421,9 @@ export class RenderWalls {
    */
   partialUpdateInstanceBuffer(edgeId, idx) {
     idx ??= this.#edgeInstanceIndices.get(edgeId);
-    const dat = this.getEdgeInstanceData(edgeId, idx);
+    const M = this.getEdgeInstanceData(edgeId, idx).M;
     this.device.queue.writeBuffer(
-      this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_LENGTH, dat.buffer,
+      this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_LENGTH, M,
     );
   }
 

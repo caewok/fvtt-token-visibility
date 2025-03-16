@@ -119,6 +119,7 @@ export class Camera {
   get offsetMatrix() {
     if ( this.#dirty.offset ) {
       mat4.fromScaling(this.#M.offset, [-1, 1, 1]);
+      // mat4.fromScaling(this.#M.offset, [1, 1, 1]);
       this.#dirty.offset = false;
     }
     return this.#M.offset;
