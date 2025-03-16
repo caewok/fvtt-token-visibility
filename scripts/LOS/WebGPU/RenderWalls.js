@@ -154,6 +154,10 @@ export class RenderWalls {
         entryPoint: "fragmentMain",
         targets: [{ format: WebGPUDevice.presentationFormat }],
       },
+      primitive: {
+        cullMode: "back",
+        frontFace: "ccw",
+      },
       depthStencil: {
         format: this.depthFormat,
         depthWriteEnabled: true,

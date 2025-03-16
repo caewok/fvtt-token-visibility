@@ -96,6 +96,28 @@ export class GeometryWallDesc {
 
 /* Test for normal
 Point3d = CONFIG.GeometryLib.threeD.Point3d
+tris = [];
+Ns = [];
+for ( let i = 0; i < arr.length; i += 8 ) {
+  a = new Point3d(arr[i], arr[i + 1], arr[i + 2])
+
+  i += 8;
+  b = new Point3d(arr[i], arr[i + 1], arr[i + 2])
+
+  i += 8;
+  c = new Point3d(arr[i], arr[i + 1], arr[i + 2])
+  tris.push([a, b, c]);
+
+  deltaAB = b.subtract(a)
+  deltaAC = c.subtract(a)
+  Ns.push(deltaAB.cross(deltaAC).normalize())
+}
+
+
+*/
+
+/* Test for normal
+Point3d = CONFIG.GeometryLib.threeD.Point3d
 x = 0
 y = 0
 z = 0

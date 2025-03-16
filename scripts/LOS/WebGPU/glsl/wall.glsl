@@ -8,6 +8,8 @@ struct VertexIn {
 
 struct VertexOut {
   @builtin(position) pos: vec4f,
+  @location(0) norm: vec3f,
+  @location(1) uv0: vec2f,
 }
 
 struct CameraUniforms {
@@ -136,12 +138,34 @@ fn rotationZMatrix(angle: f32) -> mat4x4f {
   let cameraPos = camera.lookAtM * modelMat * vec4f(in.pos, 1.0);
   out.pos = camera.offsetM * camera.perspectiveM * cameraPos;
 
+  // Transform normals to view space.
+  // Need to avoid scaling.
+  // TODO: Also use offsetM?
+  out.norm = normalize((camera.lookAtM * tMat * rMat * vec4f(in.norm, 0)).xyz);
+
+  // Pass through the uvs.
+  out.uv0 = in.uv0;
+
   return out;
 }
 
 // ----- Fragment shader ----- //
+
+// Some hardcoded lighting
+const lightDir = normalize(vec3f(0.25, 0.5, 1.0));
+const lightColor = vec3f(1, 1, 1);
+const ambientColor = vec3f(0.03, 0.03, 0.03);
 const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
 
 @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
   return baseColor;
+  // let N = normalize(in.norm); // Unneeded as norm is already normalized.
+
+  // Extremely simple directional lighting model to give the model some shape.
+  /*
+  let NDotL = max(dot(in.norm, lightDir), 0.0);
+  let surfaceColor = (baseColor.rgb * ambientColor) + (baseColor.rgb * NDotL);
+
+  return vec4(surfaceColor, baseColor.a);
+  */
 }
