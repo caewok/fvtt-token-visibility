@@ -1,8 +1,6 @@
 /* globals
 canvas,
 CONFIG,
-CONST,
-PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -10,12 +8,12 @@ PIXI,
 // Base folder
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { vec4, mat4 } from "../gl_matrix/index.js";
-import { GeometryWallDesc } from "./GeometryWall.js";
+import { mat4, vec3 } from "../gl_matrix/index.js";
+import { GeometryTokenDesc } from "./GeometryToken.js";
 
-const vec3Tmp = vec4.create();
+const vec3Tmp = vec3.create();
 
-export class RenderWalls {
+export class RenderTokens {
   /** @type {GPUDevice} */
   device;
 
@@ -73,6 +71,7 @@ export class RenderWalls {
   };
   */
   static INSTANCE_ELEMENT_LENGTH = 64;
+
   /**
    * @param {GPUDevice} device
    * @param {object} opts
@@ -84,28 +83,28 @@ export class RenderWalls {
   }
 
   /** @type {Float32Array} */
-  edgeVertexPositions;
+  tokenVertexPositions;
 
   /** @type {Uint16Array} */
-  edgeVertexIndices;
+  tokenVertexIndices;
 
   async initialize() {
     const device = this.device ??= await WebGPUDevice.getDevice();
 
     // Define shader.
-    this.modules.render = await WebGPUShader.fromGLSLFile(device, "wall", "Wall Render");
+    this.modules.render = await WebGPUShader.fromGLSLFile(device, "token", "Token Render");
 
-    this.initializeEdges();
+    this.initializeTokens();
 
     // Vertex buffer
-    const geometryDesc = new GeometryWallDesc({ label: "Wall Geometry", directional: false });
+    const geometryDesc = new GeometryTokenDesc({ label: "Token Geometry", directional: false });
     this.geometryDesc = geometryDesc;
     const numVertexBuffers = geometryDesc.verticesData.length;
     this.buffers.vertex = Array(numVertexBuffers);
     for ( let i = 0; i < numVertexBuffers; i += 1 ) {
       const data = geometryDesc.verticesData[i];
       this.buffers.vertex[i] = device.createBuffer({
-        label: `Wall Vertices Buffer ${i}`,
+        label: `Token Vertices Buffer ${i}`,
         size: data.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       });
@@ -121,11 +120,11 @@ export class RenderWalls {
     // Will be written to GPU prior to render, because the camera view will change.
 
     this.buffers.instance = this.device.createBuffer({
-      label: "Wall Instance",
-      size: this.numEdges * this.constructor.INSTANCE_ELEMENT_LENGTH,
+      label: "Token Instance",
+      size: this.numTokens * this.constructor.INSTANCE_ELEMENT_LENGTH,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    device.queue.writeBuffer(this.buffers.instance, 0, this.instanceArrayBuffer); // 0 , this.constructor.INSTANCE_ELEMENT_LENGTH * this.numEdges
+    device.queue.writeBuffer(this.buffers.instance, 0, this.instanceArrayBuffer); // 0 , this.constructor.INSTANCE_ELEMENT_LENGTH * this.numTokens
 
 
     // Define bind group layouts.
@@ -226,7 +225,7 @@ export class RenderWalls {
       this.colorAttachment.resolveTarget = undefined;
     }
 
-    const commandEncoder = device.createCommandEncoder({ label: "Render walls" });
+    const commandEncoder = device.createCommandEncoder({ label: "Render tokens" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     renderPass.setPipeline(this.pipelines.render);
     renderPass.setBindGroup(0, this.bindGroups.camera);
@@ -240,23 +239,23 @@ export class RenderWalls {
 
     // renderPass.draw(3);
     // renderPass.drawIndexed(3);
-    // renderPass.drawIndexed(this.edgeVertexIndices.length);
-    renderPass.draw(this.geometryDesc.numVertices, this.numEdges);
+    // renderPass.drawIndexed(this.tokenVertexIndices.length);
+    renderPass.draw(this.geometryDesc.numVertices, this.numTokens);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  // ----- Wall placeable handling ----- //
+  // ----- Token placeable handling ----- //
 
   /** @type {Map<string, Edge>} */
-  edges = new Map();
+  tokens = new Map();
 
   /** @type {Map<string, number>} */
-  #edgeInstanceIndices = new Map();
+  #tokenInstanceIndices = new Map();
 
   /** @type {number} */
-  get numEdges() { return this.edges.size; }
+  get numTokens() { return this.tokens.size; }
 
   /** @type {ArrayBuffer} */
   instanceArrayBuffer;
@@ -264,209 +263,117 @@ export class RenderWalls {
   get instanceArrayValues() { return new Float32Array(this.instanceArrayBuffer); }
 
   /**
-   * Initialize all edges.
+   * Initialize all tokens.
+   * TODO: Handle tokens in hex grids
    */
-  initializeEdges() {
-    this.edges.clear();
-    const edges = [...canvas.edges.values()].filter(edge => this.includeEdge(edge));
-    this.instanceArrayBuffer = new ArrayBuffer(edges.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
-    edges.forEach((edge, idx) => {
-      this.edges.set(edge.id, edge);
-      this.#edgeInstanceIndices.set(edge.id, idx);
-      this.updateEdgeInstanceData(edge.id, idx, edge);
+  initializeTokens() {
+    this.tokens.clear();
+    const tokens = canvas.tokens.placeables.filter(token => this.includeToken(token));
+    this.instanceArrayBuffer = new ArrayBuffer(tokens.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
+    tokens.forEach((token, idx) => {
+      this.tokens.set(token.id, token);
+      this.#tokenInstanceIndices.set(token.id, idx);
+      this.updateTokenInstanceData(token.id, idx, token);
     });
   }
 
-  edgeTypes = new Set(["wall"]);
-
   /**
-   * Should this edge be included in the scene render?
-   * Certain edges, like scene borders, are excluded.
+   * Should this token be included in the scene render?
+   * TODO: Filter out constrained tokens.
    */
-  includeEdge(edge) {
-    if ( edge[this.senseType] === CONST.WALL_SENSE_TYPES.NONE ) return false;
-    if ( !this.edgeTypes.has(edge.type) ) return false;
+  includeToken(_token) {
     return true;
   }
 
   // ----- Instances ----- //
 
+  /**
+   * @typedef {object} TokenInstanceData
+   * @prop {Float32Array[16]} model           Model matrix (translation, rotation, scale)
+   */
+
+  /** @type {mat4} */
   #translationM = mat4.create();
 
+  /** @type {mat4} */
   #scaleM = mat4.create();
 
-  #rotationM = mat4.create();
-
   /**
-   * @typedef {object} EdgeInstanceData
-   * @prop {Float32Array[2]} position         From wall center (vec2f)
-   * @prop {Float32Array[2]} elevation        In pixel units (vec2f)
-   * @prop {Float32Array[1]} rotation         In radians (float)
-   * @prop {Float32Array[1]} length           2d length from vertex A to B (float)
+   * Update the instance array of a specific token.
+   * @param {string} tokenId       Id of the token
+   * @param {number} [idx]        Optional token id; will be looked up using tokenId otherwise
+   * @param {Token} [token]         The token associated with the id; will be looked up otherwise
    */
+  updateTokenInstanceData(tokenId, idx, token) {
+    token ??= this.tokens.get(tokenId);
+    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const { width, height, zHeight } = this.constructor.tokenDimensions(token);
 
-  /**
-   * Update the instance array of a specific edge.
-   * @param {string} edgeId       Id of the edge
-   * @param {number} [idx]        Optional edge id; will be looked up using edgeId otherwise
-   * @param {Edge} [edge]         The edge associated with the id; will be looked up otherwise
-   */
-  updateEdgeInstanceData(edgeId, idx, edge) {
-    edge ??= this.edges.get(edgeId);
-    const pos = this.constructor.edgeCenter(edge);
-    const { top, bottom } = this.constructor.edgeElevation(edge);
-    const rot = this.constructor.edgeAngle(edge);
-    const ln = this.constructor.edgeLength(edge);
-
-    // Add in translate to center to 0,0 if elevations do not match.
-    // e.g., bottom elevation -1e05, top elevation 200.
-    let z = 0.0;
-    let scaleZ = 1.0;
-    if ( top != bottom ) {
-      z = ((0.5 * top) + (0.5 * bottom));
-      scaleZ = top - bottom;
-    }
-
-    // Move from center of wall.
+    // Move from center of token.
     const translateVec = vec3Tmp;
-    translateVec[0] = pos.x;
-    translateVec[1] = pos.y;
-    translateVec[2] = z;
-    mat4.fromTranslation(this.#translationM, translateVec)
+    translateVec[0] = ctr.x;
+    translateVec[1] = ctr.y;
+    translateVec[2] = ctr.z;
+    mat4.fromTranslation(this.#translationM, translateVec);
 
-    // Scale by its length and elevation (height).
+    // Scale based on width, height, zHeight of token.
     const scaleVec = vec3Tmp;
-    scaleVec[0] = ln;
-    scaleVec[1] = 1.0;
-    scaleVec[2] = scaleZ;
+    scaleVec[0] = width * 0.5;
+    scaleVec[1] = height * 0.5;
+    scaleVec[2] = zHeight * 0.5;
     mat4.fromScaling(this.#scaleM, scaleVec);
-
-    // Rotate around Z axis.
-    mat4.fromZRotation(this.#rotationM, rot);
 
     // Combine and update the instance matrix. Multiplies right-to-left.
     // scale --> rotate --> translate.
-    const M = this.getEdgeInstanceData(edgeId, idx);
-    mat4.multiply(M, this.#rotationM, this.#scaleM);
-    mat4.multiply(M, this.#translationM, M);
+    const M = this.getTokenInstanceData(tokenId, idx);
+    mat4.multiply(M, this.#translationM, this.#scaleM);
 
     return {
       translation: this.#translationM,
       scale: this.#scaleM,
-      rotation: this.#rotationM,
       out: M
     };
   }
 
-  /*
-  edge = renderWalls.edges.get("kDONy9fhzUd0jFyi")
-  pos = renderWalls.constructor.edgeCenter(edge);
-  let edgeElev = renderWalls.constructor.edgeElevation(edge);
-
-  rot = renderWalls.constructor.edgeAngle(edge);
-  ln = renderWalls.constructor.edgeLength(edge);
-  let z = 0.0;
-  let scaleZ = 1.0;
-  if ( edgeElev.top != edgeElev.bottom ) {
-    z = ((0.5 * edgeElev.top) + (0.5 * edgeElev.bottom));
-    scaleZ = edgeElev.top - edgeElev.bottom;
-  }
-
-  MatrixFlat = CONFIG.GeometryLib.MatrixFlat;
-  Point3d = CONFIG.GeometryLib.threeD.Point3d;
-
-  tMat = MatrixFlat.translation(pos.x, pos.y, z)
-  rMat = MatrixFlat.rotationZ(rot)
-  sMat = MatrixFlat.scale(ln, 1.0, scaleZ)
-  outMat = sMat.multiply(rMat).multiply(tMat)
-  tMat.print()
-  rMat.print()
-  sMat.print()
-  outMat.print()
-
-  rMat.multiplyPoint3d(new Point3d(0.5, 0, 0.5))
-  rMat.multiplyPoint3d(new Point3d(-0.5, 0, 0.5))
-  rMat.multiplyPoint3d(new Point3d(-0.5, 0, -0.5))
-
-  outMat.multiplyPoint3d(new Point3d(0.5, 0, 0.5))
-  outMat.multiplyPoint3d(new Point3d(-0.5, 0, 0.5))
-  outMat.multiplyPoint3d(new Point3d(-0.5, 0, -0.5))
-
-  renderWalls.updateEdgeInstanceData("kDONy9fhzUd0jFyi")
-  dat = renderWalls.getEdgeInstanceData("kDONy9fhzUd0jFyi")
-
-  mat4.identity(M);
-  mat4.multiply(M, dat.rotationM, dat.scaleM);
-  mat4.multiply(M, dat.translationM, M);
-
-  */
-
   /**
-   * Retrieve the array views associated with a given edge.
-   * @param {string} edgeId       Id of the edge
-   * @param {number} [idx]        Optional edge id; will be looked up using edgeId otherwise
+   * Retrieve the array views associated with a given token.
+   * @param {string} tokenId       Id of the token
+   * @param {number} [idx]        Optional token id; will be looked up using tokenId otherwise
    */
-  getEdgeInstanceData(edgeId, idx) {
-    idx ??= this.#edgeInstanceIndices.get(edgeId);
+  getTokenInstanceData(tokenId, idx) {
+    idx ??= this.#tokenInstanceIndices.get(tokenId);
     const i = idx * this.constructor.INSTANCE_ELEMENT_LENGTH;
     return new Float32Array(this.instanceArrayBuffer, i, 16);
   }
 
   /**
-   * Update the instance buffer on the GPU for a specific edge.
-   * @param {string} edgeId
-   * @param {Float32Array} dat      Buffer from edgeInstanceData method
-   * @param {number} [idx]          Instance index of this edge
+   * Update the instance buffer on the GPU for a specific token.
+   * @param {string} tokenId
+   * @param {Float32Array} dat      Buffer from tokenInstanceData method
+   * @param {number} [idx]          Instance index of this token
    */
-  partialUpdateInstanceBuffer(edgeId, idx) {
-    idx ??= this.#edgeInstanceIndices.get(edgeId);
-    const M = this.getEdgeInstanceData(edgeId, idx).M;
+  partialUpdateInstanceBuffer(tokenId, idx) {
+    idx ??= this.#tokenInstanceIndices.get(tokenId);
+    const dat = this.getEdgeInstanceData(tokenId, idx);
     this.device.queue.writeBuffer(
-      this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_LENGTH, M,
+      this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_LENGTH, dat.buffer,
     );
   }
 
   /**
-   * Determine the top and bottom edge elevations. Null values will be given large constants.
-   * @param {Edge} edge
+   * Determine the token 3d dimensions, in pixel units.
+   * @param {Token} token
    * @returns {object}
-   * - @prop {number} top         1e05 if null
-   * - @prop {number} bottom      -1e05 if null
+   * @prop {number} width       In x direction
+   * @prop {number} height      In y direction
+   * @prop {number} zHeight     In z direction
    */
-  static edgeElevation(edge) {
-    let { top, bottom } = edge.elevationLibGeometry.a;
-    top ??= 1e05;
-    bottom ??= -1e05;
-    top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
-    bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
-    return { top, bottom };
-  }
-
-  /**
-   * Determine the 2d center point of the edge.
-   * @param {Edge} edge
-   * @returns {PIXI.Point}
-   */
-  static edgeCenter(edge) {
-    const ctr = new PIXI.Point();
-    return edge.a.add(edge.b, ctr).multiplyScalar(0.5, ctr);
-  }
-
-  /**
-   * Determine the 2d length of the edge.
-   * @param {Edge} edge
-   * @returns {number}
-   */
-  static edgeLength(edge) { return PIXI.Point.distanceBetween(edge.a, edge.b); }
-
-  /**
-   * Angle of the edge on the 2d canvas.
-   * @param {Edge} edge
-   * @returns {number} Angle in radians
-   */
-  static edgeAngle(edge) {
-    const delta = edge.b.subtract(edge.a, PIXI.Point._tmp3);
-    return Math.atan2(delta.y, delta.x);
+  static tokenDimensions(token) {
+    return {
+      width: token.document.width * canvas.dimensions.size,
+      height: token.document.height * canvas.dimensions.size,
+      zHeight: token.topZ - token.bottomZ,
+    };
   }
 
   // ----- NOTE: Rendering ----- //

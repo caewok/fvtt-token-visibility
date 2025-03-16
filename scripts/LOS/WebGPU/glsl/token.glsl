@@ -43,7 +43,6 @@ struct Instance {
   let instanceIndex = in.instanceIndex;
   let model = instances[instanceIndex].model;
 
-
   let cameraPos = camera.lookAtM * model * vec4f(in.pos, 1.0);
   out.pos = camera.perspectiveM * cameraPos;
 

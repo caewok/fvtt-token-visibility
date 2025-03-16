@@ -70,8 +70,10 @@ import { PlaceableTrianglesHandler } from "./LOS/PlaceableTrianglesHandler.js";
 import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/WebGPU/Camera.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
+import { GeometryTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
 import { Geometry } from "./LOS/WebGPU/Geometry.js";
 import { RenderWalls } from "./LOS/WebGPU/RenderWalls.js";
+import { RenderTokens } from "./LOS/WebGPU/RenderTokens.js";
 import {
   mat2, mat2d, mat3, mat4,
   quat, quat2,
@@ -200,7 +202,9 @@ Hooks.once("init", function() {
       Camera,
       Geometry,
       GeometryWallDesc,
+      GeometryTokenDesc,
       RenderWalls,
+      RenderTokens,
     },
 
     glmatrix: {

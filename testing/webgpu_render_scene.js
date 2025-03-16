@@ -82,8 +82,10 @@ let {
   WebGPUTexture,
   Camera,
   GeometryWallDesc,
+  GeometryTokenDesc,
   Geometry,
   RenderWalls,
+  RenderTokens,
 } = api.webgpu
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
@@ -111,8 +113,7 @@ popout.context.configure({
 
 
 renderWalls = new RenderWalls(device);
-
-renderWalls.sampleCount = 4
+// renderWalls.sampleCount = 4
 renderWalls.sampleCount = 1
 renderWalls.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderWalls.initialize();
@@ -120,16 +121,7 @@ renderWalls.setRenderTextureToCanvas(popout.canvas)
 await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, vp)
 
 
-renderWalls = new RenderWalls(device);
-await renderWalls.initialize();
-renderWalls.setRenderTextureToCanvas(popout.context)
 
-renderWalls.setRenderTextureToCanvas(popout.context);
-await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target)
-
-renderWalls.renderTexture = popout.context.getCurrentTexture()
-
-popout.close()
 
 renderWalls.camera.cameraPosition = Point3d.fromTokenCenter(viewer)
 renderWalls.camera.targetPosition = Point3d.fromTokenCenter(target)
@@ -139,6 +131,15 @@ renderWalls.camera.targetPosition
 renderWalls.camera.lookAtMatrix
 renderWalls.camera.perspectiveMatrix
 renderWalls.camera.offsetMatrix
+
+
+renderTokens = new RenderTokens(device);
+renderTokens.sampleCount = 1
+renderTokens.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
+await renderTokens.initialize();
+renderTokens.setRenderTextureToCanvas(popout.canvas)
+await renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, vp)
+
 
 
 
