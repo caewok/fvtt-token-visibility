@@ -2,7 +2,8 @@
 canvas,
 CONFIG,
 game,
-Hooks
+Hooks,
+PIXI,
 */
 "use strict";
 
@@ -65,7 +66,7 @@ import {
   Polygon2dDoubleTriangles,
   PolygonVerticalTriangles
  } from "./LOS/PlaceableTriangles.js";
-import { PlaceableTrianglesHandler } from "./LOS/PlaceableTrianglesHandler.js";
+import { PlaceableTrianglesHandler, TokenTrianglesHandler, TileTrianglesHandler, WallTrianglesHandler  } from "./LOS/PlaceableTrianglesHandler.js";
 
 import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/WebGPU/Camera.js";
@@ -232,6 +233,10 @@ Hooks.once("setup", function() {
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   Settings.initializeDebugGraphics();
+
+  WallTrianglesHandler.registerPlaceables();
+  TileTrianglesHandler.registerPlaceables();
+  TokenTrianglesHandler.registerPlaceables();
 
   // Update triangles for all placeables.
   canvas.tiles.placeables.forEach(tile => tile[PlaceableTrianglesHandler.ID].update());

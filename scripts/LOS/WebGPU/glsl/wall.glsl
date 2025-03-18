@@ -10,6 +10,7 @@ struct VertexOut {
   @builtin(position) pos: vec4f,
   @location(0) norm: vec3f,
   @location(1) uv0: vec2f,
+  @location(2) @interpolate(flat) v: u32,
 }
 
 struct CameraUniforms {
@@ -55,6 +56,8 @@ struct Instance {
   // Pass through the uvs.
   out.uv0 = in.uv0;
 
+  out.v = in.vertexIndex / 6;
+
   return out;
 }
 
@@ -67,6 +70,18 @@ const ambientColor = vec3f(0.03, 0.03, 0.03);
 const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
 
 @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
+  var out = vec4f(0.0, 0.0, 0.0, 1.0);
+  switch ( in.v ) {
+    case 0: { out.r = 1.0; } // Red, south
+    case 1: { out.g = 1.0; } // Green, north
+    case 2: { out.b = 1.0; } // Blue, west
+    case 3: { out.r = 1.0; out.g = 1.0; } // Yellow, east
+    case 4: { out.g = 1.0; out.b = 1.0; } // Cyan (light blue), top
+    case 5: { out.r = 1.0; out.b = 1.0; } // Magenta, bottom
+    default: { out = vec4f(1.0); } // White
+  }
+  return out;
+
   return vec4f(in.uv0.x, in.uv0.y, 1.0, 1.0);
 
   // return baseColor;
