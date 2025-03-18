@@ -69,7 +69,7 @@ const ambientColor = vec3f(0.03, 0.03, 0.03);
 const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
 
 @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
-  /*
+
   var out = vec4f(0.0, 0.0, 0.0, 1.0);
   switch ( in.v ) {
     case 0: { out.r = 1.0; } // Red, south
@@ -83,7 +83,7 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
   return out;
 
   return vec4f(in.uv0.x, in.uv0.y, 1.0, 1.0);
-  */
+
   // return baseColor;
 
   // Extremely simple directional lighting model to give the model some shape.

@@ -215,11 +215,14 @@ export class RenderTiles {
     const numTiles = this.numTiles;
     this.bindGroups.tileTextures = Array(numTiles);
     this.textures = Array(numTiles);
-    for ( let i = 0; i < numTiles; i += 1 ) {
-      const tile = this.#tileFromInstanceIndex.get(i);
+    for ( const [idx, tile] of this.#tileFromInstanceIndex ) {
       const url = tile.document.texture.src;
-      const source = await loadImageBitmap(url); // TODO: colorSpaceConversion, shrink size to something more manageable
-      const tileTexture = device.createTexture({
+      const source = await loadImageBitmap(url, {
+        // premultiplyAlpha: "none",
+        // colorSpaceConversion: "none",
+        // resizeQuality: "high",
+       }); // TODO: colorSpaceConversion, shrink size to something more manageable
+      this.textures[idx] = device.createTexture({
         label: url,
         format: "rgba8unorm",
         size: [source.width, source.height],
@@ -229,16 +232,15 @@ export class RenderTiles {
       });
       device.queue.copyExternalImageToTexture(
         { source, flipY: true },
-        { texture: tileTexture },
+        { texture: this.textures[idx] },
         { width: source.width, height: source.height },
       );
-      this.textures[i] = tileTexture;
-      this.bindGroups.tileTextures[i] = device.createBindGroup({
-        label: `Tile Texture ${i}`,
+      this.bindGroups.tileTextures[idx] = device.createBindGroup({
+        label: `Tile Texture ${idx}`,
         layout: this.bindGroupLayouts.tileTexture,
         entries: [
           { binding: 0, resource: this.samplers.tileTexture },
-          { binding: 1, resource: tileTexture.createView() },
+          { binding: 1, resource: this.textures[idx].createView() },
         ]
       });
     }
@@ -253,7 +255,7 @@ export class RenderTiles {
    * @param {Point3d} viewerLocation
    * @param {Token} target
    */
-  async renderScene(viewerLocation, target, vp) {
+  async renderScene(viewerLocation, target, { vp, viewer } = {}) {
     const device = this.device ??= await WebGPUDevice.getDevice();
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
@@ -269,12 +271,12 @@ export class RenderTiles {
 //       zFar: vp.shaders.obstacle.far,
 //     };
 
-    this.camera.perspectiveParameters = {
-      fov: Math.toRadians(30),
-      aspect: 1,
-      zNear: 1,
-      zFar: 2000,
-    };
+//     this.camera.perspectiveParameters = {
+//       fov: Math.toRadians(30),
+//       aspect: 1,
+//       zNear: 1,
+//       zFar: 2000,
+//     };
 
     // vp.shaders.obstacle.uniforms.uLookAtMatrix
     // vp.shaders.obstacle.uniforms.uPerspectiveMatrix
@@ -313,7 +315,7 @@ export class RenderTiles {
     // renderPass.draw(3);
     // renderPass.drawIndexed(3);
     // renderPass.drawIndexed(this.tileVertexIndices.length);
-    renderPass.draw(this.geometryDesc.numVertices, this.numTiles);
+    // renderPass.draw(this.geometryDesc.numVertices, this.numTiles);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();
@@ -329,7 +331,7 @@ export class RenderTiles {
 
   /**
    * Tile instance index mapped to tile object.
-   * @type {Map<string, number>}
+   * @type {Map<string, Tile>}
    */
   #tileFromInstanceIndex = new Map();
 
@@ -467,8 +469,8 @@ export class RenderTiles {
    */
   static tileDimensions(tile) {
     return {
-      width: tile.document.width * canvas.dimensions.size,
-      height: tile.document.height * canvas.dimensions.size
+      width: tile.document.width,
+      height: tile.document.height,
     };
   }
 

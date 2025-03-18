@@ -191,7 +191,7 @@ export class RenderTokens {
    * @param {Point3d} viewerLocation
    * @param {Token} target
    */
-  async renderScene(viewerLocation, target, vp) {
+  async renderScene(viewerLocation, target, { vp, viewer } = {}) {
     const device = this.device ??= await WebGPUDevice.getDevice();
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
@@ -209,12 +209,12 @@ export class RenderTokens {
 //     };
 
 
-    this.camera.perspectiveParameters = {
-      fov: Math.toRadians(30),
-      aspect: 1,
-      zNear: 1,
-      zFar: 2000,
-    };
+//     this.camera.perspectiveParameters = {
+//       fov: Math.toRadians(30),
+//       aspect: 1,
+//       zNear: 1,
+//       zFar: 2000,
+//     };
 
     // vp.shaders.obstacle.uniforms.uLookAtMatrix
     // vp.shaders.obstacle.uniforms.uPerspectiveMatrix
@@ -246,7 +246,20 @@ export class RenderTokens {
     // renderPass.draw(3);
     // renderPass.drawIndexed(3);
     // renderPass.drawIndexed(this.tokenVertexIndices.length);
-    renderPass.draw(this.geometryDesc.numVertices, this.numTokens);
+
+    // Don't draw the viewer token.
+    if ( viewer ) {
+      const viewerIdx = this.instanceIndexFromId.get(viewer.id);
+      switch ( viewerIdx ) {
+        case 0: renderPass.draw(this.geometryDesc.numVertices, this.numTokens - 1, 0, 1); break;
+        case (this.numTokens - 1): renderPass.draw(this.geometryDesc.numVertices, this.numTokens - 1, 0, 0); break;
+        default: {
+          // 0 < viewerIdx < this.numTokens - 1.
+          renderPass.draw(this.geometryDesc.numVertices, viewerIdx, 0, 0);
+          renderPass.draw(this.geometryDesc.numVertices, this.numTokens - viewerIdx - 1, 0, viewerIdx + 1);
+        }
+      }
+    } else renderPass.draw(this.geometryDesc.numVertices, this.numTokens);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();
@@ -255,13 +268,13 @@ export class RenderTokens {
   // ----- Token placeable handling ----- //
 
   /** @type {Map<string, Edge>} */
-  tokens = new Map();
+  instanceIndexFromId = new Map();
 
-  /** @type {Map<string, number>} */
-  #tokenInstanceIndices = new Map();
+  /** @type {Map<string, Token>} */
+  #tokenFromInstanceIndex = new Map();
 
   /** @type {number} */
-  get numTokens() { return this.tokens.size; }
+  get numTokens() { return this.instanceIndexFromId.size; }
 
   /** @type {ArrayBuffer} */
   instanceArrayBuffer;
@@ -269,17 +282,24 @@ export class RenderTokens {
   get instanceArrayValues() { return new Float32Array(this.instanceArrayBuffer); }
 
   /**
+   * For a given token id, return the token object, if it exists.
+   * @param {string} id
+   * @returns {Token|undefined}
+   */
+  tokenForId(tokenId) { return canvas.tokens.documentCollection.get(tokenId)?.object; }
+
+  /**
    * Initialize all tokens.
    * TODO: Handle tokens in hex grids
    */
   initializeTokens() {
-    this.tokens.clear();
-    this.#tokenInstanceIndices.clear();
+    this.instanceIndexFromId.clear();
+    this.#tokenFromInstanceIndex.clear();
     const tokens = canvas.tokens.placeables.filter(token => this.includeToken(token));
     this.instanceArrayBuffer = new ArrayBuffer(tokens.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
     tokens.forEach((token, idx) => {
-      this.tokens.set(token.id, token);
-      this.#tokenInstanceIndices.set(token.id, idx);
+      this.instanceIndexFromId.set(token.id, idx);
+      this.#tokenFromInstanceIndex.set(idx, token);
       this.updateTokenInstanceData(token.id, idx, token);
     });
   }
@@ -312,7 +332,7 @@ export class RenderTokens {
    * @param {Token} [token]         The token associated with the id; will be looked up otherwise
    */
   updateTokenInstanceData(tokenId, idx, token) {
-    token ??= this.tokens.get(tokenId);
+    token ??= this.tokenForId(tokenId);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
     const { width, height, zHeight } = this.constructor.tokenDimensions(token);
@@ -344,7 +364,7 @@ export class RenderTokens {
    * @param {number} [idx]        Optional token id; will be looked up using tokenId otherwise
    */
   getTokenInstanceData(tokenId, idx) {
-    idx ??= this.#tokenInstanceIndices.get(tokenId);
+    idx ??= this.instanceIndexFromId.get(tokenId);
     const i = idx * this.constructor.INSTANCE_ELEMENT_LENGTH;
     return new Float32Array(this.instanceArrayBuffer, i, 16);
   }
@@ -356,7 +376,7 @@ export class RenderTokens {
    * @param {number} [idx]          Instance index of this token
    */
   partialUpdateInstanceBuffer(tokenId, idx) {
-    idx ??= this.#tokenInstanceIndices.get(tokenId);
+    idx ??= this.instanceIndexFromId.get(tokenId);
     const dat = this.getEdgeInstanceData(tokenId, idx);
     this.device.queue.writeBuffer(
       this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_LENGTH, dat.buffer,

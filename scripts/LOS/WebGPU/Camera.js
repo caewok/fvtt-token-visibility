@@ -1,4 +1,5 @@
 /* globals
+canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -61,20 +62,20 @@ export class Camera {
    */
   setTargetTokenFrustrum(targetToken) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(targetToken);
-    const a = Point3d._tmp1;
-    const b = Point3d._tmp2;
-    const c = Point3d._tmp3;
-    a.copyFrom(ctr);
-    b.set(...this.cameraPosition);
-    c.copyFrom(ctr);
-    b.z = targetToken.topZ;
-    c.z = targetToken.bottomZ;
-    const fov = Point3d.angleBetween(a, b, c);
-    const zFar = Math.sqrt(Math.max(
-      Point3d.distanceSquaredBetween(b, a),
-      Point3d.distanceSquaredBetween(b, c)));
-    this.perspectiveParameters = { fov, zFar };
+    const ctr = Point3d.fromTokenCenter(targetToken);
+    this.targetPosition = ctr;
+
+    const targetWidth = targetToken.document.width * canvas.dimensions.size;
+    const targetHeight = targetToken.document.height * canvas.dimensions.size;
+
+    const distToTarget = Point3d.distanceBetween(this.cameraPosition, this.targetPosition)
+    const halfAngle = Math.atan(Math.max(targetWidth, targetHeight) / distToTarget)
+
+    // zFar is the straight-line distance to the target.
+    // Buffer by adding in half the target diagonal.
+    const targetDiag = Math.sqrt(Math.pow(targetWidth, 2) + Math.pow(targetHeight, 2))
+    const zFar = Point3d.distanceBetween(this.cameraPosition, this.targetPosition) + (targetDiag * 0.5);
+    this.perspectiveParameters = { fov: halfAngle * 2, zFar };
   }
 
   /**
@@ -90,7 +91,7 @@ export class Camera {
     fov: Math.toRadians(90),
     aspect: 1,
     zNear: 1,
-    zFar: null,
+    zFar: Infinity,
   }
 
   /** @type {MatrixFloat32<4x4>} */
@@ -110,10 +111,10 @@ export class Camera {
   }
 
   set perspectiveParameters(params = {}) {
-    this.#dirty.perspective ||= true;
     for ( const [key, value] of Object.entries(params) ) {
       this.#perspectiveParameters[key] = value;
     }
+    this.#dirty.perspective ||= true;
   }
 
   /** @type {Float32Array|mat4} */

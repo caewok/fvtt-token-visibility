@@ -93,6 +93,10 @@ let {
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
 
+// Draw borders around tiles and borders for walls
+canvas.walls.placeables.forEach(wall => Draw.segment(wall));
+canvas.tiles.placeables.forEach(tile => Draw.shape(tile.bounds, { color: Draw.COLORS.red }))
+
 
 viewer = _token
 target = game.user.targets.first()
@@ -124,24 +128,12 @@ renderWalls.setRenderTextureToCanvas(popout.canvas)
 await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, vp)
 
 
-
-
-renderWalls.camera.cameraPosition = Point3d.fromTokenCenter(viewer)
-renderWalls.camera.targetPosition = Point3d.fromTokenCenter(target)
-renderWalls.camera.setTargetTokenFrustrum(target)
-renderWalls.camera.cameraPosition
-renderWalls.camera.targetPosition
-renderWalls.camera.lookAtMatrix
-renderWalls.camera.perspectiveMatrix
-renderWalls.camera.offsetMatrix
-
-
 renderTokens = new RenderTokens(device);
 renderTokens.sampleCount = 1
 renderTokens.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderTokens.initialize();
 renderTokens.setRenderTextureToCanvas(popout.canvas)
-await renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, vp)
+await renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
 
 
 renderTiles = new RenderTiles(device);
@@ -149,7 +141,7 @@ renderTiles.sampleCount = 1
 renderTiles.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderTiles.initialize();
 renderTiles.setRenderTextureToCanvas(popout.canvas)
-await renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, vp)
+await renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
 
 
 // Hooks to change rendering on move
@@ -162,13 +154,14 @@ rerender = () => {
   losCalc.target = target
   const vp = losCalc.viewpoints[0]
   switch ( renderType ) {
-    case "Walls": renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, vp); break;
-    case "Tokens": renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, vp); break;
-    case "Tiles": renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, vp); break;
+    case "Walls": renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "Tokens": renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "Tiles": renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
   }
 }
 
 Hooks.on("controlToken", (token, controlled) => {
+
   if ( controlled ) viewer = token;
   rerender();
 });
@@ -356,7 +349,75 @@ camera.lookAtMatrix.arr
 
 
 
+// Tile
+tile = canvas.tiles.controlled[0]
 
+tmpMat = MatrixFloat32.empty(4, 4)
+res = renderTiles.updateTileInstanceData(tile.id);
+
+camera = renderTiles.camera
+perspectiveM = camera.perspectiveMatrix
+lookAtM = camera.lookAtMatrix
+offsetM = camera.offsetMatrix
+
+console.log("Perspective"); perspectiveM.print();
+console.log("LookAt"); lookAtM.print();
+console.log("Offset"); offsetM.print();
+
+res.scale.print()
+res.translation.print()
+
+res.scale
+    .multiply4x4(res.translation, tmpMat);
+tmpMat.print()
+
+geom = new GeometryTileDesc();
+arr = geom.verticesData[0];
+
+console.log(`Tile
+  TL: ${tile.bounds.left}, ${tile.bounds.top}, ${tile.elevationZ}
+  TR: ${tile.bounds.right}, ${tile.bounds.top}, ${tile.elevationZ}
+  BR: ${tile.bounds.right}, ${tile.bounds.bottom}, ${tile.elevationZ}
+  BL: ${tile.bounds.left}, ${tile.bounds.bottom}, ${tile.elevationZ}`)
+modelPts = [];
+worldPts = [];
+cameraPts = [];
+perspectivePts = [];
+offsetPts = [];
+ndcPts = [];
+
+for ( let i = 0; i < arr.length; i += 8) {
+ // modelPt = new Point3d(...arr.slice(i, 3));
+  // worldPt = tmpMat.multiplyPoint3d(modelPt)
+  // cameraPt = lookAtM.multiplyPoint3d(worldPt)
+  // perspectivePt = perspectiveM.multiplyPoint3d(cameraPt);
+  // offsetPt = offsetM.multiplyPoint3d(perspectivePt);
+
+  const modelPt = MatrixFloat32.fromRowMajorArray([...arr.slice(i, i+3), 1], 1, 4);
+  const worldPt = modelPt.multiply(tmpMat);
+  const cameraPt = worldPt.multiply(lookAtM);
+  const perspectivePt = cameraPt.multiply(perspectiveM);
+  const offsetPt = perspectivePt.multiply(offsetM);
+  const ndcPt = offsetPt.toPoint3d()
+
+  modelPts.push(modelPt);
+  worldPts.push(worldPt);
+  cameraPts.push(cameraPt)
+  perspectivePts.push(perspectivePt);
+  offsetPts.push(offsetPt);
+  ndcPts.push(ndcPt);
+  arrToStr = arr => `${arr[0]}, ${arr[1]}, ${arr[2]}, ${arr[3]}`;
+
+  if ( (i / 8) % 6 === 0 ) {
+    console.log("\n")
+    switch ( Math.floor(i / 8 / 6) ) {
+      case 0: { console.log("Top"); break; }
+      case 1: { console.log("Bottom"); break; }
+    }
+  }
+
+  console.log(`${arrToStr(modelPt.arr)} -> ${arrToStr(worldPt.arr)} -> ${arrToStr(cameraPt.arr)}\n\t -> ${arrToStr(perspectivePt.arr)} -> ${arrToStr(offsetPt.arr)} -> ${ndcPt}`)
+}
 
 
 

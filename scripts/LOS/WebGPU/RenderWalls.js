@@ -192,7 +192,7 @@ export class RenderWalls {
    * @param {Point3d} viewerLocation
    * @param {Token} target
    */
-  async renderScene(viewerLocation, target, vp) {
+  async renderScene(viewerLocation, target, { vp, viewer } = {}) {
     const device = this.device ??= await WebGPUDevice.getDevice();
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
@@ -207,13 +207,13 @@ export class RenderWalls {
 //       zNear: vp.shaders.obstacle.near,
 //       zFar: vp.shaders.obstacle.far,
 //     };
-
-    this.camera.perspectiveParameters = {
-      fov: Math.toRadians(30),
-      aspect: 1,
-      zNear: 1,
-      zFar: 2000,
-    };
+//
+//     this.camera.perspectiveParameters = {
+//       fov: Math.toRadians(30),
+//       aspect: 1,
+//       zNear: 1,
+//       zFar: 2000,
+//     };
 
     // vp.shaders.obstacle.uniforms.uLookAtMatrix
     // vp.shaders.obstacle.uniforms.uPerspectiveMatrix
