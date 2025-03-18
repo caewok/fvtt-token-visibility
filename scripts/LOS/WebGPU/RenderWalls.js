@@ -10,10 +10,7 @@ PIXI,
 // Base folder
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { vec4, mat4 } from "../gl_matrix/index.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
-
-const vec3Tmp = vec4.create();
 
 export class RenderWalls {
   /** @type {GPUDevice} */
@@ -204,11 +201,18 @@ export class RenderWalls {
 
     // For debugging, copy from existing viewer viewpoint uniforms.
 
+//     this.camera.perspectiveParameters = {
+//       fov: vp.shaders.obstacle.fovy,
+//       aspect: 1,
+//       zNear: vp.shaders.obstacle.near,
+//       zFar: vp.shaders.obstacle.far,
+//     };
+
     this.camera.perspectiveParameters = {
-      fov: vp.shaders.obstacle.fovy,
+      fov: Math.toRadians(30),
       aspect: 1,
-      zNear: vp.shaders.obstacle.near,
-      zFar: vp.shaders.obstacle.far,
+      zNear: 1,
+      zFar: 2000,
     };
 
     // vp.shaders.obstacle.uniforms.uLookAtMatrix
@@ -268,6 +272,7 @@ export class RenderWalls {
    */
   initializeEdges() {
     this.edges.clear();
+    this.#edgeInstanceIndices.clear();
     const edges = [...canvas.edges.values()].filter(edge => this.includeEdge(edge));
     this.instanceArrayBuffer = new ArrayBuffer(edges.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
     edges.forEach((edge, idx) => {
@@ -291,11 +296,14 @@ export class RenderWalls {
 
   // ----- Instances ----- //
 
-  #translationM = mat4.create();
+  /** @type {MatrixFlat<4,4>} */
+  #translationM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
-  #scaleM = mat4.create();
+  /** @type {MatrixFlat<4,4>} */
+  #scaleM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
-  #rotationM = mat4.create();
+  /** @type {MatrixFlat<4,4>} */
+  #rotationM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
   /**
    * @typedef {object} EdgeInstanceData
@@ -313,6 +321,7 @@ export class RenderWalls {
    */
   updateEdgeInstanceData(edgeId, idx, edge) {
     edge ??= this.edges.get(edgeId);
+    const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
     const pos = this.constructor.edgeCenter(edge);
     const { top, bottom } = this.constructor.edgeElevation(edge);
     const rot = this.constructor.edgeAngle(edge);
@@ -328,28 +337,26 @@ export class RenderWalls {
     }
 
     // Move from center of wall.
-    const translateVec = vec3Tmp;
-    translateVec[0] = pos.x;
-    translateVec[1] = pos.y;
-    translateVec[2] = z;
-    mat4.fromTranslation(this.#translationM, translateVec)
+    MatrixFloat32.translation(pos.x, pos.y, z, this.#translationM);
 
     // Scale by its length and elevation (height).
-    const scaleVec = vec3Tmp;
-    scaleVec[0] = ln;
-    scaleVec[1] = 1.0;
-    scaleVec[2] = scaleZ;
-    mat4.fromScaling(this.#scaleM, scaleVec);
+    MatrixFloat32.scale(ln, 1.0, scaleZ, this.#scaleM);
 
-    // Rotate around Z axis.
-    mat4.fromZRotation(this.#rotationM, rot);
+    // Rotate around Z axis to match wall direction.
+    MatrixFloat32.rotationZ(rot, true, this.#rotationM);
 
-    // Combine and update the instance matrix. Multiplies right-to-left.
-    // scale --> rotate --> translate.
-    const M = this.getEdgeInstanceData(edgeId, idx);
-    mat4.multiply(M, this.#rotationM, this.#scaleM);
-    mat4.multiply(M, this.#translationM, M);
+    // Combine and update the instance matrix.
+    // This is uploaded as row-major.
+    // See the confusion discussed here: https://glmatrix.net/
+    // glMatrix uses the same convention and should be identical.
+    const arrM = this.getEdgeInstanceData(edgeId, idx);
+    const M = new MatrixFloat32(arrM, 4, 4);
 
+    this.#scaleM
+      .multiply4x4(this.#rotationM, M)
+      .multiply4x4(this.#translationM, M);
+
+    // Return only for debugging.
     return {
       translation: this.#translationM,
       scale: this.#scaleM,
@@ -357,9 +364,39 @@ export class RenderWalls {
       out: M
     };
   }
+  /*
+  MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
+  Point3d = CONFIG.GeometryLib.threeD.Point3d;
+  api = game.modules.get("tokenvisibility").api
+  GeometryWallDesc = api.webgpu.GeometryWallDesc;
+  let [[edgeId, edge]] = renderWalls.edges;
+  tmpMat = MatrixFloat32.empty(4, 4)
+  res = renderWalls.updateEdgeInstanceData(edgeId);
+  res.scale.print()
+  res.rotation.print()
+  res.translation.print()
+
+  res.scale
+      .multiply4x4(res.rotation, tmpMat)
+      .multiply4x4(res.translation, tmpMat);
+  tmpMat.print()
+  tmpMat.toColumnMajorArray()
+
+  geom = new GeometryWallDesc();
+  arr = geom.verticesData[0];
+
+  edgeElev = renderWalls.constructor.edgeElevation(edge);
+  console.log(`Edge ${edge.a.x},${edge.a.y} -> ${edge.b.x},${edge.b.y} | top ${edgeElev.top} | bottom ${edgeElev.bottom}`)
+  for ( let i = 0; i < arr.length; i += 8) {
+    console.log(tmpMat.multiplyPoint3d(new Point3d(arr[i], arr[i + 1], arr[i + 2])))
+  }
+
+
+  i = 0
+  tmpMat.multiplyPoint3d(new Point3d(arr[i * 8], arr[(i * 8) + 1], arr[(i * 8) + 2]))
+  */
 
   /*
-  edge = renderWalls.edges.get("kDONy9fhzUd0jFyi")
   pos = renderWalls.constructor.edgeCenter(edge);
   let edgeElev = renderWalls.constructor.edgeElevation(edge);
 

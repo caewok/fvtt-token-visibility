@@ -6,11 +6,14 @@ CONFIG,
 "use strict";
 
 // Base folder
+import { MODULES_ACTIVE } from "../../const.js";
+
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { GeometryTokenDesc } from "./GeometryToken.js";
+import { GeometryTileDesc } from "./GeometryTile.js";
 
-export class RenderTokens {
+
+export class RenderTiles {
   /** @type {GPUDevice} */
   device;
 
@@ -38,6 +41,12 @@ export class RenderTokens {
   /** @type {object<GPUBuffer>} */
   buffers = {};
 
+  /** @type {object<GPUTexture>} */
+  texture = [];
+
+  /** @type {object<GPUSampler>} */
+  samplers = {};
+
   // See https://webgpufundamentals.org/webgpu/lessons/resources/wgsl-offset-computer.html
   static BINDGROUP_OPTS = {
     CAMERA: {
@@ -57,6 +66,21 @@ export class RenderTokens {
         buffer: { type: "read-only-storage" },
       }]
     },
+
+    TILE_TEXTURE: {
+      label: "Tile Texture",
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: { type: "filtering" },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { multisampled: false, sampleType: "float", viewDimension: "2d" },
+      }
+      ]
+    }
   };
 
 
@@ -80,28 +104,28 @@ export class RenderTokens {
   }
 
   /** @type {Float32Array} */
-  tokenVertexPositions;
+  tileVertexPositions;
 
   /** @type {Uint16Array} */
-  tokenVertexIndices;
+  tileVertexIndices;
 
   async initialize() {
     const device = this.device ??= await WebGPUDevice.getDevice();
 
     // Define shader.
-    this.modules.render = await WebGPUShader.fromGLSLFile(device, "token", "Token Render");
+    this.modules.render = await WebGPUShader.fromGLSLFile(device, "tile", "Tile Render");
 
-    this.initializeTokens();
+    this.initializeTiles();
 
     // Vertex buffer
-    const geometryDesc = new GeometryTokenDesc({ label: "Token Geometry", directional: false });
+    const geometryDesc = new GeometryTileDesc({ label: "Tile Geometry", directional: false });
     this.geometryDesc = geometryDesc;
     const numVertexBuffers = geometryDesc.verticesData.length;
     this.buffers.vertex = Array(numVertexBuffers);
     for ( let i = 0; i < numVertexBuffers; i += 1 ) {
       const data = geometryDesc.verticesData[i];
       this.buffers.vertex[i] = device.createBuffer({
-        label: `Token Vertices Buffer ${i}`,
+        label: `Tile Vertices Buffer ${i}`,
         size: data.byteLength,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       });
@@ -117,17 +141,18 @@ export class RenderTokens {
     // Will be written to GPU prior to render, because the camera view will change.
 
     this.buffers.instance = this.device.createBuffer({
-      label: "Token Instance",
-      size: this.numTokens * this.constructor.INSTANCE_ELEMENT_LENGTH,
+      label: "Tile Instance",
+      size: this.numTiles * this.constructor.INSTANCE_ELEMENT_LENGTH,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    device.queue.writeBuffer(this.buffers.instance, 0, this.instanceArrayBuffer); // 0 , this.constructor.INSTANCE_ELEMENT_LENGTH * this.numTokens
+    device.queue.writeBuffer(this.buffers.instance, 0, this.instanceArrayBuffer); // 0 , this.constructor.INSTANCE_ELEMENT_LENGTH * this.numTiles
 
 
     // Define bind group layouts.
     const BG_OPTS = this.constructor.BINDGROUP_OPTS;
     this.bindGroupLayouts.camera = device.createBindGroupLayout(BG_OPTS.CAMERA);
     this.bindGroupLayouts.instance = device.createBindGroupLayout(BG_OPTS.INSTANCE);
+    this.bindGroupLayouts.tileTexture = device.createBindGroupLayout(BG_OPTS.TILE_TEXTURE);
 
     // Define pipelines.
     // TODO: Make async.
@@ -137,6 +162,7 @@ export class RenderTokens {
       layout: device.createPipelineLayout({ bindGroupLayouts: [
         this.bindGroupLayouts.camera,
         this.bindGroupLayouts.instance,
+        this.bindGroupLayouts.tileTexture,
       ]}),
       vertex: {
         module: this.modules.render,
@@ -167,19 +193,55 @@ export class RenderTokens {
       label: "Camera",
       layout: this.bindGroupLayouts.camera,
       entries: [{
-        binding: 0,
-        resource: { buffer: this.buffers.camera }
+        binding: 0, resource: { buffer: this.buffers.camera }
       }],
     });
 
     this.bindGroups.instance = this.device.createBindGroup({
       label: "Instance",
       layout: this.bindGroupLayouts.instance,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.buffers.instance }
-      }],
+      entries: [
+        { binding: 0, resource: { buffer: this.buffers.instance } },
+      ],
     });
+
+    // Process each tile texture.
+    this.samplers.tileTexture = device.createSampler({
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
+      magFilter: "linear",
+    });
+
+    const numTiles = this.numTiles;
+    this.bindGroups.tileTextures = Array(numTiles);
+    this.textures = Array(numTiles);
+    for ( let i = 0; i < numTiles; i += 1 ) {
+      const tile = this.#tileFromInstanceIndex.get(i);
+      const url = tile.document.texture.src;
+      const source = await loadImageBitmap(url); // TODO: colorSpaceConversion, shrink size to something more manageable
+      const tileTexture = device.createTexture({
+        label: url,
+        format: "rgba8unorm",
+        size: [source.width, source.height],
+        usage: GPUTextureUsage.TEXTURE_BINDING |
+               GPUTextureUsage.COPY_DST |
+               GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      device.queue.copyExternalImageToTexture(
+        { source, flipY: true },
+        { texture: tileTexture },
+        { width: source.width, height: source.height },
+      );
+      this.textures[i] = tileTexture;
+      this.bindGroups.tileTextures[i] = device.createBindGroup({
+        label: `Tile Texture ${i}`,
+        layout: this.bindGroupLayouts.tileTexture,
+        entries: [
+          { binding: 0, resource: this.samplers.tileTexture },
+          { binding: 1, resource: tileTexture.createView() },
+        ]
+      });
+    }
 
     this.#allocateRenderTargets();
     // this.pipelines.render = await this.pipelines.render;
@@ -200,14 +262,12 @@ export class RenderTokens {
 
     // For debugging, copy from existing viewer viewpoint uniforms.
 
-
 //     this.camera.perspectiveParameters = {
 //       fov: vp.shaders.obstacle.fovy,
 //       aspect: 1,
 //       zNear: vp.shaders.obstacle.near,
 //       zFar: vp.shaders.obstacle.far,
 //     };
-
 
     this.camera.perspectiveParameters = {
       fov: Math.toRadians(30),
@@ -231,7 +291,7 @@ export class RenderTokens {
       this.colorAttachment.resolveTarget = undefined;
     }
 
-    const commandEncoder = device.createCommandEncoder({ label: "Render tokens" });
+    const commandEncoder = device.createCommandEncoder({ label: "Render tiles" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     renderPass.setPipeline(this.pipelines.render);
     renderPass.setBindGroup(0, this.bindGroups.camera);
@@ -241,27 +301,40 @@ export class RenderTokens {
       renderPass.setVertexBuffer(0, this.buffers.vertex[i]);
     }
 
+    for ( let i = 0, n = this.numTiles; i < n; i += 1 ) {
+      // Set each bind group in turn and draw that instance.
+      // This probably kills most benefits of the tile instance, but...
+      renderPass.setBindGroup(2, this.bindGroups.tileTextures[i]);
+      renderPass.draw(this.geometryDesc.numVertices, 1, 0, i);
+    }
+
     // renderPass.setIndexBuffer(this.buffers.indices, "uint16");
 
     // renderPass.draw(3);
     // renderPass.drawIndexed(3);
-    // renderPass.drawIndexed(this.tokenVertexIndices.length);
-    renderPass.draw(this.geometryDesc.numVertices, this.numTokens);
+    // renderPass.drawIndexed(this.tileVertexIndices.length);
+    renderPass.draw(this.geometryDesc.numVertices, this.numTiles);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  // ----- Token placeable handling ----- //
+  // ----- Tile placeable handling ----- //
 
-  /** @type {Map<string, Edge>} */
-  tokens = new Map();
+  /**
+   * Tile id mapped to its instance index.
+   * @type {Map<string, number>}
+   */
+  instanceIndexFromId = new Map();
 
-  /** @type {Map<string, number>} */
-  #tokenInstanceIndices = new Map();
+  /**
+   * Tile instance index mapped to tile object.
+   * @type {Map<string, number>}
+   */
+  #tileFromInstanceIndex = new Map();
 
   /** @type {number} */
-  get numTokens() { return this.tokens.size; }
+  get numTiles() { return this.instanceIndexFromId.size; }
 
   /** @type {ArrayBuffer} */
   instanceArrayBuffer;
@@ -269,114 +342,148 @@ export class RenderTokens {
   get instanceArrayValues() { return new Float32Array(this.instanceArrayBuffer); }
 
   /**
-   * Initialize all tokens.
-   * TODO: Handle tokens in hex grids
+   * For a given tile id, return the tile object, if it exists.
+   * @param {string} id
+   * @returns {Tile|undefined}
    */
-  initializeTokens() {
-    this.tokens.clear();
-    this.#tokenInstanceIndices.clear();
-    const tokens = canvas.tokens.placeables.filter(token => this.includeToken(token));
-    this.instanceArrayBuffer = new ArrayBuffer(tokens.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
-    tokens.forEach((token, idx) => {
-      this.tokens.set(token.id, token);
-      this.#tokenInstanceIndices.set(token.id, idx);
-      this.updateTokenInstanceData(token.id, idx, token);
+  tileForId(tileId) { return canvas.tiles.documentCollection.get(tileId)?.object; }
+
+  /**
+   * Initialize all tiles.
+   * TODO: Handle foreground as a tile.
+   * TODO: Optionally render the scene floor as a tile for debugging.
+   */
+  initializeTiles() {
+    this.instanceIndexFromId.clear();
+    this.#tileFromInstanceIndex.clear();
+    const tiles = canvas.tiles.placeables.filter(tile => this.includeTile(tile));
+    this.instanceArrayBuffer = new ArrayBuffer(tiles.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
+    tiles.forEach((tile, idx) => {
+      this.instanceIndexFromId.set(tile.id, idx);
+      this.#tileFromInstanceIndex.set(idx, tile);
+      this.updateTileInstanceData(tile.id, idx, tile);
     });
   }
 
   /**
-   * Should this token be included in the scene render?
-   * TODO: Filter out constrained tokens.
+   * Should this tile be included in the scene render?
+   * TODO: Filter out constrained tiles.
    */
-  includeToken(_token) {
+  includeTile(tile) {
+    // Exclude tiles at elevation 0 because these overlap the ground.
+    if ( !tile.elevationZ ) return false;
+
+    // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
+    if ( MODULES_ACTIVE.LEVELS
+      && this.senseType === "sight"
+      && tile.document?.flags?.levels?.noCollision ) return false;
+
     return true;
   }
 
   // ----- Instances ----- //
 
   /**
-   * @typedef {object} TokenInstanceData
+   * @typedef {object} TileInstanceData
    * @prop {Float32Array[16]} model           Model matrix (translation, rotation, scale)
    */
 
-  /** @type {MatrixFlat<4,4>} */
+  /** @type {mat4} */
   #translationM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
-  /** @type {MatrixFlat<4,4>} */
+  /** @type {mat4} */
   #scaleM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
-  /**
-   * Update the instance array of a specific token.
-   * @param {string} tokenId       Id of the token
-   * @param {number} [idx]        Optional token id; will be looked up using tokenId otherwise
-   * @param {Token} [token]         The token associated with the id; will be looked up otherwise
-   */
-  updateTokenInstanceData(tokenId, idx, token) {
-    token ??= this.tokens.get(tokenId);
-    const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const { width, height, zHeight } = this.constructor.tokenDimensions(token);
+  /** @type {mat4} */
+  #rotationM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
-    // Move from center of token.
+  /**
+   * Update the instance array of a specific tile.
+   * @param {string} tileId       Id of the tile
+   * @param {number} [idx]        Optional tile id; will be looked up using tileId otherwise
+   * @param {Tile} [tile]         The tile associated with the id; will be looked up otherwise
+   */
+  updateTileInstanceData(tileId, idx, tile) {
+    tile ??= this.tileForId(tileId);
+    const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
+    const ctr = this.constructor.tileCenter(tile);
+    const { width, height } = this.constructor.tileDimensions(tile);
+
+    // Move from center of tile.
     MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.#translationM);
 
-    // Scale based on width, height, zHeight of token.
-    MatrixFloat32.scale(width, height, zHeight, this.#scaleM);
+    // Scale based on width, height of tile.
+    MatrixFloat32.scale(width, height, 1.0, this.#scaleM);
 
-    // Combine and update the instance matrix. Store as column-major.
+    // Rotate based on tile rotation.
+    MatrixFloat32.rotationZ(Math.toRadians(tile.document.rotation), true, this.#rotationM);
+
+    // Combine and update the instance matrix. Multiplies right-to-left.
     // scale --> rotate --> translate.
-    const arrM = this.getTokenInstanceData(tokenId, idx);
+    const arrM = this.getTileInstanceData(tileId, idx);
     const M = new MatrixFloat32(arrM, 4, 4);
+    this.#scaleM.multiply4x4(this.#rotationM, M).multiply4x4(this.#translationM, M);
 
-    this.#scaleM.multiply4x4(this.#translationM, M);
-
-    // Return only for debugging.
     return {
       translation: this.#translationM,
+      rotation: this.#rotationM,
       scale: this.#scaleM,
-      out: M
+      out: M,
     };
   }
 
   /**
-   * Retrieve the array views associated with a given token.
-   * @param {string} tokenId       Id of the token
-   * @param {number} [idx]        Optional token id; will be looked up using tokenId otherwise
+   * Retrieve the array views associated with a given tile.
+   * @param {string} tileId       Id of the tile
+   * @param {number} [idx]        Optional tile id; will be looked up using tileId otherwise
    */
-  getTokenInstanceData(tokenId, idx) {
-    idx ??= this.#tokenInstanceIndices.get(tokenId);
+  getTileInstanceData(tileId, idx) {
+    idx ??= this.instanceIndexFromId.get(tileId);
     const i = idx * this.constructor.INSTANCE_ELEMENT_LENGTH;
     return new Float32Array(this.instanceArrayBuffer, i, 16);
   }
 
   /**
-   * Update the instance buffer on the GPU for a specific token.
-   * @param {string} tokenId
-   * @param {Float32Array} dat      Buffer from tokenInstanceData method
-   * @param {number} [idx]          Instance index of this token
+   * Update the instance buffer on the GPU for a specific tile.
+   * @param {string} tileId
+   * @param {Float32Array} dat      Buffer from tileInstanceData method
+   * @param {number} [idx]          Instance index of this tile
    */
-  partialUpdateInstanceBuffer(tokenId, idx) {
-    idx ??= this.#tokenInstanceIndices.get(tokenId);
-    const dat = this.getEdgeInstanceData(tokenId, idx);
+  partialUpdateInstanceBuffer(tileId, idx) {
+    idx ??= this.instanceIndexFromId.get(tileId);
+    const dat = this.getEdgeInstanceData(tileId, idx);
     this.device.queue.writeBuffer(
       this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_LENGTH, dat.buffer,
     );
   }
 
   /**
-   * Determine the token 3d dimensions, in pixel units.
-   * @param {Token} token
+   * Determine the tile 3d dimensions, in pixel units.
+   * @param {Tile} tile
    * @returns {object}
    * @prop {number} width       In x direction
    * @prop {number} height      In y direction
-   * @prop {number} zHeight     In z direction
+   * @prop {number} elevation   In z direction
    */
-  static tokenDimensions(token) {
+  static tileDimensions(tile) {
     return {
-      width: token.document.width * canvas.dimensions.size,
-      height: token.document.height * canvas.dimensions.size,
-      zHeight: token.topZ - token.bottomZ,
+      width: tile.document.width * canvas.dimensions.size,
+      height: tile.document.height * canvas.dimensions.size
     };
+  }
+
+  /**
+   * Determine the center of the tile, in pixel units.
+   * @param {Tile} tile
+   * @returns {Point3d}
+   */
+  static tileCenter(tile) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const out = new Point3d();
+    const elev = tile.elevationZ;
+    const TL = Point3d._tmp2.set(tile.document.x, tile.document.y, elev);
+    const BR = TL.add(out.set(tile.document.width, tile.document.height, 0), out);
+    return TL.add(BR, out).multiplyScalar(0.5, out)
   }
 
   // ----- NOTE: Rendering ----- //
@@ -515,5 +622,20 @@ export class RenderTokens {
     this.#allocateRenderTargets();
   }
 }
+
+
+/**
+ * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
+ * Load an image bitmap from a url.
+ * @param {string} url
+ * @param {object} [opts]       Options passed to createImageBitmap
+ * @returns {ImageBitmap}
+ */
+async function loadImageBitmap(url, opts = {}) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await createImageBitmap(blob, opts);
+}
+
 
 

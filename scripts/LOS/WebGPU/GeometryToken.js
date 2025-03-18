@@ -42,54 +42,88 @@ export class GeometryTokenDesc {
       // Position     Normal     UV
       // Side CCW if token goes from x-w to x+w.
       // S facing
-      x+w, y-d, z+h,  0, -1, 0,  1, 1,
-      x-w, y-d, z+h,  0, -1, 0,  0, 1,
-      x-w, y-d, z-h,  0, -1, 0,  0, 0,
-      x+w, y-d, z-h,  0, -1, 0,  1, 0,
-      x+w, y-d, z+h,  0, -1, 0,  1, 1,
-      x-w, y-d, z-h,  0, -1, 0,  0, 0,
+      x+w, y+d, z+h,  0, 1, 0,  1, 0, // a
+      x-w, y+d, z+h,  0, 1, 0,  0, 0, // b
+      x-w, y+d, z-h,  0, 1, 0,  0, 1, // c
+      x+w, y+d, z-h,  0, 1, 0,  1, 1, // d
+      x+w, y+d, z+h,  0, 1, 0,  1, 0, // e
+      x-w, y+d, z-h,  0, 1, 0,  0, 1, // f
 
-      // E facing
-      x+w, y+d, z+h,  1, 0, 0,  1, 1,
-      x+w, y-d, z+h,  1, 0, 0,  0, 1,
-      x+w, y-d, z-h,  1, 0, 0,  0, 0,
-      x+w, y+d, z-h,  1, 0, 0,  1, 0,
-      x+w, y+d, z+h,  1, 0, 0,  1, 1,
-      x+w, y-d, z-h,  1, 0, 0,  0, 0,
-
-      // N facing
-      x-w, y+d, z+h,  0, 1, 0,  1, 1,
-      x+w, y+d, z+h,  0, 1, 0,  0, 1,
-      x+w, y+d, z-h,  0, 1, 0,  0, 0,
-      x-w, y+d, z-h,  0, 1, 0,  1, 0,
-      x-w, y+d, z+h,  0, 1, 0,  1, 1,
-      x+w, y+d, z-h,  0, 1, 0,  0, 0,
+      // N facing: reverse of South
+      x-w, y-d, z-h,  0, -1, 0,  1, 1, // c
+      x-w, y-d, z+h,  0, -1, 0,  1, 0, // b
+      x+w, y-d, z+h,  0, -1, 0,  0, 0, // a
+      x-w, y-d, z-h,  0, -1, 0,  1, 1, // f
+      x+w, y-d, z+h,  0, -1, 0,  0, 0, // e
+      x+w, y-d, z-h,  0, -1, 0,  0, 1, // d
 
       // W facing
-      x-w, y-d, z+h,  -1, 0, 0,  1, 1,
-      x-w, y+d, z+h,  -1, 0, 0,  0, 1,
-      x-w, y+d, z-h,  -1, 0, 0,  0, 0,
-      x-w, y-d, z-h,  -1, 0, 0,  1, 0,
-      x-w, y-d, z+h,  -1, 0, 0,  1, 1,
-      x-w, y+d, z-h,  -1, 0, 0,  0, 0,
+      x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a
+      x-w, y-d, z+h,  -1, 0, 0,  0, 0, // b
+      x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c
+      x-w, y+d, z-h,  -1, 0, 0,  1, 1, // d
+      x-w, y+d, z+h,  -1, 0, 0,  1, 0, // e
+      x-w, y-d, z-h,  -1, 0, 0,  0, 1, // f
+
+      // E facing: reverse of West
+      x+w, y-d, z-h,  1, 0, 0,  1, 1, // c
+      x+w, y-d, z+h,  1, 0, 0,  1, 0, // b
+      x+w, y+d, z+h,  1, 0, 0,  0, 0, // a
+      x+w, y-d, z-h,  1, 0, 0,  1, 1, // f
+      x+w, y+d, z+h,  1, 0, 0,  0, 0, // e
+      x+w, y+d, z-h,  1, 0, 0,  0, 1, // d
 
       // Top
-      x+w, y+d, z+h,  0, 0, 1,   1, 1,
-      x-w, y+d, z+h,  0, 0, 1,   0, 1,
-      x-w, y-d, z+h,  0, 0, 1,   0, 0,
-      x-w, y-d, z+h,  0, 0, 1,   1, 0,
-      x+w, y-d, z+h,  0, 0, 1,   1, 1,
-      x+w, y+d, z+h,  0, 0, 1,   0, 0,
+      x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a
+      x-w, y+d, z+h,  0, 0, 1,   0, 1,  // b
+      x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c
+      x+w, y-d, z+h,  0, 0, 1,   1, 0,  // d
+      x-w, y-d, z+h,  0, 0, 1,   0, 0,  // e
+      x+w, y+d, z+h,  0, 0, 1,   1, 1,  // f
 
-      // Bottom
-      x+w, y-d, z-h,  0, 0, -1,  1, 1,
-      x-w, y-d, z-h,  0, 0, -1,  0, 1,
-      x-w, y+d, z-h,  0, 0, -1,  0, 0,
-      x+w, y+d, z-h,  0, 0, -1,  1, 0,
-      x+w, y-d, z-h,  0, 0, -1,  1, 1,
-      x-w, y+d, z-h,  0, 0, -1,  0, 0,
-
+      // Bottom: reverse of Top
+      x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c
+      x-w, y+d, z-h,  0, 0, -1,  0, 0,  // b
+      x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a
+      x+w, y+d, z-h,  0, 0, -1,  1, 0,  // f
+      x-w, y-d, z-h,  0, 0, -1,  0, 1,  // e
+      x+w, y-d, z-h,  0, 0, -1,  1, 1,  // d
     ];
+
+    /*
+    Using Foundry world coordinates, where z is up, origin 0,0 is top right, y increases as it moves down.
+    N and S are same as wall.
+
+    Top and Bottom are same as tile except UV flipped for bottom
+    uv
+    0,0   1,0
+    0,1   1,1
+
+    uv flipped
+    1,1   0,1
+    1,0   0,0
+
+    top
+         x-w   x+w
+    y-d  a,e    d
+    y+d  b     c, f
+
+    west
+        y-d y+d
+    z+h b    a,e
+    z-h c,f  d
+
+    east
+        y+d   y-d
+    z+h c,e   b
+    z-h f     a,d
+
+    bottom
+        x-w   x+w
+    y+d b      a,d
+    y-d c,e    f
+
+    */
 
     // For formats, see https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat.
     // Each entry in verticesData corresponds to an entry in buffersLayout.
@@ -129,6 +163,7 @@ export class GeometryTokenDesc {
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 tris = [];
 Ns = [];
+CCW = [];
 for ( let i = 0; i < arr.length; i += 8 ) {
   a = new Point3d(arr[i], arr[i + 1], arr[i + 2])
 
@@ -142,6 +177,7 @@ for ( let i = 0; i < arr.length; i += 8 ) {
   deltaAB = b.subtract(a)
   deltaAC = c.subtract(a)
   Ns.push(deltaAB.cross(deltaAC).normalize())
+
 }
 
 

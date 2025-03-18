@@ -4,11 +4,11 @@ CONFIG,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { vec3, mat4 } from "../gl_matrix/index.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 export class Camera {
 
-  static UP = vec3.fromValues(0, 0, 1);
+  static UP = new Point3d(0, 0, 1); // Cannot use CONFIG.GeometryLib.threeD.Point3d in static defs.
 
   /**
    * @typedef {object} CameraStruct
@@ -17,7 +17,7 @@ export class Camera {
    * @param {mat4x4f} offsetM               Offset required to switch from Foundry coordinates
    */
 
-  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * 16 * 16 * 16; // Total size of CameraStruct
+  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * (16 + 16 + 16); // Total size of CameraStruct
 
   // TODO: Combine so that the buffer stores the camera values instead of repeating them.
   // Could use MatrixFlat to store the buffer views.
@@ -26,12 +26,18 @@ export class Camera {
   /** @type {ArrayBuffer} */
   #arrayBuffer = new ArrayBuffer(this.constructor.CAMERA_BUFFER_SIZE);
 
-  /** @type {Float32Array(16)|mat4} */
+  /** @type {object<Float32Array(16)|mat4>} */
   #M = {
-    perspective: new Float32Array(this.#arrayBuffer, 0, 16),
-    lookAt: new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16),
-    offset: new Float32Array(this.#arrayBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 16),
+    perspective: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 0, 16), 4, 4),
+    lookAt: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
+    offset: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
   };
+
+  /** @type {MatrixFloat32<4,4>} */
+  #cameraM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
+
+  /** @type {MatrixFloat32<4,4>} */
+  #mirrorM = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
 
   /** @type {boolean} */
   #dirty = {
@@ -43,6 +49,9 @@ export class Camera {
   constructor({ cameraPosition, targetPosition } = {}) {
     if ( cameraPosition ) this.cameraPosition = cameraPosition;
     if ( targetPosition ) this.targetPosition = targetPosition;
+
+    // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
+    this.#mirrorM.setIndex(0, 0, -1);
   }
 
   /**
@@ -84,11 +93,12 @@ export class Camera {
     zFar: null,
   }
 
-  /** @type {MatrixFlat<4x4>} */
+  /** @type {MatrixFloat32<4x4>} */
   get perspectiveMatrix() {
     if ( this.#dirty.perspective ) {
       // mat4.perspective or perspectiveZO?
-      mat4.perspectiveZO(this.#M.perspective, ...Object.values(this.#perspectiveParameters));
+      const { fov, aspect, zNear, zFar } = this.#perspectiveParameters;
+      CONFIG.GeometryLib.MatrixFloat32.perspectiveZO(fov, aspect, zNear, zFar, this.#M.perspective);
       this.#dirty.perspective = false;
     }
     return this.#M.perspective;
@@ -109,7 +119,10 @@ export class Camera {
   /** @type {Float32Array|mat4} */
   get lookAtMatrix() {
     if ( this.#dirty.lookAt ) {
-      mat4.lookAt(this.#M.lookAt, this.cameraPosition, this.targetPosition, this.constructor.UP);
+      CONFIG.GeometryLib.MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.constructor.UP, this.#cameraM, this.#M.lookAt);
+
+      // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
+      this.#M.perspective.multiply4x4(this.#mirrorM, this.#M.perspective);
       this.#dirty.lookAt = false;
     }
     return this.#M.lookAt;
@@ -118,11 +131,17 @@ export class Camera {
   /** @type {Float32Array|mat4} */
   get offsetMatrix() {
     if ( this.#dirty.offset ) {
-      // mat4.fromScaling(this.#M.offset, [-1, 1, 1]);
-      mat4.fromScaling(this.#M.offset, [1, 1, 1]);
+      CONFIG.GeometryLib.MatrixFloat32.scale(1, 1, 1, this.#M.offset);
       this.#dirty.offset = false;
     }
     return this.#M.offset;
+  }
+
+  set offset(value) {
+    value.x ??= 1;
+    value.y ??= 1;
+    value.z ??= 1;
+    CONFIG.GeometryLib.MatrixFloat32.scale(value.x, value.y, value.z, this.#M.offset);
   }
 
   /** @type {ArrayBuffer} */
@@ -136,8 +155,8 @@ export class Camera {
 
   /** @type {Float32Array(3)|vec3} */
   #positions = {
-    camera: vec3.create(),
-    target: vec3.create(),
+    camera: new CONFIG.GeometryLib.threeD.Point3d(),
+    target: new CONFIG.GeometryLib.threeD.Point3d()
   };
 
   get cameraPosition() { return this.#positions.camera; }
@@ -145,14 +164,12 @@ export class Camera {
   get targetPosition() { return this.#positions.target; }
 
   set cameraPosition(value) {
-    if ( !(value instanceof Float32Array) ) value = [value.x, value.y, value.z];
+    this.#positions.camera.copyPartial(value);
     this.#dirty.lookAt ||= true;
-    this.#positions.camera.set(value);
   }
 
   set targetPosition(value) {
-    if ( !(value instanceof Float32Array) ) value = [value.x, value.y, value.z];
+    this.#positions.target.copyPartial(value);
     this.#dirty.lookAt ||= true;
-    this.#positions.target.set(value);
   }
 }

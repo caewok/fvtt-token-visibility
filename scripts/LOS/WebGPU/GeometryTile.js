@@ -5,15 +5,15 @@
 "use strict";
 
 /**
- * Describe a wall by its vertices, normals, and uvs.
- * By default, 1x1 wall centered at origin 0,0,0.
+ * Describe a tile by its vertices, normals, and uvs.
+ * By default, 1x1 tile centered at origin 0,0,0.
  */
-export class GeometryWallDesc {
+export class GeometryTileDesc {
   /** @type {string} */
   label = "";
 
   /** @type {number} */
-  numVertices = 6;
+  numVertices = 12;
 
   /** @type {Float32Array[]} */
   verticesData = Array(1);
@@ -23,14 +23,15 @@ export class GeometryWallDesc {
 
   /**
    * @param {object} [opts]
-   * @param {string} [opts.label]    Label for this structure
-   * @param {number} [opts.length]   Length of the wall
-   * @param {number} [opts.height]   Height of wall in z direction
+   * @param {string} [opts.label]     Label for this structure
+   * @param {number} [opts.width]     Width of the token (in x direction)
+   * @param {number} [opts.depth]     Depth of the token (in y direction)
+   * @param {number} [opts.height]    Height of token (in z direction)
    * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
    */
   constructor(opts = {}) {
     const w = (opts.width ?? 1) * 0.5;
-    const h = (opts.height ?? 1) * 0.5;
+    const d = (opts.depth ?? 1) * 0.5
 
     const x = opts.x ?? 0;
     const y = opts.y ?? 0;
@@ -38,69 +39,59 @@ export class GeometryWallDesc {
 
     const arr = [
       // Position     Normal     UV
-      // Side faces south.
-      // Side CCW if wall goes from x-w to x+w.
+      // CCW if tile goes from x-w to x+w.
       // Normal vectors are times -1 b/c the triangles are CCW.
-      x+w, y, z+h,  0, 1, 0,  1, 0, // a
-      x-w, y, z+h,  0, 1, 0,  0, 0, // b
-      x-w, y, z-h,  0, 1, 0,  0, 1, // c
-      x+w, y, z-h,  0, 1, 0,  1, 1, // d
-      x+w, y, z+h,  0, 1, 0,  1, 0, // e
-      x-w, y, z-h,  0, 1, 0,  0, 1, // f
+      // https://eliemichel.github.io/LearnWebGPU/basic-3d-rendering/texturing/texture-mapping.html
+      // WebGPU uses 0->1 u/x and 0->1 v/y where y increases as it moves down.
+      // Top
+      x-w, y-d, z,  0, 0, 1,   0, 0,  // a
+      x-w, y+d, z,  0, 0, 1,   0, 1,  // b
+      x+w, y+d, z,  0, 0, 1,   1, 1,  // c
+      x+w, y-d, z,  0, 0, 1,   1, 0,  // d
+      x-w, y-d, z,  0, 0, 1,   0, 0,  // e
+      x+w, y+d, z,  0, 0, 1,   1, 1,  // f
+
+      // Bottom
+      // We want the texture always facing up, not down as one might typically expect.
+      // Thus the texture keeps the same coordinates.
+      x+w, y+d, z,  0, 0, -1,  1, 1,  // c
+      x-w, y+d, z,  0, 0, -1,  0, 1,  // b
+      x-w, y-d, z,  0, 0, -1,  0, 0,  // a
+      x+w, y+d, z,  0, 0, -1,  1, 1,  // f
+      x-w, y-d, z,  0, 0, -1,  0, 0,  // e
+      x+w, y-d, z,  0, 0, -1,  1, 0,  // d
     ];
-
-    if ( !opts.directional ) {
-      arr.push(
-        // Side faces north.
-        // Side CW if wall goes from x-w to x+w
-        x-w, y, z-h,  0, -1, 0,  1, 1, // c
-        x-w, y, z+h,  0, -1, 0,  1, 0, // b
-        x+w, y, z+h,  0, -1, 0,  0, 0, // a
-        x-w, y, z-h,  0, -1, 0,  1, 1, // f
-        x+w, y, z+h,  0, -1, 0,  0, 0, // e
-        x+w, y, z-h,  0, -1, 0,  0, 1, // d
-      );
-
-      this.numVertices += 6;
-    }
-
     /*
     Using Foundry world coordinates, where z is up, origin 0,0 is top right, y increases as it moves down.
     uv
     0,0   1,0
     0,1   1,1
 
-    front (south facing)
+    top
          x-w   x+w
-    z+h  b     a,e
-    z-h  c,f   d
+    y-d  a,e    d
+    y+d  b     c, f
 
     a->b->c
     d->e->f
 
-    back (north facing)
-        x+w   x-w
-    z+h c,e     b
-    z-h f     a,d
-    a->b->c
-    d->e->f
-
-    bottom is same as top but now cw is changed and normal is other direction compared to front positions.
+    bottom is same but now cw is changed.
     c->b->a
     f->e->d
 
-    // uv also flipped.
-    1,0   0,0
-    1,1   0,1
-
-
+    Test by flipping bottom.
+    bottom
+        x-w   x+w
+    y+d b      a,d
+    y-d c,e    f
 
     */
+
 
     // For formats, see https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat.
     // Each entry in verticesData corresponds to an entry in buffersLayout.
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-vertex-buffers.html
-    // TODO: For directional walls, make Normal an instance buffer.
+    // TODO: Use vertex buffer
     // TODO: Better way to define shaderLocation so it can be passed to the shader code?
     this.verticesData[0] = new Float32Array(arr);
     this.buffersLayout[0] = {
