@@ -218,6 +218,7 @@ export class RenderTiles {
     for ( const [idx, tile] of this.#tileFromInstanceIndex ) {
       const url = tile.document.texture.src;
       const source = await loadImageBitmap(url, {
+        imageOrientation: "flipY"
         // premultiplyAlpha: "none",
         // colorSpaceConversion: "none",
         // resizeQuality: "high",
