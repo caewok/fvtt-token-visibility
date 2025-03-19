@@ -218,11 +218,11 @@ export class RenderTiles {
     for ( const [idx, tile] of this.#tileFromInstanceIndex ) {
       const url = tile.document.texture.src;
       const source = await loadImageBitmap(url, {
-        imageOrientation: "flipY"
-        // premultiplyAlpha: "none",
-        // colorSpaceConversion: "none",
-        // resizeQuality: "high",
-       }); // TODO: colorSpaceConversion, shrink size to something more manageable
+        imageOrientation: "flipY",
+        premultiplyAlpha: "premultiply", // Will display alpha as white if "none" selected.
+        // colorSpaceConversion: "none", // Unclear if this is helpful or more performant.
+        // resizeQuality: "high", // Probably not needed
+       }); // TODO: shrink size to something more manageable?
       this.textures[idx] = device.createTexture({
         label: url,
         format: "rgba8unorm",

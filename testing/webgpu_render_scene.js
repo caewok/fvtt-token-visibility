@@ -116,6 +116,7 @@ presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 popout.context.configure({
   device,
   format: presentationFormat,
+  alphamode: "premultiplied", // Instead of "opaque"
 });
 
 
