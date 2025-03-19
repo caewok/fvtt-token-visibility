@@ -421,5 +421,109 @@ for ( let i = 0; i < arr.length; i += 8) {
 }
 
 
+/* Transparency for terrain walls
+https://webgpufundamentals.org/webgpu/lessons/webgpu-transparency.html
+
+Prototype different operations and results.
+Only really need:
+Normal color, e.g., blue (0, 0, 1, 1)
+Terrain color, e.g., green (0, 1, 0, 0.5)
+*/
+
+/**
+ * Calculate a resulting blend.
+ * @param {vec4} src
+ * @param {vec4} dst
+ * @param {object} [blendOpts = {}]
+ */
+function testBlend(src, dst, blendOpts = {})  {
+  blendOpts.color ??= {};
+  blendOpts.alpha ??= {};
+  blendOpts.color.operation ??= "add";
+  blendOpts.color.srcFactor ??= "one";
+  blendOpts.color.dstFactor ??= "zero";
+  blendOpts.alpha.operation ??= "add";
+  blendOpts.alpha.srcFactor ??= "one";
+  blendOpts.alpha.dstFactor ??= "zero";
+
+  const factors = {
+    color: {
+      src: blendFactor(blendOpts.color.srcFactor, src, dst),
+      dst: blendFactor(blendOpts.color.dstFactor, src, dst),
+    },
+    alpha: {
+      src: blendFactor(blendOpts.alpha.srcFactor, src, dst),
+      dst: blendFactor(blendOpts.alpha.dstFactor, src, dst),
+    }
+  }
+
+  const outColor = blendOp(blendOpts.color.operation, src, dst, factors.color.src, factors.color.dst);
+  const outAlpha = blendOp(blendOpts.alpha.operation, src, dst, factors.alpha.src, factors.alpha.dst);
+  return vec4.fromValues(outColor[0], outColor[1], outColor[2], outAlpha[3]);
+}
+
+function blendFactor(factorLabel, src, dst) {
+  const vOnes = vec4.fromValues(1, 1, 1, 1);
+  const alpha = v => vec4.fromValues(v[3], v[3], v[3], v[3]);
+  switch ( factorLabel ) {
+    case "zero": return vec4.fromValues(0, 0, 0, 0);
+    case "one": return vOnes;
+    case "src": return src;
+    case "one-minus-src": return vec4.subtract(vec4.create(), vOnes, src);
+    case "src-alpha": return alpha(src);
+    case "one-minus-src-alpha": return vec4.subtract(vec4.create(), vOnes, alpha(src));
+    case "dst": return dst;
+    case "one-minus-dst": return vec4.subtract(vec4.create(), vOnes, dst);
+    case "dst-alpha": return alpha(dst);
+    case "one-minus-dst-alpha": return vec4.subtract(vec4.create(), vOnes, alpha(dst));
+//     case "src-alpha-saturated":
+//     case "constant":
+//     case "one-minus-constant"
+  }
+}
+
+function blendOp(op, src, dst, srcFactor, dstFactor) {
+  // result = operation((src * srcFactor),  (dst * dstFactor))
+  const tmp1 = vec4.create();
+  const tmp2 = vec4.create();
+  const out = vec4.create();
+
+  switch ( op ) {
+    case "add": return vec4.add(out, vec4.multiply(tmp1, src, srcFactor), vec4.multiply(tmp2, dst, dstFactor));
+    case "subtract": return vec4.subtract(out, vec4.multiply(tmp1, src, srcFactor), vec4.multiply(tmp2, dst, dstFactor));
+    case "reverse-subtract": return vec4.subtract(out, vec4.multiply(tmp2, dst, dstFactor), vec4.multiply(tmp1, src, srcFactor));
+    case "min": return vec4.min(out, vec4.multiply(tmp1, src, srcFactor), vec4.multiply(tmp2, dst, dstFactor));
+    case "max": return vec4.max(out, vec4.multiply(tmp1, src, srcFactor), vec4.multiply(tmp2, dst, dstFactor));
+  }
+}
+
+
+targetSrc = vec4.fromValues(1, 0, 0, 1);
+obstacleSrc = vec4.fromValues(0, 0, 1, 1);
+terrainSrc = vec4.fromValues(0, 0.5, 0, 1);
+canvasDst = vec4.fromValues(0, 0, 0, 1);
+
+blendOpts = {
+  color: {
+    operation: "add",
+    srcFactor: "one",
+    dstFactor: "one",
+  },
+  alpha: {
+    operation: "add",
+    srcFactor: "one",
+    dstFactor: "one",
+  },
+}
+
+
+dst = testBlend(targetSrc, canvasDst, blendOpts)
+dst = testBlend(obstacleSrc, canvasDst, blendOpts)
+dst = testBlend(terrainSrc, canvasDst, blendOpts)
+
+dst2 = testBlend(targetSrc, dst, blendOpts)
+dst2 = testBlend(obstacleSrc, dst, blendOpts)
+dst2 = testBlend(terrainSrc, dst, blendOpts)
+
 
 
