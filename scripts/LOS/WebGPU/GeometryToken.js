@@ -233,7 +233,7 @@ export class GeometryTokenDescV2 {
   label = "";
 
   /** @type {number} */
-  nVertices = 24;
+  numVertices = 24;
 
   /** @type {Float32Array[]} */
   verticesData = Array(1);
@@ -363,7 +363,7 @@ export class GeometryConstrainedTokenDesc {
   label = "";
 
   /** @type {number} */
-  nVertices = 36;
+  numVertices = 36;
 
   /** @type {Float32Array[]} */
   verticesData = Array(1);
@@ -399,13 +399,13 @@ export class GeometryConstrainedTokenDesc {
     // this.verticesData[0] = top.vertices;
 
     // For indices, increase because they are getting combined into one.
-    side.indices = side.indices.map(elem => elem + top.nVertices);
-    bottom.indices = bottom.indices.map(elem => elem + top.nVertices + side.nVertices);
+    side.indices = side.indices.map(elem => elem + top.numVertices);
+    bottom.indices = bottom.indices.map(elem => elem + top.numVertices + side.numVertices);
     this.indicesData[0] = combineTypedArrays(top.indices, side.indices, bottom.indices);
     // this.indicesData[0] = top.indices;
 
-    this.nVertices = Math.floor(top.nVertices + side.nVertices + bottom.nVertices);
-    // this.nVertices = top.nVertices;
+    this.numVertices = Math.floor(top.numVertices + side.numVertices + bottom.numVertices);
+    // this.numVertices = top.numVertices;
   }
 
   static indexFormat = "uint16";
@@ -455,8 +455,8 @@ export class GeometryConstrainedTokenDesc {
    * @returns {object}
    * - @prop {array} offsets        In byteLength; sum of the sizes iteratively
    * - @prop {array} sizes          In byteLength
-   * - @prop {array} nVertices      Number of vertices in each
-   * - @prop {number} totalVertices Sum of the nVertices
+   * - @prop {array} numVertices      Number of vertices in each
+   * - @prop {number} totalVertices Sum of the numVertices
    * - @prop {number} totalSize     Sum of the sizes
    */
   static computeTotalVertexBufferOffsets(geoms, idx = 0) { // TODO: Do we need more than 1 buffer index?
@@ -479,14 +479,14 @@ export class GeometryConstrainedTokenDesc {
     for ( let i = 0, n = geoms.length; i < n; i += 1 ) {
       const geom = geoms[i];
       out.vertex.totalSize += out.vertex.sizes[i] = geom.verticesData[idx].byteLength;
-      out.vertex.totalVertices += out.vertex.lengths[i] = geom.numVertices;
+      out.vertex.totalLength += out.vertex.lengths[i] = geom.numVertices;
 
       out.index.totalSize += out.index.sizes[i] = geom.indicesData[idx].byteLength;
-      out.index.totalVertices += out.index.lengths[i] = geom.indicesData[idx].length;
+      out.index.totalLength += out.index.lengths[i] = geom.indicesData[idx].length;
     }
     for ( let i = 1, n = geoms.length; i < n; i += 1 ) {
-      out.vertex.offsets[i] += out.vertex.offsets[i - 1] + out.vertex.sizes[i];
-      out.index.offsets[i] += out.index.offsets[i - 1] + out.index.sizes[i];
+      out.vertex.offsets[i] += out.vertex.offsets[i - 1] + out.vertex.sizes[i - 1];
+      out.index.offsets[i] += out.index.offsets[i - 1] + out.index.sizes[i - 1];
     }
     return out;
   }
@@ -553,8 +553,8 @@ export class GeometryConstrainedTokenDesc {
      */
 
      // Earcut to determine indices. Then construct the vertices.
-     const nVertices = Math.floor(poly.points.length / 2);
-     const vertices = new Float32Array(nVertices * 8);
+     const numVertices = Math.floor(poly.points.length / 2);
+     const vertices = new Float32Array(numVertices * 8);
      const indices = new Uint16Array(PIXI.utils.earcut(poly.points));
 
      // For Foundry's y+ coordinate system, indices are always CCW triangles.
@@ -600,7 +600,7 @@ export class GeometryConstrainedTokenDesc {
        vertices[i++] = v(pt.y);
      }
 
-     return { indices, vertices, nVertices };
+     return { indices, vertices, numVertices };
   }
 
   /**
@@ -646,9 +646,9 @@ export class GeometryConstrainedTokenDesc {
     ];
 
     const nEdges = Math.floor(poly.points.length / 2); // Each point has an edge.
-    const nVertices = 4 * nEdges;
+    const numVertices = 4 * nEdges;
     const nIndices = 6 * nEdges;
-    const vertices = new Float32Array(nVertices * 8);
+    const vertices = new Float32Array(numVertices * 8);
     const indices = new Uint16Array(nIndices);
     let i = 0;
     let j = 0;
@@ -688,7 +688,7 @@ export class GeometryConstrainedTokenDesc {
         j += 8;
       }
     }
-    return { indices, vertices, nVertices };
+    return { indices, vertices, numVertices };
   }
 }
 
