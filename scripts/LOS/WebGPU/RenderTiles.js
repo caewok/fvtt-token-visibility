@@ -167,7 +167,7 @@ export class RenderTiles {
       vertex: {
         module: this.modules.render,
         entryPoint: "vertexMain",
-        buffers: geometryDesc.buffersLayout,
+        buffers: GeometryTileDesc.buffersLayout,
       },
       fragment: {
         module: this.modules.render,
@@ -407,6 +407,7 @@ export class RenderTiles {
    * @param {Tile} [tile]         The tile associated with the id; will be looked up otherwise
    */
   updateTileInstanceData(tileId, idx, tile) {
+    idx ??= this.instanceIndexFromId(tileId);
     tile ??= this.tileForId(tileId);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
     const ctr = this.constructor.tileCenter(tile);

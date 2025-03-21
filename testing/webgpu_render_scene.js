@@ -85,10 +85,12 @@ let {
   GeometryWallDesc,
   GeometryTokenDesc,
   GeometryTileDesc,
+  GeometryConstrainedTokenDesc,
   Geometry,
   RenderWalls,
   RenderTokens,
   RenderTiles,
+  RenderConstrainedTokens,
 } = api.webgpu
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
@@ -136,6 +138,13 @@ await renderTokens.initialize();
 renderTokens.setRenderTextureToCanvas(popout.canvas)
 await renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
 
+renderConstrainedTokens = new RenderConstrainedTokens(device);
+renderConstrainedTokens.sampleCount = 1
+renderConstrainedTokens.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
+await renderConstrainedTokens.initialize();
+renderConstrainedTokens.setRenderTextureToCanvas(popout.canvas)
+await renderConstrainedTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
+
 
 renderTiles = new RenderTiles(device);
 renderTiles.sampleCount = 1
@@ -149,6 +158,7 @@ await renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, vie
 renderType = "Walls"
 renderType = "Tokens"
 renderType = "Tiles"
+renderType = "ConstrainedTokens"
 
 rerender = () => {
   const losCalc = viewer.vision.tokenvisibility.losCalc
@@ -158,11 +168,12 @@ rerender = () => {
     case "Walls": renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
     case "Tokens": renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
     case "Tiles": renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "ConstrainedTokens": renderConstrainedTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+
   }
 }
 
 Hooks.on("controlToken", (token, controlled) => {
-
   if ( controlled ) viewer = token;
   rerender();
 });
@@ -506,7 +517,7 @@ canvasDst = vec4.fromValues(0, 0, 0, 1);
 blendOpts = {
   color: {
     operation: "add",
-    srcFactor: "one",
+    srcFactor: "one", // Could use src-alpha and set clear canvas to alpha = 0. But if no other green, this is simpler.
     dstFactor: "one",
   },
   alpha: {
@@ -524,6 +535,20 @@ dst = testBlend(terrainSrc, canvasDst, blendOpts)
 dst2 = testBlend(targetSrc, dst, blendOpts)
 dst2 = testBlend(obstacleSrc, dst, blendOpts)
 dst2 = testBlend(terrainSrc, dst, blendOpts)
+
+
+/*
+Simplest version:
+Keep all red channel for target. On overlap, keep anyway.
+Write to green channel for terrain. Add two 50% green to get to 100%.
+Write all other obstacles to blue at 100%.
+Set tile pixels to blue if greater than alphaThreshold.
+
+Now can write one texture for all:
+- Sum red to get area of target without obstacles.
+- Sum red if not 100% green and not 100% blue to get area of target w/ obstacles.
+
+*/
 
 
 

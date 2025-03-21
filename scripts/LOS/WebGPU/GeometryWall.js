@@ -18,9 +18,6 @@ export class GeometryWallDesc {
   /** @type {Float32Array[]} */
   verticesData = Array(1);
 
-  /** @type {object} */
-  buffersLayout = Array(1);
-
   /**
    * @param {object} [opts]
    * @param {string} [opts.label]    Label for this structure
@@ -29,8 +26,9 @@ export class GeometryWallDesc {
    * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
    */
   constructor(opts = {}) {
+    if ( opts.label ) this.label = opts.label;
     const w = (opts.width ?? 1) * 0.5;
-    const h = (opts.height ?? 1) * 0.5;
+    const h = (opts.zHeight ?? 1) * 0.5;
 
     const x = opts.x ?? 0;
     const y = opts.y ?? 0;
@@ -103,7 +101,10 @@ export class GeometryWallDesc {
     // TODO: For directional walls, make Normal an instance buffer.
     // TODO: Better way to define shaderLocation so it can be passed to the shader code?
     this.verticesData[0] = new Float32Array(arr);
-    this.buffersLayout[0] = {
+  }
+
+  static buffersLayout = [
+    {
       arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 2 normal, 2 uv.
       stepMode: "vertex",
       attributes: [
@@ -126,9 +127,8 @@ export class GeometryWallDesc {
           shaderLocation: 2,
         }
       ]
-    };
-
-  }
+    }
+  ];
 }
 
 /* Test for normal

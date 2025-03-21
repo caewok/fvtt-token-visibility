@@ -341,3 +341,22 @@ export function minMaxPolygonCoordinates(polygons) {
   return { xMinMax: Math.minMax(...xs), yMinMax: Math.minMax(...ys) };
 }
 
+
+/**
+ * Efficiently combine multiple typed arrays.
+ * @param {...TypedArray} ...args
+ * @returns {TypedArray}
+ */
+export function combineTypedArrays(...arrs) {
+  const len = arrs.reduce((acc, curr) => acc + curr.length, 0);
+  const out = new arrs[0].constructor(len);
+  out.set(arrs[0]);
+  let idx = 0;
+  for ( let i = 0, n = arrs.length; i < n; i += 1 ) {
+    out.set(arrs[i], idx);
+    idx += arrs[i].length;
+  }
+  return out;
+}
+
+

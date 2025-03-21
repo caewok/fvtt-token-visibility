@@ -142,7 +142,7 @@ export class RenderWalls {
       vertex: {
         module: this.modules.render,
         entryPoint: "vertexMain",
-        buffers: geometryDesc.buffersLayout,
+        buffers: GeometryWallDesc.buffersLayout,
       },
       fragment: {
         module: this.modules.render,
@@ -320,6 +320,7 @@ export class RenderWalls {
    * @param {Edge} [edge]         The edge associated with the id; will be looked up otherwise
    */
   updateEdgeInstanceData(edgeId, idx, edge) {
+    idx ??= this.instanceIndexFromId(edgeId);
     edge ??= this.edges.get(edgeId);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
     const pos = this.constructor.edgeCenter(edge);

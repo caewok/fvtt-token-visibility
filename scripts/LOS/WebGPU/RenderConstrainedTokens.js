@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONFIG,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -8,9 +9,10 @@ CONFIG,
 // Base folder
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { GeometryTokenDesc } from "./GeometryToken.js";
+import { GeometryConstrainedTokenDesc } from "./GeometryToken.js";
+import { combineTypedArrays } from "../util.js";
 
-export class RenderTokens {
+export class RenderConstrainedTokens {
   /** @type {GPUDevice} */
   device;
 
@@ -38,6 +40,24 @@ export class RenderTokens {
   /** @type {object<GPUBuffer>} */
   buffers = {};
 
+  /**
+   * @typedef {object} Drawable
+   * Information needed to render a given object.
+   * E.g., wall (as instance) or token (as instance) or constrained token (single instance)
+   * @prop {GeometryDesc} geometry
+   * @prop {string} label
+   * @prop {}
+   */
+
+  /** @type {object[]} */
+  drawables = [];
+
+  /**
+   * Maximum number of polygon points that can be accommodated using the current buffer.
+   * If over this amount, buffer is re-sized.
+   */
+  maxVertices = 10;
+
   // See https://webgpufundamentals.org/webgpu/lessons/resources/wgsl-offset-computer.html
   static BINDGROUP_OPTS = {
     CAMERA: {
@@ -48,26 +68,8 @@ export class RenderTokens {
         buffer: {},
       }]
     },
-
-    INSTANCE: {
-      label: "Instance",
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: "read-only-storage" },
-      }]
-    },
   };
 
-
-  // See https://webgpufundamentals.org/webgpu/lessons/resources/wgsl-offset-computer.html
-  /*
-  const InstanceDataValues = new ArrayBuffer(64);
-  const InstanceDataViews = {
-    model: new Float32Array(InstanceDataValues)
-  };
-  */
-  static INSTANCE_ELEMENT_LENGTH = 64;
 
   /**
    * @param {GPUDevice} device
@@ -89,24 +91,34 @@ export class RenderTokens {
     const device = this.device ??= await WebGPUDevice.getDevice();
 
     // Define shader.
-    this.modules.render = await WebGPUShader.fromGLSLFile(device, "token", "Token Render");
+    this.modules.render = await WebGPUShader.fromGLSLFile(device, "constrained_token", "Token Render");
 
+    // For constrained tokens, all their vertices are one-off, and can be expected to change
+    // at each render. (Depending on which token moves.) And each one could have a different
+    // number of vertices, so the vertex array length will change (plus some will get removed).
+    // We can either:
+    // 1. Create and upload the vertex buffer on render each time.
+    //  -- simpler
+    // 2. Create a very large work buffer, and use offsets to update as needed.
+    //  -- Likely more performant
+    //
+
+    // Set up the vertex buffer for the tokens.
+    /*
     this.initializeTokens();
 
     // Vertex buffer
-    const geometryDesc = new GeometryTokenDesc({ label: "Token Geometry", directional: false });
-    this.geometryDesc = geometryDesc;
-    const numVertexBuffers = geometryDesc.verticesData.length;
-    this.buffers.vertex = Array(numVertexBuffers);
-    for ( let i = 0; i < numVertexBuffers; i += 1 ) {
-      const data = geometryDesc.verticesData[i];
-      this.buffers.vertex[i] = device.createBuffer({
-        label: `Token Vertices Buffer ${i}`,
-        size: data.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      });
-      device.queue.writeBuffer(this.buffers.vertex[i], 0, data);
-    }
+    this.buffers.vertex = device.createBuffer({
+      label: `Token Vertices Buffer`,
+      size: this.vertexArrayBuffer.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(this.buffers.vertex, 0, this.vertexArrayBuffer);
+
+    // Index buffer
+    */
+
+
 
     // Uniform buffers.
     this.buffers.camera = device.createBuffer({
@@ -116,18 +128,10 @@ export class RenderTokens {
     });
     // Will be written to GPU prior to render, because the camera view will change.
 
-    this.buffers.instance = this.device.createBuffer({
-      label: "Token Instance",
-      size: this.numTokens * this.constructor.INSTANCE_ELEMENT_LENGTH,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(this.buffers.instance, 0, this.instanceArrayBuffer); // 0 , this.constructor.INSTANCE_ELEMENT_LENGTH * this.numTokens
-
 
     // Define bind group layouts.
     const BG_OPTS = this.constructor.BINDGROUP_OPTS;
     this.bindGroupLayouts.camera = device.createBindGroupLayout(BG_OPTS.CAMERA);
-    this.bindGroupLayouts.instance = device.createBindGroupLayout(BG_OPTS.INSTANCE);
 
     // Define pipelines.
     // TODO: Make async.
@@ -136,12 +140,11 @@ export class RenderTokens {
       label: "Render",
       layout: device.createPipelineLayout({ bindGroupLayouts: [
         this.bindGroupLayouts.camera,
-        this.bindGroupLayouts.instance,
       ]}),
       vertex: {
         module: this.modules.render,
         entryPoint: "vertexMain",
-        buffers: GeometryTokenDesc.buffersLayout,
+        buffers: GeometryConstrainedTokenDesc.buffersLayout,
       },
       fragment: {
         module: this.modules.render,
@@ -172,18 +175,11 @@ export class RenderTokens {
       }],
     });
 
-    this.bindGroups.instance = this.device.createBindGroup({
-      label: "Instance",
-      layout: this.bindGroupLayouts.instance,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.buffers.instance }
-      }],
-    });
-
     this.#allocateRenderTargets();
     // this.pipelines.render = await this.pipelines.render;
   }
+
+
 
   /**
    * Render the scene from a given viewpoint.
@@ -191,7 +187,7 @@ export class RenderTokens {
    * @param {Point3d} viewerLocation
    * @param {Token} target
    */
-  async renderScene(viewerLocation, target, { vp, viewer } = {}) {
+  async renderScene(viewerLocation, target, { _vp, viewer } = {}) {
     const device = this.device ??= await WebGPUDevice.getDevice();
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
@@ -220,8 +216,36 @@ export class RenderTokens {
     // vp.shaders.obstacle.uniforms.uPerspectiveMatrix
     // vp.shaders.obstacle.uniforms.uOffsetMatrix
 
-
     this.device.queue.writeBuffer(this.buffers.camera, 0, this.camera.arrayBuffer);
+
+    // Version 1. Create and upload the vertex buffer on render each time.
+    // Don't draw the viewer token.
+    const tokens = canvas.tokens.placeables
+      .filter(token => token !== viewer && this.includeToken(token));
+    const geoms = this.geoms = Array(tokens.length);
+    for ( let i = 0, n = tokens.length; i < n; i += 1 ) {
+      const token = tokens[i];
+      geoms[i] = new GeometryConstrainedTokenDesc(token, { label: `Constrained Token ${token}` });
+    }
+
+    const offsetData = GeometryConstrainedTokenDesc.computeTotalVertexBufferOffsets(geoms);
+    this.vertexArrayBuffer = combineTypedArrays(...geoms.map(g => g.verticesData[0]));
+    this.indexArrayBuffer = combineTypedArrays(...geoms.map(g => g.indicesData[0]));
+
+    this.buffers.vertex = device.createBuffer({
+      label: `Constrained Token Vertices Buffer`,
+      size: this.vertexArrayBuffer.byteLength, // Or offsetData.vertex.totalSize
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(this.buffers.vertex, 0, this.vertexArrayBuffer);
+
+    this.buffers.index = device.createBuffer({
+      label: `Constrained Token Vertices Buffer`,
+      size: this.indexArrayBuffer.byteLength, // Or offsetData.index.totalSize
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    })
+    device.queue.writeBuffer(this.buffers.index, 0, this.indexArrayBuffer);
+
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -235,31 +259,18 @@ export class RenderTokens {
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     renderPass.setPipeline(this.pipelines.render);
     renderPass.setBindGroup(0, this.bindGroups.camera);
-    renderPass.setBindGroup(1, this.bindGroups.instance);
 
-    for ( let i = 0, n = this.buffers.vertex.length; i < n; i += 1 ) {
-      renderPass.setVertexBuffer(0, this.buffers.vertex[i]);
+    for ( let i = 0, n = tokens.length; i < n; i += 1 ) {
+      const token = tokens[i];
+      // if ( token === viewer ) continue;
+      const geom = geoms[i];
+      const vOffset = offsetData.vertex.offsets[i];
+      const iOffset = offsetData.index.offsets[i];
+      geom.setVertexBuffer(renderPass, this.buffers.vertex, vOffset);
+      geom.setIndexBuffer(renderPass, this.buffers.index, iOffset);
+      geom.draw(renderPass);
     }
 
-    // renderPass.setIndexBuffer(this.buffers.indices, "uint16");
-
-    // renderPass.draw(3);
-    // renderPass.drawIndexed(3);
-    // renderPass.drawIndexed(this.tokenVertexIndices.length);
-
-    // Don't draw the viewer token.
-    if ( viewer ) {
-      const viewerIdx = this.instanceIndexFromId.get(viewer.id);
-      switch ( viewerIdx ) {
-        case 0: renderPass.draw(this.geometryDesc.numVertices, this.numTokens - 1, 0, 1); break;
-        case (this.numTokens - 1): renderPass.draw(this.geometryDesc.numVertices, this.numTokens - 1, 0, 0); break;
-        default: {
-          // 0 < viewerIdx < this.numTokens - 1.
-          renderPass.draw(this.geometryDesc.numVertices, viewerIdx, 0, 0);
-          renderPass.draw(this.geometryDesc.numVertices, this.numTokens - viewerIdx - 1, 0, viewerIdx + 1);
-        }
-      }
-    } else renderPass.draw(this.geometryDesc.numVertices, this.numTokens);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
     return this.device.queue.onSubmittedWorkDone();
@@ -279,7 +290,13 @@ export class RenderTokens {
   /** @type {ArrayBuffer} */
   instanceArrayBuffer;
 
-  get instanceArrayValues() { return new Float32Array(this.instanceArrayBuffer); }
+  get vertexArrayValues() { return new Float32Array(this.vertexArrayBuffer); }
+
+  /**
+   * 32 vertex entries per edge for top, bottom; 48 for sides.
+   * @type {number}
+   */
+  get maxInstanceSize() { return this.maxVertices * (32 + 32 + 48) * Float32Array.BYTES_PER_ELEMENT; }
 
   /**
    * For a given token id, return the token object, if it exists.
@@ -296,11 +313,25 @@ export class RenderTokens {
     this.instanceIndexFromId.clear();
     this.#tokenFromInstanceIndex.clear();
     const tokens = canvas.tokens.placeables.filter(token => this.includeToken(token));
-    this.instanceArrayBuffer = new ArrayBuffer(tokens.length * this.constructor.INSTANCE_ELEMENT_LENGTH);
+
+    // Create a vertex buffer.
+    // Confirm the maximum polygon points and thus maximum buffer size per token.
+    // Buffer will be sized accordingly, e.g.,
+    // T0 T0 T0 • • • T1 T1 • • • • T2 T2 T2 T2 T2 T2...
+    this.maxVertices = Math.max(this.maxVertices, ...tokens.map(t => {
+      const border = t.constrainedTokenBorder;
+      if ( border instanceof PIXI.Rectangle ) return 4;
+      return Math.floor(border.toPolygon().points.length / 2);
+    }));
+
+    // 32 vertex entries per edge for top, bottom; 48 for sides.
+    this.vertexArrayBuffer = new ArrayBuffer(tokens.length * this.maxInstanceSize);
+
     tokens.forEach((token, idx) => {
+      // Not instances per se, but offsets in the vertex buffer.
       this.instanceIndexFromId.set(token.id, idx);
       this.#tokenFromInstanceIndex.set(idx, token);
-      this.updateTokenInstanceData(token.id, idx, token);
+      this.updateTokenVertexData(token.id, idx, token);
     });
   }
 
@@ -326,37 +357,23 @@ export class RenderTokens {
   #scaleM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
   /**
-   * Update the instance array of a specific token.
+   * Update the vertex array of a specific token.
    * @param {string} tokenId       Id of the token
    * @param {number} [idx]        Optional token id; will be looked up using tokenId otherwise
    * @param {Token} [token]         The token associated with the id; will be looked up otherwise
    */
-  updateTokenInstanceData(tokenId, idx, token) {
+  updateTokenVertexData(tokenId, idx, token) {
     idx ??= this.instanceIndexFromId(tokenId);
     token ??= this.tokenForId(tokenId);
-    const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const { width, height, zHeight } = this.constructor.tokenDimensions(token);
+    const vertexArr = this.getTokenInstanceData(tokenId, idx);
+    const geom = new GeometryConstrainedTokenDesc(token, { label: `Constrained Token ${tokenId}` });
+    if ( geom.arr.length > vertexArr.length ) throw Error("updateTokenVertexData|Geometry is longer than maximum vertex array."); // TODO: Fix so this triggers a full rebuild. Set a #dirty flag?
 
-    // Move from center of token.
-    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.#translationM);
-
-    // Scale based on width, height, zHeight of token.
-    MatrixFloat32.scale(width, height, zHeight, this.#scaleM);
-
-    // Combine and update the instance matrix. Store as column-major.
-    // scale --> rotate --> translate.
-    const arrM = this.getTokenInstanceData(tokenId, idx);
-    const M = new MatrixFloat32(arrM, 4, 4);
-
-    this.#scaleM.multiply4x4(this.#translationM, M);
-
-    // Return only for debugging.
-    return {
-      translation: this.#translationM,
-      scale: this.#scaleM,
-      out: M
-    };
+//     vertexArr.fill(0); // Clear in case the new geom is less.
+//     vertexArr.set(geom.vertices);
+//
+//     indexArr.fill(0);
+//     indexArr.set(geom.indices)
   }
 
   /**
@@ -366,8 +383,8 @@ export class RenderTokens {
    */
   getTokenInstanceData(tokenId, idx) {
     idx ??= this.instanceIndexFromId.get(tokenId);
-    const i = idx * this.constructor.INSTANCE_ELEMENT_LENGTH;
-    return new Float32Array(this.instanceArrayBuffer, i, 16);
+    const i = idx * this.maxInstanceSize;
+    return new Float32Array(this.instanceArrayBuffer, i, this.maxInstanceSize);
   }
 
   /**

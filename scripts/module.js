@@ -71,12 +71,13 @@ import { PlaceableTrianglesHandler, TokenTrianglesHandler, TileTrianglesHandler,
 import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/WebGPU/Camera.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
-import { GeometryTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
+import { GeometryTokenDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
 import { GeometryTileDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { Geometry } from "./LOS/WebGPU/Geometry.js";
 import { RenderWalls } from "./LOS/WebGPU/RenderWalls.js";
 import { RenderTokens } from "./LOS/WebGPU/RenderTokens.js";
 import { RenderTiles } from "./LOS/WebGPU/RenderTiles.js";
+import { RenderConstrainedTokens } from "./LOS/WebGPU/RenderConstrainedTokens.js";
 import {
   mat2, mat2d, mat3, mat4,
   quat, quat2,
@@ -207,9 +208,11 @@ Hooks.once("init", function() {
       GeometryWallDesc,
       GeometryTokenDesc,
       GeometryTileDesc,
+      GeometryConstrainedTokenDesc,
       RenderWalls,
       RenderTokens,
       RenderTiles,
+      RenderConstrainedTokens,
     },
 
     glmatrix: {
