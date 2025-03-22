@@ -68,6 +68,15 @@ export class RenderConstrainedTokens {
         buffer: {},
       }]
     },
+
+    MATERIAL: {
+      label: 'Material',
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+        buffer: {}
+      }]
+    }
   };
 
 
@@ -128,10 +137,14 @@ export class RenderConstrainedTokens {
     });
     // Will be written to GPU prior to render, because the camera view will change.
 
-
     // Define bind group layouts.
     const BG_OPTS = this.constructor.BINDGROUP_OPTS;
     this.bindGroupLayouts.camera = device.createBindGroupLayout(BG_OPTS.CAMERA);
+    this.bindGroupLayouts.material = device.createBindGroupLayout(BG_OPTS.MATERIAL);
+
+    // Define materials (colors) used for drawables.
+    this.createMaterial({ r: 1.0, label: "target" });
+    this.createMaterial({ b: 1.0, label: "obstacle" });
 
     // Define pipelines.
     // TODO: Make async.
@@ -140,6 +153,7 @@ export class RenderConstrainedTokens {
       label: "Render",
       layout: device.createPipelineLayout({ bindGroupLayouts: [
         this.bindGroupLayouts.camera,
+        this.bindGroupLayouts.material,
       ]}),
       vertex: {
         module: this.modules.render,
@@ -177,6 +191,50 @@ export class RenderConstrainedTokens {
 
     this.#allocateRenderTargets();
     // this.pipelines.render = await this.pipelines.render;
+  }
+
+
+  /**
+   * Define a material buffer and associated bind group.
+   * Stores color associated with a drawable (instance).
+   * @param {object} [opts]
+   * @param {number} [opts.r=0]         Red; value between [0, 1]
+   * @param {number} [opts.g=0]         Green; value between [0, 1]
+   * @param {number} [opts.b=0]         Blue; value between [0, 1]
+   * @param {number} [opts.a=1]         Alpha; value between [0, 1]
+   * @param {string} [opts.label]       Name for the material
+   */
+  createMaterial({ r, g, b, a, label } = {}) {
+    this.buffers.materials ??= {};
+    r ??= 0.0;
+    g ??= 0.0;
+    b ??= 0.0;
+    a ??= 1.0;
+    label ??= `Material (${r}, ${g}, ${b}, ${a});`
+
+    const buffer = this.buffers.materials[label] = this.device.createBuffer({
+      label,
+      size: Float32Array.BYTES_PER_ELEMENT * 4,
+      usage: GPUBufferUsage.UNIFORM,
+      mappedAtCreation: true,
+    });
+    const materialArray = new Float32Array(buffer.getMappedRange());
+    materialArray[0] = r;
+    materialArray[1] = g;
+    materialArray[2] = b;
+    materialArray[3] = a;
+    buffer.unmap();
+
+    this.bindGroups.materials ??= {};
+
+    this.bindGroups.materials[label] = this.device.createBindGroup({
+      label,
+      layout: this.bindGroupLayouts.material,
+      entries: [{
+        binding: 0,
+        resource: { buffer }
+      }],
+    });
   }
 
 
@@ -226,6 +284,9 @@ export class RenderConstrainedTokens {
     for ( let i = 0, n = tokens.length; i < n; i += 1 ) {
       const token = tokens[i];
       geoms[i] = new GeometryConstrainedTokenDesc(token, { label: `Constrained Token ${token}` });
+
+      const material = token === target ? "target" : "obstacle";
+      geoms[i].material = this.bindGroups.materials[material];
     }
 
     const offsetData = GeometryConstrainedTokenDesc.computeTotalVertexBufferOffsets(geoms);
@@ -261,9 +322,11 @@ export class RenderConstrainedTokens {
     renderPass.setBindGroup(0, this.bindGroups.camera);
 
     for ( let i = 0, n = tokens.length; i < n; i += 1 ) {
-      const token = tokens[i];
+      // const token = tokens[i];
       // if ( token === viewer ) continue;
       const geom = geoms[i];
+      renderPass.setBindGroup(1, geom.material);
+
       const vOffset = offsetData.vertex.offsets[i];
       const iOffset = offsetData.index.offsets[i];
       geom.setVertexBuffer(renderPass, this.buffers.vertex, vOffset);
