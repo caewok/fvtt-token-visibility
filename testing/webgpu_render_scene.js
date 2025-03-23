@@ -86,7 +86,6 @@ let {
   GeometryTokenDesc,
   GeometryTileDesc,
   GeometryConstrainedTokenDesc,
-  Geometry,
   RenderWalls,
   RenderTokens,
   RenderTiles,
@@ -122,13 +121,14 @@ popout.context.configure({
 });
 
 
-renderWalls = new RenderWalls(device);
+renderWalls = new RenderWalls();
+await renderWalls.getDevice(); // So renderSize can be set
 // renderWalls.sampleCount = 4
 renderWalls.sampleCount = 1
 renderWalls.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderWalls.initialize();
 renderWalls.setRenderTextureToCanvas(popout.canvas)
-await renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, vp)
+await renderWalls.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
 
 
 renderTokens = new RenderTokens(device);
@@ -165,10 +165,10 @@ rerender = () => {
   losCalc.target = target
   const vp = losCalc.viewpoints[0]
   switch ( renderType ) {
-    case "Walls": renderWalls.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
-    case "Tokens": renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
-    case "Tiles": renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
-    case "ConstrainedTokens": renderConstrainedTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "Walls": renderWalls.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "Tokens": renderTokens.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "Tiles": renderTiles.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "ConstrainedTokens": renderConstrainedTokens.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
 
   }
 }

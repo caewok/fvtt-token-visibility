@@ -4,37 +4,32 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { GeometryDesc } from "./GeometryDesc.js";
+
 /**
- * Describe a tile by its vertices, normals, and uvs.
+ * Describe a horizontal plane (tile) by its vertices, normals, and uvs.
  * By default, 1x1 tile centered at origin 0,0,0.
  */
-export class GeometryTileDesc {
+export class GeometryHorizontalPlaneDesc extends GeometryDesc {
+
   /** @type {string} */
-  label = "";
+  label = "Horizontal Plane";
 
   /** @type {number} */
-  numVertices = 12;
-
-  /** @type {Float32Array[]} */
-  verticesData = Array(1);
+  numVertices = 8;
 
   /**
+   * Define the vertices and optional indices for this geometry.
    * @param {object} [opts]
-   * @param {string} [opts.label]     Label for this structure
-   * @param {number} [opts.width]     Width of the token (in x direction)
-   * @param {number} [opts.depth]     Depth of the token (in y direction)
-   * @param {number} [opts.height]    Height of token (in z direction)
-   * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
+   * @param {number} [opts.w]           Width of the token (in x direction)
+   * @param {number} [opts.d]           Depth of the token (in y direction)
+   * @param {number} [opts.h]           Height of token (in z direction)
+   * @param {number} [opts.x]           Location on x-axis
+   * @param {number} [opts.y]           Location on y-axis
+   * @param {number} [opts.z]           Location on z-axis
+   * @override
    */
-  constructor(opts = {}) {
-    if ( opts.label ) this.label = opts.label;
-    const w = (opts.width ?? 1) * 0.5;
-    const d = (opts.height ?? 1) * 0.5; // Depth (d) in y direction.
-
-    const x = opts.x ?? 0;
-    const y = opts.y ?? 0;
-    const z = opts.z ?? 0;
-
+  _defineVerticesAndIndices({ x, y, z, w, d } = {}) {
     const arr = [
       // Position     Normal     UV
       // CCW if tile goes from x-w to x+w.
@@ -42,23 +37,26 @@ export class GeometryTileDesc {
       // https://eliemichel.github.io/LearnWebGPU/basic-3d-rendering/texturing/texture-mapping.html
       // WebGPU uses 0->1 u/x and 0->1 v/y where y increases as it moves down.
       // Top
-      x-w, y-d, z,  0, 0, 1,   0, 0,  // a
+      // a, b, c, d, e, f
+      x-w, y-d, z,  0, 0, 1,   0, 0,  // a, e
       x-w, y+d, z,  0, 0, 1,   0, 1,  // b
-      x+w, y+d, z,  0, 0, 1,   1, 1,  // c
+      x+w, y+d, z,  0, 0, 1,   1, 1,  // c, f
       x+w, y-d, z,  0, 0, 1,   1, 0,  // d
-      x-w, y-d, z,  0, 0, 1,   0, 0,  // e
-      x+w, y+d, z,  0, 0, 1,   1, 1,  // f
 
       // Bottom
       // We want the texture always facing up, not down as one might typically expect.
       // Thus the texture keeps the same coordinates.
-      x+w, y+d, z,  0, 0, -1,  1, 1,  // c
+      // c, b, a, f, e, d
+      x+w, y+d, z,  0, 0, -1,  1, 1,  // c, f
       x-w, y+d, z,  0, 0, -1,  0, 1,  // b
-      x-w, y-d, z,  0, 0, -1,  0, 0,  // a
-      x+w, y+d, z,  0, 0, -1,  1, 1,  // f
-      x-w, y-d, z,  0, 0, -1,  0, 0,  // e
+      x-w, y-d, z,  0, 0, -1,  0, 0,  // a, e
       x+w, y-d, z,  0, 0, -1,  1, 0,  // d
     ];
+    const indices = [
+      0, 1, 2, 3, 0, 2, // Top (0–3)
+      4, 5, 6, 4, 6, 7, // Bottom (4–7)
+    ];
+
     /*
     Using Foundry world coordinates, where z is up, origin 0,0 is top right, y increases as it moves down.
     uv
@@ -91,35 +89,9 @@ export class GeometryTileDesc {
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-vertex-buffers.html
     // TODO: Use vertex buffer
     // TODO: Better way to define shaderLocation so it can be passed to the shader code?
-    this.verticesData[0] = new Float32Array(arr);
+    this.vertices = new Float32Array(arr);
+    this.indices = new Uint16Array(indices);
   }
-
-  static buffersLayout = [
-    {
-      arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 2 normal, 2 uv.
-      stepMode: "vertex",
-      attributes: [
-        // Position
-        {
-          format: "float32x3",
-          offset: 0,
-          shaderLocation: 0,
-        },
-        // Normal
-        {
-          format: "float32x3",
-          offset: Float32Array.BYTES_PER_ELEMENT * 3,
-          shaderLocation: 1,
-        },
-        // UV0
-        {
-          format: "float32x2",
-          offset: Float32Array.BYTES_PER_ELEMENT * 6,
-          shaderLocation: 2,
-        }
-      ]
-    }
-  ];
 }
 
 /* Test for normal

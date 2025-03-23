@@ -10,7 +10,7 @@ import { MODULES_ACTIVE } from "../../const.js";
 
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { GeometryTileDesc } from "./GeometryTile.js";
+import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
 
 
 export class RenderTiles {
@@ -118,7 +118,7 @@ export class RenderTiles {
     this.initializeTiles();
 
     // Vertex buffer
-    const geometryDesc = new GeometryTileDesc({ label: "Tile Geometry", directional: false });
+    const geometryDesc = new GeometryHorizontalPlaneDesc({ label: "Tile Geometry", directional: false });
     this.geometryDesc = geometryDesc;
     const numVertexBuffers = geometryDesc.verticesData.length;
     this.buffers.vertex = Array(numVertexBuffers);
@@ -167,7 +167,7 @@ export class RenderTiles {
       vertex: {
         module: this.modules.render,
         entryPoint: "vertexMain",
-        buffers: GeometryTileDesc.buffersLayout,
+        buffers: GeometryHorizontalPlaneDesc.buffersLayout,
       },
       fragment: {
         module: this.modules.render,

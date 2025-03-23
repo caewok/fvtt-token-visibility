@@ -8,7 +8,7 @@ CONFIG,
 // Base folder
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { GeometryTokenDesc } from "./GeometryToken.js";
+import { GeometryCubeDesc } from "./GeometryToken.js";
 
 export class RenderTokens {
   /** @type {GPUDevice} */
@@ -94,7 +94,7 @@ export class RenderTokens {
     this.initializeTokens();
 
     // Vertex buffer
-    const geometryDesc = new GeometryTokenDesc({ label: "Token Geometry", directional: false });
+    const geometryDesc = new GeometryCubeDesc({ label: "Token Geometry", directional: false });
     this.geometryDesc = geometryDesc;
     const numVertexBuffers = geometryDesc.verticesData.length;
     this.buffers.vertex = Array(numVertexBuffers);
@@ -141,7 +141,7 @@ export class RenderTokens {
       vertex: {
         module: this.modules.render,
         entryPoint: "vertexMain",
-        buffers: GeometryTokenDesc.buffersLayout,
+        buffers: GeometryCubeDesc.buffersLayout,
       },
       fragment: {
         module: this.modules.render,

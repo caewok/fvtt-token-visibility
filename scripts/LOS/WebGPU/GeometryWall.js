@@ -4,62 +4,60 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { GeometryDesc } from "./GeometryDesc.js";
+
 /**
  * Describe a wall by its vertices, normals, and uvs.
+ * Like a vertical plane, but may have a direction.
  * By default, 1x1 wall centered at origin 0,0,0.
  */
-export class GeometryWallDesc {
+export class GeometryWallDesc extends GeometryDesc {
   /** @type {string} */
-  label = "";
+  label = "Wall";
 
   /** @type {number} */
-  numVertices = 6;
-
-  /** @type {Float32Array[]} */
-  verticesData = Array(1);
+  numVertices = 4;
 
   /**
+   * Define the vertices and optional indices for this geometry.
    * @param {object} [opts]
-   * @param {string} [opts.label]    Label for this structure
-   * @param {number} [opts.length]   Length of the wall
-   * @param {number} [opts.height]   Height of wall in z direction
-   * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
+   * @param {number} [opts.w]           Width of the token (in x direction)
+   * @param {number} [opts.d]           Depth of the token (in y direction)
+   * @param {number} [opts.h]           Height of token (in z direction)
+   * @param {number} [opts.x]           Location on x-axis
+   * @param {number} [opts.y]           Location on y-axis
+   * @param {number} [opts.z]           Location on z-axis
+   * @param {boolean} [opts.directional]  If true, the wall blocks only one direction; only one set of triangles drawn
+   * @override
    */
-  constructor(opts = {}) {
-    if ( opts.label ) this.label = opts.label;
-    const w = (opts.width ?? 1) * 0.5;
-    const h = (opts.zHeight ?? 1) * 0.5;
+  _defineVerticesAndIndices({ x, y, z, w, h, directional } = {}) {
 
-    const x = opts.x ?? 0;
-    const y = opts.y ?? 0;
-    const z = opts.z ?? 0;
 
     const arr = [
       // Position     Normal     UV
       // Side faces south.
       // Side CCW if wall goes from x-w to x+w.
       // Normal vectors are times -1 b/c the triangles are CCW.
-      x+w, y, z+h,  0, 1, 0,  1, 0, // a
+      // a, b, c, d, e, f
+      x+w, y, z+h,  0, 1, 0,  1, 0, // a, e
       x-w, y, z+h,  0, 1, 0,  0, 0, // b
-      x-w, y, z-h,  0, 1, 0,  0, 1, // c
+      x-w, y, z-h,  0, 1, 0,  0, 1, // c, f
       x+w, y, z-h,  0, 1, 0,  1, 1, // d
-      x+w, y, z+h,  0, 1, 0,  1, 0, // e
-      x-w, y, z-h,  0, 1, 0,  0, 1, // f
     ];
+    const indices = [0, 1, 2, 3, 0, 2];
 
-    if ( !opts.directional ) {
+    if ( !directional ) {
       arr.push(
         // Side faces north.
         // Side CW if wall goes from x-w to x+w
-        x-w, y, z-h,  0, -1, 0,  1, 1, // c
+        // c, b, a, f, e, d
+        x-w, y, z-h,  0, -1, 0,  1, 1, // c, f
         x-w, y, z+h,  0, -1, 0,  1, 0, // b
-        x+w, y, z+h,  0, -1, 0,  0, 0, // a
-        x-w, y, z-h,  0, -1, 0,  1, 1, // f
-        x+w, y, z+h,  0, -1, 0,  0, 0, // e
+        x+w, y, z+h,  0, -1, 0,  0, 0, // a, e
         x+w, y, z-h,  0, -1, 0,  0, 1, // d
       );
-
-      this.numVertices += 6;
+      indices.push(4, 5, 6, 4, 6, 7);
+      this.numVertices += 4;
     }
 
     /*
@@ -100,35 +98,9 @@ export class GeometryWallDesc {
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-vertex-buffers.html
     // TODO: For directional walls, make Normal an instance buffer.
     // TODO: Better way to define shaderLocation so it can be passed to the shader code?
-    this.verticesData[0] = new Float32Array(arr);
+    this.vertices = new Float32Array(arr);
+    this.indices = new Uint16Array(indices);
   }
-
-  static buffersLayout = [
-    {
-      arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 2 normal, 2 uv.
-      stepMode: "vertex",
-      attributes: [
-        // Position
-        {
-          format: "float32x3",
-          offset: 0,
-          shaderLocation: 0,
-        },
-        // Normal
-        {
-          format: "float32x3",
-          offset: Float32Array.BYTES_PER_ELEMENT * 3,
-          shaderLocation: 1,
-        },
-        // UV0
-        {
-          format: "float32x2",
-          offset: Float32Array.BYTES_PER_ELEMENT * 6,
-          shaderLocation: 2,
-        }
-      ]
-    }
-  ];
 }
 
 /* Test for normal

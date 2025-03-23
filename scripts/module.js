@@ -70,11 +70,7 @@ import { PlaceableTrianglesHandler, TokenTrianglesHandler, TileTrianglesHandler,
 
 import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/WebGPU/Camera.js";
-import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
-import { GeometryTokenDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
-import { GeometryTileDesc } from "./LOS/WebGPU/GeometryTile.js";
-import { Geometry } from "./LOS/WebGPU/Geometry.js";
-import { RenderWalls } from "./LOS/WebGPU/RenderWalls.js";
+
 import { RenderTokens } from "./LOS/WebGPU/RenderTokens.js";
 import { RenderTiles } from "./LOS/WebGPU/RenderTiles.js";
 import { RenderConstrainedTokens } from "./LOS/WebGPU/RenderConstrainedTokens.js";
@@ -82,6 +78,11 @@ import {
   mat2, mat2d, mat3, mat4,
   quat, quat2,
   vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
+import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
+import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
+import { RenderWalls } from "./LOS/WebGPU/RenderObstacles.js";
+
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -204,15 +205,14 @@ Hooks.once("init", function() {
       WebGPUBuffer,
       WebGPUTexture,
       Camera,
-      Geometry,
       GeometryWallDesc,
-      GeometryTokenDesc,
-      GeometryTileDesc,
+      GeometryCubeDesc,
+      GeometryHorizontalPlaneDesc,
       GeometryConstrainedTokenDesc,
-      RenderWalls,
       RenderTokens,
       RenderTiles,
       RenderConstrainedTokens,
+      RenderWalls,
     },
 
     glmatrix: {

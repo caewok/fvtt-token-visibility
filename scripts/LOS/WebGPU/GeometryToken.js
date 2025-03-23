@@ -19,218 +19,15 @@ PIXI,
 
 
 import { combineTypedArrays } from "../util.js";
+import { GeometryDesc } from "./GeometryDesc.js";
 
 /**
- * Describe a token by its vertices, normals, and uvs.
+ * Describe a square cube (token) by its vertices, normals, and uvs.
  * By default, 1x1 token centered at origin 0,0,0.
  */
-export class GeometryTokenDesc {
+export class GeometryCubeDesc extends GeometryDesc {
   /** @type {string} */
-  label = "";
-
-  /** @type {number} */
-  numVertices = 36;
-
-  /** @type {Float32Array[]} */
-  verticesData = Array(1);
-
-  /**
-   * @param {object} [opts]
-   * @param {string} [opts.label]     Label for this structure
-   * @param {number} [opts.width]     Width of the token (in x direction)
-   * @param {number} [opts.depth]     Depth of the token (in y direction)
-   * @param {number} [opts.height]    Height of token (in z direction)
-   * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
-   */
-  constructor(opts = {}) {
-    if ( opts.label ) this.label = opts.label;
-    const w = (opts.width ?? 1) * 0.5;
-    const d = (opts.height ?? 1) * 0.5
-    const h = (opts.zHeight ?? 1) * 0.5;
-
-    const x = opts.x ?? 0;
-    const y = opts.y ?? 0;
-    const z = opts.z ?? 0;
-
-    const arr = [
-      // Position     Normal     UV
-      // Side CCW if token goes from x-w to x+w.
-      // S facing
-      x+w, y+d, z+h,  0, 1, 0,  1, 0, // a
-      x-w, y+d, z+h,  0, 1, 0,  0, 0, // b
-      x-w, y+d, z-h,  0, 1, 0,  0, 1, // c
-      x+w, y+d, z-h,  0, 1, 0,  1, 1, // d
-      x+w, y+d, z+h,  0, 1, 0,  1, 0, // e
-      x-w, y+d, z-h,  0, 1, 0,  0, 1, // f
-
-      // N facing: reverse of South
-      x-w, y-d, z-h,  0, -1, 0,  1, 1, // c
-      x-w, y-d, z+h,  0, -1, 0,  1, 0, // b
-      x+w, y-d, z+h,  0, -1, 0,  0, 0, // a
-      x-w, y-d, z-h,  0, -1, 0,  1, 1, // f
-      x+w, y-d, z+h,  0, -1, 0,  0, 0, // e
-      x+w, y-d, z-h,  0, -1, 0,  0, 1, // d
-
-      // W facing
-      x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a
-      x-w, y-d, z+h,  -1, 0, 0,  0, 0, // b
-      x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c
-      x-w, y+d, z-h,  -1, 0, 0,  1, 1, // d
-      x-w, y+d, z+h,  -1, 0, 0,  1, 0, // e
-      x-w, y-d, z-h,  -1, 0, 0,  0, 1, // f
-
-      // E facing: reverse of West
-      x+w, y-d, z-h,  1, 0, 0,  1, 1, // c
-      x+w, y-d, z+h,  1, 0, 0,  1, 0, // b
-      x+w, y+d, z+h,  1, 0, 0,  0, 0, // a
-      x+w, y-d, z-h,  1, 0, 0,  1, 1, // f
-      x+w, y+d, z+h,  1, 0, 0,  0, 0, // e
-      x+w, y+d, z-h,  1, 0, 0,  0, 1, // d
-
-      // Top
-      x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a
-      x-w, y+d, z+h,  0, 0, 1,   0, 1,  // b
-      x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c
-      x+w, y-d, z+h,  0, 0, 1,   1, 0,  // d
-      x-w, y-d, z+h,  0, 0, 1,   0, 0,  // e
-      x+w, y+d, z+h,  0, 0, 1,   1, 1,  // f
-
-      // Bottom: reverse of Top
-      x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c
-      x-w, y+d, z-h,  0, 0, -1,  0, 0,  // b
-      x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a
-      x+w, y+d, z-h,  0, 0, -1,  1, 0,  // f
-      x-w, y-d, z-h,  0, 0, -1,  0, 1,  // e
-      x+w, y-d, z-h,  0, 0, -1,  1, 1,  // d
-    ];
-
-    /*
-    Using Foundry world coordinates, where z is up, origin 0,0 is top right, y increases as it moves down.
-    N and S are same as wall.
-
-    Top and Bottom are same as tile except UV flipped for bottom
-    uv
-    0,0   1,0
-    0,1   1,1
-
-    uv flipped
-    1,1   0,1
-    1,0   0,0
-
-    south
-         x-w   x+w
-    z+h  b      a,e
-    y-h  c,f    d
-
-    top
-         x-w   x+w
-    y-d  a,e    d
-    y+d  b     c, f
-
-    west
-        y-d y+d
-    z+h b    a,e
-    z-h c,f  d
-
-    east
-        y+d   y-d
-    z+h c,e   b
-    z-h f     a,d
-
-    bottom
-        x-w   x+w
-    y+d b      a,d
-    y-d c,e    f
-
-    */
-
-    // For formats, see https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat.
-    // Each entry in verticesData corresponds to an entry in buffersLayout.
-    // See https://webgpufundamentals.org/webgpu/lessons/webgpu-vertex-buffers.html
-    // TODO: Use vertex buffer
-    // TODO: Better way to define shaderLocation so it can be passed to the shader code?
-    this.verticesData[0] = new Float32Array(arr);
-  }
-
-  static buffersLayout = [
-    {
-      arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 2 normal, 2 uv.
-      stepMode: "vertex",
-      attributes: [
-        // Position
-        {
-          format: "float32x3",
-          offset: 0,
-          shaderLocation: 0,
-        },
-        // Normal
-        {
-          format: "float32x3",
-          offset: Float32Array.BYTES_PER_ELEMENT * 3,
-          shaderLocation: 1,
-        },
-        // UV0
-        {
-          format: "float32x2",
-          offset: Float32Array.BYTES_PER_ELEMENT * 6,
-          shaderLocation: 2,
-        }
-      ]
-    }
-  ];
-}
-
-/* Test for normal
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-geom = new GeometryTokenDesc()
-arr = geom.verticesData[0]
-tris = [];
-Ns = [];
-orientation = [];
-for ( let i = 0; i < arr.length; i += 8 ) {
-  a = new Point3d(arr[i], arr[i + 1], arr[i + 2])
-
-  i += 8;
-  b = new Point3d(arr[i], arr[i + 1], arr[i + 2])
-
-  i += 8;
-  c = new Point3d(arr[i], arr[i + 1], arr[i + 2])
-  tris.push([a, b, c]);
-
-  deltaAB = b.subtract(a)
-  deltaAC = c.subtract(a)
-  Ns.push(deltaAB.cross(deltaAC).normalize())
-}
-
-
-*/
-
-/* Test for normal
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-x = 0
-y = 0
-z = 0
-w = 0.5
-h = 0.5
-
-a = new Point3d(x+w, y, z+h)
-b = new Point3d(x-w, y, z+h)
-c = new Point3d(x-w, y, z-h)
-
-a = new Point3d(x-w, y, z+h)
-b = new Point3d(x+w, y, z+h)
-c = new Point3d(x+w, y, z-h)
-
-deltaAB = b.subtract(a)
-deltaAC = c.subtract(a)
-deltaAB.cross(deltaAC).normalize()
-
-*/
-
-
-export class GeometryTokenDescV2 {
-  /** @type {string} */
-  label = "";
+  label = "Cube";
 
   /** @type {number} */
   numVertices = 24;
@@ -242,23 +39,16 @@ export class GeometryTokenDescV2 {
   indicesData = Array(1);
 
   /**
+   * Define the vertices and optional indices for this geometry.
    * @param {object} [opts]
-   * @param {string} [opts.label]     Label for this structure
-   * @param {number} [opts.width]     Width of the token (in x direction)
-   * @param {number} [opts.depth]     Depth of the token (in y direction)
-   * @param {number} [opts.height]    Height of token (in z direction)
-   * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
+   * @param {number} [opts.w]           Width of the token (in x direction)
+   * @param {number} [opts.d]           Depth of the token (in y direction)
+   * @param {number} [opts.h]           Height of token (in z direction)
+   * @param {number} [opts.x]           Location on x-axis
+   * @param {number} [opts.y]           Location on y-axis
+   * @param {number} [opts.z]           Location on z-axis
    */
-  constructor(opts = {}) {
-    if ( opts.label ) this.label = opts.label;
-    const w = (opts.width ?? 1) * 0.5;
-    const d = (opts.height ?? 1) * 0.5
-    const h = (opts.zHeight ?? 1) * 0.5;
-
-    const x = opts.x ?? 0;
-    const y = opts.y ?? 0;
-    const z = opts.z ?? 0;
-
+  _defineVerticesAndIndices({ x, y, z, w, d, h } = {}) {
     const indices = [
       0, 1, 2, 3, 0, 2,        // S facing 0–3
       4, 5, 6, 4, 6, 7,        // N facing 4–7
@@ -308,215 +98,59 @@ export class GeometryTokenDescV2 {
       x+w, y-d, z-h,  0, 0, -1,  1, 1,  // d      23
     ];
 
-    this.verticesData[0] = new Float32Array(arr);
-    this.indicesData[0] = new Uint16Array(indices);
-  }
-
-  static indexFormat = "uint16";
-
-
-  /**
-   * Set the vertex buffer to render this geometry.
-   * @param {GPURenderPassEncoder} renderPass
-   * @param {GPUBuffer} [vertexBuffer]              The buffer that contains this geometry's vertex data
-   * @param {number} [vertexOffset = 0]             Where on the buffer the data begins
-   */
-  setVertexBuffer(renderPass, vertexBuffer, offset = 0) {
-    // NOTE: Using only slot 0 for now.
-    renderPass.setVertexBuffer(0, vertexBuffer, offset, this.verticesData[0].byteLength)
-  }
-
-  /**
-   * Set the index buffer to render this geometry.
-   * @param {GPURenderPassEncoder} renderPass
-   * @param {GPUBuffer} [vertexBuffer]              The buffer that contains this geometry's vertex data
-   * @param {number} [vertexOffset = 0]             Where on the buffer the data begins
-   */
-  setIndexBuffer(renderPass, indexBuffer, offset = 0) {
-    // NOTE: For other subclasses, can just return if not using index.
-    renderPass.setIndexBuffer(indexBuffer, this.constructor.indexFormat, offset, this.indicesData[0].byteLength);
-  }
-
-  /**
-   * Draw this geometry.
-   * See https://developer.mozilla.org/en-US/docs/Web/API/GPURenderPassEncoder/drawIndexed
-   * @param {GPURenderPassEncoder} renderPass
-   * @param {object} [opts]
-   * @param {number} [opts.instanceCount=1]   Number of instances to draw
-   * @param {number} [opts.firstInstance=0]   What instance to start with
-   * @param {number} [opts.firstIndex=0]      Offset into the index buffer, in indices (rarely used)
-   * @param {number} [opts.baseVertex=0]      A number added to each index value (rarely used)
-   */
-  draw(renderPass, { instanceCount = 1, firstInstance = 0, firstIndex = 0, baseVertex = 0 } = {}) {
-    // NOTE: Using only slot 0 for now.
-    renderPass.drawIndexed(this.indicesData[0].length, instanceCount, firstIndex, baseVertex, firstInstance);
+    this.vertices = new Float32Array(arr);
+    this.indices = new Uint16Array(indices);
   }
 }
 
 /**
  * Construct vertices for a token shape that is constrained.
- * Unlike GeometryTokenDesc, this constructs a token in world space.
+ * Unlike GeometryCubeDesc, this constructs a token in world space.
  *
  */
-export class GeometryConstrainedTokenDesc {
+export class GeometryConstrainedTokenDesc extends GeometryDesc {
   /** @type {string} */
-  label = "";
+  label = "Constrained Token";
 
   /** @type {number} */
-  numVertices = 36;
+  numVertices = 0;
 
-  /** @type {Float32Array[]} */
-  verticesData = Array(1);
-
-  /** @type {Uint16Array[]} */
-  indicesData = Array(1);
+  /** @type {Token} */
+  token;
 
   /**
+   * @param {Token} token
    * @param {object} [opts]
-   * @param {string} [opts.label]     Label for this structure
-   * @param {number} [opts.width]     Width of the token (in x direction)
-   * @param {number} [opts.depth]     Depth of the token (in y direction)
-   * @param {number} [opts.height]    Height of token (in z direction)
-   * @param {boolean} [opts.directional]    If true, the wall will be one-sided.
+   * @param {string} [opts.label]       Label for this structure
+   * @return {this|GeometryCubeDesc}
    */
   constructor(token, opts = {}) {
-    if ( opts.label ) this.label = opts.label;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const border = token.constrainedTokenBorder;
     const { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
       const width = token.document.width * canvas.dimensions.size;
       const height = token.document.height * canvas.dimensions.size;
       const zHeight = topZ - bottomZ;
-      const ctr = Point3d.fromTokenCenter(token);
-      return new GeometryTokenDescV2({ width, height, zHeight, ...ctr });
+      const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      return new GeometryCubeDesc({ width, height, zHeight, ...ctr, label: opts.label });
     }
 
+    super(opts);
     const top = this.constructor.polygonTopBottomFaces(border, { elevation: topZ, top: true });
     const bottom = this.constructor.polygonTopBottomFaces(border, { elevation: bottomZ, top: false });
     const side = this.constructor.polygonSideFaces(border, { topElevation: topZ, bottomElevation: bottomZ });
-    this.verticesData[0] = combineTypedArrays(top.vertices, side.vertices, bottom.vertices);
+    this.vertices = combineTypedArrays(top.vertices, side.vertices, bottom.vertices);
     // this.verticesData[0] = top.vertices;
 
     // For indices, increase because they are getting combined into one.
     side.indices = side.indices.map(elem => elem + top.numVertices);
     bottom.indices = bottom.indices.map(elem => elem + top.numVertices + side.numVertices);
-    this.indicesData[0] = combineTypedArrays(top.indices, side.indices, bottom.indices);
+    this.indices = combineTypedArrays(top.indices, side.indices, bottom.indices);
     // this.indicesData[0] = top.indices;
 
     this.numVertices = Math.floor(top.numVertices + side.numVertices + bottom.numVertices);
     // this.numVertices = top.numVertices;
   }
-
-  static indexFormat = "uint16";
-
-
-  /**
-   * Set the vertex buffer to render this geometry.
-   * @param {GPURenderPassEncoder} renderPass
-   * @param {GPUBuffer} [vertexBuffer]              The buffer that contains this geometry's vertex data
-   * @param {number} [vertexOffset = 0]             Where on the buffer the data begins
-   */
-  setVertexBuffer(renderPass, vertexBuffer, offset = 0) {
-    // NOTE: Using only slot 0 for now.
-    renderPass.setVertexBuffer(0, vertexBuffer, offset, this.verticesData[0].byteLength)
-  }
-
-  /**
-   * Set the index buffer to render this geometry.
-   * @param {GPURenderPassEncoder} renderPass
-   * @param {GPUBuffer} [vertexBuffer]              The buffer that contains this geometry's vertex data
-   * @param {number} [vertexOffset = 0]             Where on the buffer the data begins
-   */
-  setIndexBuffer(renderPass, indexBuffer, offset = 0) {
-    // NOTE: For other subclasses, can just return if not using index.
-    renderPass.setIndexBuffer(indexBuffer, this.constructor.indexFormat, offset, this.indicesData[0].byteLength);
-  }
-
-  /**
-   * Draw this geometry.
-   * See https://developer.mozilla.org/en-US/docs/Web/API/GPURenderPassEncoder/drawIndexed
-   * @param {GPURenderPassEncoder} renderPass
-   * @param {object} [opts]
-   * @param {number} [opts.instanceCount=1]   Number of instances to draw
-   * @param {number} [opts.firstInstance=0]   What instance to start with
-   * @param {number} [opts.firstIndex=0]      Offset into the index buffer, in indices (rarely used)
-   * @param {number} [opts.baseVertex=0]      A number added to each index value (rarely used)
-   */
-  draw(renderPass, { instanceCount = 1, firstInstance = 0, firstIndex = 0, baseVertex = 0 } = {}) {
-    // NOTE: Using only slot 0 for now.
-    renderPass.drawIndexed(this.indicesData[0].length, instanceCount, firstIndex, baseVertex, firstInstance);
-  }
-
-  /**
-   * Determine the buffer offsets to store vertex data for a given group of geometries.
-   * @param {number} idx      Which vertexData index to use.
-   * @param {...GeometryDesc} ...geoms
-   * @returns {object}
-   * - @prop {array} offsets        In byteLength; sum of the sizes iteratively
-   * - @prop {array} sizes          In byteLength
-   * - @prop {array} numVertices      Number of vertices in each
-   * - @prop {number} totalVertices Sum of the numVertices
-   * - @prop {number} totalSize     Sum of the sizes
-   */
-  static computeTotalVertexBufferOffsets(geoms, idx = 0) { // TODO: Do we need more than 1 buffer index?
-    const out = {
-      vertex: {
-        offsets: new Uint16Array(geoms.length),
-        sizes: new Uint16Array(geoms.length),
-        lengths: new Uint16Array(geoms.length),
-        totalLength: 0,
-        totalSize: 0,
-      },
-      index: {
-        offsets: new Uint16Array(geoms.length),
-        sizes: new Uint16Array(geoms.length),
-        lengths: new Uint16Array(geoms.length),
-        totalLength: 0,
-        totalSize: 0,
-      }
-    };
-    for ( let i = 0, n = geoms.length; i < n; i += 1 ) {
-      const geom = geoms[i];
-      out.vertex.totalSize += out.vertex.sizes[i] = geom.verticesData[idx].byteLength;
-      out.vertex.totalLength += out.vertex.lengths[i] = geom.numVertices;
-
-      out.index.totalSize += out.index.sizes[i] = geom.indicesData[idx].byteLength;
-      out.index.totalLength += out.index.lengths[i] = geom.indicesData[idx].length;
-    }
-    for ( let i = 1, n = geoms.length; i < n; i += 1 ) {
-      out.vertex.offsets[i] += out.vertex.offsets[i - 1] + out.vertex.sizes[i - 1];
-      out.index.offsets[i] += out.index.offsets[i - 1] + out.index.sizes[i - 1];
-    }
-    return out;
-  }
-
-  static buffersLayout = [
-    {
-      arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 2 normal, 2 uv.
-      stepMode: "vertex",
-      attributes: [
-        // Position
-        {
-          format: "float32x3",
-          offset: 0,
-          shaderLocation: 0,
-        },
-        // Normal
-        {
-          format: "float32x3",
-          offset: Float32Array.BYTES_PER_ELEMENT * 3,
-          shaderLocation: 1,
-        },
-        // UV0
-        {
-          format: "float32x2",
-          offset: Float32Array.BYTES_PER_ELEMENT * 6,
-          shaderLocation: 2,
-        }
-      ]
-    }
-  ];
 
   /**
    * Return vertices for the top or bottom of the polygon.
