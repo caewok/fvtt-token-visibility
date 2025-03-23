@@ -212,6 +212,7 @@ class RenderAbstract {
       drawable.vOffset = offsetData.vertex.offsets[i];
       drawable.iOffset = offsetData.index.offsets[i];
       i += 1;
+      drawable.numInstances ??= 1;
     }
   }
 
@@ -287,7 +288,7 @@ class RenderAbstract {
 
     drawable.geom.setVertexBuffer(renderPass, drawable.vertexBuffer, drawable.vOffset);
     drawable.geom.setIndexBuffer(renderPass, drawable.indexBuffer, drawable.iOffset);
-    drawable.geom.draw(renderPass);
+    drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
   }
 
 
@@ -598,6 +599,7 @@ export class RenderWalls extends RenderAbstract {
 
     // Construct the instance buffer and bind group for the non-directional wall drawable.
     const drawable = this.drawables.get("nodirwall");
+    drawable.numInstances = this.wallHandler.numInstances;
     const buffer = drawable.instanceBuffer = this.device.createBuffer({
       label: "Non-Directional Wall Instance",
       size: this.wallHandler.instanceArrayBuffer.byteLength,
@@ -649,6 +651,12 @@ export class RenderWalls extends RenderAbstract {
 // }
 
 export class RenderConstrainedTokens extends RenderAbstract {
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  senseType = "sight";
+
+  /** @type {TokenInstanceHandler} */
+  tokenHandler;
+
 
 }
 

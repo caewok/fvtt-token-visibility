@@ -161,14 +161,11 @@ renderType = "Tiles"
 renderType = "ConstrainedTokens"
 
 rerender = () => {
-  const losCalc = viewer.vision.tokenvisibility.losCalc
-  losCalc.target = target
-  const vp = losCalc.viewpoints[0]
   switch ( renderType ) {
-    case "Walls": renderWalls.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
-    case "Tokens": renderTokens.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
-    case "Tiles": renderTiles.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
-    case "ConstrainedTokens": renderConstrainedTokens.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer }); break;
+    case "Walls": renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
+    case "Tokens": renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
+    case "Tiles": renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
+    case "ConstrainedTokens": renderConstrainedTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
 
   }
 }
