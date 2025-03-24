@@ -89,7 +89,8 @@ let {
   RenderWalls,
   RenderTokens,
   RenderTiles,
-  RenderConstrainedTokens,
+  RenderObstacles,
+
 } = api.webgpu
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
@@ -128,44 +129,53 @@ renderWalls.sampleCount = 1
 renderWalls.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderWalls.initialize();
 renderWalls.setRenderTextureToCanvas(popout.canvas)
-await renderWalls.render(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
+await renderWalls.prerender();
+await renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 
-renderTokens = new RenderTokens(device);
+renderTokens = new RenderTokens();
+await renderTokens.getDevice();
 renderTokens.sampleCount = 1
 renderTokens.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderTokens.initialize();
 renderTokens.setRenderTextureToCanvas(popout.canvas)
-await renderTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
-
-renderConstrainedTokens = new RenderConstrainedTokens(device);
-renderConstrainedTokens.sampleCount = 1
-renderConstrainedTokens.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
-await renderConstrainedTokens.initialize();
-renderConstrainedTokens.setRenderTextureToCanvas(popout.canvas)
-await renderConstrainedTokens.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
+await renderTokens.prerender();
+await renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 
-renderTiles = new RenderTiles(device);
+
+
+renderTiles = new RenderTiles();
+await renderTiles.getDevice();
 renderTiles.sampleCount = 1
 renderTiles.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderTiles.initialize();
 renderTiles.setRenderTextureToCanvas(popout.canvas)
-await renderTiles.renderScene(Point3d.fromTokenCenter(viewer), target, { vp, viewer })
+await renderTiles.prerender();
+await renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderObstacles = new RenderObstacles();
+await renderObstacles.getDevice();
+renderObstacles.sampleCount = 1
+renderObstacles.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
+await renderObstacles.initialize();
+renderObstacles.setRenderTextureToCanvas(popout.canvas)
+await renderObstacles.prerender();
+await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 
 // Hooks to change rendering on move
 renderType = "Walls"
 renderType = "Tokens"
 renderType = "Tiles"
-renderType = "ConstrainedTokens"
+renderType = "Obstacles"
 
 rerender = () => {
   switch ( renderType ) {
     case "Walls": renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
     case "Tokens": renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
     case "Tiles": renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
-    case "ConstrainedTokens": renderConstrainedTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
+    case "Obstacles": renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
 
   }
 }

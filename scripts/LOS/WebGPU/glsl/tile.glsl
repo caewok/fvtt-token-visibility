@@ -20,13 +20,18 @@ struct CameraUniforms {
 }
 @group(0) @binding(0) var<uniform> camera: CameraUniforms;
 
+struct Material {
+  color: vec4f,
+}
+@group(1) @binding(0) var<uniform> material: Material;
+
 struct Instance {
   model: mat4x4f,
 }
-@group(1) @binding(0) var<storage, read> instances: array<Instance>;
+@group(2) @binding(0) var<storage, read> instances: array<Instance>;
 
-@group(2) @binding(0) var tileSampler: sampler;
-@group(2) @binding(1) var tileTexture: texture_2d<f32>;
+@group(3) @binding(0) var tileSampler: sampler;
+@group(3) @binding(1) var tileTexture: texture_2d<f32>;
 
 // ----- Vertex shader ----- //
 @vertex fn vertexMain(in: VertexIn) -> VertexOut {
@@ -94,6 +99,9 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
 
   let texColor = textureSample(tileTexture, tileSampler, in.uv0);
   return texColor;
+
+  let baseColor = material.color;
+  return baseColor;
 
   // Extremely simple directional lighting model to give the model some shape.
   let N = normalize(in.norm);

@@ -32,6 +32,18 @@ export class GeometryDesc {
   /** @type {Uint16Array} */
   indices;
 
+  // This geometry's vertex and index buffers.
+  vertexBuffer;
+
+  indexBuffer;
+
+  // Offsets for this geometry's vertex and index buffers.
+  /** @type {number} */
+  vOffset = 0;
+
+  /** @type {number} */
+  iOffset = 0;
+
   static indexFormat = "uint16";
 
   /**
@@ -76,7 +88,9 @@ export class GeometryDesc {
    * @param {GPUBuffer} [vertexBuffer]              The buffer that contains this geometry's vertex data
    * @param {number} [vertexOffset = 0]             Where on the buffer the data begins
    */
-  setVertexBuffer(renderPass, vertexBuffer, offset = 0) {
+  setVertexBuffer(renderPass, vertexBuffer, offset) {
+    vertexBuffer ??= this.vertexBuffer;
+    offset ??= this.vOffset ?? 0;
     renderPass.setVertexBuffer(0, vertexBuffer, offset, this.vertices.byteLength)
   }
 
@@ -86,8 +100,10 @@ export class GeometryDesc {
    * @param {GPUBuffer} [vertexBuffer]              The buffer that contains this geometry's vertex data
    * @param {number} [vertexOffset = 0]             Where on the buffer the data begins
    */
-  setIndexBuffer(renderPass, indexBuffer, offset = 0) {
-    if ( !this.indices.length ) return;
+  setIndexBuffer(renderPass, indexBuffer, offset) {
+    if ( !this.indices ) return;
+    indexBuffer ??= this.indexBuffer;
+    offset ??= this.iOffset ?? 0;
     renderPass.setIndexBuffer(indexBuffer, this.constructor.indexFormat, offset, this.indices.byteLength);
   }
 
@@ -102,11 +118,38 @@ export class GeometryDesc {
    * @param {number} [opts.baseVertex=0]      A number added to each index value (rarely used)
    */
   draw(renderPass, { instanceCount = 1, firstInstance = 0, firstIndex = 0, baseVertex = 0, firstVertex = 0 } = {}) {
-    if ( this.indices.length ) {
-      // NOTE: Using only slot 0 for now.
+    if ( !instanceCount ) return;
+    if ( this.indices ) {
       renderPass.drawIndexed(this.indices.length, instanceCount, firstIndex, baseVertex, firstInstance);
     } else {
       renderPass.draw(this.vertices.length, instanceCount, firstVertex, firstInstance);
+    }
+  }
+
+  /**
+   * Draw this geometry for only the specified instances.
+   * @param {GPURenderPassEncoder} renderPass
+   * @param {Set<number>|} instanceSet           Set of positive integers, including 0.
+   */
+  drawSet(renderPass, instanceSet) {
+    if ( !instanceSet.size ) return;
+
+    const drawFn = this.indices
+      ? (instanceCount, firstInstance) => renderPass.drawIndexed(this.indices.length, instanceCount, 0, 0, firstInstance)
+        : (instanceCount, firstInstance) => renderPass.draw(this.vertices.length, instanceCount, 0, firstInstance);
+
+    // For a consecutive group, draw all at once.
+    // So if 0–5, 7–9, 12, should result in 3 draw calls.
+    if ( instanceSet instanceof Set ) instanceSet = [...instanceSet.values()];
+    instanceSet.sort((a, b) => a - b);
+    for ( let i = 0, n = instanceSet.length; i < n; i += 1 ) {
+      const firstInstance = instanceSet[i];
+
+      // Count the number of consecutive instances.
+      let instanceCount = 1;
+      while ( instanceSet[i + 1] === instanceSet[i] + 1 ) { instanceCount += 1; i += 1; }
+      // console.log({ firstInstance, instanceCount }); // Debugging.
+      drawFn(instanceCount, firstInstance);
     }
   }
 

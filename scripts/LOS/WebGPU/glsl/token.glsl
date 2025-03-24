@@ -20,10 +20,15 @@ struct CameraUniforms {
 }
 @group(0) @binding(0) var<uniform> camera: CameraUniforms;
 
+struct Material {
+  color: vec4f,
+}
+@group(1) @binding(0) var<uniform> material: Material;
+
 struct Instance {
   model: mat4x4f,
 }
-@group(1) @binding(0) var<storage, read> instances: array<Instance>;
+@group(2) @binding(0) var<storage, read> instances: array<Instance>;
 
 // ----- Vertex shader ----- //
 @vertex fn vertexMain(in: VertexIn) -> VertexOut {
@@ -69,7 +74,7 @@ const ambientColor = vec3f(0.03, 0.03, 0.03);
 const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
 
 @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
-
+  /*
   var out = vec4f(0.0, 0.0, 0.0, 1.0);
   switch ( in.v ) {
     case 0: { out.r = 1.0; } // Red, south
@@ -81,10 +86,12 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
     default: { out = vec4f(1.0); } // White
   }
   return out;
+  */
 
-  return vec4f(in.uv0.x, in.uv0.y, 1.0, 1.0);
+  // return vec4f(in.uv0.x, in.uv0.y, 1.0, 1.0);
 
-  // return baseColor;
+  let baseColor = material.color;
+  return baseColor;
 
   // Extremely simple directional lighting model to give the model some shape.
   let N = normalize(in.norm);

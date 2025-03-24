@@ -20,6 +20,25 @@ export class Camera {
 
   static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * (16 + 16 + 16); // Total size of CameraStruct
 
+  /** @type {object} */
+  static CAMERA_LAYOUT = {
+    label: "Camera",
+    entries: [{
+      binding: 0, // Camera/Frame uniforms
+      visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+      buffer: {},
+    }]
+  };
+
+  /** @type {GPUBindGroupLayout} */
+  bindGroupLayout;
+
+  /** @type {GPUBuffer} */
+  deviceBuffer;
+
+  /** @type {GPUBindGroup} */
+  bindGroup;
+
   // TODO: Combine so that the buffer stores the camera values instead of repeating them.
   // Could use MatrixFlat to store the buffer views.
   // Need to update MatrixFlat to handle the WebGPU perspectiveZO.
@@ -47,12 +66,38 @@ export class Camera {
     offset: true,
   };
 
-  constructor({ cameraPosition, targetPosition } = {}) {
+  constructor(device, { cameraPosition, targetPosition } = {}) {
+    this.device = device;
     if ( cameraPosition ) this.cameraPosition = cameraPosition;
     if ( targetPosition ) this.targetPosition = targetPosition;
 
     // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
     this.#mirrorM.setIndex(0, 0, -1);
+
+    this.bindGroupLayout = device.createBindGroupLayout(this.constructor.CAMERA_LAYOUT);
+    this._createBindGroup();
+  }
+
+  _createBindGroup() {
+    const buffer = this.deviceBuffer = this.device.createBuffer({
+      label: "Camera",
+      size: Camera.CAMERA_BUFFER_SIZE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    // Buffer will be written to GPU prior to render, because the camera view will change.
+    this.bindGroup = this.device.createBindGroup({
+      label: "Camera",
+      layout: this.bindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: { buffer }
+      }],
+    });
+  }
+
+  updateDeviceBuffer() {
+    this.device.queue.writeBuffer(this.deviceBuffer, 0, this.arrayBuffer);
+    this.debugBuffer = new Float32Array(this.arrayBuffer)
   }
 
   /**

@@ -37,10 +37,10 @@ class PlaceableInstanceHandler {
     this.senseType = senseType;
   }
 
-  /** @type {Map<string, Placeable|Edge>} */
+  /** @type {Map<string, number>} */
   instanceIndexFromId = new Map();
 
-  /** @type {Map<string, Placeable|Edge>} */
+  /** @type {Map<number, Placeable|Edge>} */
   placeableFromInstanceIndex = new Map();
 
   /** @type {number} */
