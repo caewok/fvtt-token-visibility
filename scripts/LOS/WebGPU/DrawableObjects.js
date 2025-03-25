@@ -496,6 +496,9 @@ export class DrawableWallInstances extends DrawableObjectInstancesAbstract {
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      // If the edge is an open door, ignore.
+      if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
+
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
   }
