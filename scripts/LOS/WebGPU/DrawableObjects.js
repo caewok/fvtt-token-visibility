@@ -252,7 +252,7 @@ class DrawableObjectsAbstract {
     // Define shader and pipeline.
     this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`);
     this._setRenderPipelineOpts();
-    this.pipeline = device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
+    this.pipeline = device.createRenderPipelineAsync(this.RENDER_PIPELINE_OPTS);
 
     // Define placeables handled by this class.
     this.placeableHandler.initializePlaceables();
