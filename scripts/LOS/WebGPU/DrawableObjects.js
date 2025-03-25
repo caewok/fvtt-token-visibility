@@ -1,5 +1,8 @@
 /* globals
 CONST,
+foundry,
+Hooks,
+Wall,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -314,7 +317,7 @@ class DrawableObjectsAbstract {
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  async prerender() {}
+  prerender() {}
 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
@@ -369,6 +372,131 @@ class DrawableObjectsAbstract {
     this.RENDER_PIPELINE_OPTS.multisample.count = this.sampleCount ?? 1;
     this.RENDER_PIPELINE_OPTS.depthStencil.format = this.depthFormat ?? "depth24plus";
   }
+
+  // ----- NOTE: Placeable updating ----- //
+
+  _hooks = [];
+
+  _registerPlaceableHooks() {}
+
+  _deregisterPlaceableHooks() { this._hooks.forEach(hook => Hooks.off(hook.name, hook.id)); }
+
+  /**
+   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
+   * @param {Document} document                       The new Document instance which has been created
+   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
+   * @param {string} userId                           The ID of the User who triggered the creation workflow
+   */
+  _onPlaceableCreation(document, _options, _userId) {
+    console.log(`${this.constructor.name} _onPlaceableCreation`, document);
+    this.addPlaceable(document.object);
+    // TODO: How to detect non-wall edge creation?
+  }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an update workflow.
+   * @param {Document} document                       The existing Document which was updated
+   * @param {object} changed                          Differential data that was used to update the document
+   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
+   * @param {string} userId                           The ID of the User who triggered the update workflow
+   */
+  _onPlaceableUpdate(document, changed, _options, _userId) {
+    console.log(`${this.constructor.name} _onPlaceableUpdate`, document, changed);
+    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
+    const docUpdateKeys = this.placeableHandler.constructor.docUpdateKeys;
+    const updateNeeded = changeKeys.some(key => docUpdateKeys.has(key));
+    this.updatePlaceable(document.object, updateNeeded);
+  }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an deletion workflow.
+   * @param {Document} document                       The existing Document which was deleted
+   * @param {Partial<DatabaseDeleteOperation>} options Additional options which modified the deletion request
+   * @param {string} userId                           The ID of the User who triggered the deletion workflow
+   */
+  _onPlaceableDeletion(document, _options, _userId) {
+    console.log(`${this.constructor.name} _onPlaceableDeletion`, document);
+    this.removePlaceable(document.id);
+    // TODO: How to detect non-wall edge deletion?
+  }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is initially drawn.
+   * @param {PlaceableObject} object    The object instance being drawn
+   */
+  _onPlaceableDraw(object, opts) {
+    console.log(`${this.constructor.name} _onPlaceableDraw`, object, opts);
+    this.addPlaceable(object);
+  }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is incrementally refreshed.
+   * @param {PlaceableObject} object    The object instance being refreshed
+   * @param {RenderFlags} flags
+   */
+  _onPlaceableRefresh(object, flags) {
+    /* Wall flags
+    refreshLine: refreshes when the wall coordinates or type changes
+    refreshEndpoints: refreshes when the wall position or state changes
+    refreshDirection: refreshes when wall direction changes
+    refreshHighlight: Occurs when wall control or position changes
+    refreshState: refresh the displayed state of the wall. alpha & zIndex
+    */
+    console.log(`${this.constructor.name} _onPlaceableRefresh`, object, flags);
+    const refreshFlags = this.placeableHandler.constructor.refreshFlags;
+    const updateNeeded = Object.keys(flags).some(f => refreshFlags.has(f));
+    this.updatePlaceable(object, updateNeeded);
+  }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is destroyed.
+   * @param {PlaceableObject} object    The object instance being destroyed
+   */
+  _onPlaceableDestroy(object, opts) {
+    console.log(`${this.constructor.name} _onPlaceableDestroy`, object, opts);
+    this.removePlaceable(object.id);
+  }
+
+  addPlaceable(object) {
+    if ( !this.placeableHandler.includePlaceable(document.object.edge) ) return;
+    this._addPlaceable(object)
+  }
+
+  _addPlaceable(_object) {
+    this.placeableHandler.initializePlaceables();
+    this.prerender();
+  }
+
+  updatePlaceable(object, updateNeeded = true) {
+    // Possible that the placeable needs to be added or removed instead of simply updated.
+    const alreadyTracking = this.placeableHandler.instanceIndexFromId.has(object.id);
+    const shouldTrack = this.placeableHandler.includePlaceable(object);
+    if ( !(alreadyTracking && shouldTrack) ) return;
+    if ( alreadyTracking && !shouldTrack ) return this._removePlaceable(object);
+    else if ( !alreadyTracking && shouldTrack ) return this._addPlaceable(object, shouldTrack);
+    if ( updateNeeded ) this._updatePlaceable(object);
+  }
+
+  _updatePlaceable(_object) { this.prerender(); }
+
+  removePlaceable(placeableId) {
+    if ( !this.placeableHandler.instanceIndexFromId.has(placeableId) ) return;
+    console.log(`${this.constructor.name} _onPlaceableDeletion`, document);
+    this._removePlaceable(placeableId);
+  }
+
+  _removePlaceable(_placeableId) {
+    // Rebuild the instance buffer.
+    // Could track empty indices and swap in/out as edges are added or deleted but that would
+    /// be complicated and possibly for little gain.
+    this.placeableHandler.initializePlaceables();
+  }
+
+  destroy() {
+    this._deregisterPlaceableHooks();
+    this.buffers.forEach(buffer => buffer.destroy());
+  }
+
 }
 
 export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
@@ -394,6 +522,13 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
 
   _setStaticGeometriesBuffers() {
     if ( !this.placeableHandler.numInstances ) return;
+    this._setInstanceBuffer();
+    super._setStaticGeometriesBuffers();
+  }
+
+  _setInstanceBuffer() {
+    if ( this.buffers.instance ) this.buffers.instance.destroy();
+    if ( !this.placeableHandler.numInstances ) return;
     const device = this.device;
 
     const buffer = this.buffers.instance = this.device.createBuffer({
@@ -412,13 +547,41 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
         resource: { buffer }
       }],
     });
-
-    super._setStaticGeometriesBuffers();
   }
 
   _initializeRenderPass(renderPass) {
     super._initializeRenderPass(renderPass);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.INSTANCE, this.bindGroups.instance);
+  }
+
+  _addPlaceable(object) {
+    super._addPlaceable(object);
+    this._setInstanceBuffer();
+  }
+
+  _updatePlaceable(object) {
+    this.placeableHandler.updateInstanceBuffer(object.id);
+    this.partialUpdateInstanceBuffer(object.id);
+    this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer); // Debugging.
+  }
+
+  /**
+   * Update the instance buffer on the GPU for a specific placeable.
+   * @param {string} placeableId    Id of the placeable
+   * @param {number} [idx]          Optional placeable index; will be looked up using placeableId otherwise
+   */
+  partialUpdateInstanceBuffer(placeableId, idx,) {
+    const h = this.placeableHandler
+    idx ??= h.instanceIndexFromId.get(placeableId);
+    const M = h.getPlaceableInstanceData(placeableId, idx);
+    this.device.queue.writeBuffer(
+      this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M,
+    );
+  }
+
+  _removePlaceable(object) {
+    super._removePlaceable(object);
+    this._setInstanceBuffer();
   }
 }
 
@@ -498,9 +661,43 @@ export class DrawableWallInstances extends DrawableObjectInstancesAbstract {
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       // If the edge is an open door, ignore.
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
-
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
+  }
+
+  _registerPlaceableHooks() {
+    this._hooks.push({ name: "createWall", id: Hooks.on("createWall", this._onPlaceableCreation.bind(this)) });
+    this._hooks.push({ name: "updateWall", id: Hooks.on("updateWall", this._onPlaceableUpdate.bind(this)) });
+    this._hooks.push({ name: "deleteWall", id: Hooks.on("deleteWall", this._onPlaceableDeletion.bind(this)) });
+//     this._hooks.push({ name: "drawWall", id: Hooks.on("drawWall", this._onPlaceableDraw.bind(this)) });
+//     this._hooks.push({ name: "refreshWall", id: Hooks.on("refreshWall", this._onPlaceableRefresh.bind(this)) });
+//     this._hooks.push({ name: "destroyWall", id: Hooks.on("destroyWall", this._onPlaceableDestroy.bind(this)) });
+  }
+
+  /**
+   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
+   * @param {Document} document                       The new Document instance which has been created
+   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
+   * @param {string} userId                           The ID of the User who triggered the creation workflow
+   */
+  _onPlaceableCreation(document, _options, _userId) {
+    console.log(`${this.constructor.name} _onPlaceableCreation`, document);
+    this.addPlaceable(document.object.edge);
+    // TODO: How to detect non-wall edge creation?
+  }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an update workflow.
+   * @param {Document} document                       The existing Document which was updated
+   * @param {object} changed                          Differential data that was used to update the document
+   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
+   * @param {string} userId                           The ID of the User who triggered the update workflow
+   */
+  _onPlaceableUpdate(document, changed, _options, _userId) {
+    console.log(`${this.constructor.name} _onPlaceableUpdate`, document, changed);
+    const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
+    const updateNeeded = this.placeableHandler.constructor.docUpdateKeys.some(key => changeKeys.has(key));
+    this.updatePlaceable(document.object.edge, updateNeeded);
   }
 }
 
@@ -544,7 +741,7 @@ export class DrawableTokenInstances extends DrawableObjectInstancesAbstract {
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  async prerender() {
+  prerender() {
     // Determine the number of constrained tokens and separate from instance set.
     // Essentially subset the instance set.
     this.#unconstrainedTokenIndices.clear();
@@ -589,6 +786,16 @@ export class DrawableTokenInstances extends DrawableObjectInstancesAbstract {
     }
     super._initializeRenderPass(renderPass, opts)
   }
+
+  _registerPlaceableHooks() {
+//     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
+//     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
+//     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
+    this._hooks.push({ name: "drawToken", id: Hooks.on("drawToken", this._onPlaceableDraw.bind(this)) });
+    this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
+    this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
+  }
+
 }
 
 // Tile instances.
@@ -721,6 +928,15 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     drawable.geom.setIndexBuffer(renderPass);
     drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
   }
+
+  _registerPlaceableHooks() {
+    this._hooks.push({ name: "createTile", id: Hooks.on("createTile", this._onPlaceableCreation.bind(this)) });
+    this._hooks.push({ name: "updateTile", id: Hooks.on("updateTile", this._onPlaceableUpdate.bind(this)) });
+    this._hooks.push({ name: "deleteTile", id: Hooks.on("deleteTile", this._onPlaceableDeletion.bind(this)) });
+//     this._hooks.push({ name: "drawTile", id: Hooks.on("drawTile", this._onPlaceableDraw.bind(this)) });
+//     this._hooks.push({ name: "refreshTile", id: Hooks.on("refreshTile", this._onPlaceableRefresh.bind(this)) });
+//     this._hooks.push({ name: "destroyTile", id: Hooks.on("destroyTile", this._onPlaceableDestroy.bind(this)) });
+  }
 }
 
 // Handle constrained tokens and the target token in red.
@@ -737,7 +953,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     this.materials.create({ r: 1.0, label: "target" });
   }
 
-  async prerender() {
+  prerender() {
     // Create a geometry for each constrained token.
     this.geometries.clear();
     this.drawables.clear();
@@ -811,6 +1027,16 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);
     drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
+  }
+
+
+  _registerPlaceableHooks() {
+//     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
+//     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
+//     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
+    this._hooks.push({ name: "drawToken", id: Hooks.on("drawToken", this._onPlaceableDraw.bind(this)) });
+    this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
+    this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
   }
 }
 

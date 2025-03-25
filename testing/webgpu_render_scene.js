@@ -125,6 +125,7 @@ popout.context.configure({
   alphamode: "premultiplied", // Instead of "opaque"
 });
 
+
 tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)
 tri.draw()
 canvas.walls.placeables.filter(wall => tri.containsWall(wall));
@@ -171,6 +172,9 @@ await renderObstacles.initialize();
 renderObstacles.setRenderTextureToCanvas(popout.canvas)
 await renderObstacles.prerender();
 await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderObstacles._registerPlaceableHooks();
+
 
 
 // Hooks to change rendering on move

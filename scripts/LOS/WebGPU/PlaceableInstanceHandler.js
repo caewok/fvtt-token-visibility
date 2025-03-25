@@ -30,6 +30,16 @@ class PlaceableInstanceHandler {
 
   static INSTANCE_ELEMENT_SIZE = this.INSTANCE_ELEMENT_LENGTH * Float32Array.BYTES_PER_ELEMENT;
 
+  /**
+   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   */
+  static docUpdateKeys = new Set();
+
+  /**
+   * Flags in refreshObject hook that indicate a relevant change to the placeable.
+   */
+  static refreshFlags = new Set();
+
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   senseType = "sight";
 
@@ -69,10 +79,19 @@ class PlaceableInstanceHandler {
   }
 
   /**
-   * Subclass initialization of placeables.
+   * Subclass locate placeables.
+   * @returns {Placeable|Edge[]}
    * @override
    */
   getPlaceables() { return []; }
+
+  /**
+   * Subclass test for placeable inclusion in the instance array.
+   * @param {Placeable|Edge}
+   * @returns {boolean}
+   * @override
+   */
+  includePlaceable(_placeable) { return true; }
 
   /**
    * Update the instance array of a specific placeable.
@@ -101,19 +120,6 @@ class PlaceableInstanceHandler {
   }
 
   /**
-   * Update the instance buffer on the GPU for a specific placeable.
-   * @param {string} placeableId    Id of the placeable
-   * @param {number} [idx]          Optional placeable index; will be looked up using placeableId otherwise
-   */
-  partialUpdateInstanceBuffer(placeableId, idx) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const M = this.getPlaceableInstanceData(placeableId, idx);
-    this.device.queue.writeBuffer(
-      this.buffers.instance, idx * this.constructor.INSTANCE_ELEMENT_SIZE, M,
-    );
-  }
-
-  /**
    * Retrieve the array views associated with a given placeable.
    * @param {string} placeableId  Id of the placeable
    * @param {number} [idx]        Optional placeable index; will be looked up using placeableId otherwise
@@ -127,10 +133,33 @@ class PlaceableInstanceHandler {
 
 export class WallInstanceHandler extends PlaceableInstanceHandler {
   /**
+   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   */
+  static docUpdateKeys = new Set([
+    "x",
+    "y",
+    "flags.elevatedvision.elevation.top",
+    "flags.elevatedvision.elevation.bottom",
+    "flags.wall-height.top",
+    "flags.wall-height.top",
+    "c",
+    "dir",
+  ]);
+
+  /**
+   * Flags in refreshObject hook that indicate a relevant change to the placeable.
+   */
+  static refreshFlags = new Set([
+    "refreshLine",
+    "refreshDirection",
+    "refreshEndpoints",
+  ]);
+
+  /**
    * Get edges in the scene.
    */
   getPlaceables() {
-    return [...canvas.edges.values()].filter(edge => this.includeEdge(edge));
+    return [...canvas.edges.values()].filter(edge => this.includePlaceable(edge));
   }
 
   edgeTypes = new Set(["wall"]);
@@ -139,7 +168,7 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * Should this edge be included in the scene render?
    * Certain edges, like scene borders, are excluded.
    */
-  includeEdge(edge) {
+  includePlaceable(edge) {
     if ( edge[this.senseType] === CONST.WALL_SENSE_TYPES.NONE ) return false;
     if ( !this.edgeTypes.has(edge.type) ) return false;
     return true;
@@ -152,8 +181,8 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId(placeableId);
-    const edge = placeable ??= this.placeableFromInstanceIndex.get(placeableId);
+    idx ??= this.instanceIndexFromId.get(placeableId);
+    const edge = placeable ??= this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const pos = this.constructor.edgeCenter(edge);
@@ -229,16 +258,37 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
 
 export class TileInstanceHandler extends PlaceableInstanceHandler {
   /**
+   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   */
+  static docUpdateKeys = new Set([
+    "x",
+    "y",
+    "elevation",
+    "width",
+    "height",
+    "rotation",
+  ]);
+
+  /**
+   * Flags in refreshObject hook that indicate a relevant change to the placeable.
+   */
+  static refreshFlags = new Set([
+    "refreshPosition",
+    "refreshRotation",
+    "refreshSize",
+  ]);
+
+  /**
    * Get edges in the scene.
    */
   getPlaceables() {
-    return canvas.tiles.placeables.filter(tile => this.includeTile(tile));
+    return canvas.tiles.placeables.filter(tile => this.includePlaceable(tile));
   }
 
   /**
    * Should this tile be included in the scene render?
    */
-  includeTile(tile) {
+  includePlaceable(tile) {
     // Exclude tiles at elevation 0 because these overlap the ground.
     if ( !tile.elevationZ ) return false;
 
@@ -257,8 +307,8 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId(placeableId);
-    const tile = placeable ??= this.placeableFromInstanceIndex.get(placeableId);
+    idx ??= this.instanceIndexFromId.get(placeableId);
+    const tile = placeable ??= this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = this.constructor.tileCenter(tile);
@@ -309,17 +359,36 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
 
 export class TokenInstanceHandler extends PlaceableInstanceHandler {
   /**
+   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   */
+  static docUpdateKeys = new Set([
+    "x",
+    "y",
+    "elevation",
+    "width",
+    "height",
+  ]);
+
+  /**
+   * Flags in refreshObject hook that indicate a relevant change to the placeable.
+   */
+  static refreshFlags = new Set([
+    "refreshPosition",
+    "refreshSize",
+  ]);
+
+  /**
    * Get edges in the scene.
    */
   getPlaceables() {
-    return canvas.tokens.placeables.filter(token => this.includeToken(token));
+    return canvas.tokens.placeables.filter(token => this.includePlaceable(token));
   }
 
   /**
    * Should this token be included in the scene render?
    * Constrained tokens included here; handled later in prerender.
    */
-  includeToken(_token) { return true; }
+  // includePlaceable(_token) { return true; }
 
   /**
    * Update the instance array of a specific placeable.
@@ -328,8 +397,8 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId(placeableId);
-    const token = placeable ??= this.placeableFromInstanceIndex.get(placeableId);
+    idx ??= this.instanceIndexFromId.get(placeableId);
+    const token = placeable ??= this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);

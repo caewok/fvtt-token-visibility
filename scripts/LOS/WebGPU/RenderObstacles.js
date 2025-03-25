@@ -156,6 +156,10 @@ class RenderAbstract {
     this.camera.updateDeviceBuffer();
   }
 
+  _registerPlaceableHooks() { this.drawableObjects.forEach(obj => obj._registerPlaceableHooks()); }
+
+  _deregisterPlaceableHooks() { this.drawableObjects.forEach(obj => obj._deregisterPlaceableHooks()); }
+
   // ----- NOTE: Rendering ----- //
 
   /** @type {number} */
