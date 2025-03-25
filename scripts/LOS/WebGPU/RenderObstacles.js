@@ -6,6 +6,7 @@ CONFIG,
 
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
+import { VisionTriangle } from "../VisionPolygon.js";
 import {
   MaterialsTracker,
   DrawableWallInstances,
@@ -99,9 +100,7 @@ class RenderAbstract {
     for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(device, materials, camera, { senseType });
       this.drawableObjects.push(drawableObj);
-      await drawableObj.initialize(); // For debugging.
-
-      // promises.push(drawableObject.initialize());
+      promises.push(drawableObj.initialize());
     }
     return Promise.allSettled(promises);
   }
@@ -112,16 +111,15 @@ class RenderAbstract {
    */
   async prerender() {
     const promises = [];
-    for ( const drawableObj of this.drawableObjects ) {
-      // promises.push(drawableObj.prerender());
-      await drawableObj.prerender();
-    }
+    for ( const drawableObj of this.drawableObjects ) promises.push(drawableObj.prerender());
     return Promise.allSettled(promises);
   }
 
   async render(viewerLocation, target, { viewer, targetLocation } = {}) {
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
+    const visionTriangle = VisionTriangle.build(viewerLocation, target);
+    this.drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle))
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();

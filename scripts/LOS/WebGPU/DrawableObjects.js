@@ -258,6 +258,7 @@ class DrawableObjectsAbstract {
     this._createStaticGeometries();
     this._setStaticGeometriesBuffers();
     this._createStaticDrawables();
+    this.pipeline = await this.pipeline;
   }
 
   /**
@@ -316,6 +317,13 @@ class DrawableObjectsAbstract {
   async prerender() {}
 
   /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   */
+  _filterObjects(_visionTriangle) {}
+
+  /**
    * Called after pass has begun for this render object.
    * @param {CommandEncoder} renderPass
    */
@@ -330,12 +338,12 @@ class DrawableObjectsAbstract {
    * @param {Drawable} drawable
    */
   _renderDrawable(renderPass, drawable) {
-    if ( !drawable.numInstances ) return;
+    if ( !drawable.instanceSet.size ) return;
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
 
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);
-    drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
+    drawable.geom.drawSet(renderPass, drawable.instanceSet);
   }
 
   /**
@@ -475,13 +483,21 @@ export class DrawableWallInstances extends DrawableObjectInstancesAbstract {
     return props.join("-");
   }
 
-  _renderDrawable(renderPass, drawable) {
-    if ( !drawable.instanceSet.size ) return;
-    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   */
+  _filterObjects(visionTriangle) {
+    const keys = ["wall", "wall-dir", "wall-terrain", "wall-dir-terrain"];
+    const instanceSets = {};
+    for ( const key of keys ) instanceSets[key] = this.drawables.get(key).instanceSet
+    Object.values(instanceSets).forEach(s => s.clear());
 
-    drawable.geom.setVertexBuffer(renderPass);
-    drawable.geom.setIndexBuffer(renderPass);
-    drawable.geom.drawSet(renderPass, drawable.instanceSet);
+    // Put each edge in one of four drawable sets if viewable; skip otherwise.
+    for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
+    }
   }
 }
 
@@ -519,16 +535,34 @@ export class DrawableTokenInstances extends DrawableObjectInstancesAbstract {
     });
   }
 
+  #unconstrainedTokenIndices = new Map();
+
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
   async prerender() {
     // Determine the number of constrained tokens and separate from instance set.
-    const tokenDrawable = this.drawables.get("token");
-    tokenDrawable.instanceSet.clear();
+    // Essentially subset the instance set.
+    this.#unconstrainedTokenIndices.clear();
     for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( !token.isConstrainedTokenBorder ) tokenDrawable.instanceSet.add(idx);
+      if ( !token.isConstrainedTokenBorder ) this.#unconstrainedTokenIndices.set(idx, token);
+    }
+  }
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   */
+  _filterObjects(visionTriangle) {
+    // Limit tokens
+    const drawable = this.drawables.get("token");
+    drawable.instanceSet.clear();
+
+    // Put each edge in one of four drawable sets if viewable; skip otherwise.
+    for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
+      if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
     }
   }
 
@@ -551,28 +585,6 @@ export class DrawableTokenInstances extends DrawableObjectInstancesAbstract {
       if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
     }
     super._initializeRenderPass(renderPass, opts)
-  }
-
-  /**
-   * Called after the render pass has ended for this render object (at given viewpoint, target).
-   * @param {object} [opts]
-   */
-  _postRenderPass({ viewer, target } = {}) {
-    // Add back the viewer and target to the instance drawable if they are not constrained.
-    const drawable = this.drawables.get("token");
-    if ( viewer
-      && !viewer.isConstrainedTokenBorder ) drawable.instanceSet.add(this.placeableHandler.instanceIndexFromId.get(viewer.id));
-    if ( target
-      && !target.isConstrainedTokenBorder ) drawable.instanceSet.add(this.placeableHandler.instanceIndexFromId.get(target.id));
-  }
-
-  _renderDrawable(renderPass, drawable) {
-    if ( !drawable.instanceSet.size ) return;
-    renderPass.setBindGroup(1, drawable.materialBG);
-
-    drawable.geom.setVertexBuffer(renderPass);
-    drawable.geom.setIndexBuffer(renderPass);
-    drawable.geom.drawSet(renderPass, drawable.instanceSet);
   }
 }
 
@@ -630,7 +642,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
       label: "Tile instance",
       geom: this.geometries.get("tile"),
       materialBG: this.materials.bindGroups.get("obstacle"),
-      numInstances: 1, // Each has unique tile texture.
+      numInstances: 1,
       texture: null,
       textureBG: null,
     });
@@ -650,7 +662,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     this.textures = Array(numTiles);
     const defaultDrawable = this.drawables.get("tile");
     this.drawables.delete("tile");
-    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex ) {
+    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       const drawable = { ...defaultDrawable };
       const url = tile.document.texture.src;
       const source = await loadImageBitmap(url, {
@@ -680,14 +692,31 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
           { binding: 1, resource: drawable.texture.createView() },
         ]
       });
-      this.drawables.set(`tile_${idx}`, drawable);
+      this.drawables.set(tile.id, drawable);
+    }
+  }
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   */
+  _filterObjects(visionTriangle) {
+    // Filter non-viewable tiles.
+    for ( const tile of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      const drawable = this.drawables.get(tile.id);
+      drawable.numInstances = Boolean(visionTriangle.containsTile(tile));
     }
   }
 
   _renderDrawable(renderPass, drawable) {
     if ( !drawable.numInstances ) return;
+    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.TILE_TEXTURE, drawable.textureBG);
-    super._renderDrawable(renderPass, drawable);
+
+    drawable.geom.setVertexBuffer(renderPass);
+    drawable.geom.setIndexBuffer(renderPass);
+    drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
   }
 }
 
@@ -725,6 +754,19 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     this._setStaticGeometriesBuffers();
   }
 
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   */
+  _filterObjects(visionTriangle) {
+    for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      const drawable = this.drawables.get(token.id);
+      if ( !drawable ) continue;
+      drawable.numInstances = Number(visionTriangle.containsToken(token));
+    }
+  }
+
   _initializeRenderPass(renderPass, opts = {}) {
     const { viewer, target } = opts;
 
@@ -755,8 +797,17 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
 
     if ( target && this.drawables.has(target.id) ) {
       const drawable = this.drawables.get(target.id);
-      drawable.materialBG = this.materials.bindGroups.get("obstacles");;
+      drawable.materialBG = this.materials.bindGroups.get("obstacles");
     }
+  }
+
+  _renderDrawable(renderPass, drawable) {
+    if ( !drawable.numInstances ) return;
+    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
+
+    drawable.geom.setVertexBuffer(renderPass);
+    drawable.geom.setIndexBuffer(renderPass);
+    drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
   }
 }
 

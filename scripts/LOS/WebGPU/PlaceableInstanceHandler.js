@@ -123,7 +123,6 @@ class PlaceableInstanceHandler {
     const i = idx * this.constructor.INSTANCE_ELEMENT_SIZE;
     return new Float32Array(this.instanceArrayBuffer, i, 16);
   }
-
 }
 
 export class WallInstanceHandler extends PlaceableInstanceHandler {
@@ -225,30 +224,6 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
   static edgeAngle(edge) {
     const delta = edge.b.subtract(edge.a, PIXI.Point._tmp3);
     return Math.atan2(delta.y, delta.x);
-  }
-}
-
-export class NonDirectionalWallInstanceHandler extends WallInstanceHandler {
-  /**
-   * Should this edge be included in the scene render?
-   * Certain edges, like scene borders, are excluded.
-   */
-  includeEdge(edge) {
-    if ( !super.includeEdge(edge) ) return false;
-    if ( edge.direction !== CONST.WALL_DIRECTIONS.BOTH ) return false;
-    return true;
-  }
-}
-
-export class DirectionalWallInstanceHandler extends WallInstanceHandler {
-  /**
-   * Should this edge be included in the scene render?
-   * Certain edges, like scene borders, are excluded.
-   */
-  includeEdge(edge) {
-    if ( !super.includeEdge(edge) ) return false;
-    if ( edge.direction === CONST.WALL_DIRECTIONS.BOTH ) return false;
-    return true;
   }
 }
 

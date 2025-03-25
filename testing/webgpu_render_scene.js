@@ -74,6 +74,8 @@ MatrixFlat = CONFIG.GeometryLib.MatrixFlat
 MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32
 Area3dPopout = api.Area3dPopout
 Area3dPopoutCanvas = api.Area3dPopoutCanvas
+VisionTriangle = api.bvh.VisionTriangle
+VisionPolygon = api.bvh.VisionPolygon
 
 
 let {
@@ -92,6 +94,8 @@ let {
   RenderObstacles,
 
 } = api.webgpu
+
+
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
 
@@ -120,6 +124,11 @@ popout.context.configure({
   format: presentationFormat,
   alphamode: "premultiplied", // Instead of "opaque"
 });
+
+tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)
+tri.draw()
+canvas.walls.placeables.filter(wall => tri.containsWall(wall));
+canvas.tokens.placeables.filter(token => tri.containsToken(token))
 
 
 renderWalls = new RenderWalls();
@@ -170,14 +179,20 @@ renderType = "Tokens"
 renderType = "Tiles"
 renderType = "Obstacles"
 
-rerender = () => {
-  switch ( renderType ) {
-    case "Walls": renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
-    case "Tokens": renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
-    case "Tiles": renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
-    case "Obstacles": renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer }); break;
+async function rerenderObj(renderObj, viewer, target) {
+  await renderObj.prerender();
+  await renderObj.render(Point3d.fromTokenCenter(viewer), target, { viewer });
+}
 
+rerender = () => {
+  let renderObj;
+  switch ( renderType ) {
+    case "Walls": renderObj = renderWalls; break;
+    case "Tokens": renderObj = renderTokens; break;
+    case "Tiles": renderObj = renderTiles; break;
+    case "Obstacles": renderObj = renderObstacles; break;
   }
+  rerenderObj(renderObj, viewer, target);
 }
 
 Hooks.on("controlToken", (token, controlled) => {
