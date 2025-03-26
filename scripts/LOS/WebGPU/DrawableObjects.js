@@ -714,12 +714,15 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
 //     });
 //   }
 
+  _filterObjects(_visionTriangle) { this._updateCulledValues(); }
+
+
   /**
    * Set the culled instance buffer and indirect buffer for each drawable.
    * The indirect buffer determines how many elements in the culled instance buffer are drawn.
    * Prior to this, the drawable instanceSet should be updated.
    */
-  _filterObjects(_visionTriangle) {
+  _updateCulledValues() {
     // Set the culled instance buffer and indirect buffer for each drawable.
     // The indirect buffer determines how many elements in the culled instance buffer are drawn.
     for ( const drawable of this.drawables.values() ) {
@@ -828,7 +831,6 @@ export class DrawableWallInstances extends DrawableObjectCulledInstancesAbstract
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
-    super._filterObjects(visionTriangle);
   }
 
   _registerPlaceableHooks() {
@@ -867,7 +869,7 @@ export class DrawableWallInstances extends DrawableObjectCulledInstancesAbstract
   }
 }
 
-export class DrawableTokenInstances extends DrawableObjectInstancesAbstract {
+export class DrawableTokenInstances extends DrawableObjectCulledInstancesAbstract {
   /** @type {TokenInstanceHandler} */
   static handlerClass = TokenInstanceHandler;
 
@@ -950,6 +952,10 @@ export class DrawableTokenInstances extends DrawableObjectInstancesAbstract {
       // If the target is not constrained, set it here.
       if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
     }
+
+    // Update the culled values for indirect drawing.
+    this._updateCulledValues();
+
     super._initializeRenderPass(renderPass, opts)
   }
 
