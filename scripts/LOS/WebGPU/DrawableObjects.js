@@ -644,7 +644,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
 
     if ( this.buffers.indirect ) this.buffers.indirect.destroy();
-    const size = 5 * Uint32Array.BYTES_PER_ELEMENT; // TODO: use Uint16Array?
+    const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
     this.buffers.indirect = this.device.createBuffer({
       label: "Indirect Buffer",
       size: size * this.drawables.size,
@@ -652,11 +652,11 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     });
     this.rawBuffers.indirect = new ArrayBuffer(size * this.drawables.size);
 
-    let indirectBufferOffset = 0;
+    let indirectOffset = 0;
     for ( const drawable of this.drawables.values() ) {
-      drawable.indirectBufferOffset = indirectBufferOffset;
-      drawable.indirectBuffer = new Uint32Array(this.rawBuffers.indirect, indirectBufferOffset, 5);
-      indirectBufferOffset += size;
+      drawable.indirectOffset = indirectOffset;
+      drawable.indirectBuffer = new Uint32Array(this.rawBuffers.indirect, indirectOffset, 5);
+      indirectOffset += size;
     }
   }
 
@@ -668,30 +668,30 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
    */
   _createCulledBuffer() {
-    if ( this.buffers.culled ) this.buffers.culled.destroy();
-    const size = this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT; // TODO: use Uint16Array?
-    this.buffers.culled = this.device.createBuffer({
-      label: "Culled Buffer",
-      size: size * this.drawables.size,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    this.rawBuffers.culled = new ArrayBuffer(size * this.drawables.size);
+    // Could create a single buffer but the offset must be a multiple of 256.
+    // As each element is only u32 (or u16), that means 64 (u32) or 128 (u16) entries per drawable.
+    // So 64 or 128 walls minimum.
+    // For 4 wall drawables, need 1 culling buffer of min size 256 * 4 = 1024.
+    // If split into 4, can do 4 buffers of min 2 length.
 
-    let culledBufferOffset = 0;
     for ( const drawable of this.drawables.values() ) {
+      if ( drawable.culledBuffer ) drawable.culledBuffer.destroy();
 
+      drawable.culledBufferRaw = new Uint32Array(this.placeableHandler.numInstances);
+      drawable.culledBuffer = this.device.createBuffer({
+        label: `Culled Buffer ${drawable.label}`,
+        size: drawable.culledBufferRaw.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
 
-      drawable.culledBufferOffset = culledBufferOffset;
-      drawable.culledBuffer = new Uint32Array(this.rawBuffers.culled, culledBufferOffset, this.placeableHandler.numInstances);
       drawable.culledBG = this.device.createBindGroup({
         label: `${this.constructor.name} ${drawable.label}`,
         layout: this.bindGroupLayouts.culled,
         entries: [{
           binding: 0,
-          resource: { buffer: this.buffers.culled, offset: culledBufferOffset, size }
+          resource: { buffer: drawable.culledBuffer }
         }]
       });
-      culledBufferOffset += size;
     }
   }
 
@@ -716,15 +716,15 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // The indirect buffer determines how many elements in the culled instance buffer are drawn.
     for ( const drawable of this.drawables.values() ) {
       let i = 0;
-      drawable.instanceSet.forEach(idx => drawable.culledBuffer[i++] = idx);
+      drawable.instanceSet.forEach(idx => drawable.culledBufferRaw[i++] = idx);
 
       // https://developer.mozilla.org/en-US/docs/Web/API/GPURenderPassEncoder/drawIndexedIndirect
       // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
       drawable.indirectBuffer[0] = drawable.geom.indices.length;
       drawable.indirectBuffer[1] = drawable.instanceSet.size;
+      this.device.queue.writeBuffer(drawable.culledBuffer, 0, drawable.culledBufferRaw);
     }
     this.device.queue.writeBuffer(this.buffers.indirect, 0, this.rawBuffers.indirect);
-    this.device.queue.writeBuffer(this.buffers.culled, 0, this.rawBuffers.culled);
   }
 
   /**
@@ -733,7 +733,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    * @param {Drawable} drawable
    */
   _renderDrawable(renderPass, drawable) {
-    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
+    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CULLED, drawable.culledBG);
 
     drawable.geom.setVertexBuffer(renderPass);
@@ -1086,7 +1086,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
 
   _renderDrawable(renderPass, drawable) {
     if ( !drawable.numInstances ) return;
-    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
+    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.TILE_TEXTURE, drawable.textureBG);
 
     drawable.geom.setVertexBuffer(renderPass);
@@ -1187,7 +1187,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
 
   _renderDrawable(renderPass, drawable) {
     if ( !drawable.numInstances ) return;
-    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
+    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
 
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);

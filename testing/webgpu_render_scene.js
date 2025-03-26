@@ -141,6 +141,7 @@ await renderWalls.initialize();
 renderWalls.setRenderTextureToCanvas(popout.canvas)
 await renderWalls.prerender();
 await renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+renderWalls._registerPlaceableHooks();
 
 
 renderTokens = new RenderTokens();
