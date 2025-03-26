@@ -184,7 +184,7 @@ renderType = "Tiles"
 renderType = "Obstacles"
 
 async function rerenderObj(renderObj, viewer, target) {
-  await renderObj.prerender();
+  // await renderObj.prerender();
   await renderObj.render(Point3d.fromTokenCenter(viewer), target, { viewer });
 }
 

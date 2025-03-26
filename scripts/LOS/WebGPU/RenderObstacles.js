@@ -86,6 +86,7 @@ class RenderAbstract {
     this.materials = new MaterialsTracker(device);
     await this._initializeDrawObjects();
     this._allocateRenderTargets();
+    this.prerender();
   }
 
   /**
@@ -100,7 +101,8 @@ class RenderAbstract {
     for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(device, materials, camera, { senseType });
       this.drawableObjects.push(drawableObj);
-      promises.push(drawableObj.initialize());
+      await drawableObj.initialize();
+      // promises.push(drawableObj.initialize());
     }
     return Promise.allSettled(promises);
   }
@@ -109,10 +111,8 @@ class RenderAbstract {
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  async prerender() {
-    const promises = [];
-    for ( const drawableObj of this.drawableObjects ) promises.push(drawableObj.prerender());
-    return Promise.allSettled(promises);
+  prerender() {
+    for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
   }
 
   async render(viewerLocation, target, { viewer, targetLocation } = {}) {

@@ -30,6 +30,11 @@ struct Instance {
 }
 @group(2) @binding(0) var<storage, read> instances: array<Instance>;
 
+struct CulledInstances {
+  instances: array<u32>,
+}
+@group(3) @binding(0) var<storage, read> culled: CulledInstances;
+
 // ----- Vertex shader ----- //
 @vertex fn vertexMain(in: VertexIn) -> VertexOut {
   var out: VertexOut;
@@ -46,7 +51,9 @@ struct Instance {
 
   // For debugging using vertices set between -1 and 1.
   // out.pos = vec4f(in.pos, 1.0);
-  let instanceIndex = in.instanceIndex;
+
+  let instanceIndex = culled.instances[in.instanceIndex]; // Culled version.
+  // let instanceIndex = in.instanceIndex; // Non-culled version.
   let model = instances[instanceIndex].model;
 
 

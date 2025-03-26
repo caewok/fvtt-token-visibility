@@ -143,8 +143,9 @@ class DrawableObjectsAbstract {
 
   static GROUP_NUM = {
     CAMERA: 0,
-    MATERIAL: 1
+    MATERIALS: 1
   };
+
 
   placeableHandler;
 
@@ -159,6 +160,9 @@ class DrawableObjectsAbstract {
 
   /** @type {object<GPUBindGroupLayout>} */
   bindGroupLayouts = {};
+
+  /** @type {GPUBindGroupLayout[]} */
+  bindGroupLayoutsArray = Array(2);
 
   /** @type {object<GPUBindGroup>} */
   bindGroups = {};
@@ -251,17 +255,19 @@ class DrawableObjectsAbstract {
 
     // Define shader and pipeline.
     this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`);
-    this._setRenderPipelineOpts();
-    this.pipeline = device.createRenderPipelineAsync(this.RENDER_PIPELINE_OPTS);
 
     // Define placeables handled by this class.
     this.placeableHandler.initializePlaceables();
 
     // Create static buffers.
     this._createStaticGeometries();
-    this._setStaticGeometriesBuffers();
     this._createStaticDrawables();
-    this.pipeline = await this.pipeline;
+    this._setStaticGeometriesBuffers();
+
+    this._setRenderPipelineOpts();
+    this.pipeline = device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
+    console.log("Initialize finished!");
+    return true;
   }
 
   /**
@@ -280,7 +286,7 @@ class DrawableObjectsAbstract {
     const offsetData = GeometryDesc.computeBufferOffsets(geoms);
     const vertexArray = combineTypedArrays(...geoms.map(g => g.vertices));
     this.buffers.staticVertex = this.device.createBuffer({
-        label: `Static Vertex Buffer`,
+        label: "Static Vertex Buffer",
         size: offsetData.vertex.totalSize,
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
       });
@@ -290,7 +296,7 @@ class DrawableObjectsAbstract {
     if ( offsetData.index.totalSize ) {
       const indexArray = combineTypedArrays(...geoms.filter(g => Boolean(g.indices)).map(g => g.indices));
       this.buffers.staticIndex = this.device.createBuffer({
-        label: `Static Index Buffer`,
+        label: "Static Index Buffer",
         size: offsetData.index.totalSize,
         usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
       });
@@ -356,6 +362,9 @@ class DrawableObjectsAbstract {
   _postRenderPass(_opts = {}) {}
 
   _setRenderPipelineOpts() {
+    this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.CAMERA] = this.camera.bindGroupLayout;
+    this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.MATERIALS] = this.materials.bindGroupLayout;
+
     this.RENDER_PIPELINE_OPTS.label = `${this.constructor.name}`;
     this.RENDER_PIPELINE_OPTS.vertex.module = this.module;
     this.RENDER_PIPELINE_OPTS.fragment.module = this.module;
@@ -363,11 +372,7 @@ class DrawableObjectsAbstract {
     this.RENDER_PIPELINE_OPTS.fragment.targets[0] = { format: WebGPUDevice.presentationFormat };
     this.RENDER_PIPELINE_OPTS.layout = this.device.createPipelineLayout({
       label: `${this.constructor.name}`,
-      bindGroupLayouts: [
-        this.camera.bindGroupLayout,     // 0
-        this.materials.bindGroupLayout,  // 1
-        ...Object.values(this.bindGroupLayouts),
-      ]
+      bindGroupLayouts: this.bindGroupLayoutsArray,
     });
     this.RENDER_PIPELINE_OPTS.multisample.count = this.sampleCount ?? 1;
     this.RENDER_PIPELINE_OPTS.depthStencil.format = this.depthFormat ?? "depth24plus";
@@ -494,9 +499,11 @@ class DrawableObjectsAbstract {
 
   destroy() {
     this._deregisterPlaceableHooks();
-    this.buffers.forEach(buffer => buffer.destroy());
+    this.buffers.forEach(buffer => {
+      if ( Array.isArray(buffer) ) buffer.forEach(elem => elem.destroy());
+      else buffer.destroy();
+    });
   }
-
 }
 
 export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
@@ -513,38 +520,48 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
         buffer: { type: "read-only-storage" },
       }]
     },
-  }
+  };
 
   static GROUP_NUM = {
     ...DrawableObjectsAbstract.GROUP_NUM,
     INSTANCE: 2,
   };
 
+  bindGroupLayoutsArray = new Array(3);
+
+  _setRenderPipelineOpts() {
+    this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.INSTANCE] = this.bindGroupLayouts.instance;
+    super._setRenderPipelineOpts();
+  }
+
   _setStaticGeometriesBuffers() {
     if ( !this.placeableHandler.numInstances ) return;
-    this._setInstanceBuffer();
+    this._createInstanceBuffer();
+    this._createInstanceBindGroup();
     super._setStaticGeometriesBuffers();
   }
 
-  _setInstanceBuffer() {
+  _createInstanceBuffer() {
     if ( this.buffers.instance ) this.buffers.instance.destroy();
     if ( !this.placeableHandler.numInstances ) return;
     const device = this.device;
 
-    const buffer = this.buffers.instance = this.device.createBuffer({
+    this.buffers.instance = this.device.createBuffer({
       label: `${this.constructor.name}`,
       size: this.placeableHandler.instanceArrayBuffer.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    device.queue.writeBuffer(buffer, 0, this.placeableHandler.instanceArrayBuffer)
+    device.queue.writeBuffer(this.buffers.instance, 0, this.placeableHandler.instanceArrayBuffer)
     this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer)
+  }
 
-    this.bindGroups.instance = device.createBindGroup({
-      label: `${this.constructor.name}`,
+  _createInstanceBindGroup() {
+    this.bindGroups.instance = this.device.createBindGroup({
+      label: `${this.constructor.name} Instance`,
       layout: this.bindGroupLayouts.instance,
       entries: [{
         binding: 0,
-        resource: { buffer }
+        resource: { buffer: this.buffers.instance }
       }],
     });
   }
@@ -556,7 +573,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
 
   _addPlaceable(object) {
     super._addPlaceable(object);
-    this._setInstanceBuffer();
+    this._createInstanceBuffer();
+    this._createInstanceBindGroup()
   }
 
   _updatePlaceable(object) {
@@ -581,13 +599,152 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
 
   _removePlaceable(object) {
     super._removePlaceable(object);
-    this._setInstanceBuffer();
+    this._createInstanceBuffer();
+    this._createInstanceBindGroup()
+  }
+}
+
+export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstancesAbstract {
+  static BINDGROUP_LAYOUT_OPTS = {
+    ...DrawableObjectInstancesAbstract.BINDGROUP_LAYOUT_OPTS,
+
+    culled: {
+      label: "Culled",
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: "read-only-storage" },
+      }]
+    },
+  };
+
+  static GROUP_NUM = {
+    ...DrawableObjectInstancesAbstract.GROUP_NUM,
+    CULLED: 3,
+  };
+
+  bindGroupLayoutsArray = new Array(4);
+
+  _setRenderPipelineOpts() {
+    this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.CULLED] = this.bindGroupLayouts.culled;
+    super._setRenderPipelineOpts();
+  }
+
+  _setStaticGeometriesBuffers() {
+    if ( !this.placeableHandler.numInstances ) return;
+    this._createIndirectBuffer();
+    this._createCulledBuffer();
+    // this._createCulledBindGroup();
+    super._setStaticGeometriesBuffers();
+  }
+
+  _createIndirectBuffer() {
+    // Track the indirect draw commands for each drawable.
+    // Used in conjunction with the culling buffer.
+    // The indirect buffer sets the number of instances while the culling buffer defines which instances.
+
+    if ( this.buffers.indirect ) this.buffers.indirect.destroy();
+    const size = 5 * Uint32Array.BYTES_PER_ELEMENT; // TODO: use Uint16Array?
+    this.buffers.indirect = this.device.createBuffer({
+      label: "Indirect Buffer",
+      size: size * this.drawables.size,
+      usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.rawBuffers.indirect = new ArrayBuffer(size * this.drawables.size);
+
+    let indirectBufferOffset = 0;
+    for ( const drawable of this.drawables.values() ) {
+      drawable.indirectBufferOffset = indirectBufferOffset;
+      drawable.indirectBuffer = new Uint32Array(this.rawBuffers.indirect, indirectBufferOffset, 5);
+      indirectBufferOffset += size;
+    }
+  }
+
+  /**
+   * Store the indices that should be rendered in an indirect buffer.
+   * This allows use of Render Bundles for the wall rendering.
+   * Set up just like the indirect buffer.
+   * See https://toji.dev/webgpu-best-practices/render-bundles
+   *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
+   */
+  _createCulledBuffer() {
+    if ( this.buffers.culled ) this.buffers.culled.destroy();
+    const size = this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT; // TODO: use Uint16Array?
+    this.buffers.culled = this.device.createBuffer({
+      label: "Culled Buffer",
+      size: size * this.drawables.size,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.rawBuffers.culled = new ArrayBuffer(size * this.drawables.size);
+
+    let culledBufferOffset = 0;
+    for ( const drawable of this.drawables.values() ) {
+
+
+      drawable.culledBufferOffset = culledBufferOffset;
+      drawable.culledBuffer = new Uint32Array(this.rawBuffers.culled, culledBufferOffset, this.placeableHandler.numInstances);
+      drawable.culledBG = this.device.createBindGroup({
+        label: `${this.constructor.name} ${drawable.label}`,
+        layout: this.bindGroupLayouts.culled,
+        entries: [{
+          binding: 0,
+          resource: { buffer: this.buffers.culled, offset: culledBufferOffset, size }
+        }]
+      });
+      culledBufferOffset += size;
+    }
+  }
+
+//   _createCulledBindGroup() {
+//     this.bindGroups.culled = this.device.createBindGroup({
+//       label: `${this.constructor.name} Culled`,
+//       layout: this.bindGroupLayouts.culled,
+//       entries: [{
+//         binding: 0,
+//         resource: { buffer: this.buffers.culled }
+//       }],
+//     });
+//   }
+
+  /**
+   * Set the culled instance buffer and indirect buffer for each drawable.
+   * The indirect buffer determines how many elements in the culled instance buffer are drawn.
+   * Prior to this, the drawable instanceSet should be updated.
+   */
+  _filterObjects(_visionTriangle) {
+    // Set the culled instance buffer and indirect buffer for each drawable.
+    // The indirect buffer determines how many elements in the culled instance buffer are drawn.
+    for ( const drawable of this.drawables.values() ) {
+      let i = 0;
+      drawable.instanceSet.forEach(idx => drawable.culledBuffer[i++] = idx);
+
+      // https://developer.mozilla.org/en-US/docs/Web/API/GPURenderPassEncoder/drawIndexedIndirect
+      // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
+      drawable.indirectBuffer[0] = drawable.geom.indices.length;
+      drawable.indirectBuffer[1] = drawable.instanceSet.size;
+    }
+    this.device.queue.writeBuffer(this.buffers.indirect, 0, this.rawBuffers.indirect);
+    this.device.queue.writeBuffer(this.buffers.culled, 0, this.rawBuffers.culled);
+  }
+
+  /**
+   * Called on each drawable for this render object.
+   * @param {CommandEncoder} renderPass
+   * @param {Drawable} drawable
+   */
+  _renderDrawable(renderPass, drawable) {
+    renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
+    renderPass.setBindGroup(this.constructor.GROUP_NUM.CULLED, drawable.culledBG);
+
+    drawable.geom.setVertexBuffer(renderPass);
+    drawable.geom.setIndexBuffer(renderPass);
+    renderPass.drawIndexedIndirect(this.buffers.indirect, drawable.indirectOffset);
   }
 }
 
 // Instances of walls. Could include tokens but prefer to keep separate both for simplicity
 // and because tokens get updated much more often.
-export class DrawableWallInstances extends DrawableObjectInstancesAbstract {
+export class DrawableWallInstances extends DrawableObjectCulledInstancesAbstract {
   /** @type {WallInstanceHandler} */
   static handlerClass = WallInstanceHandler;
 
@@ -663,6 +820,7 @@ export class DrawableWallInstances extends DrawableObjectInstancesAbstract {
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
+    super._filterObjects(visionTriangle);
   }
 
   _registerPlaceableHooks() {
@@ -830,6 +988,13 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     TILE_TEXTURE: 3,
   };
 
+
+  bindGroupLayoutsArray = new Array(4);
+
+  _setRenderPipelineOpts() {
+    this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.TILE_TEXTURE] = this.bindGroupLayouts.tileTexture;
+    super._setRenderPipelineOpts();
+  }
 
   async initialize() {
     await super.initialize();
