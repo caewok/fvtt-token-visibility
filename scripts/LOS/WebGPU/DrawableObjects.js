@@ -668,30 +668,38 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
    */
   _createCulledBuffer() {
-    // Could create a single buffer but the offset must be a multiple of 256.
+    // To create a single buffer the offset must be a multiple of 256.
     // As each element is only u32 (or u16), that means 64 (u32) or 128 (u16) entries per drawable.
     // So 64 or 128 walls minimum.
     // For 4 wall drawables, need 1 culling buffer of min size 256 * 4 = 1024.
-    // If split into 4, can do 4 buffers of min 2 length.
+    const minSize = this.drawables.size > 1 ? 256 : 4;
 
+    if ( this.buffers.culled ) this.buffers.culled.destroy();
+    const size = Math.max(minSize, this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT);
+    this.buffers.culled = this.device.createBuffer({
+      label: "Culled Buffer",
+      size: size * this.drawables.size,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.rawBuffers.culled = new ArrayBuffer(size * this.drawables.size);
+
+    let culledBufferOffset = 0;
     for ( const drawable of this.drawables.values() ) {
-      if ( drawable.culledBuffer ) drawable.culledBuffer.destroy();
-
-      drawable.culledBufferRaw = new Uint32Array(this.placeableHandler.numInstances);
-      drawable.culledBuffer = this.device.createBuffer({
-        label: `Culled Buffer ${drawable.label}`,
-        size: drawable.culledBufferRaw.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      });
-
+      drawable.culledBufferOffset = culledBufferOffset;
+      drawable.culledBufferRaw = new Uint32Array(
+        this.rawBuffers.culled,
+        culledBufferOffset,
+        this.placeableHandler.numInstances, // Alt: Math.floor(size / Uint32Array.BYTES_PER_ELEMENT),
+      );
       drawable.culledBG = this.device.createBindGroup({
         label: `${this.constructor.name} ${drawable.label}`,
         layout: this.bindGroupLayouts.culled,
         entries: [{
           binding: 0,
-          resource: { buffer: drawable.culledBuffer }
+          resource: { buffer: this.buffers.culled, offset: culledBufferOffset, size }
         }]
       });
+      culledBufferOffset += size;
     }
   }
 
@@ -722,9 +730,9 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       // indexCount, instanceCount, firstIndex, baseVertex, firstInstance
       drawable.indirectBuffer[0] = drawable.geom.indices.length;
       drawable.indirectBuffer[1] = drawable.instanceSet.size;
-      this.device.queue.writeBuffer(drawable.culledBuffer, 0, drawable.culledBufferRaw);
     }
     this.device.queue.writeBuffer(this.buffers.indirect, 0, this.rawBuffers.indirect);
+    this.device.queue.writeBuffer(this.buffers.culled, 0, this.rawBuffers.culled);
   }
 
   /**
