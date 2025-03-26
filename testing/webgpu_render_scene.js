@@ -152,7 +152,7 @@ await renderTokens.initialize();
 renderTokens.setRenderTextureToCanvas(popout.canvas)
 await renderTokens.prerender();
 await renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
-
+renderTokens._registerPlaceableHooks();
 
 
 

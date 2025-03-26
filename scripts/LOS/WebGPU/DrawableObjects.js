@@ -60,78 +60,23 @@ DrawableObjects:
   - Tiles: Require a sampler
   - Instances of Walls, Tokens.
   - Constrained tokens (Could use the instance shader but would have to pass identity matrix, useless instance code)
+
+async initialize: All operations that only need happen at start.
+- _createStaticGeometries: Add to this.geometries array any instance geometries that won't change.
+- _setStaticGeometriesBuffers: Define static vertex and index buffers, geometry offsets for those buffers.
+- _createStaticDrawables: define combinations of drawables and materials that don't change.
+vertices and indices that don't change, instance geometries.
+
+initializePlaceableBuffers: All operations that must occur when the number of placeables change, but not necessarily data for a placeable.
+--> Called at initialize and whenever object is added or deleted.
+--> instance buffers, indirect buffer, culling buffers
+
+
+prerender: Changes whenever a placeable is updated.
+
+async render:
+
 */
-
-export class MaterialsTracker {
-  /** @type {GPUDevice} */
-  device;
-
-  /** @type {Map<string, GPUBindGroup>} */
-  bindGroups = new Map();
-
-  /** @type {GPUBindGroupLayout} */
-  bindGroupLayout;
-
-  /** @type {object} */
-  static MATERIAL_LAYOUT = {
-    label: 'Material',
-    entries: [{
-      binding: 0,
-      visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-      buffer: {}
-    }]
-  };
-
-  /**
-   * @type {GPUDevice} device
-   */
-  constructor(device) {
-    this.device = device;
-    this.bindGroupLayout = device.createBindGroupLayout(this.constructor.MATERIAL_LAYOUT);
-  }
-
-  /**
-   * Create singleton material for a given label.
-   * Currently does not check if r,g,b,a are same/different for given label.
-   * @param {object} [opts]
-   * @param {number} [opts.r]     Red value (0–1)
-   * @param {number} [opts.g]     Green value (0–1)
-   * @param {number} [opts.b]     Blue value (0–1)
-   * @param {number} [opts.a]     Alpha value (0–1)
-   * @param {string} [opts.label] Name/key of the material
-   */
-  create({ r, g, b, a, label }) {
-    r ??= 0.0;
-    g ??= 0.0;
-    b ??= 0.0;
-    a ??= 1.0;
-    label ??= `Material (${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)}, ${a.toFixed(2)})`;
-    if ( this.bindGroups.has(label) ) return;
-
-    const buffer = this.device.createBuffer({
-      label,
-      size: Float32Array.BYTES_PER_ELEMENT * 4,
-      usage: GPUBufferUsage.UNIFORM,
-      mappedAtCreation: true,
-    });
-    const materialArray = new Float32Array(buffer.getMappedRange());
-    materialArray[0] = r;
-    materialArray[1] = g;
-    materialArray[2] = b;
-    materialArray[3] = a;
-    buffer.unmap();
-
-    this.bindGroups.set(label, this.device.createBindGroup({
-      label,
-      layout: this.bindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: { buffer }
-      }],
-    }));
-  }
-}
-
 
 class DrawableObjectsAbstract {
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
@@ -255,19 +200,44 @@ class DrawableObjectsAbstract {
 
     // Define shader and pipeline.
     this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`);
-
-    // Define placeables handled by this class.
-    this.placeableHandler.initializePlaceables();
+    this._setRenderPipelineOpts();
+    this.pipeline = device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
 
     // Create static buffers.
     this._createStaticGeometries();
     this._createStaticDrawables();
     this._setStaticGeometriesBuffers();
 
-    this._setRenderPipelineOpts();
-    this.pipeline = device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
+    // Initialize the changeable buffers.
+    this.initializePlaceableBuffers();
+
+    // Debugging.
     console.log("Initialize finished!");
     return true;
+  }
+
+  /**
+   * Set up part of the render chain dependent on the number of placeables.
+   * Called whenever a placeable is added or deleted (but not necessarily just updated).
+   * E.g., wall is added.
+   */
+  initializePlaceableBuffers() {
+    this.placeableHandler.initializePlaceables();
+  }
+
+  /**
+   * Set up parts of the render chain that change often but not necessarily every render.
+   * Called whenever a placeable is added, deleted, or updated.
+   * E.g., tokens that move a lot vs a camera view that changes every render.
+   */
+  prerender() {}
+
+  /**
+   * Render this drawable.
+   * @param {CommandEncoder} renderPass
+   */
+  render(renderPass) {
+    this.drawables.forEach(drawable => this._renderDrawable(renderPass, drawable));
   }
 
   /**
@@ -320,12 +290,6 @@ class DrawableObjectsAbstract {
   _createStaticDrawables() {}
 
   /**
-   * Set up parts of the render chain that change often but not necessarily every render.
-   * E.g., tokens that move a lot vs a camera view that changes every render.
-   */
-  prerender() {}
-
-  /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
@@ -336,7 +300,7 @@ class DrawableObjectsAbstract {
    * Called after pass has begun for this render object.
    * @param {CommandEncoder} renderPass
    */
-  _initializeRenderPass(renderPass) {
+  initializeRenderPass(renderPass) {
     renderPass.setPipeline(this.pipeline);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CAMERA, this.camera.bindGroup);
   }
@@ -468,7 +432,7 @@ class DrawableObjectsAbstract {
   }
 
   _addPlaceable(_object) {
-    this.placeableHandler.initializePlaceables();
+    this.initializePlaceableBuffers();
     this.prerender();
   }
 
@@ -494,7 +458,8 @@ class DrawableObjectsAbstract {
     // Rebuild the instance buffer.
     // Could track empty indices and swap in/out as edges are added or deleted but that would
     /// be complicated and possibly for little gain.
-    this.placeableHandler.initializePlaceables();
+    this.initializePlaceableBuffers();
+    this.prerender();
   }
 
   destroy() {
@@ -534,11 +499,10 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
     super._setRenderPipelineOpts();
   }
 
-  _setStaticGeometriesBuffers() {
-    if ( !this.placeableHandler.numInstances ) return;
+  initializePlaceableBuffers() {
+    super.initializePlaceableBuffers();
     this._createInstanceBuffer();
     this._createInstanceBindGroup();
-    super._setStaticGeometriesBuffers();
   }
 
   _createInstanceBuffer() {
@@ -566,15 +530,9 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
     });
   }
 
-  _initializeRenderPass(renderPass) {
-    super._initializeRenderPass(renderPass);
+  initializeRenderPass(renderPass) {
+    super.initializeRenderPass(renderPass);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.INSTANCE, this.bindGroups.instance);
-  }
-
-  _addPlaceable(object) {
-    super._addPlaceable(object);
-    this._createInstanceBuffer();
-    this._createInstanceBindGroup()
   }
 
   _updatePlaceable(object) {
@@ -595,12 +553,6 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
     this.device.queue.writeBuffer(
       this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M,
     );
-  }
-
-  _removePlaceable(object) {
-    super._removePlaceable(object);
-    this._createInstanceBuffer();
-    this._createInstanceBindGroup()
   }
 }
 
@@ -630,12 +582,10 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     super._setRenderPipelineOpts();
   }
 
-  _setStaticGeometriesBuffers() {
-    if ( !this.placeableHandler.numInstances ) return;
+  initializePlaceableBuffers() {
+    super.initializePlaceableBuffers();
     this._createIndirectBuffer();
     this._createCulledBuffer();
-    // this._createCulledBindGroup();
-    super._setStaticGeometriesBuffers();
   }
 
   _createIndirectBuffer() {
@@ -753,9 +703,43 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   }
 }
 
+// Use a render bundle for this object's render.
+// See https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
+export class DrawableObjectRBCulledInstancesAbstract extends DrawableObjectCulledInstancesAbstract {
+  /** @type {WebGPURenderBundle} */
+  renderBundle;
+
+  // TODO: Pass colorFormat, depthStencilFormat, and sampleCount.
+  // Could pass from prerender or other method.
+  _createRenderBundle(opts) {
+    const encoder = this.device.createRenderBundleEncoder({
+      colorFormats: [ WebGPUDevice.presentationFormat ],
+      depthStencilFormat: "depth24plus",
+      sampleCount: 1
+    });
+
+    // Call the exact same function as the non-bundled draw
+    // Call the parent so executeBundles is not called.
+    this.initializeRenderPass(encoder, opts);
+    super.render(encoder, opts);
+    this.renderBundle = encoder.finish();
+    this._postRenderPass(opts)
+  }
+
+  initializePlaceableBuffers() {
+    super.initializePlaceableBuffers();
+    this.renderBundle = undefined;
+  }
+
+  render(renderPass, opts) {
+    if ( !this.renderBunder ) this._createRenderBundle(opts);
+    renderPass.executeBundles([this.renderBundle]);
+  }
+}
+
 // Instances of walls. Could include tokens but prefer to keep separate both for simplicity
 // and because tokens get updated much more often.
-export class DrawableWallInstances extends DrawableObjectCulledInstancesAbstract {
+export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstract {
   /** @type {WallInstanceHandler} */
   static handlerClass = WallInstanceHandler;
 
@@ -802,9 +786,9 @@ export class DrawableWallInstances extends DrawableObjectCulledInstancesAbstract
     });
 
     // Determine the initial distribution of placeables among the drawable types.
-    for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      this.drawables.get(this.edgeDrawableKey(edge)).instanceSet.add(idx);
-    }
+//     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+//       this.drawables.get(this.edgeDrawableKey(edge)).instanceSet.add(idx);
+//     }
   }
 
   edgeDrawableKey(edge) {
@@ -869,7 +853,7 @@ export class DrawableWallInstances extends DrawableObjectCulledInstancesAbstract
   }
 }
 
-export class DrawableTokenInstances extends DrawableObjectCulledInstancesAbstract {
+export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
   /** @type {TokenInstanceHandler} */
   static handlerClass = TokenInstanceHandler;
 
@@ -910,6 +894,8 @@ export class DrawableTokenInstances extends DrawableObjectCulledInstancesAbstrac
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
   prerender() {
+    super.prerender();
+
     // Determine the number of constrained tokens and separate from instance set.
     // Essentially subset the instance set.
     this.#unconstrainedTokenIndices.clear();
@@ -934,7 +920,7 @@ export class DrawableTokenInstances extends DrawableObjectCulledInstancesAbstrac
     }
   }
 
-  _initializeRenderPass(renderPass, opts = {}) {
+  initializeRenderPass(renderPass, opts = {}) {
     // Remove viewer and target
     const { viewer, target } = opts;
     const drawable = this.drawables.get("token");
@@ -956,7 +942,7 @@ export class DrawableTokenInstances extends DrawableObjectCulledInstancesAbstrac
     // Update the culled values for indirect drawing.
     this._updateCulledValues();
 
-    super._initializeRenderPass(renderPass, opts)
+    super.initializeRenderPass(renderPass, opts)
   }
 
   _registerPlaceableHooks() {
@@ -1133,6 +1119,8 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
   }
 
   prerender() {
+    super.prerender();
+
     // Create a geometry for each constrained token.
     this.geometries.clear();
     this.drawables.clear();
@@ -1165,7 +1153,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     }
   }
 
-  _initializeRenderPass(renderPass, opts = {}) {
+  initializeRenderPass(renderPass, opts = {}) {
     const { viewer, target } = opts;
 
     // Remove viewer.
@@ -1179,7 +1167,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
       const drawable = this.drawables.get(target.id);
       drawable.materialBG = this.materials.bindGroups.get("target");
     }
-    super._initializeRenderPass(renderPass, opts)
+    super.initializeRenderPass(renderPass, opts)
   }
 
   /**

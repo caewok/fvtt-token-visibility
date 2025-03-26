@@ -7,8 +7,8 @@ CONFIG,
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
 import { VisionTriangle } from "../VisionPolygon.js";
+import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
-  MaterialsTracker,
   DrawableWallInstances,
   DrawableTokenInstances,
   DrawableTileInstances,
@@ -134,8 +134,8 @@ class RenderAbstract {
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
     for ( const drawableObj of this.drawableObjects ) {
-      drawableObj._initializeRenderPass(renderPass, opts);
-      drawableObj.drawables.forEach(drawable => drawableObj._renderDrawable(renderPass, drawable));
+      drawableObj.initializeRenderPass(renderPass, opts);
+      drawableObj.render(renderPass, opts);
     }
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
