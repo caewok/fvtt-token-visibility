@@ -25,6 +25,13 @@ const rotationM = MatrixFloat32.identity(4, 4);
 
 
 class PlaceableInstanceHandler {
+
+  /**
+   * Only keep one instance of each handler type. Class and sense type.
+   * @type {Map<string, PlaceableInstanceHandler>}
+   */
+  static handlers = new Map();
+
   /** @type {number} */
   static INSTANCE_ELEMENT_LENGTH = 16; // Single mat4x4.
 
@@ -44,6 +51,10 @@ class PlaceableInstanceHandler {
   senseType = "sight";
 
   constructor({ senseType = "sight" } = {}) {
+    const key = `${this.constructor.name}_${senseType}`;
+    const handlers = this.constructor.handlers;
+    if ( handlers.has(key) ) return handlers.get(key);
+    handlers.set(key, this);
     this.senseType = senseType;
   }
 
