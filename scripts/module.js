@@ -79,7 +79,7 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/Geo
 import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
 import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
-
+import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -210,6 +210,7 @@ Hooks.once("init", function() {
       RenderTiles,
       RenderWalls,
       RenderObstacles,
+      WebGPUSumRedPixels,
     },
 
     glmatrix: {

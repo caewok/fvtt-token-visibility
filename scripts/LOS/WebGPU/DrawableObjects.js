@@ -325,6 +325,9 @@ class DrawableObjectsAbstract {
    */
   _postRenderPass(_opts = {}) {}
 
+  /**
+   * Define the settings used for the render pipeline.
+   */
   _setRenderPipelineOpts() {
     this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.CAMERA] = this.camera.bindGroupLayout;
     this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.MATERIALS] = this.materials.bindGroupLayout;
@@ -520,6 +523,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
   }
 
   _createInstanceBindGroup() {
+    if ( !this.placeableHandler.numInstances ) return;
     this.bindGroups.instance = this.device.createBindGroup({
       label: `${this.constructor.name} Instance`,
       layout: this.bindGroupLayouts.instance,
@@ -664,7 +668,10 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
 //     });
 //   }
 
-  _filterObjects(_visionTriangle) { this._updateCulledValues(); }
+  _filterObjects(visionTriangle) {
+    this._updateCulledValues();
+    super._filterObjects(visionTriangle);
+  }
 
 
   /**
@@ -815,6 +822,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
+    super._filterObjects(visionTriangle);
   }
 
   _registerPlaceableHooks() {
@@ -918,6 +926,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
       if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
     }
+    super._filterObjects(visionTriangle);
   }
 
   initializeRenderPass(renderPass, opts = {}) {
@@ -1082,6 +1091,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
       const drawable = this.drawables.get(tile.id);
       drawable.numInstances = Boolean(visionTriangle.containsTile(tile));
     }
+    super._filterObjects(visionTriangle);
   }
 
   _renderDrawable(renderPass, drawable) {
@@ -1151,6 +1161,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
       if ( !drawable ) continue;
       drawable.numInstances = Number(visionTriangle.containsToken(token));
     }
+    super._filterObjects(visionTriangle);
   }
 
   initializeRenderPass(renderPass, opts = {}) {

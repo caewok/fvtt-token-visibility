@@ -182,12 +182,18 @@ class RenderAbstract {
   }
 
   set renderTexture(value) {
+    if ( this.#renderTexture && this.#renderTexture !== value ) this.#renderTexture.destroy();
     this.#renderTexture = value;
     this.#context = undefined;
   }
 
   _allocateRenderTargets() {
     const sampleCount = this.sampleCount;
+
+    if ( this.#renderTexture ) {
+      this.#renderTexture.destroy();
+      this.#renderTexture = this._createRenderTexture();
+    }
 
     // Update the multi-sample texture if needed.
     if ( this.msaaColorTexture ) this.msaaColorTexture = this.msaaColorTexture.destroy(); // Sets to undefined.
@@ -214,6 +220,11 @@ class RenderAbstract {
       format: WebGPUDevice.presentationFormat,
     });
     this.renderSize = { width: canvas.width, height: canvas.height };
+  }
+
+  setRenderTextureToInternalTexture() {
+    this.removeCanvasRenderTexture();
+    if ( !this.#renderTexture ) this.#renderTexture = this._createRenderTexture();
   }
 
   removeCanvasRenderTexture() { this.#context = undefined; }
@@ -264,11 +275,47 @@ class RenderAbstract {
   _createDepthTexture() {
     return this.device.createTexture({
       label: "Render Depth",
-      size: this.renderSize,
+      size: [this.renderSize.width, this.renderSize.height, 1],
       sampleCount: this.sampleCount,
       format: this.depthFormat,
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
+  }
+
+  async readTexturePixels() {
+    const texture = this.renderTexture;
+
+    // copyTextureToBuffer requires 256 byte widths for bytesPerRow
+    const width = Math.ceil((texture.width * 4) / 256) * (256 / 4);
+    const height = texture.height;
+    const renderResult = this.device.createBuffer({
+      label: "renderResult",
+      size: width * height * 4, // 1 bytes per (u8)
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+
+    const encoder = this.device.createCommandEncoder({ label: 'Read texture pixels' });
+    encoder.copyTextureToBuffer(
+      { texture },
+      { buffer: renderResult, bytesPerRow: width * 4 },
+      { width: texture.width, height: texture.height },
+    );
+    this.device.queue.submit([encoder.finish()]);
+
+    await renderResult.mapAsync(GPUMapMode.READ);
+    const pixels = new Uint8Array(renderResult.getMappedRange());
+
+    // Do a second copy so the original buffer can be unmapped.
+    const imgData = {
+      pixels: new Uint8Array(pixels),
+      x: 0,
+      y: 0,
+      width,
+      height,
+    };
+    renderResult.unmap();
+    renderResult.destroy();
+    return imgData;
   }
 
   /**

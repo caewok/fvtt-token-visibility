@@ -92,7 +92,7 @@ let {
   RenderTokens,
   RenderTiles,
   RenderObstacles,
-
+  WebGPUSumRedPixels,
 } = api.webgpu
 
 
@@ -147,13 +147,16 @@ renderWalls._registerPlaceableHooks();
 renderTokens = new RenderTokens();
 await renderTokens.getDevice();
 renderTokens.sampleCount = 1
-renderTokens.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
+renderTokens.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
 await renderTokens.initialize();
 renderTokens.setRenderTextureToCanvas(popout.canvas)
 await renderTokens.prerender();
 await renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 renderTokens._registerPlaceableHooks();
 
+renderTokens.setRenderTextureToInternalTexture()
+imgData = await renderTokens.readTexturePixels()
+imgData = await renderTokens.readTexturePixels(true)
 
 
 renderTiles = new RenderTiles();
@@ -168,13 +171,22 @@ await renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 renderObstacles = new RenderObstacles();
 await renderObstacles.getDevice();
 renderObstacles.sampleCount = 1
-renderObstacles.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
+renderObstacles.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
 await renderObstacles.initialize();
 renderObstacles.setRenderTextureToCanvas(popout.canvas)
 await renderObstacles.prerender();
 await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderObstacles._registerPlaceableHooks();
+
+
+// Render to texture
+renderObstacles.setRenderTextureToInternalTexture()
+imgData = await renderObstacles.readTexturePixels()
+
+sumPixels = new WebGPUSumRedPixels(renderObstacles.device)
+await sumPixels.initialize()
+res = await sumPixels.compute(renderObstacles.renderTexture)
 
 
 
@@ -220,6 +232,87 @@ Hooks.on("refreshToken", (token, flags) => {
 })
 
 
+// Read pixels
+async function readTexturePixels(device, texture) {
+  // copyTextureToBuffer requires 256 byte widths for bytesPerRow
+  const width = Math.ceil((texture.width * 4) / 256) * (256 / 4);
+  const height = texture.height;
+  const renderResult = device.createBuffer({
+    label: "renderResult",
+    size: width * height * 4, // 1 bytes per (u8)
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
+
+  const encoder = device.createCommandEncoder({ label: 'Read texture pixels' });
+  encoder.copyTextureToBuffer(
+    { texture },
+    { buffer: renderResult, bytesPerRow: width * 4 },
+    { width: texture.width, height: texture.height }, // height: 1, depthOrArrayLayers: 1
+  );
+
+
+  device.queue.submit([encoder.finish()]);
+
+  await renderResult.mapAsync(GPUMapMode.READ);
+  const pixels = new Uint8Array(renderResult.getMappedRange());
+
+  // Do a second copy so the original buffer can be unmapped.
+  const imgData = {
+    pixels: new Uint8Array(pixels),
+    x: 0,
+    y: 0,
+    width,
+    height,
+  };
+  renderResult.unmap();
+  renderResult.destroy();
+  return imgData;
+}
+imgData = await readTexturePixels(renderObstacles.device, renderObstacles.renderTexture)
+
+tex = PIXI.Texture.fromBuffer(imgData.pixels, imgData.width, imgData.height)
+sprite = new PIXI.Sprite(tex);
+canvas.app.stage.addChild(sprite);
+canvas.app.stage.removeChild(sprite);
+
+acc = Array(12).fill(0);
+max = Array(4).fill(0);
+min = Array(4).fill(0)
+imgData.pixels.forEach((px, idx) => {
+  acc[idx % 4] += px;
+  acc[idx % 4 + 4] += Boolean(px);
+  acc[idx % 4 + 8] += !Boolean(px);
+  max[idx % 4] = Math.max(px, max[idx % 4])
+  min[idx % 4] = Math.min(px, min[idx % 4])
+});
+console.table([
+  { label: "sum", r: acc[0], g: acc[1], b: acc[2], a: acc[3] },
+  { label: "count", r: acc[4], g: acc[5], b: acc[6], a: acc[7] },
+  { label: "zeroes", r: acc[8], g: acc[9], b: acc[10], a: acc[11] },
+  { label: "min", r: min[0], g: min[1], b: min[2], a: min[3] },
+  { label: "max", r: max[0], g: max[1], b: max[2], a: max[3] }
+])
+
+function sumRedPixels(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) sumTarget += Boolean(targetCache.pixels[i]);
+  return sumTarget;
+}
+function sumRedObstaclesPixels(targetCache) {
+  const pixels = targetCache.pixels;
+  const nPixels = pixels.length;
+  let sumTarget = 0;
+  for ( let i = 0; i < nPixels; i += 4 ) {
+    const px = pixels[i];
+    if ( px < 128 ) continue;
+    sumTarget += Boolean(targetCache.pixels[i]);
+  }
+  return sumTarget;
+}
+sumRedPixels(imgData)
+sumRedObstaclesPixels(imgData)
 
 // Test matrix outputs
 let [[edgeId, edge]] = renderWalls.edges;
