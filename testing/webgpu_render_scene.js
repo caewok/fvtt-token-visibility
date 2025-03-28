@@ -93,6 +93,7 @@ let {
   RenderTiles,
   RenderObstacles,
   WebGPUSumRedPixels,
+  PercentVisibleCalculator,
 } = api.webgpu
 
 
@@ -141,7 +142,7 @@ await renderWalls.initialize();
 renderWalls.setRenderTextureToCanvas(popout.canvas)
 await renderWalls.prerender();
 await renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
-renderWalls._registerPlaceableHooks();
+renderWalls.registerPlaceableHooks();
 
 
 renderTokens = new RenderTokens();
@@ -152,7 +153,7 @@ await renderTokens.initialize();
 renderTokens.setRenderTextureToCanvas(popout.canvas)
 await renderTokens.prerender();
 await renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
-renderTokens._registerPlaceableHooks();
+renderTokens.registerPlaceableHooks();
 
 renderTokens.setRenderTextureToInternalTexture()
 imgData = await renderTokens.readTexturePixels()
@@ -177,7 +178,7 @@ renderObstacles.setRenderTextureToCanvas(popout.canvas)
 await renderObstacles.prerender();
 await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderObstacles._registerPlaceableHooks();
+renderObstacles.registerPlaceableHooks();
 
 
 // Render to texture
@@ -189,6 +190,9 @@ await sumPixels.initialize()
 res = await sumPixels.compute(renderObstacles.renderTexture)
 
 
+visCalc = new PercentVisibleCalculator();
+await visCalc.initialize({ senseType: "sight" })
+await visCalc.percentVisible(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 // Hooks to change rendering on move
 renderType = "Walls"

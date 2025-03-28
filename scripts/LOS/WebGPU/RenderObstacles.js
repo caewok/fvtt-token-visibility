@@ -115,11 +115,17 @@ class RenderAbstract {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
   }
 
-  async render(viewerLocation, target, { viewer, targetLocation } = {}) {
+  async render(viewerLocation, target, { viewer, targetLocation, targetOnly = false } = {}) {
+    const opts = { viewer, target, targetOnly };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
-    const visionTriangle = VisionTriangle.build(viewerLocation, target);
-    this.drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle))
+    const visionTriangle = targetOnly ? null : VisionTriangle.build(viewerLocation, target);
+
+    const drawableObjects = targetOnly
+      ? this.drawableObjects.filter(drawableObject =>
+        drawableObject instanceof DrawableConstrainedTokens || drawableObject instanceof DrawableTokenInstances)
+      : this.drawableObjects;
+    drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -130,11 +136,10 @@ class RenderAbstract {
     }
 
     // Render each drawable object.
-    const opts = { viewer, target };
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
-    for ( const drawableObj of this.drawableObjects ) {
-      drawableObj.initializeRenderPass(renderPass, opts);
+    for ( const drawableObj of drawableObjects ) {
+      drawableObj.initializeRenderPass(renderPass);
       drawableObj.render(renderPass, opts);
     }
     renderPass.end();
@@ -156,9 +161,9 @@ class RenderAbstract {
     this.camera.updateDeviceBuffer();
   }
 
-  _registerPlaceableHooks() { this.drawableObjects.forEach(obj => obj._registerPlaceableHooks()); }
+  registerPlaceableHooks() { this.drawableObjects.forEach(obj => obj.registerPlaceableHooks()); }
 
-  _deregisterPlaceableHooks() { this.drawableObjects.forEach(obj => obj._deregisterPlaceableHooks()); }
+  deregisterPlaceableHooks() { this.drawableObjects.forEach(obj => obj.deregisterPlaceableHooks()); }
 
   // ----- NOTE: Rendering ----- //
 

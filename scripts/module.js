@@ -80,6 +80,7 @@ import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
 import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
+import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -211,6 +212,7 @@ Hooks.once("init", function() {
       RenderWalls,
       RenderObstacles,
       WebGPUSumRedPixels,
+      PercentVisibleCalculator,
     },
 
     glmatrix: {

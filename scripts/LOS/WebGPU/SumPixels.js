@@ -182,7 +182,7 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     this.buffers.counterOutput = this.device.createBuffer({
       label: `${this.constructor.name} counterOutput`,
       size: 4, // 4 bytes per (u32)
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
 
     // Buffer to get back the results
@@ -220,6 +220,8 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     });
   }
 
+  #counterReset = new Uint32Array(1);
+
   /**
    * Run the compute pass(es).
    */
@@ -227,7 +229,7 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     this._defineTextureBindGroup(texture);
 
     // Reset the counter.
-    this.device.queue.writeBuffer(this.buffers.counterOutput, 0, [0]);
+    this.device.queue.writeBuffer(this.buffers.counterOutput, 0, this.#counterReset);
 
     const numWorkgroups = { x: texture.width, y: texture.height, z: 1 };
     numWorkgroups.x = Math.ceil(numWorkgroups.x / this.workgroupSize.x);

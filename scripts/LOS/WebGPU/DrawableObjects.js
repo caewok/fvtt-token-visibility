@@ -349,9 +349,9 @@ class DrawableObjectsAbstract {
 
   _hooks = [];
 
-  _registerPlaceableHooks() {}
+  registerPlaceableHooks() {}
 
-  _deregisterPlaceableHooks() { this._hooks.forEach(hook => Hooks.off(hook.name, hook.id)); }
+  deregisterPlaceableHooks() { this._hooks.forEach(hook => Hooks.off(hook.name, hook.id)); }
 
   /**
    * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
@@ -466,7 +466,7 @@ class DrawableObjectsAbstract {
   }
 
   destroy() {
-    this._deregisterPlaceableHooks();
+    this.deregisterPlaceableHooks();
     this.buffers.forEach(buffer => {
       if ( Array.isArray(buffer) ) buffer.forEach(elem => elem.destroy());
       else buffer.destroy();
@@ -668,9 +668,9 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
 //     });
 //   }
 
-  _filterObjects(visionTriangle) {
+  _filterObjects(visionTriangle, opts) {
+    super._filterObjects(visionTriangle, opts);
     this._updateCulledValues();
-    super._filterObjects(visionTriangle);
   }
 
 
@@ -727,7 +727,7 @@ export class DrawableObjectRBCulledInstancesAbstract extends DrawableObjectCulle
 
     // Call the exact same function as the non-bundled draw
     // Call the parent so executeBundles is not called.
-    this.initializeRenderPass(encoder, opts);
+    this.initializeRenderPass(encoder);
     super.render(encoder, opts);
     this.renderBundle = encoder.finish();
     this._postRenderPass(opts)
@@ -825,7 +825,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     super._filterObjects(visionTriangle);
   }
 
-  _registerPlaceableHooks() {
+  registerPlaceableHooks() {
     this._hooks.push({ name: "createWall", id: Hooks.on("createWall", this._onPlaceableCreation.bind(this)) });
     this._hooks.push({ name: "updateWall", id: Hooks.on("updateWall", this._onPlaceableUpdate.bind(this)) });
     this._hooks.push({ name: "deleteWall", id: Hooks.on("deleteWall", this._onPlaceableDeletion.bind(this)) });
@@ -917,27 +917,28 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
-  _filterObjects(visionTriangle) {
+  _filterObjects(visionTriangle, opts = {}) {
+    const { viewer, target, targetOnly } = opts;
+    if ( targetOnly && !target ) console.error("DrawableTokenInstances|_filterObjects no target specified.");
+
     // Limit tokens
     const drawable = this.drawables.get("token");
     drawable.instanceSet.clear();
 
-    // Put each edge in one of four drawable sets if viewable; skip otherwise.
-    for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
-      if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
-    }
-    super._filterObjects(visionTriangle);
-  }
+    if ( !targetOnly ) {
+      // Add in all viewable tokens.
+      for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
+        if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
+      }
 
-  initializeRenderPass(renderPass, opts = {}) {
-    // Remove viewer and target
-    const { viewer, target } = opts;
-    const drawable = this.drawables.get("token");
-    if ( viewer ) {
-      const viewerIdx = this.placeableHandler.instanceIndexFromId.get(viewer.id);
-      drawable.instanceSet.delete(viewerIdx);
+      // Remove the viewer.
+      if ( viewer ) {
+        const viewerIdx = this.placeableHandler.instanceIndexFromId.get(viewer.id);
+        drawable.instanceSet.delete(viewerIdx);
+      }
     }
 
+    // Add target as a distinct drawable.
     const targetDrawable = this.drawables.get("target");
     targetDrawable.instanceSet.clear();
     if ( target ) {
@@ -947,14 +948,10 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       // If the target is not constrained, set it here.
       if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
     }
-
-    // Update the culled values for indirect drawing.
-    this._updateCulledValues();
-
-    super.initializeRenderPass(renderPass, opts)
+    super._filterObjects(visionTriangle);
   }
 
-  _registerPlaceableHooks() {
+  registerPlaceableHooks() {
 //     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
 //     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
 //     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
@@ -1104,7 +1101,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
   }
 
-  _registerPlaceableHooks() {
+  registerPlaceableHooks() {
     this._hooks.push({ name: "createTile", id: Hooks.on("createTile", this._onPlaceableCreation.bind(this)) });
     this._hooks.push({ name: "updateTile", id: Hooks.on("updateTile", this._onPlaceableUpdate.bind(this)) });
     this._hooks.push({ name: "deleteTile", id: Hooks.on("deleteTile", this._onPlaceableDeletion.bind(this)) });
@@ -1155,20 +1152,25 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
-  _filterObjects(visionTriangle) {
-    for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      const drawable = this.drawables.get(token.id);
-      if ( !drawable ) continue;
-      drawable.numInstances = Number(visionTriangle.containsToken(token));
-    }
-    super._filterObjects(visionTriangle);
-  }
+  _filterObjects(visionTriangle, opts = {}) {
+    const { viewer, target, targetOnly } = opts;
 
-  initializeRenderPass(renderPass, opts = {}) {
-    const { viewer, target } = opts;
+    if ( targetOnly ) {
+      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+        const drawable = this.drawables.get(token.id);
+        if ( !drawable ) continue;
+        drawable.numInstances = Boolean(token === target);
+      }
+    } else {
+      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+        const drawable = this.drawables.get(token.id);
+        if ( !drawable ) continue;
+        drawable.numInstances = Number(visionTriangle.containsToken(token));
+      }
+    }
 
     // Remove viewer.
-    if ( viewer && this.drawables.has(viewer.id) ) {
+    if ( !targetOnly && viewer && this.drawables.has(viewer.id) ) {
       const drawable = this.drawables.get(viewer.id);
       drawable.numInstances = 0;
     }
@@ -1178,7 +1180,8 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
       const drawable = this.drawables.get(target.id);
       drawable.materialBG = this.materials.bindGroups.get("target");
     }
-    super.initializeRenderPass(renderPass, opts)
+
+    super._filterObjects(visionTriangle);
   }
 
   /**
@@ -1208,7 +1211,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
   }
 
 
-  _registerPlaceableHooks() {
+  registerPlaceableHooks() {
 //     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
 //     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
 //     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
