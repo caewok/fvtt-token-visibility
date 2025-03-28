@@ -15,10 +15,9 @@ export class Camera {
    * @typedef {object} CameraStruct
    * @param {mat4x4f} perspectiveM          The perspective matrix
    * @param {mat4x4f} lookAtM               Matrix to shift world around a camera location
-   * @param {mat4x4f} offsetM               Offset required to switch from Foundry coordinates
    */
 
-  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * (16 + 16 + 16); // Total size of CameraStruct
+  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * (16 + 16); // Total size of CameraStruct
 
   /** @type {object} */
   static CAMERA_LAYOUT = {
@@ -50,7 +49,6 @@ export class Camera {
   #M = {
     perspective: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 0, 16), 4, 4),
     lookAt: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
-    offset: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
   };
 
   /** @type {MatrixFloat32<4,4>} */
@@ -63,7 +61,6 @@ export class Camera {
   #dirty = {
     perspective: true,
     lookAt: true,
-    offset: true,
   };
 
   constructor(device, { cameraPosition, targetPosition } = {}) {
@@ -174,28 +171,11 @@ export class Camera {
     return this.#M.lookAt;
   }
 
-  /** @type {Float32Array|mat4} */
-  get offsetMatrix() {
-    if ( this.#dirty.offset ) {
-      CONFIG.GeometryLib.MatrixFloat32.scale(1, 1, 1, this.#M.offset);
-      this.#dirty.offset = false;
-    }
-    return this.#M.offset;
-  }
-
-  set offset(value) {
-    value.x ??= 1;
-    value.y ??= 1;
-    value.z ??= 1;
-    CONFIG.GeometryLib.MatrixFloat32.scale(value.x, value.y, value.z, this.#M.offset);
-  }
-
   /** @type {ArrayBuffer} */
   get arrayBuffer() {
     // Ensure no updates required.
     const tmp0 = this.perspectiveMatrix;      /* eslint-disable-line no-unused-vars */
     const tmp1 = this.lookAtMatrix;           /* eslint-disable-line no-unused-vars */
-    const tmp2 = this.offsetMatrix;           /* eslint-disable-line no-unused-vars */
     return this.#arrayBuffer;
   }
 

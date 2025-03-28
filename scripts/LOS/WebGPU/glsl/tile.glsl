@@ -16,7 +16,6 @@ struct VertexOut {
 struct CameraUniforms {
   perspectiveM: mat4x4f,
   lookAtM: mat4x4f,
-  offsetM: mat4x4f,
 }
 @group(0) @binding(0) var<uniform> camera: CameraUniforms;
 
@@ -57,7 +56,6 @@ struct Instance {
 
   // Transform normals to view space.
   // Need to avoid scaling.
-  // TODO: Also use offsetM?
   out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0)).xyz);
 
   // Pass through the uvs.

@@ -16,7 +16,6 @@ struct VertexOut {
 struct CameraUniforms {
   perspectiveM: mat4x4f,
   lookAtM: mat4x4f,
-  offsetM: mat4x4f,
 }
 @group(0) @binding(0) var<uniform> camera: CameraUniforms;
 
@@ -30,11 +29,10 @@ struct Material {
   var out: VertexOut;
 
   let cameraPos = camera.lookAtM * vec4f(in.pos, 1.0);
-  out.pos = camera.offsetM * camera.perspectiveM * cameraPos;
+  out.pos = camera.perspectiveM * cameraPos;
 
   // Transform normals to view space.
   // Need to avoid scaling.
-  // TODO: Also use offsetM?
   out.norm = normalize((camera.lookAtM * vec4f(in.norm, 0)).xyz);
 
   // Pass through the uvs.

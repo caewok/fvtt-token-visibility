@@ -16,7 +16,6 @@ struct VertexOut {
 struct CameraUniforms {
   perspectiveM: mat4x4f,
   lookAtM: mat4x4f,
-  offsetM: mat4x4f,
 }
 @group(0) @binding(0) var<uniform> camera: CameraUniforms;
 
@@ -62,13 +61,20 @@ struct CulledInstances {
 
   // Transform normals to view space.
   // Need to avoid scaling.
-  // TODO: Also use offsetM?
-  // out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0)).xyz);
+  out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0)).xyz);
 
   // See https://stackoverflow.com/questions/17401922/transforming-normal-to-view-space-in-vertex-shader
   // Need to pass the transpose(inverse(model)) matrix.
   // Alternatively, pass a model matrix without the scaling.
   // Or could construct the model matrix from components here, although that is expensive for many vertices (instances).
+  // https://stackoverflow.com/questions/29008847/normal-matrix-for-non-uniform-scaling/29015501#29015501
+  /*
+  var matN = mat4x4f(vec4f(model[0].xyz, 0.0), vec4f(model[1].xyz, 0.0), vec4f(model[2].xyz, 0.0), vec4f(0.0, 0.0, 0.0, 1.0));
+  matN[0] /= dot(matN[0], matN[0]);
+  matN[1] /= dot(matN[1], matN[1]);
+  matN[2] /= dot(matN[2], matN[2]);
+  out.norm = normalize((camera.lookAtM * matN * vec4f(in.norm, 0)).xyz);
+  */
 
   // Pass through the uvs.
   out.uv0 = in.uv0;
@@ -83,7 +89,7 @@ struct CulledInstances {
 // Some hardcoded lighting
 const lightDir = normalize(vec3f(0.25, 0.5, 1.0));
 const lightColor = vec3f(1, 1, 1);
-const ambientColor = vec3f(0.03, 0.03, 0.03);
+const ambientColor = vec3f(0.1, 0.1, 0.1);
 const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
 
 @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
@@ -105,7 +111,7 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
   // return vec4f(in.uv0.x, in.uv0.y, 1.0, 1.0);
 
   let baseColor = material.color;
-  return baseColor;
+  // return baseColor;
 
   // Extremely simple directional lighting model to give the model some shape.
   let N = normalize(in.norm);
