@@ -15,9 +15,6 @@ export class GeometryHorizontalPlaneDesc extends GeometryDesc {
   /** @type {string} */
   label = "Horizontal Plane";
 
-  /** @type {number} */
-  numVertices = 8;
-
   /**
    * Define the vertices and optional indices for this geometry.
    * @param {object} [opts]
@@ -29,8 +26,8 @@ export class GeometryHorizontalPlaneDesc extends GeometryDesc {
    * @param {number} [opts.z]           Location on z-axis
    * @override
    */
-  _defineVerticesAndIndices({ x, y, z, w, d } = {}) {
-    const arr = [
+  static defineVertices({ x, y, z, w, d } = {}) {
+    return [
       // Position     Normal     UV
       // CCW if tile goes from x-w to x+w.
       // Normal vectors are times -1 b/c the triangles are CCW.
@@ -43,6 +40,9 @@ export class GeometryHorizontalPlaneDesc extends GeometryDesc {
       x+w, y+d, z,  0, 0, 1,   1, 1,  // c, f
       x+w, y-d, z,  0, 0, 1,   1, 0,  // d
 
+      x-w, y-d, z,  0, 0, 1,   0, 0,  // a, e
+      x+w, y+d, z,  0, 0, 1,   1, 1,  // c, f
+
       // Bottom
       // We want the texture always facing up, not down as one might typically expect.
       // Thus the texture keeps the same coordinates.
@@ -50,12 +50,15 @@ export class GeometryHorizontalPlaneDesc extends GeometryDesc {
       x+w, y+d, z,  0, 0, -1,  1, 1,  // c, f
       x-w, y+d, z,  0, 0, -1,  0, 1,  // b
       x-w, y-d, z,  0, 0, -1,  0, 0,  // a, e
+
+      x+w, y+d, z,  0, 0, -1,  1, 1,  // c, f
+      x-w, y-d, z,  0, 0, -1,  0, 0,  // a, e
       x+w, y-d, z,  0, 0, -1,  1, 0,  // d
     ];
-    const indices = [
-      0, 1, 2, 3, 0, 2, // Top (0–3)
-      4, 5, 6, 4, 6, 7, // Bottom (4–7)
-    ];
+//     const indices = [
+//       0, 1, 2, 3, 0, 2, // Top (0–3)
+//       4, 5, 6, 4, 6, 7, // Bottom (4–7)
+//     ];
 
     /*
     Using Foundry world coordinates, where z is up, origin 0,0 is top right, y increases as it moves down.
@@ -83,14 +86,6 @@ export class GeometryHorizontalPlaneDesc extends GeometryDesc {
 
     */
 
-
-    // For formats, see https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat.
-    // Each entry in verticesData corresponds to an entry in buffersLayout.
-    // See https://webgpufundamentals.org/webgpu/lessons/webgpu-vertex-buffers.html
-    // TODO: Use vertex buffer
-    // TODO: Better way to define shaderLocation so it can be passed to the shader code?
-    this.vertices = new Float32Array(arr);
-    this.indices = new Uint16Array(indices);
   }
 }
 

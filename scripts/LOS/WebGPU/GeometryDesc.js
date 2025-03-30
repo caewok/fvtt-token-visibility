@@ -46,6 +46,7 @@ export class GeometryDesc {
 
   static indexFormat = "uint16";
 
+
   /**
    * @param {object} [opts]
    * @param {string} [opts.label]       Label for this structure
@@ -55,6 +56,8 @@ export class GeometryDesc {
    * @param {number} [opts.x]           Location on x-axis
    * @param {number} [opts.y]           Location on y-axis
    * @param {number} [opts.z]           Location on z-axis
+   * @param {boolean} [opts.skipUVs]          True omits UVs from the vertex data
+   * @param {boolean} [opts.skipNormals]      True omits normals and UVS from the vertex data
    */
   constructor(opts = {}) {
     if ( opts.label ) this.label = opts.label;
@@ -66,7 +69,7 @@ export class GeometryDesc {
     const y = opts.y ?? 0;
     const z = opts.z ?? 0;
 
-    this._defineVerticesAndIndices({ ...opts, x, y, z, w, d, h,  }); // Override opts with x,y,z, etc.
+    this._defineVerticesAndIndices({ ...opts, x, y, z, w, d, h }); // Override opts with x,y,z, etc.
   }
 
   /**
@@ -80,7 +83,18 @@ export class GeometryDesc {
    * @param {number} [opts.z]           Location on z-axis
    * @override
    */
-  _defineVerticesAndIndices(_opts = {}) {}
+  _defineVerticesAndIndices(opts) {
+    const arr = this.constructor.defineVertices(opts);
+    const res = trimVertexData(arr, { addNormals: opts.addNormals, addUVs: opts.addUVs });
+    this.vertices = res.vertices;
+    this.indices = res.indices;
+    this.numVertices = res.numVertices;
+  }
+
+  /**
+   * Return the full set of vertices, normals, and uvs for this object.
+   */
+  static defineVertices(_opts) { return { vertices: new Float32Array(), indices: new Uint16Array() }}
 
   /**
    * Set the vertex buffer to render this geometry.
@@ -203,7 +217,62 @@ export class GeometryDesc {
 
   static buffersLayout = [
     {
-      arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 2 normal, 2 uv.
+      arrayStride: Float32Array.BYTES_PER_ELEMENT * 3, // 3 position, 3 normal, 2 uv.
+      stepMode: "vertex",
+      attributes: [
+        // Position
+        {
+          format: "float32x3",
+          offset: 0,
+          shaderLocation: 0,
+        }
+      ]
+    }
+  ];
+
+  static buffersLayoutNormals = [
+     {
+      arrayStride: Float32Array.BYTES_PER_ELEMENT * 6, // 3 position, 3 normal, 2 uv.
+      stepMode: "vertex",
+      attributes: [
+        // Position
+        {
+          format: "float32x3",
+          offset: 0,
+          shaderLocation: 0,
+        },
+        // Normal
+        {
+          format: "float32x3",
+          offset: Float32Array.BYTES_PER_ELEMENT * 3,
+          shaderLocation: 1,
+        }
+      ]
+    }
+  ];
+
+  static buffersLayoutUVs = [{
+    arrayStride: Float32Array.BYTES_PER_ELEMENT * 5, // 3 position, 3 normal, 2 uv.
+      stepMode: "vertex",
+      attributes: [
+        // Position
+        {
+          format: "float32x3",
+          offset: 0,
+          shaderLocation: 0,
+        },
+        // UV0
+        {
+          format: "float32x2",
+          offset: Float32Array.BYTES_PER_ELEMENT * 3,
+          shaderLocation: 1,
+        }
+      ]
+  }];
+
+  static buffersLayoutNormalsUVs = [
+    {
+      arrayStride: Float32Array.BYTES_PER_ELEMENT * 8, // 3 position, 3 normal, 2 uv.
       stepMode: "vertex",
       attributes: [
         // Position
@@ -227,4 +296,86 @@ export class GeometryDesc {
       ]
     }
   ];
+}
+
+
+/**
+ * Trim an array of vertices, removing duplicates and defining indices to match.
+ * @param {number[]} arr      1D array of vertices
+ * @param {number} stride     How many elements between vertices?
+ * @param {number} length     How many elements make up a vertex? Use to skip unneeded vertex information
+ * @returns {object}
+ * - @prop {Float32Array} vertices
+ * - @prop {Uint16Array} indices
+ */
+function trimVertexData(arr, { addNormals = false, addUVs = false } = {}) {
+  const stride = 8; // Arrangement is x, y, z, n.x, n.y, n.z, uv.v, uv.w
+  let pullFn;
+  let length;
+  if ( addNormals && addUVs ) {
+    pullFn = (tmpKey, vertexNum) => {
+      pullCoords(tmpKey, arr, vertexNum);
+      pullNormals(tmpKey, arr, vertexNum);
+      pullUVs(tmpKey, arr, vertexNum);
+    }
+    length = 8;
+  } else if ( addNormals ) {
+    pullFn = (tmpKey, vertexNum) => {
+      pullCoords(tmpKey, arr, vertexNum);
+      pullNormals(tmpKey, arr, vertexNum);
+    }
+    length = 6;
+  } else if ( addUVs ) {
+    pullFn = (tmpKey, vertexNum) => {
+      pullCoords(tmpKey, arr, vertexNum);
+      pullUVs(tmpKey, arr, vertexNum, 3); // Skipping normals, so offset at 3.
+    }
+    length = 5
+  } else {
+    pullFn = (tmpKey, vertexNum) => pullCoords(tmpKey, arr, vertexNum);
+    length = 3;
+  }
+
+  const vertices = [];
+  const indices = new Uint16Array(arr.length / stride);
+  const uniqueV = new Map();
+  const tmpKey = new Array(length)
+  for ( let i = 0, n = arr.length, v = 0; i < n; i += stride, v += 1 ) {
+    pullFn(tmpKey, v);
+    const key = tmpKey.join("_");
+    if ( !uniqueV.has(key) ) {
+      uniqueV.set(key, uniqueV.size);
+      vertices.push(...tmpKey);
+    }
+    indices[v] = uniqueV.get(key);
+  }
+  return {
+    indices,
+    vertices: new Float32Array(vertices),
+    numVertices: uniqueV.size,
+  };
+}
+
+/**
+ * Pull the x,y,z coordinates for a given vertex and place in array.
+ * Arrangement is x, y, z, n.x, n.y, n.z, uv.v, uv.w.
+ */
+function pullCoords(tmpKey, arr, vertexNum, offset = 0, stride = 8) {
+  for ( let j = 0; j < 3; j += 1 ) tmpKey[j + offset] = arr[(vertexNum * stride) + j];
+}
+
+/**
+ * Pull the 3 normals for a given vertex and place in array.
+ * Arrangement is x, y, z, n.x, n.y, n.z, uv.v, uv.w.
+ */
+function pullNormals(tmpKey, arr, vertexNum, offset = 3, stride = 8) {
+  for ( let j = 0; j < 3; j += 1 ) tmpKey[j + offset] = arr[(vertexNum * stride) + 3 + j];
+}
+
+/**
+ * Pull the 2 uv values for a given vertex and place in array.
+ * Arrangement is x, y, z, n.x, n.y, n.z, uv.v, uv.w.
+ */
+function pullUVs(tmpKey, arr, vertexNum, offset = 6, stride = 8) {
+  for ( let j = 0; j < 2; j += 1 ) tmpKey[j + offset] = arr[(vertexNum * stride) + 6 + j];
 }

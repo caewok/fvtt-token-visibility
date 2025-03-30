@@ -94,6 +94,8 @@ let {
   RenderObstacles,
   WebGPUSumRedPixels,
   PercentVisibleCalculator,
+  AsyncQueue,
+  // wgsl
 } = api.webgpu
 
 
@@ -115,7 +117,7 @@ vp = losCalc.viewpoints[0]
 
 device = await WebGPUDevice.getDevice()
 
-popout = new Area3dPopoutCanvas({ width: 400, height: 400, resizable: true })
+popout = new Area3dPopoutCanvas({ width: 400, height: 475, resizable: false })
 await popout._render(true);
 
 
@@ -138,7 +140,7 @@ await renderWalls.getDevice(); // So renderSize can be set
 // renderWalls.sampleCount = 4
 renderWalls.sampleCount = 1
 renderWalls.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
-await renderWalls.initialize();
+await renderWalls.initialize({ debugViewNormals: true });
 renderWalls.setRenderTextureToCanvas(popout.canvas)
 await renderWalls.prerender();
 await renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
@@ -149,7 +151,7 @@ renderTokens = new RenderTokens();
 await renderTokens.getDevice();
 renderTokens.sampleCount = 1
 renderTokens.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
-await renderTokens.initialize();
+await renderTokens.initialize({ debugViewNormals: true });
 renderTokens.setRenderTextureToCanvas(popout.canvas)
 await renderTokens.prerender();
 await renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
@@ -164,7 +166,7 @@ renderTiles = new RenderTiles();
 await renderTiles.getDevice();
 renderTiles.sampleCount = 1
 renderTiles.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
-await renderTiles.initialize();
+await renderTiles.initialize({ debugViewNormals: true });
 renderTiles.setRenderTextureToCanvas(popout.canvas)
 await renderTiles.prerender();
 await renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
@@ -173,12 +175,56 @@ renderObstacles = new RenderObstacles();
 await renderObstacles.getDevice();
 renderObstacles.sampleCount = 1
 renderObstacles.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
-await renderObstacles.initialize();
+await renderObstacles.initialize({ debugViewNormals: true });
 renderObstacles.setRenderTextureToCanvas(popout.canvas)
 await renderObstacles.prerender();
 await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderObstacles.registerPlaceableHooks();
+
+
+// Render to WebGL2 texture
+device = renderObstacles.device
+let width = 256
+let height = 256
+gpuCanvas = new OffscreenCanvas(1, 1);
+gpuCtx = gpuCanvas.getContext('webgpu');
+glCanvas = new OffscreenCanvas(1, 1);
+gl = glCanvas.getContext('webgl2');
+texture = gl.createTexture();
+framebuffer = gl.createFramebuffer();
+
+gl.bindTexture(gl.TEXTURE_2D, texture);
+gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+
+// Resize the WebGPU canvas
+gpuCanvas.width = width;
+gpuCanvas.height = height;
+gpuCtx.configure({
+    device,
+    format: 'bgra8unorm',
+  });
+
+renderObstacles.setRenderTextureToCanvas(gpuCanvas)
+await renderObstacles.prerender();
+await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+
+readbackSize = width * height * 4;
+bufferData = new Uint8Array(readbackSize);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, gpuCanvas);
+gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
+imgData = { pixels: bufferData, x: 0, y: 0, width, height }
+
+
+gl = canvas.app.renderer.gl
+let { width, height } = popout.canvas
+readbackSize = width * height * 4;
+bufferData = new Uint8Array(readbackSize);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, popout.canvas);
+gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
 
 
 // Render to texture
@@ -193,6 +239,95 @@ res = await sumPixels.compute(renderObstacles.renderTexture)
 visCalc = new PercentVisibleCalculator();
 await visCalc.initialize({ senseType: "sight" })
 await visCalc.percentVisible(Point3d.fromTokenCenter(viewer), target, { viewer })
+visibleTextElem = popout.element[0].getElementsByTagName("p")[0]
+
+
+
+// Full test with popout debug
+// renderObstacles = new RenderObstacles();
+// await renderObstacles.getDevice();
+// renderObstacles.sampleCount = 1
+// renderObstacles.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
+// renderObstacles.setRenderTextureToInternalTexture()
+// await renderObstacles.initialize({ debugViewNormals: false });
+// await renderObstacles.prerender();
+
+visCalc = new PercentVisibleCalculator();
+await visCalc.initialize({ senseType: "sight" })
+visibleTextElem = popout.element[0].getElementsByTagName("p")[0]
+
+renderObstaclesDebug = new RenderObstacles();
+await renderObstaclesDebug.getDevice();
+renderObstaclesDebug.sampleCount = 1
+renderObstaclesDebug.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
+await renderObstaclesDebug.initialize({ debugViewNormals: true });
+renderObstaclesDebug.setRenderTextureToCanvas(popout.canvas)
+await renderObstaclesDebug.prerender();
+
+renderQueue = new AsyncQueue()
+
+queueObjectFunction = function(viewer, target) { return rerender; }
+
+async function rerenderAsync() {
+  // await renderObj.prerender();
+  console.debug(`Rerendering ${viewer.name} (${Point3d.fromTokenCenter(viewer)} -> ${target.name} (${Point3d.fromTokenCenter(target)}))`);
+  await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer });
+  const percentVis = await visCalc.percentVisible(Point3d.fromTokenCenter(viewer), target, { viewer });
+
+  await renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer });
+  visibleTextElem.innerHTML = `Percent visible:${Math.round(percentVis * 100)}%`;
+  console.debug(`${viewer.name} --> ${target.name} ${Math.round(percentVis * 100)}%`);
+}
+
+function rerender() {
+  console.debug(`Rerendering ${viewer.name} (${Point3d.fromTokenCenter(viewer)} -> ${target.name} (${Point3d.fromTokenCenter(target)}))`);
+  // renderObstacles.renderSync(Point3d.fromTokenCenter(viewer), target, { viewer });
+  const percentVis = visCalc.percentVisibleSync(Point3d.fromTokenCenter(viewer), target, { viewer });
+
+  renderObstaclesDebug.renderSync(Point3d.fromTokenCenter(viewer), target, { viewer });
+  visibleTextElem.innerHTML = `Percent visible:${Math.round(percentVis * 100)}%`;
+  console.debug(`${viewer.name} --> ${target.name} ${Math.round(percentVis * 100)}%`);
+}
+
+Hooks.on("controlToken", (token, controlled) => {
+  if ( controlled ) viewer = token;
+  // rerender();
+  console.debug(`Control changed to ${token.name} (${controlled})`);
+//   const queueObject = queueObjectFunction(viewer, token);
+//   renderQueue.enqueue(queueObject);
+  rerender();
+});
+
+Hooks.on("targetToken", (user, targetToken, targeted) => {
+  if ( !targeted || game.user !== user ) return;
+  target = targetToken;
+  // rerender();
+  console.debug(`Target changed to ${target.name}`);
+  rerender();
+
+//   const queueObject = queueObjectFunction(viewer, token);
+//   renderQueue.enqueue(queueObject);
+})
+
+tokenPositionCache = new WeakMap();
+Hooks.on("refreshToken", (token, flags) => {
+  if ( token !== viewer && token !== target ) return;
+  if ( !(flags.refreshPosition
+      || flags.refreshElevation
+      || flags.refreshSize ) ) return;
+  // rerender();
+
+  const currPosition = Point3d.fromTokenCenter(token)
+  const lastPosition = tokenPositionCache.get(_token);
+  if ( !flags.refreshSize && lastPosition && currPosition.equals(lastPosition) ) return;
+  tokenPositionCache.set(_token, currPosition);
+
+  console.debug(`Refreshing ${token.name} at position ${currPosition},`, {...flags});
+  rerender();
+//   const queueObject = queueObjectFunction(viewer, token);
+//   renderQueue.enqueue(queueObject);
+})
+
 
 // Hooks to change rendering on move
 renderType = "Walls"
@@ -203,18 +338,20 @@ renderType = "Obstacles"
 async function rerenderObj(renderObj, viewer, target) {
   // await renderObj.prerender();
   await renderObj.render(Point3d.fromTokenCenter(viewer), target, { viewer });
+  //const percentVis = await visCalc.percentVisible(Point3d.fromTokenCenter(viewer), target, { viewer })
+  //visibleTextElem.innerHTML = `Percent visible: ${percentVis.toFixed(2) * 100}%`;
 }
 
-rerender = () => {
-  let renderObj;
-  switch ( renderType ) {
-    case "Walls": renderObj = renderWalls; break;
-    case "Tokens": renderObj = renderTokens; break;
-    case "Tiles": renderObj = renderTiles; break;
-    case "Obstacles": renderObj = renderObstacles; break;
-  }
-  rerenderObj(renderObj, viewer, target);
-}
+// rerender = () => {
+//   let renderObj;
+//   switch ( renderType ) {
+//     case "Walls": renderObj = renderWalls; break;
+//     case "Tokens": renderObj = renderTokens; break;
+//     case "Tiles": renderObj = renderTiles; break;
+//     case "Obstacles": renderObj = renderObstacles; break;
+//   }
+//   rerenderObj(renderObj, viewer, target);
+// }
 
 Hooks.on("controlToken", (token, controlled) => {
   if ( controlled ) viewer = token;
@@ -234,6 +371,38 @@ Hooks.on("refreshToken", (token, flags) => {
       || flags.refreshSize ) ) return;
   rerender();
 })
+
+/**
+ * Handle multiple sheet refreshes by using an async queue.
+ * If the actor sheet is rendering, wait for it to finish.
+ */
+const sleep = delay => new Promise(resolve => setTimeout(resolve, delay)); // eslint-disable-line no-promise-executor-return
+
+const renderQueue = new AsyncQueue();
+
+const queueObjectFn = function(ms, actor) {
+  return async function rerenderActorSheet() {
+    log(`AbstractUniqueEffect#rerenderActorSheet|Testing sheet for ${actor.name}`);
+
+    // Give up after too many iterations.
+    const MAX_ITER = 10;
+    let iter = 0;
+    while ( iter < MAX_ITER && actor.sheet?._state === Application.RENDER_STATES.RENDERING ) {
+      iter += 1;
+      await sleep(ms);
+    }
+    if ( actor.sheet?.rendered ) {
+      log(`AbstractUniqueEffect#rerenderActorSheet|Refreshing sheet for ${actor.name}`);
+      await actor.sheet.render(true);
+    }
+  };
+};
+
+function queueSheetRefresh(actor) {
+  log(`AbstractUniqueEffect#rerenderActorSheet|Queuing sheet refresh for ${actor.name}`);
+  const queueObject = queueObjectFn(100, actor);
+  renderQueue.enqueue(queueObject); // Could break up the queue per actor but probably unnecessary?
+}
 
 
 // Read pixels

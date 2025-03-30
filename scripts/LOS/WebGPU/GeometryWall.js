@@ -15,9 +15,6 @@ export class GeometryWallDesc extends GeometryDesc {
   /** @type {string} */
   label = "Wall";
 
-  /** @type {number} */
-  numVertices = 4;
-
   /**
    * Define the vertices and optional indices for this geometry.
    * @param {object} [opts]
@@ -30,9 +27,7 @@ export class GeometryWallDesc extends GeometryDesc {
    * @param {boolean} [opts.directional]  If true, the wall blocks only one direction; only one set of triangles drawn
    * @override
    */
-  _defineVerticesAndIndices({ x, y, z, w, h, directional } = {}) {
-
-
+  static defineVertices({ x, y, z, w, h, directional } = {}) {
     const arr = [
       // Position     Normal     UV
       // Side faces south.
@@ -43,8 +38,11 @@ export class GeometryWallDesc extends GeometryDesc {
       x-w, y, z+h,  0, 1, 0,  0, 0, // b
       x-w, y, z-h,  0, 1, 0,  0, 1, // c, f
       x+w, y, z-h,  0, 1, 0,  1, 1, // d
+
+      x+w, y, z+h,  0, 1, 0,  1, 0, // a, e
+      x-w, y, z-h,  0, 1, 0,  0, 1, // c, f
     ];
-    const indices = [0, 1, 2, 3, 0, 2];
+    // const indices = [0, 1, 2, 3, 0, 2];
 
     if ( !directional ) {
       arr.push(
@@ -54,11 +52,16 @@ export class GeometryWallDesc extends GeometryDesc {
         x-w, y, z-h,  0, -1, 0,  1, 1, // c, f
         x-w, y, z+h,  0, -1, 0,  1, 0, // b
         x+w, y, z+h,  0, -1, 0,  0, 0, // a, e
+
+        x-w, y, z-h,  0, -1, 0,  1, 1, // c, f
+        x+w, y, z+h,  0, -1, 0,  0, 0, // a, e
+
         x+w, y, z-h,  0, -1, 0,  0, 1, // d
       );
-      indices.push(4, 5, 6, 4, 6, 7);
-      this.numVertices += 4;
+      // indices.push(4, 5, 6, 4, 6, 7);
+      // this.numVertices += 4;
     }
+    return arr;
 
     /*
     Using Foundry world coordinates, where z is up, origin 0,0 is top right, y increases as it moves down.
@@ -92,14 +95,6 @@ export class GeometryWallDesc extends GeometryDesc {
 
 
     */
-
-    // For formats, see https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexformat.
-    // Each entry in verticesData corresponds to an entry in buffersLayout.
-    // See https://webgpufundamentals.org/webgpu/lessons/webgpu-vertex-buffers.html
-    // TODO: For directional walls, make Normal an instance buffer.
-    // TODO: Better way to define shaderLocation so it can be passed to the shader code?
-    this.vertices = new Float32Array(arr);
-    this.indices = new Uint16Array(indices);
   }
 }
 

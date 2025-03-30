@@ -188,18 +188,24 @@ class DrawableObjectsAbstract {
     this.placeableHandler = new this.constructor.handlerClass(this.senseType);
   }
 
+  /** @type {boolean} */
+  #debugViewNormals = false;
+
+  get debugViewNormals() { return this.#debugViewNormals; }
+
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize() {
+  async initialize({ debugViewNormals = false } = {}) {
     const device = this.device;
+    this.#debugViewNormals = debugViewNormals;
 
     for ( const [key, opts] of Object.entries(this.constructor.BINDGROUP_LAYOUT_OPTS) ) {
       this.bindGroupLayouts[key] = device.createBindGroupLayout(opts);
     }
 
     // Define shader and pipeline.
-    this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`);
+    this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`, { debugViewNormals });
     this._setRenderPipelineOpts();
     this.pipeline = device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
 
@@ -210,10 +216,6 @@ class DrawableObjectsAbstract {
 
     // Initialize the changeable buffers.
     this.initializePlaceableBuffers();
-
-    // Debugging.
-    console.log("Initialize finished!");
-    return true;
   }
 
   /**
@@ -335,7 +337,7 @@ class DrawableObjectsAbstract {
     this.RENDER_PIPELINE_OPTS.label = `${this.constructor.name}`;
     this.RENDER_PIPELINE_OPTS.vertex.module = this.module;
     this.RENDER_PIPELINE_OPTS.fragment.module = this.module;
-    this.RENDER_PIPELINE_OPTS.vertex.buffers = GeometryDesc.buffersLayout;
+    this.RENDER_PIPELINE_OPTS.vertex.buffers = this.debugViewNormals ? GeometryDesc.buffersLayoutNormals : GeometryDesc.buffersLayout;
     this.RENDER_PIPELINE_OPTS.fragment.targets[0] = { format: WebGPUDevice.presentationFormat };
     this.RENDER_PIPELINE_OPTS.layout = this.device.createPipelineLayout({
       label: `${this.constructor.name}`,
@@ -360,7 +362,6 @@ class DrawableObjectsAbstract {
    * @param {string} userId                           The ID of the User who triggered the creation workflow
    */
   _onPlaceableCreation(document, _options, _userId) {
-    console.log(`${this.constructor.name} _onPlaceableCreation`, document);
     this.addPlaceable(document.object);
     // TODO: How to detect non-wall edge creation?
   }
@@ -373,7 +374,6 @@ class DrawableObjectsAbstract {
    * @param {string} userId                           The ID of the User who triggered the update workflow
    */
   _onPlaceableUpdate(document, changed, _options, _userId) {
-    console.log(`${this.constructor.name} _onPlaceableUpdate`, document, changed);
     const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
     const docUpdateKeys = this.placeableHandler.constructor.docUpdateKeys;
     const updateNeeded = changeKeys.some(key => docUpdateKeys.has(key));
@@ -387,7 +387,6 @@ class DrawableObjectsAbstract {
    * @param {string} userId                           The ID of the User who triggered the deletion workflow
    */
   _onPlaceableDeletion(document, _options, _userId) {
-    console.log(`${this.constructor.name} _onPlaceableDeletion`, document);
     this.removePlaceable(document.id);
     // TODO: How to detect non-wall edge deletion?
   }
@@ -397,7 +396,6 @@ class DrawableObjectsAbstract {
    * @param {PlaceableObject} object    The object instance being drawn
    */
   _onPlaceableDraw(object, opts) {
-    console.log(`${this.constructor.name} _onPlaceableDraw`, object, opts);
     this.addPlaceable(object);
   }
 
@@ -414,7 +412,6 @@ class DrawableObjectsAbstract {
     refreshHighlight: Occurs when wall control or position changes
     refreshState: refresh the displayed state of the wall. alpha & zIndex
     */
-    console.log(`${this.constructor.name} _onPlaceableRefresh`, object, flags);
     const refreshFlags = this.placeableHandler.constructor.refreshFlags;
     const updateNeeded = Object.keys(flags).some(f => refreshFlags.has(f));
     this.updatePlaceable(object, updateNeeded);
@@ -425,12 +422,12 @@ class DrawableObjectsAbstract {
    * @param {PlaceableObject} object    The object instance being destroyed
    */
   _onPlaceableDestroy(object, opts) {
-    console.log(`${this.constructor.name} _onPlaceableDestroy`, object, opts);
     this.removePlaceable(object.id);
   }
 
   addPlaceable(object) {
-    if ( !this.placeableHandler.includePlaceable(document.object.edge) ) return;
+    if ( this.placeableHandler.instanceIndexFromId.has(object.id) ) return;
+    if ( !this.placeableHandler.includePlaceable(object) ) return;
     this._addPlaceable(object)
   }
 
@@ -453,7 +450,6 @@ class DrawableObjectsAbstract {
 
   removePlaceable(placeableId) {
     if ( !this.placeableHandler.instanceIndexFromId.has(placeableId) ) return;
-    console.log(`${this.constructor.name} _onPlaceableDeletion`, document);
     this._removePlaceable(placeableId);
   }
 
@@ -467,7 +463,7 @@ class DrawableObjectsAbstract {
 
   destroy() {
     this.deregisterPlaceableHooks();
-    this.buffers.forEach(buffer => {
+    Object.values(this.buffers).forEach(buffer => {
       if ( Array.isArray(buffer) ) buffer.forEach(elem => elem.destroy());
       else buffer.destroy();
     });
@@ -475,8 +471,6 @@ class DrawableObjectsAbstract {
 }
 
 export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
-  static INSTANCE_ELEMENT_LENGTH = 64;
-
   static BINDGROUP_LAYOUT_OPTS = {
     ...DrawableObjectsAbstract.BINDGROUP_LAYOUT_OPTS,
 
@@ -757,8 +751,8 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
    * Define static geometries for the shapes handled in this class.
    */
   _createStaticGeometries() {
-    this.geometries.set("wall", new GeometryWallDesc({ directional: false }));
-    this.geometries.set("wall-dir", new GeometryWallDesc({ directional: true }));
+    this.geometries.set("wall", new GeometryWallDesc({ directional: false, addNormals: this.debugViewNormals, addUVs: false }));
+    this.geometries.set("wall-dir", new GeometryWallDesc({ directional: true, addNormals: this.debugViewNormals, addUVs: false }));
   }
 
   /**
@@ -841,7 +835,6 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
    * @param {string} userId                           The ID of the User who triggered the creation workflow
    */
   _onPlaceableCreation(document, _options, _userId) {
-    console.log(`${this.constructor.name} _onPlaceableCreation`, document);
     this.addPlaceable(document.object.edge);
     // TODO: How to detect non-wall edge creation?
   }
@@ -854,7 +847,6 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
    * @param {string} userId                           The ID of the User who triggered the update workflow
    */
   _onPlaceableUpdate(document, changed, _options, _userId) {
-    console.log(`${this.constructor.name} _onPlaceableUpdate`, document, changed);
     const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
     const updateNeeded = this.placeableHandler.constructor.docUpdateKeys.some(key => changeKeys.has(key));
     this.updatePlaceable(document.object.edge, updateNeeded);
@@ -872,7 +864,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    * Define static geometries for the shapes handled in this class.
    */
   _createStaticGeometries() {
-    this.geometries.set("token", new GeometryCubeDesc());
+    this.geometries.set("token", new GeometryCubeDesc({ addNormals: this.debugViewNormals, addUVs: false }));
   }
 
   /**
@@ -1000,6 +992,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
   _setRenderPipelineOpts() {
     this.bindGroupLayoutsArray[this.constructor.GROUP_NUM.TILE_TEXTURE] = this.bindGroupLayouts.tileTexture;
     super._setRenderPipelineOpts();
+    this.RENDER_PIPELINE_OPTS.vertex.buffers = this.debugViewNormals ? GeometryDesc.buffersLayoutNormalsUVs : GeometryDesc.buffersLayoutUVs;
   }
 
   async initialize() {
@@ -1011,7 +1004,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
    * Define static geometries for the shapes handled in this class.
    */
   _createStaticGeometries() {
-    this.geometries.set("tile", new GeometryHorizontalPlaneDesc());
+    this.geometries.set("tile", new GeometryHorizontalPlaneDesc({ addNormals: this.debugViewNormals, addUVs: true }));
   }
 
   /**
@@ -1135,7 +1128,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     const numInstances = 1;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       if ( !token.isConstrainedTokenBorder ) return;
-      const geom = new GeometryConstrainedTokenDesc(token)
+      const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
       this.geometries.set(token.id, geom);
       this.drawables.set(token.id, {
         label: `Token drawable ${token.id}`,

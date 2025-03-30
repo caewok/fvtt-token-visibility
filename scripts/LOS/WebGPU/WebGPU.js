@@ -5,6 +5,7 @@ foundry
 "use strict";
 
 import { MODULE_ID } from "../../const.js";
+import { wgsl } from "./wgsl-preprocessor.js";
 
 
 /* WebGPU
@@ -94,7 +95,7 @@ export class WebGPUShader {
    * @returns {WebGPUShader}
    */
   static fromCodeString(device, code, label = "", params = {}) {
-    if ( !foundry.utils.isEmpty(params) ) code = interpolate(code, params);
+    if ( !foundry.utils.isEmpty(params) ) code = interpolateWGSL(code, params);
     const out = device.createShaderModule({ label, code });
     out._sourceCode = code;
     return out;
@@ -367,9 +368,9 @@ async function fetchGLSLCode(fileName) {
  * @param {object} params   Valid objects that can be replaced; either variables or function names
  * @returns {string}
  */
-function interpolate(str, params = {}) {
+function interpolateWGSL(str, params = {}) {
   // Replace the names with the relevant values.
   const names = Object.keys(params);
   const vals = Object.values(params);
-  return new Function(...names, `return \`${str}\`;`)(...vals);
+  return new Function("wgsl", ...names, `return wgsl\`${str}\`;`)(wgsl, ...vals);
 }

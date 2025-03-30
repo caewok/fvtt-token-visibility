@@ -1,16 +1,26 @@
 struct VertexIn {
   @location(0) pos: vec3f,
-  @location(1) norm: vec3f,
-  @location(2) uv0: vec2f,
+
+  #if ${debugViewNormals}
+    @location(1) norm: vec3f,
+    @location(2) uv0: vec2f,
+  #else
+    @location(1) uv0: vec2f,
+  #endif
   @builtin(vertex_index) vertexIndex: u32,
   @builtin(instance_index) instanceIndex: u32,
 }
 
 struct VertexOut {
   @builtin(position) pos: vec4f,
-  @location(0) norm: vec3f,
-  @location(1) uv0: vec2f,
-  @location(2) @interpolate(flat) v: u32,
+
+  #if ${debugViewNormals}
+    @location(0) norm: vec3f,
+    @location(1) uv0: vec2f,
+  #else
+    @location(0) uv0: vec2f,
+  #endif
+  // @location(2) @interpolate(flat) v: u32,
 }
 
 struct CameraUniforms {
@@ -56,17 +66,22 @@ struct Instance {
 
   // Transform normals to view space.
   // Need to avoid scaling.
-  out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0)).xyz);
+  #if ${debugViewNormals}
+    out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0)).xyz);
+  #endif
 
   // Pass through the uvs.
   out.uv0 = in.uv0;
 
-  out.v = in.vertexIndex / 6;
+  // out.v = in.vertexIndex / 6;
 
   return out;
 }
 
 // ----- Fragment shader ----- //
+
+// Mark tile pixels less than this alpha as clear.
+const alphaValue = 0.75;
 
 // Some hardcoded lighting
 const lightDir = normalize(vec3f(0.25, 0.5, 1.0));
@@ -87,24 +102,21 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
   }
   return out;
   */
-
   // return vec4f(in.uv0.x, in.uv0.y, 1.0, 1.0);
 
-
-  // var texColor = baseColor;
-  // return texColor;
-
-
   let texColor = textureSample(tileTexture, tileSampler, in.uv0);
-  return texColor;
+  var baseColor = texColor;
 
-  let baseColor = material.color;
+  #if ${debugViewNormals}
+    // Extremely simple directional lighting model to give the model some shape.
+    let N = normalize(in.norm);
+    let NDotL = max(dot(N, lightDir), 0.0);
+    let surfaceColor = (baseColor.rgb * ambientColor) + (baseColor.rgb * NDotL);
+    baseColor = vec4(surfaceColor, baseColor.a);
+  #else
+    baseColor = material.color;
+    baseColor.a = step(alphaValue, texColor.a); // (edge, x) => returns 1.0 if edge ≤ x
+  #endif
+
   return baseColor;
-
-  // Extremely simple directional lighting model to give the model some shape.
-  let N = normalize(in.norm);
-  let NDotL = max(dot(N, lightDir), 0.0);
-  let surfaceColor = (baseColor.rgb * ambientColor) + (baseColor.rgb * NDotL);
-
-  return vec4(surfaceColor, baseColor.a);
 }

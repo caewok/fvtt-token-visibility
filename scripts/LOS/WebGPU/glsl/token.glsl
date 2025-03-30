@@ -1,16 +1,20 @@
 struct VertexIn {
   @location(0) pos: vec3f,
+
+  #if ${debugViewNormals}
   @location(1) norm: vec3f,
-  @location(2) uv0: vec2f,
+  #endif
   @builtin(vertex_index) vertexIndex: u32,
   @builtin(instance_index) instanceIndex: u32,
 }
 
 struct VertexOut {
   @builtin(position) pos: vec4f,
+
+  #if ${debugViewNormals}
   @location(0) norm: vec3f,
-  @location(1) uv0: vec2f,
-  @location(2) @interpolate(flat) v: u32,
+  #endif
+  // @location(1) @interpolate(flat) v: u32,
 }
 
 struct CameraUniforms {
@@ -59,7 +63,9 @@ struct CulledInstances {
 
   // Transform normals to view space.
   // Need to avoid scaling.
+  #if ${debugViewNormals}
   out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0)).xyz);
+  #endif
 
   // See https://stackoverflow.com/questions/17401922/transforming-normal-to-view-space-in-vertex-shader
   // Need to pass the transpose(inverse(model)) matrix.
@@ -75,10 +81,7 @@ struct CulledInstances {
   out.norm = normalize((camera.lookAtM * matN * vec4f(in.norm, 0)).xyz);
   */
 
-  // Pass through the uvs.
-  out.uv0 = in.uv0;
-
-  out.v = in.vertexIndex / 6;
+  // out.v = in.vertexIndex / 6;
 
   return out;
 }
@@ -106,15 +109,15 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
   return out;
   */
 
-  // return vec4f(in.uv0.x, in.uv0.y, 1.0, 1.0);
-
-  let baseColor = material.color;
-  // return baseColor;
+  var baseColor = material.color;
 
   // Extremely simple directional lighting model to give the model some shape.
-  let N = normalize(in.norm);
-  let NDotL = max(dot(N, lightDir), 0.0);
-  let surfaceColor = (baseColor.rgb * ambientColor) + (baseColor.rgb * NDotL);
+  #if ${debugViewNormals}
+    let N = normalize(in.norm);
+    let NDotL = max(dot(N, lightDir), 0.0);
+    let surfaceColor = (baseColor.rgb * ambientColor) + (baseColor.rgb * NDotL);
+    baseColor = vec4(surfaceColor, baseColor.a);
+  #endif
 
-  return vec4(surfaceColor, baseColor.a);
+  return baseColor;
 }

@@ -29,15 +29,6 @@ export class GeometryCubeDesc extends GeometryDesc {
   /** @type {string} */
   label = "Cube";
 
-  /** @type {number} */
-  numVertices = 24;
-
-  /** @type {Float32Array[]} */
-  verticesData = Array(1);
-
-  /** @type {Uint16Array[]} */
-  indicesData = Array(1);
-
   /**
    * Define the vertices and optional indices for this geometry.
    * @param {object} [opts]
@@ -48,18 +39,18 @@ export class GeometryCubeDesc extends GeometryDesc {
    * @param {number} [opts.y]           Location on y-axis
    * @param {number} [opts.z]           Location on z-axis
    */
-  _defineVerticesAndIndices({ x, y, z, w, d, h } = {}) {
-    const indices = [
-      0, 1, 2, 3, 0, 2,        // S facing 0–3
-      4, 5, 6, 4, 6, 7,        // N facing 4–7
-      8, 9, 10, 11, 8, 10,     // W facing 8–11
-      12, 13, 14, 12, 14, 15,  // E facing 12–15
-      16, 17, 18, 19, 16, 18,  // Top 16–19
-      20, 21, 22, 20, 22, 23,  // Bottom 20–23
-    ];
+  static defineVertices({ x, y, z, w, d, h } = {}) {
+//     const indices = [
+//       0, 1, 2, 3, 0, 2,        // S facing 0–3
+//       4, 5, 6, 4, 6, 7,        // N facing 4–7
+//       8, 9, 10, 11, 8, 10,     // W facing 8–11
+//       12, 13, 14, 12, 14, 15,  // E facing 12–15
+//       16, 17, 18, 19, 16, 18,  // Top 16–19
+//       20, 21, 22, 20, 22, 23,  // Bottom 20–23
+//     ];
 
-    const arr = [
-      // Position     Normal     UV
+    return [
+      // Position    UV Normal
       // Side CCW if token goes from x-w to x+w.
       // S facing
       x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
@@ -67,10 +58,17 @@ export class GeometryCubeDesc extends GeometryDesc {
       x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
       x+w, y+d, z-h,  0, 1, 0,  1, 1, // d       3
 
+      x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
+      x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
+
       // N facing: reverse of South. c,b,a,f,e,d
       x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
       x-w, y-d, z+h,  0, -1, 0,  1, 0, // b      5
       x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+
+      x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
+      x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+
       x+w, y-d, z-h,  0, -1, 0,  0, 1, // d      7
 
       // W facing
@@ -79,10 +77,17 @@ export class GeometryCubeDesc extends GeometryDesc {
       x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
       x-w, y+d, z-h,  -1, 0, 0,  1, 1, // d      11
 
+      x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a, e   8
+      x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
+
       // E facing: reverse of West c,b,a,f,e,d
       x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
       x+w, y-d, z+h,  1, 0, 0,  1, 0, // b        13
       x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+
+      x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
+      x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+
       x+w, y+d, z-h,  1, 0, 0,  0, 1, // d        15
 
       // Top
@@ -91,22 +96,26 @@ export class GeometryCubeDesc extends GeometryDesc {
       x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
       x+w, y-d, z+h,  0, 0, 1,   1, 0,  // d      19
 
+      x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a, e   16
+      x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
+
       // Bottom: reverse of Top c,b,a,f,e,d
       x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
       x-w, y+d, z-h,  0, 0, -1,  0, 0,  // b      21
       x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+
+      x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
+      x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+
       x+w, y-d, z-h,  0, 0, -1,  1, 1,  // d      23
     ];
-
-    this.vertices = new Float32Array(arr);
-    this.indices = new Uint16Array(indices);
   }
 }
 
 /**
  * Construct vertices for a token shape that is constrained.
  * Unlike GeometryCubeDesc, this constructs a token in world space.
- *
+ * Constructor options must include token.
  */
 export class GeometryConstrainedTokenDesc extends GeometryDesc {
   /** @type {string} */
@@ -118,38 +127,37 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
   /** @type {Token} */
   token;
 
-  /**
-   * @param {Token} token
-   * @param {object} [opts]
-   * @param {string} [opts.label]       Label for this structure
-   * @return {this|GeometryCubeDesc}
-   */
-  constructor(token, opts = {}) {
+  static defineVertices({ token } = {}) {
     const border = token.constrainedTokenBorder;
     const { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
-      const width = token.document.width * canvas.dimensions.size;
-      const height = token.document.height * canvas.dimensions.size;
-      const zHeight = topZ - bottomZ;
+      const w = token.document.width * canvas.dimensions.size;
+      const d = token.document.height * canvas.dimensions.size;
+      const h = topZ - bottomZ;
       const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-      return new GeometryCubeDesc({ width, height, zHeight, ...ctr, label: opts.label });
+      return GeometryCubeDesc.defineVertices({ w, d, h, ...ctr});
     }
 
-    super(opts);
-    const top = this.constructor.polygonTopBottomFaces(border, { elevation: topZ, top: true });
-    const bottom = this.constructor.polygonTopBottomFaces(border, { elevation: bottomZ, top: false });
-    const side = this.constructor.polygonSideFaces(border, { topElevation: topZ, bottomElevation: bottomZ });
-    this.vertices = combineTypedArrays(top.vertices, side.vertices, bottom.vertices);
-    // this.verticesData[0] = top.vertices;
+    // Build structure from the border polygon, with rectangular sides along each edge.
+    // Polygon assumed to lie on x/y plane, forming the top and bottom faces.
+    const top = this.polygonTopBottomFaces(border, { elevation: topZ, top: true });
+    const bottom = this.polygonTopBottomFaces(border, { elevation: bottomZ, top: false });
+    const side = this.polygonSideFaces(border, { topElevation: topZ, bottomElevation: bottomZ });
+    const vertices = combineTypedArrays(top.vertices, side.vertices, bottom.vertices);
 
     // For indices, increase because they are getting combined into one.
     side.indices = side.indices.map(elem => elem + top.numVertices);
     bottom.indices = bottom.indices.map(elem => elem + top.numVertices + side.numVertices);
-    this.indices = combineTypedArrays(top.indices, side.indices, bottom.indices);
-    // this.indicesData[0] = top.indices;
+    const indices = combineTypedArrays(top.indices, side.indices, bottom.indices);
 
-    this.numVertices = Math.floor(top.numVertices + side.numVertices + bottom.numVertices);
-    // this.numVertices = top.numVertices;
+    // Expand the vertices based on indices, so they can be trimmed as needed.
+    const arr = new Array(indices.length * 8);
+    for ( let i = 0, n = indices.length; i < n; i += 1 ) {
+      const vertex = vertices.slice(indices[i] * 8, (indices[i] * 8) + 8);
+      const arrI = i * 8;
+      for ( let v = 0; v < 8; v += 1 ) arr[arrI + v] = vertex[v];
+    }
+    return arr;
   }
 
   /**
@@ -359,6 +367,117 @@ tris.forEach(tri => tri.forEach(pt => Draw.point(pt, { radius: 2 })))
 
 */
 
+
+/*
+
+w = 0.5;
+d = 0.5
+h = 0.5;
+
+x = 0
+y = 0
+z = 0
+
+const indices = [
+  0, 1, 2, 3, 0, 2,        // S facing 0–3
+  4, 5, 6, 4, 6, 7,        // N facing 4–7
+  8, 9, 10, 11, 8, 10,     // W facing 8–11
+  12, 13, 14, 12, 14, 15,  // E facing 12–15
+  16, 17, 18, 19, 16, 18,  // Top 16–19
+  20, 21, 22, 20, 22, 23,  // Bottom 20–23
+];
+
+arr = [
+  // Position     Normal     UV
+  // Side CCW if token goes from x-w to x+w.
+  // S facing
+  x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
+  x-w, y+d, z+h,  0, 1, 0,  0, 0, // b       1
+  x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
+  x+w, y+d, z-h,  0, 1, 0,  1, 1, // d       3
+
+  x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
+  x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
+
+
+  // N facing: reverse of South. c,b,a,f,e,d
+  x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
+  x-w, y-d, z+h,  0, -1, 0,  1, 0, // b      5
+  x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+
+  x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
+  x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+
+  x+w, y-d, z-h,  0, -1, 0,  0, 1, // d      7
+
+  // W facing
+  x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a, e   8
+  x-w, y-d, z+h,  -1, 0, 0,  0, 0, // b      9
+  x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
+  x-w, y+d, z-h,  -1, 0, 0,  1, 1, // d      11
+
+  x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a, e   8
+  x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
+
+
+  // E facing: reverse of West c,b,a,f,e,d
+  x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
+  x+w, y-d, z+h,  1, 0, 0,  1, 0, // b        13
+  x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+
+  x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
+  x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+
+  x+w, y+d, z-h,  1, 0, 0,  0, 1, // d        15
+
+  // Top
+  x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a, e   16
+  x-w, y+d, z+h,  0, 0, 1,   0, 1,  // b      17
+  x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
+  x+w, y-d, z+h,  0, 0, 1,   1, 0,  // d      19
+
+  x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a, e   16
+  x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
+
+  // Bottom: reverse of Top c,b,a,f,e,d
+  x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
+  x-w, y+d, z-h,  0, 0, -1,  0, 0,  // b      21
+  x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+
+  x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
+  x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+
+  x+w, y-d, z-h,  0, 0, -1,  1, 1,  // d      23
+];
+
+// Convert to indices
+stride = 8; // How many elements between vertices?
+length = 8; // How many elements make up a vertex?
+
+vertices = [];
+indices = new Uint16Array(arr.length / stride);
+uniqueV = new Map();
+tmpKey = new Array(length)
+for ( let i = 0, n = arr.length, v = 0; i < n; i += stride, v += 1 ) {
+  for ( let j = 0; j < length; j += 1 ) tmpKey[j] = arr[i + j];
+  const key = tmpKey.join("_");
+  if ( !uniqueV.has(key) ) {
+    uniqueV.set(key, uniqueV.size);
+    vertices.push(...arr.slice(i, i + length))
+  }
+  indices[v] = uniqueV.get(key);
+}
+
+// Skip normals and uvs
+length = 3
+
+
+// Skip uvs
+length = 6
+
+
+
+*/
 
 
 

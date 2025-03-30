@@ -89,8 +89,18 @@ class WebGPUComputeAbstract {
    * @returns {*} Output of the computation.
    */
   async compute(opts) {
+    // console.debug(`${this.constructor.name}|computing...`);
     await this._compute(opts);
-    return this._postCompute(opts);
+    // console.debug(`${this.constructor.name}|pulling result...`);
+    const res = await this._postCompute(opts);
+    // console.debug(`${this.constructor.name}|${res} red pixels`);
+    return res;
+  }
+
+  computeSync(opts,) {
+    this._computeSync(opts);
+    const res = this._postComputeSync(opts);
+    return res;
   }
 
   /**
@@ -191,6 +201,13 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
       size: 4, // 4 bytes per (u32)
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
+
+    // Sync buffer
+    this.buffers.counterResultSync = this.device.createBuffer({
+      label: `${this.constructor.name} counterResultSync`,
+      size: 4, // 4 bytes per (u32)
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ_SYNC,
+    });
   }
 
   /**
@@ -226,6 +243,11 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
    * Run the compute pass(es).
    */
   async _compute(texture) {
+    this._computeSync(texture, false);
+    return this.device.queue.onSubmittedWorkDone();
+  }
+
+  _computeSync(texture, sync = true) {
     this._defineTextureBindGroup(texture);
 
     // Reset the counter.
@@ -245,12 +267,11 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     computePass.end();
 
     // Copy the counter buffer to the result buffer
-    encoder.copyBufferToBuffer(this.buffers.counterOutput, 0, this.buffers.counterResult, 0, this.buffers.counterResult.size);
+    const resultBuffer = sync ? this.buffers.counterResultSync : this.buffers.counterResult;
+    encoder.copyBufferToBuffer(this.buffers.counterOutput, 0, resultBuffer, 0, resultBuffer.size);
 
     // Execute the commands
     this.device.queue.submit([encoder.finish()]);
-
-    // return this.device.queue.onSubmittedWorkDone();
   }
 
 
@@ -263,6 +284,14 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     const counterPixels = new Uint32Array(this.buffers.counterResult.getMappedRange());
     const r = counterPixels[0];
     this.buffers.counterResult.unmap();
+    return r;
+  }
+
+  _postComputeSync(_opts) {
+    this.buffers.counterResultSync.mapSync(GPUMapMode.READ);
+    const counterPixels = new Uint32Array(this.buffers.counterResultSync.getMappedRange());
+    const r = counterPixels[0];
+    this.buffers.counterResultSync.unmap();
     return r;
   }
 }

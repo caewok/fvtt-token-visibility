@@ -52,6 +52,7 @@ import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriang
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
+
 import {
   Triangle,
   DirectionalWallTriangles,
@@ -81,9 +82,13 @@ import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
 import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.js";
+import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
+import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
+import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
 
 // Other self-executing hooks
 import "./changelog.js";
+import "./LOS/WebGPU/webgpu-map-sync.js";
 
 Hooks.once("init", function() {
   // Load bitmap font
@@ -213,6 +218,9 @@ Hooks.once("init", function() {
       RenderObstacles,
       WebGPUSumRedPixels,
       PercentVisibleCalculator,
+      wgsl,
+      AsyncQueue,
+      SumPixelsWebGL2,
     },
 
     glmatrix: {

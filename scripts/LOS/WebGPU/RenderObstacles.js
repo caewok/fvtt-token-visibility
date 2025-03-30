@@ -80,11 +80,13 @@ class RenderAbstract {
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize() {
+  async initialize(opts) {
+    this.drawableObjects.forEach(drawableObject => drawableObject.destroy());
+    this.drawableObjects.length = 0;
     const device = await this.getDevice();
     this.camera = new Camera(device);
     this.materials = new MaterialsTracker(device);
-    await this._initializeDrawObjects();
+    await this._initializeDrawObjects(opts);
     this._allocateRenderTargets();
     this.prerender();
   }
@@ -92,7 +94,7 @@ class RenderAbstract {
   /**
    * Define one ore more DrawObjects used to render the scene.
    */
-  async _initializeDrawObjects() {
+  async _initializeDrawObjects(opts) {
     const device = this.device;
     const materials = this.materials;
     const camera = this.camera;
@@ -101,7 +103,7 @@ class RenderAbstract {
     for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(device, materials, camera, { senseType });
       this.drawableObjects.push(drawableObj);
-      await drawableObj.initialize();
+      await drawableObj.initialize(opts);
       // promises.push(drawableObj.initialize());
     }
     return Promise.allSettled(promises);
@@ -115,7 +117,12 @@ class RenderAbstract {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
   }
 
-  async render(viewerLocation, target, { viewer, targetLocation, targetOnly = false } = {}) {
+  async render(viewerLocation, target, opts) {
+    this.renderSync(viewerLocation, target, opts);
+    return this.device.queue.onSubmittedWorkDone();
+  }
+
+  renderSync(viewerLocation, target, { viewer, targetLocation, targetOnly = false } = {}) {
     const opts = { viewer, target, targetOnly };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
@@ -147,7 +154,6 @@ class RenderAbstract {
 
     // Clean up.
     this.drawableObjects.forEach(drawableObj => drawableObj._postRenderPass(opts));
-    return this.device.queue.onSubmittedWorkDone();
   }
 
   /**
