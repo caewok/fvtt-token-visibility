@@ -34,7 +34,7 @@ function updateWall(wallD, changed, _options, _userId) {
   const wall = wallD.object;
   if ( !wall ) return;
   const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
-  object[WallTrianglesHandler.ID].update(changeKeys);
+  wall[WallTrianglesHandler.ID].update(changeKeys);
   // TODO: Only run if other modules are not present.
   // Default to ATV, ATC, then Elevation Shadows.
 }

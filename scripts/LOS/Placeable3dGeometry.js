@@ -734,12 +734,12 @@ class PlaceableGeometryHandler {
 
   /**
    * Update the existing geometry, if one has been built. Ignore otherwise.
-   * @param {Set<string>} changes         Change keys for the source.
+   * @param {Set<string>} [changes]         Change keys for the source.
    */
   static UPDATE_TRIGGERS = [];
   update(changes) {
     if ( !this.#geometry ) return;
-    if ( !this.constructor.UPDATE_TRIGGERS.some(t => changes.has(t)) ) return;
+    if ( changes && !this.constructor.UPDATE_TRIGGERS.some(t => changes.has(t)) ) return;
     this.geometry.updateObjectPoints();
     this.geometry.updateVertices();
   }

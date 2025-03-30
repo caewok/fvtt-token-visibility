@@ -2,7 +2,8 @@
 canvas,
 CONFIG,
 game,
-Hooks
+Hooks,
+PIXI,
 */
 "use strict";
 
@@ -34,7 +35,7 @@ import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
 import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
 import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
-import { OPEN_POPOUTS } from "./LOS/Area3dPopout.js";
+import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 
@@ -51,6 +52,7 @@ import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriang
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
+
 import {
   Triangle,
   DirectionalWallTriangles,
@@ -65,10 +67,28 @@ import {
   Polygon2dDoubleTriangles,
   PolygonVerticalTriangles
  } from "./LOS/PlaceableTriangles.js";
-import { PlaceableTrianglesHandler } from "./LOS/PlaceableTrianglesHandler.js";
+import { PlaceableTrianglesHandler, TokenTrianglesHandler, TileTrianglesHandler, WallTrianglesHandler  } from "./LOS/PlaceableTrianglesHandler.js";
+
+import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
+import { Camera } from "./LOS/WebGPU/Camera.js";
+
+import {
+  mat2, mat2d, mat3, mat4,
+  quat, quat2,
+  vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
+import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
+import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
+import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
+import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
+import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.js";
+import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
+import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
+import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
 
 // Other self-executing hooks
 import "./changelog.js";
+import "./LOS/WebGPU/webgpu-map-sync.js";
 
 Hooks.once("init", function() {
   // Load bitmap font
@@ -172,7 +192,7 @@ Hooks.once("init", function() {
       PolygonVerticalTriangles
     },
 
-    OPEN_POPOUTS,
+    OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,
 
     Settings,
 
@@ -180,6 +200,33 @@ Hooks.once("init", function() {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,
       Placeable3dDebugShader, Tile3dDebugShader
+    },
+
+    webgpu: {
+      WebGPUDevice,
+      WebGPUShader,
+      WebGPUBuffer,
+      WebGPUTexture,
+      Camera,
+      GeometryWallDesc,
+      GeometryCubeDesc,
+      GeometryHorizontalPlaneDesc,
+      GeometryConstrainedTokenDesc,
+      RenderTokens,
+      RenderTiles,
+      RenderWalls,
+      RenderObstacles,
+      WebGPUSumRedPixels,
+      PercentVisibleCalculator,
+      wgsl,
+      AsyncQueue,
+      SumPixelsWebGL2,
+    },
+
+    glmatrix: {
+      mat2, mat2d, mat3, mat4,
+      quat, quat2,
+      vec2, vec3, vec4
     },
 
     PATCHER,
@@ -197,6 +244,10 @@ Hooks.once("setup", function() {
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   Settings.initializeDebugGraphics();
+
+  WallTrianglesHandler.registerPlaceables();
+  TileTrianglesHandler.registerPlaceables();
+  TokenTrianglesHandler.registerPlaceables();
 
   // Update triangles for all placeables.
   canvas.tiles.placeables.forEach(tile => tile[PlaceableTrianglesHandler.ID].update());

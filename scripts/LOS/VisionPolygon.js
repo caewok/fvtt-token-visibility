@@ -221,7 +221,7 @@ export class VisionTriangle {
   c = new PIXI.Point();
 
   /** @type {VPElevation} */
-  elevation = {
+  elevationZ = {
     min: Number.NEGATIVE_INFINITY,
     max: Number.POSITIVE_INFINITY
   };
@@ -229,12 +229,12 @@ export class VisionTriangle {
   /** @type {PIXI.Rectangle} */
   bounds = new PIXI.Rectangle;
 
-  constructor(a, b, c, maxElevation = Number.POSITIVE_INFINITY, minElevation = Number.NEGATIVE_INFINITY) {
+  constructor(a, b, c, { maxElevation = Number.POSITIVE_INFINITY, minElevation = Number.NEGATIVE_INFINITY } = {}) {
     this.a.copyFrom(a);
     this.b.copyFrom(b);
     this.c.copyFrom(c);
-    this.elevation.max = maxElevation;
-    this.elevation.min = minElevation;
+    this.elevationZ.max = maxElevation;
+    this.elevationZ.min = minElevation;
     this.setBounds();
   }
 
@@ -294,22 +294,23 @@ export class VisionTriangle {
         b = keyPoints[0];
         c = keyPoints.at(-1);
     }
-    return new this(viewpoint, b, c, this.elevationMin(viewpoint, target), this.elevationMax(viewpoint, target));
+    return new this(viewpoint, b, c, { minElevation: this.elevationZMin(viewpoint, target), maxElevation: this.elevationZMax(viewpoint, target) });
   }
 
   /**
    * Determine the minimum and maximum elevations for a given viewpoint and target.
    * @param {Point3d} viewpoint
    * @param {Token} target
-   * @returns {number}
+   * @returns {number} Elevation in pixel units
    */
-  static elevationMin(viewpoint, target) {
+  static elevationZMin(viewpoint, target) {
     return Math.min(
       viewpoint?.z ?? Number.NEGATIVE_INFINITY,
       target?.bottomZ ?? Number.NEGATIVE_INFINITY
     );
   }
-  static elevationMax(viewpoint, target) {
+
+  static elevationZMax(viewpoint, target) {
     return Math.max(
       viewpoint?.z ?? Number.POSITIVE_INFINITY,
       target?.topZ ?? Number.POSITIVE_INFINITY
@@ -334,19 +335,22 @@ export class VisionTriangle {
     Draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
   }
 
-  containsWall(wall) {
+  containsEdge(edge) {
     // Ignore one-directional walls facing away from the viewpoint.
-    if ( wall.document.dir
-      && (wall.edge.orientPoint(this.a) === wall.document.dir) ) return false;
+    if ( edge.direction
+      && (edge.orientPoint(this.a) === edge.direction) ) return false;
 
     // Is the wall within the elevation box?
-    let { top, bottom } = wall.edge.elevationLibGeometry.a;
-    top ??= Number.POSITIVE_INFINITY;
-    bottom ??= Number.NEGATIVE_INFINITY;
-    if ( wall.top < this.elevation.min || wall.bottom > this.elevation.max ) return false;
+    let { top, bottom } = edge.elevationLibGeometry.a;
+    top ??= 1e06;
+    bottom ??= -1e06;
+    top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
+    bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
+
+    if ( top < this.elevationZ.min || bottom > this.elevationZ.max ) return false;
 
     // Ignore walls not within the elevation vision rectangle.
-    const { a, b } = wall.edge;
+    const { a, b } = edge;
     if ( this.pointInsideTriangle(a) || this.pointInsideTriangle(b) ) return true;
 
     // Does the wall intersect the triangle?
@@ -356,14 +360,16 @@ export class VisionTriangle {
     return ( lsi(this.a, this.b, a, b) || lsi(this.a, this.c, a, b) );
   }
 
+  containsWall(wall) { return this.containsEdge(wall.edge); }
+
   containsTile(tile) {
-    const tileE = tile.document.elevation;
 
     // Only overhead tiles count for blocking vision
-    if ( tileE < tile.document.parent?.foregroundElevation ) return false;
+    if ( tile.elevationE < tile.document.parent?.foregroundElevation ) return false;
 
     // Ignore tiles that are not within the elevation vision rectangle.
-    if ( tileE < this.elevation.min || tileE > this.elevation.max ) return false;
+    const tileZ = tile.elevationZ
+    if ( tileZ < this.elevationZ.min || tileZ > this.elevationZ.max ) return false;
 
     // Use the alpha bounding box. This might be a polygon if the tile is rotated.
     const tBounds = tile.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
@@ -375,7 +381,7 @@ export class VisionTriangle {
 
   containsToken(token) {
     // Ignore tokens not within the elevation vision rectangle.
-    if ( token.topE < this.elevation.min || token.bottomE > this.elevation.max ) return false;
+    if ( token.topZ < this.elevationZ.min || token.bottomZ > this.elevationZ.max ) return false;
 
     // Even for constrained tokens, the token center should remain within the token border.
     const tCenter = token.center;

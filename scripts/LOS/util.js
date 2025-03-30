@@ -311,3 +311,52 @@ export function sumRedObstaclesPixels(targetCache) {
   }
   return sumTarget;
 }
+
+
+/**
+ * Determine minimum and maximum x and y of an array of polygons.
+ * @param {PIXI.Polygon[]} polygons
+ * @returns { object }
+ *   - @prop {object} xMinMax
+ *     - @prop {number} min
+ *     - @prop {number} max
+ *   - @prop {object} yMinMax
+ *     - @prop {number} min
+ *     - @prop {number} max
+ */
+export function minMaxPolygonCoordinates(polygons) {
+  let elem = 0;
+  polygons.forEach(poly => elem += poly.points.length);
+  const nCoord = elem * 0.5;
+  const xs = Array(nCoord);
+  const ys = Array(nCoord);
+  for ( let i = 0, k = 0, n = polygons.length; i < n; i += 1) {
+    const arr = polygons[i].points;
+    const nArr = arr.length;
+    for ( let j = 0; j < nArr; j += 2, k += 1 ) {
+      xs[k] = arr[j];
+      ys[k] = arr[j+1];
+    }
+  }
+  return { xMinMax: Math.minMax(...xs), yMinMax: Math.minMax(...ys) };
+}
+
+
+/**
+ * Efficiently combine multiple typed arrays.
+ * @param {...TypedArray} ...args
+ * @returns {TypedArray}
+ */
+export function combineTypedArrays(...arrs) {
+  const len = arrs.reduce((acc, curr) => acc + curr.length, 0);
+  const out = new arrs[0].constructor(len);
+  out.set(arrs[0]);
+  let idx = 0;
+  for ( let i = 0, n = arrs.length; i < n; i += 1 ) {
+    out.set(arrs[i], idx);
+    idx += arrs[i].length;
+  }
+  return out;
+}
+
+
