@@ -180,7 +180,7 @@ class DrawableObjectsAbstract {
    * @type {object} [opts]
    * @type {CONST.WALL_RESTRICTION_TYPES} [opts.senseType="sight"]
    */
-  constructor(device, materials, camera, { senseType = "sight" }) {
+  constructor(device, materials, camera, { senseType = "sight" } = {}) {
     this.device = device;
     this.materials = materials;
     this.camera = camera;

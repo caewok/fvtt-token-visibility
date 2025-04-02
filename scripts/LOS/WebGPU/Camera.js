@@ -30,13 +30,13 @@ export class Camera {
   };
 
   /** @type {GPUBindGroupLayout} */
-  bindGroupLayout;
+//   bindGroupLayout;
 
   /** @type {GPUBuffer} */
-  deviceBuffer;
+//   deviceBuffer;
 
   /** @type {GPUBindGroup} */
-  bindGroup;
+//   bindGroup;
 
   // TODO: Combine so that the buffer stores the camera values instead of repeating them.
   // Could use MatrixFlat to store the buffer views.
@@ -63,39 +63,38 @@ export class Camera {
     lookAt: true,
   };
 
-  constructor(device, { cameraPosition, targetPosition } = {}) {
-    this.device = device;
+  constructor({ cameraPosition, targetPosition } = {}) {
     if ( cameraPosition ) this.cameraPosition = cameraPosition;
     if ( targetPosition ) this.targetPosition = targetPosition;
 
     // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
     this.#mirrorM.setIndex(0, 0, -1);
 
-    this.bindGroupLayout = device.createBindGroupLayout(this.constructor.CAMERA_LAYOUT);
-    this._createBindGroup();
+//     this.bindGroupLayout = device.createBindGroupLayout(this.constructor.CAMERA_LAYOUT);
+//     this._createBindGroup();
   }
 
-  _createBindGroup() {
-    const buffer = this.deviceBuffer = this.device.createBuffer({
-      label: "Camera",
-      size: Camera.CAMERA_BUFFER_SIZE,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    // Buffer will be written to GPU prior to render, because the camera view will change.
-    this.bindGroup = this.device.createBindGroup({
-      label: "Camera",
-      layout: this.bindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: { buffer }
-      }],
-    });
-  }
+//   _createBindGroup() {
+//     const buffer = this.deviceBuffer = this.device.createBuffer({
+//       label: "Camera",
+//       size: Camera.CAMERA_BUFFER_SIZE,
+//       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+//     });
+//     // Buffer will be written to GPU prior to render, because the camera view will change.
+//     this.bindGroup = this.device.createBindGroup({
+//       label: "Camera",
+//       layout: this.bindGroupLayout,
+//       entries: [{
+//         binding: 0,
+//         resource: { buffer }
+//       }],
+//     });
+//   }
 
-  updateDeviceBuffer() {
-    this.device.queue.writeBuffer(this.deviceBuffer, 0, this.arrayBuffer);
-    this.debugBuffer = new Float32Array(this.arrayBuffer)
-  }
+//   updateDeviceBuffer() {
+//     this.device.queue.writeBuffer(this.deviceBuffer, 0, this.arrayBuffer);
+//     this.debugBuffer = new Float32Array(this.arrayBuffer)
+//   }
 
   /**
    * Set the field of view and zFar for a target token, to maximize the space the token

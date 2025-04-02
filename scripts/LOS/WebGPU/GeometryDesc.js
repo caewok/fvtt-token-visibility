@@ -33,8 +33,10 @@ export class GeometryDesc {
   indices;
 
   // This geometry's vertex and index buffers.
+  /** @type {GPUBuffer} */
   vertexBuffer;
 
+  /** @type {GPUBuffer} */
   indexBuffer;
 
   // Offsets for this geometry's vertex and index buffers.

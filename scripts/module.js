@@ -85,6 +85,9 @@ import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
 import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
+import { WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
+import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
+import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -119,7 +122,7 @@ Hooks.once("init", function() {
      * Size of the render texture (width and height) used in the webGL LOS algorithms.
      * @type {number}
      */
-    renderTextureSize: 100,
+    renderTextureSize: 128,
 
     /**
      * Resolution of the render texture used in the webZGL LOS algorithm.
@@ -199,7 +202,9 @@ Hooks.once("init", function() {
     webgl: {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,
-      Placeable3dDebugShader, Tile3dDebugShader
+      Placeable3dDebugShader, Tile3dDebugShader,
+      DrawableWallInstancesPIXI,
+      RenderWallsPIXI,
     },
 
     webgpu: {
@@ -221,6 +226,7 @@ Hooks.once("init", function() {
       wgsl,
       AsyncQueue,
       SumPixelsWebGL2,
+      WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler
     },
 
     glmatrix: {

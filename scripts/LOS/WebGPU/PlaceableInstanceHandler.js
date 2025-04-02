@@ -267,6 +267,20 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
   }
 }
 
+export class NonDirectionalWallInstanceHandler extends WallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return !edge.direction;
+  }
+}
+
+export class DirectionalWallInstanceHandler extends WallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return edge.direction;
+  }
+}
+
 export class TileInstanceHandler extends PlaceableInstanceHandler {
   /**
    * Change keys in updateDocument hook that indicate a relevant change to the placeable.
