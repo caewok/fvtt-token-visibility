@@ -201,33 +201,49 @@ WebGL2.summarizePixelData(imgData)
 
 
 // Test drawing target token.
-debugViewNormals = false
+debugViewNormals = true
 camera = new Camera();
 placeableHandler = new TokenInstanceHandler("sight");
 geom = new GeometryConstrainedTokenDesc({ token: target, addNormals: debugViewNormals, addUVs: false })
-vertexShaderSource = await WebGL2.sourceFromGLSLFile("constrained_token_vertex", { debugViewNormals: Number(debugViewNormals) })
-fragmentShaderSource = await WebGL2.sourceFromGLSLFile("wall_fragment", { debugViewNormals: 0 })
+vertexShaderSource = await WebGL2.sourceFromGLSLFile("constrained_token_vertex", { debugViewNormals })
+fragmentShaderSource = await WebGL2.sourceFromGLSLFile("wall_fragment", { debugViewNormals })
 vertexShader = WebGL2.createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
 fragmentShader = WebGL2.createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
 program = WebGL2.createProgram(gl, vertexShader, fragmentShader)
 
+// gl.getShaderSource(vertexShader)
+// gl.getShaderSource(fragmentShader)
+
 
 // Set vertex buffer
-posAttribLoc = gl.getAttribLocation(program, "aPos")
-posBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer)
+vBuffer = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer)
 gl.bufferData(gl.ARRAY_BUFFER, geom.vertices, gl.STATIC_DRAW)
 
 // Link vao to the vertex buffer
 vao = gl.createVertexArray()
 gl.bindVertexArray(vao)
+
+// For offset and stride, see https://stackoverflow.com/questions/16380005/opengl-3-4-glvertexattribpointer-stride-and-offset-miscalculation
+posAttribLoc = gl.getAttribLocation(program, "aPos")
 gl.enableVertexAttribArray(posAttribLoc)
 size = 3
 type = gl.FLOAT
-stride = 0
+stride = geom.vertices.BYTES_PER_ELEMENT * 6
 offset = 0
 normalize = false
 gl.vertexAttribPointer(posAttribLoc, size, type, normalize, stride, offset);
+
+if ( debugViewNormals ) {
+  normAttribLoc = gl.getAttribLocation(program, "aNorm");
+  gl.enableVertexAttribArray(normAttribLoc)
+  size = 3
+  type = gl.FLOAT
+  // stride = geom.vertices.BYTES_PER_ELEMENT * 6;
+  offset = 3 * geom.vertices.BYTES_PER_ELEMENT
+  normalize = false
+  gl.vertexAttribPointer(normAttribLoc, size, type, normalize, stride, offset);
+}
 
 // Set index buffer
 indexBuffer = gl.createBuffer();
@@ -244,7 +260,8 @@ viewerLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer)
 targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
 camera.cameraPosition = viewerLocation;
 camera.targetPosition = targetLocation;
-//camera.setTargetTokenFrustrum(target);
+camera.setTargetTokenFrustrum(target);
+camera.perspectiveParameters = { fov: camera.perspectiveParameters.fov * 2, zFar: camera.perspectiveParameters.zFar + 50 }
 
 transpose = false
 perspectiveMat4UniformLoc = gl.getUniformLocation(program, "uPerspectiveMatrix");
@@ -284,15 +301,6 @@ indexType = gl.UNSIGNED_SHORT
 gl.drawElements(primitiveType, count, indexType, offset)
 
 
-
-// Set normals
-if ( debugViewNormals ) {}
-
-
-
-vertexShader = WebGL2.createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-
-this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`, { debugViewNormals });
 
 
 

@@ -1,10 +1,8 @@
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-#define USE_NORMALS   ${debugViewNormals}
-
 in vec3 aPos;
-#if (USE_NORMALS == 1)
+#if ${debugViewNormals}
 in vec3 aNorm;
 #endif
 in mat4 aiModel;
@@ -12,7 +10,7 @@ in mat4 aiModel;
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uLookAtMatrix;
 
-#if (USE_NORMALS == 1)
+#if ${debugViewNormals}
 out vec3 vNorm;
 #endif
 
@@ -22,7 +20,7 @@ void main() {
 
   // instance: gl_InstanceID
 
-  #if (USE_NORMALS == 1)
+  #if ${debugViewNormals}
   vNorm = normalize((uLookAtMatrix * model * vec4(aNorm, 0.0)).xyz);
   #endif
 }

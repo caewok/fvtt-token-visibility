@@ -11,6 +11,7 @@ import { Camera } from "../WebGPU/Camera.js";
 import { combineTypedArrays } from "../util.js";
 import { NonDirectionalWallInstanceHandler, DirectionalWallInstanceHandler } from "../WebGPU/PlaceableInstanceHandler.js";
 import { VisionTriangle } from "../VisionPolygon.js";
+import { wgsl } from "../WebGPU/wgsl-preprocessor.js";
 
 /*
 PIXI: Only does basic instancing. No apparent way to filter which instances to use.
@@ -226,7 +227,7 @@ function interpolate(str, params = {}) {
   // Replace the names with the relevant values.
   const names = Object.keys(params);
   const vals = Object.values(params);
-  return new Function(...names, `return \`${str}\`;`)(...vals);
+  return new Function("wgsl", ...names, `return wgsl\`${str}\`;`)(wgsl, ...vals);
 }
 
 export class RenderObstaclesAbstractPIXI {

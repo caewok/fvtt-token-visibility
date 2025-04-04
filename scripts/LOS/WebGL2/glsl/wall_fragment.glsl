@@ -1,13 +1,10 @@
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-#define USE_NORMALS   ${debugViewNormals}
 
-#if (USE_NORMALS == 1)
-in vec2 vNorm
+#if ${debugViewNormals}
+in vec3 vNorm;
 #endif
-
-flat in int faceID;
 
 uniform vec4 uColor;
 
@@ -22,8 +19,8 @@ void main() {
   fragColor = uColor;
 
   // Extremely simple directional lighting model to give the model some shape.
-  #if (USE_NORMALS == 1)
-    vec3 N = normalize(in.norm);
+  #if ${debugViewNormals}
+    vec3 N = normalize(vNorm);
     float NDotL = max(dot(N, lightDir), 0.0);
     vec3 surfaceColor = (uColor.rgb * ambientColor) + (uColor.rgb * NDotL);
     fragColor = vec4(surfaceColor, uColor.a);
