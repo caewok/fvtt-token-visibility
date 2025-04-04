@@ -67,7 +67,7 @@ struct CulledInstances {
   // Transform normals to view space.
   // Need to avoid scaling.
   #if ${debugViewNormals}
-  out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0)).xyz);
+  out.norm = normalize((camera.lookAtM * model * vec4f(in.norm, 0.0)).xyz);
   #endif
 
   // See https://stackoverflow.com/questions/17401922/transforming-normal-to-view-space-in-vertex-shader

@@ -121,9 +121,6 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
   /** @type {string} */
   label = "Constrained Token";
 
-  /** @type {number} */
-  numVertices = 0;
-
   /** @type {Token} */
   token;
 

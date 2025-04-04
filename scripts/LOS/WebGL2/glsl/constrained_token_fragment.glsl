@@ -7,15 +7,13 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 in vec2 vNorm
 #endif
 
-flat in int faceID;
-
 uniform vec4 uColor;
 
 out vec4 fragColor;
 
 // Some hardcoded lighting
 const vec3 lightDir = normalize(vec3(0.25, 0.5, 1.0));
-const vec3 lightColor = vec3(1.0, 1.0, 1.0);
+const vec3 lightColor = vec3(1, 1, 1);
 const vec3 ambientColor = vec3(0.1, 0.1, 0.1);
 
 void main() {

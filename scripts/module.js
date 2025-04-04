@@ -88,6 +88,7 @@ import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
 import { WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
 import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
 import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
+import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -205,6 +206,7 @@ Hooks.once("init", function() {
       Placeable3dDebugShader, Tile3dDebugShader,
       DrawableWallInstancesPIXI,
       RenderWallsPIXI,
+      WebGL2,
     },
 
     webgpu: {
