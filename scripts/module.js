@@ -76,6 +76,7 @@ import {
   mat2, mat2d, mat3, mat4,
   quat, quat2,
   vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
+import { GeometryDesc } from "./LOS/WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
@@ -85,7 +86,14 @@ import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
 import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
-import { WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
+import {
+  WallInstanceHandler,
+  TileInstanceHandler,
+  TokenInstanceHandler,
+  NonDirectionalWallInstanceHandlerWebGL2,
+  DirectionalWallInstanceHandlerWebGL2,
+  TileInstanceHandlerWebGL2,
+  TokenInstanceHandlerWebGL2 } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
 import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
 import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
@@ -207,6 +215,10 @@ Hooks.once("init", function() {
       DrawableWallInstancesPIXI,
       RenderWallsPIXI,
       WebGL2,
+      NonDirectionalWallInstanceHandlerWebGL2,
+      DirectionalWallInstanceHandlerWebGL2,
+      TileInstanceHandlerWebGL2,
+      TokenInstanceHandlerWebGL2
     },
 
     webgpu: {
@@ -215,6 +227,7 @@ Hooks.once("init", function() {
       WebGPUBuffer,
       WebGPUTexture,
       Camera,
+      GeometryDesc,
       GeometryWallDesc,
       GeometryCubeDesc,
       GeometryHorizontalPlaneDesc,

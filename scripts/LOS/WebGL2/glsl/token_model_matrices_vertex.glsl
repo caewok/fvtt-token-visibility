@@ -5,10 +5,10 @@ in vec3 aPos;
 #if ${debugViewNormals}
 in vec3 aNorm;
 #endif
-in mat4 model;
 
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uLookAtMatrix;
+uniform mat4 model;
 
 #if ${debugViewNormals}
 out vec3 vNorm;

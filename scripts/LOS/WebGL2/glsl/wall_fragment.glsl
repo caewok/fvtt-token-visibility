@@ -1,7 +1,6 @@
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-
 #if ${debugViewNormals}
 in vec3 vNorm;
 #endif

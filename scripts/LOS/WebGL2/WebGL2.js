@@ -212,6 +212,42 @@ export class WebGL2 {
     gl.readPixels(x, y, width, height, format, type, pixels, dstOffset);
     return { pixels, x, y, width, height };
   }
+
+  /**
+   * Draw elements for triangles.
+   * @param {WebGL2RenderingContext} gl
+   * @param {number} count
+   * @param {number} [offset=0]
+   */
+  static draw(gl, count, offset = 0) {
+    const primitiveType = gl.TRIANGLES;
+    const indexType = gl.UNSIGNED_SHORT;
+    gl.drawElements(primitiveType, count, indexType, offset);
+  }
+
+  /**
+   * Draw for only the specified instances.
+   * @param {WebGL2RenderingContext} gl
+   * @param {Set<number>|number[]} instanceSet           Set of positive integers, including 0.
+   * @param {object} offsetData                           Offset data from GeometryDesc.computeBufferOffsets
+   */
+  static drawSet(gl, instanceSet, offsetData) {
+    if ( !(instanceSet.size || instanceSet.length) ) return;
+
+    // For a consecutive group, draw all at once.
+    // So if 0–5, 7–9, 12, should result in 3 draw calls.
+    if ( instanceSet instanceof Set ) instanceSet = [...instanceSet.values()];
+    instanceSet.sort((a, b) => a - b);
+    for ( let i = 0, iMax = instanceSet.length; i < iMax; i += 1 ) {
+      const firstInstance = instanceSet[i];
+      // Count the number of consecutive instances.
+      let instanceCount = 1;
+      while ( instanceSet[i + 1] === instanceSet[i] + 1 ) { instanceCount += 1; i += 1; }
+      const offset = firstInstance ? offsetData.index.offsets.slice(0, firstInstance).reduce((acc, curr) => acc + curr, 0) : 0;
+      const count = offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount).reduce((acc, curr) => acc + curr, 0);
+      this.draw(gl, count, offset);
+    }
+  }
 }
 
 

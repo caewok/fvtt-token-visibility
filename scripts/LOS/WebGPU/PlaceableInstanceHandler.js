@@ -9,6 +9,9 @@ PIXI,
 
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
 import { MODULES_ACTIVE } from "../../const.js";
+import { GeometryWallDesc } from "./GeometryWall.js";
+import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./GeometryToken.js";
 
 // Base folder
 
@@ -50,8 +53,9 @@ class PlaceableInstanceHandler {
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   senseType = "sight";
 
-  constructor({ senseType = "sight" } = {}) {
-    const key = `${this.constructor.name}_${senseType}`;
+  constructor({ senseType = "sight", keys = [] } = {}) {
+    keys.unshift(this.constructor.name, senseType);
+    const key = keys.join("_");
     const handlers = this.constructor.handlers;
     if ( handlers.has(key) ) return handlers.get(key);
     handlers.set(key, this);
@@ -72,6 +76,9 @@ class PlaceableInstanceHandler {
 
   get instanceArrayValues() { return new Float32Array(this.instanceArrayBuffer); }
 
+  /** @type {MatrixFloat32[]} */
+  matrices = [];
+
   /**
    * Initialize all placeables.
    */
@@ -81,12 +88,29 @@ class PlaceableInstanceHandler {
     const placeables = this.getPlaceables();
 
     // mat4x4 for each placeable; 4 bytes per entry.
-    this.instanceArrayBuffer = new ArrayBuffer(placeables.length * this.constructor.INSTANCE_ELEMENT_SIZE);
-    placeables.forEach((placeable, idx) => {
-      this.instanceIndexFromId.set(placeable.id, idx);
-      this.placeableFromInstanceIndex.set(idx, placeable);
-      this.updateInstanceBuffer(placeable.id, idx, placeable);
-    });
+    this._createInstanceBuffer(placeables.length);
+    placeables.forEach((placeable, idx) => this._initializePlaceable(placeable, idx));
+  }
+
+  /**
+   * Construct data related to the number of instances.
+   * @param {number} numPlaceables
+   */
+  _createInstanceBuffer(numPlaceables) {
+    this.instanceArrayBuffer = new ArrayBuffer(numPlaceables * this.constructor.INSTANCE_ELEMENT_SIZE);
+    this.matrices.length = numPlaceables;
+  }
+
+  /**
+   * Initialize a single placeable at a given index.
+   * @param {PlaceableObject|Edge} placeable
+   * @param {number} idx
+   */
+  _initializePlaceable(placeable, idx) {
+    this.instanceIndexFromId.set(placeable.id, idx);
+    this.placeableFromInstanceIndex.set(idx, placeable);
+    this.matrices[idx] = new MatrixFloat32(this.getPlaceableInstanceData(placeable.id, idx), 4, 4);
+    this.updateInstanceBuffer(idx);
   }
 
   /**
@@ -110,13 +134,12 @@ class PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable, { rotation, translation, scale } = {}) {
+  updateInstanceBuffer(idx, { rotation, translation, scale } = {}) {
     rotation ??= MatrixFloat32.identity(4, 4, rotationM);
     translation ??= MatrixFloat32.identity(4, 4, translationM);
     scale ??= MatrixFloat32.identity(4, 4, scaleM);
 
-    const arrM = this.getPlaceableInstanceData(placeableId, idx);
-    const M = new MatrixFloat32(arrM, 4, 4);
+    const M = this.matrices[idx];
     scale
       .multiply4x4(rotation, M)
       .multiply4x4(translation, M);
@@ -191,9 +214,8 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const edge = placeable ??= this.placeableFromInstanceIndex.get(idx);
+  updateInstanceBuffer(idx) {
+    const edge = this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const pos = this.constructor.edgeCenter(edge);
@@ -219,7 +241,7 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
     // Rotate around Z axis to match wall direction.
     MatrixFloat32.rotationZ(rot, true, rotationM);
 
-    super.updateInstanceBuffer(placeableId, idx, placeable,
+    return super.updateInstanceBuffer(idx,
       { rotation: rotationM, translation: translationM, scale: scaleM });
   }
 
@@ -331,9 +353,8 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const tile = placeable ??= this.placeableFromInstanceIndex.get(idx);
+  updateInstanceBuffer(idx) {
+    const tile = this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = this.constructor.tileCenter(tile);
@@ -348,7 +369,7 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
     // Rotate based on tile rotation.
     MatrixFloat32.rotationZ(Math.toRadians(tile.document.rotation), true, rotationM);
 
-    super.updateInstanceBuffer(placeableId, idx, placeable,
+    return super.updateInstanceBuffer(idx,
       { rotation: rotationM, translation: translationM, scale: scaleM });
   }
 
@@ -421,9 +442,8 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const token = placeable ??= this.placeableFromInstanceIndex.get(idx);
+  updateInstanceBuffer(idx) {
+    const token = this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
@@ -435,7 +455,7 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
     // Scale based on width, height, zHeight of token.
     MatrixFloat32.scale(width, height, zHeight, scaleM);
 
-    super.updateInstanceBuffer(placeableId, idx, placeable,
+    return super.updateInstanceBuffer(idx,
       { translation: translationM, scale: scaleM });
   }
 
@@ -453,5 +473,189 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
       height: token.document.height * canvas.dimensions.size,
       zHeight: token.topZ - token.bottomZ,
     };
+  }
+}
+
+// Mixin for storing wall geometry and updating vertices based on changes to the instances.
+const VerticesMixin = function(Base) {
+  class Vertices extends Base {
+    /** @type {ArrayBuffer} */
+    verticesBuffer = new ArrayBuffer();
+
+    /** @type {ArrayBuffer} */
+    indicesBuffer = new ArrayBuffer();
+
+    /** @type {Float32Array} */
+    verticesArray = new Float32Array();
+
+    /** @type {Uint16Array} */
+    indicesArray = new Uint16Array();
+
+    /** @type {Float32Array[]} */
+    vertices = [];
+
+    /** @type {Uint16Array[]} */
+    indices = [];
+
+    /** @type {boolean} */
+    addNormals = false;
+
+    /** @type {boolean} */
+    addUVs = false;
+
+    /** @type {GeometryDesc} */
+    geom;
+
+    constructor({ senseType = "sight", addNormals = false, addUVs = false } = {}) {
+      const keys = [addNormals, addUVs];
+      super({ senseType, keys });
+      this.addNormals = addNormals;
+      this.addUVs = addUVs;
+    }
+
+    /**
+     * Construct data related to the number of instances.
+     * @param {number} numPlaceables
+     */
+    _createInstanceBuffer(numPlaceables) {
+      super._createInstanceBuffer(numPlaceables);
+      const geom = this.geom;
+      this.verticesBuffer = new ArrayBuffer(numPlaceables * geom.vertices.byteLength);
+      this.indicesBuffer = new ArrayBuffer(numPlaceables * geom.indices.byteLength);
+      this.verticesArray = new geom.vertices.constructor(this.verticesBuffer);
+      this.indicesArray = new geom.indices.constructor(this.indicesBuffer);
+
+      // Create distinct views into the vertices and indices buffers
+      this.vertices = new Array(numPlaceables);
+      this.indices = new Array(numPlaceables);
+      for ( let i = 0; i < numPlaceables; i += 1 ) {
+        const numIndices = geom.indices.length;
+        this.vertices[i] = new geom.vertices.constructor(this.verticesBuffer, i * geom.vertices.byteLength, geom.vertices.length);
+        const indices = this.indices[i] = new geom.indices.constructor(this.indicesBuffer, i * geom.indices.byteLength, numIndices);
+
+        // Set the indices for each; incrementing for each subsequent placeable after the first.
+        const offset = geom.numVertices * i;
+        for ( let j = 0; j < numIndices; j += 1 ) indices[j] = geom.indices[j] + offset;
+      }
+    }
+
+    /**
+     * Update the instance array of a specific placeable.
+     * Also updates the relevant vertices.
+     * @param {string} placeableId          Id of the placeable
+     * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
+     * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
+     */
+    updateInstanceBuffer(idx, opts) {
+      super.updateInstanceBuffer(idx, opts);
+      const M = this.matrices[idx];
+      const geomVertices = this.geom.vertices;
+      const vertices = this.vertices[idx];
+      const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+      const stride = (this.addNormals && this.addUVs) ? 8
+        : this.addNormals ? 6
+        : this.addUVs ? 5
+        : 3;
+
+      for ( let i = 0, iMax = geomVertices.length; i < iMax; i += stride ) {
+        const xIdx = i;
+        const yIdx = i + 1;
+        const zIdx = i + 2;
+        const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
+        const txPt = M.multiplyPoint3d(pt, Point3d._tmp1);
+
+        vertices[xIdx] = txPt.x;
+        vertices[yIdx] = txPt.y;
+        vertices[zIdx] = txPt.z;
+      }
+
+      if ( this.addNormals ) {
+        // Should not matter for fully vertical or horizontal triangles, but...
+        // See https://webgl2fundamentals.org/webgl/lessons/webgl-3d-lighting-directional.html
+        const invTransposeM = M.invert().transpose();
+        for ( let i = 3, iMax = geomVertices.length; i < iMax; i += stride ) {
+          const xIdx = i;
+          const yIdx = i + 1;
+          const zIdx = i + 2;
+          const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
+          const txPt = invTransposeM.multiplyPoint3d(pt, Point3d._tmp1);
+
+          vertices[xIdx] = txPt.x;
+          vertices[yIdx] = txPt.y;
+          vertices[zIdx] = txPt.z;
+        }
+      }
+    }
+  }
+  return Vertices;
+}
+
+
+/**
+ * Store the wall geometry and update vertices based on changes to the instance matrix.
+ */
+export class NonDirectionalWallInstanceHandlerWebGL2 extends VerticesMixin(NonDirectionalWallInstanceHandler) {
+  constructor(opts) {
+    super(opts);
+    const { addNormals, addUVs } = this;
+    this.geom = new GeometryWallDesc({ directional: false, addNormals, addUVs });
+  }
+}
+
+export class DirectionalWallInstanceHandlerWebGL2 extends VerticesMixin(DirectionalWallInstanceHandler) {
+  constructor(opts) {
+    super(opts);
+    const { addNormals, addUVs } = this;
+    this.geom = new GeometryWallDesc({ directional: true, addNormals, addUVs });
+  }
+}
+
+export class TileInstanceHandlerWebGL2 extends VerticesMixin(TileInstanceHandler) {
+  constructor(opts) {
+    super(opts);
+    const { addNormals } = this;
+    this.geom = new GeometryHorizontalPlaneDesc({ directional: true, addNormals, addUVs: true });
+  }
+}
+
+/**
+ * Store the token geometry and update vertices based on changes to the instance matrix.
+ */
+export class TokenInstanceHandlerWebGL2 extends VerticesMixin(TokenInstanceHandler) {
+  /** @type {GeometryDesc[]} */
+  constrainedGeoms = [];
+
+  constructor(opts) {
+    super(opts);
+    const { addNormals, addUVs } = this;
+    this.geom = new GeometryCubeDesc({ addNormals, addUVs });
+  }
+
+  /**
+   * Construct data related to the number of instances.
+   * For tokens, always use the constrained geometry.
+   * @param {number} numPlaceables
+   */
+  _createInstanceBuffer(numPlaceables) {
+    super._createInstanceBuffer(numPlaceables);
+    this.geoms = new Array(numPlaceables);
+  }
+
+  /**
+   * Update the instance array of a specific placeable.
+   * Also updates the relevant vertices and creates constrained geometries if necessary.
+   * @param {string} placeableId          Id of the placeable
+   * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
+   * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
+   */
+  updateInstanceBuffer(idx, opts) {
+    super.updateInstanceBuffer(idx, opts);
+    const token = this.placeableFromInstanceIndex.get(idx);
+    if ( !token.isConstrained ) {
+      this.geoms[idx] = undefined;
+      return;
+    }
+    const { addNormals, addUVs } = this;
+    this.geoms[idx] = new GeometryConstrainedTokenDesc({ token, addNormals, addUVs });
   }
 }
