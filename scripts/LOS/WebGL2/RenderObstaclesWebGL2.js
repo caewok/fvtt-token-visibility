@@ -62,8 +62,8 @@ class RenderAbstractWebGL2 {
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-//     gl.enable(gl.CULL_FACE);
-//     gl.cullFace(gl.BACK);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
 
     this.drawableObjects.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
   }

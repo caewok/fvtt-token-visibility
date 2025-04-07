@@ -158,6 +158,7 @@ class DrawableObjectsWebGL2Abstract {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
 
     // TODO: Swap between canvas and renderTexture.
 
@@ -250,6 +251,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
 
