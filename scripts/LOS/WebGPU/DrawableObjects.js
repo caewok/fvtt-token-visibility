@@ -84,7 +84,7 @@ class DrawableObjectsAbstract {
 
   static handlerClass;
 
-  static shaderFile;
+  static shaderFile = "";
 
   static GROUP_NUM = {
     CAMERA: 0,

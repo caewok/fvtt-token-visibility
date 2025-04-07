@@ -52,7 +52,6 @@ import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriang
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
-
 import {
   Triangle,
   DirectionalWallTriangles,
@@ -97,6 +96,9 @@ import {
 import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
 import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
+import { DrawableNonDirectionalWallWebGL2 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
+import { RenderWallsWebGL2 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
+import * as twgl from "./LOS/WebGL2/twgl.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -218,7 +220,10 @@ Hooks.once("init", function() {
       NonDirectionalWallInstanceHandlerWebGL2,
       DirectionalWallInstanceHandlerWebGL2,
       TileInstanceHandlerWebGL2,
-      TokenInstanceHandlerWebGL2
+      TokenInstanceHandlerWebGL2,
+      DrawableNonDirectionalWallWebGL2,
+      RenderWallsWebGL2,
+      twgl,
     },
 
     webgpu: {

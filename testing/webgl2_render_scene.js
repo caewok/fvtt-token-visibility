@@ -26,6 +26,9 @@ let {
   DirectionalWallInstanceHandlerWebGL2,
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2,
+  DrawableNonDirectionalWallWebGL2,
+  RenderWallsWebGL2,
+  twgl,
 } = api.webgl;
 
 function combineTypedArrays(...arrs) {
@@ -60,6 +63,19 @@ gl = glCanvas.getContext('webgl2');
 popout = new Area3dPopoutCanvas({ width: 400, height: 475, resizable: false })
 await popout._render(true, { contextType: "webgl2"});
 gl = popout.context
+
+
+// NOTE: Test renderWall
+
+renderWalls = new RenderWallsWebGL2()
+await renderWalls.initialize({ gl, senseType: "sight" })
+renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderWalls._setCamera()
+
+drawableObj = renderWalls.drawableObjects[0]
+
+
 
 
 
@@ -798,4 +814,82 @@ offsetData = {
 }
 offsetData.index.sizes.forEach((ln, i) => offsetData.index.offsets[i] = ln * i)
 WebGL2.drawSet(gl, instanceSet, offsetData)
+
+// NOTE: Draw walls individually using twgl
+debugViewNormals = true
+camera = new Camera();
+placeableHandler = new NonDirectionalWallInstanceHandlerWebGL2({ senseType: "sight", addNormals: debugViewNormals });
+placeableHandler.initializePlaceables()
+
+vertexShaderSource = await WebGL2.sourceFromGLSLFile("obstacle_vertex", { debugViewNormals })
+fragmentShaderSource = await WebGL2.sourceFromGLSLFile("obstacle_fragment", { debugViewNormals })
+programInfo = twgl.createProgramInfo(gl, [vertexShaderSource, fragmentShaderSource], )
+
+// Set vertex buffer
+vBuffer = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer)
+gl.bufferData(gl.ARRAY_BUFFER, placeableHandler.verticesArray, gl.STATIC_DRAW)
+
+// See https://github.com/greggman/twgl.js/issues/132
+wallBufferData = {
+  aPos: {
+    numComponents: 3,
+    buffer: vBuffer,
+    stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+    offset: 0,
+  },
+  indices: placeableHandler.indicesArray,
+};
+
+if ( debugViewNormals ) wallBufferData.aNorm = {
+  numComponents: 3,
+  buffer: vBuffer,
+  stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * 6,
+  offset: 3 * placeableHandler.verticesArray.BYTES_PER_ELEMENT,
+};
+bufferInfo = twgl.createBufferInfoFromArrays(gl, wallBufferData);
+
+vertexArrayInfo = twgl.createVertexArrayInfo(gl, programInfo, bufferInfo);
+
+// Draw
+viewerLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer)
+targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+camera.cameraPosition = viewerLocation;
+camera.targetPosition = targetLocation;
+camera.setTargetTokenFrustrum(target);
+camera.perspectiveParameters = { fov: camera.perspectiveParameters.fov * 2, zFar: camera.perspectiveParameters.zFar + 50 }
+
+gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+
+uniforms = {
+  uColor: new Float32Array([0, 0, 1, 1]),
+  uPerspectiveMatrix: camera.perspectiveMatrix.arr,
+  uLookAtMatrix: camera.lookAtMatrix.arr,
+};
+
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0, 0, 0, 0);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+gl.useProgram(programInfo.program);
+
+twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+twgl.setUniforms(programInfo, uniforms);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+// gl.bufferSubData(gl.ARRAY_BUFFER, 0, particleBuf); // If updating vertices
+gl.bindVertexArray(vertexArrayInfo.vertexArrayObject);
+
+instanceSet = new Set(placeableHandler.instanceIndexFromId.values())
+// instanceSet.delete(placeableHandler.instanceIndexFromId.get(viewer.id))
+
+offsetData = {
+  index: {
+    offsets: new Array(placeableHandler.numInstances),
+    lengths: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.length),
+    sizes: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.byteLength),
+  }
+}
+offsetData.index.sizes.forEach((ln, i) => offsetData.index.offsets[i] = ln * i)
+WebGL2.drawSet(gl, instanceSet, offsetData)
+
 

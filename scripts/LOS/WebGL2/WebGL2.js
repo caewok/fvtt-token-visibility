@@ -8,9 +8,7 @@ PIXI,
 
 import { MODULE_ID } from "../../const.js";
 import { Camera } from "../WebGPU/Camera.js";
-import { combineTypedArrays } from "../util.js";
 import { NonDirectionalWallInstanceHandler, DirectionalWallInstanceHandler } from "../WebGPU/PlaceableInstanceHandler.js";
-import { VisionTriangle } from "../VisionPolygon.js";
 import { wgsl } from "../WebGPU/wgsl-preprocessor.js";
 
 /*
@@ -31,6 +29,36 @@ https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/vertexAtt
  * Misc functions to assist with WebGL2 rendering.
  */
 export class WebGL2 {
+
+  /** @type {WebGL2RenderingContext} */
+  gl;
+
+  /** @type {WebGL2Program} */
+  program; // Current program to use.
+
+  /** @type {WebGL2VertexArray} */
+  vao; // Current vao to use.
+
+
+  /**
+   * @param {WebGL2RenderingContext} gl
+   */
+  constructor(gl) {
+    this.gl = gl;
+  }
+
+  /**
+   * Bind the current vertex array object.
+   */
+  bindVAO() { this.gl.bindVertexArray(this.vao); }
+
+  unbindVAO() { this.gl.bindVertexArray(null); }
+
+  /**
+   * Use the current program.
+   */
+  useProgram() { this.gl.useProgram(this.program); }
+
   /**
    * Load code from a GLSL file.
    * @param {string} fileName       Name of the GLSL file, found at scripts/glsl/
@@ -54,7 +82,6 @@ export class WebGL2 {
 
   /**
    * Create a WebGL shader.
-   * @param {WebGL2RenderingContext} gl
    * @param {gl.VERTEX_SHADER|gl.FRAGMENT_SHADER} type
    * @param {string} source
    * @returns {WebGL2Shader|undefined}
@@ -72,13 +99,23 @@ export class WebGL2 {
     return undefined;
   }
 
+  createVertexShader(source) { return this.constructor.createShader(this.gl, this.gl.VERTEX_SHADER, source); }
+
+  createFragmentShader(source) { return this.constructor.createShader(this.gl, this.gl.FRAGMENT_SHADER, source); }
+
   /**
    * Create a WebGL shader program.
    * @param {WebGL2RenderingContext} gl
    * @param {WebGL2Shader} vertexShader
    * @param {WebGL2Shader} fragmentShader
-   * @returns {WebGLProgram}
+   * @returns {WebGLProgram|undefined}
    */
+  createProgram(vertexShader, fragmentShader) {
+    const program = this.constructor.createProgram(this.gl, vertexShader, fragmentShader);
+    this.program = program;
+    return program;
+  }
+
   static createProgram(gl, vertexShader, fragmentShader) {
     const program = gl.createProgram();
     gl.attachShader(program, vertexShader);
@@ -93,9 +130,34 @@ export class WebGL2 {
     return undefined;
   }
 
+  /**
+   * Create a WebGL program from vertex and fragment files.
+   * @param {string} vertexFileName
+   * @param {string} fragmentFileName
+   * @param {object} [params]           For interpolation
+   * @returns {WebGLProgram|undefined}
+   */
+  async createProgramFromFiles(shaderFile, fragmentFile, params = {}) {
+    const vertexShaderSource = await this.constructor.sourceFromGLSLFile("obstacle_vertex", params)
+    const fragmentShaderSource = await this.constructor.sourceFromGLSLFile("obstacle_fragment", params)
+    const vertexShader = this.createVertexShader(vertexShaderSource);
+    const fragmentShader = this.createFragmentShader(fragmentShaderSource);
+    return this.createProgram(vertexShader, fragmentShader);
+  }
+
+  /**
+   * Bind a framebuffer and set the width/height for the framebuffer.
+   * @param {WebGLFramebuffer} fb
+   * @param {number} [width]
+   * @param {number} [height]
+   */
+  bindFramebufferAndSetViewport(fb, width, height) { this.constructor.bindFramebufferAndSetViewport(this.gl, fb, width, height); }
+
   static bindFramebufferAndSetViewport(gl, fb, width, height) {
-   gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-   gl.viewport(0, 0, width, height);
+    width ??= gl.canvas.width;
+    height ??= gl.canvas.height;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.viewport(0, 0, width, height);
   }
 
   /**
@@ -103,7 +165,6 @@ export class WebGL2 {
    * Binds the texture to gl.TEXTURE_2D.
    * See https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texParameter
    * Adapted from https://webgl2fundamentals.org/webgl/lessons/webgl-image-processing-continued.html
-   * @param {WebGL2RenderingContext} gl
    * @param {object} params       Passed to gl.texParameteri
    * @param {GLint} [params[gl.TEXTURE_WRAP_S]=gl.CLAMP_TO_EDGE]
    * @param {GLint} [params[gl.TEXTURE_WRAP_T]=gl.CLAMP_TO_EDGE]
@@ -111,7 +172,9 @@ export class WebGL2 {
    * @param {GLint} [params[gl.TEXTURE_MAG_FILTER]=gl.LINEAR]
    * @returns {WebGLTexture}
    */
-  static createAndSetupTexture(gl, params = {}) {
+  createAndSetupTexture(params = {}) {
+    const gl = this.gl;
+
     // Set defaults.
     params[gl.TEXTURE_WRAP_S] ??= gl.CLAMP_TO_EDGE;
     params[gl.TEXTURE_WRAP_T] ??= gl.CLAMP_TO_EDGE;
@@ -142,7 +205,8 @@ export class WebGL2 {
    * @param {GLint} [opts.srcType=gl.UNSIGNED_BYTE]     Type of data being supplied
    * @param {TypedArray|ImageBitmap|null} [opts.data]   Data to be uploaded to the texture
    */
-  static formatTexture(gl, { mipLevel, internalFormat, srcFormat, srcType, data, width, height } = {}) {
+  formatTexture({ mipLevel, internalFormat, srcFormat, srcType, data, width, height } = {}) {
+    const gl = this.gl;
     mipLevel ??= 0;
     internalFormat ??= gl.RGBA
     srcFormat ??= gl.RGBA;
@@ -157,19 +221,130 @@ export class WebGL2 {
     gl.texImage2D(gl.TEXTURE_2D, mipLevel, internalFormat, width, height, border, srcFormat, srcType, data);
   }
 
+  attributes = {};
+
+  /**
+   * Add an attribute.
+   * See https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/vertexAttribPointer
+   * @param {string} attribName
+   * @param {WebGLProgram} program
+   * @param {object} [opts]
+   * @param {number} [opts.size=1]         Attribute length (between 1 and 4)
+   * @param {glType} [opts.type=gl.FLOAT]  Type of the attribute
+   * @param {number} [opts.stride]         In bytes
+   * @param {number} [opts.offset]         In bytes
+   * @param {boolean} [opts.normalize=false]
+   */
+  addAttribute(attribName, { size = 1, type, stride, offset, normalize = false } = {}) {
+    const gl = this.gl;
+    type ??= gl.FLOAT;
+    const loc = gl.getAttribLocation(this.program, attribName);
+    this.attributes[attribName] = { loc, size, type, normalize, stride, offset };
+
+    // gl.vertexAttribPointer(loc, size, type, normalize, stride, offset);
+  }
+
+  /**
+   * Creates the vertex array object and sets atributes on it.
+   * Binds the index buffer as well.
+   */
+  createVAOAndSetAttributes() {
+    const gl = this.gl;
+    this.vao = gl.createVertexArray();
+    this.bindVAO();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    this._setAttributes();
+    if ( this.indexBuffer ) gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
+    this.unbindVAO(); // Otherwise changes to ELEMENT_ARRAY_BUFFER will mess this up.
+  }
+
+  _setAttributes() {
+    const gl = this.gl;
+    for ( const params of Object.values(this.attributes) ) gl.vertexAttribPointer(...Object.values(params));
+  }
+
+  vertexBuffer;
+
+  /**
+   * Add a vertex buffer.
+   * @param {Float32Array} arr
+   * @param {glInt} [drawType=gl.STATIC_DRAW]     Or gl.DYNAMIC_DRAW
+   */
+  addVertexBuffer(arr, drawType) {
+    const gl = this.gl;
+    drawType ??= gl.STATIC_DRAW;
+    this.vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, arr, drawType);
+  }
+
+  indexBuffer;
+
+  /**
+   * Add an index buffer.
+   * @param {Uint16Array|Uint32Array} arr
+   * @param {glInt} [drawType=gl.STATIC_DRAW]     Or gl.DYNAMIC_DRAW
+   */
+  addIndexBuffer(arr, drawType) {
+    const gl = this.gl;
+    drawType ??= gl.STATIC_DRAW;
+    this.indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, arr, drawType);
+  }
+
+ /**
+  * Set the vertex buffer for drawing.
+  */
+ setVertexBuffer() { this.gl.bindVertexArray(this.gl.ARRAY_BUFFER, this.vertexBuffer); }
+
+ /**
+  * Add a uniform.
+  * @param {string} uniformName
+  * @param {Array|TypedArray|number} data
+  * @param {string} type              E.g., "mat4", "uvec2", "sampler2D"
+  */
+ setUniform(uniformName, type, ...data) {
+   // TODO: Could determine most types from data. Easier if data is a TypedArray.
+   // Or could use gl.uniform(program, loc) to get the data. Likely slower.
+   // TODO: get typeMethod from type string
+   const gl = this.gl;
+   const loc = gl.getUniformLocation(this.program, uniformName);
+   if ( Array.isArray(data[0]) || isTypedArray(data[0]) ) data = data[0];
+
+   if ( type.startsWith("mat") ) {
+     const numLabel = type.slice(3);
+     const transpose = false;
+     return gl[`uniformMatrix${numLabel}fv`](loc, transpose, data);
+   } else if ( type.startsWith("sampler") ) return gl.uniform1iv(loc, data);
+
+   // float, int, uint, bool, or ivec[n], bvec[n], uvec[n], vec[n]
+   const n = data.length;
+   const startValue = type.slice(0, 1);
+   switch ( startValue ) {
+     case "b":
+     case "u": return gl[`uniform${n}uv`](loc, data);
+     case "i": return gl[`uniform${n}iv`](loc, data);
+     case "f": // float
+     case "v": return gl[`uniform${n}fv`](loc, data);
+   }
+   console.error(`addUniform|Uniform type ${type} unknown.`);
+ }
+
+
   /**
    * Given image data or image pixels, print summary of the 4 color channels to console.
    * @param {object|TypedArray} pixels      Object with pixels parameter or an array of pixels
    */
   static summarizePixelData(pixels) {
-    if ( !(Array.isArray(pixels) || pixels instanceof TypedArray) ) pixels = pixels.pixels;
+    if ( Object.hasOwn(pixels, "pixels") ) pixels = pixels.pixels;
     const acc = Array(12).fill(0);
     const max = Array(4).fill(0);
     const min = Array(4).fill(0)
     pixels.forEach((px, idx) => {
       acc[idx % 4] += px;
       acc[idx % 4 + 4] += Boolean(px);
-      acc[idx % 4 + 8] += !Boolean(px);
+      acc[idx % 4 + 8] += !px;
       max[idx % 4] = Math.max(px, max[idx % 4])
       min[idx % 4] = Math.min(px, min[idx % 4])
     });
@@ -202,7 +377,8 @@ export class WebGL2 {
    * - @prop {number} height
    * - @prop {TypedArray} pixels
    */
-  static extractPixelData(gl, data, { x = 0, y = 0, width, height, dstOffset = 0, format, type  } = {}) {
+  extractPixelData(data, { x = 0, y = 0, width, height, dstOffset = 0, format, type  } = {}) {
+    const gl = this.gl;
     width ??= gl.canvas.width;
     height ??= gl.canvas.height;
     format ??= gl.RGBA;
@@ -213,12 +389,25 @@ export class WebGL2 {
     return { pixels, x, y, width, height };
   }
 
+  /** @type {Array(4)} */
+  clearColor = [0, 0, 0, 0];
+
+  /**
+   * Clear the draw.
+   */
+  clearDraw() {
+    const gl = this.gl;
+    gl.clearColor(...this.clearColor);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  }
+
   /**
    * Draw elements for triangles.
-   * @param {WebGL2RenderingContext} gl
    * @param {number} count
    * @param {number} [offset=0]
    */
+  draw(count, offset = 0) { this.constructor.draw(this.gl, count, offset); }
+
   static draw(gl, count, offset = 0) {
     const primitiveType = gl.TRIANGLES;
     const indexType = gl.UNSIGNED_SHORT;
@@ -227,10 +416,11 @@ export class WebGL2 {
 
   /**
    * Draw for only the specified instances.
-   * @param {WebGL2RenderingContext} gl
    * @param {Set<number>|number[]} instanceSet           Set of positive integers, including 0.
    * @param {object} offsetData                           Offset data from GeometryDesc.computeBufferOffsets
    */
+  drawSet(instanceSet, offsetData) { this.constructor.drawSet(this.gl, instanceSet, offsetData); }
+
   static drawSet(gl, instanceSet, offsetData) {
     if ( !(instanceSet.size || instanceSet.length) ) return;
 
@@ -279,7 +469,7 @@ export class RenderObstaclesAbstractPIXI {
   async initialize(opts) {
     this.drawableObjects.forEach(drawableObject => drawableObject.destroy());
     this.drawableObjects.length = 0;
-    const device = await this.getDevice();
+    // const device = await this.getDevice();
     // this.materials = new MaterialsTracker(device);
     await this._initializeDrawObjects(opts);
     this._allocateRenderTargets();
@@ -495,7 +685,8 @@ export class DrawableWallInstancesPIXI {
   render() {
     this.drawables.forEach(drawable => this._renderDrawable(drawable));
   }
+}
 
-
-
+function isTypedArray(obj) {
+  return ArrayBuffer.isView(obj) && !(obj instanceof DataView);
 }

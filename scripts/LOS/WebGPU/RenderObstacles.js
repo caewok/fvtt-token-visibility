@@ -106,6 +106,7 @@ class RenderAbstract {
   async _initializeDrawObjects(opts) {
     const device = this.device;
     const materials = this.materials;
+    const camera = this.camera;
     this._createCameraBindGroup();
 
     const senseType = this.senseType;
