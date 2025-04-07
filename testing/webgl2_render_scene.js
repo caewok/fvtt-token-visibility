@@ -28,6 +28,9 @@ let {
   TokenInstanceHandlerWebGL2,
   DrawableNonDirectionalWallWebGL2,
   RenderWallsWebGL2,
+  RenderTokensWebGL2,
+  RenderTilesWebGL2,
+  RenderObstaclesWebGL2,
   twgl,
 } = api.webgl;
 
@@ -70,6 +73,10 @@ gl = popout.context
 renderWalls = new RenderWallsWebGL2()
 await renderWalls.initialize({ gl, senseType: "sight" })
 renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderTokens = new RenderTokensWebGL2()
+await renderTokens.initialize({ gl, senseType: "sight" })
+renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderWalls._setCamera()
 
@@ -823,7 +830,7 @@ placeableHandler.initializePlaceables()
 
 vertexShaderSource = await WebGL2.sourceFromGLSLFile("obstacle_vertex", { debugViewNormals })
 fragmentShaderSource = await WebGL2.sourceFromGLSLFile("obstacle_fragment", { debugViewNormals })
-programInfo = twgl.createProgramInfo(gl, [vertexShaderSource, fragmentShaderSource], )
+programInfo = twgl.createProgramInfo(gl, [vertexShaderSource, fragmentShaderSource])
 
 // Set vertex buffer
 vBuffer = gl.createBuffer()
@@ -893,3 +900,32 @@ offsetData.index.sizes.forEach((ln, i) => offsetData.index.offsets[i] = ln * i)
 WebGL2.drawSet(gl, instanceSet, offsetData)
 
 
+// Testing
+camera = drawableObj.camera
+gl.viewport(0, 0,cgl.canvas.width, gl.canvas.height)
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0, 0, 0, 0);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+drawableObj = renderWalls.drawableObjects[0]
+uniforms = drawableObj.uniforms
+programInfo = drawableObj.programInfo
+bufferInfo = drawableObj.bufferInfo
+placeableHandler = drawableObj.placeableHandler
+offsetData = drawableObj.offsetData
+vertexBuffer = drawableObj.vertexBuffer
+vertexArrayInfo = drawableObj.vertexArrayInfo
+
+gl.useProgram(programInfo.program);
+twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+twgl.setUniforms(programInfo, uniforms);
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+gl.bindVertexArray(vertexArrayInfo.vertexArrayObject);
+instanceSet = new Set(placeableHandler.instanceIndexFromId.values())
+WebGL2.drawSet(gl, instanceSet, offsetData)
+
+gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0, 0, 0, 0);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+drawableObj.render()

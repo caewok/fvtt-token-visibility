@@ -10,6 +10,7 @@ import { MODULE_ID } from "../../const.js";
 import { Camera } from "../WebGPU/Camera.js";
 import { NonDirectionalWallInstanceHandler, DirectionalWallInstanceHandler } from "../WebGPU/PlaceableInstanceHandler.js";
 import { wgsl } from "../WebGPU/wgsl-preprocessor.js";
+import * as twgl from "./twgl.js";
 
 /*
 PIXI: Only does basic instancing. No apparent way to filter which instances to use.
@@ -38,6 +39,8 @@ export class WebGL2 {
 
   /** @type {WebGL2VertexArray} */
   vao; // Current vao to use.
+
+
 
 
   /**

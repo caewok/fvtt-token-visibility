@@ -173,9 +173,15 @@ export class Camera {
   /** @type {ArrayBuffer} */
   get arrayBuffer() {
     // Ensure no updates required.
-    const tmp0 = this.perspectiveMatrix;      /* eslint-disable-line no-unused-vars */
-    const tmp1 = this.lookAtMatrix;           /* eslint-disable-line no-unused-vars */
+    this.refresh();
     return this.#arrayBuffer;
+  }
+
+  refresh() {
+    return {
+      perspectiveMatrix: this.perspectiveMatrix,
+      lookAtMatrix: this.lookAtMatrix,
+    };
   }
 
   /** @type {Float32Array(3)|vec3} */

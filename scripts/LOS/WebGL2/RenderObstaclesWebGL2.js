@@ -10,8 +10,13 @@ import {
   DirectionalWallInstanceHandlerWebGL2,
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2,
-} from "../WebGPU/PlaceableInstanceHandler.js";
-import { DrawableNonDirectionalWallWebGL2 } from "./DrawableObjectsWebGL2.js";
+} from "./PlaceableInstanceHandlerWebGL2.js";
+import {
+  DrawableNonDirectionalWallWebGL2,
+  DrawableDirectionalWallWebGL2,
+  DrawableTileWebGL2,
+  DrawableTokenWebGL2,
+} from "./DrawableObjectsWebGL2.js";
 
 class RenderAbstractWebGL2 {
   /** @type {class} */
@@ -56,7 +61,14 @@ class RenderAbstractWebGL2 {
     // const opts = { viewer, target, targetOnly };
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = targetOnly ? null : VisionTriangle.build(viewerLocation, target);
-    this.drawableObjects.forEach(drawableObj => drawableObj.render(viewerLocation, targetLocation, target, visionTriangle));
+
+    const gl = this.gl;
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    this.drawableObjects.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
   }
 
   /**
@@ -72,9 +84,22 @@ class RenderAbstractWebGL2 {
       fov: camera.perspectiveParameters.fov * 2,
       zFar: camera.perspectiveParameters.zFar + 50
     };
+    camera.refresh();
   }
 }
 
 export class RenderWallsWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableNonDirectionalWallWebGL2];
+  static drawableClasses = [DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2];
+}
+
+export class RenderTilesWebGL2 extends RenderAbstractWebGL2 {
+  static drawableClasses = [DrawableTileWebGL2];
+}
+
+export class RenderTokensWebGL2 extends RenderAbstractWebGL2 {
+  static drawableClasses = [DrawableTokenWebGL2];
+}
+
+export class RenderObstaclesWebGL2 extends RenderAbstractWebGL2 {
+  static drawableClasses = [DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2, DrawableTokenWebGL2];
 }

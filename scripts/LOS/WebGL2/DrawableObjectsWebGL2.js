@@ -1,13 +1,8 @@
 /* globals
-CONST,
-foundry,
-Hooks,
-Wall,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { combineTypedArrays } from "../util.js";
 import { GeometryDesc } from "../WebGPU/GeometryDesc.js";
 import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/GeometryToken.js";
@@ -18,8 +13,13 @@ import {
   DirectionalWallInstanceHandlerWebGL2,
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2,
-} from "../WebGPU/PlaceableInstanceHandler.js";
+} from "./PlaceableInstanceHandlerWebGL2.js";
+import * as twgl from "./twgl.js";
 
+const RED = 0;
+const GREEN = 1;
+const BLUE = 2;
+const ALPHA = 3;
 
 class DrawableObjectsWebGL2Abstract {
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
@@ -44,6 +44,12 @@ class DrawableObjectsWebGL2Abstract {
     this.webGL2 = new WebGL2(gl);
     this.camera = camera;
     this.senseType = senseType;
+
+    this.uniforms = {
+      uColor: new Float32Array([0, 0, 1, 1]),
+      uPerspectiveMatrix: camera.perspectiveMatrix.arr,
+      uLookAtMatrix: camera.lookAtMatrix.arr,
+    };
   }
 
   #debugViewNormals = false;
@@ -63,18 +69,37 @@ class DrawableObjectsWebGL2Abstract {
 
     // TODO: Split placeableHandler and program creation from buffer creation so buffers can be updated when placeables change.
     const webGL2 = this.webGL2;
+    const gl = webGL2.gl;
     await webGL2.createProgramFromFiles(this.vertexFile, this.fragmentFile, { debugViewNormals });
 
-    const stride = placeableHandler.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3);
-    const type = webGL2.gl.FLOAT;
-    webGL2.addAttribute("aPos", { size: 3, type, stride, offset: 0 });
-    if ( debugViewNormals ) {
-      const offset = 3 * placeableHandler.verticesArray.BYTES_PER_ELEMENT;
-      webGL2.addAttribute("aNorm", { size: 3, type, stride, offset })
-    }
-    webGL2.addVertexBuffer(this.placeableHandler.verticesArray);
-    webGL2.addIndexBuffer(this.placeableHandler.indicesArray);
-    webGL2.createVAOAndSetAttributes()
+    const vertexShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.vertexFile, { debugViewNormals })
+    const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.fragmentFile, { debugViewNormals })
+    this.programInfo = twgl.createProgramInfo(gl, [vertexShaderSource, fragmentShaderSource]);
+
+    // Set vertex buffer
+    const vBuffer = this.vertexBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, placeableHandler.verticesArray, gl.STATIC_DRAW)
+
+    // Set vertex attributes
+    const bufferData = {
+      aPos: {
+        numComponents: 3,
+        buffer: vBuffer,
+        stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+        offset: 0,
+      },
+      indices: placeableHandler.indicesArray,
+    };
+
+    if ( debugViewNormals ) bufferData.aNorm = {
+      numComponents: 3,
+      buffer: vBuffer,
+      stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * 6,
+      offset: 3 * placeableHandler.verticesArray.BYTES_PER_ELEMENT,
+    };
+    this.bufferInfo = twgl.createBufferInfoFromArrays(gl, bufferData);
+    this.vertexArrayInfo = twgl.createVertexArrayInfo(gl, this.programInfo, this.bufferInfo);
 
     const offsetData = this.offsetData = {
       index: {
@@ -96,30 +121,35 @@ class DrawableObjectsWebGL2Abstract {
   /**
    * Render this drawable.
    */
-  render(viewerLocation, targetLocation, target, visionTriangle) {
-    const webGL2 = this.webGL2;
-    webGL2.useProgram();
-    webGL2.bindVAO();
-
-    this.setCamera(viewerLocation, targetLocation, target);
-    webGL2.setUniform("uColor", "vec4", this.color);
-
+  render(target, viewer, visionTriangle) {
     // TODO: Use visionTriangle
-    // TODO: Swap between canvas and renderTexture.
-    webGL2.bindFramebufferAndSetViewport(null);
+    this.setRenderInstances(target, viewer, visionTriangle);
+    if ( !this.instanceSet.size ) return;
 
-    const instanceSet = new Set(this.placeableHandler.instanceIndexFromId.values());
-    webGL2.drawSet(instanceSet, this.offsetData);
-    webGL2.unbindVAO();
+    const webGL2 = this.webGL2;
+    const gl = this.webGL2.gl;
+
+    gl.useProgram(this.programInfo.program);
+    twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
+    twgl.setUniforms(this.programInfo, this.uniforms);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+
+
+    // TODO: Swap between canvas and renderTexture.
+
+    WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
+    // webGL2.unbindVAO();
   }
 
-  /** @type {Array(4)} */
-  color = [0, 0, 1, 1];
+  /** @type {Set<number>} */
+  instanceSet = new Set();
 
-  setCamera(viewerLocation, targetLocation, target) {
-    const { camera, webGL2 } = this;
-    webGL2.setUniform("uPerspectiveMatrix", "mat4", camera.perspectiveMatrix.arr);
-    webGL2.setUniform("uLookAtMatrix", "mat4", camera.lookAtMatrix.arr);
+  setRenderInstances(_target, _viewer, _visionTriangle) {
+    // TODO: Use visionTriangle
+    const instanceSet = this.instanceSet;
+    instanceSet.clear();
+    this.placeableHandler.instanceIndexFromId.values().forEach(idx => instanceSet.add(idx));
   }
 }
 
@@ -128,8 +158,95 @@ export class DrawableNonDirectionalWallWebGL2 extends DrawableObjectsWebGL2Abstr
   static handlerClass = NonDirectionalWallInstanceHandlerWebGL2;
 
   /** @type {string} */
-  static vertexFile = "";
+  static vertexFile = "obstacle_vertex";
 
   /** @type {string} */
-  static fragmentFile = "";
+  static fragmentFile = "obstacle_fragment";
+}
+
+export class DrawableDirectionalWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+  /** @type {class} */
+  static handlerClass = DirectionalWallInstanceHandlerWebGL2;
+
+  /** @type {string} */
+  static vertexFile = "obstacle_vertex";
+
+  /** @type {string} */
+  static fragmentFile = "obstacle_fragment";
+}
+
+export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
+  /** @type {class} */
+  static handlerClass = TileInstanceHandlerWebGL2;
+
+  /** @type {string} */
+  static vertexFile = "tile_obstacle_vertex";
+
+  /** @type {string} */
+  static fragmentFile = "tile_obstacle_fragment";
+
+  render(target, viewer, visionTriangle) {
+    // TODO: Use visionTriangle
+    if ( !this.placeableHandler.numInstances ) return;
+
+    const webGL2 = this.webGL2;
+    const gl = this.webGL2.gl;
+
+    gl.useProgram(this.programInfo.program);
+    twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
+    twgl.setUniforms(this.programInfo, this.uniforms);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    const uniforms = { uTileTexture: -1 };
+
+    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex ) {
+      this.instanceSet.clear();
+      this.instanceSet.add(idx);
+      uniforms.uTileTexture = tile.texture.baseTexture; // TODO: Fix?
+      twgl.setUniforms(this.programInfo, this.uniforms);
+      WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
+    }
+  }
+
+}
+
+export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
+  /** @type {class} */
+  static handlerClass = TokenInstanceHandlerWebGL2;
+
+  /** @type {string} */
+  static vertexFile = "obstacle_vertex";
+
+  /** @type {string} */
+  static fragmentFile = "obstacle_fragment";
+
+  render(target, viewer, visionTriangle) {
+    // Render the target red.
+    this.uniforms.uColor[RED] = 1;
+    this.uniforms.uColor[BLUE] = 0;
+    super.render(target, viewer, null);
+    if ( !visionTriangle ) return;
+
+    // Render other tokens blue.
+    this.uniforms.uColor[RED] = 0;
+    this.uniforms.uColor[BLUE] = 1;
+    super.render(target, viewer, visionTriangle);
+  }
+
+  setRenderInstances(_target, _viewer, visionTriangle) {
+    const instanceSet = this.instanceSet;
+    instanceSet.clear();
+    if ( !visionTriangle ) {
+      // Target only.
+      const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
+      if ( typeof idx !== "undefined" ) instanceSet.add(idx);
+      return;
+    }
+    // TODO: Use visionTriangle
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      if ( id === viewer.id ) continue;
+      instanceSet.add(idx);
+    }
+  }
+
 }

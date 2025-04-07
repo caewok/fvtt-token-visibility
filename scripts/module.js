@@ -89,16 +89,24 @@ import {
   WallInstanceHandler,
   TileInstanceHandler,
   TokenInstanceHandler,
-  NonDirectionalWallInstanceHandlerWebGL2,
-  DirectionalWallInstanceHandlerWebGL2,
-  TileInstanceHandlerWebGL2,
-  TokenInstanceHandlerWebGL2 } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
+ } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
 import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
 import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
 import { DrawableNonDirectionalWallWebGL2 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
-import { RenderWallsWebGL2 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
+import {
+  RenderWallsWebGL2,
+  RenderTilesWebGL2,
+  RenderTokensWebGL2,
+  RenderObstaclesWebGL2,
+} from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 import * as twgl from "./LOS/WebGL2/twgl.js";
+import {
+  NonDirectionalWallInstanceHandlerWebGL2,
+  DirectionalWallInstanceHandlerWebGL2,
+  TileInstanceHandlerWebGL2,
+  TokenInstanceHandlerWebGL2
+} from "./LOS/WebGL2/PlaceableInstanceHandlerWebGL2.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -223,6 +231,9 @@ Hooks.once("init", function() {
       TokenInstanceHandlerWebGL2,
       DrawableNonDirectionalWallWebGL2,
       RenderWallsWebGL2,
+      RenderTilesWebGL2,
+      RenderTokensWebGL2,
+      RenderObstaclesWebGL2,
       twgl,
     },
 
