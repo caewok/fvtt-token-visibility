@@ -58,10 +58,10 @@ target = game.user.targets.first()
 
 
 
-gl = canvas.app.renderer.gl
-
-glCanvas = new OffscreenCanvas(1, 1);
-gl = glCanvas.getContext('webgl2');
+// gl = canvas.app.renderer.gl
+//
+// glCanvas = new OffscreenCanvas(1, 1);
+// gl = glCanvas.getContext('webgl2');
 
 popout = new Area3dPopoutCanvas({ width: 400, height: 475, resizable: false })
 await popout._render(true, { contextType: "webgl2"});
@@ -77,6 +77,17 @@ renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 renderTokens = new RenderTokensWebGL2()
 await renderTokens.initialize({ gl, senseType: "sight" })
 renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderTiles = new RenderTilesWebGL2()
+await renderTiles.initialize({ gl, senseType: "sight" })
+renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderTokensDebug = new RenderTokensWebGL2()
+await renderTokensDebug.initialize({ gl, senseType: "sight", debugViewNormals: true  })
+renderTokensDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+
+
 
 renderWalls._setCamera()
 

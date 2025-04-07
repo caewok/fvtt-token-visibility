@@ -436,7 +436,7 @@ export class WebGL2 {
       // Count the number of consecutive instances.
       let instanceCount = 1;
       while ( instanceSet[i + 1] === instanceSet[i] + 1 ) { instanceCount += 1; i += 1; }
-      const offset = firstInstance ? offsetData.index.offsets.slice(0, firstInstance).reduce((acc, curr) => acc + curr, 0) : 0;
+      const offset = firstInstance ? offsetData.index.offsets.slice(0, firstInstance + 1).reduce((acc, curr) => acc + curr, 0) : 0;
       const count = offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount).reduce((acc, curr) => acc + curr, 0);
       this.draw(gl, count, offset);
     }

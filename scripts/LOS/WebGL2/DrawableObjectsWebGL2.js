@@ -3,10 +3,6 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { GeometryDesc } from "../WebGPU/GeometryDesc.js";
-import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/GeometryToken.js";
-import { GeometryHorizontalPlaneDesc } from "../WebGPU/GeometryTile.js";
 import { WebGL2 } from "./WebGL2.js";
 import {
   NonDirectionalWallInstanceHandlerWebGL2,
@@ -17,9 +13,9 @@ import {
 import * as twgl from "./twgl.js";
 
 const RED = 0;
-const GREEN = 1;
+// const GREEN = 1;
 const BLUE = 2;
-const ALPHA = 3;
+// const ALPHA = 3;
 
 class DrawableObjectsWebGL2Abstract {
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
@@ -37,8 +33,15 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {PlaceableInstanceHandler} */
   placeableHandler;
 
+  /** @type {object} */
+  offsetData = {};
+
   /** @type WebGL2 */
   webGL2;
+
+  uniforms = {};
+
+  materialUniforms = {};
 
   constructor(gl, camera, { senseType = "sight" } = {}) {
     this.webGL2 = new WebGL2(gl);
@@ -46,9 +49,11 @@ class DrawableObjectsWebGL2Abstract {
     this.senseType = senseType;
 
     this.uniforms = {
-      uColor: new Float32Array([0, 0, 1, 1]),
       uPerspectiveMatrix: camera.perspectiveMatrix.arr,
       uLookAtMatrix: camera.lookAtMatrix.arr,
+    };
+    this.materialUniforms = {
+      uColor: new Float32Array([0, 0, 1, 1]),
     };
   }
 
@@ -61,20 +66,49 @@ class DrawableObjectsWebGL2Abstract {
    */
   async initialize({ debugViewNormals = false } = {}) {
     this.#debugViewNormals = debugViewNormals;
-    const placeableHandler = this.placeableHandler = new this.constructor.handlerClass({
+    await this._initialize();
+    this._updateInstances();
+  }
+
+  async _initialize() {
+    this._createPlaceableHandler();
+    await this._createProgram();
+  }
+
+  _createPlaceableHandler() {
+    this.placeableHandler = new this.constructor.handlerClass({
       senseType: this.senseType,
-      addNormals: debugViewNormals
+      addNormals: this.debugViewNormals
     });
-    placeableHandler.initializePlaceables()
+  }
 
-    // TODO: Split placeableHandler and program creation from buffer creation so buffers can be updated when placeables change.
-    const webGL2 = this.webGL2;
-    const gl = webGL2.gl;
-    await webGL2.createProgramFromFiles(this.vertexFile, this.fragmentFile, { debugViewNormals });
-
+  async _createProgram() {
+    const debugViewNormals = this.debugViewNormals;
     const vertexShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.vertexFile, { debugViewNormals })
     const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.fragmentFile, { debugViewNormals })
-    this.programInfo = twgl.createProgramInfo(gl, [vertexShaderSource, fragmentShaderSource]);
+    this.programInfo = twgl.createProgramInfo(this.webGL2.gl, [vertexShaderSource, fragmentShaderSource]);
+  }
+
+  _updateInstances() {
+    this._initializePlaceableHandler();
+    this._initializeBuffers();
+  }
+
+  _initializePlaceableHandler() {
+    const { placeableHandler, offsetData } = this;
+    placeableHandler.initializePlaceables()
+    offsetData.index = {
+      offsets: new Array(placeableHandler.numInstances),
+      lengths: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.length),
+      sizes: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.byteLength),
+    };
+    offsetData.index.sizes.forEach((ln, i) => offsetData.index.offsets[i] = ln * i);
+  }
+
+  _initializeBuffers() {
+    const gl = this.webGL2.gl;
+    const debugViewNormals = this.debugViewNormals;
+    const placeableHandler = this.placeableHandler;
 
     // Set vertex buffer
     const vBuffer = this.vertexBuffer = gl.createBuffer()
@@ -100,15 +134,6 @@ class DrawableObjectsWebGL2Abstract {
     };
     this.bufferInfo = twgl.createBufferInfoFromArrays(gl, bufferData);
     this.vertexArrayInfo = twgl.createVertexArrayInfo(gl, this.programInfo, this.bufferInfo);
-
-    const offsetData = this.offsetData = {
-      index: {
-        offsets: new Array(placeableHandler.numInstances),
-        lengths: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.length),
-        sizes: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.byteLength),
-      }
-    }
-    offsetData.index.sizes.forEach((ln, i) => offsetData.index.offsets[i] = ln * i);
   }
 
   /**
@@ -126,20 +151,18 @@ class DrawableObjectsWebGL2Abstract {
     this.setRenderInstances(target, viewer, visionTriangle);
     if ( !this.instanceSet.size ) return;
 
-    const webGL2 = this.webGL2;
     const gl = this.webGL2.gl;
 
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-    twgl.setUniforms(this.programInfo, this.uniforms);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
-
+    twgl.setUniforms(this.programInfo, this.uniforms);
 
     // TODO: Swap between canvas and renderTexture.
 
     WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
-    // webGL2.unbindVAO();
+    // gl.bindVertexArray(null);
   }
 
   /** @type {Set<number>} */
@@ -185,11 +208,43 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {string} */
   static fragmentFile = "tile_obstacle_fragment";
 
-  render(target, viewer, visionTriangle) {
+  /** @type {WebGLTexture[]} */
+  textures = [];
+
+  _createPlaceableHandler() {
+    this.placeableHandler = new this.constructor.handlerClass({
+      senseType: this.senseType,
+      addNormals: this.debugViewNormals,
+      addUVs: true,
+    });
+  }
+
+  _initializeBuffers() {
+    super._initializeBuffers();
+
+    // Setup the texture buffers.
+    const gl = this.webGL2.gl;
+    const textureOpts = {
+      target: gl.TEXTURE_2D,
+      level: 0,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE,
+      internalFormat: gl.RGBA,
+      format: gl.RGBA,
+      type: gl.UNSIGNED_BYTE,
+    }
+    const placeableHandler = this.placeableHandler;
+    this.textures.length = placeableHandler.numInstances;
+    for ( const [idx, tile] of placeableHandler.placeableFromInstanceIndex.entries() ) {
+      textureOpts.src = tile.texture.baseTexture.resource.source;
+      this.textures[idx] = twgl.createTexture(gl, textureOpts)
+    }
+  }
+
+  render(_target, _viewer, _visionTriangle) {
     // TODO: Use visionTriangle
     if ( !this.placeableHandler.numInstances ) return;
 
-    const webGL2 = this.webGL2;
     const gl = this.webGL2.gl;
 
     gl.useProgram(this.programInfo.program);
@@ -197,17 +252,17 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     twgl.setUniforms(this.programInfo, this.uniforms);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
-    const uniforms = { uTileTexture: -1 };
 
-    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex ) {
+    const uniforms = { uTileTexture: -1 };
+    for ( const idx of this.placeableHandler.placeableFromInstanceIndex.keys() ) {
       this.instanceSet.clear();
       this.instanceSet.add(idx);
-      uniforms.uTileTexture = tile.texture.baseTexture; // TODO: Fix?
+      uniforms.uTileTexture = this.textures[idx];
       twgl.setUniforms(this.programInfo, this.uniforms);
       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
     }
+    // gl.bindVertexArray(null);
   }
-
 }
 
 export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
@@ -221,32 +276,62 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   static fragmentFile = "obstacle_fragment";
 
   render(target, viewer, visionTriangle) {
-    // Render the target red.
-    this.uniforms.uColor[RED] = 1;
-    this.uniforms.uColor[BLUE] = 0;
-    super.render(target, viewer, null);
-    if ( !visionTriangle ) return;
-
-    // Render other tokens blue.
-    this.uniforms.uColor[RED] = 0;
-    this.uniforms.uColor[BLUE] = 1;
-    super.render(target, viewer, visionTriangle);
-  }
-
-  setRenderInstances(_target, _viewer, visionTriangle) {
+    if ( !this.placeableHandler.numInstances ) return;
     const instanceSet = this.instanceSet;
+    const gl = this.webGL2.gl;
+
+    gl.useProgram(this.programInfo.program);
+    twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    twgl.setUniforms(this.programInfo, this.uniforms);
+
+    // Target only.
     instanceSet.clear();
-    if ( !visionTriangle ) {
-      // Target only.
-      const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
-      if ( typeof idx !== "undefined" ) instanceSet.add(idx);
-      return;
+    const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
+    if ( typeof idx !== "undefined" ) {
+      // Render the target red.
+      this.materialUniforms.uColor[RED] = 1;
+      this.materialUniforms.uColor[BLUE] = 0;
+      twgl.setUniforms(this.programInfo, this.materialUniforms);
+
+      instanceSet.add(idx);
+      WebGL2.drawSet(gl, instanceSet, this.offsetData);
     }
+
+    if ( !visionTriangle ) return; // webGL2.unbindVAO();
+
+    // Other tokens.
+    instanceSet.clear();
     // TODO: Use visionTriangle
     for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
       if ( id === viewer.id ) continue;
       instanceSet.add(idx);
     }
+    if ( instanceSet.size ) {
+      this.materialUniforms.uColor[RED] = 0;
+      this.materialUniforms.uColor[BLUE] = 1;
+      twgl.setUniforms(this.programInfo, this.materialUniforms);
+      WebGL2.drawSet(gl, instanceSet, this.offsetData);
+    }
+    // gl.bindVertexArray(null);
+
   }
+
+//   setRenderInstances(target, viewer, visionTriangle) {
+//     const instanceSet = this.instanceSet;
+//     instanceSet.clear();
+//     if ( !visionTriangle ) {
+//       // Target only.
+//       const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
+//       if ( typeof idx !== "undefined" ) instanceSet.add(idx);
+//       return;
+//     }
+//     // TODO: Use visionTriangle
+//     for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+//       if ( id === viewer.id ) continue;
+//       instanceSet.add(idx);
+//     }
+//   }
 
 }

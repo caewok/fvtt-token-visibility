@@ -1,16 +1,11 @@
 /* globals
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionPolygon.js";
-import {
-  NonDirectionalWallInstanceHandlerWebGL2,
-  DirectionalWallInstanceHandlerWebGL2,
-  TileInstanceHandlerWebGL2,
-  TokenInstanceHandlerWebGL2,
-} from "./PlaceableInstanceHandlerWebGL2.js";
 import {
   DrawableNonDirectionalWallWebGL2,
   DrawableDirectionalWallWebGL2,
@@ -34,7 +29,7 @@ class RenderAbstractWebGL2 {
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize({ gl, senseType = "sight" } = {}) {
+  async initialize({ gl, senseType = "sight", debugViewNormals = false } = {}) {
     this.senseType = senseType;
     this.gl = gl;
 
@@ -42,8 +37,8 @@ class RenderAbstractWebGL2 {
     for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(gl, this.camera, { senseType });
       this.drawableObjects.push(drawableObj);
-      await drawableObj.initialize();
-      // promises.push(drawableObj.initialize());
+      await drawableObj.initialize({ debugViewNormals });
+      // promises.push(drawableObj.initialize({ debugViewNormals }));
     }
     return Promise.allSettled(promises);
   }
@@ -67,6 +62,8 @@ class RenderAbstractWebGL2 {
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+//     gl.enable(gl.CULL_FACE);
+//     gl.cullFace(gl.BACK);
 
     this.drawableObjects.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
   }
@@ -89,7 +86,7 @@ class RenderAbstractWebGL2 {
 }
 
 export class RenderWallsWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2];
+  static drawableClasses = [DrawableNonDirectionalWallWebGL2];
 }
 
 export class RenderTilesWebGL2 extends RenderAbstractWebGL2 {
