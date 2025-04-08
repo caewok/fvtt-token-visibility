@@ -431,17 +431,26 @@ export class WebGL2 {
     // So if 0–5, 7–9, 12, should result in 3 draw calls.
     if ( instanceSet instanceof Set ) instanceSet = [...instanceSet.values()];
     instanceSet.sort((a, b) => a - b);
+
+    // Handle either instances all same number of vertices or different number.
+    const instanceLength = Number.isNumeric(offsetData.index.lengths) ? offsetData.index.lengths : 0;
+
     for ( let i = 0, iMax = instanceSet.length; i < iMax; i += 1 ) {
       const firstInstance = instanceSet[i];
       // Count the number of consecutive instances.
       let instanceCount = 1;
       while ( instanceSet[i + 1] === instanceSet[i] + 1 ) { instanceCount += 1; i += 1; }
-      const offset = firstInstance ? offsetData.index.offsets.slice(0, firstInstance + 1).reduce((acc, curr) => acc + curr, 0) : 0;
-      const count = offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount).reduce((acc, curr) => acc + curr, 0);
+
+      // Pull the offset and count from the offsetData.
+      const offset = offsetData.index.offsets[firstInstance];
+      const count = instanceLength || sumArray(offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount));
+      console.debug(`Drawing ${count} vertices with offset ${offset}; firstInstance at ${firstInstance}; represents ${instanceCount} instances`, new Set([...instanceSet.values()]));
       this.draw(gl, count, offset);
     }
   }
 }
+
+function sumArray(arr) { return arr.reduce((acc, curr) => acc + curr, 0); }
 
 
 /**

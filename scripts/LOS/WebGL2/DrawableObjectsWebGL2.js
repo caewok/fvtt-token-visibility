@@ -99,7 +99,7 @@ class DrawableObjectsWebGL2Abstract {
     placeableHandler.initializePlaceables()
     offsetData.index = {
       offsets: new Array(placeableHandler.numInstances),
-      lengths: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.length),
+      lengths: placeableHandler.geom.indices.length,
       sizes: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.byteLength),
     };
     offsetData.index.sizes.forEach((ln, i) => offsetData.index.offsets[i] = ln * i);
@@ -107,7 +107,6 @@ class DrawableObjectsWebGL2Abstract {
 
   _initializeBuffers() {
     const gl = this.webGL2.gl;
-    const debugViewNormals = this.debugViewNormals;
     const placeableHandler = this.placeableHandler;
 
     // Set vertex buffer
@@ -116,24 +115,31 @@ class DrawableObjectsWebGL2Abstract {
     gl.bufferData(gl.ARRAY_BUFFER, placeableHandler.verticesArray, gl.STATIC_DRAW)
 
     // Set vertex attributes
-    const bufferData = {
+    const vertexProps = this.vertexProps = this._defineVertexAttributeProperties();
+    this.bufferInfo = twgl.createBufferInfoFromArrays(gl, vertexProps);
+    this.vertexArrayInfo = twgl.createVertexArrayInfo(gl, this.programInfo, this.bufferInfo);
+  }
+
+  _defineVertexAttributeProperties() {
+    const debugViewNormals = this.debugViewNormals;
+    const placeableHandler = this.placeableHandler;
+    const vertexProps = {
       aPos: {
         numComponents: 3,
-        buffer: vBuffer,
+        buffer: this.vertexBuffer,
         stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
         offset: 0,
       },
       indices: placeableHandler.indicesArray,
     };
 
-    if ( debugViewNormals ) bufferData.aNorm = {
+    if ( debugViewNormals ) vertexProps.aNorm = {
       numComponents: 3,
-      buffer: vBuffer,
+      buffer: this.vertexBuffer,
       stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * 6,
       offset: 3 * placeableHandler.verticesArray.BYTES_PER_ELEMENT,
     };
-    this.bufferInfo = twgl.createBufferInfoFromArrays(gl, bufferData);
-    this.vertexArrayInfo = twgl.createVertexArrayInfo(gl, this.programInfo, this.bufferInfo);
+    return vertexProps;
   }
 
   /**
@@ -220,6 +226,27 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     });
   }
 
+  _defineVertexAttributeProperties() {
+    const vertexProps = super._defineVertexAttributeProperties();
+    const debugViewNormals = this.debugViewNormals;
+    const placeableHandler = this.placeableHandler;
+
+    // coords (3), normal (3), uv (2)
+    let stride = placeableHandler.verticesArray.BYTES_PER_ELEMENT * 5;
+    if ( debugViewNormals ) {
+      stride = placeableHandler.verticesArray.BYTES_PER_ELEMENT * 8;
+      vertexProps.aNorm.stride = stride;
+    }
+    vertexProps.aPos.stride = stride;
+    vertexProps.aUV = {
+      numComponents: 2,
+      buffer: vertexProps.aPos.buffer,
+      stride,
+      offset: placeableHandler.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+    }
+    return vertexProps;
+  }
+
   _initializeBuffers() {
     super._initializeBuffers();
 
@@ -242,6 +269,8 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     }
   }
 
+
+
   render(_target, _viewer, _visionTriangle) {
     // TODO: Use visionTriangle
     if ( !this.placeableHandler.numInstances ) return;
@@ -260,11 +289,36 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
       this.instanceSet.clear();
       this.instanceSet.add(idx);
       uniforms.uTileTexture = this.textures[idx];
-      twgl.setUniforms(this.programInfo, this.uniforms);
+      twgl.setUniforms(this.programInfo, uniforms);
       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
     }
+
     // gl.bindVertexArray(null);
+
+
+//     for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+//       this.instanceSet.clear();
+//       this.instanceSet.add(idx);
+//
+//       const image = tile.texture.baseTexture.resource.source;
+//       const textureOpts = {
+//         target: gl.TEXTURE_2D,
+//         level: 0,
+//         minMag: gl.NEAREST,
+//         wrap: gl.CLAMP_TO_EDGE,
+//         internalFormat: gl.RGBA,
+//         format: gl.RGBA,
+//         type: gl.UNSIGNED_BYTE,
+//         src: image,
+//       }
+//       const texture = twgl.createTexture(gl, textureOpts)
+//       const uniforms = { uTileTexture: texture }
+//       twgl.setUniforms(this.programInfo, uniforms);
+//       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
+//     }
+
   }
+
 }
 
 export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
@@ -307,7 +361,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     instanceSet.clear();
     // TODO: Use visionTriangle
     for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-      if ( id === viewer.id ) continue;
+      if ( id === viewer.id || id === target.id ) continue;
       instanceSet.add(idx);
     }
     if ( instanceSet.size ) {

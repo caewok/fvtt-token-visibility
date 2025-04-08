@@ -24,7 +24,7 @@ class RenderAbstractWebGL2 {
   drawableObjects = []
 
   /** @type {Camera} */
-  camera = new Camera();
+  camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
 
   /**
    * Set up all parts of the render pipeline that will not change often.

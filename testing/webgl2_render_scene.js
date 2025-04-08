@@ -15,6 +15,7 @@ let {
   GeometryCubeDesc,
   GeometryTileDesc,
   GeometryConstrainedTokenDesc,
+  GeometryHorizontalPlaneDesc,
   WallInstanceHandler,
   TileInstanceHandler,
   TokenInstanceHandler,
@@ -33,6 +34,8 @@ let {
   RenderObstaclesWebGL2,
   twgl,
 } = api.webgl;
+
+glmatrix = api.glmatrix;
 
 function combineTypedArrays(...arrs) {
   const len = arrs.reduce((acc, curr) => acc + curr.length, 0);
@@ -82,11 +85,18 @@ renderTiles = new RenderTilesWebGL2()
 await renderTiles.initialize({ gl, senseType: "sight" })
 renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
+renderTilesDebug = new RenderTilesWebGL2()
+await renderTilesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderTilesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
 renderTokensDebug = new RenderTokensWebGL2()
 await renderTokensDebug.initialize({ gl, senseType: "sight", debugViewNormals: true  })
 renderTokensDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-
+renderTokensDebug = new RenderTokensWebGL2()
+renderTokensDebug.camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" })
+renderTokensDebug.camera = new Camera({ glType: "webGPU", perspectiveType: "orthogonal" })
+renderTokensDebug.camera = new Camera({ glType: "webGL2", perspectiveType: "orthogonal" })
 
 
 renderWalls._setCamera()
@@ -940,3 +950,452 @@ gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0, 0, 0, 0);
 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 drawableObj.render()
+
+
+// NOTE: Render simple texture
+// See https://webgl2fundamentals.org/webgl/lessons/webgl-image-processing.html
+
+vertexShaderSource = `#version 300 es
+
+in vec2 a_position;
+in vec2 a_texCoord;
+
+// Used to pass in the resolution of the canvas
+uniform vec2 u_resolution;
+
+// Used to pass the texture coordinates to the fragment shader
+out vec2 v_texCoord;
+
+// all shaders have a main function
+void main() {
+
+  // convert the position from pixels to 0.0 to 1.0
+  vec2 zeroToOne = a_position / u_resolution;
+
+  // convert from 0->1 to 0->2
+  vec2 zeroToTwo = zeroToOne * 2.0;
+
+  // convert from 0->2 to -1->+1 (clipspace)
+  vec2 clipSpace = zeroToTwo - 1.0;
+
+  gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+
+  // pass the texCoord to the fragment shader
+  // The GPU will interpolate this value between points.
+  v_texCoord = a_texCoord;
+}
+`;
+
+fragmentShaderSource = `#version 300 es
+precision highp float;
+
+// our texture
+uniform sampler2D u_image;
+
+// the texCoords passed in from the vertex shader.
+in vec2 v_texCoord;
+
+// we need to declare an output for the fragment shader
+out vec4 outColor;
+
+void main() {
+  outColor = texture(u_image, v_texCoord);
+}
+`;
+
+tile = canvas.tiles.controlled[0]
+image = tile.texture.baseTexture.resource.source;
+
+image = new Image()
+image.src = tile.document.texture.src
+image.onload = function() {
+  console.log(image);
+  renderImage();
+}
+
+image = new Image();
+image.src = "https://webgl2fundamentals.org/webgl/resources/leaves.jpg";  // MUST BE SAME DOMAIN!!!
+image.onload = function() { console.log(image); }
+image.onload = function() { renderImage(image); }
+
+
+programInfo = twgl.createProgramInfo(gl, [vertexShaderSource, fragmentShaderSource]);
+program = programInfo.program
+
+// look up where the vertex data needs to go.
+positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
+
+// lookup uniforms
+resolutionLocation = gl.getUniformLocation(program, "u_resolution");
+imageLocation = gl.getUniformLocation(program, "u_image");
+
+// Create a vertex array object (attribute state)
+vao = gl.createVertexArray();
+
+// and make it the one we're currently working with
+gl.bindVertexArray(vao);
+
+// Create a buffer and put a single pixel space rectangle in
+// it (2 triangles)
+positionBuffer = gl.createBuffer();
+
+// Turn on the attribute
+gl.enableVertexAttribArray(positionAttributeLocation);
+
+// Bind it to ARRAY_BUFFER (think of it as ARRAY_BUFFER = positionBuffer)
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+// Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
+let size = 2;          // 2 components per iteration
+let type = gl.FLOAT;   // the data is 32bit floats
+let normalize = false; // don't normalize the data
+let stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+let offset = 0;        // start at the beginning of the buffer
+gl.vertexAttribPointer(
+    positionAttributeLocation, size, type, normalize, stride, offset);
+
+// provide texture coordinates for the rectangle.
+texCoordBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    0.0,  0.0,
+    1.0,  0.0,
+    0.0,  1.0,
+    0.0,  1.0,
+    1.0,  0.0,
+    1.0,  1.0,
+]), gl.STATIC_DRAW);
+
+// Turn on the attribute
+gl.enableVertexAttribArray(texCoordAttributeLocation);
+
+// Tell the attribute how to get data out of texCoordBuffer (ARRAY_BUFFER)
+size = 2;          // 2 components per iteration
+type = gl.FLOAT;   // the data is 32bit floats
+normalize = false; // don't normalize the data
+stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+offset = 0;        // start at the beginning of the buffer
+gl.vertexAttribPointer(
+    texCoordAttributeLocation, size, type, normalize, stride, offset);
+
+// Create a texture.
+texture = gl.createTexture();
+
+// make unit 0 the active texture uint
+// (ie, the unit all other texture commands will affect
+gl.activeTexture(gl.TEXTURE0 + 0);
+
+// Bind it to texture unit 0' 2D bind point
+gl.bindTexture(gl.TEXTURE_2D, texture);
+
+// Set the parameters so we don't need mips and so we're not filtering
+// and we don't repeat at the edges
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+// Upload the image into the texture.
+let mipLevel = 0;               // the largest mip
+let internalFormat = gl.RGBA;   // format we want in the texture
+let srcFormat = gl.RGBA;        // format of data we are supplying
+let srcType = gl.UNSIGNED_BYTE; // type of data we are supplying
+gl.texImage2D(gl.TEXTURE_2D,
+              mipLevel,
+              internalFormat,
+              srcFormat,
+              srcType,
+              image);
+
+
+// resizeCanvasToDisplaySize(gl.canvas);
+
+// Tell WebGL how to convert from clip space to pixels
+gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+// Clear the canvas
+gl.clearColor(0, 0, 0, 0);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+// Tell it to use our program (pair of shaders)
+gl.useProgram(program);
+
+// Bind the attribute/buffer set we want.
+gl.bindVertexArray(vao);
+
+// Pass in the canvas resolution so we can convert from
+// pixels to clipspace in the shader
+gl.uniform2f(resolutionLocation, gl.canvas.width, gl.canvas.height);
+
+// Tell the shader to get the texture from texture unit 0
+gl.uniform1i(imageLocation, 0);
+
+// Bind the position buffer so gl.bufferData that will be called
+// in setRectangle puts data in the position buffer
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+// Set a rectangle the same size as the image.
+
+setRectangle(gl, 0, 0, image.width, image.height);
+
+// Draw the rectangle.
+let primitiveType = gl.TRIANGLES;
+offset = 0;
+let count = 6;
+gl.drawArrays(primitiveType, offset, count);
+
+
+function resizeCanvasToDisplaySize(canvas, multiplier) {
+  multiplier = multiplier || 1;
+  const width  = canvas.clientWidth  * multiplier | 0;
+  const height = canvas.clientHeight * multiplier | 0;
+  if (canvas.width !== width ||  canvas.height !== height) {
+    canvas.width  = width;
+    canvas.height = height;
+    return true;
+  }
+  return false;
+}
+
+function setRectangle(gl, x, y, width, height) {
+  var x1 = x;
+  var x2 = x + width;
+  var y1 = y;
+  var y2 = y + height;
+  return new Float32Array([
+     x1, y1,
+     x2, y1,
+     x1, y2,
+     x1, y2,
+     x2, y1,
+     x2, y2,
+  ]);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+     x1, y1,
+     x2, y1,
+     x1, y2,
+     x1, y2,
+     x2, y1,
+     x2, y2,
+  ]), gl.STATIC_DRAW);
+}
+
+
+// NOTE: Another attempt to display a texture
+// https://webgl2fundamentals.org/webgl/lessons/webgl-3d-textures.html
+vertexShaderSource =
+`#version 300 es
+in vec4 a_position;
+
+out vec2 v_texCoord;
+
+void main() {
+  gl_Position = a_position;
+  v_texCoord = a_position.xy;
+}
+`;
+
+fragmentShaderSource =
+`#version 300 es
+precision highp float;
+
+uniform sampler2D u_image;
+in vec2 v_texCoord;
+
+out vec4 outColor;
+
+void main() {
+  outColor = texture(u_image, v_texCoord);
+  // outColor = vec4(1.0, 0.0, 0.5, 1.0);
+}
+`;
+
+// create GLSL shaders, upload the GLSL source, compile the shaders
+vertexShader = WebGL2.createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+fragmentShader = WebGL2.createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+// Link the two shaders into a program
+program = WebGL2.createProgram(gl, vertexShader, fragmentShader)
+
+// Look up where the vertex data needs to go.
+positionAttribLoc = gl.getAttribLocation(program, "a_position");
+
+// Create a buffer and put three 2d clip space points in it
+positionBuffer = gl.createBuffer(); // WebGLBuffer
+
+// Bind it to ARRAY_BUFFER (think of it as ARRAY_BUFFER = positionBuffer)
+gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+positions = [
+  0, 0,
+  1, 0,
+  0, 1,
+  0, 1,
+  1, 0,
+  1, 1,
+];
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+// Create a vertex array object (attribute state)
+vao = gl.createVertexArray();
+
+// and make it the one we're currently working with
+gl.bindVertexArray(vao);
+
+// Turn on the attribute
+gl.enableVertexAttribArray(positionAttribLoc);
+
+// Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
+size = 2;          // 2 components per iteration
+type = gl.FLOAT;   // the data is 32bit floats
+normalize = false; // don't normalize the data
+stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+offset = 0;        // start at the beginning of the buffer
+gl.vertexAttribPointer(positionAttribLoc, size, type, normalize, stride, offset);
+
+
+// Create a texture.
+var texture = gl.createTexture();
+
+// make unit 0 the active texture uint
+// (ie, the unit all other texture commands will affect
+gl.activeTexture(gl.TEXTURE0 + 0);
+
+// Bind it to texture unit 0' 2D bind point
+gl.bindTexture(gl.TEXTURE_2D, texture);
+
+// Set the parameters so we don't need mips and so we're not filtering
+// and we don't repeat at the edges
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+// Upload the image into the texture.
+var mipLevel = 0;               // the largest mip
+var internalFormat = gl.RGBA;   // format we want in the texture
+var srcFormat = gl.RGBA;        // format of data we are supplying
+var srcType = gl.UNSIGNED_BYTE; // type of data we are supplying
+
+async function loadImageBitmap(url, opts = {}) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await createImageBitmap(blob, opts);
+}
+
+// url = tile.document.texture.src;
+// image = await loadImageBitmap(url, {
+//   imageOrientation: "flipY",
+//   premultiplyAlpha: "premultiply",
+// });
+image = tile.texture.baseTexture.resource.source;
+
+gl.texImage2D(gl.TEXTURE_2D,
+              mipLevel,
+              internalFormat,
+              srcFormat,
+              srcType,
+              image);
+
+// Set render to canvas
+WebGL2.bindFramebufferAndSetViewport(gl, null, gl.canvas.width, gl.canvas.height)
+
+// gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+// Clear the canvas
+gl.clearColor(0, 0, 0, 0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+
+// Tell it to use our program (pair of shaders)
+gl.useProgram(program);
+
+// Bind the attribute/buffer set we want.
+gl.bindVertexArray(vao);
+
+// draw
+primitiveType = gl.TRIANGLES;
+offset = 0;
+count = 6;
+gl.drawArrays(primitiveType, offset, count);
+
+// NOTE: Test with twgl
+vertexShaderSource =
+`#version 300 es
+in vec2 a_position;
+
+out vec2 v_texCoord;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+  v_texCoord = a_position.xy;
+}
+`;
+
+fragmentShaderSource =
+`#version 300 es
+precision highp float;
+
+uniform sampler2D u_image;
+in vec2 v_texCoord;
+
+out vec4 outColor;
+
+void main() {
+  outColor = texture(u_image, v_texCoord);
+  // outColor = vec4(1.0, 0.0, 0.5, 1.0);
+}
+`;
+
+// Link the two shaders into a program
+programInfo = twgl.createProgramInfo(gl, [vertexShaderSource, fragmentShaderSource])
+program = programInfo.program
+
+const bufferData = {
+  a_position: {
+    numComponents: 2,
+    data: [
+      0, 0,
+      1, 0,
+      0, 1,
+      0, 1,
+      1, 0,
+      1, 1,
+    ],
+  }
+}
+bufferInfo = twgl.createBufferInfoFromArrays(gl, bufferData);
+vertexArrayInfo = twgl.createVertexArrayInfo(gl, programInfo, bufferInfo);
+
+image = tile.texture.baseTexture.resource.source;
+textureOpts = {
+  target: gl.TEXTURE_2D,
+  level: 0,
+  minMag: gl.NEAREST,
+  wrap: gl.CLAMP_TO_EDGE,
+  internalFormat: gl.RGBA,
+  format: gl.RGBA,
+  type: gl.UNSIGNED_BYTE,
+  src: image,
+}
+texture = twgl.createTexture(gl, textureOpts)
+uniforms = { u_image: texture }
+
+// Set render to canvas
+WebGL2.bindFramebufferAndSetViewport(gl, null, gl.canvas.width, gl.canvas.height)
+
+// gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+// Clear the canvas
+gl.clearColor(0, 0, 0, 0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+
+gl.useProgram(programInfo.program);
+twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+gl.bindVertexArray(vertexArrayInfo.vertexArrayObject);
+twgl.setUniforms(programInfo, uniforms);
+
+
+// draw
+primitiveType = gl.TRIANGLES;
+offset = 0;
+count = 6;
+gl.drawArrays(primitiveType, offset, count);
+

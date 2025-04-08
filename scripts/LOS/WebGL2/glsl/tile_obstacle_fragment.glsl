@@ -1,6 +1,8 @@
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
-precision ${PIXI.settings.PRECISION_FRAGMENT} usampler2D;
+precision ${PIXI.settings.PRECISION_VERTEX} usampler2D;
+
+// Or PIXI.settings.PRECISION_FRAGMENT, which may be lower.
 
 #if ${debugViewNormals}
 in vec3 vNorm;
@@ -23,8 +25,14 @@ const vec3 ambientColor = vec3(0.1, 0.1, 0.1);
 
 void main() {
   vec4 texColor = texture(uTileTexture, uv0);
+  // fragColor = texColor;
+  // fragColor = uColor;
+  // fragColor.b = 1.0;
+  // return;
+
 
   // Extremely simple directional lighting model to give the model some shape.
+
   #if ${debugViewNormals}
     vec3 N = normalize(vNorm);
     float NDotL = max(dot(N, lightDir), 0.0);

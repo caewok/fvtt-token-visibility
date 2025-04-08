@@ -73,7 +73,7 @@ class RenderAbstract {
   drawableObjects = []
 
   /** @type {Camera} */
-  camera = new Camera();
+  camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" });
 
   /** @type {MaterialTracker} */
   materials;

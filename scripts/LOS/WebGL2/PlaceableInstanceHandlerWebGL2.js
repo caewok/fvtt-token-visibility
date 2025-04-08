@@ -110,6 +110,7 @@ const VerticesMixin = function(Base) {
       if ( this.addNormals ) {
         // Should not matter for fully vertical or horizontal triangles, but...
         // See https://webgl2fundamentals.org/webgl/lessons/webgl-3d-lighting-directional.html
+        // TODO: For tiles, this seems incorrect. Normal should be -1 or +1.
         const invTransposeM = M.invert().transpose();
         for ( let i = 3, iMax = geomVertices.length; i < iMax; i += stride ) {
           const xIdx = i;
@@ -121,6 +122,16 @@ const VerticesMixin = function(Base) {
           vertices[xIdx] = txPt.x;
           vertices[yIdx] = txPt.y;
           vertices[zIdx] = txPt.z;
+        }
+      }
+
+      if ( this.addUVs ) {
+        const offset = this.addNormals ? 6 : 3;
+        for ( let i = offset, iMax = geomVertices.length; i < iMax; i += stride ) {
+          const uIdx = i;
+          const vIdx = i + 1;
+          vertices[uIdx] = geomVertices[uIdx];
+          vertices[vIdx] = geomVertices[vIdx];
         }
       }
     }
@@ -151,8 +162,8 @@ export class DirectionalWallInstanceHandlerWebGL2 extends VerticesMixin(Directio
 export class TileInstanceHandlerWebGL2 extends VerticesMixin(TileInstanceHandler) {
   constructor(opts) {
     super(opts);
-    const { addNormals } = this;
-    this.geom = new GeometryHorizontalPlaneDesc({ directional: true, addNormals, addUVs: true });
+    const { addNormals, addUVs } = this;
+    this.geom = new GeometryHorizontalPlaneDesc({ addNormals, addUVs });
   }
 }
 

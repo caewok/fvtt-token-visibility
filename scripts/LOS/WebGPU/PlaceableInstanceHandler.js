@@ -379,9 +379,10 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    * @prop {number} elevation   In z direction
    */
   static tileDimensions(tile) {
+    const { x, y, width, height } = tile.document;
     return {
-      width: tile.document.width,
-      height: tile.document.height,
+      x, y, width, height,
+      elevation: tile.elevationZ,
     };
   }
 
@@ -393,9 +394,9 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
   static tileCenter(tile) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const out = new Point3d();
-    const elev = tile.elevationZ;
-    const TL = Point3d._tmp2.set(tile.document.x, tile.document.y, elev);
-    const BR = TL.add(out.set(tile.document.width, tile.document.height, 0), out);
+    const { x, y, width, height, elevation } = this.tileDimensions(tile);
+    const TL = Point3d._tmp2.set(x, y, elevation);
+    const BR = TL.add(out.set(width, height, 0), out);
     return TL.add(BR, out).multiplyScalar(0.5, out)
   }
 }
