@@ -19,9 +19,9 @@ out vec4 fragColor;
 const float alphaValue = 0.75;
 
 // Some hardcoded lighting
-const vec3 lightDir = normalize(vec3(0.25, 0.5, -1.0));
+const vec3 lightDir = normalize(vec3(0.25, 0.5, 1.0));
 const vec3 lightColor = vec3(1.0, 1.0, 1.0);
-const vec3 ambientColor = vec3(0.1, 0.1, 0.1);
+const vec3 ambientColor = vec3(0.3, 0.3, 0.3);
 
 void main() {
   vec4 texColor = texture(uTileTexture, uv0);

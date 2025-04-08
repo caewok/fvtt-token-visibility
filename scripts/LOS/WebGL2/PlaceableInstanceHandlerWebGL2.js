@@ -85,7 +85,7 @@ const VerticesMixin = function(Base) {
      * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
      */
     updateInstanceBuffer(idx, opts) {
-      super.updateInstanceBuffer(idx, opts);
+      const res = super.updateInstanceBuffer(idx, opts);
       const M = this.matrices[idx];
       const geomVertices = this.geom.vertices;
       const vertices = this.vertices[idx];
@@ -111,13 +111,16 @@ const VerticesMixin = function(Base) {
         // Should not matter for fully vertical or horizontal triangles, but...
         // See https://webgl2fundamentals.org/webgl/lessons/webgl-3d-lighting-directional.html
         // TODO: For tiles, this seems incorrect. Normal should be -1 or +1.
-        const invTransposeM = M.invert().transpose();
+        // const invTransposeM = M.invert().transpose();
+        // See https://github.com/graphitemaster/normals_revisited
+        // Just use the rotation matrix.
+
         for ( let i = 3, iMax = geomVertices.length; i < iMax; i += stride ) {
           const xIdx = i;
           const yIdx = i + 1;
           const zIdx = i + 2;
           const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
-          const txPt = invTransposeM.multiplyPoint3d(pt, Point3d._tmp1);
+          const txPt = res.rotation.multiplyPoint3d(pt, Point3d._tmp1).normalize();
 
           vertices[xIdx] = txPt.x;
           vertices[yIdx] = txPt.y;
