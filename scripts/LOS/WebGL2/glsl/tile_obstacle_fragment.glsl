@@ -30,6 +30,8 @@ void main() {
   // fragColor.b = 1.0;
   // return;
 
+  // Use discard so we don't have to deal with transparency for the textures.
+  if ( texColor.a < alphaValue ) { discard; }
 
   // Extremely simple directional lighting model to give the model some shape.
 
@@ -40,7 +42,8 @@ void main() {
     fragColor = vec4(surfaceColor, texColor.a);
   #else
     fragColor = uColor;
-    fragColor.a = step(alphaValue, texColor.a);
+    // fragColor.a = step(alphaValue, texColor.a);
+    fragColor.a = texColor.a;
   #endif
 }
 
