@@ -10,6 +10,8 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/Geomet
 import {
   NonDirectionalWallInstanceHandler,
   DirectionalWallInstanceHandler,
+  NonDirectionalTerrainWallInstanceHandler,
+  DirectionalTerrainWallInstanceHandler,
   TileInstanceHandler,
   TokenInstanceHandler,
 } from "../WebGPU/PlaceableInstanceHandler.js";
@@ -155,6 +157,22 @@ export class NonDirectionalWallInstanceHandlerWebGL2 extends VerticesMixin(NonDi
 }
 
 export class DirectionalWallInstanceHandlerWebGL2 extends VerticesMixin(DirectionalWallInstanceHandler) {
+  constructor(opts) {
+    super(opts);
+    const { addNormals, addUVs } = this;
+    this.geom = new GeometryWallDesc({ directional: true, addNormals, addUVs });
+  }
+}
+
+export class NonDirectionalTerrainWallInstanceHandlerWebGL2 extends VerticesMixin(NonDirectionalTerrainWallInstanceHandler) {
+  constructor(opts) {
+    super(opts);
+    const { addNormals, addUVs } = this;
+    this.geom = new GeometryWallDesc({ directional: false, addNormals, addUVs });
+  }
+}
+
+export class DirectionalTerrainWallInstanceHandlerWebGL2 extends VerticesMixin(DirectionalTerrainWallInstanceHandler) {
   constructor(opts) {
     super(opts);
     const { addNormals, addUVs } = this;

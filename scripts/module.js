@@ -93,7 +93,16 @@ import {
 import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
 import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
-import { DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2, DrawableTokenWebGL2 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
+import {
+  DrawableNonDirectionalWallWebGL2,
+  DrawableDirectionalWallWebGL2,
+  DrawableNonDirectionalTerrainWallWebGL2,
+  DrawableDirectionalTerrainWallWebGL2,
+  DrawableTileWebGL2,
+  DrawableTokenWebGL2,
+  DrawableSceneBackground,
+} from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
+
 import {
   RenderWallsWebGL2,
   RenderTilesWebGL2,
@@ -102,6 +111,7 @@ import {
   RenderSceneBackgroundWebGL2,
   RenderAbstractWebGL2,
 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
+
 import * as twgl from "./LOS/WebGL2/twgl.js";
 import {
   NonDirectionalWallInstanceHandlerWebGL2,
@@ -231,7 +241,13 @@ Hooks.once("init", function() {
       DirectionalWallInstanceHandlerWebGL2,
       TileInstanceHandlerWebGL2,
       TokenInstanceHandlerWebGL2,
-      DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2, DrawableTokenWebGL2,
+      DrawableNonDirectionalWallWebGL2,
+      DrawableDirectionalWallWebGL2,
+      DrawableNonDirectionalTerrainWallWebGL2,
+      DrawableDirectionalTerrainWallWebGL2,
+      DrawableTileWebGL2,
+      DrawableTokenWebGL2,
+      DrawableSceneBackground,
       RenderWallsWebGL2,
       RenderTilesWebGL2,
       RenderTokensWebGL2,

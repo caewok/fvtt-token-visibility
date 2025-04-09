@@ -29,6 +29,8 @@ let {
   TokenInstanceHandlerWebGL2,
   DrawableNonDirectionalWallWebGL2,
   DrawableDirectionalWallWebGL2,
+  DrawableNonDirectionalTerrainWallWebGL2,
+  DrawableDirectionalTerrainWallWebGL2,
   DrawableTileWebGL2,
   DrawableTokenWebGL2,
   DrawableSceneBackground,
@@ -77,6 +79,8 @@ await popout._render(true, { contextType: "webgl2"});
 gl = popout.context
 
 
+
+
 // NOTE: Test renderWall
 
 renderWalls = new RenderWallsWebGL2()
@@ -111,6 +115,15 @@ renderSceneBackgroundDebug = new RenderSceneBackgroundWebGL2()
 await renderSceneBackgroundDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderSceneBackgroundDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
+renderTerrainWalls = new RenderTerrainWallsWebGL2()
+await renderTerrainWalls.initialize({ gl, senseType: "sight" })
+renderTerrainWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderTerrainWallsDebug = new RenderTerrainWallsWebGL2()
+await renderTerrainWallsDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderTerrainWallsDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+
 
 renderObstacles = new RenderObstaclesWebGL2()
 await renderObstacles.initialize({ gl, senseType: "sight" })
@@ -119,6 +132,8 @@ renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 renderObstaclesDebug = new RenderObstaclesWebGL2()
 await renderObstaclesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+
 
 
 renderTokensDebug = new RenderTokensWebGL2()

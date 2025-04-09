@@ -7,16 +7,13 @@ import { WebGL2 } from "./WebGL2.js";
 import {
   NonDirectionalWallInstanceHandlerWebGL2,
   DirectionalWallInstanceHandlerWebGL2,
+  NonDirectionalTerrainWallInstanceHandlerWebGL2,
+  DirectionalTerrainWallInstanceHandlerWebGL2,
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2,
   SceneInstanceHandlerWebGL2,
 } from "./PlaceableInstanceHandlerWebGL2.js";
 import * as twgl from "./twgl.js";
-
-const RED = 0;
-// const GREEN = 1;
-const BLUE = 2;
-// const ALPHA = 3;
 
 class DrawableObjectsWebGL2Abstract {
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
@@ -30,6 +27,8 @@ class DrawableObjectsWebGL2Abstract {
 
   /** @type {string} */
   static fragmentFile = "";
+
+  static obstacleColor = [0, 0, 1, 1];
 
   /** @type {PlaceableInstanceHandler} */
   placeableHandler;
@@ -54,7 +53,7 @@ class DrawableObjectsWebGL2Abstract {
       uLookAtMatrix: camera.lookAtMatrix.arr,
     };
     this.materialUniforms = {
-      uColor: new Float32Array([0, 0, 1, 1]),
+      uColor: new Float32Array(this.constructor.obstacleColor),
     };
   }
 
@@ -206,6 +205,32 @@ export class DrawableDirectionalWallWebGL2 extends DrawableObjectsWebGL2Abstract
   static fragmentFile = "obstacle_fragment";
 }
 
+export class DrawableNonDirectionalTerrainWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+  /** @type {class} */
+  static handlerClass = NonDirectionalTerrainWallInstanceHandlerWebGL2;
+
+  /** @type {string} */
+  static vertexFile = "obstacle_vertex";
+
+  /** @type {string} */
+  static fragmentFile = "obstacle_fragment";
+
+  static obstacleColor = [0, 0.5, 1, 0.5];
+}
+
+export class DrawableDirectionalTerrainWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+  /** @type {class} */
+  static handlerClass = DirectionalTerrainWallInstanceHandlerWebGL2;
+
+  /** @type {string} */
+  static vertexFile = "obstacle_vertex";
+
+  /** @type {string} */
+  static fragmentFile = "obstacle_fragment";
+
+  static obstacleColor = [0, 0.5, 1, 0.5];
+}
+
 export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
   static handlerClass = TileInstanceHandlerWebGL2;
@@ -332,6 +357,8 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {string} */
   static fragmentFile = "obstacle_fragment";
 
+  static targetColor = [1, 0, 0, 1];
+
   render(target, viewer, visionTriangle) {
     if ( !this.placeableHandler.numInstances ) return;
     const instanceSet = this.instanceSet;
@@ -348,8 +375,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
     if ( typeof idx !== "undefined" ) {
       // Render the target red.
-      this.materialUniforms.uColor[RED] = 1;
-      this.materialUniforms.uColor[BLUE] = 0;
+      for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
       twgl.setUniforms(this.programInfo, this.materialUniforms);
 
       instanceSet.add(idx);
@@ -366,8 +392,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
       instanceSet.add(idx);
     }
     if ( instanceSet.size ) {
-      this.materialUniforms.uColor[RED] = 0;
-      this.materialUniforms.uColor[BLUE] = 1;
+      for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
       twgl.setUniforms(this.programInfo, this.materialUniforms);
       WebGL2.drawSet(gl, instanceSet, this.offsetData);
     }

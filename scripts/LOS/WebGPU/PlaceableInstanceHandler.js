@@ -284,19 +284,63 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
     const delta = edge.b.subtract(edge.a, PIXI.Point._tmp3);
     return Math.atan2(delta.y, delta.x);
   }
+
+  /**
+   * Is this a terrain (limited) edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  isTerrain(edge) {
+    return edge[this.senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
+  }
+
+  /**
+   * Is this a directional edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  static isDirectional(edge) { return Boolean(edge.direction); }
 }
 
-export class NonDirectionalWallInstanceHandler extends WallInstanceHandler {
+export class NonTerrainWallInstanceHandler extends WallInstanceHandler {
   includePlaceable(edge) {
     if ( !super.includePlaceable(edge) ) return false;
-    return !edge.direction;
+    return !this.isTerrain(edge);
   }
 }
 
-export class DirectionalWallInstanceHandler extends WallInstanceHandler {
+export class TerrainWallInstanceHandler extends WallInstanceHandler {
   includePlaceable(edge) {
     if ( !super.includePlaceable(edge) ) return false;
-    return edge.direction;
+    return this.isTerrain(edge);
+  }
+}
+
+export class NonDirectionalWallInstanceHandler extends NonTerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return !this.constructor.isDirectional(edge);
+  }
+}
+
+export class DirectionalWallInstanceHandler extends NonTerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return this.constructor.isDirectional(edge);
+  }
+}
+
+export class NonDirectionalTerrainWallInstanceHandler extends TerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return !this.constructor.isDirectional(edge);
+  }
+}
+
+export class DirectionalTerrainWallInstanceHandler extends TerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return this.constructor.isDirectional(edge);
   }
 }
 
