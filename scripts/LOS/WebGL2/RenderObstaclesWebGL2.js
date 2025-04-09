@@ -103,5 +103,5 @@ export class RenderSceneBackgroundWebGL2 extends RenderAbstractWebGL2 {
 }
 
 export class RenderObstaclesWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2, DrawableTokenWebGL2];
+  static drawableClasses = [DrawableTokenWebGL2, DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2];
 }

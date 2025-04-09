@@ -443,7 +443,7 @@ export class WebGL2 {
 
       // Pull the offset and count from the offsetData.
       const offset = offsetData.index.offsets[firstInstance];
-      const count = instanceLength || sumArray(offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount));
+      const count = (instanceLength * instanceCount) || sumArray(offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount));
       console.debug(`Drawing ${count} vertices with offset ${offset}; firstInstance at ${firstInstance}; represents ${instanceCount} instances`, new Set([...instanceSet.values()]));
       this.draw(gl, count, offset);
     }

@@ -93,7 +93,7 @@ import {
 import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
 import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
-import { DrawableNonDirectionalWallWebGL2 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
+import { DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2, DrawableTokenWebGL2 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
 import {
   RenderWallsWebGL2,
   RenderTilesWebGL2,
@@ -231,7 +231,7 @@ Hooks.once("init", function() {
       DirectionalWallInstanceHandlerWebGL2,
       TileInstanceHandlerWebGL2,
       TokenInstanceHandlerWebGL2,
-      DrawableNonDirectionalWallWebGL2,
+      DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2, DrawableTokenWebGL2,
       RenderWallsWebGL2,
       RenderTilesWebGL2,
       RenderTokensWebGL2,

@@ -28,11 +28,16 @@ let {
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2,
   DrawableNonDirectionalWallWebGL2,
+  DrawableDirectionalWallWebGL2,
+  DrawableTileWebGL2,
+  DrawableTokenWebGL2,
+  DrawableSceneBackground,
   RenderWallsWebGL2,
   RenderTokensWebGL2,
   RenderTilesWebGL2,
   RenderObstaclesWebGL2,
   RenderSceneBackgroundWebGL2,
+  RenderAbstractWebGL2,
   twgl,
 } = api.webgl;
 
@@ -77,6 +82,10 @@ gl = popout.context
 renderWalls = new RenderWallsWebGL2()
 await renderWalls.initialize({ gl, senseType: "sight" })
 renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderWallsDebug = new RenderWallsWebGL2()
+await renderWallsDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderWallsDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderTokens = new RenderTokensWebGL2()
 await renderTokens.initialize({ gl, senseType: "sight" })
