@@ -9,6 +9,7 @@ import {
   DirectionalWallInstanceHandlerWebGL2,
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2,
+  SceneInstanceHandlerWebGL2,
 } from "./PlaceableInstanceHandlerWebGL2.js";
 import * as twgl from "./twgl.js";
 
@@ -264,12 +265,14 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     const placeableHandler = this.placeableHandler;
     this.textures.length = placeableHandler.numInstances;
     for ( const [idx, tile] of placeableHandler.placeableFromInstanceIndex.entries() ) {
-      textureOpts.src = tile.texture.baseTexture.resource.source;
+      textureOpts.src = this._sourceForTile(tile);
       this.textures[idx] = twgl.createTexture(gl, textureOpts)
     }
   }
 
-
+  _sourceForTile(tile) {
+    return tile.texture.baseTexture.resource.source;
+  }
 
   render(_target, _viewer, _visionTriangle) {
     // TODO: Use visionTriangle
@@ -292,33 +295,31 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
       twgl.setUniforms(this.programInfo, uniforms);
       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
     }
-
     // gl.bindVertexArray(null);
+  }
+}
 
+export class DrawableSceneBackground extends DrawableTileWebGL2 {
+  /** @type {class} */
+  static handlerClass = SceneInstanceHandlerWebGL2;
 
-//     for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-//       this.instanceSet.clear();
-//       this.instanceSet.add(idx);
-//
-//       const image = tile.texture.baseTexture.resource.source;
-//       const textureOpts = {
-//         target: gl.TEXTURE_2D,
-//         level: 0,
-//         minMag: gl.NEAREST,
-//         wrap: gl.CLAMP_TO_EDGE,
-//         internalFormat: gl.RGBA,
-//         format: gl.RGBA,
-//         type: gl.UNSIGNED_BYTE,
-//         src: image,
-//       }
-//       const texture = twgl.createTexture(gl, textureOpts)
-//       const uniforms = { uTileTexture: texture }
-//       twgl.setUniforms(this.programInfo, uniforms);
-//       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
-//     }
+  /** @type ImageBitMap */
+  backgroundImage;
 
+  async _initialize() {
+    await super._initialize();
+
+    this.placeableHandler.initializePlaceables()
+    const sceneObj = this.placeableHandler.placeableFromInstanceIndex.get(0);
+    if ( !sceneObj || !sceneObj.src ) return;
+    this.backgroundImage = await loadImageBitmap(sceneObj.src, {
+      //imageOrientation: "flipY",
+      // premultiplyAlpha: "premultiply",
+      premultiplyAlpha: "none",
+    });
   }
 
+  _sourceForTile() { return this.backgroundImage; }
 }
 
 export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
@@ -390,4 +391,17 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 //     }
 //   }
 
+}
+
+/**
+ * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
+ * Load an image bitmap from a url.
+ * @param {string} url
+ * @param {object} [opts]       Options passed to createImageBitmap
+ * @returns {ImageBitmap}
+ */
+async function loadImageBitmap(url, opts = {}) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await createImageBitmap(blob, opts);
 }

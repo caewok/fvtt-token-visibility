@@ -170,6 +170,30 @@ export class TileInstanceHandlerWebGL2 extends VerticesMixin(TileInstanceHandler
   }
 }
 
+export class SceneInstanceHandlerWebGL2 extends TileInstanceHandlerWebGL2 {
+  constructor(opts) {
+    super(opts);
+    const { addNormals, addUVs } = this;
+    this.geom = new GeometryHorizontalPlaneDesc({ addNormals, addUVs });
+  }
+
+  getPlaceables() {
+    if ( !canvas.scene.background.src ) return [];
+    return [{ id: canvas.scene.id, ...canvas.scene.background}];
+  }
+
+  // includePlaceable(sceneObj) { return Boolean(canvas.scene.background.src); }
+
+  static tileRotation() { return 0; }
+
+  static tileDimensions() { return canvas.dimensions.sceneRect; }
+
+  static tileCenter() {
+    const ctr = canvas.dimensions.rect.center;
+    return new Point3d(ctr.x, ctr.y, 0);
+  }
+}
+
 /**
  * Store the token geometry and update vertices based on changes to the instance matrix.
  */

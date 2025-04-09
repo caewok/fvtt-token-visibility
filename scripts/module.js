@@ -99,6 +99,8 @@ import {
   RenderTilesWebGL2,
   RenderTokensWebGL2,
   RenderObstaclesWebGL2,
+  RenderSceneBackgroundWebGL2,
+  RenderAbstractWebGL2,
 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 import * as twgl from "./LOS/WebGL2/twgl.js";
 import {
@@ -234,6 +236,8 @@ Hooks.once("init", function() {
       RenderTilesWebGL2,
       RenderTokensWebGL2,
       RenderObstaclesWebGL2,
+      RenderSceneBackgroundWebGL2,
+      RenderAbstractWebGL2,
       twgl,
     },
 

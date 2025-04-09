@@ -32,6 +32,7 @@ let {
   RenderTokensWebGL2,
   RenderTilesWebGL2,
   RenderObstaclesWebGL2,
+  RenderSceneBackgroundWebGL2,
   twgl,
 } = api.webgl;
 
@@ -92,6 +93,24 @@ renderTilesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 renderTokensDebug = new RenderTokensWebGL2()
 await renderTokensDebug.initialize({ gl, senseType: "sight", debugViewNormals: true  })
 renderTokensDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderSceneBackground = new RenderSceneBackgroundWebGL2()
+await renderSceneBackground.initialize({ gl, senseType: "sight" })
+renderSceneBackground.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderSceneBackgroundDebug = new RenderSceneBackgroundWebGL2()
+await renderSceneBackgroundDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderSceneBackgroundDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+
+renderObstacles = new RenderObstaclesWebGL2()
+await renderObstacles.initialize({ gl, senseType: "sight" })
+renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderObstaclesDebug = new RenderObstaclesWebGL2()
+await renderObstaclesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
 
 renderTokensDebug = new RenderTokensWebGL2()
 renderTokensDebug.camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" })

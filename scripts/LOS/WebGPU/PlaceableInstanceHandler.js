@@ -364,11 +364,18 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
     MatrixFloat32.scale(width, height, 1.0, scaleM);
 
     // Rotate based on tile rotation.
-    MatrixFloat32.rotationZ(Math.toRadians(tile.document.rotation), true, rotationM);
+    MatrixFloat32.rotationZ(this.constructor.rotation, true, rotationM);
 
     return super.updateInstanceBuffer(idx,
       { rotation: rotationM, translation: translationM, scale: scaleM });
   }
+
+  /**
+   * Determine the tile rotation.
+   * @param {Tile} tile
+   * @returns {number}    Rotation, in radians.
+   */
+  static tileRotation(tile) { return Math.toRadians(tile.document.rotation); }
 
   /**
    * Determine the tile 3d dimensions, in pixel units.
