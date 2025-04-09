@@ -1032,8 +1032,8 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
       MatrixFlat.scale(wSize, hSize, 1, this._scalePrototypeM[TOP]);
       MatrixFlat.scale(wSize, hSize, 1, this._scalePrototypeM[BOTTOM]);
     } else {
-      MatrixFlat.identity(this._scalePrototypeM[TOP]);
-      MatrixFlat.identity(this._scalePrototypeM[BOTTOM]);
+      MatrixFlat.identity(4, 4, this._scalePrototypeM[TOP]);
+      MatrixFlat.identity(4, 4, this._scalePrototypeM[BOTTOM]);
     }
     return this._scalePrototypeM;
   }
