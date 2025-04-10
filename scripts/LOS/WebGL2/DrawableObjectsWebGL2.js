@@ -75,11 +75,16 @@ class DrawableObjectsWebGL2Abstract {
     await this._createProgram();
   }
 
+  #placeableHandlerUpdateId = 0;
+
+  #placeableHandlerBufferId = 0;
+
   _createPlaceableHandler() {
     this.placeableHandler = new this.constructor.handlerClass({
       senseType: this.senseType,
       addNormals: this.debugViewNormals
     });
+    this.placeableHandler.registerPlaceableHooks();
   }
 
   async _createProgram() {
@@ -96,7 +101,15 @@ class DrawableObjectsWebGL2Abstract {
 
   _initializePlaceableHandler() {
     const { placeableHandler, offsetData } = this;
-    placeableHandler.initializePlaceables()
+    placeableHandler.initializePlaceables();
+    this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
+    this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
+    offsetData.vertex = {
+      offsets: new Array(placeableHandler.numInstances),
+      lengths: placeableHandler.geom.vertices.length,
+      sizes: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.vertices.byteLength),
+    }
+    offsetData.vertex.sizes.forEach((ln, i) => offsetData.vertex.offsets[i] = ln * i);
     offsetData.index = {
       offsets: new Array(placeableHandler.numInstances),
       lengths: placeableHandler.geom.indices.length,
@@ -143,11 +156,42 @@ class DrawableObjectsWebGL2Abstract {
   }
 
   /**
+   * Update the vertex and index buffers for the placeable(s).
+   */
+  _updateBuffers() {
+    const placeableHandler = this.placeableHandler;
+
+    if ( placeableHandler.bufferId < this.#placeableHandlerBufferId ) return this._updateInstances();
+    if ( placeableHandler.updateId <= this.#placeableHandlerUpdateId ) return;
+
+    const gl = this.webGL2.gl;
+    const vBuffer = this.vertexBuffer;
+    const iBuffer = this.bufferInfo.indices;
+    const vOffsets = this.offsetData.vertex.offsets;
+    const iOffsets = this.offsetData.index.offsets;
+    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
+      if ( lastUpdate <= this.#placeableHandlerUpdateId ) continue;
+
+      // See twgl.setAttribInfoBufferFromArray.
+      const vOffset = vOffsets[idx];
+      gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, placeableHandler.vertices[idx]);
+
+      const iOffset = iOffsets[idx];
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
+      gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, placeableHandler.indices[idx]);
+    }
+    this.#placeableHandlerUpdateId = placeableHandler.updateId;
+  }
+
+  /**
    * Set up parts of the render chain that change often but not necessarily every render.
    * Called whenever a placeable is added, deleted, or updated.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  prerender() {}
+  prerender() {
+    this._updateBuffers();
+  }
 
   /**
    * Render this drawable.
@@ -156,6 +200,8 @@ class DrawableObjectsWebGL2Abstract {
     // TODO: Use visionTriangle
     this.setRenderInstances(target, viewer, visionTriangle);
     if ( !this.instanceSet.size ) return;
+
+    this._updateBuffers();
 
     const gl = this.webGL2.gl;
 
@@ -302,6 +348,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   render(_target, _viewer, _visionTriangle) {
     // TODO: Use visionTriangle
     if ( !this.placeableHandler.numInstances ) return;
+    this._updateBuffers();
 
     const gl = this.webGL2.gl;
 
@@ -364,6 +411,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( typeof idx === "undefined" ) return;
 
     const instanceSet = this.instanceSet;
+    this._updateBuffers();
     const gl = this.webGL2.gl;
 
     gl.useProgram(this.programInfo.program);
@@ -386,6 +434,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   render(target, viewer, visionTriangle) {
     if ( !this.placeableHandler.numInstances ) return;
     const instanceSet = this.instanceSet;
+    this._updateBuffers();
     const gl = this.webGL2.gl;
 
     gl.useProgram(this.programInfo.program);

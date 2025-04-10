@@ -86,6 +86,7 @@ import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
 import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
 import {
+  PlaceableInstanceHandler,
   WallInstanceHandler,
   TileInstanceHandler,
   TokenInstanceHandler,
@@ -275,7 +276,8 @@ Hooks.once("init", function() {
       wgsl,
       AsyncQueue,
       SumPixelsWebGL2,
-      WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler
+      PlaceableInstanceHandler,
+      WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
     },
 
     glmatrix: {

@@ -1,4 +1,5 @@
 /* globals
+canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -189,6 +190,8 @@ export class TileInstanceHandlerWebGL2 extends VerticesMixin(TileInstanceHandler
 }
 
 export class SceneInstanceHandlerWebGL2 extends TileInstanceHandlerWebGL2 {
+  static HOOKS = []; // TODO: Scene hook if the scene background changes?
+
   constructor(opts) {
     super(opts);
     const { addNormals, addUVs } = this;
@@ -208,7 +211,7 @@ export class SceneInstanceHandlerWebGL2 extends TileInstanceHandlerWebGL2 {
 
   static tileCenter() {
     const ctr = canvas.dimensions.rect.center;
-    return new Point3d(ctr.x, ctr.y, 0);
+    return new CONFIG.GeometryLib.threeD.Point3d(ctr.x, ctr.y, 0);
   }
 }
 

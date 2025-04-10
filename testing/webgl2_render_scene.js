@@ -19,6 +19,7 @@ let {
   WallInstanceHandler,
   TileInstanceHandler,
   TokenInstanceHandler,
+  PlaceableInstanceHandler,
 } = api.webgpu;
 
 let {

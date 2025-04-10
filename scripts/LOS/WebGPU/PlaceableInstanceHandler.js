@@ -2,6 +2,8 @@
 canvas,
 CONFIG,
 CONST,
+foundry,
+Hooks,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -24,7 +26,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 const rotationM = MatrixFloat32.identity(4, 4);
 
 
-class PlaceableInstanceHandler {
+export class PlaceableInstanceHandler {
 
   /**
    * Only keep one instance of each handler type. Class and sense type.
@@ -65,6 +67,12 @@ class PlaceableInstanceHandler {
   /** @type {Map<number, Placeable|Edge>} */
   placeableFromInstanceIndex = new Map();
 
+  /**
+   * Track when each instance index was last updated, by updateId
+   * @type {Map<number, number>}
+   */
+  instanceLastUpdated = new Map();
+
   /** @type {number} */
   get numInstances() { return this.instanceIndexFromId.size; }
 
@@ -96,6 +104,8 @@ class PlaceableInstanceHandler {
   _createInstanceBuffer(numPlaceables) {
     this.instanceArrayBuffer = new ArrayBuffer(numPlaceables * this.constructor.INSTANCE_ELEMENT_SIZE);
     this.matrices.length = numPlaceables;
+    this.#bufferId += 1;
+    this.instanceLastUpdated.clear();
   }
 
   /**
@@ -132,6 +142,7 @@ class PlaceableInstanceHandler {
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updateInstanceBuffer(idx, { rotation, translation, scale } = {}) {
+    this.instanceLastUpdated.set(idx, this.#updateId);
     rotation ??= MatrixFloat32.identity(4, 4, rotationM);
     translation ??= MatrixFloat32.identity(4, 4, translationM);
     scale ??= MatrixFloat32.identity(4, 4, scaleM);
@@ -160,13 +171,198 @@ class PlaceableInstanceHandler {
     const i = idx * this.constructor.INSTANCE_ELEMENT_SIZE;
     return new Float32Array(this.instanceArrayBuffer, i, 16);
   }
+
+  /* ----- NOTE: Hooks and updating ----- */
+
+  // Increment every time the buffer is created.
+  /** @type {number} */
+  #bufferId = 0;
+
+  get bufferId() { return this.#bufferId; }
+
+  // Increment every time there is an update.
+  /** @type {number} */
+  #updateId = 0;
+
+  get updateId() { return this.#updateId; }
+
+  // Track what instance indices are not currently used.
+  /** @type {Set<number>} */
+  #emptyIndices = new Set();
+
+  /**
+   * Add the placeable to the instance array. May trigger a rebuild of the array.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if it resulted in a change.
+   */
+  addPlaceable(placeable) {
+    if ( this.instanceIndexFromId.has(placeable.id) ) return false;
+    if ( !this.includePlaceable(placeable) ) return false;
+
+    this.#updateId += 1;
+    if ( this._addPlaceableUsingIndex(placeable) ) return true;
+    this.initializePlaceables(); // Redo the instance buffer.
+    return true;
+  }
+
+  /**
+   * Attempt to add the placeable object to the existing instance array.
+   * Only works if there are empty spaces in the array.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if successfully added.
+   */
+  _addPlaceableUsingIndex(placeable) {
+    if ( !this.#emptyIndices.size ) return false;
+    const idx = this.#emptyIndices.first();
+    this.#emptyIndices.delete(idx);
+    this.instanceIndexFromId.add(idx, placeable.id);
+    this.placeableFromInstanceIndex.add(idx, placeable);
+    this.updateInstanceBuffer(idx);
+  }
+
+  /**
+   * Remove the placeable from the instance array. Simply removes the associated index
+   * without rebuilding the array.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if it resulted in a change.
+   */
+  removePlaceable(placeableId) {
+    if ( !this.instanceIndexFromId.has(placeableId) ) return false;
+
+    this.#updateId += 1;
+    const idx = this.instanceIndexFromId.get(placeableId);
+    this.instanceIndexFromId.delete(idx);
+    this.placeableFromInstanceIndex.delete(idx);
+    this.#emptyIndices.add(idx);
+    return true;
+  }
+
+  /** @type {Set<string>} */
+  static UPDATE_KEYS = new Set();
+
+  /**
+   * Update some data about the placeable in the array.
+   * @param {PlaceableObject} placeable
+   * @param {string[]} changeKeys       Change keys (flags/properties modified)
+   * @returns {boolean} True if it resulted in a change.
+   */
+  updatePlaceable(placeable, changeKeys) {
+    // Possible that the placeable needs to be added or removed instead of simply updated.
+    const alreadyTracking = this.instanceIndexFromId.has(placeable.id);
+    const shouldTrack = this.includePlaceable(placeable);
+    if ( !(alreadyTracking && shouldTrack) ) return false;
+    if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.id);
+    else if ( !alreadyTracking && shouldTrack ) return this.addPlaceable(placeable);
+
+    // If the changes include one or more relevant keys, update.
+    if ( !changeKeys.some(key => this.constructor.UPDATE_KEYS.has(key)) ) return false;
+    return this._updatePlaceable(placeable);
+  }
+
+  /**
+   * Update the placeable; assumes the placeable is tracked and need not be added/deleted.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if it resulted in a change.
+   */
+  _updatePlaceable(placeable) {
+    const idx = this.instanceIndexFromId.get(placeable.id);
+    this.updateInstanceBuffer(idx);
+    this.#updateId += 1;
+    return true;
+  }
+
+  /** @type {number[]} */
+  _hooks = [];
+
+  /**
+   * @typedef {object} PlaceableHookData
+   * Description of a hook to use.
+   * @prop {object} name: methodName        Name of the hook and method; e.g. updateWall: "_onPlaceableUpdate"
+   */
+  /** @type {object[]} */
+  static HOOKS = [];
+
+  /**
+   * Register hooks for this placeable that record updates.
+   */
+  registerPlaceableHooks() {
+    if ( this._hooks.length ) return; // Only register once.
+    for ( const hookDatum of this.constructor.HOOKS ) {
+      const [name, methodName] = Object.entries(hookDatum)[0];
+      const id = Hooks.on(name, this[methodName].bind(this));
+      this._hooks.push({ name, methodName, id });
+    }
+  }
+
+  deregisterPlaceableHooks() {
+    this._hooks.forEach(hook => Hooks.off(hook.name, hook.id));
+    this._hooks.length = 0;
+  }
+
+  /**
+   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
+   * @param {Document} document                       The new Document instance which has been created
+   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
+   * @param {string} userId                           The ID of the User who triggered the creation workflow
+   */
+  _onPlaceableCreation(document, _options, _userId) { this.addPlaceable(document.object); }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an update workflow.
+   * @param {Document} document                       The existing Document which was updated
+   * @param {object} changed                          Differential data that was used to update the document
+   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
+   * @param {string} userId                           The ID of the User who triggered the update workflow
+   */
+  _onPlaceableUpdate(document, changed, _options, _userId) {
+    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
+    this.updatePlaceable(document.object, changeKeys);
+  }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an deletion workflow.
+   * @param {Document} document                       The existing Document which was deleted
+   * @param {Partial<DatabaseDeleteOperation>} options Additional options which modified the deletion request
+   * @param {string} userId                           The ID of the User who triggered the deletion workflow
+   */
+  _onPlaceableDeletion(document, _options, _userId) { this.removePlaceable(document.id); }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is initially drawn.
+   * @param {PlaceableObject} object    The object instance being drawn
+   */
+  _onPlaceableDraw(object) { this.addPlaceable(object); }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is incrementally refreshed.
+   * @param {PlaceableObject} object    The object instance being refreshed
+   * @param {RenderFlags} flags
+   */
+  _onPlaceableRefresh(object, flags) {
+    // TODO: Can flags be set to false? Need this filter if so.
+    // const changeKeys = Object.entries(flags).filter([key, value] => value).map([key, value] => key);
+    const changeKeys = Object.keys(flags);
+    this.updatePlaceable(object, changeKeys);
+  }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is destroyed.
+   * @param {PlaceableObject} object    The object instance being destroyed
+   */
+  _onPlaceableDestroy(object) { this.removePlaceable(object.id); }
 }
 
 export class WallInstanceHandler extends PlaceableInstanceHandler {
+  static HOOKS = [
+    { createWall: "_onPlaceableCreation" },
+    { updateWall: "_onPlaceableUpdate" },
+    { removeWall: "_onPlaceableDeletion" },
+  ];
+
   /**
-   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   * Change keys in updateWall hook that indicate a relevant change to the placeable.
    */
-  static docUpdateKeys = new Set([
+  static UPDATE_KEYS = new Set([
     "x",
     "y",
     "flags.elevatedvision.elevation.top",
@@ -178,13 +374,24 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
   ]);
 
   /**
-   * Flags in refreshObject hook that indicate a relevant change to the placeable.
+   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
+   * @param {Document} document                       The new Document instance which has been created
+   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
+   * @param {string} userId                           The ID of the User who triggered the creation workflow
    */
-  static refreshFlags = new Set([
-    "refreshLine",
-    "refreshDirection",
-    "refreshEndpoints",
-  ]);
+  _onPlaceableCreation(document, _options, _userId) { this.addPlaceable(document.object.edge); }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an update workflow.
+   * @param {Document} document                       The existing Document which was updated
+   * @param {object} changed                          Differential data that was used to update the document
+   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
+   * @param {string} userId                           The ID of the User who triggered the update workflow
+   */
+  _onPlaceableUpdate(document, changed, _options, _userId) {
+    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
+    this.updatePlaceable(document.object.edge, changeKeys);
+  }
 
   /**
    * Get edges in the scene.
@@ -345,25 +552,22 @@ export class DirectionalTerrainWallInstanceHandler extends TerrainWallInstanceHa
 }
 
 export class TileInstanceHandler extends PlaceableInstanceHandler {
+  static HOOKS = [
+    { createTile: "_onPlaceableCreation" },
+    { updateTile: "_onPlaceableUpdate" },
+    { removeTile: "_onPlaceableDeletion" },
+  ];
+
   /**
    * Change keys in updateDocument hook that indicate a relevant change to the placeable.
    */
-  static docUpdateKeys = new Set([
+  static UPDATE_KEYS = new Set([
     "x",
     "y",
     "elevation",
     "width",
     "height",
     "rotation",
-  ]);
-
-  /**
-   * Flags in refreshObject hook that indicate a relevant change to the placeable.
-   */
-  static refreshFlags = new Set([
-    "refreshPosition",
-    "refreshRotation",
-    "refreshSize",
   ]);
 
   /**
@@ -453,21 +657,16 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
 }
 
 export class TokenInstanceHandler extends PlaceableInstanceHandler {
+  static HOOKS = [
+    { drawToken: "_onPlaceableDraw" },
+    { refreshToken: "_onPlaceableRefresh" },
+    { destroyToken: "_onPlaceableDestroy" },
+  ];
+
   /**
    * Change keys in updateDocument hook that indicate a relevant change to the placeable.
    */
-  static docUpdateKeys = new Set([
-    "x",
-    "y",
-    "elevation",
-    "width",
-    "height",
-  ]);
-
-  /**
-   * Flags in refreshObject hook that indicate a relevant change to the placeable.
-   */
-  static refreshFlags = new Set([
+  static UPDATE_KEYS = new Set([
     "refreshPosition",
     "refreshSize",
   ]);
