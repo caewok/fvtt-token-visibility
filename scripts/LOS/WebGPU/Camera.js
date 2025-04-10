@@ -55,7 +55,7 @@ export class Camera {
   #cameraM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
   /** @type {MatrixFloat32<4,4>} */
-  #mirrorM = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
+  mirrorM = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
 
   /** @type {boolean} */
   #dirty = {
@@ -68,6 +68,10 @@ export class Camera {
 
   #internalParams = {};
 
+  UP = new Point3d();
+
+
+
   /**
    * @type {object} [opts]
    * @type {Point3d} [opts.cameraPosition]
@@ -78,9 +82,10 @@ export class Camera {
   constructor({ cameraPosition, targetPosition, glType = "webGPU", perspectiveType = "perspective" } = {}) {
     if ( cameraPosition ) this.cameraPosition = cameraPosition;
     if ( targetPosition ) this.targetPosition = targetPosition;
+    this.UP.copyFrom(this.constructor.UP);
 
     // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
-    this.#mirrorM.setIndex(0, 0, -1);
+    this.mirrorM.setIndex(0, 0, -1);
 
     const fnName = `${perspectiveType}${glType === "webGPU" ? "ZO" : ""}`;
     this.#perspectiveFn = CONFIG.GeometryLib.MatrixFloat32[fnName];
@@ -189,7 +194,7 @@ export class Camera {
       this.#perspectiveFn(...Object.values(this.#internalParams), this.#M.perspective);
 
       // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
-      this.#M.perspective.multiply4x4(this.#mirrorM, this.#M.perspective);
+      this.#M.perspective.multiply4x4(this.mirrorM, this.#M.perspective);
 
       this.#dirty.perspective = false;
     }
@@ -232,7 +237,7 @@ export class Camera {
   /** @type {Float32Array|mat4} */
   get lookAtMatrix() {
     if ( this.#dirty.lookAt ) {
-      CONFIG.GeometryLib.MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.constructor.UP, this.#cameraM, this.#M.lookAt);
+      CONFIG.GeometryLib.MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
       this.#dirty.lookAt = false;
     }
     return this.#M.lookAt;

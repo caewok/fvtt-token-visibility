@@ -1,5 +1,6 @@
 /* globals
 CONFIG,
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -16,48 +17,69 @@ import {
   DrawableSceneBackground,
 } from "./DrawableObjectsWebGL2.js";
 
-export class RenderAbstractWebGL2 {
-  /** @type {class} */
-  static drawableClasses = [];
+export class RenderObstaclesAbstractWebGL2 {
+  /** @type {targetClass} */
+  static targetClass = DrawableTokenWebGL2;
 
   /** @type {class} */
-  static terrainDrawableClasses = [];
+  static obstacleClasses = [];
+
+  /** @type {class} */
+  static terrainClasses = [];
+
+  static sceneFloorClass = null;
 
   /** @type {WebGL2RenderingContext} */
   gl;
 
+  /** @type {DrawObjectsAbstract} */
+  drawableTarget;
+
   /** @type {DrawObjectsAbstract[]} */
-  drawableObjects = []
+  drawableObstacles = []
 
   /** @type {DrawableObjectsAbstract[]} */
   drawableTerrain = [];
 
+  /** @type {DrawableObjectsAbstract[]} */
+  drawableFloor;
+
   /** @type {Camera} */
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
 
+  /** @type {object} */
   debugViewNormals = false;
 
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
   async initialize({ gl, senseType = "sight", debugViewNormals = false } = {}) {
+    this.debugViewNormals = debugViewNormals;
     this.senseType = senseType;
     this.gl = gl;
-    this.debugViewNormals = debugViewNormals;
 
     const promises = [];
-    for ( const cl of this.constructor.drawableClasses ) {
-      const drawableObj = new cl(gl, this.camera, { senseType });
-      this.drawableObjects.push(drawableObj);
-      await drawableObj.initialize({ debugViewNormals });
-      // promises.push(drawableObj.initialize({ debugViewNormals }));
+    const clOpts = { senseType };
+    const initOpts = { debugViewNormals };
+    this.drawableTarget = new this.constructor.targetClass(gl, this.camera, clOpts);
+    promises.push(this.drawableTarget.initialize(initOpts));
+
+    for ( const cl of this.constructor.obstacleClasses ) {
+      const drawableObj = new cl(gl, this.camera, clOpts);
+      this.drawableObstacles.push(drawableObj);
+      promises.push(drawableObj.initialize(initOpts));
+    }
+    this.drawableObstacles.push(this.drawableTarget);
+
+    for ( const cl of this.constructor.terrainClasses ) {
+      const drawableObj = new cl(gl, this.camera, clOpts);
+      this.drawableTerrain.push(drawableObj);
+      promises.push(drawableObj.initialize(initOpts));
     }
 
-    for ( const cl of this.constructor.terrainDrawableClasses ) {
-      const drawableObj = new cl(gl, this.camera, { senseType });
-      this.drawableTerrain.push(drawableObj);
-      await drawableObj.initialize({ debugViewNormals });
-      // promises.push(drawableObj.initialize({ debugViewNormals }));
+    if ( this.constructor.sceneFloorClass ) {
+      this.drawableFloor = this.constructor.sceneFloorClass(gl, this.camera, clOpts);
+      promises.push(this.drawableFloor.initialize(initOpts));
     }
 
     return Promise.allSettled(promises);
@@ -77,6 +99,17 @@ export class RenderAbstractWebGL2 {
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = targetOnly ? null : VisionTriangle.build(viewerLocation, target);
 
+    const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
+    renderFn.call(this, target, viewer, visionTriangle);
+  }
+
+  /**
+   * Render the scene using select color channels to encode vision information.
+   * Target is rendered red first and nothing else touches the red channel.
+   * Obstacles are rendered into the blue channel.
+   * Terrain is rendered into the green channel at 50%, such that 2+ terrain === full green.
+   */
+  _renderColorCoded(target, viewer, visionTriangle) {
     const gl = this.gl;
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
     gl.enable(gl.DEPTH_TEST);
@@ -85,12 +118,18 @@ export class RenderAbstractWebGL2 {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
+    // gl.cullFace(gl.FRONT);
 
-    this.drawableObjects.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
+    gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+    this.drawableTarget.renderTarget(target);
+
+    gl.colorMask(false, false, true, true); // Blue, alpha channels for obstacles.
+    this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Draw terrain walls.
     // Blend so that 2+ walls exceed a value in the green channel
     // Preserve R and B for the destination.
+    gl.colorMask(false, true, false, true); // Green, alpha channels for terrains.
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
 
@@ -103,32 +142,48 @@ export class RenderAbstractWebGL2 {
 
     this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
-    // For terrain color, could use either [0, .5, 0, alpha] or [0, 0, 0.5, alpha]
+    // Reset
+    gl.colorMask(true, true, true, true);
+    gl.disable(gl.BLEND);
+  }
 
+  /**
+   * Render the scene in a manner that makes sense for a human viewer.
+   */
+  _renderDebug(target, viewer, visionTriangle) {
+    const gl = this.gl;
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+    // gl.cullFace(gl.FRONT);
 
+    // Draw the scene floor to orient the viewer.
+    if ( this.drawableFloor ) this.drawableFloor.render();
 
-    // color(RGB) = (sourceColor * srcRGB) + (destinationColor * dstRGB)
-    // color(A) = (sourceAlpha * srcAlpha) + (destinationAlpha * dstAlpha)
+    this.drawableTarget.renderTarget(target);
+    this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
-    // srcRGB: gl.ONE
-    // dstRGB: gl.ONE
+    // Draw terrain walls.
+    // Blend so that 2+ walls exceed a value in the green channel
+    // Preserve R and B for the destination.
+    gl.disable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
 
-    // B/c we only care about terrain that already is over a target red area, we can ignore source alpha
-    // srcAlpha: gl.ZERO
-    // dstAlpha: gl.ONE
-//     src, dst
-//     r: 0 * 1 + 1 * 1 = 1
-//     g: .5 * 1 + 0 * 1 = .5
-//     b: 0 * 1 + 1 * 1 = 1
-//     a: .5 * 0 + 1 * 1 = 1
-//
-//     // two terrains
-//     dst: 1, .5, 0, 1
-//     src: 0, .5, 0, .5?
-//     r: 0 * 1 + 1 * 1 = 1
-//     g: .5 * 1 + .5 * 1 = 1
-//     b: 0 * 1 + 0 * 1 = 0
-//     a: .5 * 0 + 1 * 1 = 1
+    // Blend the terrain walls.
+    const srcRGB = gl.SRC_ALPHA;
+    const dstRGB = gl.SRC_ALPHA;
+    const srcAlpha = gl.ONE_MINUS_SRC_ALPHA;
+    const dstAlpha = gl.ONE_MINUS_SRC_ALPHA;
+    gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+
+    this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
+
+    // Reset
+     gl.disable(gl.BLEND);
   }
 
   /**
@@ -142,35 +197,49 @@ export class RenderAbstractWebGL2 {
     camera.setTargetTokenFrustrum(target);
     camera.perspectiveParameters = {
       fov: camera.perspectiveParameters.fov * 2,
-      zFar: camera.perspectiveParameters.zFar + 50
+      zFar: Infinity, // camera.perspectiveParameters.zFar + 50
     };
     camera.refresh();
   }
 }
 
-export class RenderWallsWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableNonDirectionalWallWebGL2];
+export class RenderWallObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
+  /** @type {class} */
+  static obstacleClasses = [
+    DrawableNonDirectionalWallWebGL2,
+    DrawableDirectionalWallWebGL2,
+  ];
+
+  /** @type {class} */
+  static terrainClasses = [
+    DrawableNonDirectionalTerrainWallWebGL2,
+    DrawableDirectionalTerrainWallWebGL2,
+  ];
 }
 
-export class RenderTilesWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableTileWebGL2];
-}
-
-export class RenderTokensWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableTokenWebGL2];
-}
-
-export class RenderTerrainWallsWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableTokenWebGL2];
-
-  static terrainDrawableClasses = [DrawableNonDirectionalTerrainWallWebGL2]
+export class RenderTileObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
+  /** @type {class} */
+  static obstacleClasses = [
+    DrawableTileWebGL2,
+  ];
 }
 
 
-export class RenderSceneBackgroundWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableSceneBackground];
+export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
+  /** @type {class} */
+  static obstacleClasses = [
+    DrawableNonDirectionalWallWebGL2,
+    DrawableDirectionalWallWebGL2,
+    DrawableTileWebGL2,
+  ];
+
+  /** @type {class} */
+  static terrainClasses = [
+    DrawableNonDirectionalTerrainWallWebGL2,
+    DrawableDirectionalTerrainWallWebGL2,
+  ];
 }
 
-export class RenderObstaclesWebGL2 extends RenderAbstractWebGL2 {
-  static drawableClasses = [DrawableTokenWebGL2, DrawableNonDirectionalWallWebGL2, DrawableDirectionalWallWebGL2, DrawableTileWebGL2];
+export class RenderObstaclesWithBackgroundWebGL2 extends RenderObstaclesWebGL2 {
+  static sceneFloorClass = DrawableSceneBackground;
 }

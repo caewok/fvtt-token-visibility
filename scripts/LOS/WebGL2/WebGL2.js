@@ -175,9 +175,7 @@ export class WebGL2 {
    * @param {GLint} [params[gl.TEXTURE_MAG_FILTER]=gl.LINEAR]
    * @returns {WebGLTexture}
    */
-  createAndSetupTexture(params = {}) {
-    const gl = this.gl;
-
+  static createAndSetupTexture(gl, params = {}) {
     // Set defaults.
     params[gl.TEXTURE_WRAP_S] ??= gl.CLAMP_TO_EDGE;
     params[gl.TEXTURE_WRAP_T] ??= gl.CLAMP_TO_EDGE;
@@ -195,6 +193,9 @@ export class WebGL2 {
     return texture;
   }
 
+  createAndSetupTexture(params = {}) { return this.constructor.createAndSetupTexture(this.gl, params); }
+
+
   /**
    * Format a texture.
    * Assumes that the texture is already bound using gl.bindTexture, e.g., by calling createAndSetupTexture.
@@ -208,8 +209,7 @@ export class WebGL2 {
    * @param {GLint} [opts.srcType=gl.UNSIGNED_BYTE]     Type of data being supplied
    * @param {TypedArray|ImageBitmap|null} [opts.data]   Data to be uploaded to the texture
    */
-  formatTexture({ mipLevel, internalFormat, srcFormat, srcType, data, width, height } = {}) {
-    const gl = this.gl;
+  static formatTexture(gl, { mipLevel, internalFormat, srcFormat, srcType, data, width, height } = {}) {
     mipLevel ??= 0;
     internalFormat ??= gl.RGBA
     srcFormat ??= gl.RGBA;
@@ -223,6 +223,9 @@ export class WebGL2 {
     height ??= width;
     gl.texImage2D(gl.TEXTURE_2D, mipLevel, internalFormat, width, height, border, srcFormat, srcType, data);
   }
+
+  formatTexture(opts) { this.constructor.formatTexture(this.gl, opts); }
+
 
   attributes = {};
 
@@ -351,12 +354,22 @@ export class WebGL2 {
       max[idx % 4] = Math.max(px, max[idx % 4])
       min[idx % 4] = Math.min(px, min[idx % 4])
     });
+    let redBlocked = 0;
+    const terrainThreshold = 255 * 0.75;
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      redBlocked += Boolean(r) * Boolean(b || (g > terrainThreshold))
+    }
+
     console.table([
       { label: "sum", r: acc[0], g: acc[1], b: acc[2], a: acc[3] },
       { label: "count", r: acc[4], g: acc[5], b: acc[6], a: acc[7] },
       { label: "zeroes", r: acc[8], g: acc[9], b: acc[10], a: acc[11] },
       { label: "min", r: min[0], g: min[1], b: min[2], a: min[3] },
-      { label: "max", r: max[0], g: max[1], b: max[2], a: max[3] }
+      { label: "max", r: max[0], g: max[1], b: max[2], a: max[3] },
+      { label: "redBlocked", r: redBlocked, g: redBlocked, b: redBlocked, a: redBlocked}
     ])
   }
 

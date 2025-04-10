@@ -169,7 +169,7 @@ class DrawableObjectsWebGL2Abstract {
     // TODO: Swap between canvas and renderTexture.
 
     WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
-    // gl.bindVertexArray(null);
+    gl.bindVertexArray(null);
   }
 
   /** @type {Set<number>} */
@@ -320,7 +320,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
       twgl.setUniforms(this.programInfo, uniforms);
       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
     }
-    // gl.bindVertexArray(null);
+    gl.bindVertexArray(null);
   }
 }
 
@@ -359,6 +359,30 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   static targetColor = [1, 0, 0, 1];
 
+  renderTarget(target) {
+    const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
+    if ( typeof idx === "undefined" ) return;
+
+    const instanceSet = this.instanceSet;
+    const gl = this.webGL2.gl;
+
+    gl.useProgram(this.programInfo.program);
+    twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    twgl.setUniforms(this.programInfo, this.uniforms);
+
+    instanceSet.clear();
+
+    // Render the target red.
+    for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
+
+    instanceSet.add(idx);
+    WebGL2.drawSet(gl, instanceSet, this.offsetData);
+    gl.bindVertexArray(null);
+  }
+
   render(target, viewer, visionTriangle) {
     if ( !this.placeableHandler.numInstances ) return;
     const instanceSet = this.instanceSet;
@@ -369,20 +393,6 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
-
-    // Target only.
-    instanceSet.clear();
-    const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
-    if ( typeof idx !== "undefined" ) {
-      // Render the target red.
-      for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
-      twgl.setUniforms(this.programInfo, this.materialUniforms);
-
-      instanceSet.add(idx);
-      WebGL2.drawSet(gl, instanceSet, this.offsetData);
-    }
-
-    if ( !visionTriangle ) return; // webGL2.unbindVAO();
 
     // Other tokens.
     instanceSet.clear();
@@ -396,7 +406,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
       twgl.setUniforms(this.programInfo, this.materialUniforms);
       WebGL2.drawSet(gl, instanceSet, this.offsetData);
     }
-    // gl.bindVertexArray(null);
+    gl.bindVertexArray(null);
 
   }
 

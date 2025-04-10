@@ -104,12 +104,11 @@ import {
 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
 
 import {
-  RenderWallsWebGL2,
-  RenderTilesWebGL2,
-  RenderTokensWebGL2,
+  RenderObstaclesAbstractWebGL2,
+  RenderWallObstaclesWebGL2,
+  RenderTileObstaclesWebGL2,
   RenderObstaclesWebGL2,
-  RenderSceneBackgroundWebGL2,
-  RenderAbstractWebGL2,
+  RenderObstaclesWithBackgroundWebGL2,
 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
 import * as twgl from "./LOS/WebGL2/twgl.js";
@@ -248,12 +247,11 @@ Hooks.once("init", function() {
       DrawableTileWebGL2,
       DrawableTokenWebGL2,
       DrawableSceneBackground,
-      RenderWallsWebGL2,
-      RenderTilesWebGL2,
-      RenderTokensWebGL2,
+      RenderObstaclesAbstractWebGL2,
+      RenderWallObstaclesWebGL2,
+      RenderTileObstaclesWebGL2,
       RenderObstaclesWebGL2,
-      RenderSceneBackgroundWebGL2,
-      RenderAbstractWebGL2,
+      RenderObstaclesWithBackgroundWebGL2,
       twgl,
     },
 

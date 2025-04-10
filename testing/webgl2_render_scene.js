@@ -34,12 +34,11 @@ let {
   DrawableTileWebGL2,
   DrawableTokenWebGL2,
   DrawableSceneBackground,
-  RenderWallsWebGL2,
-  RenderTokensWebGL2,
-  RenderTilesWebGL2,
+  RenderObstaclesAbstractWebGL2,
+  RenderWallObstaclesWebGL2,
+  RenderTileObstaclesWebGL2,
   RenderObstaclesWebGL2,
-  RenderSceneBackgroundWebGL2,
-  RenderAbstractWebGL2,
+  RenderObstaclesWithBackgroundWebGL2,
   twgl,
 } = api.webgl;
 
@@ -78,42 +77,159 @@ popout = new Area3dPopoutCanvas({ width: 400, height: 475, resizable: false })
 await popout._render(true, { contextType: "webgl2"});
 gl = popout.context
 
+// NOTE: Test rendering to texture and then to canvas
+
+renderObstacles = new RenderObstaclesWebGL2()
+await renderObstacles.initialize({ gl, senseType: "sight" })
+
+renderObstaclesDebug = new RenderObstaclesWebGL2()
+await renderObstaclesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+
+// Create a texture to render to.
+textureOpts = {
+  target: gl.TEXTURE_2D,
+  level: 0,
+  minMag: gl.NEAREST,
+  wrap: gl.CLAMP_TO_EDGE,
+  internalFormat: gl.RGBA,
+  format: gl.RGBA,
+  type: gl.UNSIGNED_BYTE,
+  width: 256,
+  height: 256,
+}
+// targetTextureWidth = 256;
+// targetTextureHeight = 256;
+// renderTexture = WebGL2.createAndSetupTexture(gl);
+// WebGL2.formatTexture(gl, { width: targetTextureWidth, height: targetTextureHeight });
+
+renderTexture = twgl.createTexture(gl, textureOpts)
+// gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+fb = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+// Attach texture to it.
+mipLevel = 0;
+attachmentPoint = gl.COLOR_ATTACHMENT0;
+gl.framebufferTexture2D(gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, renderTexture, mipLevel);
+
+// Draw into the framebuffer with the texture attached.
+gl.canvas.width = 256
+gl.canvas.height = 256
+WebGL2.bindFramebufferAndSetViewport(gl, fb, textureOpts.width, textureOpts.height)
+
+// framebufferInfo = twgl.createFramebufferInfo(gl, { attachment: renderTexture })
+// twgl.bindFramebufferInfo(gl, framebufferInfo, textureOpts.width, textureOpts.height)
+
+
+renderObstaclesDebug.camera.UP = new Point3d(-1, 0, 1)
+renderObstaclesDebug.camera.mirrorM.setIndex(0, 0, -1)
+renderObstaclesDebug.camera.mirrorM.setIndex(1, 1, 1)
+renderObstaclesDebug.camera.mirrorM.setIndex(2, 2, -1)
+renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+
+viewerLocation = Point3d.fromTokenCenter(viewer)
+targetLocation = Point3d.fromTokenCenter(target)
+flippedViewerLocation = viewerLocation.projectToward(targetLocation, 2)
+
+viewerLocation.y *= -1
+viewerLocation.y = 1 - viewerLocation.y
+targetLocation.y = 1 - targetLocation.y
+renderObstaclesDebug.render(viewerLocation, target, { viewer })
+
+
+readbackSize = textureOpts.width * textureOpts.height * 4;
+bufferData = new Uint8Array(readbackSize)
+// gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, targetTexture)
+gl.readPixels(0, 0, textureOpts.width, textureOpts.height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
+imgData =  { pixels: bufferData, x: 0, y: 0, width: textureOpts.width, height: textureOpts.height };
+WebGL2.summarizePixelData(imgData)
+
+/*
+canvas.app.stage.removeChild(sprite);
+tex = PIXI.Texture.fromBuffer(imgData.pixels, imgData.width, imgData.height)
+sprite = new PIXI.Sprite(tex);
+canvas.app.stage.addChild(sprite);
+canvas.app.stage.removeChild(sprite);
+
+*/
+
+
+// Now render same to canvas
+// twgl.bindFramebufferInfo(gl, null)
+gl.canvas.width = 400
+gl.canvas.height = 400
+WebGL2.bindFramebufferAndSetViewport(gl, null, gl.canvas.width, gl.canvas.height)
+
+renderObstacles.camera.mirrorM.setIndex(0, 0, -1)
+renderObstacles.camera.mirrorM.setIndex(1, 1, 1)
+renderObstacles.camera.mirrorM.setIndex(2, 2, 1)
+renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+// Now render debug to canvas
+renderObstaclesDebug.camera.mirrorM.setIndex(0, 0, -1)
+renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+
+width = gl.canvas.width
+height = gl.canvas.height
+readbackSize = width * height * 4;
+bufferData = new Uint8Array(readbackSize)
+// gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, targetTexture)
+
+// gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, popout.canvas);
+gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
+imgData =  { pixels: bufferData, x: 0, y: 0, width, height };
+WebGL2.summarizePixelData(imgData)
+
+
+// Try rendering to offscreen canvas
+width = 256
+height = 256
+glCanvas = new OffscreenCanvas(width, height);
+gl = glCanvas.getContext('webgl2');
+// texture = gl.createTexture();
+// framebuffer = gl.createFramebuffer();
+// gl.bindTexture(gl.TEXTURE_2D, texture);
+// gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+// gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+readbackSize = width * height * 4;
+bufferData = new Uint8Array(readbackSize)
+
+renderObstaclesDebug = new RenderObstaclesWebGL2()
+await renderObstaclesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
+imgData =  { pixels: bufferData, x: 0, y: 0, width, height };
+WebGL2.summarizePixelData(imgData)
+
+canvas.app.stage.removeChild(sprite);
+tex = PIXI.Texture.fromBuffer(imgData.pixels, imgData.width, imgData.height)
+sprite = new PIXI.Sprite(tex);
+canvas.app.stage.addChild(sprite);
 
 
 
 // NOTE: Test renderWall
 
-renderWalls = new RenderWallsWebGL2()
+
+renderWalls = new RenderWallObstaclesWebGL2()
 await renderWalls.initialize({ gl, senseType: "sight" })
 renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderWallsDebug = new RenderWallsWebGL2()
+renderWallsDebug = new RenderWallObstaclesWebGL2()
 await renderWallsDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderWallsDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderTokens = new RenderTokensWebGL2()
-await renderTokens.initialize({ gl, senseType: "sight" })
-renderTokens.render(Point3d.fromTokenCenter(viewer), target, { viewer })
-
-renderTiles = new RenderTilesWebGL2()
+renderTiles = new RenderTileObstaclesWebGL2()
 await renderTiles.initialize({ gl, senseType: "sight" })
 renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderTilesDebug = new RenderTilesWebGL2()
+renderTilesDebug = new RenderTileObstaclesWebGL2()
 await renderTilesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderTilesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderTokensDebug = new RenderTokensWebGL2()
-await renderTokensDebug.initialize({ gl, senseType: "sight", debugViewNormals: true  })
-renderTokensDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderSceneBackground = new RenderSceneBackgroundWebGL2()
-await renderSceneBackground.initialize({ gl, senseType: "sight" })
-renderSceneBackground.render(Point3d.fromTokenCenter(viewer), target, { viewer })
-
-renderSceneBackgroundDebug = new RenderSceneBackgroundWebGL2()
-await renderSceneBackgroundDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
-renderSceneBackgroundDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderTerrainWalls = new RenderTerrainWallsWebGL2()
 await renderTerrainWalls.initialize({ gl, senseType: "sight" })
@@ -123,8 +239,6 @@ renderTerrainWallsDebug = new RenderTerrainWallsWebGL2()
 await renderTerrainWallsDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderTerrainWallsDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-
-
 renderObstacles = new RenderObstaclesWebGL2()
 await renderObstacles.initialize({ gl, senseType: "sight" })
 renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
@@ -132,6 +246,14 @@ renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 renderObstaclesDebug = new RenderObstaclesWebGL2()
 await renderObstaclesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderSceneBackground = new RenderObstaclesWithBackgroundWebGL2()
+await renderSceneBackground.initialize({ gl, senseType: "sight" })
+renderSceneBackground.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
+renderSceneBackgroundDebug = new RenderObstaclesWithBackgroundWebGL2()
+await renderSceneBackgroundDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderSceneBackgroundDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 
 
