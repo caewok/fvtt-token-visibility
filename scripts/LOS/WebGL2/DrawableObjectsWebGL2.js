@@ -30,6 +30,8 @@ class DrawableObjectsWebGL2Abstract {
 
   static obstacleColor = [0, 0, 1, 1];
 
+  static bufferDrawType = "STATIC_DRAW";
+
   /** @type {PlaceableInstanceHandler} */
   placeableHandler;
 
@@ -125,7 +127,7 @@ class DrawableObjectsWebGL2Abstract {
     // Set vertex buffer
     const vBuffer = this.vertexBuffer = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, placeableHandler.verticesArray, gl.STATIC_DRAW)
+    gl.bufferData(gl.ARRAY_BUFFER, placeableHandler.verticesArray, gl[this.constructor.bufferDrawType])
 
     // Set vertex attributes
     const vertexProps = this.vertexProps = this._defineVertexAttributeProperties();
@@ -405,6 +407,8 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   static fragmentFile = "obstacle_fragment";
 
   static targetColor = [1, 0, 0, 1];
+
+  static bufferDrawType = "DYNAMIC_DRAW";
 
   renderTarget(target) {
     const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
