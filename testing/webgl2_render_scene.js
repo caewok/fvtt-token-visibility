@@ -240,12 +240,12 @@ renderTerrainWallsDebug = new RenderTerrainWallsWebGL2()
 await renderTerrainWallsDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderTerrainWallsDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderObstacles = new RenderObstaclesWebGL2()
-await renderObstacles.initialize({ gl, senseType: "sight" })
+renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: "sight" })
+await renderObstacles.initialize()
 renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderObstaclesDebug = new RenderObstaclesWebGL2()
-await renderObstaclesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderObstaclesDebug = new RenderObstaclesWebGL2({ gl, senseType: "sight", debugViewNormals: true })
+await renderObstaclesDebug.initialize()
 renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderSceneBackground = new RenderObstaclesWithBackgroundWebGL2()

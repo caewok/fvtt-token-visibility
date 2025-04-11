@@ -28,9 +28,14 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {string} */
   static fragmentFile = "";
 
+  /** @type {number[4]} */
   static obstacleColor = [0, 0, 1, 1];
 
+  /** @type {string} */
   static bufferDrawType = "STATIC_DRAW";
+
+  /** @type {boolean} */
+  static addUVs = false;
 
   /** @type {PlaceableInstanceHandler} */
   placeableHandler;
@@ -45,10 +50,16 @@ class DrawableObjectsWebGL2Abstract {
 
   materialUniforms = {};
 
-  constructor(gl, camera, { senseType = "sight" } = {}) {
+  constructor(gl, camera, { senseType = "sight", debugViewNormals = false } = {}) {
     this.webGL2 = new WebGL2(gl);
     this.camera = camera;
     this.senseType = senseType;
+    this.#debugViewNormals = debugViewNormals;
+    this.placeableHandler = new this.constructor.handlerClass({
+      senseType: this.senseType,
+      addNormals: this.debugViewNormals,
+      addUVs: this.constructor.addUVs,
+    });
 
     this.uniforms = {
       uPerspectiveMatrix: camera.perspectiveMatrix.arr,
@@ -66,28 +77,19 @@ class DrawableObjectsWebGL2Abstract {
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize({ debugViewNormals = false } = {}) {
-    this.#debugViewNormals = debugViewNormals;
+  async initialize() {
     await this._initialize();
     this._updateInstances();
   }
 
   async _initialize() {
-    this._createPlaceableHandler();
+    this.placeableHandler.registerPlaceableHooks();
     await this._createProgram();
   }
 
   #placeableHandlerUpdateId = 0;
 
   #placeableHandlerBufferId = 0;
-
-  _createPlaceableHandler() {
-    this.placeableHandler = new this.constructor.handlerClass({
-      senseType: this.senseType,
-      addNormals: this.debugViewNormals
-    });
-    this.placeableHandler.registerPlaceableHooks();
-  }
 
   async _createProgram() {
     const debugViewNormals = this.debugViewNormals;
@@ -289,16 +291,11 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {string} */
   static fragmentFile = "tile_obstacle_fragment";
 
+  /** @type {boolean} */
+  static addUVs = false;
+
   /** @type {WebGLTexture[]} */
   textures = [];
-
-  _createPlaceableHandler() {
-    this.placeableHandler = new this.constructor.handlerClass({
-      senseType: this.senseType,
-      addNormals: this.debugViewNormals,
-      addUVs: true,
-    });
-  }
 
   _defineVertexAttributeProperties() {
     const vertexProps = super._defineVertexAttributeProperties();

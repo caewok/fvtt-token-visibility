@@ -266,8 +266,8 @@ export class PlaceableInstanceHandler {
    */
   _updatePlaceable(placeable) {
     const idx = this.instanceIndexFromId.get(placeable.id);
-    this.updateInstanceBuffer(idx);
     this.#updateId += 1;
+    this.updateInstanceBuffer(idx);
     return true;
   }
 

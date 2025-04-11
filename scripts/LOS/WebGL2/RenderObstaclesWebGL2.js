@@ -50,38 +50,40 @@ export class RenderObstaclesAbstractWebGL2 {
   /** @type {object} */
   debugViewNormals = false;
 
-  /**
-   * Set up all parts of the render pipeline that will not change often.
-   */
-  async initialize({ gl, senseType = "sight", debugViewNormals = false } = {}) {
+  constructor({ gl, senseType = "sight", debugViewNormals = false } = {}) {
     this.debugViewNormals = debugViewNormals;
     this.senseType = senseType;
     this.gl = gl;
 
-    const promises = [];
-    const clOpts = { senseType };
-    const initOpts = { debugViewNormals };
+    // Construct the various drawable instances.
+    const clOpts = { senseType, debugViewNormals };
     this.drawableTarget = new this.constructor.targetClass(gl, this.camera, clOpts);
-    promises.push(this.drawableTarget.initialize(initOpts));
-
     for ( const cl of this.constructor.obstacleClasses ) {
       const drawableObj = new cl(gl, this.camera, clOpts);
       this.drawableObstacles.push(drawableObj);
-      promises.push(drawableObj.initialize(initOpts));
     }
     this.drawableObstacles.push(this.drawableTarget);
-
     for ( const cl of this.constructor.terrainClasses ) {
       const drawableObj = new cl(gl, this.camera, clOpts);
       this.drawableTerrain.push(drawableObj);
-      promises.push(drawableObj.initialize(initOpts));
     }
-
     if ( this.constructor.sceneFloorClass ) {
       this.drawableFloor = this.constructor.sceneFloorClass(gl, this.camera, clOpts);
-      promises.push(this.drawableFloor.initialize(initOpts));
     }
+  }
 
+  /**
+   * Set up all parts of the render pipeline that will not change often.
+   */
+  async initialize() {
+    const promises = [];
+    for ( const drawableObstacle of this.drawableObstacles ) {
+      promises.push(drawableObstacle.initialize());
+    }
+    for ( const drawableTerrain of this.drawableTerrain ) {
+      promises.push(drawableTerrain.initialize());
+    }
+    if ( this.drawableFloor ) promises.push(this.drawableFloor.initialize());
     return Promise.allSettled(promises);
   }
 
