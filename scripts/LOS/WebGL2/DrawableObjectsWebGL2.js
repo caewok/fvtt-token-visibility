@@ -292,7 +292,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   static fragmentFile = "tile_obstacle_fragment";
 
   /** @type {boolean} */
-  static addUVs = false;
+  static addUVs = true;
 
   /** @type {WebGLTexture[]} */
   textures = [];
