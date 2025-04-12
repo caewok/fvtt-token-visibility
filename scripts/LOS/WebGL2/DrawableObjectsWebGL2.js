@@ -335,14 +335,12 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     const placeableHandler = this.placeableHandler;
     this.textures.length = placeableHandler.numInstances;
     for ( const [idx, tile] of placeableHandler.placeableFromInstanceIndex.entries() ) {
-      textureOpts.src = this._sourceForTile(tile);
+      textureOpts.src = this.constructor.tileSource(tile);
       this.textures[idx] = twgl.createTexture(gl, textureOpts)
     }
   }
 
-  _sourceForTile(tile) {
-    return tile.texture.baseTexture.resource.source;
-  }
+  static tileSource(tile) { return tile.texture.baseTexture.resource.source; }
 
   render(_target, _viewer, _visionTriangle) {
     // TODO: Use visionTriangle
