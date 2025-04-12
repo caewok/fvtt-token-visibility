@@ -84,7 +84,7 @@ class DrawableObjectsAbstract {
 
   static handlerClass;
 
-  static shaderFile;
+  static shaderFile = "";
 
   static GROUP_NUM = {
     CAMERA: 0,
@@ -180,7 +180,7 @@ class DrawableObjectsAbstract {
    * @type {object} [opts]
    * @type {CONST.WALL_RESTRICTION_TYPES} [opts.senseType="sight"]
    */
-  constructor(device, materials, camera, { senseType = "sight" }) {
+  constructor(device, materials, camera, { senseType = "sight" } = {}) {
     this.device = device;
     this.materials = materials;
     this.camera = camera;
@@ -534,8 +534,10 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
   }
 
   _updatePlaceable(object) {
-    this.placeableHandler.updateInstanceBuffer(object.id);
-    this.partialUpdateInstanceBuffer(object.id);
+    const idx = this.placeableHandler.instanceIndexFromId(object.id);
+    if ( typeof idx === "undefined" ) return;
+    this.placeableHandler.updateInstanceBuffer(idx);
+    this.partialUpdateInstanceBuffer(idx);
     this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer); // Debugging.
   }
 
@@ -544,13 +546,10 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
    * @param {string} placeableId    Id of the placeable
    * @param {number} [idx]          Optional placeable index; will be looked up using placeableId otherwise
    */
-  partialUpdateInstanceBuffer(placeableId, idx,) {
+  partialUpdateInstanceBuffer(idx) {
     const h = this.placeableHandler
-    idx ??= h.instanceIndexFromId.get(placeableId);
-    const M = h.getPlaceableInstanceData(placeableId, idx);
-    this.device.queue.writeBuffer(
-      this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M,
-    );
+    const M = h.matrices[idx];
+    this.device.queue.writeBuffer(this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M.arr);
   }
 }
 

@@ -372,6 +372,7 @@ export class VisionTriangle {
     if ( tileZ < this.elevationZ.min || tileZ > this.elevationZ.max ) return false;
 
     // Use the alpha bounding box. This might be a polygon if the tile is rotated.
+    const alphaThreshold = CONFIG[MODULE_ID].alphaThreshold;
     const tBounds = tile.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
     const tCenter = tBounds.center;
     if ( this.pointInsideTriangle(tCenter) ) return true;

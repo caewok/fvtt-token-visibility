@@ -19,7 +19,8 @@ import { PlaceableTrianglesHandler } from "./PlaceableTrianglesHandler.js";
 
 import {
   insetPoints,
-  tokensOverlap } from "./util.js";
+  tokensOverlap,
+  getObjectProperty } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";

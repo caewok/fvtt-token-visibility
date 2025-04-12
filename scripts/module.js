@@ -52,7 +52,6 @@ import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriang
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
-
 import {
   Triangle,
   DirectionalWallTriangles,
@@ -76,6 +75,7 @@ import {
   mat2, mat2d, mat3, mat4,
   quat, quat2,
   vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
+import { GeometryDesc } from "./LOS/WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
@@ -85,6 +85,42 @@ import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
 import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
+import {
+  PlaceableInstanceHandler,
+  WallInstanceHandler,
+  TileInstanceHandler,
+  TokenInstanceHandler,
+ } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
+import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
+import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
+import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
+import {
+  DrawableNonDirectionalWallWebGL2,
+  DrawableDirectionalWallWebGL2,
+  DrawableNonDirectionalTerrainWallWebGL2,
+  DrawableDirectionalTerrainWallWebGL2,
+  DrawableTileWebGL2,
+  DrawableTokenWebGL2,
+  DrawableSceneBackground,
+} from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
+
+import {
+  RenderObstaclesAbstractWebGL2,
+  RenderWallObstaclesWebGL2,
+  RenderTileObstaclesWebGL2,
+  RenderObstaclesWebGL2,
+  RenderObstaclesWithBackgroundWebGL2,
+} from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
+
+import * as twgl from "./LOS/WebGL2/twgl.js";
+import {
+  NonDirectionalWallInstanceHandlerWebGL2,
+  DirectionalWallInstanceHandlerWebGL2,
+  TileInstanceHandlerWebGL2,
+  TokenInstanceHandlerWebGL2
+} from "./LOS/WebGL2/PlaceableInstanceHandlerWebGL2.js";
+import { PercentVisibleCalculatorWebGL2 } from "./LOS/WebGL2/PercentVisibleCalculatorWebGL2.js";
+import { DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/DebugVisibilityViewerWebGL2.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -119,7 +155,7 @@ Hooks.once("init", function() {
      * Size of the render texture (width and height) used in the webGL LOS algorithms.
      * @type {number}
      */
-    renderTextureSize: 100,
+    renderTextureSize: 128,
 
     /**
      * Resolution of the render texture used in the webZGL LOS algorithm.
@@ -199,7 +235,29 @@ Hooks.once("init", function() {
     webgl: {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,
-      Placeable3dDebugShader, Tile3dDebugShader
+      Placeable3dDebugShader, Tile3dDebugShader,
+      DrawableWallInstancesPIXI,
+      RenderWallsPIXI,
+      WebGL2,
+      NonDirectionalWallInstanceHandlerWebGL2,
+      DirectionalWallInstanceHandlerWebGL2,
+      TileInstanceHandlerWebGL2,
+      TokenInstanceHandlerWebGL2,
+      DrawableNonDirectionalWallWebGL2,
+      DrawableDirectionalWallWebGL2,
+      DrawableNonDirectionalTerrainWallWebGL2,
+      DrawableDirectionalTerrainWallWebGL2,
+      DrawableTileWebGL2,
+      DrawableTokenWebGL2,
+      DrawableSceneBackground,
+      RenderObstaclesAbstractWebGL2,
+      RenderWallObstaclesWebGL2,
+      RenderTileObstaclesWebGL2,
+      RenderObstaclesWebGL2,
+      RenderObstaclesWithBackgroundWebGL2,
+      twgl,
+      PercentVisibleCalculatorWebGL2,
+      DebugVisibilityViewerWebGL2,
     },
 
     webgpu: {
@@ -208,6 +266,7 @@ Hooks.once("init", function() {
       WebGPUBuffer,
       WebGPUTexture,
       Camera,
+      GeometryDesc,
       GeometryWallDesc,
       GeometryCubeDesc,
       GeometryHorizontalPlaneDesc,
@@ -221,6 +280,8 @@ Hooks.once("init", function() {
       wgsl,
       AsyncQueue,
       SumPixelsWebGL2,
+      PlaceableInstanceHandler,
+      WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
     },
 
     glmatrix: {

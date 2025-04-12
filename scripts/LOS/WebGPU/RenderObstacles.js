@@ -56,6 +56,16 @@ class RenderAbstract {
   /** @type {class} */
   static drawableClasses = [];
 
+  /** @type {object} */
+  static CAMERA_LAYOUT = {
+    label: "Camera",
+    entries: [{
+      binding: 0, // Camera/Frame uniforms
+      visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+      buffer: {},
+    }]
+  };
+
   /** @type {GPUDevice} */
   device;
 
@@ -63,7 +73,7 @@ class RenderAbstract {
   drawableObjects = []
 
   /** @type {Camera} */
-  camera;
+  camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" });
 
   /** @type {MaterialTracker} */
   materials;
@@ -84,7 +94,6 @@ class RenderAbstract {
     this.drawableObjects.forEach(drawableObject => drawableObject.destroy());
     this.drawableObjects.length = 0;
     const device = await this.getDevice();
-    this.camera = new Camera(device);
     this.materials = new MaterialsTracker(device);
     await this._initializeDrawObjects(opts);
     this._allocateRenderTargets();
@@ -98,6 +107,8 @@ class RenderAbstract {
     const device = this.device;
     const materials = this.materials;
     const camera = this.camera;
+    this._createCameraBindGroup();
+
     const senseType = this.senseType;
     const promises = [];
     for ( const cl of this.constructor.drawableClasses ) {
@@ -164,7 +175,30 @@ class RenderAbstract {
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
     this.camera.setTargetTokenFrustrum(target);
-    this.camera.updateDeviceBuffer();
+    this._updateCameraBuffer();
+  }
+
+  _updateCameraBuffer() {
+    this.device.queue.writeBuffer(this.deviceBuffer, 0, this.arrayBuffer);
+    this.debugBuffer = new Float32Array(this.arrayBuffer)
+  }
+
+  _createCameraBindGroup() {
+    this.camera.bindGroupLayout = this.device.createBindGroupLayout(this.constructor.CAMERA_LAYOUT);
+    const buffer = this.camera.deviceBuffer = this.device.createBuffer({
+      label: "Camera",
+      size: Camera.CAMERA_BUFFER_SIZE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    // Buffer will be written to GPU prior to render, because the camera view will change.
+    this.camera.bindGroup = this.device.createBindGroup({
+      label: "Camera",
+      layout: this.camera.bindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: { buffer }
+      }],
+    });
   }
 
   registerPlaceableHooks() { this.drawableObjects.forEach(obj => obj.registerPlaceableHooks()); }

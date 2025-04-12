@@ -2,6 +2,8 @@
 canvas,
 CONFIG,
 CONST,
+foundry,
+Hooks,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -24,7 +26,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 const rotationM = MatrixFloat32.identity(4, 4);
 
 
-class PlaceableInstanceHandler {
+export class PlaceableInstanceHandler {
 
   /**
    * Only keep one instance of each handler type. Class and sense type.
@@ -50,8 +52,9 @@ class PlaceableInstanceHandler {
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   senseType = "sight";
 
-  constructor({ senseType = "sight" } = {}) {
-    const key = `${this.constructor.name}_${senseType}`;
+  constructor({ senseType = "sight", keys = [] } = {}) {
+    keys.unshift(this.constructor.name, senseType);
+    const key = keys.join("_");
     const handlers = this.constructor.handlers;
     if ( handlers.has(key) ) return handlers.get(key);
     handlers.set(key, this);
@@ -64,6 +67,12 @@ class PlaceableInstanceHandler {
   /** @type {Map<number, Placeable|Edge>} */
   placeableFromInstanceIndex = new Map();
 
+  /**
+   * Track when each instance index was last updated, by updateId
+   * @type {Map<number, number>}
+   */
+  instanceLastUpdated = new Map();
+
   /** @type {number} */
   get numInstances() { return this.instanceIndexFromId.size; }
 
@@ -71,6 +80,9 @@ class PlaceableInstanceHandler {
   instanceArrayBuffer;
 
   get instanceArrayValues() { return new Float32Array(this.instanceArrayBuffer); }
+
+  /** @type {MatrixFloat32[]} */
+  matrices = [];
 
   /**
    * Initialize all placeables.
@@ -81,12 +93,31 @@ class PlaceableInstanceHandler {
     const placeables = this.getPlaceables();
 
     // mat4x4 for each placeable; 4 bytes per entry.
-    this.instanceArrayBuffer = new ArrayBuffer(placeables.length * this.constructor.INSTANCE_ELEMENT_SIZE);
-    placeables.forEach((placeable, idx) => {
-      this.instanceIndexFromId.set(placeable.id, idx);
-      this.placeableFromInstanceIndex.set(idx, placeable);
-      this.updateInstanceBuffer(placeable.id, idx, placeable);
-    });
+    this._createInstanceBuffer(placeables.length);
+    placeables.forEach((placeable, idx) => this._initializePlaceable(placeable, idx));
+  }
+
+  /**
+   * Construct data related to the number of instances.
+   * @param {number} numPlaceables
+   */
+  _createInstanceBuffer(numPlaceables) {
+    this.instanceArrayBuffer = new ArrayBuffer(numPlaceables * this.constructor.INSTANCE_ELEMENT_SIZE);
+    this.matrices.length = numPlaceables;
+    this.#bufferId += 1;
+    this.instanceLastUpdated.clear();
+  }
+
+  /**
+   * Initialize a single placeable at a given index.
+   * @param {PlaceableObject|Edge} placeable
+   * @param {number} idx
+   */
+  _initializePlaceable(placeable, idx) {
+    this.instanceIndexFromId.set(placeable.id, idx);
+    this.placeableFromInstanceIndex.set(idx, placeable);
+    this.matrices[idx] = new MatrixFloat32(this.getPlaceableInstanceData(placeable.id, idx), 4, 4);
+    this.updateInstanceBuffer(idx);
   }
 
   /**
@@ -110,13 +141,13 @@ class PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable, { rotation, translation, scale } = {}) {
+  updateInstanceBuffer(idx, { rotation, translation, scale } = {}) {
+    this.instanceLastUpdated.set(idx, this.#updateId);
     rotation ??= MatrixFloat32.identity(4, 4, rotationM);
     translation ??= MatrixFloat32.identity(4, 4, translationM);
     scale ??= MatrixFloat32.identity(4, 4, scaleM);
 
-    const arrM = this.getPlaceableInstanceData(placeableId, idx);
-    const M = new MatrixFloat32(arrM, 4, 4);
+    const M = this.matrices[idx];
     scale
       .multiply4x4(rotation, M)
       .multiply4x4(translation, M);
@@ -140,13 +171,198 @@ class PlaceableInstanceHandler {
     const i = idx * this.constructor.INSTANCE_ELEMENT_SIZE;
     return new Float32Array(this.instanceArrayBuffer, i, 16);
   }
+
+  /* ----- NOTE: Hooks and updating ----- */
+
+  // Increment every time the buffer is created.
+  /** @type {number} */
+  #bufferId = 0;
+
+  get bufferId() { return this.#bufferId; }
+
+  // Increment every time there is an update.
+  /** @type {number} */
+  #updateId = 0;
+
+  get updateId() { return this.#updateId; }
+
+  // Track what instance indices are not currently used.
+  /** @type {Set<number>} */
+  #emptyIndices = new Set();
+
+  /**
+   * Add the placeable to the instance array. May trigger a rebuild of the array.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if it resulted in a change.
+   */
+  addPlaceable(placeable) {
+    if ( this.instanceIndexFromId.has(placeable.id) ) return false;
+    if ( !this.includePlaceable(placeable) ) return false;
+
+    this.#updateId += 1;
+    if ( this._addPlaceableUsingIndex(placeable) ) return true;
+    this.initializePlaceables(); // Redo the instance buffer.
+    return true;
+  }
+
+  /**
+   * Attempt to add the placeable object to the existing instance array.
+   * Only works if there are empty spaces in the array.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if successfully added.
+   */
+  _addPlaceableUsingIndex(placeable) {
+    if ( !this.#emptyIndices.size ) return false;
+    const idx = this.#emptyIndices.first();
+    this.#emptyIndices.delete(idx);
+    this.instanceIndexFromId.add(idx, placeable.id);
+    this.placeableFromInstanceIndex.add(idx, placeable);
+    this.updateInstanceBuffer(idx);
+  }
+
+  /**
+   * Remove the placeable from the instance array. Simply removes the associated index
+   * without rebuilding the array.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if it resulted in a change.
+   */
+  removePlaceable(placeableId) {
+    if ( !this.instanceIndexFromId.has(placeableId) ) return false;
+
+    this.#updateId += 1;
+    const idx = this.instanceIndexFromId.get(placeableId);
+    this.instanceIndexFromId.delete(idx);
+    this.placeableFromInstanceIndex.delete(idx);
+    this.#emptyIndices.add(idx);
+    return true;
+  }
+
+  /** @type {Set<string>} */
+  static UPDATE_KEYS = new Set();
+
+  /**
+   * Update some data about the placeable in the array.
+   * @param {PlaceableObject} placeable
+   * @param {string[]} changeKeys       Change keys (flags/properties modified)
+   * @returns {boolean} True if it resulted in a change.
+   */
+  updatePlaceable(placeable, changeKeys) {
+    // Possible that the placeable needs to be added or removed instead of simply updated.
+    const alreadyTracking = this.instanceIndexFromId.has(placeable.id);
+    const shouldTrack = this.includePlaceable(placeable);
+    if ( !(alreadyTracking && shouldTrack) ) return false;
+    if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.id);
+    else if ( !alreadyTracking && shouldTrack ) return this.addPlaceable(placeable);
+
+    // If the changes include one or more relevant keys, update.
+    if ( !changeKeys.some(key => this.constructor.UPDATE_KEYS.has(key)) ) return false;
+    return this._updatePlaceable(placeable);
+  }
+
+  /**
+   * Update the placeable; assumes the placeable is tracked and need not be added/deleted.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if it resulted in a change.
+   */
+  _updatePlaceable(placeable) {
+    const idx = this.instanceIndexFromId.get(placeable.id);
+    this.#updateId += 1;
+    this.updateInstanceBuffer(idx);
+    return true;
+  }
+
+  /** @type {number[]} */
+  _hooks = [];
+
+  /**
+   * @typedef {object} PlaceableHookData
+   * Description of a hook to use.
+   * @prop {object} name: methodName        Name of the hook and method; e.g. updateWall: "_onPlaceableUpdate"
+   */
+  /** @type {object[]} */
+  static HOOKS = [];
+
+  /**
+   * Register hooks for this placeable that record updates.
+   */
+  registerPlaceableHooks() {
+    if ( this._hooks.length ) return; // Only register once.
+    for ( const hookDatum of this.constructor.HOOKS ) {
+      const [name, methodName] = Object.entries(hookDatum)[0];
+      const id = Hooks.on(name, this[methodName].bind(this));
+      this._hooks.push({ name, methodName, id });
+    }
+  }
+
+  deregisterPlaceableHooks() {
+    this._hooks.forEach(hook => Hooks.off(hook.name, hook.id));
+    this._hooks.length = 0;
+  }
+
+  /**
+   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
+   * @param {Document} document                       The new Document instance which has been created
+   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
+   * @param {string} userId                           The ID of the User who triggered the creation workflow
+   */
+  _onPlaceableCreation(document, _options, _userId) { this.addPlaceable(document.object); }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an update workflow.
+   * @param {Document} document                       The existing Document which was updated
+   * @param {object} changed                          Differential data that was used to update the document
+   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
+   * @param {string} userId                           The ID of the User who triggered the update workflow
+   */
+  _onPlaceableUpdate(document, changed, _options, _userId) {
+    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
+    this.updatePlaceable(document.object, changeKeys);
+  }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an deletion workflow.
+   * @param {Document} document                       The existing Document which was deleted
+   * @param {Partial<DatabaseDeleteOperation>} options Additional options which modified the deletion request
+   * @param {string} userId                           The ID of the User who triggered the deletion workflow
+   */
+  _onPlaceableDeletion(document, _options, _userId) { this.removePlaceable(document.id); }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is initially drawn.
+   * @param {PlaceableObject} object    The object instance being drawn
+   */
+  _onPlaceableDraw(object) { this.addPlaceable(object); }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is incrementally refreshed.
+   * @param {PlaceableObject} object    The object instance being refreshed
+   * @param {RenderFlags} flags
+   */
+  _onPlaceableRefresh(object, flags) {
+    // TODO: Can flags be set to false? Need this filter if so.
+    // const changeKeys = Object.entries(flags).filter([key, value] => value).map([key, value] => key);
+    const changeKeys = Object.keys(flags);
+    this.updatePlaceable(object, changeKeys);
+  }
+
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is destroyed.
+   * @param {PlaceableObject} object    The object instance being destroyed
+   */
+  _onPlaceableDestroy(object) { this.removePlaceable(object.id); }
 }
 
 export class WallInstanceHandler extends PlaceableInstanceHandler {
+  static HOOKS = [
+    { createWall: "_onPlaceableCreation" },
+    { updateWall: "_onPlaceableUpdate" },
+    { removeWall: "_onPlaceableDeletion" },
+  ];
+
   /**
-   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   * Change keys in updateWall hook that indicate a relevant change to the placeable.
    */
-  static docUpdateKeys = new Set([
+  static UPDATE_KEYS = new Set([
     "x",
     "y",
     "flags.elevatedvision.elevation.top",
@@ -158,13 +374,24 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
   ]);
 
   /**
-   * Flags in refreshObject hook that indicate a relevant change to the placeable.
+   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
+   * @param {Document} document                       The new Document instance which has been created
+   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
+   * @param {string} userId                           The ID of the User who triggered the creation workflow
    */
-  static refreshFlags = new Set([
-    "refreshLine",
-    "refreshDirection",
-    "refreshEndpoints",
-  ]);
+  _onPlaceableCreation(document, _options, _userId) { this.addPlaceable(document.object.edge); }
+
+  /**
+   * A hook event that fires for every Document type after conclusion of an update workflow.
+   * @param {Document} document                       The existing Document which was updated
+   * @param {object} changed                          Differential data that was used to update the document
+   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
+   * @param {string} userId                           The ID of the User who triggered the update workflow
+   */
+  _onPlaceableUpdate(document, changed, _options, _userId) {
+    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
+    this.updatePlaceable(document.object.edge, changeKeys);
+  }
 
   /**
    * Get edges in the scene.
@@ -191,9 +418,8 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const edge = placeable ??= this.placeableFromInstanceIndex.get(idx);
+  updateInstanceBuffer(idx) {
+    const edge = this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const pos = this.constructor.edgeCenter(edge);
@@ -219,7 +445,7 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
     // Rotate around Z axis to match wall direction.
     MatrixFloat32.rotationZ(rot, true, rotationM);
 
-    super.updateInstanceBuffer(placeableId, idx, placeable,
+    return super.updateInstanceBuffer(idx,
       { rotation: rotationM, translation: translationM, scale: scaleM });
   }
 
@@ -265,28 +491,83 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
     const delta = edge.b.subtract(edge.a, PIXI.Point._tmp3);
     return Math.atan2(delta.y, delta.x);
   }
+
+  /**
+   * Is this a terrain (limited) edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  isTerrain(edge) {
+    return edge[this.senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
+  }
+
+  /**
+   * Is this a directional edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  static isDirectional(edge) { return Boolean(edge.direction); }
+}
+
+export class NonTerrainWallInstanceHandler extends WallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return !this.isTerrain(edge);
+  }
+}
+
+export class TerrainWallInstanceHandler extends WallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return this.isTerrain(edge);
+  }
+}
+
+export class NonDirectionalWallInstanceHandler extends NonTerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return !this.constructor.isDirectional(edge);
+  }
+}
+
+export class DirectionalWallInstanceHandler extends NonTerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return this.constructor.isDirectional(edge);
+  }
+}
+
+export class NonDirectionalTerrainWallInstanceHandler extends TerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return !this.constructor.isDirectional(edge);
+  }
+}
+
+export class DirectionalTerrainWallInstanceHandler extends TerrainWallInstanceHandler {
+  includePlaceable(edge) {
+    if ( !super.includePlaceable(edge) ) return false;
+    return this.constructor.isDirectional(edge);
+  }
 }
 
 export class TileInstanceHandler extends PlaceableInstanceHandler {
+  static HOOKS = [
+    { createTile: "_onPlaceableCreation" },
+    { updateTile: "_onPlaceableUpdate" },
+    { removeTile: "_onPlaceableDeletion" },
+  ];
+
   /**
    * Change keys in updateDocument hook that indicate a relevant change to the placeable.
    */
-  static docUpdateKeys = new Set([
+  static UPDATE_KEYS = new Set([
     "x",
     "y",
     "elevation",
     "width",
     "height",
     "rotation",
-  ]);
-
-  /**
-   * Flags in refreshObject hook that indicate a relevant change to the placeable.
-   */
-  static refreshFlags = new Set([
-    "refreshPosition",
-    "refreshRotation",
-    "refreshSize",
   ]);
 
   /**
@@ -317,9 +598,8 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const tile = placeable ??= this.placeableFromInstanceIndex.get(idx);
+  updateInstanceBuffer(idx) {
+    const tile = this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = this.constructor.tileCenter(tile);
@@ -332,11 +612,18 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
     MatrixFloat32.scale(width, height, 1.0, scaleM);
 
     // Rotate based on tile rotation.
-    MatrixFloat32.rotationZ(Math.toRadians(tile.document.rotation), true, rotationM);
+    MatrixFloat32.rotationZ(this.constructor.rotation, true, rotationM);
 
-    super.updateInstanceBuffer(placeableId, idx, placeable,
+    return super.updateInstanceBuffer(idx,
       { rotation: rotationM, translation: translationM, scale: scaleM });
   }
+
+  /**
+   * Determine the tile rotation.
+   * @param {Tile} tile
+   * @returns {number}    Rotation, in radians.
+   */
+  static tileRotation(tile) { return Math.toRadians(tile.document.rotation); }
 
   /**
    * Determine the tile 3d dimensions, in pixel units.
@@ -347,9 +634,10 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    * @prop {number} elevation   In z direction
    */
   static tileDimensions(tile) {
+    const { x, y, width, height } = tile.document;
     return {
-      width: tile.document.width,
-      height: tile.document.height,
+      x, y, width, height,
+      elevation: tile.elevationZ,
     };
   }
 
@@ -361,29 +649,24 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
   static tileCenter(tile) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const out = new Point3d();
-    const elev = tile.elevationZ;
-    const TL = Point3d._tmp2.set(tile.document.x, tile.document.y, elev);
-    const BR = TL.add(out.set(tile.document.width, tile.document.height, 0), out);
+    const { x, y, width, height, elevation } = this.tileDimensions(tile);
+    const TL = Point3d._tmp2.set(x, y, elevation);
+    const BR = TL.add(out.set(width, height, 0), out);
     return TL.add(BR, out).multiplyScalar(0.5, out)
   }
 }
 
 export class TokenInstanceHandler extends PlaceableInstanceHandler {
+  static HOOKS = [
+    { drawToken: "_onPlaceableDraw" },
+    { refreshToken: "_onPlaceableRefresh" },
+    { destroyToken: "_onPlaceableDestroy" },
+  ];
+
   /**
    * Change keys in updateDocument hook that indicate a relevant change to the placeable.
    */
-  static docUpdateKeys = new Set([
-    "x",
-    "y",
-    "elevation",
-    "width",
-    "height",
-  ]);
-
-  /**
-   * Flags in refreshObject hook that indicate a relevant change to the placeable.
-   */
-  static refreshFlags = new Set([
+  static UPDATE_KEYS = new Set([
     "refreshPosition",
     "refreshSize",
   ]);
@@ -407,9 +690,8 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
-  updateInstanceBuffer(placeableId, idx, placeable) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const token = placeable ??= this.placeableFromInstanceIndex.get(idx);
+  updateInstanceBuffer(idx) {
+    const token = this.placeableFromInstanceIndex.get(idx);
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
@@ -421,7 +703,7 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
     // Scale based on width, height, zHeight of token.
     MatrixFloat32.scale(width, height, zHeight, scaleM);
 
-    super.updateInstanceBuffer(placeableId, idx, placeable,
+    return super.updateInstanceBuffer(idx,
       { translation: translationM, scale: scaleM });
   }
 

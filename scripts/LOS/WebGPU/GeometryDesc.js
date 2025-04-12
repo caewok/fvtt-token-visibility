@@ -33,8 +33,10 @@ export class GeometryDesc {
   indices;
 
   // This geometry's vertex and index buffers.
+  /** @type {GPUBuffer} */
   vertexBuffer;
 
+  /** @type {GPUBuffer} */
   indexBuffer;
 
   // Offsets for this geometry's vertex and index buffers.
@@ -56,8 +58,8 @@ export class GeometryDesc {
    * @param {number} [opts.x]           Location on x-axis
    * @param {number} [opts.y]           Location on y-axis
    * @param {number} [opts.z]           Location on z-axis
-   * @param {boolean} [opts.skipUVs]          True omits UVs from the vertex data
-   * @param {boolean} [opts.skipNormals]      True omits normals and UVS from the vertex data
+   * @param {boolean} [opts.addNormals]  True adds UVs to the vertex data
+   * @param {boolean} [opts.addUVS]      True adds UVs to the vertex data
    */
   constructor(opts = {}) {
     if ( opts.label ) this.label = opts.label;
@@ -146,7 +148,7 @@ export class GeometryDesc {
    * @param {Set<number>|} instanceSet           Set of positive integers, including 0.
    */
   drawSet(renderPass, instanceSet) {
-    if ( !instanceSet.size ) return;
+    if ( !(instanceSet.size || instanceSet.length) ) return;
 
     const drawFn = this.indices
       ? (instanceCount, firstInstance) => renderPass.drawIndexed(this.indices.length, instanceCount, 0, 0, firstInstance)
