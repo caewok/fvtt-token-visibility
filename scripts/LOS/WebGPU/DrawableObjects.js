@@ -1032,7 +1032,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     // For each tile, add a drawable with its specific texture and bindgroup.
     const numTiles = this.placeableHandler.numInstances;
     this.bindGroups.tileTextures = Array(numTiles);
-    this.textures = Array(numTiles);
+    // this.textures = Array(numTiles);
     const defaultDrawable = this.drawables.get("tile");
     this.drawables.delete("tile");
     for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
@@ -1044,7 +1044,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
         // colorSpaceConversion: "none", // Unclear if this is helpful or more performant.
         // resizeQuality: "high", // Probably not needed
        }); // TODO: shrink size to something more manageable?
-      this.textures[idx] = device.createTexture({
+      const texture = drawable.texture = device.createTexture({
         label: url,
         format: "rgba8unorm",
         size: [source.width, source.height],
@@ -1054,7 +1054,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
       });
       device.queue.copyExternalImageToTexture(
         { source, flipY: true },
-        { texture: this.textures[idx] },
+        { texture },
         { width: source.width, height: source.height },
       );
       drawable.textureBG = device.createBindGroup({
@@ -1062,7 +1062,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
         layout: this.bindGroupLayouts.tileTexture,
         entries: [
           { binding: 0, resource: this.samplers.tileTexture },
-          { binding: 1, resource: this.textures[idx].createView() },
+          { binding: 1, resource: texture.createView() },
         ]
       });
       this.drawables.set(tile.id, drawable);
