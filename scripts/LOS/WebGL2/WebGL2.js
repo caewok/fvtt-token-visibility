@@ -337,6 +337,32 @@ export class WebGL2 {
    console.error(`addUniform|Uniform type ${type} unknown.`);
  }
 
+ /**
+  * Draw representation of pixels
+  */
+ static drawPixels(imgData, { minX = 0, maxX, minY = 0, maxY, channel = 0 } = {}) {
+   let str = "";
+   maxX ??= imgData.width;
+   maxY ??= imgData.height;
+
+   // 0,0 is bottom left
+   // pixel is data[(width * height - 1) * pixelSize]
+   for ( let y = imgData.height - 1; y >= 0; y -= 1 ) {
+     for ( let x = 0; x < imgData.width; x += 1 ) {
+       if ( x < minX || x > maxX ) continue;
+       if ( y < minY || y > maxY ) continue;
+       const px = imgData.pixels[(x * y * 4) + channel];
+       const nStr = `${px}`;
+       const paddingLn = 3 - nStr.length;
+       const paddedStr = "0".repeat(paddingLn) + nStr;
+       str += `${paddedStr} `;
+     }
+     str += "\n";
+   }
+   console.log(str);
+   // return str;
+ }
+
 
   /**
    * Given image data or image pixels, print summary of the 4 color channels to console.
