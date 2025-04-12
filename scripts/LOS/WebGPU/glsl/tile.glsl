@@ -107,6 +107,9 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
   let texColor = textureSample(tileTexture, tileSampler, in.uv0);
   var baseColor = texColor;
 
+  // Use discard so we don't have to deal with transparency for the textures.
+  if ( texColor.a < alphaValue ) { discard; }
+
   #if ${debugViewNormals}
     // Extremely simple directional lighting model to give the model some shape.
     let N = normalize(in.norm);
@@ -115,7 +118,8 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
     baseColor = vec4(surfaceColor, baseColor.a);
   #else
     baseColor = material.color;
-    baseColor.a = step(alphaValue, texColor.a); // (edge, x) => returns 1.0 if edge ≤ x
+    fragColor.a = texColor.a; // Already discarded low alphas above.
+    // baseColor.a = step(alphaValue, texColor.a); // (edge, x) => returns 1.0 if edge ≤ x
   #endif
 
   return baseColor;

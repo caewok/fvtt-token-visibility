@@ -637,7 +637,7 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
     const { x, y, width, height } = tile.document;
     return {
       x, y, width, height,
-      elevation: tile.elevationZ,
+      elevation: tile.elevationZ - 0.1, // Drop slightly to avoid z-fighting.
     };
   }
 
