@@ -118,7 +118,7 @@ const baseColor = vec4f(0.0, 0.0, 1.0, 1.0);
     baseColor = vec4(surfaceColor, baseColor.a);
   #else
     baseColor = material.color;
-    fragColor.a = texColor.a; // Already discarded low alphas above.
+    baseColor.a = texColor.a; // Already discarded low alphas above.
     // baseColor.a = step(alphaValue, texColor.a); // (edge, x) => returns 1.0 if edge ≤ x
   #endif
 

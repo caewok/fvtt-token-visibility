@@ -135,17 +135,13 @@ class RenderAbstract {
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  renderSync(viewerLocation, target, { viewer, targetLocation, targetOnly = false } = {}) {
-    const opts = { viewer, target, targetOnly };
+  renderSync(viewerLocation, target, { viewer, targetLocation } = {}) {
+    const opts = { viewer, target };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
-    const visionTriangle = targetOnly ? null : VisionTriangle.build(viewerLocation, target);
+    const visionTriangle = VisionTriangle.build(viewerLocation, target);
 
-    const drawableObjects = targetOnly
-      ? this.drawableObjects.filter(drawableObject =>
-        drawableObject instanceof DrawableConstrainedTokens || drawableObject instanceof DrawableTokenInstances)
-      : this.drawableObjects;
-    drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle, opts));
+    this.drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -158,10 +154,19 @@ class RenderAbstract {
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
-    for ( const drawableObj of drawableObjects ) {
+
+    // Render the target.
+    // (Could be either constrained or not constrained.)
+
+
+    for ( const drawableObj of this.drawableObjects ) {
       drawableObj.initializeRenderPass(renderPass);
       drawableObj.render(renderPass, opts);
     }
+
+    // Render terrains last.
+
+
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
 
