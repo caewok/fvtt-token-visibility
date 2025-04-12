@@ -395,7 +395,7 @@ class DrawableObjectsAbstract {
    * A hook event that fires when a {@link PlaceableObject} is initially drawn.
    * @param {PlaceableObject} object    The object instance being drawn
    */
-  _onPlaceableDraw(object, opts) {
+  _onPlaceableDraw(object, _opts) {
     this.addPlaceable(object);
   }
 
@@ -421,7 +421,7 @@ class DrawableObjectsAbstract {
    * A hook event that fires when a {@link PlaceableObject} is destroyed.
    * @param {PlaceableObject} object    The object instance being destroyed
    */
-  _onPlaceableDestroy(object, opts) {
+  _onPlaceableDestroy(object, _opts) {
     this.removePlaceable(object.id);
   }
 
@@ -994,8 +994,8 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     this.RENDER_PIPELINE_OPTS.vertex.buffers = this.debugViewNormals ? GeometryDesc.buffersLayoutNormalsUVs : GeometryDesc.buffersLayoutUVs;
   }
 
-  async initialize() {
-    await super.initialize();
+  async initialize(opts) {
+    await super.initialize(opts);
     await this._addTileTextures();
   }
 
@@ -1044,7 +1044,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
         // colorSpaceConversion: "none", // Unclear if this is helpful or more performant.
         // resizeQuality: "high", // Probably not needed
        }); // TODO: shrink size to something more manageable?
-      drawable.texture = device.createTexture({
+      this.textures[idx] = device.createTexture({
         label: url,
         format: "rgba8unorm",
         size: [source.width, source.height],
@@ -1062,7 +1062,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
         layout: this.bindGroupLayouts.tileTexture,
         entries: [
           { binding: 0, resource: this.samplers.tileTexture },
-          { binding: 1, resource: drawable.texture.createView() },
+          { binding: 1, resource: this.textures[idx].createView() },
         ]
       });
       this.drawables.set(tile.id, drawable);
