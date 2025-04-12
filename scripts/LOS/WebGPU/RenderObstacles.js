@@ -179,19 +179,20 @@ class RenderAbstract {
   }
 
   _updateCameraBuffer() {
-    this.device.queue.writeBuffer(this.deviceBuffer, 0, this.arrayBuffer);
-    this.debugBuffer = new Float32Array(this.arrayBuffer)
+    this.device.queue.writeBuffer(this.camera.deviceBuffer, 0, this.camera.arrayBuffer);
+    this.debugBuffer = new Float32Array(this.camera.arrayBuffer)
   }
 
   _createCameraBindGroup() {
-    this.camera.bindGroupLayout = this.device.createBindGroupLayout(this.constructor.CAMERA_LAYOUT);
-    const buffer = this.camera.deviceBuffer = this.device.createBuffer({
+    const device = this.device;
+    this.camera.bindGroupLayout = device.createBindGroupLayout(Camera.CAMERA_LAYOUT);
+    const buffer = this.camera.deviceBuffer = device.createBuffer({
       label: "Camera",
       size: Camera.CAMERA_BUFFER_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // Buffer will be written to GPU prior to render, because the camera view will change.
-    this.camera.bindGroup = this.device.createBindGroup({
+    this.camera.bindGroup = device.createBindGroup({
       label: "Camera",
       layout: this.camera.bindGroupLayout,
       entries: [{
