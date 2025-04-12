@@ -13,6 +13,8 @@ import {
   DrawableTokenInstances,
   DrawableTileInstances,
   DrawableConstrainedTokens,
+  DrawableNonTerrainWallInstances,
+  DrawableTerrainWallInstances,
   } from "./DrawableObjects.js";
 
 /*
@@ -404,7 +406,8 @@ export class RenderTokens extends RenderAbstract {
 
 export class RenderObstacles extends RenderAbstract {
   static drawableClasses = [
-    DrawableWallInstances,
+    DrawableTerrainWallInstances,
+    DrawableNonTerrainWallInstances,
     DrawableTileInstances,
     DrawableTokenInstances,
     DrawableConstrainedTokens,

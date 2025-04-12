@@ -15,6 +15,8 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./GeometryToken.
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
 import {
   WallInstanceHandler,
+  TerrainWallInstanceHandler,
+  NonTerrainWallInstanceHandler,
   // DirectionalWallInstanceHandler,
   // NonDirectionalWallInstanceHandler,
   TileInstanceHandler,
@@ -798,13 +800,15 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     return props.join("-");
   }
 
+  static FILTER_KEYS = ["wall", "wall-dir", "wall-terrain", "wall-dir-terrain"];
+
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
   _filterObjects(visionTriangle) {
-    const keys = ["wall", "wall-dir", "wall-terrain", "wall-dir-terrain"];
+    const keys = this.constructor.FILTER_KEYS;
     const instanceSets = {};
     for ( const key of keys ) instanceSets[key] = this.drawables.get(key).instanceSet
     Object.values(instanceSets).forEach(s => s.clear());
@@ -850,6 +854,62 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     const updateNeeded = this.placeableHandler.constructor.docUpdateKeys.some(key => changeKeys.has(key));
     this.updatePlaceable(document.object.edge, updateNeeded);
   }
+}
+
+// Instances of walls. Could include tokens but prefer to keep separate both for simplicity
+// and because tokens get updated much more often.
+export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
+  /** @type {WallInstanceHandler} */
+  static handlerClass = NonTerrainWallInstanceHandler;
+
+  /**
+   * Insert drawables that rarely change into the drawables map.
+   */
+  _createStaticDrawables() {
+    this.materials.create({ b: 1.0, label: "obstacle" });
+    this.drawables.set("wall", {
+      label: "Non-directional wall",
+      geom: this.geometries.get("wall"),
+      materialBG: this.materials.bindGroups.get("obstacle"),
+      instanceSet: new Set(),
+    });
+    this.drawables.set("wall-dir", {
+      label: "Directional wall",
+      geom: this.geometries.get("wall-dir"),
+      materialBG: this.materials.bindGroups.get("obstacle"),
+      instanceSet: new Set(),
+    });
+  }
+
+  static FILTER_KEYS = ["wall", "wall-dir"];
+}
+
+// Instances of walls. Could include tokens but prefer to keep separate both for simplicity
+// and because tokens get updated much more often.
+export class DrawableTerrainWallInstances extends DrawableWallInstances {
+  /** @type {WallInstanceHandler} */
+  static handlerClass = TerrainWallInstanceHandler;
+
+  /**
+   * Insert drawables that rarely change into the drawables map.
+   */
+  _createStaticDrawables() {
+    this.materials.create({ g: 0.5, a: 0.5, label: "terrain" });
+    this.drawables.set("wall-terrain", {
+      label: "Non-directional terrain wall",
+      geom: this.geometries.get("wall"),
+      materialBG: this.materials.bindGroups.get("terrain"),
+      instanceSet: new Set(),
+    });
+    this.drawables.set("wall-dir-terrain", {
+      label: "Directional terrain wall",
+      geom: this.geometries.get("wall-dir"),
+      materialBG: this.materials.bindGroups.get("terrain"),
+      instanceSet: new Set(),
+    });
+  }
+
+  static FILTER_KEYS = ["wall-terrain", "wall-dir-terrain"];
 }
 
 export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
@@ -1216,17 +1276,4 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
     this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
   }
-}
-
-/**
- * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
- * Load an image bitmap from a url.
- * @param {string} url
- * @param {object} [opts]       Options passed to createImageBitmap
- * @returns {ImageBitmap}
- */
-async function loadImageBitmap(url, opts = {}) {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return await createImageBitmap(blob, opts);
 }
