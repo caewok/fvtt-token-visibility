@@ -1037,13 +1037,16 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     this.drawables.delete("tile");
     for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       const drawable = { ...defaultDrawable };
+      const source = this.constructor.tileSource(tile);
       const url = tile.document.texture.src;
+      /*
       const source = await loadImageBitmap(url, {
         imageOrientation: "flipY",
         premultiplyAlpha: "premultiply", // Will display alpha as white if "none" selected.
         // colorSpaceConversion: "none", // Unclear if this is helpful or more performant.
         // resizeQuality: "high", // Probably not needed
        }); // TODO: shrink size to something more manageable?
+      */
       const texture = drawable.texture = device.createTexture({
         label: url,
         format: "rgba8unorm",
@@ -1068,6 +1071,8 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
       this.drawables.set(tile.id, drawable);
     }
   }
+
+  static tileSource(tile) { return tile.texture.baseTexture.resource.source; }
 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
