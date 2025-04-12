@@ -41,6 +41,8 @@ let {
   RenderObstaclesWebGL2,
   RenderObstaclesWithBackgroundWebGL2,
   twgl,
+  PercentVisibleCalculatorWebGL2,
+  DebugVisibilityViewerWebGL2,
 } = api.webgl;
 
 glmatrix = api.glmatrix;
@@ -77,6 +79,22 @@ target = game.user.targets.first()
 popout = new Area3dPopoutCanvas({ width: 400, height: 475, resizable: false })
 await popout._render(true, { contextType: "webgl2"});
 gl = popout.context
+
+// Test PercentVisibleCalculator
+calc = new PercentVisibleCalculatorWebGL2({ senseType: "sight" });
+await calc.initialize()
+calc.percentVisible(viewer, target)
+calc.percentVisible(target, viewer)
+
+// Test debug viewer
+debugViewer = new DebugVisibilityViewerWebGL2({ senseType: "sight", debugView: true })
+await debugViewer.initialize();
+debugViewer.destroy();
+
+
+debugViewer = new DebugVisibilityViewerWebGL2({ senseType: "sight", debugView: false })
+await debugViewer.initialize();
+
 
 // NOTE: Test rendering to texture and then to canvas
 

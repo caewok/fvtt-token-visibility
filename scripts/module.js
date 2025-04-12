@@ -119,6 +119,8 @@ import {
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2
 } from "./LOS/WebGL2/PlaceableInstanceHandlerWebGL2.js";
+import { PercentVisibleCalculatorWebGL2 } from "./LOS/WebGL2/PercentVisibleCalculatorWebGL2.js";
+import { DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/DebugVisibilityViewerWebGL2.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -254,6 +256,8 @@ Hooks.once("init", function() {
       RenderObstaclesWebGL2,
       RenderObstaclesWithBackgroundWebGL2,
       twgl,
+      PercentVisibleCalculatorWebGL2,
+      DebugVisibilityViewerWebGL2,
     },
 
     webgpu: {
