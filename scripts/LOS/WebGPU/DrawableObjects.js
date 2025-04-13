@@ -201,6 +201,7 @@ class DrawableObjectsAbstract {
    */
   async initialize() {
     const device = this.device;
+    this.placeableHandler.registerPlaceableHooks();
 
     for ( const [key, opts] of Object.entries(this.constructor.BINDGROUP_LAYOUT_OPTS) ) {
       this.bindGroupLayouts[key] = device.createBindGroupLayout(opts);

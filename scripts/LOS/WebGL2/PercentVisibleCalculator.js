@@ -7,7 +7,6 @@ CONFIG,
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
 import { WebGPUDevice } from "../WebGPU/WebGPU.js";
-import { TokenInstanceHandler } from "../WebGPU/PlaceableInstanceHandler.js";
 
 /* Percent visible calculator
 

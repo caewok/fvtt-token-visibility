@@ -9,20 +9,6 @@ Area3dPopout = api.Area3dPopout
 Area3dPopoutCanvas = api.Area3dPopoutCanvas
 
 let {
-  Camera,
-  GeometryDesc,
-  GeometryWallDesc,
-  GeometryCubeDesc,
-  GeometryTileDesc,
-  GeometryConstrainedTokenDesc,
-  GeometryHorizontalPlaneDesc,
-  WallInstanceHandler,
-  TileInstanceHandler,
-  TokenInstanceHandler,
-  PlaceableInstanceHandler,
-} = api.webgpu;
-
-let {
   WebGL2,
   NonDirectionalWallInstanceHandlerWebGL2,
   DirectionalWallInstanceHandlerWebGL2,

@@ -141,8 +141,8 @@ class RenderAbstract {
     this._createCameraBindGroup();
     const promises = [];
     for ( const drawableObj of this.drawableObjects ) {
-      await drawableObj.initialize();
-      // promises.push(drawableObj.initialize());
+      // await drawableObj.initialize();
+      promises.push(drawableObj.initialize());
     }
     return Promise.allSettled(promises);
   }

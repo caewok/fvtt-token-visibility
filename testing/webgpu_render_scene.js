@@ -96,6 +96,7 @@ let {
   PercentVisibleCalculator,
   AsyncQueue,
   PercentVisibleCalculatorWebGPU,
+  DebugVisibilityViewerWebGPU,
   // wgsl
 } = api.webgpu
 
@@ -133,6 +134,10 @@ popout.context.configure({
 calc = new PercentVisibleCalculatorWebGPU({ device })
 await calc.initialize()
 calc.percentVisible(viewer, target)
+
+debugViewer = new DebugVisibilityViewerWebGPU({ device });
+await debugViewer.initialize();
+debugViewer.render();
 
 
 tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)
@@ -238,6 +243,8 @@ imgData = await renderObstacles.readTexturePixels()
 sumPixels = new WebGPUSumRedPixels(renderObstacles.device)
 await sumPixels.initialize()
 res = await sumPixels.compute(renderObstacles.renderTexture)
+
+sumPixels.computeSync(renderObstacles.renderTexture)
 
 
 visCalc = new PercentVisibleCalculator();
