@@ -171,11 +171,11 @@ renderTiles.setRenderTextureToCanvas(popout.canvas)
 await renderTiles.prerender();
 await renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderObstacles = new RenderObstacles();
+renderObstacles = new RenderObstacles({ debugViewNormals: true });
 await renderObstacles.getDevice();
 renderObstacles.sampleCount = 1
 renderObstacles.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
-await renderObstacles.initialize({ debugViewNormals: true });
+await renderObstacles.initialize();
 renderObstacles.setRenderTextureToCanvas(popout.canvas)
 await renderObstacles.prerender();
 await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })

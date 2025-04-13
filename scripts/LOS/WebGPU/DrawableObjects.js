@@ -182,11 +182,12 @@ class DrawableObjectsAbstract {
    * @type {object} [opts]
    * @type {CONST.WALL_RESTRICTION_TYPES} [opts.senseType="sight"]
    */
-  constructor(device, materials, camera, { senseType = "sight" } = {}) {
+  constructor(device, materials, camera, { senseType = "sight", debugViewNormals = false } = {}) {
     this.device = device;
     this.materials = materials;
     this.camera = camera;
     this.senseType = senseType;
+    this.#debugViewNormals = debugViewNormals;
     this.placeableHandler = new this.constructor.handlerClass(this.senseType);
   }
 
@@ -198,15 +199,15 @@ class DrawableObjectsAbstract {
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize({ debugViewNormals = false } = {}) {
+  async initialize() {
     const device = this.device;
-    this.#debugViewNormals = debugViewNormals;
 
     for ( const [key, opts] of Object.entries(this.constructor.BINDGROUP_LAYOUT_OPTS) ) {
       this.bindGroupLayouts[key] = device.createBindGroupLayout(opts);
     }
 
     // Define shader and pipeline.
+    const debugViewNormals = this.debugViewNormals;
     this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`, { debugViewNormals });
     this._createPipeline();
 
@@ -1110,8 +1111,8 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     this.RENDER_PIPELINE_OPTS.vertex.buffers = this.debugViewNormals ? GeometryDesc.buffersLayoutNormalsUVs : GeometryDesc.buffersLayoutUVs;
   }
 
-  async initialize(opts) {
-    await super.initialize(opts);
+  async initialize() {
+    await super.initialize();
     await this._addTileTextures();
   }
 

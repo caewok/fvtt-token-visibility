@@ -80,6 +80,11 @@ class RenderAbstract {
   /** @type {MaterialTracker} */
   materials;
 
+  constructor({ senseType = "sight", debugViewNormals = false } = {}) {
+    this.senseType = senseType;
+    this.debugViewNormals = debugViewNormals;
+  }
+
   /**
    * Get the current device or attempt to get a new one if lost.
    */
@@ -92,12 +97,12 @@ class RenderAbstract {
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize(opts) {
+  async initialize() {
     this.drawableObjects.forEach(drawableObject => drawableObject.destroy());
     this.drawableObjects.length = 0;
     const device = await this.getDevice();
     this.materials = new MaterialsTracker(device);
-    await this._initializeDrawObjects(opts);
+    await this._initializeDrawObjects();
     this._allocateRenderTargets();
     this.prerender();
   }
@@ -105,18 +110,19 @@ class RenderAbstract {
   /**
    * Define one ore more DrawObjects used to render the scene.
    */
-  async _initializeDrawObjects(opts) {
+  async _initializeDrawObjects() {
     const device = this.device;
     const materials = this.materials;
     const camera = this.camera;
     this._createCameraBindGroup();
 
     const senseType = this.senseType;
+    const debugViewNormals = this.debugViewNormals;
     const promises = [];
     for ( const cl of this.constructor.drawableClasses ) {
-      const drawableObj = new cl(device, materials, camera, { senseType });
+      const drawableObj = new cl(device, materials, camera, { senseType, debugViewNormals });
       this.drawableObjects.push(drawableObj);
-      await drawableObj.initialize(opts);
+      await drawableObj.initialize();
       // promises.push(drawableObj.initialize());
     }
     return Promise.allSettled(promises);
