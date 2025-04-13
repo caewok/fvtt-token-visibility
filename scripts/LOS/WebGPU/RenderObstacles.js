@@ -13,6 +13,8 @@ import {
   DrawableTokenInstances,
   DrawableTileInstances,
   DrawableConstrainedTokens,
+  DrawableNonTerrainWallInstances,
+  DrawableTerrainWallInstances,
   } from "./DrawableObjects.js";
 
 /*
@@ -70,7 +72,13 @@ class RenderAbstract {
   device;
 
   /** @type {DrawObjectsAbstract[]} */
-  drawableObjects = []
+  drawableObjects = [];
+
+  /** @type {DrawableTokenInstances|DrawableConstrainedTokens[]} */
+  drawableTokens = [];
+
+  /** @type {DrawObjectsAbstract[]} */
+  drawableObstacles = [];
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" });
@@ -78,10 +86,40 @@ class RenderAbstract {
   /** @type {MaterialTracker} */
   materials;
 
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; } // Don't allow modifications.
+
+  /** @type {boolean} */
+  #debugViewNormals = false;
+
+  get debugViewNormals() { return this.#debugViewNormals; } // Don't allow modifications.
+
+  constructor(device, { senseType = "sight", debugViewNormals = false, width = 256, height = 256 } = {}) {
+    this.#senseType = senseType;
+    this.#debugViewNormals = debugViewNormals;
+    this.device = device;
+    this.materials = new MaterialsTracker(this.device);
+
+    for ( const cl of this.constructor.drawableClasses ) {
+      const drawableObj = new cl(this.device, this.materials, this.camera, { senseType, debugViewNormals });
+      this.drawableObjects.push(drawableObj);
+      const categoryArr = drawableObj instanceof DrawableTokenInstances
+        || drawableObj instanceof DrawableConstrainedTokens ? this.drawableTokens : this.drawableObstacles;
+      categoryArr.push(drawableObj);
+    }
+    this.#renderSize.width = width;
+    this.#renderSize.height = height;
+  }
+
+  /** @type {WebGPUDevice} */
+  static device;
+
   /**
    * Get the current device or attempt to get a new one if lost.
    */
-  async getDevice() {
+  static async getDevice() {
     if ( this.device ) return this.device;
     this.device = await WebGPUDevice.getDevice();
     return this.device;
@@ -90,12 +128,8 @@ class RenderAbstract {
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize(opts) {
-    this.drawableObjects.forEach(drawableObject => drawableObject.destroy());
-    this.drawableObjects.length = 0;
-    const device = await this.getDevice();
-    this.materials = new MaterialsTracker(device);
-    await this._initializeDrawObjects(opts);
+  async initialize() {
+    await this._initializeDrawObjects();
     this._allocateRenderTargets();
     this.prerender();
   }
@@ -103,19 +137,12 @@ class RenderAbstract {
   /**
    * Define one ore more DrawObjects used to render the scene.
    */
-  async _initializeDrawObjects(opts) {
-    const device = this.device;
-    const materials = this.materials;
-    const camera = this.camera;
+  async _initializeDrawObjects() {
     this._createCameraBindGroup();
-
-    const senseType = this.senseType;
     const promises = [];
-    for ( const cl of this.constructor.drawableClasses ) {
-      const drawableObj = new cl(device, materials, camera, { senseType });
-      this.drawableObjects.push(drawableObj);
-      await drawableObj.initialize(opts);
-      // promises.push(drawableObj.initialize());
+    for ( const drawableObj of this.drawableObjects ) {
+      // await drawableObj.initialize();
+      promises.push(drawableObj.initialize());
     }
     return Promise.allSettled(promises);
   }
@@ -128,22 +155,18 @@ class RenderAbstract {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
   }
 
-  async render(viewerLocation, target, opts) {
-    this.renderSync(viewerLocation, target, opts);
+  async renderAsync(viewerLocation, target, opts) {
+    this.render(viewerLocation, target, opts);
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  renderSync(viewerLocation, target, { viewer, targetLocation, targetOnly = false } = {}) {
-    const opts = { viewer, target, targetOnly };
+  render(viewerLocation, target, { viewer, targetLocation } = {}) {
+    const opts = { viewer, target };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
-    const visionTriangle = targetOnly ? null : VisionTriangle.build(viewerLocation, target);
+    const visionTriangle = VisionTriangle.build(viewerLocation, target);
 
-    const drawableObjects = targetOnly
-      ? this.drawableObjects.filter(drawableObject =>
-        drawableObject instanceof DrawableConstrainedTokens || drawableObject instanceof DrawableTokenInstances)
-      : this.drawableObjects;
-    drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle, opts));
+    this.drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -156,10 +179,22 @@ class RenderAbstract {
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
-    for ( const drawableObj of drawableObjects ) {
+
+    // Render the target.
+    // Render first so full red of target is recorded.
+    // (Could be either constrained or not constrained.)
+    this.drawableTokens.forEach(drawableObj => drawableObj.renderTarget(renderPass, target));
+    this.drawableTokens.forEach(drawableObj => drawableObj.renderObstacles(renderPass, target));
+
+    // Render the obstacles
+    for ( const drawableObj of this.drawableObstacles ) {
+      if ( !drawableObj.drawables.size ) continue;
       drawableObj.initializeRenderPass(renderPass);
       drawableObj.render(renderPass, opts);
     }
+
+    // TODO: Do we need to render terrains last?
+
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
 
@@ -179,19 +214,20 @@ class RenderAbstract {
   }
 
   _updateCameraBuffer() {
-    this.device.queue.writeBuffer(this.deviceBuffer, 0, this.arrayBuffer);
-    this.debugBuffer = new Float32Array(this.arrayBuffer)
+    this.device.queue.writeBuffer(this.camera.deviceBuffer, 0, this.camera.arrayBuffer);
+    this.debugBuffer = new Float32Array(this.camera.arrayBuffer)
   }
 
   _createCameraBindGroup() {
-    this.camera.bindGroupLayout = this.device.createBindGroupLayout(this.constructor.CAMERA_LAYOUT);
-    const buffer = this.camera.deviceBuffer = this.device.createBuffer({
+    const device = this.device;
+    this.camera.bindGroupLayout = device.createBindGroupLayout(Camera.CAMERA_LAYOUT);
+    const buffer = this.camera.deviceBuffer = device.createBuffer({
       label: "Camera",
       size: Camera.CAMERA_BUFFER_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // Buffer will be written to GPU prior to render, because the camera view will change.
-    this.camera.bindGroup = this.device.createBindGroup({
+    this.camera.bindGroup = device.createBindGroup({
       label: "Camera",
       layout: this.camera.bindGroupLayout,
       entries: [{
@@ -378,7 +414,7 @@ class RenderAbstract {
   }
 
   /** @type {object<width: {number}, height: {number}>} */
-  #renderSize = { width: 200, height: 200 };
+  #renderSize = { width: 256, height: 256 };
 
   get renderSize() { return this.#renderSize; }
 
@@ -403,7 +439,8 @@ export class RenderTokens extends RenderAbstract {
 
 export class RenderObstacles extends RenderAbstract {
   static drawableClasses = [
-    DrawableWallInstances,
+    DrawableTerrainWallInstances,
+    DrawableNonTerrainWallInstances,
     DrawableTileInstances,
     DrawableTokenInstances,
     DrawableConstrainedTokens,

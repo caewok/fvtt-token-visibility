@@ -119,8 +119,8 @@ import {
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2
 } from "./LOS/WebGL2/PlaceableInstanceHandlerWebGL2.js";
-import { PercentVisibleCalculatorWebGL2 } from "./LOS/WebGL2/PercentVisibleCalculatorWebGL2.js";
-import { DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/DebugVisibilityViewerWebGL2.js";
+import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU } from "./LOS/WebGL2/PercentVisibleCalculator.js";
+import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -282,6 +282,8 @@ Hooks.once("init", function() {
       SumPixelsWebGL2,
       PlaceableInstanceHandler,
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
+      PercentVisibleCalculatorWebGPU,
+      DebugVisibilityViewerWebGPU,
     },
 
     glmatrix: {

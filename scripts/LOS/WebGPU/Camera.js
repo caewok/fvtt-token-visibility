@@ -137,7 +137,8 @@ export class Camera {
     // zFar is the straight-line distance to the target.
     // Buffer by adding in half the target diagonal.
     const targetDiag = Math.sqrt(Math.pow(targetWidth, 2) + Math.pow(targetHeight, 2))
-    const zFar = Point3d.distanceBetween(this.cameraPosition, this.targetPosition) + (targetDiag * 0.5);
+    // const zFar = Point3d.distanceBetween(this.cameraPosition, this.targetPosition) + (targetDiag * 0.5);
+    const zFar = Infinity;
     this.perspectiveParameters = { fov: halfAngle * 2, zFar };
 
     // Just for kicks, calculate orthogonal parameters.

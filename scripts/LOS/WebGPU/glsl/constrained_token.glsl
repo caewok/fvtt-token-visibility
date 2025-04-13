@@ -53,7 +53,7 @@ struct Material {
 // Some hardcoded lighting
 const lightDir = normalize(vec3f(0.25, 0.5, 1.0));
 const lightColor = vec3f(1, 1, 1);
-const ambientColor = vec3f(0.03, 0.03, 0.03);
+const ambientColor = vec3f(0.1, 0.1, 0.1);
 
 @fragment fn fragmentMain(in: VertexOut) -> @location(0) vec4f {
   /*

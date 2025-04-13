@@ -1,5 +1,5 @@
 /* globals
-CONIFG,
+CONFIG,
 game,
 Hooks,
 */
@@ -7,8 +7,9 @@ Hooks,
 "use strict";
 
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
+import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
 import { Area3dPopoutCanvas } from "../Area3dPopout.js";
-import { PercentVisibleCalculatorWebGL2 } from "./PercentVisibleCalculatorWebGL2.js";
+import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU } from "./PercentVisibleCalculator.js";
 
 /* Debug viewer
 
@@ -16,7 +17,7 @@ If a token is controlled and another is targeted, display a popup with the debug
 Calculates percentage visible for the viewer/target combo.
 */
 
-export class DebugVisibilityViewerWebGL2 {
+class DebugVisibilityViewerAbstract {
 
   /** @type {number} */
   static WIDTH = 400;
@@ -48,36 +49,44 @@ export class DebugVisibilityViewerWebGL2 {
   /** @type {Token} */
   target;
 
+  static CONTEXT_TYPE = "webgl2";
+
   constructor({ senseType = "sight", debugView = true } = {}) {
     this.senseType = senseType;
     this.debugView = debugView;
     this.popout = new Area3dPopoutCanvas({ width: this.constructor.WIDTH, height: this.constructor.HEIGHT + 75, resizable: false });
-    this.calc = new PercentVisibleCalculatorWebGL2({ senseType: "sight" });
   }
 
   async initialize() {
     await this.calc.initialize()
     this.registerHooks();
+    await this.reinitialize();
   }
 
   async reinitialize() {
     if ( this.popout._state !== this.popout.constructor.RENDER_STATES.RENDERED ) {
-      await this.popout._render(true, { contextType: "webgl2"});
+      await this.popout._render(true, { contextType: this.constructor.CONTEXT_TYPE });
       this.gl = this.popout.context;
     }
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType, debugViewNormals: this.debugView });
+    this.renderObstacles = this._createRenderer();
     await this.renderObstacles.initialize();
-    this.render();
   }
 
-  render() {
-    const { viewer, target } = this;
+  _createRenderer() {
+    return new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType, debugViewNormals: this.debugView });
+  }
 
+  render(viewerLocation, target, { viewer, targetLocation } = {}) {
+    viewer ??= this.viewer;
+    target ??= this.target;
     if ( !(viewer || target) ) return;
-    if ( this.popout._state !== this.popout.constructor.RENDER_STATES.RENDERED ) return this.reinitialize();
+    if ( this.popout._state !== this.popout.constructor.RENDER_STATES.RENDERED ) {
+      return this.reinitialize().then(() =>
+        this.render(viewerLocation, target, { viewer, targetLocation } ));
+    }
 
-    const viewerLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
-    this.renderObstacles.render(viewerLocation, target, { viewer });
+    viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
 
     const percentVis = this.calc.percentVisible(viewer, target);
     const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
@@ -162,6 +171,44 @@ export class DebugVisibilityViewerWebGL2 {
     this.deregisterHooks();
     this.popout.close();
     // this.renderObstacles.destroy();
+  }
+}
+
+export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerAbstract {
+
+  constructor(opts) {
+    super(opts);
+    this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.senseType });
+  }
+
+  _createRenderer() {
+    return new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType, debugViewNormals: this.debugView });
+  }
+
+
+}
+
+export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerAbstract {
+  static CONTEXT_TYPE = "webgpu";
+
+  constructor({ device, ...opts } = {}) {
+    super(opts);
+    this.device = device;
+    this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.senseType });
+  }
+
+  _createRenderer() {
+    return new RenderObstacles(this.device, {
+      senseType: this.senseType,
+      debugViewNormals: this.debugView,
+      width: this.constructor.WIDTH,
+      height: this.constructor.HEIGHT
+    });
+  }
+
+  async reinitialize() {
+    await super.reinitialize();
+    this.renderObstacles.setRenderTextureToCanvas(this.popout.canvas);
   }
 }
 

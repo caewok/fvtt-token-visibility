@@ -15,6 +15,8 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./GeometryToken.
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
 import {
   WallInstanceHandler,
+  TerrainWallInstanceHandler,
+  NonTerrainWallInstanceHandler,
   // DirectionalWallInstanceHandler,
   // NonDirectionalWallInstanceHandler,
   TileInstanceHandler,
@@ -100,8 +102,8 @@ class DrawableObjectsAbstract {
   /** @type {GPUModule} */
   module;
 
-  /** @type {GPUPipeline} */
-  pipeline;
+  /** @type {object<GPUPipeline>} */
+  pipeline = {};
 
   /** @type {object<GPUBindGroupLayout>} */
   bindGroupLayouts = {};
@@ -172,7 +174,7 @@ class DrawableObjectsAbstract {
     multisample: {
       count: 1,
     }
-  }
+  };
 
   /**
    * @type {GPUDevice} device
@@ -180,11 +182,12 @@ class DrawableObjectsAbstract {
    * @type {object} [opts]
    * @type {CONST.WALL_RESTRICTION_TYPES} [opts.senseType="sight"]
    */
-  constructor(device, materials, camera, { senseType = "sight" } = {}) {
+  constructor(device, materials, camera, { senseType = "sight", debugViewNormals = false } = {}) {
     this.device = device;
     this.materials = materials;
     this.camera = camera;
     this.senseType = senseType;
+    this.#debugViewNormals = debugViewNormals;
     this.placeableHandler = new this.constructor.handlerClass(this.senseType);
   }
 
@@ -196,18 +199,18 @@ class DrawableObjectsAbstract {
   /**
    * Set up all parts of the render pipeline that will not change often.
    */
-  async initialize({ debugViewNormals = false } = {}) {
+  async initialize() {
     const device = this.device;
-    this.#debugViewNormals = debugViewNormals;
+    this.placeableHandler.registerPlaceableHooks();
 
     for ( const [key, opts] of Object.entries(this.constructor.BINDGROUP_LAYOUT_OPTS) ) {
       this.bindGroupLayouts[key] = device.createBindGroupLayout(opts);
     }
 
     // Define shader and pipeline.
+    const debugViewNormals = this.debugViewNormals;
     this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`, { debugViewNormals });
-    this._setRenderPipelineOpts();
-    this.pipeline = device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
+    this._createPipeline();
 
     // Create static buffers.
     this._createStaticGeometries();
@@ -216,6 +219,11 @@ class DrawableObjectsAbstract {
 
     // Initialize the changeable buffers.
     this.initializePlaceableBuffers();
+  }
+
+  _createPipeline() {
+    this._setRenderPipelineOpts();
+    this.pipeline.default = this.device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
   }
 
   /**
@@ -302,8 +310,8 @@ class DrawableObjectsAbstract {
    * Called after pass has begun for this render object.
    * @param {CommandEncoder} renderPass
    */
-  initializeRenderPass(renderPass) {
-    renderPass.setPipeline(this.pipeline);
+  initializeRenderPass(renderPass, pipelineName = "default") {
+    renderPass.setPipeline(this.pipeline[pipelineName]);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CAMERA, this.camera.bindGroup);
   }
 
@@ -338,7 +346,10 @@ class DrawableObjectsAbstract {
     this.RENDER_PIPELINE_OPTS.vertex.module = this.module;
     this.RENDER_PIPELINE_OPTS.fragment.module = this.module;
     this.RENDER_PIPELINE_OPTS.vertex.buffers = this.debugViewNormals ? GeometryDesc.buffersLayoutNormals : GeometryDesc.buffersLayout;
-    this.RENDER_PIPELINE_OPTS.fragment.targets[0] = { format: WebGPUDevice.presentationFormat };
+    this.RENDER_PIPELINE_OPTS.fragment.targets[0] = {
+      format: WebGPUDevice.presentationFormat,
+      writeMask: this.debugViewNormals ? GPUColorWrite.ALL : (GPUColorWrite.BLUE | GPUColorWrite.ALPHA),
+    };
     this.RENDER_PIPELINE_OPTS.layout = this.device.createPipelineLayout({
       label: `${this.constructor.name}`,
       bindGroupLayouts: this.bindGroupLayoutsArray,
@@ -395,7 +406,7 @@ class DrawableObjectsAbstract {
    * A hook event that fires when a {@link PlaceableObject} is initially drawn.
    * @param {PlaceableObject} object    The object instance being drawn
    */
-  _onPlaceableDraw(object, opts) {
+  _onPlaceableDraw(object, _opts) {
     this.addPlaceable(object);
   }
 
@@ -421,7 +432,7 @@ class DrawableObjectsAbstract {
    * A hook event that fires when a {@link PlaceableObject} is destroyed.
    * @param {PlaceableObject} object    The object instance being destroyed
    */
-  _onPlaceableDestroy(object, opts) {
+  _onPlaceableDestroy(object, _opts) {
     this.removePlaceable(object.id);
   }
 
@@ -528,8 +539,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
     });
   }
 
-  initializeRenderPass(renderPass) {
-    super.initializeRenderPass(renderPass);
+  initializeRenderPass(renderPass, pipelineName) {
+    super.initializeRenderPass(renderPass, pipelineName);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.INSTANCE, this.bindGroups.instance);
   }
 
@@ -798,13 +809,15 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     return props.join("-");
   }
 
+  static FILTER_KEYS = ["wall", "wall-dir", "wall-terrain", "wall-dir-terrain"];
+
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
   _filterObjects(visionTriangle) {
-    const keys = ["wall", "wall-dir", "wall-terrain", "wall-dir-terrain"];
+    const keys = this.constructor.FILTER_KEYS;
     const instanceSets = {};
     for ( const key of keys ) instanceSets[key] = this.drawables.get(key).instanceSet
     Object.values(instanceSets).forEach(s => s.clear());
@@ -852,6 +865,92 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   }
 }
 
+// Instances of walls. Could include tokens but prefer to keep separate both for simplicity
+// and because tokens get updated much more often.
+export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
+  /** @type {WallInstanceHandler} */
+  static handlerClass = NonTerrainWallInstanceHandler;
+
+  /**
+   * Insert drawables that rarely change into the drawables map.
+   */
+  _createStaticDrawables() {
+    this.materials.create({ b: 1.0, label: "obstacle" });
+    this.drawables.set("wall", {
+      label: "Non-directional wall",
+      geom: this.geometries.get("wall"),
+      materialBG: this.materials.bindGroups.get("obstacle"),
+      instanceSet: new Set(),
+    });
+    this.drawables.set("wall-dir", {
+      label: "Directional wall",
+      geom: this.geometries.get("wall-dir"),
+      materialBG: this.materials.bindGroups.get("obstacle"),
+      instanceSet: new Set(),
+    });
+  }
+
+  static FILTER_KEYS = ["wall", "wall-dir"];
+}
+
+// Instances of walls. Could include tokens but prefer to keep separate both for simplicity
+// and because tokens get updated much more often.
+export class DrawableTerrainWallInstances extends DrawableWallInstances {
+  /** @type {WallInstanceHandler} */
+  static handlerClass = TerrainWallInstanceHandler;
+
+  /**
+   * Insert drawables that rarely change into the drawables map.
+   */
+  _createStaticDrawables() {
+    this.materials.create({ g: 0.5, a: 0.5, label: "terrain" });
+    this.drawables.set("wall-terrain", {
+      label: "Non-directional terrain wall",
+      geom: this.geometries.get("wall"),
+      materialBG: this.materials.bindGroups.get("terrain"),
+      instanceSet: new Set(),
+    });
+    this.drawables.set("wall-dir-terrain", {
+      label: "Directional terrain wall",
+      geom: this.geometries.get("wall-dir"),
+      materialBG: this.materials.bindGroups.get("terrain"),
+      instanceSet: new Set(),
+    });
+  }
+
+  static FILTER_KEYS = ["wall-terrain", "wall-dir-terrain"];
+
+  _setRenderPipelineOpts() {
+    super._setRenderPipelineOpts();
+    const target = this.RENDER_PIPELINE_OPTS.fragment.targets[0];
+    target.blend ??= {};
+    if ( this.debugViewNormals ) {
+      target.blend.alpha = {
+        dstFactor: "one-minus-src-alpha",
+        srcFactor: "one-minus-src-alpha",
+      };
+      target.blend.color = {
+        dstFactor: "src-alpha",
+        srcFactor: "src-alpha",
+      };
+
+    } else {
+      target.writeMask = GPUColorWrite.GREEN | GPUColorWrite.ALPHA;
+      target.blend.alpha = {
+        dstFactor: "zero",
+        srcFactor: "one",
+      };
+      target.blend.color = {
+        dstFactor: "one",
+        srcFactor: "one",
+      };
+    }
+
+    this.RENDER_PIPELINE_OPTS.depthStencil.depthCompare = "always"; // Effectively turn off depth testing.
+    this.RENDER_PIPELINE_OPTS.depthStencil.depthWriteEnabled = false;
+  }
+}
+
 export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
   /** @type {TokenInstanceHandler} */
   static handlerClass = TokenInstanceHandler;
@@ -873,13 +972,13 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     this.materials.create({ b: 1.0, label: "obstacle" });
     this.materials.create({ r: 1.0, label: "target" });
     this.drawables.set("token", {
-      label: "Token instance",
+      label: "Token obstacle",
       geom: this.geometries.get("token"),
       materialBG: this.materials.bindGroups.get("obstacle"),
       instanceSet: new Set(),
     });
     this.drawables.set("target", {
-      label: "Token instance",
+      label: "Token target",
       geom: this.geometries.get("token"),
       materialBG: this.materials.bindGroups.get("target"),
       instanceSet: new Set(),
@@ -909,25 +1008,23 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
   _filterObjects(visionTriangle, opts = {}) {
-    const { viewer, target, targetOnly } = opts;
-    if ( targetOnly && !target ) console.error("DrawableTokenInstances|_filterObjects no target specified.");
+    const { viewer, target } = opts;
 
     // Limit tokens
     const drawable = this.drawables.get("token");
     drawable.instanceSet.clear();
 
-    if ( !targetOnly ) {
-      // Add in all viewable tokens.
-      for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
-        if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
-      }
-
-      // Remove the viewer.
-      if ( viewer ) {
-        const viewerIdx = this.placeableHandler.instanceIndexFromId.get(viewer.id);
-        drawable.instanceSet.delete(viewerIdx);
-      }
+    // Add in all viewable tokens.
+    for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
+      if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
     }
+
+    // Remove the viewer.
+    if ( viewer ) {
+      const viewerIdx = this.placeableHandler.instanceIndexFromId.get(viewer.id);
+      drawable.instanceSet.delete(viewerIdx);
+    }
+
 
     // Add target as a distinct drawable.
     const targetDrawable = this.drawables.get("target");
@@ -940,6 +1037,45 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
     }
     super._filterObjects(visionTriangle);
+  }
+
+  _createPipeline() {
+    super._createPipeline();
+    if ( !this.debugViewNormals ) {
+      const target = this.RENDER_PIPELINE_OPTS.fragment.targets[0];
+      target.writeMask = GPUColorWrite.RED | GPUColorWrite.ALPHA;
+    }
+    this.pipeline.target = this.device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
+  }
+
+  // Skipped until render.
+  initializeRenderPass(_renderPass) { return; }
+
+  /**
+   * Render only the target token.
+   */
+  renderTarget(renderPass, _target) {
+    const drawable = this.drawables.get("target");
+    if ( !drawable ) return;
+    this._renderDrawable(renderPass, drawable);
+  }
+
+  /**
+   * Render all but the target
+   */
+  renderObstacles(renderPass, _target) {
+    const drawable = this.drawables.get("obstacle");
+    if ( !drawable ) return;
+    this._renderDrawable(renderPass, drawable);
+  }
+
+  _renderDrawable(renderPass, drawable) {
+    if ( !drawable.instanceSet.size ) return;
+
+    // Skipped initialize, so do here. Change if drawing the target.
+    const pipelineName = drawable.label === "Token target" ? "target" : "default";
+    super.initializeRenderPass(renderPass, pipelineName);
+    super._renderDrawable(renderPass, drawable);
   }
 
   registerPlaceableHooks() {
@@ -1032,19 +1168,22 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     // For each tile, add a drawable with its specific texture and bindgroup.
     const numTiles = this.placeableHandler.numInstances;
     this.bindGroups.tileTextures = Array(numTiles);
-    this.textures = Array(numTiles);
+    // this.textures = Array(numTiles);
     const defaultDrawable = this.drawables.get("tile");
     this.drawables.delete("tile");
     for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       const drawable = { ...defaultDrawable };
+      const source = this.constructor.tileSource(tile);
       const url = tile.document.texture.src;
+      /*
       const source = await loadImageBitmap(url, {
         imageOrientation: "flipY",
         premultiplyAlpha: "premultiply", // Will display alpha as white if "none" selected.
         // colorSpaceConversion: "none", // Unclear if this is helpful or more performant.
         // resizeQuality: "high", // Probably not needed
        }); // TODO: shrink size to something more manageable?
-      drawable.texture = device.createTexture({
+      */
+      const texture = drawable.texture = device.createTexture({
         label: url,
         format: "rgba8unorm",
         size: [source.width, source.height],
@@ -1054,7 +1193,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
       });
       device.queue.copyExternalImageToTexture(
         { source, flipY: true },
-        { texture: this.textures[idx] },
+        { texture },
         { width: source.width, height: source.height },
       );
       drawable.textureBG = device.createBindGroup({
@@ -1062,12 +1201,14 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
         layout: this.bindGroupLayouts.tileTexture,
         entries: [
           { binding: 0, resource: this.samplers.tileTexture },
-          { binding: 1, resource: drawable.texture.createView() },
+          { binding: 1, resource: texture.createView() },
         ]
       });
       this.drawables.set(tile.id, drawable);
     }
   }
+
+  static tileSource(tile) { return tile.texture.baseTexture.resource.source; }
 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
@@ -1104,7 +1245,6 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
 }
 
 // Handle constrained tokens and the target token in red.
-// TODO: Reference a single placeable handler instead of creating a new one.
 export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
   /** @type {WallInstanceHandler} */
   static handlerClass = TokenInstanceHandler;
@@ -1145,24 +1285,15 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
   _filterObjects(visionTriangle, opts = {}) {
-    const { viewer, target, targetOnly } = opts;
-
-    if ( targetOnly ) {
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-        const drawable = this.drawables.get(token.id);
-        if ( !drawable ) continue;
-        drawable.numInstances = Boolean(token === target);
-      }
-    } else {
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-        const drawable = this.drawables.get(token.id);
-        if ( !drawable ) continue;
-        drawable.numInstances = Number(visionTriangle.containsToken(token));
-      }
+    const { viewer, target } = opts;
+    for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      const drawable = this.drawables.get(token.id);
+      if ( !drawable ) continue;
+      drawable.numInstances = Number(visionTriangle.containsToken(token));
     }
 
     // Remove viewer.
-    if ( !targetOnly && viewer && this.drawables.has(viewer.id) ) {
+    if ( viewer && this.drawables.has(viewer.id) ) {
       const drawable = this.drawables.get(viewer.id);
       drawable.numInstances = 0;
     }
@@ -1193,8 +1324,43 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     }
   }
 
+  _createPipeline() {
+    super._createPipeline();
+    if ( !this.debugViewNormals ) {
+      const target = this.RENDER_PIPELINE_OPTS.fragment.targets[0];
+      target.writeMask = GPUColorWrite.RED | GPUColorWrite.ALPHA;
+    }
+    this.pipeline.target = this.device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
+  }
+
+  // Skipped until render.
+  initializeRenderPass(_renderPass) { return; }
+
+  /**
+   * Render only the target token.
+   */
+  renderTarget(renderPass, target) {
+    const drawable = this.drawables.get(target.id);
+    if ( !drawable ) return;
+    this._renderDrawable(renderPass, drawable);
+  }
+
+  /**
+   * Render all but the target
+   */
+  renderObstacles(renderPass, target) {
+    for ( const [key, drawable] of this.drawables.entries() ) {
+      if ( key === target.id ) continue;
+      this._renderDrawable(renderPass, drawable);
+    }
+  }
+
   _renderDrawable(renderPass, drawable) {
     if ( !drawable.numInstances ) return;
+
+    // Skipped initialize, so do here. Change if drawing the target.
+    const pipelineName = drawable.label === "Token target" ? "target" : "default";
+    super.initializeRenderPass(renderPass, pipelineName);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
 
     drawable.geom.setVertexBuffer(renderPass);
@@ -1211,17 +1377,4 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
     this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
   }
-}
-
-/**
- * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
- * Load an image bitmap from a url.
- * @param {string} url
- * @param {object} [opts]       Options passed to createImageBitmap
- * @returns {ImageBitmap}
- */
-async function loadImageBitmap(url, opts = {}) {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return await createImageBitmap(blob, opts);
 }

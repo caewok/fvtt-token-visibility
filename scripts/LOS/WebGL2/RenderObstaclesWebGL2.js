@@ -1,6 +1,5 @@
 /* globals
 CONFIG,
-foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -95,11 +94,11 @@ export class RenderObstaclesAbstractWebGL2 {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
   }
 
-  render(viewerLocation, target, { viewer, targetLocation, targetOnly = false } = {}) {
+  render(viewerLocation, target, { viewer, targetLocation } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     // const opts = { viewer, target, targetOnly };
     this._setCamera(viewerLocation, target, { targetLocation });
-    const visionTriangle = targetOnly ? null : VisionTriangle.build(viewerLocation, target);
+    const visionTriangle = VisionTriangle.build(viewerLocation, target);
 
     const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
     renderFn.call(this, target, viewer, visionTriangle);

@@ -716,10 +716,11 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
    * @prop {number} zHeight     In z direction
    */
   static tokenDimensions(token) {
+    // Shrink tokens slightly to avoid z-fighting with walls and tiles.
     return {
-      width: token.document.width * canvas.dimensions.size,
-      height: token.document.height * canvas.dimensions.size,
-      zHeight: token.topZ - token.bottomZ,
+      width: token.document.width * canvas.dimensions.size * .99,
+      height: token.document.height * canvas.dimensions.size * .99,
+      zHeight: (token.topZ - token.bottomZ) * .99,
     };
   }
 }

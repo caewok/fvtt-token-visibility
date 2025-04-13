@@ -359,4 +359,15 @@ export function combineTypedArrays(...arrs) {
   return out;
 }
 
-
+/**
+ * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
+ * Load an image bitmap from a url.
+ * @param {string} url
+ * @param {object} [opts]       Options passed to createImageBitmap
+ * @returns {ImageBitmap}
+ */
+export async function loadImageBitmap(url, opts = {}) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await createImageBitmap(blob, opts);
+}
