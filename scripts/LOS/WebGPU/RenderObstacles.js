@@ -80,15 +80,37 @@ class RenderAbstract {
   /** @type {MaterialTracker} */
   materials;
 
-  constructor({ senseType = "sight", debugViewNormals = false } = {}) {
-    this.senseType = senseType;
-    this.debugViewNormals = debugViewNormals;
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; } // Don't allow modifications.
+
+  /** @type {boolean} */
+  #debugViewNormals = false;
+
+  get debugViewNormals() { return this.#debugViewNormals; } // Don't allow modifications.
+
+  constructor(device, { senseType = "sight", debugViewNormals = false, width = 256, height = 256 } = {}) {
+    this.#senseType = senseType;
+    this.#debugViewNormals = debugViewNormals;
+    this.device = device;
+    this.materials = new MaterialsTracker(this.device);
+
+    for ( const cl of this.constructor.drawableClasses ) {
+      const drawableObj = new cl(this.device, this.materials, this.camera, { senseType, debugViewNormals });
+      this.drawableObjects.push(drawableObj);
+    }
+    this.#renderSize.width = width;
+    this.#renderSize.height = height;
   }
+
+  /** @type {WebGPUDevice} */
+  static device;
 
   /**
    * Get the current device or attempt to get a new one if lost.
    */
-  async getDevice() {
+  static async getDevice() {
     if ( this.device ) return this.device;
     this.device = await WebGPUDevice.getDevice();
     return this.device;
@@ -98,10 +120,6 @@ class RenderAbstract {
    * Set up all parts of the render pipeline that will not change often.
    */
   async initialize() {
-    this.drawableObjects.forEach(drawableObject => drawableObject.destroy());
-    this.drawableObjects.length = 0;
-    const device = await this.getDevice();
-    this.materials = new MaterialsTracker(device);
     await this._initializeDrawObjects();
     this._allocateRenderTargets();
     this.prerender();
@@ -111,17 +129,9 @@ class RenderAbstract {
    * Define one ore more DrawObjects used to render the scene.
    */
   async _initializeDrawObjects() {
-    const device = this.device;
-    const materials = this.materials;
-    const camera = this.camera;
     this._createCameraBindGroup();
-
-    const senseType = this.senseType;
-    const debugViewNormals = this.debugViewNormals;
     const promises = [];
-    for ( const cl of this.constructor.drawableClasses ) {
-      const drawableObj = new cl(device, materials, camera, { senseType, debugViewNormals });
-      this.drawableObjects.push(drawableObj);
+    for ( const drawableObj of this.drawableObjects ) {
       await drawableObj.initialize();
       // promises.push(drawableObj.initialize());
     }
@@ -392,7 +402,7 @@ class RenderAbstract {
   }
 
   /** @type {object<width: {number}, height: {number}>} */
-  #renderSize = { width: 200, height: 200 };
+  #renderSize = { width: 256, height: 256 };
 
   get renderSize() { return this.#renderSize; }
 

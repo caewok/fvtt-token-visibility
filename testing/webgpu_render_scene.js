@@ -162,22 +162,20 @@ imgData = await renderTokens.readTexturePixels()
 imgData = await renderTokens.readTexturePixels(true)
 
 
-renderTiles = new RenderTiles();
+renderTiles = new RenderTiles({ width: 400, height: 400 });
 await renderTiles.getDevice();
 renderTiles.sampleCount = 1
-renderTiles.renderSize = { width: 400, height: 400 } // Must set width/height to match canvas so depthTex works.
 await renderTiles.initialize({ debugViewNormals: true });
 renderTiles.setRenderTextureToCanvas(popout.canvas)
 await renderTiles.prerender();
 await renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderObstacles = new RenderObstacles({ debugViewNormals: true });
-await renderObstacles.getDevice();
-renderObstacles.sampleCount = 1
+
+renderObstacles = new RenderObstacles(device, { debugViewNormals: true, width: 256, height: 256 });
 renderObstacles.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
 await renderObstacles.initialize();
 renderObstacles.setRenderTextureToCanvas(popout.canvas)
-await renderObstacles.prerender();
+// await renderObstacles.prerender();
 await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderObstacles.registerPlaceableHooks();
