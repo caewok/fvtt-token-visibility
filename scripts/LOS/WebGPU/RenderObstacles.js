@@ -72,7 +72,13 @@ class RenderAbstract {
   device;
 
   /** @type {DrawObjectsAbstract[]} */
-  drawableObjects = []
+  drawableObjects = [];
+
+  /** @type {DrawableTokenInstances|DrawableConstrainedTokens[]} */
+  drawableTokens = [];
+
+  /** @type {DrawObjectsAbstract[]} */
+  drawableObstacles = [];
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" });
@@ -99,6 +105,9 @@ class RenderAbstract {
     for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(this.device, this.materials, this.camera, { senseType, debugViewNormals });
       this.drawableObjects.push(drawableObj);
+      const categoryArr = drawableObj instanceof DrawableTokenInstances
+        || drawableObj instanceof DrawableConstrainedTokens ? this.drawableTokens : this.drawableObstacles;
+      categoryArr.push(drawableObj);
     }
     this.#renderSize.width = width;
     this.#renderSize.height = height;
@@ -146,12 +155,12 @@ class RenderAbstract {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
   }
 
-  async render(viewerLocation, target, opts) {
-    this.renderSync(viewerLocation, target, opts);
+  async renderAsync(viewerLocation, target, opts) {
+    this.render(viewerLocation, target, opts);
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  renderSync(viewerLocation, target, { viewer, targetLocation } = {}) {
+  render(viewerLocation, target, { viewer, targetLocation } = {}) {
     const opts = { viewer, target };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
@@ -172,16 +181,19 @@ class RenderAbstract {
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
     // Render the target.
+    // Render first so full red of target is recorded.
     // (Could be either constrained or not constrained.)
+    this.drawableTokens.forEach(drawableObj => drawableObj.renderTarget(renderPass, target));
+    this.drawableTokens.forEach(drawableObj => drawableObj.renderObstacles(renderPass, target));
 
-
-    for ( const drawableObj of this.drawableObjects ) {
+    // Render the obstacles
+    for ( const drawableObj of this.drawableObstacles ) {
+      if ( !drawableObj.drawables.size ) continue;
       drawableObj.initializeRenderPass(renderPass);
       drawableObj.render(renderPass, opts);
     }
 
-    // Render terrains last.
-
+    // TODO: Do we need to render terrains last?
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);

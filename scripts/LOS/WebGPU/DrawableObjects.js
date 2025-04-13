@@ -1050,6 +1050,24 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
   // Skipped until render.
   initializeRenderPass(_renderPass) { return; }
 
+  /**
+   * Render only the target token.
+   */
+  renderTarget(renderPass, _target) {
+    const drawable = this.drawables.get("target");
+    if ( !drawable ) return;
+    this._renderDrawable(renderPass, drawable);
+  }
+
+  /**
+   * Render all but the target
+   */
+  renderObstacles(renderPass, _target) {
+    const drawable = this.drawables.get("obstacle");
+    if ( !drawable ) return;
+    this._renderDrawable(renderPass, drawable);
+  }
+
   _renderDrawable(renderPass, drawable) {
     if ( !drawable.instanceSet.size ) return;
 
@@ -1316,6 +1334,25 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
 
   // Skipped until render.
   initializeRenderPass(_renderPass) { return; }
+
+  /**
+   * Render only the target token.
+   */
+  renderTarget(renderPass, target) {
+    const drawable = this.drawables.get(target.id);
+    if ( !drawable ) return;
+    this._renderDrawable(renderPass, drawable);
+  }
+
+  /**
+   * Render all but the target
+   */
+  renderObstacles(renderPass, target) {
+    for ( const [key, drawable] of this.drawables.entries() ) {
+      if ( key === target.id ) continue;
+      this._renderDrawable(renderPass, drawable);
+    }
+  }
 
   _renderDrawable(renderPass, drawable) {
     if ( !drawable.numInstances ) return;

@@ -8,7 +8,7 @@ Hooks,
 
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { Area3dPopoutCanvas } from "../Area3dPopout.js";
-import { PercentVisibleCalculatorWebGL2 } from "./PercentVisibleCalculatorWebGL2.js";
+import { PercentVisibleCalculatorWebGL2 } from "./PercentVisibleCalculator.js";
 
 /* Debug viewer
 

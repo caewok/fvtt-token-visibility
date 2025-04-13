@@ -5,6 +5,9 @@ CONFIG,
 "use strict";
 
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
+import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
+import { WebGPUDevice } from "../WebGPU/WebGPU.js";
+import { TokenInstanceHandler } from "../WebGPU/PlaceableInstanceHandler.js";
 
 /* Percent visible calculator
 
@@ -15,7 +18,7 @@ Caches values based on the viewer, viewer location, target, target location.
 
 const TARGETED_BY_SET = Symbol("TARGETED_SET");
 
-export class PercentVisibleCalculatorWebGL2 {
+class PercentVisibleCalculatorAbstract {
 
   /** @type {number} */
   static WIDTH = 256;
@@ -45,7 +48,6 @@ export class PercentVisibleCalculatorWebGL2 {
     this.senseType = senseType;
     this.constructor.glCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
     this.gl = this.constructor.glCanvas.getContext("webgl2");
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl: this.gl, senseType });
   }
 
   async initialize() {
@@ -53,8 +55,7 @@ export class PercentVisibleCalculatorWebGL2 {
 
     // Track the update ids for each.
     this.#updateObstacleCacheKeys();
-    const ph = this.renderObstacles.drawableTarget.placeableHandler;
-    for ( const token of ph.placeableFromInstanceIndex.values() ) this.#updateTokenCacheKeys(token);
+    for ( const token of this.tokenHandler.placeableFromInstanceIndex.values() ) this.#updateTokenCacheKeys(token);
   }
 
   // ----- NOTE: Visibility testing ----- //
@@ -75,11 +76,15 @@ export class PercentVisibleCalculatorWebGL2 {
 
   _percentVisible(viewer, target, viewerLocation, targetLocation) {
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-    const { WIDTH, HEIGHT } = this.constructor;
-    this.gl.readPixels(0, 0, WIDTH, HEIGHT, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.bufferData);
+    this._readRenderResult();
     const percentRed = this._percentRedPixels(this.bufferData);
     this._setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentRed);
     return percentRed;
+  }
+
+  _readRenderResult() {
+    const { WIDTH, HEIGHT } = this.constructor;
+    this.gl.readPixels(0, 0, WIDTH, HEIGHT, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.bufferData);
   }
 
   _percentRedPixels(pixels) {
@@ -166,6 +171,25 @@ export class PercentVisibleCalculatorWebGL2 {
     return this._getCachedPercentVisible(viewer, target, viewerLocation, targetLocation);
   }
 
+  /** @type {PlaceableInstanceHandler} */
+  get tokenHandler() { return this.renderObstacles.drawableTarget.placeableHandler; }
+
+  /** @type {PlaceableInstanceHandler[]} */
+  #obstacleHandlers = [];
+
+  get obstacleHandlers() {
+    if ( this.#obstacleHandlers.length ) return this.#obstacleHandlers;
+
+    // Excludes tokens.
+    const tokenHandler = this.tokenHandler;
+    this.renderObstacles.drawableObstacles.forEach(drawableObj => {
+      if ( drawableObj.placeableHandler === tokenHandler ) return;
+      this.#obstacleHandlers.push(drawableObj.placeableHandler);
+    });
+    this.renderObstacles.drawableTerrain.forEach(drawableObj => this.#obstacleHandlers.push(drawableObj.placeableHandler));
+    return this.#obstacleHandlers;
+  }
+
   /**
    * Has a given token changed?
    * @param {Token} token       Token to test against the token placeable handler
@@ -173,11 +197,9 @@ export class PercentVisibleCalculatorWebGL2 {
    */
   tokenChanged(token) {
     // Check if this specific token needs updating.
-    const ph = this.renderObstacles.drawableTarget.placeableHandler;
+    const ph = this.tokenHandler;
     const idx = ph.instanceIndexFromId.get(token.id);
-    const updateId = ph.instanceLastUpdated.get(idx);
-    if ( updateId > (this.#updateKeys.get(token) || 0)  ) return true;
-    return false;
+    return ph.instanceLastUpdated.get(idx) > (this.#updateKeys.get(token) || 0);
   }
 
   /**
@@ -185,39 +207,21 @@ export class PercentVisibleCalculatorWebGL2 {
    * @returns {boolean}
    */
   obstacleChanged() {
-    for ( const drawableObject of this.renderObstacles.drawableObstacles ) {
-      const ph = drawableObject.placeableHandler;
-      if ( ph === this.renderObstacles.drawableTarget.placeableHandler ) continue;
-      if ( ph.updateId > (this.#updateKeys.get(ph) || 0) ) return true;
-    }
-    for ( const drawableTerrain of this.renderObstacles.drawableTerrain ) {
-      const ph = drawableTerrain.placeableHandler;
-      if ( ph.updateId > (this.#updateKeys.get(ph) || 0) ) return true;
-    }
-    return false;
+    return this.obstacleHandlers.some(ph => ph.updateId > (this.#updateKeys.get(ph) || 0));
   }
 
   /**
    * Update the cache keys for obstacles to match current update id for each placeable.
    */
   #updateObstacleCacheKeys() {
-    // Token is in drawableObstacles.
-    for ( const drawableObject of this.renderObstacles.drawableObstacles ) {
-      const ph = drawableObject.placeableHandler;
-      if ( ph === this.renderObstacles.drawableTarget.placeableHandler ) continue;
-      this.#updateKeys.set(ph, ph.updateId);
-    }
-    for ( const drawableTerrain of this.renderObstacles.drawableTerrain ) {
-      const ph = drawableTerrain.placeableHandler;
-      this.#updateKeys.set(ph, ph.updateId);
-    }
+    this.obstacleHandlers.forEach(ph => this.#updateKeys.set(ph, ph.updateId));
   }
 
   /**
    * Update the cache keys for tokens to match current update id for a given token.
    */
   #updateTokenCacheKeys(token) {
-    const ph = this.renderObstacles.drawableTarget.placeableHandler;
+    const ph = this.tokenHandler;
     const idx = ph.instanceIndexFromId.get(token.id);
     const updateId = ph.instanceLastUpdated.get(idx);
     this.#updateKeys.set(token, updateId);
@@ -245,4 +249,83 @@ export class PercentVisibleCalculatorWebGL2 {
     if ( !targetCache.has(TARGETED_BY_SET) ) targetCache.set(TARGETED_BY_SET, new Set());
     targetCache.get(TARGETED_BY_SET).add(viewer);
   }
+}
+
+export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
+  constructor(opts) {
+    super(opts);
+    this.renderObstacles = new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType });
+  }
+}
+
+export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorAbstract {
+  /** @type {OffScreenCanvas} */
+  static gpuCanvas;
+
+  /** @type {GPUCanvasContext} */
+  gpuCtx;
+
+
+  constructor({ device, ...opts } = {}) {
+    super(opts);
+    this.device = device;
+    this.renderObstacles = new RenderObstacles(device,
+      { senseType: this.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT });
+
+    this.constructor.gpuCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
+    this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
+    this.gpuCtx.configure({
+      device,
+      format: WebGPUDevice.presentationFormat,
+      alphamode: "premultiplied", // Instead of "opaque"
+    });
+
+    const gl = this.gl;
+    this.texture = gl.createTexture();
+    this.framebuffer = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
+  }
+
+  async initialize() {
+    await super.initialize();
+    this.renderObstacles.setRenderTextureToCanvas(this.constructor.gpuCanvas);
+  }
+
+  _percentVisible(...args) {
+    this.renderObstacles.prerender(); // TODO: Can we move prerender into render?
+    return super._percentVisible(...args);
+  }
+
+  /**
+   * Must first render to the gpuCanvas.
+   * Then call this to retrieve the pixel data.
+   */
+  _readRenderResult() {
+    const gl = this.gl;
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
+    super._readRenderResult();
+    // return { pixels: this.bufferData, x: 0, y: 0, width, height };
+  }
+
+  /** @type {PlaceableInstanceHandler} */
+  get tokenHandler() { return this.renderObstacles.drawableTokens[0].placeableHandler; }
+
+  /** @type {PlaceableInstanceHandler[]} */
+  #obstacleHandlers = [];
+
+  get obstacleHandlers() {
+    if ( this.#obstacleHandlers.length ) return this.#obstacleHandlers;
+
+    // Excludes tokens.
+    this.renderObstacles.drawableObstacles.forEach(drawableObj => {
+      this.#obstacleHandlers.push(drawableObj.placeableHandler);
+    });
+    return this.#obstacleHandlers;
+  }
+}
+
+export class PercentVisibleCalculatorWebGPU2 extends PercentVisibleCalculatorWebGPU {
+
 }

@@ -95,6 +95,7 @@ let {
   WebGPUSumRedPixels,
   PercentVisibleCalculator,
   AsyncQueue,
+  PercentVisibleCalculatorWebGPU,
   // wgsl
 } = api.webgpu
 
@@ -127,6 +128,11 @@ popout.context.configure({
   format: presentationFormat,
   alphamode: "premultiplied", // Instead of "opaque"
 });
+
+
+calc = new PercentVisibleCalculatorWebGPU({ device })
+await calc.initialize()
+calc.percentVisible(viewer, target)
 
 
 tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)
@@ -172,7 +178,7 @@ await renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 
 renderObstacles = new RenderObstacles(device, { debugViewNormals: true, width: 256, height: 256 });
-renderObstacles.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
+// renderObstacles.renderSize = { width: 256, height: 256 } // Must set width/height to match canvas so depthTex works.
 await renderObstacles.initialize();
 renderObstacles.setRenderTextureToCanvas(popout.canvas)
 // await renderObstacles.prerender();
