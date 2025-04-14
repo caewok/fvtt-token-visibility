@@ -15,6 +15,8 @@ import { Area3dWebGL1Viewpoint } from "./Area3dWebGL1Viewpoint.js";
 import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
 import { Area3dHybridViewpoint } from "./Area3dHybridViewpoint.js";
 import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
+import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
+import { WebGPUViewpoint } from "./WebGPU/WebGPUViewpoint.js";
 
 // Debug
 import { Area3dPopout } from "./Area3dPopout.js";
@@ -32,7 +34,9 @@ export class Area3dViewerLOS extends AbstractViewerLOS {
     "los-area-3d-geometric": Area3dGeometricViewpoint,
     "los-area-3d-webgl1": Area3dWebGL1Viewpoint,
     "los-area-3d-webgl2": Area3dWebGL2Viewpoint,
-    "los-area-3d-hybrid": Area3dHybridViewpoint
+    "los-area-3d-hybrid": Area3dHybridViewpoint,
+    "los-webgl2": WebGL2Viewpoint,
+    "los-webgpu": WebGPUViewpoint,
   };
 
   /**

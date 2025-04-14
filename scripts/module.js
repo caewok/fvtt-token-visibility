@@ -168,7 +168,12 @@ Hooks.once("init", function() {
      * For Area3D, debug tiles using the rendered tile texture in the window, as opposed to
      * the red/blue filled color.
      */
-    useDebugShaders: true
+    useDebugShaders: true,
+
+    /**
+     * Calculator for percent visible tokens using sight.
+     */
+    percentVisibleWebGL2: new PercentVisibleCalculatorWebGL2({ senseType: "sight" }),
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -316,6 +321,15 @@ Hooks.on("canvasReady", function() {
   canvas.tiles.placeables.forEach(tile => tile[PlaceableTrianglesHandler.ID].update());
   canvas.walls.placeables.forEach(wall => wall[PlaceableTrianglesHandler.ID].update());
   canvas.tokens.placeables.forEach(token => token[PlaceableTrianglesHandler.ID].update());
+
+  CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
+
+  WebGPUDevice.getDevice().then(device => {
+    if ( !device ) return console.warn("No WebGPU device located. Falling back to WebGL2.");
+    CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
+    CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
+  });
+
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
