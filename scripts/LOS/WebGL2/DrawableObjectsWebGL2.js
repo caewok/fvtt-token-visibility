@@ -1,8 +1,13 @@
 /* globals
+CONFIG,
+Wall
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+
+import { MODULE_ID, MODULES_ACTIVE } from "../../const.js";
+import { tokensOverlap } from "../util.js";
 import { WebGL2 } from "./WebGL2.js";
 import {
   NonDirectionalWallInstanceHandlerWebGL2,
@@ -200,9 +205,7 @@ class DrawableObjectsWebGL2Abstract {
   /**
    * Render this drawable.
    */
-  render(target, viewer, visionTriangle) {
-    // TODO: Use visionTriangle
-    this.setRenderInstances(target, viewer, visionTriangle);
+  render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
 
     this._updateBuffers();
@@ -225,15 +228,19 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {Set<number>} */
   instanceSet = new Set();
 
-  setRenderInstances(_target, _viewer, _visionTriangle) {
-    // TODO: Use visionTriangle
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   */
+  filterObjects(_visionTriangle, _opts) {
     const instanceSet = this.instanceSet;
     instanceSet.clear();
     this.placeableHandler.instanceIndexFromId.values().forEach(idx => instanceSet.add(idx));
   }
 }
 
-export class DrawableNonDirectionalWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
   static handlerClass = NonDirectionalWallInstanceHandlerWebGL2;
 
@@ -242,41 +249,48 @@ export class DrawableNonDirectionalWallWebGL2 extends DrawableObjectsWebGL2Abstr
 
   /** @type {string} */
   static fragmentFile = "obstacle_fragment";
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
+   */
+  filterObjects(visionTriangle, opts = {}) {
+    const instanceSet = this.instanceSet;
+    instanceSet.clear();
+    opts.walls ??= true;
+    if ( !opts.walls ) return;
+
+    // Limit to walls within the vision triangle
+    // Drop open doors.
+    for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
+      if ( visionTriangle.containsEdge(edge) ) instanceSet.add(idx);
+    }
+  }
 }
 
-export class DrawableDirectionalWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+export class DrawableNonDirectionalWallWebGL2 extends DrawableWallWebGL2 {
+  /** @type {class} */
+  static handlerClass = NonDirectionalWallInstanceHandlerWebGL2;
+}
+
+export class DrawableDirectionalWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {class} */
   static handlerClass = DirectionalWallInstanceHandlerWebGL2;
-
-  /** @type {string} */
-  static vertexFile = "obstacle_vertex";
-
-  /** @type {string} */
-  static fragmentFile = "obstacle_fragment";
 }
 
-export class DrawableNonDirectionalTerrainWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+export class DrawableNonDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {class} */
   static handlerClass = NonDirectionalTerrainWallInstanceHandlerWebGL2;
-
-  /** @type {string} */
-  static vertexFile = "obstacle_vertex";
-
-  /** @type {string} */
-  static fragmentFile = "obstacle_fragment";
 
   static obstacleColor = [0, 0.5, 1, 0.5];
 }
 
-export class DrawableDirectionalTerrainWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+export class DrawableDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {class} */
   static handlerClass = DirectionalTerrainWallInstanceHandlerWebGL2;
-
-  /** @type {string} */
-  static vertexFile = "obstacle_vertex";
-
-  /** @type {string} */
-  static fragmentFile = "obstacle_fragment";
 
   static obstacleColor = [0, 0.5, 1, 0.5];
 }
@@ -342,7 +356,10 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   static tileSource(tile) { return tile.texture.baseTexture.resource.source; }
 
-  render(_target, _viewer, _visionTriangle) {
+  /** @type {Set<number>} */
+  #tmpSet = new Set();
+
+  render(_target, _viewer) {
     // TODO: Use visionTriangle
     if ( !this.placeableHandler.numInstances ) return;
     this._updateBuffers();
@@ -357,14 +374,32 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
 
     const uniforms = { uTileTexture: -1 };
-    for ( const idx of this.placeableHandler.placeableFromInstanceIndex.keys() ) {
-      this.instanceSet.clear();
-      this.instanceSet.add(idx);
+    for ( const idx of this.instanceSet ) {
+      this.#tmpSet.clear();
+      this.#tmpSet.add(idx);
       uniforms.uTileTexture = this.textures[idx];
       twgl.setUniforms(this.programInfo, uniforms);
-      WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
+      WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
     }
     gl.bindVertexArray(null);
+  }
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
+   */
+  filterObjects(visionTriangle, opts = {}) {
+    const instanceSet = this.instanceSet;
+    instanceSet.clear();
+    opts.tiles ??= true;
+    if ( !opts.tiles ) return;
+
+    // Limit to tiles within the vision triangle
+    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      if ( visionTriangle.containsTile(tile) ) instanceSet.add(idx);
+    }
   }
 }
 
@@ -386,7 +421,10 @@ export class DrawableSceneBackground extends DrawableTileWebGL2 {
       // premultiplyAlpha: "premultiply",
       premultiplyAlpha: "none",
     });
+    this.instanceSet.add(0);
   }
+
+  filterObjects() { return; }
 
   _sourceForTile() { return this.backgroundImage; }
 }
@@ -409,7 +447,6 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
     if ( typeof idx === "undefined" ) return;
 
-    const instanceSet = this.instanceSet;
     this._updateBuffers();
     const gl = this.webGL2.gl;
 
@@ -419,20 +456,22 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
-    instanceSet.clear();
+    this.#tmpSet.clear();
 
     // Render the target red.
     for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
-    instanceSet.add(idx);
-    WebGL2.drawSet(gl, instanceSet, this.offsetData);
+    this.#tmpSet.add(idx);
+    WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
     gl.bindVertexArray(null);
   }
 
-  render(target, viewer, visionTriangle) {
-    if ( !this.placeableHandler.numInstances ) return;
-    const instanceSet = this.instanceSet;
+  /** @type {Set<number>} */
+  #tmpSet = new Set();
+
+  render(_target, _viewer) {
+    if ( !this.instanceSet.size ) return;
     this._updateBuffers();
     const gl = this.webGL2.gl;
 
@@ -442,38 +481,51 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
-    // Other tokens.
-    instanceSet.clear();
-    // TODO: Use visionTriangle
-    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-      if ( id === viewer.id || id === target.id ) continue;
-      instanceSet.add(idx);
-    }
-    if ( instanceSet.size ) {
-      for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
-      twgl.setUniforms(this.programInfo, this.materialUniforms);
-      WebGL2.drawSet(gl, instanceSet, this.offsetData);
-    }
+    for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
+    WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
     gl.bindVertexArray(null);
-
   }
 
-//   setRenderInstances(target, viewer, visionTriangle) {
-//     const instanceSet = this.instanceSet;
-//     instanceSet.clear();
-//     if ( !visionTriangle ) {
-//       // Target only.
-//       const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
-//       if ( typeof idx !== "undefined" ) instanceSet.add(idx);
-//       return;
-//     }
-//     // TODO: Use visionTriangle
-//     for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-//       if ( id === viewer.id ) continue;
-//       instanceSet.add(idx);
-//     }
-//   }
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
+   */
+  filterObjects(visionTriangle, opts = {}) {
+    const instanceSet = this.instanceSet;
+    instanceSet.clear();
+    opts.tokens ??= {};
+    opts.tokens.dead ??= true;
+    opts.tokens.live ??= true;
+    opts.tokens.prone ??= true;
+    if ( !(opts.tokens.dead || opts.tokens.live) ) return;
 
+    // Limit to tokens within the vision triangle.
+    // Drop excluded token categories.
+    const { viewer, target } = opts;
+    const api = MODULES_ACTIVE.API.RIDEABLE;
+    for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      if ( token === viewer || token === target ) continue;
+      if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+
+      // Filter tokens that directly overlaps the viewer.
+      if ( tokensOverlap(token, viewer) ) continue;
+
+      // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
+      if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
+
+      if ( visionTriangle.containsToken(token) ) instanceSet.add(idx);
+    }
+  }
+
+  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
+    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
+    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
+    if ( !prone && token.isProne ) return false;
+    return true;
+  }
 }
 
 /**

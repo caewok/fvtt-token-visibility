@@ -167,13 +167,27 @@ Hooks.once("init", function() {
     /**
      * For Area3D, debug tiles using the rendered tile texture in the window, as opposed to
      * the red/blue filled color.
+     * @type {boolean}
      */
     useDebugShaders: true,
 
     /**
      * Calculator for percent visible tokens using sight.
+     * @type {PercentVisibleCalculatorAbstract}
      */
     percentVisibleWebGL2: new PercentVisibleCalculatorWebGL2({ senseType: "sight" }),
+
+    /**
+     * Function to determine if a token is alive
+     * @type {function}
+     */
+    tokenIsAlive,
+
+    /**
+     * Function to determine if a token is dead
+     * @type {function}
+     */
+    tokenIsDead,
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -301,6 +315,30 @@ Hooks.once("init", function() {
     Patcher, HookPatch, MethodPatch, LibWrapperPatch
   };
 });
+
+
+/**
+ * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsDead.
+ * @param {Token} token
+ * @returns {boolean} True if dead.
+ */
+function tokenIsAlive(token) { return !tokenIsDead(token); }
+
+/**
+ * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsAlive.
+ * @param {Token} token
+ * @returns {boolean} True if dead.
+ */
+function tokenIsDead(token) {
+  const deadStatus = CONFIG.statusEffects.find(status => status.id === "dead");
+  if ( deadStatus && token.actor.statuses.has(deadStatus.id) ) return true;
+
+  const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
+  const hp = getObjectProperty(t.actor, tokenHPAttribute);
+  if ( typeof hp !== "number" ) return false;
+  return hp <= 0;
+}
+
 
 Hooks.once("setup", function() {
   Settings.registerAll();
