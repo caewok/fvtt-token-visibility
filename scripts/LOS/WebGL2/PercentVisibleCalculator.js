@@ -20,10 +20,10 @@ const TARGETED_BY_SET = Symbol("TARGETED_SET");
 class PercentVisibleCalculatorAbstract {
 
   /** @type {number} */
-  static WIDTH = 256;
+  static WIDTH = 128;
 
   /** @type {number} */
-  static HEIGHT = 256;
+  static HEIGHT = 128;
 
   /** @type {number} */
   static TERRAIN_THRESHOLD = 255 * 0.75;

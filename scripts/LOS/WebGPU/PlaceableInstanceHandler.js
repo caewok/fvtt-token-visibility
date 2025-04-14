@@ -420,6 +420,7 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    */
   updateInstanceBuffer(idx) {
     const edge = this.placeableFromInstanceIndex.get(idx);
+    if ( !edge ) return;
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const pos = this.constructor.edgeCenter(edge);
@@ -600,6 +601,7 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    */
   updateInstanceBuffer(idx) {
     const tile = this.placeableFromInstanceIndex.get(idx);
+    if ( !tile ) return;
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = this.constructor.tileCenter(tile);
@@ -692,6 +694,7 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
    */
   updateInstanceBuffer(idx) {
     const token = this.placeableFromInstanceIndex.get(idx);
+    if ( !token ) return;
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);

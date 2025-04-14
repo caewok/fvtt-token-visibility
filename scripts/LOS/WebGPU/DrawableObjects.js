@@ -249,7 +249,10 @@ class DrawableObjectsAbstract {
    * @param {CommandEncoder} renderPass
    */
   render(renderPass) {
-    this.drawables.forEach(drawable => this._renderDrawable(renderPass, drawable));
+    this.drawables.forEach(drawable => {
+      this._initializeRenderPass(renderPass);
+      this._renderDrawable(renderPass, drawable);
+    });
   }
 
   /**
@@ -312,7 +315,7 @@ class DrawableObjectsAbstract {
    * Called after pass has begun for this render object.
    * @param {CommandEncoder} renderPass
    */
-  initializeRenderPass(renderPass, pipelineName = "default") {
+  _initializeRenderPass(renderPass, pipelineName = "default") {
     renderPass.setPipeline(this.pipeline[pipelineName]);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CAMERA, this.camera.bindGroup);
   }
@@ -541,8 +544,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
     });
   }
 
-  initializeRenderPass(renderPass, pipelineName) {
-    super.initializeRenderPass(renderPass, pipelineName);
+  _initializeRenderPass(renderPass, pipelineName) {
+    super._initializeRenderPass(renderPass, pipelineName);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.INSTANCE, this.bindGroups.instance);
   }
 
@@ -733,7 +736,6 @@ export class DrawableObjectRBCulledInstancesAbstract extends DrawableObjectCulle
 
     // Call the exact same function as the non-bundled draw
     // Call the parent so executeBundles is not called.
-    this.initializeRenderPass(encoder);
     super.render(encoder, opts);
     this.renderBundle = encoder.finish();
     this._postRenderPass(opts)
@@ -1067,7 +1069,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
   }
 
   // Skipped until render.
-  initializeRenderPass(_renderPass) { return; }
+  _initializeRenderPass(_renderPass) { return; }
 
   /**
    * Render only the target token.
@@ -1092,7 +1094,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
 
     // Skipped initialize, so do here. Change if drawing the target.
     const pipelineName = drawable.label === "Token target" ? "target" : "default";
-    super.initializeRenderPass(renderPass, pipelineName);
+    super._initializeRenderPass(renderPass, pipelineName);
     super._renderDrawable(renderPass, drawable);
   }
 
@@ -1369,7 +1371,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
   }
 
   // Skipped until render.
-  initializeRenderPass(_renderPass) { return; }
+  _initializeRenderPass(_renderPass) { return; }
 
   /**
    * Render only the target token.
@@ -1395,7 +1397,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
 
     // Skipped initialize, so do here. Change if drawing the target.
     const pipelineName = drawable.label === "Token target" ? "target" : "default";
-    super.initializeRenderPass(renderPass, pipelineName);
+    super._initializeRenderPass(renderPass, pipelineName);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
 
     drawable.geom.setVertexBuffer(renderPass);

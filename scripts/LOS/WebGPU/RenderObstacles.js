@@ -184,14 +184,10 @@ class RenderAbstract {
     // Render first so full red of target is recorded.
     // (Could be either constrained or not constrained.)
     this.drawableTokens.forEach(drawableObj => drawableObj.renderTarget(renderPass, target));
-    this.drawableTokens.forEach(drawableObj => drawableObj.renderObstacles(renderPass, target));
 
     // Render the obstacles
-    for ( const drawableObj of this.drawableObstacles ) {
-      if ( !drawableObj.drawables.size ) continue;
-      drawableObj.initializeRenderPass(renderPass);
-      drawableObj.render(renderPass, opts);
-    }
+    this.drawableTokens.forEach(drawableObj => drawableObj.renderObstacles(renderPass, target));
+    for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?
 
