@@ -165,7 +165,7 @@ class RenderAbstract {
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = VisionTriangle.build(viewerLocation, target);
-    // TODO: Add BlockOptions
+
     this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 
     // Must set the canvas context immediately prior to render.
