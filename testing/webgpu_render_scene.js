@@ -187,7 +187,7 @@ renderObstacles = new RenderObstacles(device, { debugViewNormals: true, width: 2
 await renderObstacles.initialize();
 renderObstacles.setRenderTextureToCanvas(popout.canvas)
 // await renderObstacles.prerender();
-await renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderObstacles.registerPlaceableHooks();
 
