@@ -21,15 +21,13 @@ export class RenderObstaclesAbstractWebGL2 {
   static targetClass = DrawableTokenWebGL2;
 
   /** @type {class} */
-  static obstacleClasses = [];
-
-  /** @type {class} */
-  static terrainClasses = [];
-
-  static sceneFloorClass = null;
+  static drawableClasses = [];
 
   /** @type {WebGL2RenderingContext} */
   gl;
+
+  /** @type {DrawObjectsAbstract[]} */
+  drawableObjects = [];
 
   /** @type {DrawObjectsAbstract} */
   drawableTarget;
@@ -57,17 +55,16 @@ export class RenderObstaclesAbstractWebGL2 {
     // Construct the various drawable instances.
     const clOpts = { senseType, debugViewNormals };
     this.drawableTarget = new this.constructor.targetClass(gl, this.camera, clOpts);
-    for ( const cl of this.constructor.obstacleClasses ) {
+    for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(gl, this.camera, clOpts);
-      this.drawableObstacles.push(drawableObj);
-    }
-    this.drawableObstacles.push(this.drawableTarget);
-    for ( const cl of this.constructor.terrainClasses ) {
-      const drawableObj = new cl(gl, this.camera, clOpts);
-      this.drawableTerrain.push(drawableObj);
-    }
-    if ( this.constructor.sceneFloorClass ) {
-      this.drawableFloor = this.constructor.sceneFloorClass(gl, this.camera, clOpts);
+      this.drawableObjects.push(drawableObj);
+      switch ( cl ) {
+        case DrawableTokenWebGL2: this.drawableTarget = drawableObj; break;
+        case DrawableSceneBackground: this.drawableFloor = drawableObj; break;
+        case DrawableNonDirectionalTerrainWallWebGL2:
+        case DrawableDirectionalTerrainWallWebGL2: this.drawableTerrain.push(drawableObj); break;
+        default: this.drawableObstacles.push(drawableObj);
+      }
     }
   }
 
@@ -76,13 +73,7 @@ export class RenderObstaclesAbstractWebGL2 {
    */
   async initialize() {
     const promises = [];
-    for ( const drawableObstacle of this.drawableObstacles ) {
-      promises.push(drawableObstacle.initialize());
-    }
-    for ( const drawableTerrain of this.drawableTerrain ) {
-      promises.push(drawableTerrain.initialize());
-    }
-    if ( this.drawableFloor ) promises.push(this.drawableFloor.initialize());
+    this.drawableObjects.forEach(drawableObj => promises.push(drawableObj.initialize()));
     return Promise.allSettled(promises);
   }
 
@@ -96,10 +87,10 @@ export class RenderObstaclesAbstractWebGL2 {
 
   render(viewerLocation, target, { viewer, targetLocation } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    // const opts = { viewer, target, targetOnly };
+    const opts = { viewer, target }; // TODO: Add BlockOptions.
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = VisionTriangle.build(viewerLocation, target);
-
+    this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
     renderFn.call(this, target, viewer, visionTriangle);
   }

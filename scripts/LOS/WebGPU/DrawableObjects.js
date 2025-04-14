@@ -1,4 +1,5 @@
 /* globals
+CONFIG,
 CONST,
 foundry,
 Hooks,
@@ -7,7 +8,8 @@ Wall,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { combineTypedArrays } from "../util.js";
+import { MODULE_ID, MODULES_ACTIVE } from "../../const.js";
+import { combineTypedArrays, tokensOverlap } from "../util.js";
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
@@ -304,7 +306,7 @@ class DrawableObjectsAbstract {
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
-  _filterObjects(_visionTriangle) {}
+  filterObjects(_visionTriangle, _opts) {}
 
   /**
    * Called after pass has begun for this render object.
@@ -672,8 +674,8 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
 //     });
 //   }
 
-  _filterObjects(visionTriangle, opts) {
-    super._filterObjects(visionTriangle, opts);
+  filterObjects(visionTriangle, opts) {
+    super.filterObjects(visionTriangle, opts);
     this._updateCulledValues();
   }
 
@@ -816,7 +818,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
-  _filterObjects(visionTriangle) {
+  filterObjects(visionTriangle) {
     const keys = this.constructor.FILTER_KEYS;
     const instanceSets = {};
     for ( const key of keys ) instanceSets[key] = this.drawables.get(key).instanceSet
@@ -828,7 +830,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
-    super._filterObjects(visionTriangle);
+    super.filterObjects(visionTriangle);
   }
 
   registerPlaceableHooks() {
@@ -1007,24 +1009,33 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
-  _filterObjects(visionTriangle, opts = {}) {
+  filterObjects(visionTriangle, opts = {}) {
     const { viewer, target } = opts;
+    opts.tokens ??= {};
+    opts.tokens.dead ??= true;
+    opts.tokens.live ??= true;
+    opts.tokens.prone ??= true;
 
-    // Limit tokens
+    // Limit tokens as obstacles.
     const drawable = this.drawables.get("token");
     drawable.instanceSet.clear();
 
-    // Add in all viewable tokens.
-    for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
-      if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
-    }
+    if ( opts.tokens.dead || opts.tokens.live ) {
+      // Add in all viewable tokens.
+      const api = MODULES_ACTIVE.API.RIDEABLE;
+      for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
+        if ( token === viewer || token === target ) continue;
+        if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
 
-    // Remove the viewer.
-    if ( viewer ) {
-      const viewerIdx = this.placeableHandler.instanceIndexFromId.get(viewer.id);
-      drawable.instanceSet.delete(viewerIdx);
-    }
+        // Filter tokens that directly overlaps the viewer.
+        if ( tokensOverlap(token, viewer) ) continue;
 
+        // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
+        if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
+
+        if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
+      }
+    }
 
     // Add target as a distinct drawable.
     const targetDrawable = this.drawables.get("target");
@@ -1036,7 +1047,14 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       // If the target is not constrained, set it here.
       if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
     }
-    super._filterObjects(visionTriangle);
+    super.filterObjects(visionTriangle);
+  }
+
+  static includeToken(token, { dead = true, live = true, prone =  true } = {}) {
+    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
+    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
+    if ( !prone && token.isProne ) return false;
+    return true;
   }
 
   _createPipeline() {
@@ -1215,13 +1233,13 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
-  _filterObjects(visionTriangle) {
+  filterObjects(visionTriangle) {
     // Filter non-viewable tiles.
     for ( const tile of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       const drawable = this.drawables.get(tile.id);
       drawable.numInstances = Boolean(visionTriangle.containsTile(tile));
     }
-    super._filterObjects(visionTriangle);
+    super.filterObjects(visionTriangle);
   }
 
   _renderDrawable(renderPass, drawable) {
@@ -1284,27 +1302,44 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    */
-  _filterObjects(visionTriangle, opts = {}) {
+  filterObjects(visionTriangle, opts = {}) {
     const { viewer, target } = opts;
+    opts.tokens ??= {};
+    opts.tokens.dead ??= true;
+    opts.tokens.live ??= true;
+    opts.tokens.prone ??= true;
+
+    const api = MODULES_ACTIVE.API.RIDEABLE;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       const drawable = this.drawables.get(token.id);
       if ( !drawable ) continue;
+      drawable.numInstances = 0; // Default to not drawing this token.
+      if ( token === viewer || token === target ) continue;
+      if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+
+      // Filter tokens that directly overlaps the viewer.
+      if ( tokensOverlap(token, viewer) ) continue;
+
+      // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
+      if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
+
       drawable.numInstances = Number(visionTriangle.containsToken(token));
     }
 
-    // Remove viewer.
-    if ( viewer && this.drawables.has(viewer.id) ) {
-      const drawable = this.drawables.get(viewer.id);
-      drawable.numInstances = 0;
-    }
-
-    // Set material for target.
+    // Set material for target and set it to be drawn.
     if ( target && this.drawables.has(target.id) ) {
       const drawable = this.drawables.get(target.id);
+      drawable.numInstances = 1;
       drawable.materialBG = this.materials.bindGroups.get("target");
     }
+    super.filterObjects(visionTriangle, opts);
+  }
 
-    super._filterObjects(visionTriangle);
+  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
+    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
+    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
+    if ( !prone && token.isProne ) return false;
+    return true;
   }
 
   /**

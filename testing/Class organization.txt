@@ -1,0 +1,33 @@
+LOS organization
+
+x AbstractCalculator: deprecated
+
+
+x AlternativeLOS: deprecated
+  - viewer, token, configuration (e.g., walls block, tokens block)
+  - hasLOS()
+  - percentVisible()
+  - _simpleVisibilityTest()
+
+  --> Area3dLOS extends AlternativeLOS
+    --> Area3dLOSGeometric extends Area3dLOS
+      --> Area3dLOSHybrid extends Area3dLOSGeometric
+      --> Area3dLOSWebGL extends Area3dLOSGeometric
+    --> Area3dLOSWebGL2 extends Area3dLOS
+
+AbstractViewerLOS
+  - viewer, configuration (e.g., vision offset, shape)
+
+  --> Area3dViewerLOS extends AbstractViewerLOS
+
+
+AbstractViewpoint -- specific eye of a specific viewer
+  - viewerLOS (AbstractViewerLOS), viewpoint (Point3d)
+
+  --> PointsViewpoint extends AbstractViewpoint
+  --> Area3dGeometricViewpoint extends AbstractViewpoint
+    --> Area3dHybridViewpoint extends Area3dGeometricViewpoint
+    --> Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint
+  --> Area3dWebGL2Viewpoint extends AbstractViewpoint
+
+token.vision.tokenvisibility.losCalc instanceof AbstractViewerLOS

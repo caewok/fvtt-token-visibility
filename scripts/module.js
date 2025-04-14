@@ -167,8 +167,27 @@ Hooks.once("init", function() {
     /**
      * For Area3D, debug tiles using the rendered tile texture in the window, as opposed to
      * the red/blue filled color.
+     * @type {boolean}
      */
-    useDebugShaders: true
+    useDebugShaders: true,
+
+    /**
+     * Calculator for percent visible tokens using sight.
+     * @type {PercentVisibleCalculatorAbstract}
+     */
+    percentVisibleWebGL2: new PercentVisibleCalculatorWebGL2({ senseType: "sight" }),
+
+    /**
+     * Function to determine if a token is alive
+     * @type {function}
+     */
+    tokenIsAlive,
+
+    /**
+     * Function to determine if a token is dead
+     * @type {function}
+     */
+    tokenIsDead,
   };
 
   game.modules.get(MODULE_ID).api = {
@@ -297,6 +316,30 @@ Hooks.once("init", function() {
   };
 });
 
+
+/**
+ * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsDead.
+ * @param {Token} token
+ * @returns {boolean} True if dead.
+ */
+function tokenIsAlive(token) { return !tokenIsDead(token); }
+
+/**
+ * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsAlive.
+ * @param {Token} token
+ * @returns {boolean} True if dead.
+ */
+function tokenIsDead(token) {
+  const deadStatus = CONFIG.statusEffects.find(status => status.id === "dead");
+  if ( deadStatus && token.actor.statuses.has(deadStatus.id) ) return true;
+
+  const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
+  const hp = getObjectProperty(t.actor, tokenHPAttribute);
+  if ( typeof hp !== "number" ) return false;
+  return hp <= 0;
+}
+
+
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
@@ -316,6 +359,15 @@ Hooks.on("canvasReady", function() {
   canvas.tiles.placeables.forEach(tile => tile[PlaceableTrianglesHandler.ID].update());
   canvas.walls.placeables.forEach(wall => wall[PlaceableTrianglesHandler.ID].update());
   canvas.tokens.placeables.forEach(token => token[PlaceableTrianglesHandler.ID].update());
+
+  CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
+
+  WebGPUDevice.getDevice().then(device => {
+    if ( !device ) return console.warn("No WebGPU device located. Falling back to WebGL2.");
+    CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
+    CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
+  });
+
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

@@ -337,7 +337,6 @@ export class AlternativeLOS {
 
   // ------ NOTE: Primary methods to be overridden by subclass -----
 
-  d
   hasLOS() {
     log(`hasLOS|${this.viewer.name}👀 => ${this.target.name}🎯`);
 

@@ -105,8 +105,8 @@ class RenderAbstract {
     for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(this.device, this.materials, this.camera, { senseType, debugViewNormals });
       this.drawableObjects.push(drawableObj);
-      const categoryArr = drawableObj instanceof DrawableTokenInstances
-        || drawableObj instanceof DrawableConstrainedTokens ? this.drawableTokens : this.drawableObstacles;
+      const categoryArr = cl === DrawableTokenInstances || cl === DrawableConstrainedTokens
+        ? this.drawableTokens : this.drawableObstacles;
       categoryArr.push(drawableObj);
     }
     this.#renderSize.width = width;
@@ -165,8 +165,8 @@ class RenderAbstract {
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = VisionTriangle.build(viewerLocation, target);
-
-    this.drawableObjects.forEach(drawable => drawable._filterObjects(visionTriangle, opts));
+    // TODO: Add BlockOptions
+    this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
