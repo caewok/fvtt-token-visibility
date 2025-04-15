@@ -195,43 +195,47 @@ export class RenderObstaclesAbstractWebGL2 {
   }
 }
 
+
 export class RenderWallObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
   /** @type {class} */
-  static obstacleClasses = [
+  static drawableClasses = [
     DrawableNonDirectionalWallWebGL2,
     DrawableDirectionalWallWebGL2,
-  ];
-
-  /** @type {class} */
-  static terrainClasses = [
     DrawableNonDirectionalTerrainWallWebGL2,
     DrawableDirectionalTerrainWallWebGL2,
+    DrawableTokenWebGL2,
   ];
 }
 
 export class RenderTileObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
   /** @type {class} */
-  static obstacleClasses = [
+  static drawableClasses = [
     DrawableTileWebGL2,
+    DrawableTokenWebGL2,
   ];
 }
 
 
 export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
   /** @type {class} */
-  static obstacleClasses = [
+  static drawableClasses = [
     DrawableNonDirectionalWallWebGL2,
     DrawableDirectionalWallWebGL2,
     DrawableTileWebGL2,
-  ];
-
-  /** @type {class} */
-  static terrainClasses = [
     DrawableNonDirectionalTerrainWallWebGL2,
     DrawableDirectionalTerrainWallWebGL2,
+    DrawableTokenWebGL2,
   ];
 }
 
 export class RenderObstaclesWithBackgroundWebGL2 extends RenderObstaclesWebGL2 {
-  static sceneFloorClass = DrawableSceneBackground;
+  static drawableClasses = [
+    DrawableNonDirectionalWallWebGL2,
+    DrawableDirectionalWallWebGL2,
+    DrawableTileWebGL2,
+    DrawableNonDirectionalTerrainWallWebGL2,
+    DrawableDirectionalTerrainWallWebGL2,
+    DrawableSceneBackground,
+    DrawableTokenWebGL2,
+  ];
 }
