@@ -403,7 +403,8 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
     // Check if we already know this value for the given parameters.
     let cachedValue = null;
-    if ( !this._updateAsyncCache(viewer, target, viewerLocation, targetLocation) ) {
+    if ( !this._updateAsyncCache(viewer, target, viewerLocation, targetLocation)
+       && this._hasCachedValue(viewer, target, viewerLocation, targetLocation) ) {
       cachedValue = this._percentVisibleCached(viewer, target, viewerLocation, targetLocation);
     }
     if ( Number.isNumeric(cachedValue) ) return cachedValue;
@@ -425,7 +426,6 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     return (res.red - res.redBlocked) / res.red;
   }
 
-x
   /** @type {PlaceableInstanceHandler} */
   get tokenHandler() { return this.renderObstacles.drawableTokens[0].placeableHandler; }
 
@@ -536,12 +536,20 @@ x
     }
   }
 
+  _hasCachedValue(viewer, target, viewerLocation, targetLocation) {
+    this._addCache(viewer, target);
+    return Boolean(this._cache
+      .get(viewer)
+        .get(target)
+          .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)));
+  }
+
   _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation) {
     this._addCache(viewer, target);
     const res = this._cache
       .get(viewer)
         .get(target)
-          .get(this.constructor.locationKey(viewerLocation, targetLocation)) ?? {
+          .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)) ?? {
       value: 0,
       dirty: true,
     };
@@ -561,9 +569,11 @@ x
 
   _setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentVisible) {
     this._addCache(viewer, target);
-    const res = this._cache.get(viewer).get(target).get(this.constructor.locationKey(viewerLocation, targetLocation)) ?? {};
+    const locMap = this._cache.get(viewer).get(target);
+
+    const res = locMap.get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)) ?? {};
     res.value = percentVisible;
     res.dirty = false;
-    this._cache.get(viewer).get(target).set(this.constructor.locationKey(viewerLocation, targetLocation), res);
+    locMap.set(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation), res);
   }
 }

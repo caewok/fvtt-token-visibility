@@ -237,7 +237,7 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     });
   }
 
-  #counterReset = new Uint32Array(1);
+  #counterReset = new Uint32Array([1, 1]);
 
   /**
    * Run the compute pass(es).

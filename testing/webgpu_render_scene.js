@@ -154,6 +154,7 @@ calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
 await calcWebGPUAsync.initialize()
 calcWebGPUAsync.percentVisible(viewer, target)
 await calcWebGPUAsync._percentVisibleAsync(viewer, target)
+await calcWebGPUAsync.percentVisibleAsync(viewer, target)
 
 
 debugViewer = new DebugVisibilityViewerWebGPU({ device });
