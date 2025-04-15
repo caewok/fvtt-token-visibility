@@ -231,6 +231,15 @@ export class AbstractViewerLOS {
     return hasLOS;
   }
 
+  async hasLOSAsync(target, threshold) {
+    threshold ??= this.config.threshold;
+    const percent = await this.percentVisibleAsync(target); // Percent visible will reset the cache.
+    const hasLOS = !percent.almostEqual(0)
+      && (percent > threshold || percent.almostEqual(threshold));
+    if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
+    return hasLOS;
+  }
+
   /**
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
@@ -243,10 +252,27 @@ export class AbstractViewerLOS {
     return percent;
   }
 
+  async percentVisibleAsync(target) {
+    this.target = target;  // Important so the cache is reset.
+    if ( this.config.debug ) this._drawCanvasDebug();
+    const percent = this._simpleVisibilityTest(target) ?? (await this._percentVisibleAsync(target));
+    if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
+    return percent;
+  }
+
   _percentVisible(target) {
     let max = 0;
     for ( const vp of this.viewpoints ) {
       max = Math.max(max, vp.percentVisible(target));
+      if ( max === 1 ) return max;
+    }
+    return max;
+  }
+
+  async _percentVisibleAsync(target) {
+    let max = 0;
+    for ( const vp of this.viewpoints ) {
+      max = Math.max(max, (await vp.percentVisibleAsync(target)));
       if ( max === 1 ) return max;
     }
     return max;

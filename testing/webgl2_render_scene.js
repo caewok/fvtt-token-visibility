@@ -218,20 +218,20 @@ canvas.app.stage.addChild(sprite);
 // NOTE: Test renderWall
 
 
-renderWalls = new RenderWallObstaclesWebGL2()
-await renderWalls.initialize({ gl, senseType: "sight" })
+renderWalls = new RenderWallObstaclesWebGL2({ gl, senseType: "sight" })
+await renderWalls.initialize()
 renderWalls.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 renderWallsDebug = new RenderWallObstaclesWebGL2()
 await renderWallsDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
 renderWallsDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderTiles = new RenderTileObstaclesWebGL2()
-await renderTiles.initialize({ gl, senseType: "sight" })
+renderTiles = new RenderTileObstaclesWebGL2({ gl, senseType: "sight" })
+await renderTiles.initialize()
 renderTiles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
-renderTilesDebug = new RenderTileObstaclesWebGL2()
-await renderTilesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderTilesDebug = new RenderTileObstaclesWebGL2({ gl, senseType: "sight", debugViewNormals: true })
+await renderTilesDebug.initialize()
 renderTilesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
 
 

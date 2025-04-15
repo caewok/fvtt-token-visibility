@@ -119,7 +119,7 @@ import {
   TileInstanceHandlerWebGL2,
   TokenInstanceHandlerWebGL2
 } from "./LOS/WebGL2/PlaceableInstanceHandlerWebGL2.js";
-import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU } from "./LOS/WebGL2/PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./LOS/WebGL2/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
 // Other self-executing hooks
@@ -303,6 +303,7 @@ Hooks.once("init", function() {
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
       PercentVisibleCalculatorWebGPU,
       DebugVisibilityViewerWebGPU,
+      PercentVisibleCalculatorWebGPUAsync,
     },
 
     glmatrix: {
@@ -366,6 +367,9 @@ Hooks.on("canvasReady", function() {
     if ( !device ) return console.warn("No WebGPU device located. Falling back to WebGL2.");
     CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
     CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
+
+    CONFIG[MODULE_ID].percentVisibleWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device });
+    CONFIG[MODULE_ID].percentVisibleWebGPUAsync.initialize(); // Async
   });
 
 });

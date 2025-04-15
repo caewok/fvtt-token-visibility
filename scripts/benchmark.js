@@ -256,16 +256,13 @@ export async function benchTokenLOS(n = 100, opts = {}) {
   await revertDebugStatus();
 }
 
-export async function benchTokenLOSAlgorithm(n = 100, { algorithm, large = false, nPoints, sleep = false, movement = false } = {}) {
-  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
-  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
-
+export async function benchTokenLOSAlgorithm(n = 100, { movement = false, ...opts }= {}) {
   const { viewers, targets } = getTokens();
   registerArea3d(); // Required for Area3d algorithms to work.
 
   await storeDebugStatus();
   const fn = movement ? runLOSTestWithMovement : runLOSTest;
-  await fn(n, viewers, targets, { algorithm, large, nPoints, sleep });
+  await fn(n, viewers, targets, opts);
   await revertDebugStatus();
 }
 
@@ -277,7 +274,9 @@ async function revertLOSSettings() {
   await Settings.set(LARGE, large);
 }
 
-async function runLOSTest(n, viewers, targets, { algorithm, large = false, nPoints, sleep = false } = {}) {
+async function runLOSTest(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
+  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
 
   const calcs = viewers.map(viewer => {
     const losCalc = buildCustomLOSCalculator(viewer, algorithm);
@@ -290,7 +289,8 @@ async function runLOSTest(n, viewers, targets, { algorithm, large = false, nPoin
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
   const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
-  await fn(n, benchLOS, label, calcs, targets);
+  const benchFn = useAsync ? benchLOSAsync : benchLOS;
+  await fn(n, benchFn, label, calcs, targets);
 }
 
 function benchLOS(calcs, targets) {
@@ -304,8 +304,22 @@ function benchLOS(calcs, targets) {
   return out;
 }
 
+async function benchLOSAsync(calcs, targets) {
+  const out = [];
+  for ( const calc of calcs ) {
+    for ( const target of targets ) {
+      if ( calc.viewer === target ) continue;
+      out.push(await calc.hasLOSAsync(target));
+    }
+  }
+  return out;
+}
 
-async function runLOSTestWithMovement(n, viewers, targets, { algorithm, large = false, nPoints, sleep = false } = {}) {
+
+async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
+  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
+
   const calcs = viewers.map(viewer => {
     const losCalc = buildCustomLOSCalculator(viewer, algorithm);
     losCalc.config.largeTarget = large;
@@ -321,6 +335,7 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, large = 
   const locMap = new Map();
   for ( const token of tokens ) locMap.set(token, { x: token.document.x, y: token.document.y });
 
+  const benchFn = useAsync ? benchLOSAsync : benchLOS;
   const timings = [];
   for ( let i = 0; i < n; i += 1 ) {
     const promises = [];
@@ -331,7 +346,7 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, large = 
     }
     await Promise.allSettled(promises);
     const t0 = performance.now();
-    benchLOS(calcs, targets);
+    await benchFn(calcs, targets);
     const t1 = performance.now();
     timings.push(t1 - t0);
     if ( sleep ) await sleepFn(0);

@@ -146,7 +146,7 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
         buffer: {
           type: "storage",
           hasDynamicOffset: false,
-          minBindingSize: 4,
+          minBindingSize: 8,
         },
       }]
     },
@@ -191,21 +191,21 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     // Buffer to sum the values.
     this.buffers.counterOutput = this.device.createBuffer({
       label: `${this.constructor.name} counterOutput`,
-      size: 4, // 4 bytes per (u32)
+      size: 8, // 4 bytes per (u32)
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
 
     // Buffer to get back the results
     this.buffers.counterResult = this.device.createBuffer({
       label: `${this.constructor.name} counterResult`,
-      size: 4, // 4 bytes per (u32)
+      size: 8, // 4 bytes per (u32)
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
 
     // Sync buffer
     this.buffers.counterResultSync = this.device.createBuffer({
       label: `${this.constructor.name} counterResultSync`,
-      size: 4, // 4 bytes per (u32)
+      size: 8, // 4 bytes per (u32)
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ_SYNC,
     });
   }
@@ -282,16 +282,18 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     // Get the data from the result buffer.
     await this.buffers.counterResult.mapAsync(GPUMapMode.READ);
     const counterPixels = new Uint32Array(this.buffers.counterResult.getMappedRange());
-    const r = counterPixels[0];
+    const red = counterPixels[0];
+    const redBlocked = counterPixels[1];
     this.buffers.counterResult.unmap();
-    return r;
+    return { red, redBlocked };
   }
 
   _postComputeSync(_opts) {
     this.buffers.counterResultSync.mapSync(GPUMapMode.READ);
     const counterPixels = new Uint32Array(this.buffers.counterResultSync.getMappedRange());
-    const r = counterPixels[0];
+    const red = counterPixels[0];
+    const redBlocked = counterPixels[1];
     this.buffers.counterResultSync.unmap();
-    return r;
+    return { red, redBlocked };
   }
 }

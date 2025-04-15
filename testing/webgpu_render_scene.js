@@ -96,10 +96,19 @@ let {
   PercentVisibleCalculator,
   AsyncQueue,
   PercentVisibleCalculatorWebGPU,
+  PercentVisibleCalculatorWebGPUAsync,
   DebugVisibilityViewerWebGPU,
   // wgsl
 } = api.webgpu
 
+let {
+  PercentVisibleCalculatorWebGL2,
+} = api.webgl
+
+device = await WebGPUDevice.getDevice()
+
+viewer = _token
+target = game.user.targets.first()
 
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
@@ -109,15 +118,14 @@ canvas.walls.placeables.forEach(wall => Draw.segment(wall));
 canvas.tiles.placeables.forEach(tile => Draw.shape(tile.bounds, { color: Draw.COLORS.red }))
 
 
-viewer = _token
-target = game.user.targets.first()
+
 
 losCalc = viewer.vision.tokenvisibility.losCalc
 losCalc.target = target
 vp = losCalc.viewpoints[0]
 
 
-device = await WebGPUDevice.getDevice()
+
 
 popout = new Area3dPopoutCanvas({ width: 400, height: 475, resizable: false })
 await popout._render(true);
@@ -130,10 +138,25 @@ popout.context.configure({
   alphamode: "premultiplied", // Instead of "opaque"
 });
 
+viewerLocation = Point3d.fromTokenCenter(viewer)
+targetLocation = Point3d.fromTokenCenter(target)
 
-calc = new PercentVisibleCalculatorWebGPU({ device })
-await calc.initialize()
-calc.percentVisible(viewer, target)
+calcWebGL2 = new PercentVisibleCalculatorWebGL2()
+await calcWebGL2.initialize()
+calcWebGL2.percentVisible(viewer, target)
+calcWebGL2._percentVisible(viewer, target, viewerLocation, targetLocation)
+
+calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
+await calcWebGPU.initialize()
+calcWebGPU.percentVisible(viewer, target)
+calcWebGPU._percentVisible(viewer, target, viewerLocation, targetLocation)
+
+
+calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
+await calcWebGPUAsync.initialize()
+calcWebGPUAsync.percentVisible(viewer, target)
+await calcWebGPUAsync._percentVisibileAsync(viewer, target, viewerLocation, targetLocation)
+
 
 debugViewer = new DebugVisibilityViewerWebGPU({ device });
 await debugViewer.initialize();
@@ -236,9 +259,43 @@ gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, popout.canva
 gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
 
 
+function summarizePixelData(pixels) {
+  if ( Object.hasOwn(pixels, "pixels") ) pixels = pixels.pixels;
+  const acc = Array(12).fill(0);
+  const max = Array(4).fill(0);
+  const min = Array(4).fill(0)
+  pixels.forEach((px, idx) => {
+    acc[idx % 4] += px;
+    acc[idx % 4 + 4] += Boolean(px);
+    acc[idx % 4 + 8] += !px;
+    max[idx % 4] = Math.max(px, max[idx % 4])
+    min[idx % 4] = Math.min(px, min[idx % 4])
+  });
+  let redBlocked = 0;
+  const terrainThreshold = 255 * 0.75;
+  for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+    redBlocked += Boolean(r) * Boolean(b || (g > terrainThreshold))
+  }
+
+  console.table([
+    { label: "sum", r: acc[0], g: acc[1], b: acc[2], a: acc[3] },
+    { label: "count", r: acc[4], g: acc[5], b: acc[6], a: acc[7] },
+    { label: "zeroes", r: acc[8], g: acc[9], b: acc[10], a: acc[11] },
+    { label: "min", r: min[0], g: min[1], b: min[2], a: min[3] },
+    { label: "max", r: max[0], g: max[1], b: max[2], a: max[3] },
+    { label: "redBlocked", r: redBlocked, g: redBlocked, b: redBlocked, a: redBlocked}
+  ])
+}
+
 // Render to texture
 renderObstacles.setRenderTextureToInternalTexture()
+renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+
 imgData = await renderObstacles.readTexturePixels()
+summarizePixelData(imgData.pixels)
 
 sumPixels = new WebGPUSumRedPixels(renderObstacles.device)
 await sumPixels.initialize()
