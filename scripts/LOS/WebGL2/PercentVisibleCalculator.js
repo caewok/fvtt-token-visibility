@@ -500,7 +500,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
       // Wipe every viewer that targets this viewer.
       targetedSet.add(viewer);
-      targetedSet.forEach(token => this._clearTargetCache(token));
+      targetedSet.forEach(token => this.#clearTokenCache(token));
       targetedSet.delete(viewer);
 
       // Increment the cache key to reflect these updates.
@@ -514,7 +514,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
       // Wipe every viewer that targets this target.
       targetedSet.add(target);
-      targetedSet.forEach(token => this._clearTargetCache(token));
+      targetedSet.forEach(token => this.#clearTokenCache(token));
       targetedSet.delete(target);
 
       // Increment the cache key to reflect these updates.
