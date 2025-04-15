@@ -72,6 +72,8 @@ await calc.initialize()
 calc.percentVisible(viewer, target)
 calc.percentVisible(target, viewer)
 
+calc._percentVisible(viewer, target)
+
 // Test debug viewer
 debugViewer = new DebugVisibilityViewerWebGL2({ senseType: "sight", debugView: true })
 await debugViewer.initialize();
@@ -198,15 +200,39 @@ gl = glCanvas.getContext('webgl2');
 // gl.bindTexture(gl.TEXTURE_2D, texture);
 // gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 // gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-readbackSize = width * height * 4;
+readbackSize = gl.canvas.width * gl.canvas.height * 4;
 bufferData = new Uint8Array(readbackSize)
 
-renderObstaclesDebug = new RenderObstaclesWebGL2()
-await renderObstaclesDebug.initialize({ gl, senseType: "sight", debugViewNormals: true })
+renderObstaclesDebug = new RenderObstaclesWebGL2({ gl, senseType: "sight", debugViewNormals: true })
+await renderObstaclesDebug.initialize()
 renderObstaclesDebug.render(Point3d.fromTokenCenter(viewer), target, { viewer })
-gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
-imgData =  { pixels: bufferData, x: 0, y: 0, width, height };
+gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
+imgData =  { pixels: bufferData, x: 0, y: 0, width: gl.canvas.width, height: gl.canvas.height };
 WebGL2.summarizePixelData(imgData)
+
+
+
+
+
+width = 256
+height = 256
+glCanvas = new OffscreenCanvas(width, height);
+gl = glCanvas.getContext('webgl2');
+// texture = gl.createTexture();
+// framebuffer = gl.createFramebuffer();
+// gl.bindTexture(gl.TEXTURE_2D, texture);
+// gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+// gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+readbackSize = gl.canvas.width * gl.canvas.height * 4;
+bufferData = new Uint8Array(readbackSize)
+
+renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: "sight", debugViewNormals: false })
+await renderObstacles.initialize()
+renderObstacles.render(Point3d.fromTokenCenter(viewer), target, { viewer })
+gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
+imgData =  { pixels: bufferData, x: 0, y: 0, width: gl.canvas.width, height: gl.canvas.height };
+WebGL2.summarizePixelData(imgData)
+
 
 canvas.app.stage.removeChild(sprite);
 tex = PIXI.Texture.fromBuffer(imgData.pixels, imgData.width, imgData.height)

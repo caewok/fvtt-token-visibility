@@ -138,24 +138,22 @@ popout.context.configure({
   alphamode: "premultiplied", // Instead of "opaque"
 });
 
-viewerLocation = Point3d.fromTokenCenter(viewer)
-targetLocation = Point3d.fromTokenCenter(target)
 
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
 await calcWebGL2.initialize()
 calcWebGL2.percentVisible(viewer, target)
-calcWebGL2._percentVisible(viewer, target, viewerLocation, targetLocation)
+calcWebGL2._percentVisible(viewer, target)
 
 calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
 await calcWebGPU.initialize()
 calcWebGPU.percentVisible(viewer, target)
-calcWebGPU._percentVisible(viewer, target, viewerLocation, targetLocation)
+calcWebGPU._percentVisible(viewer, target)
 
 
 calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
 await calcWebGPUAsync.initialize()
 calcWebGPUAsync.percentVisible(viewer, target)
-await calcWebGPUAsync._percentVisibileAsync(viewer, target, viewerLocation, targetLocation)
+await calcWebGPUAsync._percentVisibleAsync(viewer, target)
 
 
 debugViewer = new DebugVisibilityViewerWebGPU({ device });

@@ -87,6 +87,10 @@ class PercentVisibleCalculatorAbstract {
    * @returns {number}
    */
   _percentVisible(viewer, target, viewerLocation, targetLocation) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    viewerLocation ??= Point3d.fromTokenCenter(viewer);
+    targetLocation ??= Point3d.fromTokenCenter(target);
+
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
     return this._percentRedPixels();
   }
@@ -254,7 +258,7 @@ class PercentVisibleCalculatorAbstract {
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
   /** @type {Uint8Array} */
-  bufferData = new Uint8Array(this.constructor.WIDTH * this.constructor.HEIGHT * 4);
+  bufferData;
 
   /** @type {OffscreenCanvas} */
   static glCanvas;
@@ -264,18 +268,23 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 
   constructor(opts) {
     super(opts);
-    this.constructor.glCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
-    this.gl = this.constructor.glCanvas.getContext("webgl2");
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType });
+    const { WIDTH, HEIGHT } = this.constructor;
+    this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
+    const gl = this.gl = this.constructor.glCanvas.getContext("webgl2");
+    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.senseType });
+    this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 
-  _readRenderResult() {
-    const { WIDTH, HEIGHT } = this.constructor;
-    this.gl.readPixels(0, 0, WIDTH, HEIGHT, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.bufferData);
+  _percentVisible(...args) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    return super._percentVisible(...args);
   }
 
   _percentRedPixels() {
-    this._readRenderResult();
+    const gl = this.gl;
+    this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
     const terrainThreshold = this.constructor.TERRAIN_THRESHOLD;
     let countRed = 0;
@@ -317,12 +326,12 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
       alphamode: "premultiplied", // Instead of "opaque"
     });
 
-    const gl = this.gl;
-    this.texture = gl.createTexture();
-    this.framebuffer = gl.createFramebuffer();
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
+//     const gl = this.gl;
+//     this.texture = gl.createTexture();
+//     this.framebuffer = gl.createFramebuffer();
+//     gl.bindTexture(gl.TEXTURE_2D, this.texture);
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+//     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
   }
 
   async initialize() {
@@ -406,6 +415,10 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
   }
 
   async _percentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    viewerLocation ??= Point3d.fromTokenCenter(viewer);
+    targetLocation ??= Point3d.fromTokenCenter(target);
+
     this.renderObstacles.prerender();
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
     const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
