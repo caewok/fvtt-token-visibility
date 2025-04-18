@@ -157,7 +157,7 @@ export class TileTrianglesHandler extends PlaceableTrianglesHandler {
    * If not overhead, don't update.
    */
   update() {
-    if ( !this.tile.document.overhead ) return;
+    if ( this.tile.document.elevation === 0 ) return;
     super.update();
   }
 
