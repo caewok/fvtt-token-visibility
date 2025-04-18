@@ -13,12 +13,12 @@ import {
   DrawableDirectionalTerrainWallWebGL2,
   DrawableTileWebGL2,
   DrawableTokenWebGL2,
-  DrawableSceneBackground,
+  UnconstrainedDrawableTokenWebGL2,
+  ConstrainedDrawableTokenWebGL2,
+  DrawableSceneBackgroundWebGL2,
 } from "./DrawableObjectsWebGL2.js";
 
 export class RenderObstaclesAbstractWebGL2 {
-  /** @type {targetClass} */
-  static targetClass = DrawableTokenWebGL2;
 
   /** @type {class} */
   static drawableClasses = [];
@@ -30,7 +30,7 @@ export class RenderObstaclesAbstractWebGL2 {
   drawableObjects = [];
 
   /** @type {DrawObjectsAbstract} */
-  drawableTarget;
+  drawableTargets = [];
 
   /** @type {DrawObjectsAbstract[]} */
   drawableObstacles = []
@@ -54,13 +54,14 @@ export class RenderObstaclesAbstractWebGL2 {
 
     // Construct the various drawable instances.
     const clOpts = { senseType, debugViewNormals };
-    this.drawableTarget = new this.constructor.targetClass(gl, this.camera, clOpts);
     for ( const cl of this.constructor.drawableClasses ) {
       const drawableObj = new cl(gl, this.camera, clOpts);
       this.drawableObjects.push(drawableObj);
       switch ( cl ) {
-        case DrawableTokenWebGL2: this.drawableTarget = drawableObj; break;
-        case DrawableSceneBackground: this.drawableFloor = drawableObj; break;
+        case DrawableTokenWebGL2:
+        case UnconstrainedDrawableTokenWebGL2:
+        case ConstrainedDrawableTokenWebGL2: this.drawableTargets.push(drawableObj); this.drawableObstacles.push(drawableObj); break;
+        case DrawableSceneBackgroundWebGL2: this.drawableFloor = drawableObj; break;
         case DrawableNonDirectionalTerrainWallWebGL2:
         case DrawableDirectionalTerrainWallWebGL2: this.drawableTerrain.push(drawableObj); break;
         default: this.drawableObstacles.push(drawableObj);
@@ -113,7 +114,7 @@ export class RenderObstaclesAbstractWebGL2 {
     // gl.cullFace(gl.FRONT);
 
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
-    this.drawableTarget.renderTarget(target);
+    this.drawableTargets.forEach(drawableTarget => drawableTarget.renderTarget(target));
 
     gl.colorMask(false, false, true, true); // Blue, alpha channels for obstacles.
     this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
@@ -156,7 +157,7 @@ export class RenderObstaclesAbstractWebGL2 {
     // Draw the scene floor to orient the viewer.
     if ( this.drawableFloor ) this.drawableFloor.render();
 
-    this.drawableTarget.renderTarget(target);
+    this.drawableTargets.forEach(drawableTarget => drawableTarget.renderTarget(target));
     this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Draw terrain walls.
@@ -224,7 +225,8 @@ export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
     DrawableTileWebGL2,
     DrawableNonDirectionalTerrainWallWebGL2,
     DrawableDirectionalTerrainWallWebGL2,
-    DrawableTokenWebGL2,
+    UnconstrainedDrawableTokenWebGL2,
+    ConstrainedDrawableTokenWebGL2,
   ];
 }
 
@@ -235,7 +237,8 @@ export class RenderObstaclesWithBackgroundWebGL2 extends RenderObstaclesWebGL2 {
     DrawableTileWebGL2,
     DrawableNonDirectionalTerrainWallWebGL2,
     DrawableDirectionalTerrainWallWebGL2,
-    DrawableSceneBackground,
-    DrawableTokenWebGL2,
+    DrawableSceneBackgroundWebGL2,
+    UnconstrainedDrawableTokenWebGL2,
+    ConstrainedDrawableTokenWebGL2
   ];
 }

@@ -173,8 +173,8 @@ export class GeometryDesc {
 
   /**
    * Determine the buffer offsets to store vertex data for a given group of geometries.
-   * @param {number} idx      Which vertexData index to use.
-   * @param {...GeometryDesc} ...geoms
+   * @param {number} idx            Which vertexData index to use.
+   * @param {GeometryDesc[]}  geoms The geometries used in the buffer
    * @returns {object}
    * - @prop {array} offsets        In byteLength; sum of the sizes iteratively
    * - @prop {array} sizes          In byteLength
@@ -186,9 +186,10 @@ export class GeometryDesc {
     const ln = geoms.length;
     const out = {
       vertex: {
-        offsets: new Uint16Array(ln),
-        sizes: new Uint16Array(ln),
-        lengths: new Uint16Array(ln),
+        offsets: new Uint16Array(ln), // Byte size of vertices consecutively summed.
+        sizes: new Uint16Array(ln),   // Byte size of vertices.
+        lengths: new Uint16Array(ln), // Length of vertices (number components * number of vertices).
+        num: new Uint16Array(ln),     // Number of vertices.
         totalLength: 0,
         totalSize: 0,
       },
@@ -203,7 +204,8 @@ export class GeometryDesc {
     for ( let i = 0; i < ln; i += 1 ) {
       const geom = geoms[i];
       out.vertex.totalSize += out.vertex.sizes[i] = geom.vertices.byteLength;
-      out.vertex.totalLength += out.vertex.lengths[i] = geom.numVertices;
+      out.vertex.totalLength += out.vertex.lengths[i] = geom.vertices.length;
+      out.vertex.num[i] = geom.numVertices;
 
       out.index.totalSize += out.index.sizes[i] = geom.indices?.byteLength ?? 0;
       out.index.totalLength += out.index.lengths[i] = geom.indices?.length ?? 0;
