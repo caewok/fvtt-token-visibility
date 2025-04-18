@@ -144,17 +144,17 @@ class PercentVisibleCalculatorAbstract {
       return true;
     }
     if ( this.tokenChanged(viewer) )  {
-      this.#clearTokenCache(viewer);
+      this._clearTokenCache(viewer);
       return true;
     }
     if ( this.tokenChanged(target) ) {
-      this.#clearTokenCache(target);
+      this._clearTokenCache(target);
       return true;
     }
     return false;
   }
 
-  #clearTokenCache(viewer) {
+  _clearTokenCache(viewer) {
     // Wipe every token that targets this viewer.
     const targetedSet = this._cache.get(viewer)?.get(TARGETED_BY_SET) || new Set();
     for ( const token of targetedSet ) {
@@ -250,6 +250,24 @@ class PercentVisibleCalculatorAbstract {
     // Add viewer --> target to the target's targeted set.
     if ( !targetCache.has(TARGETED_BY_SET) ) targetCache.set(TARGETED_BY_SET, new Set());
     targetCache.get(TARGETED_BY_SET).add(viewer);
+  }
+
+  printCache() {
+    const res = [];
+    for ( const viewer of canvas.tokens.placeables ) {
+      const targetMap = this._cache.get(viewer);
+      if ( !targetMap ) continue;
+      for ( const target of canvas.tokens.placeables ) {
+        const locMap = targetMap.get(target);
+        if ( !locMap ) continue;
+        for ( const [key, value] of locMap.entries() ) {
+          if ( key === TARGETED_BY_SET ) continue;
+          res.push({ viewer: viewer.name, target: target.name, key, value });
+        }
+      }
+    }
+    console.table(res);
+    return res;
   }
 }
 
@@ -484,7 +502,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
   _updateAsyncCache(viewer, target, _viewerLocation, _targetLocation) {
     if ( this.obstacleChanged() ) {
       // Wipe everything. Cannot iterate a weak map, so use the tokens in the scene.
-      canvas.tokens.placeables.forEach(token => this.#clearTokenCache(token));
+      canvas.tokens.placeables.forEach(token => this._clearTokenCache(token));
 
       // Increment the cache keys.
       this._updateObstacleCacheKeys();
@@ -497,7 +515,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
       // Wipe every viewer that targets this viewer.
       targetedSet.add(viewer);
-      targetedSet.forEach(token => this.#clearTokenCache(token));
+      targetedSet.forEach(token => this._clearTokenCache(token));
       targetedSet.delete(viewer);
 
       // Increment the cache key to reflect these updates.
@@ -511,7 +529,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
       // Wipe every viewer that targets this target.
       targetedSet.add(target);
-      targetedSet.forEach(token => this.#clearTokenCache(token));
+      targetedSet.forEach(token => this._clearTokenCache(token));
       targetedSet.delete(target);
 
       // Increment the cache key to reflect these updates.
@@ -521,7 +539,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     return false;
   }
 
-  #clearTokenCache(viewer) {
+  _clearTokenCache(viewer) {
     const targetMap = this._cache.get(viewer);
     if ( !targetMap ) return;
 
@@ -572,5 +590,25 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     res.value = percentVisible;
     res.dirty = false;
     locMap.set(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation), res);
+  }
+
+  printCache() {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const res = [];
+    for ( const viewer of canvas.tokens.placeables ) {
+      const targetMap = this._cache.get(viewer);
+      if ( !targetMap ) continue;
+      for ( const target of canvas.tokens.placeables ) {
+        const locMap = targetMap.get(target);
+        if ( !locMap ) continue;
+        for ( const [key, value] of locMap.entries() ) {
+          if ( key === TARGETED_BY_SET ) continue;
+          // const targetLoc = Point3d.invertKey(key.split("_")[0]); // Inversion not working for 3d keys
+          res.push({ viewer: viewer.name, target: target.name, key , value: value.value, dirty: value.dirty });
+        }
+      }
+    }
+    console.table(res);
+    return res;
   }
 }
