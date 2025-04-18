@@ -607,6 +607,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
 
     if ( this.buffers.indirect ) this.buffers.indirect.destroy();
+    if ( !this.placeableHandler.numInstances ) return;
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
     this.buffers.indirect = this.device.createBuffer({
       label: "Indirect Buffer",
@@ -631,14 +632,17 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
    */
   _createCulledBuffer() {
+    if ( this.buffers.culled ) this.buffers.culled.destroy();
+    if ( !this.placeableHandler.numInstances ) return;
+
     // To create a single buffer the offset must be a multiple of 256.
     // As each element is only u32 (or u16), that means 64 (u32) or 128 (u16) entries per drawable.
     // So 64 or 128 walls minimum.
     // For 4 wall drawables, need 1 culling buffer of min size 256 * 4 = 1024.
-    const minSize = this.drawables.size > 1 ? 256 : 4;
+    // Ensure size is divisible by 256.
+    const minSize = 256;
+    const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
 
-    if ( this.buffers.culled ) this.buffers.culled.destroy();
-    const size = Math.max(minSize, this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT);
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
       size: size * this.drawables.size,
@@ -692,6 +696,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // Set the culled instance buffer and indirect buffer for each drawable.
     // The indirect buffer determines how many elements in the culled instance buffer are drawn.
     for ( const drawable of this.drawables.values() ) {
+      if ( !drawable.instanceSet.size ) continue;
       let i = 0;
       drawable.instanceSet.forEach(idx => drawable.culledBufferRaw[i++] = idx);
 
