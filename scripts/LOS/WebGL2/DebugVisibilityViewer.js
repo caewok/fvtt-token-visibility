@@ -14,6 +14,7 @@ import { Area3dPopoutCanvas } from "../Area3dPopout.js";
 import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./PercentVisibleCalculator.js";
 import { buildCustomLOSCalculator } from "../../LOSCalculator.js";
 import { Settings } from "../../settings.js";
+import { PointsViewpoint } from "../PointsViewpoint.js";
 
 /* Debug viewer
 
@@ -307,29 +308,37 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
 
     if ( !(targets.length || viewers.length) ) return this.clearDebug();
     this.clearDebug();
-    this._drawVisibleTokenBorder();
-    const draw = this.debugDraw;
 
     // Calculate points and pull the debug data.
-    this.calc ??= buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
-    this.calc.config.debug = true;
-    this.calc.config.debugDraw = this.debugDraw;
     for ( const viewer of viewers) {
       this.calc.viewer = viewer;
-      this.calc.initializeViewpoints();
+      this.calc.viewpoints = this.calc.initializeViewpoints();
 
       for ( const target of targets) {
         if ( viewer === target ) continue;
         this.calc.target = target;
-        this.calc.viewpoints.forEach(vp => {
-          vp._drawLineOfSight(draw);
-          // vp._drawVisionTriangle(draw);
-          vp._drawDetectedObjects(draw);
-        });
-
+        this.calc._drawCanvasDebug();
         this.calc.percentVisible(target);
       }
     }
+  }
+
+  /** @type {AbstractViewer} */
+  #calc;
+
+  get calc() {
+    if ( this.#calc ) return this.#calc;
+    this.#calc = buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
+    this.#calc.config.viewpointClass = PointsViewpoint;
+    this.#calc.config.debug = true;
+    this.#calc.config.debugDraw = this.debugDraw;
+    return this.#calc;
+  }
+
+  initializeCalc() {
+    this.calc ??= buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
+    this.calc.config.debug = true;
+    this.calc.config.debugDraw = this.debugDraw;
   }
 
   _initializeDebugGraphics() {
@@ -344,28 +353,6 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
   }
 
   /**
-   * For debugging.
-   * Draw the constrained token border and visible shape, if any.
-   * @param {boolean} hasLOS    Is there line-of-sight to this target?
-   */
-  _drawVisibleTokenBorder() {
-    const draw = this.debugDraw;
-    let color = CONFIG.GeometryLib.Draw.COLORS.blue;
-
-    // Fill in the constrained border on canvas
-    this.targets.forEach(target => draw.shape(target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2}));
-
-    // Separately fill in the visible target shape
-    color = CONFIG.GeometryLib.Draw.COLORS.yellow;
-    if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color });
-  }
-
-   _calculateVisibleTargetShape(target) {
-    return this.config.useLitTargetShape
-      ? this.calc._constructLitTargetShape(target) : target.constrainedTokenBorder;
-  }
-
-  /**
    * Triggered whenever a token is refreshed.
    * @param {Token} token
    * @param {RenderFlags} flags
@@ -377,6 +364,13 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
         || flags.refreshElevation
         || flags.refreshSize ) ) return;
     this.render();
+  }
+
+  destroy() {
+    this.clearDebug();
+    canvas.tokens.removeChild(this.#debugGraphics);
+    if ( this.#debugGraphics ) this.#debugGraphics.destroy();
+    super.destroy();
   }
 
 }

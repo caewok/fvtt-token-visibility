@@ -143,7 +143,6 @@ await calcWebGPU.initialize()
 calcWebGPU.percentVisible(viewer, target)
 calcWebGPU._percentVisible(viewer, target)
 
-
 calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
 await calcWebGPUAsync.initialize()
 calcWebGPUAsync.percentVisible(viewer, target)

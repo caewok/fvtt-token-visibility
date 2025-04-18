@@ -90,6 +90,7 @@ export class AbstractViewerLOS {
     cfg.threshold ??= Settings.get(KEYS.LOS.TARGET.PERCENT);
     cfg.largeTarget ??= Settings.get(KEYS.LOS.TARGET.LARGE);
     cfg.debug ??= Settings.get(KEYS.DEBUG.LOS);
+    cfg.debugDraw ??= new CONFIG.GeometryLib.Draw();
 
     // Blocking canvas objects.
     cfg.block ??= {};
@@ -397,10 +398,6 @@ export class AbstractViewerLOS {
    * Destroy any PIXI objects and remove hooks upon destroying.
    */
   destroy() {
-    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
-    this.#debugGraphics = undefined;
-    this.#debugDraw = undefined;
-
     this.#target = undefined;
     this.viewer = undefined;
     this.viewpoints.forEach(vp => vp.destroy());
@@ -409,36 +406,9 @@ export class AbstractViewerLOS {
 
   /* ----- NOTE: Debug ----- */
 
-  /** @type {PIXI.Graphics} */
-  #debugGraphics;
-
-  get debugGraphics() {
-    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = this._initializeDebugGraphics();
-    return this.#debugGraphics;
-  }
-
-  /** @type {Draw} */
-  #debugDraw;
-
-  get debugDraw() {
-    if ( !this.#debugDraw
-      || !this.#debugGraphics
-      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
-    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
-  }
-
-  _initializeDebugGraphics() {
-    const g = new PIXI.Graphics();
-    g.tokenvisibility_losDebug = this.viewer.id;
-    g.eventMode = "passive"; // Allow targeting, selection to pass through.
-    canvas.tokens.addChild(g);
-    return g;
-  }
-
   clearDebug() {
-    if ( !this.#debugGraphics ) return;
-    console.log("Clearing debug.")
-    this.#debugGraphics.clear();
+    if ( !this.config.debugDraw ) return;
+    this.config.debugDraw.clear();
   }
 
   /**
@@ -447,12 +417,12 @@ export class AbstractViewerLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawCanvasDebug() {
-    this.clearDebug();
+    const draw = this.config.debugDraw;
     this._drawVisibleTokenBorder();
     this.viewpoints.forEach(vp => {
-      vp._drawLineOfSight();
-      vp._drawVisionTriangle();
-      vp._drawDetectedObjects();
+      // vp._drawLineOfSight(draw);
+      vp._drawVisionTriangle(draw);
+      vp._drawDetectedObjects(draw);
     });
   }
 
@@ -462,7 +432,7 @@ export class AbstractViewerLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawVisibleTokenBorder() {
-    const draw = this.debugDraw;
+    const draw = this.config.debugDraw;
     let color = Draw.COLORS.blue;
 
     // Fill in the constrained border on canvas
