@@ -9,15 +9,20 @@ Wall
 import { MODULE_ID, MODULES_ACTIVE } from "../../const.js";
 import { tokensOverlap } from "../util.js";
 import { WebGL2 } from "./WebGL2.js";
+import { GeometryDesc } from "../WebGPU/GeometryDesc.js";
+import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
+import { GeometryHorizontalPlaneDesc } from "../WebGPU/GeometryTile.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/GeometryToken.js";
 import {
-  NonDirectionalWallInstanceHandlerWebGL2,
-  DirectionalWallInstanceHandlerWebGL2,
-  NonDirectionalTerrainWallInstanceHandlerWebGL2,
-  DirectionalTerrainWallInstanceHandlerWebGL2,
-  TileInstanceHandlerWebGL2,
-  TokenInstanceHandlerWebGL2,
-  SceneInstanceHandlerWebGL2,
-} from "./PlaceableInstanceHandlerWebGL2.js";
+  NonDirectionalWallInstanceHandler,
+  DirectionalWallInstanceHandler,
+  NonDirectionalTerrainWallInstanceHandler,
+  DirectionalTerrainWallInstanceHandler,
+  TileInstanceHandler,
+  TokenInstanceHandler,
+  SceneInstanceHandler,
+} from "../WebGPU/PlaceableInstanceHandler.js";
+
 import * as twgl from "./twgl.js";
 
 class DrawableObjectsWebGL2Abstract {
@@ -27,11 +32,14 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {class} */
   static handlerClass;
 
-  /** @type {string} */
-  static vertexFile = "";
+  /** @type {class} */
+  static geomClass;
 
   /** @type {string} */
-  static fragmentFile = "";
+  static vertexFile = "obstacle_vertex";
+
+  /** @type {string} */
+  static fragmentFile = "obstacle_fragment";
 
   /** @type {number[4]} */
   static obstacleColor = [0, 0, 1, 1];
@@ -55,17 +63,33 @@ class DrawableObjectsWebGL2Abstract {
 
   materialUniforms = {};
 
+  /** @type {GeometryWallDesc} */
+  geoms = [];
+
+  /** @type {ArrayBuffer} */
+  verticesBuffer = new ArrayBuffer();
+
+  /** @type {ArrayBuffer} */
+  indicesBuffer = new ArrayBuffer();
+
+  /** @type {Float32Array} */
+  verticesArray = new Float32Array();
+
+  /** @type {Uint16Array} */
+  indicesArray = new Uint16Array();
+
+  /** @type {Float32Array[]} */
+  vertices = [];
+
+  /** @type {Uint16Array[]} */
+  indices = [];
+
   constructor(gl, camera, { senseType = "sight", debugViewNormals = false } = {}) {
     this.webGL2 = new WebGL2(gl);
     this.camera = camera;
     this.senseType = senseType;
     this.#debugViewNormals = debugViewNormals;
-    this.placeableHandler = new this.constructor.handlerClass({
-      senseType: this.senseType,
-      addNormals: this.debugViewNormals,
-      addUVs: this.constructor.addUVs,
-    });
-
+    this.placeableHandler = new this.constructor.handlerClass({ senseType });
     this.uniforms = {
       uPerspectiveMatrix: camera.perspectiveMatrix.arr,
       uLookAtMatrix: camera.lookAtMatrix.arr,
@@ -83,13 +107,13 @@ class DrawableObjectsWebGL2Abstract {
    * Set up all parts of the render pipeline that will not change often.
    */
   async initialize() {
-    await this._initialize();
-    this._updateInstances();
-  }
-
-  async _initialize() {
+    const promises = [this._createProgram()];
     this.placeableHandler.registerPlaceableHooks();
-    await this._createProgram();
+    this._initializePlaceableHandler();
+    this._initializeGeoms();
+
+    await Promise.allSettled(promises); // Prior to updating buffers, etc.
+    this._updateAllInstances();
   }
 
   #placeableHandlerUpdateId = 0;
@@ -103,38 +127,193 @@ class DrawableObjectsWebGL2Abstract {
     this.programInfo = twgl.createProgramInfo(this.webGL2.gl, [vertexShaderSource, fragmentShaderSource]);
   }
 
-  _updateInstances() {
-    this._initializePlaceableHandler();
+  /*
+  initialize
+  - initialize placeable handler
+  - define geometries
+  - define offsets
+  - define vertices, indices
+  - define vertices and arrays buffers, which uploads the current vertices and indices
+
+  update but do not change number of instances (update per instance)
+  - update vertices
+  - update buffers
+
+  update and change number of instances; single geometry
+  - define offsets
+  - define vertices and arrays buffers
+  - update indices
+  - update vertices
+  - update buffers
+
+  change geometries
+  - define geometries
+  - define offsets
+  - define vertices and arrays buffers
+  - update indices
+  - update vertices
+  - update buffers
+  */
+
+
+
+  _updateAllInstances() {
+    // Recreate the buffers entirely based on a possibly modified number of instances.
+    // Default here assumes geometry is singular and need not be updated.
+    // Child class may redefine geometry to start here.
+    this._initializeOffsets();
+    this._initializeVerticesAndArrays();
+
+    // Update indices and vertices first.
+    this._updateIndices();
+    for ( let i = 0, iMax = this.placeableHandler.numInstances; i < iMax; i += 1 ) this._updateVerticesForInstance(i);
+
+    // Now initialize buffers with the current vertices and indices.
     this._initializeBuffers();
   }
 
+  _updateInstances() {
+    // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
+    const placeableHandler = this.placeableHandler;
+    if ( placeableHandler.bufferId < this.#placeableHandlerBufferId ) return this._updateAllInstances(); // Number of instances changed.
+    if ( placeableHandler.updateId <= this.#placeableHandlerUpdateId ) return; // No changes since last update.
+
+    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
+      if ( lastUpdate <= this.#placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
+      this._updateInstance(idx);
+    }
+    this.#placeableHandlerUpdateId = placeableHandler.updateId;
+  }
+
+  _updateInstance(idx) {
+    this._updateVerticesForInstance(idx);
+    this._updateBuffersForInstance(idx);
+  }
+
   _initializePlaceableHandler() {
-    const { placeableHandler, offsetData } = this;
-    placeableHandler.initializePlaceables();
+    this.placeableHandler.initializePlaceables();
     this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
     this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
-    offsetData.vertex = {
-      offsets: new Array(placeableHandler.numInstances),
-      lengths: placeableHandler.geom.vertices.length,
-      sizes: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.vertices.byteLength),
+  }
+
+  _initializeGeoms() {
+    this.geom = new this.constructor.geomClass({ addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs });
+  }
+
+  _initializeOffsets() {
+    // Use either a single geom repeatedly or define each geom separately.
+    // Subclasses can come up with more complex configurations if necessary.
+    if ( this.geoms.length ) this.offsetData = GeometryDesc.computeBufferOffsets(this.geoms);
+    else this.offsetData = GeometryDesc.computeBufferOffsets((new Array(this.placeableHandler.numInstances)).fill(this.geom));
+  }
+
+  /**
+   * Construct data arrays representing vertices and indices.
+   */
+  _initializeVerticesAndArrays() {
+    const offsetData = this.offsetData;
+    const numPlaceables = this.placeableHandler.numInstances;
+    const vClass = this.verticesArray.constructor;
+    const iClass = this.indicesArray.constructor;
+
+    this.verticesBuffer = new ArrayBuffer(offsetData.vertex.totalSize);
+    this.indicesBuffer = new ArrayBuffer(offsetData.index.totalSize);
+    this.verticesArray = new vClass(this.verticesBuffer);
+    this.indicesArray = new iClass(this.indicesBuffer);
+
+    // Create distinct views into the vertices and indices buffers
+    this.vertices = new Array(numPlaceables);
+    this.indices = new Array(numPlaceables);
+    for ( let i = 0; i < numPlaceables; i += 1 ) {
+      this.vertices[i] = new vClass(this.verticesBuffer, offsetData.vertex.offsets[i], offsetData.vertex.lengths[i]);
+      this.indices[i] = new iClass(this.indicesBuffer, offsetData.index.offsets[i], offsetData.index.lengths[i]);
     }
-    offsetData.vertex.sizes.forEach((ln, i) => offsetData.vertex.offsets[i] = ln * i);
-    offsetData.index = {
-      offsets: new Array(placeableHandler.numInstances),
-      lengths: placeableHandler.geom.indices.length,
-      sizes: (new Array(placeableHandler.numInstances)).fill(placeableHandler.geom.indices.byteLength),
-    };
-    offsetData.index.sizes.forEach((ln, i) => offsetData.index.offsets[i] = ln * i);
+  }
+
+  /**
+   * Update the index numbers based on geoms.
+   */
+  _updateIndices() {
+    // Set the indices for each; incrementing for each subsequent placeable after the first.
+    const numVertexComponents = 3 + (this.constructor.addUVs * 2) + (this.debugViewNormals * 3)
+    let offset = 0;
+    for ( let i = 0, iMax = this.indices.length; i < iMax; i += 1 ) {
+      const geom = this.geoms[i] ?? this.geom;
+      const index = this.indices[i];
+      for ( let j = 0, jMax = index.length; j < jMax; j += 1 ) index[j] = geom.indices[j] + offset;
+      offset += this.offsetData.vertex.num[i];
+    }
+  }
+
+  /**
+   * Update the vertices based on instance data.
+   */
+  _updateVerticesForInstance(idx) {
+    const ph = this.placeableHandler;
+    const M = ph.matrices[idx];
+    const geom = this.geoms[idx] ?? this.geom;
+    const geomVertices = geom.vertices;
+    const vertices = this.vertices[idx];
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const addNormals = this.debugViewNormals;
+    const addUVs = this.constructor.addUVs;
+    const stride = (addNormals && addUVs) ? 8
+      : addNormals ? 6
+      : addUVs ? 5
+      : 3;
+
+    for ( let i = 0, iMax = geomVertices.length; i < iMax; i += stride ) {
+      const xIdx = i;
+      const yIdx = i + 1;
+      const zIdx = i + 2;
+      const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
+      const txPt = M.multiplyPoint3d(pt, Point3d._tmp1);
+
+      vertices[xIdx] = txPt.x;
+      vertices[yIdx] = txPt.y;
+      vertices[zIdx] = txPt.z;
+    }
+
+    if ( addNormals ) {
+      // Should not matter for fully vertical or horizontal triangles, but...
+      // See https://webgl2fundamentals.org/webgl/lessons/webgl-3d-lighting-directional.html
+      // TODO: For tiles, this seems incorrect. Normal should be -1 or +1.
+      // const invTransposeM = M.invert().transpose();
+      // See https://github.com/graphitemaster/normals_revisited
+      // Just use the rotation matrix.
+      const rotM = ph.rotationMatrixForInstance(idx);
+
+      for ( let i = 3, iMax = geomVertices.length; i < iMax; i += stride ) {
+        const xIdx = i;
+        const yIdx = i + 1;
+        const zIdx = i + 2;
+        const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
+        const txPt = rotM.multiplyPoint3d(pt, Point3d._tmp1).normalize();
+
+        vertices[xIdx] = txPt.x;
+        vertices[yIdx] = txPt.y;
+        vertices[zIdx] = txPt.z;
+      }
+    }
+
+    if ( addUVs ) {
+      const offset = addNormals ? 6 : 3;
+      for ( let i = offset, iMax = geomVertices.length; i < iMax; i += stride ) {
+        const uIdx = i;
+        const vIdx = i + 1;
+        vertices[uIdx] = geomVertices[uIdx];
+        vertices[vIdx] = geomVertices[vIdx];
+      }
+    }
   }
 
   _initializeBuffers() {
     const gl = this.webGL2.gl;
-    const placeableHandler = this.placeableHandler;
 
     // Set vertex buffer
     const vBuffer = this.vertexBuffer = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, placeableHandler.verticesArray, gl[this.constructor.bufferDrawType])
+    gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.bufferDrawType])
 
     // Set vertex attributes
     const vertexProps = this.vertexProps = this._defineVertexAttributeProperties();
@@ -144,53 +323,41 @@ class DrawableObjectsWebGL2Abstract {
 
   _defineVertexAttributeProperties() {
     const debugViewNormals = this.debugViewNormals;
-    const placeableHandler = this.placeableHandler;
     const vertexProps = {
       aPos: {
         numComponents: 3,
         buffer: this.vertexBuffer,
-        stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+        stride: this.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
         offset: 0,
       },
-      indices: placeableHandler.indicesArray,
+      indices: this.indicesArray,
     };
 
     if ( debugViewNormals ) vertexProps.aNorm = {
       numComponents: 3,
       buffer: this.vertexBuffer,
-      stride: placeableHandler.verticesArray.BYTES_PER_ELEMENT * 6,
-      offset: 3 * placeableHandler.verticesArray.BYTES_PER_ELEMENT,
+      stride: this.verticesArray.BYTES_PER_ELEMENT * 6,
+      offset: 3 * this.verticesArray.BYTES_PER_ELEMENT,
     };
     return vertexProps;
   }
 
-  /**
-   * Update the vertex and index buffers for the placeable(s).
-   */
-  _updateBuffers() {
-    const placeableHandler = this.placeableHandler;
 
-    if ( placeableHandler.bufferId < this.#placeableHandlerBufferId ) return this._updateInstances();
-    if ( placeableHandler.updateId <= this.#placeableHandlerUpdateId ) return;
-
+  _updateBuffersForInstance(idx) {
     const gl = this.webGL2.gl;
     const vBuffer = this.vertexBuffer;
     const iBuffer = this.bufferInfo.indices;
     const vOffsets = this.offsetData.vertex.offsets;
     const iOffsets = this.offsetData.index.offsets;
-    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
-      if ( lastUpdate <= this.#placeableHandlerUpdateId ) continue;
 
-      // See twgl.setAttribInfoBufferFromArray.
-      const vOffset = vOffsets[idx];
-      gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, placeableHandler.vertices[idx]);
+    // See twgl.setAttribInfoBufferFromArray.
+    const vOffset = vOffsets[idx];
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, this.vertices[idx]);
 
-      const iOffset = iOffsets[idx];
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
-      gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, placeableHandler.indices[idx]);
-    }
-    this.#placeableHandlerUpdateId = placeableHandler.updateId;
+    const iOffset = iOffsets[idx];
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, this.indices[idx]);
   }
 
   /**
@@ -199,7 +366,7 @@ class DrawableObjectsWebGL2Abstract {
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
   prerender() {
-    this._updateBuffers();
+    this._updateInstances();
   }
 
   /**
@@ -207,11 +374,9 @@ class DrawableObjectsWebGL2Abstract {
    */
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
-
-    this._updateBuffers();
+    this._updateInstances();
 
     const gl = this.webGL2.gl;
-
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
@@ -242,13 +407,21 @@ class DrawableObjectsWebGL2Abstract {
 
 export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = NonDirectionalWallInstanceHandlerWebGL2;
+  static handlerClass = NonDirectionalWallInstanceHandler;
 
-  /** @type {string} */
-  static vertexFile = "obstacle_vertex";
+  /** @type {class} */
+  static geomClass = GeometryWallDesc;
 
-  /** @type {string} */
-  static fragmentFile = "obstacle_fragment";
+  /** @type {boolean} */
+  static directional = false;
+
+  _initializeGeoms() {
+    this.geom = new this.constructor.geomClass({
+      directional: this.constructor.directional,
+      addNormals: this.debugViewNormals,
+      addUVs: this.constructor.addUVs,
+    });
+  }
 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
@@ -273,31 +446,46 @@ export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
 
 export class DrawableNonDirectionalWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {class} */
-  static handlerClass = NonDirectionalWallInstanceHandlerWebGL2;
+  static handlerClass = NonDirectionalWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = false;
 }
 
 export class DrawableDirectionalWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {class} */
-  static handlerClass = DirectionalWallInstanceHandlerWebGL2;
+  static handlerClass = DirectionalWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = true;
 }
 
 export class DrawableNonDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {class} */
-  static handlerClass = NonDirectionalTerrainWallInstanceHandlerWebGL2;
+  static handlerClass = NonDirectionalTerrainWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = false;
 
   static obstacleColor = [0, 0.5, 1, 0.5];
 }
 
 export class DrawableDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {class} */
-  static handlerClass = DirectionalTerrainWallInstanceHandlerWebGL2;
+  static handlerClass = DirectionalTerrainWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = true;
 
   static obstacleColor = [0, 0.5, 1, 0.5];
 }
 
 export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TileInstanceHandlerWebGL2;
+  static handlerClass = TileInstanceHandler;
+
+  /** @type {class} */
+  static geomClass = GeometryHorizontalPlaneDesc;
 
   /** @type {string} */
   static vertexFile = "tile_obstacle_vertex";
@@ -314,12 +502,11 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   _defineVertexAttributeProperties() {
     const vertexProps = super._defineVertexAttributeProperties();
     const debugViewNormals = this.debugViewNormals;
-    const placeableHandler = this.placeableHandler;
 
     // coords (3), normal (3), uv (2)
-    let stride = placeableHandler.verticesArray.BYTES_PER_ELEMENT * 5;
+    let stride = this.verticesArray.BYTES_PER_ELEMENT * 5;
     if ( debugViewNormals ) {
-      stride = placeableHandler.verticesArray.BYTES_PER_ELEMENT * 8;
+      stride = this.verticesArray.BYTES_PER_ELEMENT * 8;
       vertexProps.aNorm.stride = stride;
     }
     vertexProps.aPos.stride = stride;
@@ -327,7 +514,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
       numComponents: 2,
       buffer: vertexProps.aPos.buffer,
       stride,
-      offset: placeableHandler.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+      offset: this.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
     }
     return vertexProps;
   }
@@ -360,12 +547,10 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   #tmpSet = new Set();
 
   render(_target, _viewer) {
-    // TODO: Use visionTriangle
-    if ( !this.placeableHandler.numInstances ) return;
-    this._updateBuffers();
+    if ( !this.instanceSet.size ) return;
+    this._updateInstances();
 
     const gl = this.webGL2.gl;
-
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
@@ -403,26 +588,37 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 }
 
-export class DrawableSceneBackground extends DrawableTileWebGL2 {
+export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
   /** @type {class} */
-  static handlerClass = SceneInstanceHandlerWebGL2;
+  static handlerClass = SceneInstanceHandler;
+
+  /** @type {class} */
+  static geomClass = GeometryHorizontalPlaneDesc;
 
   /** @type ImageBitMap */
   backgroundImage;
 
-  async _initialize() {
-    await super._initialize();
+  async initialize() {
+    const promises = [this._createProgram()];
+    this.placeableHandler.registerPlaceableHooks();
+    this._initializePlaceableHandler();
 
-    this.placeableHandler.initializePlaceables()
     const sceneObj = this.placeableHandler.placeableFromInstanceIndex.get(0);
-    if ( !sceneObj || !sceneObj.src ) return;
-    this.backgroundImage = await loadImageBitmap(sceneObj.src, {
-      //imageOrientation: "flipY",
-      // premultiplyAlpha: "premultiply",
-      premultiplyAlpha: "none",
-    });
-    this.instanceSet.add(0);
+    if ( sceneObj && sceneObj.src ) {
+      this.backgroundImage = await loadImageBitmap(sceneObj.src, {
+        //imageOrientation: "flipY",
+        // premultiplyAlpha: "premultiply",
+        premultiplyAlpha: "none",
+      });
+      this.instanceSet.add(0);
+    }
+
+    this._initializeGeoms();
+    await Promise.allSettled(promises); // Prior to updating buffers, etc.
+    this._updateAllInstances();
   }
+
+  _updateInstances() { return; } // Nothing to change.
 
   filterObjects() { return; }
 
@@ -431,13 +627,10 @@ export class DrawableSceneBackground extends DrawableTileWebGL2 {
 
 export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TokenInstanceHandlerWebGL2;
+  static handlerClass = TokenInstanceHandler;
 
-  /** @type {string} */
-  static vertexFile = "obstacle_vertex";
-
-  /** @type {string} */
-  static fragmentFile = "obstacle_fragment";
+  /** @type {class} */
+  static geomClass = GeometryCubeDesc;
 
   static targetColor = [1, 0, 0, 1];
 
@@ -447,7 +640,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
     if ( typeof idx === "undefined" ) return;
 
-    this._updateBuffers();
+    this._updateInstances();
     const gl = this.webGL2.gl;
 
     gl.useProgram(this.programInfo.program);
@@ -472,9 +665,9 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
-    this._updateBuffers();
-    const gl = this.webGL2.gl;
+    this._updateInstances();
 
+    const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);

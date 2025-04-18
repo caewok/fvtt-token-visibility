@@ -101,7 +101,7 @@ import {
   DrawableDirectionalTerrainWallWebGL2,
   DrawableTileWebGL2,
   DrawableTokenWebGL2,
-  DrawableSceneBackground,
+  DrawableSceneBackgroundWebGL2,
 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
 
 import {
@@ -113,12 +113,6 @@ import {
 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
 import * as twgl from "./LOS/WebGL2/twgl.js";
-import {
-  NonDirectionalWallInstanceHandlerWebGL2,
-  DirectionalWallInstanceHandlerWebGL2,
-  TileInstanceHandlerWebGL2,
-  TokenInstanceHandlerWebGL2
-} from "./LOS/WebGL2/PlaceableInstanceHandlerWebGL2.js";
 import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./LOS/WebGL2/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
@@ -258,17 +252,13 @@ Hooks.once("init", function() {
       DrawableWallInstancesPIXI,
       RenderWallsPIXI,
       WebGL2,
-      NonDirectionalWallInstanceHandlerWebGL2,
-      DirectionalWallInstanceHandlerWebGL2,
-      TileInstanceHandlerWebGL2,
-      TokenInstanceHandlerWebGL2,
       DrawableNonDirectionalWallWebGL2,
       DrawableDirectionalWallWebGL2,
       DrawableNonDirectionalTerrainWallWebGL2,
       DrawableDirectionalTerrainWallWebGL2,
       DrawableTileWebGL2,
       DrawableTokenWebGL2,
-      DrawableSceneBackground,
+      DrawableSceneBackgroundWebGL2,
       RenderObstaclesAbstractWebGL2,
       RenderWallObstaclesWebGL2,
       RenderTileObstaclesWebGL2,
@@ -335,7 +325,7 @@ function tokenIsDead(token) {
   if ( deadStatus && token.actor.statuses.has(deadStatus.id) ) return true;
 
   const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
-  const hp = getObjectProperty(t.actor, tokenHPAttribute);
+  const hp = util.getObjectProperty(token.actor, tokenHPAttribute);
   if ( typeof hp !== "number" ) return false;
   return hp <= 0;
 }
