@@ -118,15 +118,6 @@ canvas.walls.placeables.forEach(wall => Draw.segment(wall));
 canvas.tiles.placeables.forEach(tile => Draw.shape(tile.bounds, { color: Draw.COLORS.red }))
 
 
-
-
-losCalc = viewer.vision.tokenvisibility.losCalc
-losCalc.target = target
-vp = losCalc.viewpoints[0]
-
-
-
-
 popout = new Area3dPopoutCanvas({ width: 400, height: 475, resizable: false })
 await popout._render(true);
 

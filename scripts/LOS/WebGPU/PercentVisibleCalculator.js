@@ -38,6 +38,7 @@ export class PercentVisibleCalculator {
   }
 
   async percentVisible(viewerLocation, target, { viewer, targetLocation } = {}) {
+    this.renderObstacles.prerender();
     viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
     const targetArea = await this.targetPixelArea(viewerLocation, target, { viewer, targetLocation });
     // console.debug(`${this.constructor.name}|${targetArea} target pixels`);
@@ -57,6 +58,7 @@ export class PercentVisibleCalculator {
   }
 
   percentVisibleSync(viewerLocation, target, { viewer, targetLocation } = {}) {
+    this.renderObstacles.prerender();
     viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
     const targetArea = this.targetPixelAreaSync(viewerLocation, target, { viewer, targetLocation });
     // console.debug(`${this.constructor.name}|${targetArea} target pixels`);
