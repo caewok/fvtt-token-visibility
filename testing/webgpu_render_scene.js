@@ -105,6 +105,7 @@ let {
 let {
   PercentVisibleCalculatorWebGL2,
   DebugVisibilityViewerWebGL2,
+  DebugVisibilityViewerPoints,
 } = api.webgl
 
 device = await WebGPUDevice.getDevice()
@@ -149,18 +150,25 @@ calcWebGPUAsync.percentVisible(viewer, target)
 await calcWebGPUAsync._percentVisibleAsync(viewer, target)
 await calcWebGPUAsync.percentVisibleAsync(viewer, target)
 
-
-debugViewer = new DebugVisibilityViewerWebGL2({ device });
+debugViewer = new DebugVisibilityViewerPoints();
 await debugViewer.initialize();
 debugViewer.render();
+debugViewer.destroy()
+
+debugViewer = new DebugVisibilityViewerWebGL2();
+await debugViewer.initialize();
+debugViewer.render();
+debugViewer.destroy()
 
 debugViewer = new DebugVisibilityViewerWebGPU({ device });
 await debugViewer.initialize();
 debugViewer.render();
+debugViewer.destroy()
 
 debugViewer = new DebugVisibilityViewerWebGPUAsync({ device });
 await debugViewer.initialize();
 debugViewer.render();
+debugViewer.destroy()
 
 
 tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)

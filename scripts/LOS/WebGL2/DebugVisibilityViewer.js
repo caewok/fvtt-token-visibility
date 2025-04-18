@@ -1,7 +1,9 @@
 /* globals
+canvas,
 CONFIG,
 game,
 Hooks,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -10,6 +12,8 @@ import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
 import { Area3dPopoutCanvas } from "../Area3dPopout.js";
 import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./PercentVisibleCalculator.js";
+import { buildCustomLOSCalculator } from "../../LOSCalculator.js";
+import { Settings } from "../../settings.js";
 
 /* Debug viewer
 
@@ -25,17 +29,14 @@ class DebugVisibilityViewerAbstract {
   /** @type {number} */
   static HEIGHT = 400;
 
-  /** @type {OffscreenCanvas} */
-  static glCanvas;
+  /** @type {class} */
+  static popoutClass = Area3dPopoutCanvas;
 
   /** @type {WebGL2Context} */
   gl;
 
   /** @type {string} */
   senseType = "sight";
-
-  /** @type {boolean} */
-  debugView = true;
 
   /** @type {RenderObstaclesWebGL2} */
   renderObstacles;
@@ -51,10 +52,9 @@ class DebugVisibilityViewerAbstract {
 
   static CONTEXT_TYPE = "webgl2";
 
-  constructor({ senseType = "sight", debugView = true } = {}) {
+  constructor({ senseType = "sight" } = {}) {
     this.senseType = senseType;
-    this.debugView = debugView;
-    this.popout = new Area3dPopoutCanvas({ width: this.constructor.WIDTH, height: this.constructor.HEIGHT + 75, resizable: false });
+    if ( this.constructor.popoutClass ) this.popout = new this.constructor.popoutClass({ width: this.constructor.WIDTH, height: this.constructor.HEIGHT + 75, resizable: false });
   }
 
   async initialize() {
@@ -134,8 +134,8 @@ class DebugVisibilityViewerAbstract {
    * @param {Token} token
    * @param {boolean} controlled      True if controlled
    */
-  onControlToken(token, controlled) {
-    if ( !controlled ) return;
+  onControlToken(token, _controlled) {
+    // if ( !controlled ) return;
     this.viewer = token;
     this.render();
   }
@@ -146,9 +146,10 @@ class DebugVisibilityViewerAbstract {
    * @param {Token} targetToken
    * @param {boolean} targeted      True if targeted
    */
-  onTargetToken(user, targetToken, targeted) {
-    if ( !targeted || game.user !== user ) return;
+  onTargetToken(user, targetToken, _targeted) {
+    if ( game.user !== user ) return;
     this.target = targetToken;
+    this.render();
   }
 
   /**
@@ -176,8 +177,12 @@ class DebugVisibilityViewerAbstract {
 
 export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerAbstract {
 
+  /** @type {boolean} */
+  debugView = true;
+
   constructor(opts) {
     super(opts);
+    this.debugView = opts.debugView ?? true;
     this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.senseType });
   }
 
@@ -191,6 +196,7 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerAbstract {
 
   constructor({ device, ...opts } = {}) {
     super(opts);
+    this.debugView = opts.debugView ?? true;
     this.device = device;
     this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.senseType });
   }
@@ -254,3 +260,123 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerAbstr
   }
 }
 
+export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
+  /** @type {class} */
+  // static popoutClass = Area3dPopout; // PIXI version
+
+  /** @type {PIXI.Graphics} */
+  #debugGraphics;
+
+  get debugGraphics() {
+    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = this._initializeDebugGraphics();
+    return this.#debugGraphics;
+  }
+
+  /** @type {Draw} */
+  #debugDraw;
+
+  get debugDraw() {
+    const Draw = CONFIG.GeometryLib.Draw;
+    if ( !this.#debugDraw
+      || !this.#debugGraphics
+      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
+    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
+  }
+
+  /** @type {Token[]} */
+  get viewers() { return canvas.tokens.controlled; }
+
+  /** @type {Token[]} */
+  get targets() { return game.user.targets.values(); }
+
+  /** @type {object} */
+  config = {
+    useLitTargetShape: false,
+  };
+
+  constructor(opts) {
+    super(opts);
+  }
+
+  async initialize() {
+    this.registerHooks();
+  }
+
+  render() {
+    const { targets, viewers } = this;
+
+    if ( !(targets.length || viewers.length) ) return this.clearDebug();
+    this.clearDebug();
+    this._drawVisibleTokenBorder();
+    const draw = this.debugDraw;
+
+    // Calculate points and pull the debug data.
+    this.calc ??= buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
+    this.calc.config.debug = true;
+    this.calc.config.debugDraw = this.debugDraw;
+    for ( const viewer of viewers) {
+      this.calc.viewer = viewer;
+      this.calc.initializeViewpoints();
+
+      for ( const target of targets) {
+        if ( viewer === target ) continue;
+        this.calc.target = target;
+        this.calc.viewpoints.forEach(vp => {
+          vp._drawLineOfSight(draw);
+          // vp._drawVisionTriangle(draw);
+          vp._drawDetectedObjects(draw);
+        });
+
+        this.calc.percentVisible(target);
+      }
+    }
+  }
+
+  _initializeDebugGraphics() {
+    const g = new PIXI.Graphics();
+    g.eventMode = "passive"; // Allow targeting, selection to pass through.
+    canvas.tokens.addChild(g);
+    return g;
+  }
+
+  clearDebug() {
+    if ( this.#debugGraphics ) this.#debugGraphics.clear();
+  }
+
+  /**
+   * For debugging.
+   * Draw the constrained token border and visible shape, if any.
+   * @param {boolean} hasLOS    Is there line-of-sight to this target?
+   */
+  _drawVisibleTokenBorder() {
+    const draw = this.debugDraw;
+    let color = CONFIG.GeometryLib.Draw.COLORS.blue;
+
+    // Fill in the constrained border on canvas
+    this.targets.forEach(target => draw.shape(target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2}));
+
+    // Separately fill in the visible target shape
+    color = CONFIG.GeometryLib.Draw.COLORS.yellow;
+    if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color });
+  }
+
+   _calculateVisibleTargetShape(target) {
+    return this.config.useLitTargetShape
+      ? this.calc._constructLitTargetShape(target) : target.constrainedTokenBorder;
+  }
+
+  /**
+   * Triggered whenever a token is refreshed.
+   * @param {Token} token
+   * @param {RenderFlags} flags
+   */
+  onRefreshToken(token, flags) {
+    if ( !(this.viewers.some(viewer => viewer === token)
+        || this.targets.some(target => target === token)) ) return;
+    if ( !(flags.refreshPosition
+        || flags.refreshElevation
+        || flags.refreshSize ) ) return;
+    this.render();
+  }
+
+}

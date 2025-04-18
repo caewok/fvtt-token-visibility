@@ -398,8 +398,9 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw the line of sight from token to target.
    */
-  _drawLineOfSight() {
-    this.viewerLOS.debugDraw.segment({ A: this.viewpoint, B: this.viewerLOS.target.center });
+  _drawLineOfSight(debugDraw) {
+    debugDraw ??= this.viewerLOS.debugDraw;
+    debugDraw.segment({ A: this.viewpoint, B: this.viewerLOS.target.center });
     console.log("Drawing line of sight.")
   }
 
@@ -407,10 +408,9 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw outlines for the various objects that can be detected on the canvas.
    */
-  _drawDetectedObjects() {
+  _drawDetectedObjects(draw) {
     // if ( !this.#blockingObjects.initialized ) return;
-
-    const draw = this.viewerLOS.debugDraw;
+    draw ??= this.viewerLOS.debugDraw;
     const colors = Draw.COLORS;
     const { walls, tiles, terrainWalls, tokens } = this.blockingObjects;
     walls.forEach(w => draw.segment(w, { color: colors.red, fillAlpha: 0.3 }));
@@ -424,8 +424,8 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw the vision triangle between viewer point and target.
    */
-  _drawVisionTriangle() {
-    const draw = this.viewerLOS.debugDraw;
+  _drawVisionTriangle(draw) {
+    draw ??= this.viewerLOS.debugDraw;
     draw.shape(this.visionPolygon, { width: 0, fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
     console.log("Drawing vision triangle.")
   }
