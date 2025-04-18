@@ -177,7 +177,7 @@ class PercentVisibleCalculatorAbstract {
   }
 
   /** @type {PlaceableInstanceHandler} */
-  get tokenHandler() { return this.renderObstacles.drawableTarget.placeableHandler; }
+  get tokenHandler() { return this.renderObstacles.drawableTargets[0].placeableHandler; }
 
   /** @type {PlaceableInstanceHandler[]} */
   #obstacleHandlers = [];

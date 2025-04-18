@@ -120,6 +120,10 @@ class DrawableObjectsWebGL2Abstract {
 
   #placeableHandlerBufferId = 0;
 
+  get placeableHandlerUpdateId() { return this.#placeableHandlerUpdateId; }
+
+  get placeableHandlerBufferId() { return this.#placeableHandlerBufferId; }
+
   async _createProgram() {
     const debugViewNormals = this.debugViewNormals;
     const vertexShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.vertexFile, { debugViewNormals })
@@ -235,7 +239,6 @@ class DrawableObjectsWebGL2Abstract {
    */
   _updateIndices() {
     // Set the indices for each; incrementing for each subsequent placeable after the first.
-    const numVertexComponents = 3 + (this.constructor.addUVs * 2) + (this.debugViewNormals * 3)
     let offset = 0;
     for ( let i = 0, iMax = this.indices.length; i < iMax; i += 1 ) {
       const geom = this.geoms[i] ?? this.geom;
@@ -720,6 +723,119 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     return true;
   }
 }
+
+export class UnconstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
+  static includeToken(token, opts) {
+    if ( token.isConstrainedTokenBorder ) return false;
+    return DrawableTokenWebGL2.includeToken(token, opts);
+  }
+
+  renderTarget(target) {
+    if ( target.isConstrainedTokenBorder ) return;
+    super.renderTarget(target);
+  }
+}
+
+export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
+  static includeToken(token, opts) {
+    if ( !token.isConstrainedTokenBorder ) return false;
+    return DrawableTokenWebGL2.includeToken(token, opts);
+  }
+
+  renderTarget(target) {
+    if ( !target.isConstrainedTokenBorder ) return;
+    super.renderTarget(target);
+  }
+
+  _updateInstanceGeoms() {
+    const ph = this.placeableHandler;
+    this.geoms.length = ph.numInstances;
+    const addUVs = this.constructor.addUVs;
+    const addNormals = this.debugViewNormals;
+    ph.placeableFromInstanceIndex.entries().forEach(([idx, token]) =>
+      this.geoms[idx] = new GeometryConstrainedTokenDesc({ token, addUVs, addNormals }));
+  }
+
+  _updateAllInstances() {
+    this._updateInstanceGeoms();
+    super._updateAllInstances();
+  }
+
+  _updateInstances() {
+    const placeableHandler = this.placeableHandler;
+    if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return super._updateInstances(); // No changes since last update.
+
+    // If any constrained token has changed, need to rebuild.
+    // If the token is now unconstrained, that is fine (will be skipped).
+    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
+      if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
+      const token = placeableHandler.placeableFromInstanceIndex.get(idx);
+      if ( token.isConstrainedTokenBorder ) return this._updateAllInstances();
+    }
+    super._updateInstances();
+  }
+
+  _updateVerticesForInstance(idx) {
+    // The geometry is already at the correct location, so only adjust the normals.
+    const ph = this.placeableHandler;
+    // const M = ph.matrices[idx];
+    const geom = this.geoms[idx] ?? this.geom;
+    const geomVertices = geom.vertices;
+    const vertices = this.vertices[idx];
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const addNormals = this.debugViewNormals;
+    const addUVs = this.constructor.addUVs;
+    const stride = (addNormals && addUVs) ? 8
+      : addNormals ? 6
+      : addUVs ? 5
+      : 3;
+
+    for ( let i = 0, iMax = geomVertices.length; i < iMax; i += stride ) {
+      const xIdx = i;
+      const yIdx = i + 1;
+      const zIdx = i + 2;
+      const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
+      // const txPt = M.multiplyPoint3d(pt, Point3d._tmp1);
+
+      vertices[xIdx] = pt.x;
+      vertices[yIdx] = pt.y;
+      vertices[zIdx] = pt.z;
+    }
+
+    if ( addNormals ) {
+      // Should not matter for fully vertical or horizontal triangles, but...
+      // See https://webgl2fundamentals.org/webgl/lessons/webgl-3d-lighting-directional.html
+      // TODO: For tiles, this seems incorrect. Normal should be -1 or +1.
+      // const invTransposeM = M.invert().transpose();
+      // See https://github.com/graphitemaster/normals_revisited
+      // Just use the rotation matrix.
+      const rotM = ph.rotationMatrixForInstance(idx);
+
+      for ( let i = 3, iMax = geomVertices.length; i < iMax; i += stride ) {
+        const xIdx = i;
+        const yIdx = i + 1;
+        const zIdx = i + 2;
+        const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
+        const txPt = rotM.multiplyPoint3d(pt, Point3d._tmp1).normalize();
+
+        vertices[xIdx] = txPt.x;
+        vertices[yIdx] = txPt.y;
+        vertices[zIdx] = txPt.z;
+      }
+    }
+
+    if ( addUVs ) {
+      const offset = addNormals ? 6 : 3;
+      for ( let i = offset, iMax = geomVertices.length; i < iMax; i += stride ) {
+        const uIdx = i;
+        const vIdx = i + 1;
+        vertices[uIdx] = geomVertices[uIdx];
+        vertices[vIdx] = geomVertices[vIdx];
+      }
+    }
+  }
+}
+
 
 /**
  * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
