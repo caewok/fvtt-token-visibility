@@ -8,7 +8,7 @@ PIXI
 
 "use strict";
 
-import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep } from "./geometry/Benchmark.js";
+import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
 import { buildCustomLOSCalculator } from "./LOSCalculator.js";
@@ -32,7 +32,7 @@ await api.bench.TokenVisibility(1000)
 
 export async function benchAll(n = 100, sleep = false) {
   await benchTokenRange(n, sleep);
-  await benchTokenLOS(n, sleep);
+  await benchTokenLOS(n, { sleep });
   await benchTokenVisibility(n, sleep);
 }
 
@@ -212,7 +212,7 @@ function benchRange(viewers, targets) {
 
 // ----- NOTE: LOS testing -----
 
-export async function benchTokenLOS(n = 100, sleep = false) {
+export async function benchTokenLOS(n = 100, opts = {}) {
   console.log("\n");
   const { viewers, targets } = getTokens();
   registerArea3d(); // Required for Area3d algorithms to work.
@@ -226,7 +226,8 @@ export async function benchTokenLOS(n = 100, sleep = false) {
   const { POINTS, AREA3D_HYBRID } = Settings.KEYS.LOS.TARGET.TYPES;
   const { CENTER, TWO, THREE, FOUR, FIVE, EIGHT, NINE } = Settings.KEYS.POINT_TYPES;
   // const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
-  const opts = { nPoints: CENTER, sleep };
+  opts.nPoints = CENTER;
+  opts.movement ??= false
 
   // Count viewpoints.
   const viewpointCases = { [CENTER]: 1, [TWO]: 2, [THREE]: 3, [FOUR]: 4, [FIVE]: 5, [EIGHT]: 8, [NINE]: 9 }
@@ -234,17 +235,18 @@ export async function benchTokenLOS(n = 100, sleep = false) {
   console.log(`${viewers.length} viewers, ${viewpoints} viewpoints, ${targets.length} targets`)
 
   console.log("\n")
+  const fn = opts.movement ? runLOSTestWithMovement : runLOSTest;
   for ( const large of [false, true] ) {
     opts.large = large;
     for ( const algorithm of Object.values(Settings.KEYS.LOS.TARGET.TYPES) ) {
       if ( algorithm === AREA3D_HYBRID ) continue; // Skip for the moment b/c it is failing.
       opts.algorithm = algorithm;
-      await runLOSTest(n, viewers, targets, opts);
+      await fn(n, viewers, targets, opts);
 
       // For points test, run additional test using 9 points vs just 1.
       if ( algorithm === POINTS ) {
         opts.nPoints = NINE;
-        await runLOSTest(n, viewers, targets, opts);
+        await fn(n, viewers, targets, opts);
         opts.nPoints = CENTER;
       }
     }
@@ -254,15 +256,13 @@ export async function benchTokenLOS(n = 100, sleep = false) {
   await revertDebugStatus();
 }
 
-export async function benchTokenLOSAlgorithm(n = 100, { algorithm, large = false, nPoints, sleep = false } = {}) {
-  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
-  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
-
+export async function benchTokenLOSAlgorithm(n = 100, { movement = false, ...opts }= {}) {
   const { viewers, targets } = getTokens();
   registerArea3d(); // Required for Area3d algorithms to work.
 
   await storeDebugStatus();
-  await runLOSTest(n, viewers, targets, { algorithm, large, nPoints, sleep });
+  const fn = movement ? runLOSTestWithMovement : runLOSTest;
+  await fn(n, viewers, targets, opts);
   await revertDebugStatus();
 }
 
@@ -274,7 +274,9 @@ async function revertLOSSettings() {
   await Settings.set(LARGE, large);
 }
 
-async function runLOSTest(n, viewers, targets, { algorithm, large = false, nPoints, sleep = false } = {}) {
+async function runLOSTest(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
+  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
 
   const calcs = viewers.map(viewer => {
     const losCalc = buildCustomLOSCalculator(viewer, algorithm);
@@ -287,7 +289,8 @@ async function runLOSTest(n, viewers, targets, { algorithm, large = false, nPoin
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
   const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
-  await fn(n, benchLOS, label, calcs, targets);
+  const benchFn = useAsync ? benchLOSAsync : benchLOS;
+  await fn(n, benchFn, label, calcs, targets);
 }
 
 function benchLOS(calcs, targets) {
@@ -300,3 +303,81 @@ function benchLOS(calcs, targets) {
   }
   return out;
 }
+
+async function benchLOSAsync(calcs, targets) {
+  const out = [];
+  for ( const calc of calcs ) {
+    for ( const target of targets ) {
+      if ( calc.viewer === target ) continue;
+      out.push(await calc.hasLOSAsync(target));
+    }
+  }
+  return out;
+}
+
+
+async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
+  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
+
+  const calcs = viewers.map(viewer => {
+    const losCalc = buildCustomLOSCalculator(viewer, algorithm);
+    losCalc.config.largeTarget = large;
+    if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) losCalc.viewpoints
+      .forEach(viewpoint => viewpoint.config.pointAlgorithm = nPoints);
+    return losCalc;
+  });
+
+  let label = (`LOS: ${algorithm}, largeToken: ${large}`);
+  if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
+
+  const tokens = new Set([...viewers, ...targets]);
+  const locMap = new Map();
+  for ( const token of tokens ) locMap.set(token, { x: token.document.x, y: token.document.y });
+
+  const benchFn = useAsync ? benchLOSAsync : benchLOS;
+  const timings = [];
+  for ( let i = 0; i < n; i += 1 ) {
+    const promises = [];
+    for ( const token of tokens ) {
+      const xDiff = Math.round((Math.random() - 0.5) * 100); // Move up to 50.
+      const yDiff = Math.round((Math.random() - 0.5) * 100);
+
+      // Keep within scene bounds to avoid polygon errors.
+      const x = token.document.x + xDiff;
+      const y = token.document.y + yDiff;
+      if ( !canvas.dimensions.sceneRect.contains(x, y) ) continue;
+      promises.push(token.document.update({ x, y }));
+    }
+    await Promise.allSettled(promises);
+    const t0 = performance.now();
+    await benchFn(calcs, targets);
+    const t1 = performance.now();
+    timings.push(t1 - t0);
+    if ( sleep ) await sleepFn(0);
+  }
+  const sum = timings.reduce((prev, curr) => prev + curr);
+  const q = quantile(timings, [.1, .5, .9]);
+
+  const promises = [];
+  for ( const token of tokens ) {
+    const loc = locMap.get(token);
+    promises.push(token.document.update({ x: loc.x, y: loc.y }));
+  }
+
+  console.log(`${label} | ${n} iterations | ${precision(sum, 4)}ms | ${precision(sum / n, 4)}ms per | 10/50/90: ${precision(q[.1], 6)} / ${precision(q[.5], 6)} / ${precision(q[.9], 6)}`);
+  await Promise.allSettled(promises);
+}
+
+/**
+ * Round a decimal number to a specified number of digits.
+ * @param {Number}  n       Number to round.
+ * @param {Number}  digits  Digits to round to.
+ */
+function precision(n, digits = 2) {
+  return Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits);
+}
+
+export async function sleepFn(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+

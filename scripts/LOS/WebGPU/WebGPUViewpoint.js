@@ -20,7 +20,8 @@ export class WebGPUViewpoint extends AbstractViewpoint {
 
   constructor(...args) {
     super(...args);
-    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPU || CONFIG[MODULE_ID].percentVisibleWebGL2;
+    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPU //|| CONFIG[MODULE_ID].percentVisibleWebGL2;
+    if ( !this.calc ) console.error("WebGPUViewpoint|percentVisibleWebGPU not found.");
   }
 
   /** @type {boolean} */
@@ -33,7 +34,42 @@ export class WebGPUViewpoint extends AbstractViewpoint {
     const viewerLocation = this.viewpoint;
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
 
-    if ( this.useCache ) return this.calc._percentVisible(viewer, target, viewerLocation, targetLocation);
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
+    if ( this.useCache ) return this.calc.percentVisible(viewer, target, viewerLocation, targetLocation);
+    return this.calc._percentVisible(viewer, target, { viewerLocation, targetLocation });
+  }
+}
+
+export class WebGPUViewpointAsync extends AbstractViewpoint {
+  // TODO: Handle config and filtering obstacles.
+
+  constructor(...args) {
+    super(...args);
+    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPUAsync // || CONFIG[MODULE_ID].percentVisibleWebGL2;
+    if ( !this.calc ) console.error("WebGPUViewpointAsync|percentVisibleWebGPUAsync not found.");
+  }
+
+  /** @type {boolean} */
+  useCache = true;
+
+  _percentVisible() {
+    // TODO: Handle configuration options.
+    const viewer =  this.viewerLOS.viewer;
+    const target = this.viewerLOS.target;
+    const viewerLocation = this.viewpoint;
+    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+
+    if ( this.useCache ) return this.calc.percentVisible(viewer, target, viewerLocation, targetLocation);
+    return this.calc._percentVisible(viewer, target, { viewerLocation, targetLocation });
+  }
+
+  async _percentVisible() {
+    // TODO: Handle configuration options.
+    const viewer =  this.viewerLOS.viewer;
+    const target = this.viewerLOS.target;
+    const viewerLocation = this.viewpoint;
+    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+
+    if ( this.useCache ) return this.calc.percentVisibleAsync(viewer, target, viewerLocation, targetLocation);
+    return this.calc._percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
   }
 }

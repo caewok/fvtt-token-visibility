@@ -16,7 +16,7 @@ import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
 import { Area3dHybridViewpoint } from "./Area3dHybridViewpoint.js";
 import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
 import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
-import { WebGPUViewpoint } from "./WebGPU/WebGPUViewpoint.js";
+import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
 // Debug
 import { Area3dPopout } from "./Area3dPopout.js";
@@ -37,6 +37,7 @@ export class Area3dViewerLOS extends AbstractViewerLOS {
     "los-area-3d-hybrid": Area3dHybridViewpoint,
     "los-webgl2": WebGL2Viewpoint,
     "los-webgpu": WebGPUViewpoint,
+    "los-webgpu-async": WebGPUViewpointAsync,
   };
 
   /**
@@ -46,6 +47,13 @@ export class Area3dViewerLOS extends AbstractViewerLOS {
   _percentVisible(target) {
     if ( this.config.debug ) this._clear3dDebug();
     const percent = super._percentVisible(target);
+    if ( this.config.debug && this.viewer.controlled && game.user.targets.has(target) ) this._draw3dDebug();
+    return percent;
+  }
+
+  async _percentVisibleAsync(target) {
+    if ( this.config.debug ) this._clear3dDebug();
+    const percent = await super._percentVisibleAsync(target);
     if ( this.config.debug && this.viewer.controlled && game.user.targets.has(target) ) this._draw3dDebug();
     return percent;
   }

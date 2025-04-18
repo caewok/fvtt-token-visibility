@@ -1052,7 +1052,11 @@ export class TokenTriangles extends AbstractPlaceableTriangles {
 
     // Debugging: confirm facing.
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.token);
-    if ( this.triangles.some(tri => tri.isFacing(ctr)) ) console.error(`Token ${this.token.name} ${this.token.id} has misconfigured triangles.`);
+    for ( const tri of this.triangles ) {
+      if ( tri.isFacing(ctr) ) tri.reverseOrientation();
+    }
+
+    // if ( this.triangles.some(tri => tri.isFacing(ctr)) ) console.error(`Token ${this.token.name} ${this.token.id} has misconfigured triangles.`);
   }
 }
 

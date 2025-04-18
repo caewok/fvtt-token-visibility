@@ -73,6 +73,7 @@ export const SETTINGS = {
         AREA3D_HYBRID: "los-area-3d-hybrid",
         WEBGL2: "los-webgl2",
         WEBGPU: "los-webgpu",
+        WEBGPU_ASYNC: "los-webgpu-async"
       },
       POINT_OPTIONS: {
         NUM_POINTS: "los-points-target",

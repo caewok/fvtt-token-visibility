@@ -161,6 +161,10 @@ export class PlaceableInstanceHandler {
     };
   }
 
+  rotationMatrixForInstance(_idx) {
+    return MatrixFloat32.identity(4, 4, rotationM);
+  }
+
   /**
    * Retrieve the array views associated with a given placeable.
    * @param {string} placeableId  Id of the placeable
@@ -215,8 +219,8 @@ export class PlaceableInstanceHandler {
     if ( !this.#emptyIndices.size ) return false;
     const idx = this.#emptyIndices.first();
     this.#emptyIndices.delete(idx);
-    this.instanceIndexFromId.add(idx, placeable.id);
-    this.placeableFromInstanceIndex.add(idx, placeable);
+    this.instanceIndexFromId.set(idx, placeable.id);
+    this.placeableFromInstanceIndex.set(idx, placeable);
     this.updateInstanceBuffer(idx);
   }
 
@@ -420,6 +424,7 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    */
   updateInstanceBuffer(idx) {
     const edge = this.placeableFromInstanceIndex.get(idx);
+    if ( !edge ) return;
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const pos = this.constructor.edgeCenter(edge);
@@ -447,6 +452,14 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
 
     return super.updateInstanceBuffer(idx,
       { rotation: rotationM, translation: translationM, scale: scaleM });
+  }
+
+  rotationMatrixForInstance(idx) {
+    const edge = this.placeableFromInstanceIndex.get(idx);
+    if ( !edge ) return super.rotationMatrixForInstance(idx);
+    const rot = this.constructor.edgeAngle(edge);
+    MatrixFloat32.rotationZ(rot, true, rotationM);
+    return rotationM;
   }
 
   /**
@@ -600,6 +613,7 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    */
   updateInstanceBuffer(idx) {
     const tile = this.placeableFromInstanceIndex.get(idx);
+    if ( !tile ) return;
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = this.constructor.tileCenter(tile);
@@ -612,10 +626,18 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
     MatrixFloat32.scale(width, height, 1.0, scaleM);
 
     // Rotate based on tile rotation.
-    MatrixFloat32.rotationZ(this.constructor.rotation, true, rotationM);
+    MatrixFloat32.rotationZ(this.constructor.tileRotation(tile), true, rotationM);
 
     return super.updateInstanceBuffer(idx,
       { rotation: rotationM, translation: translationM, scale: scaleM });
+  }
+
+  rotationMatrixForInstance(idx) {
+    const tile = this.placeableFromInstanceIndex.get(idx);
+    if ( !tile ) return super.rotationMatrixForInstance(idx);
+    const rot = this.constructor.tileRotation(tile)
+    MatrixFloat32.rotationZ(rot, true, rotationM);
+    return rotationM;
   }
 
   /**
@@ -692,6 +714,7 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
    */
   updateInstanceBuffer(idx) {
     const token = this.placeableFromInstanceIndex.get(idx);
+    if ( !token ) return;
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
@@ -722,5 +745,25 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
       height: token.document.height * canvas.dimensions.size * .99,
       zHeight: (token.topZ - token.bottomZ) * .99,
     };
+  }
+}
+
+export class SceneInstanceHandler extends TileInstanceHandler {
+  static HOOKS = []; // TODO: Scene hook if the scene background changes?
+
+  getPlaceables() {
+    if ( !canvas.scene.background.src ) return [];
+    return [{ id: canvas.scene.id, ...canvas.scene.background}];
+  }
+
+  // includePlaceable(sceneObj) { return Boolean(canvas.scene.background.src); }
+
+  static tileRotation() { return 0; }
+
+  static tileDimensions() { return canvas.dimensions.sceneRect; }
+
+  static tileCenter() {
+    const ctr = canvas.dimensions.rect.center;
+    return new CONFIG.GeometryLib.threeD.Point3d(ctr.x, ctr.y, 0);
   }
 }

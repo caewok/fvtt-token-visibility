@@ -249,7 +249,10 @@ class DrawableObjectsAbstract {
    * @param {CommandEncoder} renderPass
    */
   render(renderPass) {
-    this.drawables.forEach(drawable => this._renderDrawable(renderPass, drawable));
+    this.drawables.forEach(drawable => {
+      this._initializeRenderPass(renderPass);
+      this._renderDrawable(renderPass, drawable);
+    });
   }
 
   /**
@@ -312,7 +315,7 @@ class DrawableObjectsAbstract {
    * Called after pass has begun for this render object.
    * @param {CommandEncoder} renderPass
    */
-  initializeRenderPass(renderPass, pipelineName = "default") {
+  _initializeRenderPass(renderPass, pipelineName = "default") {
     renderPass.setPipeline(this.pipeline[pipelineName]);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CAMERA, this.camera.bindGroup);
   }
@@ -541,8 +544,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
     });
   }
 
-  initializeRenderPass(renderPass, pipelineName) {
-    super.initializeRenderPass(renderPass, pipelineName);
+  _initializeRenderPass(renderPass, pipelineName) {
+    super._initializeRenderPass(renderPass, pipelineName);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.INSTANCE, this.bindGroups.instance);
   }
 
@@ -604,6 +607,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
 
     if ( this.buffers.indirect ) this.buffers.indirect.destroy();
+    if ( !this.placeableHandler.numInstances ) return;
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
     this.buffers.indirect = this.device.createBuffer({
       label: "Indirect Buffer",
@@ -628,14 +632,17 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
    */
   _createCulledBuffer() {
+    if ( this.buffers.culled ) this.buffers.culled.destroy();
+    if ( !this.placeableHandler.numInstances ) return;
+
     // To create a single buffer the offset must be a multiple of 256.
     // As each element is only u32 (or u16), that means 64 (u32) or 128 (u16) entries per drawable.
     // So 64 or 128 walls minimum.
     // For 4 wall drawables, need 1 culling buffer of min size 256 * 4 = 1024.
-    const minSize = this.drawables.size > 1 ? 256 : 4;
+    // Ensure size is divisible by 256.
+    const minSize = 256;
+    const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
 
-    if ( this.buffers.culled ) this.buffers.culled.destroy();
-    const size = Math.max(minSize, this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT);
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
       size: size * this.drawables.size,
@@ -689,6 +696,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // Set the culled instance buffer and indirect buffer for each drawable.
     // The indirect buffer determines how many elements in the culled instance buffer are drawn.
     for ( const drawable of this.drawables.values() ) {
+      if ( !drawable.instanceSet.size ) continue;
       let i = 0;
       drawable.instanceSet.forEach(idx => drawable.culledBufferRaw[i++] = idx);
 
@@ -733,7 +741,6 @@ export class DrawableObjectRBCulledInstancesAbstract extends DrawableObjectCulle
 
     // Call the exact same function as the non-bundled draw
     // Call the parent so executeBundles is not called.
-    this.initializeRenderPass(encoder);
     super.render(encoder, opts);
     this.renderBundle = encoder.finish();
     this._postRenderPass(opts)
@@ -1067,7 +1074,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
   }
 
   // Skipped until render.
-  initializeRenderPass(_renderPass) { return; }
+  _initializeRenderPass(_renderPass) { return; }
 
   /**
    * Render only the target token.
@@ -1092,7 +1099,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
 
     // Skipped initialize, so do here. Change if drawing the target.
     const pipelineName = drawable.label === "Token target" ? "target" : "default";
-    super.initializeRenderPass(renderPass, pipelineName);
+    super._initializeRenderPass(renderPass, pipelineName);
     super._renderDrawable(renderPass, drawable);
   }
 
@@ -1369,7 +1376,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
   }
 
   // Skipped until render.
-  initializeRenderPass(_renderPass) { return; }
+  _initializeRenderPass(_renderPass) { return; }
 
   /**
    * Render only the target token.
@@ -1395,7 +1402,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
 
     // Skipped initialize, so do here. Change if drawing the target.
     const pipelineName = drawable.label === "Token target" ? "target" : "default";
-    super.initializeRenderPass(renderPass, pipelineName);
+    super._initializeRenderPass(renderPass, pipelineName);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
 
     drawable.geom.setVertexBuffer(renderPass);

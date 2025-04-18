@@ -8,10 +8,9 @@
 // LOS folder
 import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
 import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
-import { testWallsForIntersections } from "./PointSourcePolygon.js";
 
 // Geometry folder
-import { addClassGetter, addClassMethod } from "../geometry/util.js";
+import { addClassGetter } from "../geometry/util.js";
 
 
 // Debug
@@ -63,6 +62,7 @@ export class Area3dHybridViewpoint extends Area3dGeometricViewpoint {
     if ( this.blockingObjects.tiles.size ) return this.#webGL2Class._percentVisible();
     return super._percentVisible();
   }
+
 
   // ----- NOTE: Debugging methods ----- //
 
