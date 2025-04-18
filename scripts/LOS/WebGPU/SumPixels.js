@@ -93,7 +93,7 @@ class WebGPUComputeAbstract {
     await this._compute(opts);
     // console.debug(`${this.constructor.name}|pulling result...`);
     const res = await this._postCompute(opts);
-    // console.debug(`${this.constructor.name}|${res} red pixels`);
+    // console.debug(`${this.constructor.name}|${res.red} red pixels; ${res.redBlocked} blocked red pixels`);
     return res;
   }
 

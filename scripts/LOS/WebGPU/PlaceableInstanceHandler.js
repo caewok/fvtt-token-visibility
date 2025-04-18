@@ -219,8 +219,8 @@ export class PlaceableInstanceHandler {
     if ( !this.#emptyIndices.size ) return false;
     const idx = this.#emptyIndices.first();
     this.#emptyIndices.delete(idx);
-    this.instanceIndexFromId.add(idx, placeable.id);
-    this.placeableFromInstanceIndex.add(idx, placeable);
+    this.instanceIndexFromId.set(idx, placeable.id);
+    this.placeableFromInstanceIndex.set(idx, placeable);
     this.updateInstanceBuffer(idx);
   }
 
