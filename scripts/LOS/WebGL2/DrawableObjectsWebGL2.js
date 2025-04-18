@@ -377,7 +377,6 @@ class DrawableObjectsWebGL2Abstract {
    */
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
-    this._updateInstances();
 
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
@@ -551,7 +550,6 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
-    this._updateInstances();
 
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
@@ -643,7 +641,6 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
     if ( typeof idx === "undefined" ) return;
 
-    this._updateInstances();
     const gl = this.webGL2.gl;
 
     gl.useProgram(this.programInfo.program);
@@ -668,7 +665,6 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
-    this._updateInstances();
 
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
