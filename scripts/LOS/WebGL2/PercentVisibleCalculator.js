@@ -143,33 +143,30 @@ class PercentVisibleCalculatorAbstract {
       this._updateObstacleCacheKeys();
       return true;
     }
-
     if ( this.tokenChanged(viewer) )  {
-      // Wipe every token that targets this viewer.
-      const targetedSet = this._cache.get(viewer)?.get(TARGETED_BY_SET) || new Set();
-      for ( const token of targetedSet ) this._cache.get(token).get(viewer).clear();
-
-      // Wipe every viewer that targets this viewer.
-      this._cache.set(viewer, new WeakMap()); // Wipe everything for this viewer; cannot clear a WeakMap.
-
-      // Increment the cache key to reflect these updates.
-      this._updateTokenCacheKeys(viewer);
+      this.#clearTokenCache(viewer);
       return true;
     }
-
     if ( this.tokenChanged(target) ) {
-      // Wipe every token that targets this target.
-      const targetedSet = this._cache.get(target)?.get(TARGETED_BY_SET) || new Set();
-      for ( const token of targetedSet ) this._cache.get(token).get(target).clear();
-
-      // Wipe every viewer that targets this target.
-      this._cache.set(target, new WeakMap()); // Wipe everything for this target; cannot clear a WeakMap.
-
-      // Increment the cache key to reflect these updates.
-      this._updateTokenCacheKeys(target);
+      this.#clearTokenCache(target);
       return true;
     }
     return false;
+  }
+
+  #clearTokenCache(viewer) {
+    // Wipe every token that targets this viewer.
+    const targetedSet = this._cache.get(viewer)?.get(TARGETED_BY_SET) || new Set();
+    for ( const token of targetedSet ) {
+      const locMap = this._cache.get(token).get(viewer);
+      if ( locMap ) locMap.clear();
+    }
+
+    // Wipe every viewer that targets this viewer.
+    this._cache.set(viewer, new WeakMap()); // Wipe everything for this viewer; cannot clear a WeakMap.
+
+    // Increment the cache key to reflect these updates.
+    this._updateTokenCacheKeys(viewer);
   }
 
   _percentVisibleCached(viewer, target, viewerLocation, targetLocation) {
