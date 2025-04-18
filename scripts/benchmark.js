@@ -342,7 +342,12 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints,
     for ( const token of tokens ) {
       const xDiff = Math.round((Math.random() - 0.5) * 100); // Move up to 50.
       const yDiff = Math.round((Math.random() - 0.5) * 100);
-      promises.push(token.document.update({ x: token.document.x + xDiff, y: token.document.y + yDiff }));
+
+      // Keep within scene bounds to avoid polygon errors.
+      const x = token.document.x + xDiff;
+      const y = token.document.y + yDiff;
+      if ( !canvas.dimensions.sceneRect.contains(x, y) ) continue;
+      promises.push(token.document.update({ x, y }));
     }
     await Promise.allSettled(promises);
     const t0 = performance.now();
