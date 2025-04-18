@@ -98,11 +98,13 @@ let {
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
   DebugVisibilityViewerWebGPU,
+  DebugVisibilityViewerWebGPUAsync
   // wgsl
 } = api.webgpu
 
 let {
   PercentVisibleCalculatorWebGL2,
+  DebugVisibilityViewerWebGL2,
 } = api.webgl
 
 device = await WebGPUDevice.getDevice()
@@ -148,7 +150,15 @@ await calcWebGPUAsync._percentVisibleAsync(viewer, target)
 await calcWebGPUAsync.percentVisibleAsync(viewer, target)
 
 
+debugViewer = new DebugVisibilityViewerWebGL2({ device });
+await debugViewer.initialize();
+debugViewer.render();
+
 debugViewer = new DebugVisibilityViewerWebGPU({ device });
+await debugViewer.initialize();
+debugViewer.render();
+
+debugViewer = new DebugVisibilityViewerWebGPUAsync({ device });
 await debugViewer.initialize();
 debugViewer.render();
 

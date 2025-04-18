@@ -9,7 +9,7 @@ Hooks,
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
 import { Area3dPopoutCanvas } from "../Area3dPopout.js";
-import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU } from "./PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./PercentVisibleCalculator.js";
 
 /* Debug viewer
 
@@ -184,8 +184,6 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerAbstract {
   _createRenderer() {
     return new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType, debugViewNormals: this.debugView });
   }
-
-
 }
 
 export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerAbstract {
@@ -209,6 +207,50 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerAbstract {
   async reinitialize() {
     await super.reinitialize();
     this.renderObstacles.setRenderTextureToCanvas(this.popout.canvas);
+  }
+}
+
+export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerAbstract {
+  static CONTEXT_TYPE = "webgpu";
+
+  constructor({ device, ...opts } = {}) {
+    super(opts);
+    this.device = device;
+    this.calc = new PercentVisibleCalculatorWebGPUAsync({ device, senseType: this.senseType });
+  }
+
+  _createRenderer() {
+    return new RenderObstacles(this.device, {
+      senseType: this.senseType,
+      debugViewNormals: this.debugView,
+      width: this.constructor.WIDTH,
+      height: this.constructor.HEIGHT
+    });
+  }
+
+  async reinitialize() {
+    await super.reinitialize();
+    this.renderObstacles.setRenderTextureToCanvas(this.popout.canvas);
+  }
+
+  render(viewerLocation, target, { viewer, targetLocation } = {}) {
+    viewer ??= this.viewer;
+    target ??= this.target;
+    if ( !(viewer || target) ) return;
+    if ( this.popout._state !== this.popout.constructor.RENDER_STATES.RENDERED ) {
+      return this.reinitialize().then(() =>
+        this.render(viewerLocation, target, { viewer, targetLocation } ));
+    }
+
+    viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+
+    const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
+    const callback = (percentVis, viewer, target) => {
+      visibleTextElem.innerHTML = `Percent visible:${Math.round(percentVis * 100)}%`;
+      console.debug(`${viewer.name} --> ${target.name} ${Math.round(percentVis * 100)}%`);
+    }
+    const percentVis = this.calc.percentVisible(viewer, target, { callback });
   }
 }
 

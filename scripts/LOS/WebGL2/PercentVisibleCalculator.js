@@ -60,7 +60,7 @@ class PercentVisibleCalculatorAbstract {
    * @param {Point3d} [opts.targetLocation]   Where the camera is looking to in 3d space
    * @returns {number}
    */
-  percentVisible(viewer, target, { viewerLocation, targetLocation } = {}) {
+  percentVisible(viewer, target, { viewerLocation, targetLocation, ...opts } = {}) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
@@ -68,7 +68,7 @@ class PercentVisibleCalculatorAbstract {
     // Check if we already know this value for the given parameters.
     let cachedValue = null;
     if ( !this._updateCache(viewer, target, viewerLocation, targetLocation) ) {
-      cachedValue = this._percentVisibleCached(viewer, target, viewerLocation, targetLocation);
+      cachedValue = this._percentVisibleCached(viewer, target, viewerLocation, targetLocation, opts);
     }
     if ( Number.isNumeric(cachedValue) ) return cachedValue;
 
@@ -169,8 +169,8 @@ class PercentVisibleCalculatorAbstract {
     this._updateTokenCacheKeys(viewer);
   }
 
-  _percentVisibleCached(viewer, target, viewerLocation, targetLocation) {
-   return this._getCachedPercentVisible(viewer, target, viewerLocation, targetLocation);
+  _percentVisibleCached(viewer, target, viewerLocation, targetLocation, opts) {
+   return this._getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts);
   }
 
   /** @type {PlaceableInstanceHandler} */
@@ -559,7 +559,8 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
           .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)));
   }
 
-  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation) {
+
+  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts) {
     this._addCache(viewer, target);
     const res = this._cache
       .get(viewer)
@@ -573,8 +574,9 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     // TODO: Trigger an LOS or Cover update? Pass through a callback to trigger?
     if ( res.dirty ) {
       const task = async () => {
-        const percentRed = await this._percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
+        const percentRed = await this._percentVisibleAsync(viewer, target, viewerLocation, targetLocation);
         this._setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentRed);
+        if ( opts.callback ) await opts.callback(percentRed, viewer, target, viewerLocation, targetLocation);
       }
       this.queue.enqueue(task)
       // TODO: Trigger an LOS / Cover update, probably using callback.
