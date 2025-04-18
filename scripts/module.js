@@ -118,7 +118,7 @@ import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU } from "./LOS/
 
 // Other self-executing hooks
 import "./changelog.js";
-import "./LOS/WebGPU/webgpu-map-sync.js";
+// import "./LOS/WebGPU/webgpu-map-sync.js";
 
 Hooks.once("init", function() {
   // Load bitmap font

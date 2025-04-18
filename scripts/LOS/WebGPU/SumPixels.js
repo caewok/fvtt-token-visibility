@@ -280,6 +280,7 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
    */
   async _postCompute(_opts) {
     // Get the data from the result buffer.
+    // this.buffers.counterResult.unmap();
     await this.buffers.counterResult.mapAsync(GPUMapMode.READ);
     const counterPixels = new Uint32Array(this.buffers.counterResult.getMappedRange());
     const red = counterPixels[0];
@@ -289,6 +290,7 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
   }
 
   _postComputeSync(_opts) {
+    console.error(`${this.constructor.name}|_postComputeSync not enabled.`);
     this.buffers.counterResultSync.mapSync(GPUMapMode.READ);
     const counterPixels = new Uint32Array(this.buffers.counterResultSync.getMappedRange());
     const red = counterPixels[0];
