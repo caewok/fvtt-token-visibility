@@ -560,7 +560,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
   }
 
 
-  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts) {
+  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts = {}) {
     this._addCache(viewer, target);
     const res = this._cache
       .get(viewer)
