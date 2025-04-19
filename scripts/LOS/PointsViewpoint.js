@@ -188,7 +188,9 @@ export class PointsViewpoint extends AbstractViewpoint {
       if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
 
       const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
-      if ( !constrainedGridShape || constrainedGridShape.points.length < 6 ) continue;
+      if ( !constrainedGridShape
+        || ((constrainedGridShape instanceof PIXI.Polygon)
+         && (constrainedGridShape.points.length < 6)) ) continue;
       constrainedGridShapes.push(constrainedGridShape);
     }
 
