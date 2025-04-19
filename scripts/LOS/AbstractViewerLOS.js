@@ -274,7 +274,6 @@ export class AbstractViewerLOS {
    */
   percentVisible(target) {
     this.target = target;  // Important so the cache is reset.
-    if ( this.config.debug ) this._drawCanvasDebug();
     const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target);
     if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
@@ -282,7 +281,6 @@ export class AbstractViewerLOS {
 
   async percentVisibleAsync(target) {
     this.target = target;  // Important so the cache is reset.
-    if ( this.config.debug ) this._drawCanvasDebug();
     const percent = this._simpleVisibilityTest(target) ?? (await this._percentVisibleAsync(target));
     if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;

@@ -515,7 +515,6 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   destroy() {
     this.clearCalc();
-    this.popout.pixiApp.stage.removeChildren();
     if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) this.#popoutGraphics.destroy();
     if ( this.#popoutContainer && !this.#popoutContainer.destroyed ) this.#popoutContainer.destroy();
     super.destroy();

@@ -144,7 +144,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
   maxTargetValue = 1;
 
-  _calculateTargetPerspectivePolygons(lookAtM, scale = 100) {
+  _calculateTargetPerspectivePolygons(lookAtM, scale = 1000) {
     lookAtM ??= this.targetLookAtMatrix;
 
     // Build the target shape.
@@ -167,7 +167,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
       }).map(tri => tri.perspectiveTransform(scale / this.maxTargetValue).toPolygon());
   }
 
-  _calculateBlockingPerspectivePolygons(objects, lookAtM, scale = 100) {
+  _calculateBlockingPerspectivePolygons(objects, lookAtM, scale = 1000) {
     lookAtM ??= this.targetLookAtMatrix;
     const blockingPolys = [];
     const multiplier = scale / this.maxTargetValue;
@@ -274,7 +274,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * Draw the 3d objects in the popout.
    */
   _draw3dDebug(drawTool, renderer) {
-    if ( !this._targetPolys.length ) return;
+    this._obscuredArea(); // Recalculate the 3d objects.
     const colors = Draw.COLORS;
 
     // Scale the target graphics to fit in the view window.
