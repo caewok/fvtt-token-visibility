@@ -28,15 +28,6 @@ class DebugVisibilityViewerAbstract {
   /** @type {string} */
   senseType = "sight";
 
-  /** @type {RenderObstaclesWebGL2} */
-  renderObstacles;
-
-  /** @type {Token} */
-  viewer;
-
-  /** @type {Token} */
-  target;
-
   constructor({ senseType = "sight" } = {}) {
     this.senseType = senseType;
   }
@@ -45,14 +36,24 @@ class DebugVisibilityViewerAbstract {
     this.registerHooks();
   }
 
-  _createRenderer() {
-    return new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType, debugViewNormals: this.debugView });
-  }
+  /** @type {Token} */
+  #viewer;
+
+  get viewer() { return (this.#viewer ??= canvas.tokens.controlled[0]); }
+
+  set viewer(value) { this.#viewer = value; }
+
+  /** @type {Token} */
+  #target;
+
+  get target() { return (this.#target ??= game.user.targets.first()); }
+
+  set target(value) { this.#target = value; }
 
   render(viewerLocation, target, { viewer, targetLocation } = {}) {
     viewer ??= this.viewer;
     target ??= this.target;
-    if ( !(viewer || target) ) return;
+    if ( !(viewer && target) ) return;
 
     viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
     this._render(viewer, target, viewerLocation, targetLocation);
@@ -60,15 +61,11 @@ class DebugVisibilityViewerAbstract {
     this.updateDebugForPercentVisible(percentVisible, viewer, target, viewerLocation, targetLocation);
   }
 
-  _render(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-  }
+  _render(_viewer, _target, _viewerLocation, _targetLocation) {}
 
   updateDebugForPercentVisible(_percentVisible, _viewer, _target, _viewerLocation, _targetLocation) {}
 
-  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
-    return this.calc.percentVisible(viewer, target);
-  }
+  percentVisible(_viewer, _target, _viewerLocation, _targetLocation) {}
 
   /** @type {number[]} */
   hooks = [];
@@ -110,9 +107,9 @@ class DebugVisibilityViewerAbstract {
    * @param {Token} token
    * @param {boolean} controlled      True if controlled
    */
-  onControlToken(token, _controlled) {
+  onControlToken(token, controlled) {
     // if ( !controlled ) return;
-    this.viewer = token;
+    if ( controlled ) this.viewer = token;
     this.render();
   }
 
@@ -122,9 +119,9 @@ class DebugVisibilityViewerAbstract {
    * @param {Token} targetToken
    * @param {boolean} targeted      True if targeted
    */
-  onTargetToken(user, targetToken, _targeted) {
+  onTargetToken(user, targetToken, targeted) {
     if ( game.user !== user ) return;
-    this.target = targetToken;
+    if ( targeted ) this.target = targetToken;
     this.render();
   }
 
@@ -149,7 +146,6 @@ class DebugVisibilityViewerAbstract {
     this.deregisterHooks();
     canvas.tokens.removeChild(this.#debugGraphics);
     if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
-    // this.renderObstacles.destroy();
   }
 
   /* ----- Canvas graphics ----- */
@@ -185,6 +181,76 @@ class DebugVisibilityViewerAbstract {
   }
 }
 
+export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
+  /** @type {class} */
+  // static popoutClass = Area3dPopout; // PIXI version
+
+  /** @type {Token[]} */
+  get viewers() { return canvas.tokens.controlled; }
+
+  /** @type {Token[]} */
+  get targets() { return game.user.targets.values(); }
+
+  /** @type {object} */
+  config = {
+    useLitTargetShape: false,
+  };
+
+  constructor(opts) {
+    super(opts);
+  }
+
+  render() {
+    const { targets, viewers } = this;
+
+    if ( !(targets.length || viewers.length) ) return this.clearDebug();
+    this.clearDebug();
+
+    // Calculate points and pull the debug data.
+    for ( const viewer of viewers) {
+      this.calc.viewer = viewer;
+
+      for ( const target of targets) {
+        if ( viewer === target ) continue;
+        this.calc.target = target;
+        this.calc._drawCanvasDebug();
+        this.calc.percentVisible(target);
+      }
+    }
+  }
+
+  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
+    this.calc.viewer = viewer;
+    return this.calc.percentVisible(target);
+  }
+
+  /** @type {AbstractViewer} */
+  #calc;
+
+  get calc() {
+    if ( this.#calc ) return this.#calc;
+    this.#calc = buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
+    this.#calc.config.viewpointClass = PointsViewpoint;
+    this.#calc.config.debug = true;
+    this.#calc.config.debugDraw = this.debugDraw;
+    return this.#calc;
+  }
+
+  /**
+   * Triggered whenever a token is refreshed.
+   * @param {Token} token
+   * @param {RenderFlags} flags
+   */
+  onRefreshToken(token, flags) {
+    if ( !(this.viewers.some(viewer => viewer === token)
+        || this.targets.some(target => target === token)) ) return;
+    if ( !(flags.refreshPosition
+        || flags.refreshElevation
+        || flags.refreshSize ) ) return;
+    this.render();
+  }
+}
+
 export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityViewerAbstract {
   /** @type {number} */
   static WIDTH = 400;
@@ -195,16 +261,17 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   /** @type {class} */
   static popoutClass = Area3dPopoutCanvas;
 
+  static CONTEXT_TYPE = "webgl2";
+
   /** @type {Area3dPopoutCanvas} */
   popout;
-
-  /** @type {WebGL2Context} */
-  gl;
 
   constructor(opts) {
     super(opts);
     this.popout = new this.constructor.popoutClass({ width: this.constructor.WIDTH, height: this.constructor.HEIGHT + 75, resizable: false });
   }
+
+  get gl() { return this.popout.context; }
 
   async initialize() {
     await super.initialize();
@@ -212,16 +279,11 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   }
 
   async reinitialize() {
-    if ( !this.popoutIsRendered ) {
-      await this.openPopout();
-      this.gl = this.popout.context;
-    }
-    this.renderObstacles = this._createRenderer();
-    return this.renderObstacles.initialize(); // Async
+    if ( !this.popoutIsRendered ) await this.openPopout();
   }
 
-  async openPopout(opts) {
-    await this.popout._render(true, opts);
+  async openPopout() {
+    await this.popout._render(true, { contextType: this.constructor.CONTEXT_TYPE });
     this._updatePopoutTitle(this.popoutTitle);
   } // Async.
 
@@ -257,16 +319,12 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   render(viewerLocation, target, { viewer, targetLocation } = {}) {
     viewer ??= this.viewer;
     target ??= this.target;
-    if ( !(viewer || target) ) return;
+    if ( !(viewer && target) ) return;
     if ( !this.popoutIsRendered ) {
       return this.reinitialize().then(() =>
         super.render(viewerLocation, target, { viewer, targetLocation }));
     }
     super.render(viewerLocation, target, { viewer, targetLocation });
-  }
-
-  _render(viewer, target, viewerLocation, targetLocation) {
-    super._render(viewer, target, viewerLocation, targetLocation);
   }
 
   updateDebugForPercentVisible(percentVisible, viewer, target, _viewerLocation, _targetLocation) {
@@ -286,64 +344,110 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   /** @type {boolean} */
   debugView = true;
 
-  constructor(opts) {
+  constructor(opts = {}) {
     super(opts);
     this.debugView = opts.debugView ?? true;
     this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.senseType });
   }
 
   async initialize() {
-    await this.calc.initialize()
     await super.initialize();
+    await this.calc.initialize();
   }
 
-  async openPopout(opts = {}) {
-    opts.contextType = this.constructor.CONTEXT_TYPE;
-    return super.openPopout(opts); // Async.
+  async openPopout() {
+    await super.openPopout();
+    if ( this.renderer ) this.renderer.destroy();
+    this.renderer = new RenderObstaclesWebGL2({
+      senseType: this.senseType,
+      debugViewNormals: this.debugView,
+      gl: this.gl,
+    });
+    await this.renderer.initialize();
   }
 
+  _render(viewer, target, viewerLocation, targetLocation) {
+    this.renderer.prerender();
+    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
+  }
 
-  _createRenderer() {
-    return new RenderObstaclesWebGL2({ gl: this.gl, senseType: this.senseType, debugViewNormals: this.debugView });
+  percentVisible(viewer, target, viewerLocation, targetLocation) {
+    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
+  }
+
+  destroy() {
+    // this.calc.destroy();
+    // if ( this.renderer ) this.renderer.destroy();
+    super.destroy();
   }
 }
 
 export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopoutAbstract {
   static CONTEXT_TYPE = "webgpu";
 
+  /** @type {PercentVisibleCalculator} */
+  calc;
+
+  /** @type {RenderObstacles} */
+  renderer;
+
   constructor({ device, ...opts } = {}) {
     super(opts);
     this.debugView = opts.debugView ?? true;
     this.device = device;
     this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.senseType });
-  }
-
-  _createRenderer() {
-    return new RenderObstacles(this.device, {
+    this.renderer = new RenderObstacles(this.device, {
       senseType: this.senseType,
       debugViewNormals: this.debugView,
       width: this.constructor.WIDTH,
       height: this.constructor.HEIGHT
     });
   }
+  async initialize() {
+    await super.initialize();
+    await this.calc.initialize();
+    await this.renderer.initialize();
+  }
 
   async reinitialize() {
     await super.reinitialize();
-    this.renderObstacles.setRenderTextureToCanvas(this.popout.canvas);
+    this.renderer.setRenderTextureToCanvas(this.popout.canvas);
+  }
+
+  _render(viewer, target, viewerLocation, targetLocation) {
+    this.renderer.prerender();
+    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
+  }
+
+  percentVisible(viewer, target, viewerLocation, targetLocation) {
+    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
+  }
+
+  destroy() {
+    // this.calc.destroy();
+    // this.renderer.destroy();
+    super.destroy();
   }
 }
 
 export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithPopoutAbstract {
   static CONTEXT_TYPE = "webgpu";
 
+  /** @type {PercentVisibleCalculator} */
+  calc;
+
+  /** @type {RenderObstacles} */
+  renderer;
+
+  /** @type {boolean} */
+  debugView = true;
+
   constructor({ device, ...opts } = {}) {
     super(opts);
     this.device = device;
+    this.debugView = opts.debugView ?? true;
     this.calc = new PercentVisibleCalculatorWebGPUAsync({ device, senseType: this.senseType });
-  }
-
-  _createRenderer() {
-    return new RenderObstacles(this.device, {
+    this.renderer = new RenderObstacles(this.device, {
       senseType: this.senseType,
       debugViewNormals: this.debugView,
       width: this.constructor.WIDTH,
@@ -351,87 +455,31 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
     });
   }
 
+  async initialize() {
+    await super.initialize();
+    await this.calc.initialize();
+    await this.renderer.initialize();
+  }
+
   async reinitialize() {
     await super.reinitialize();
-    this.renderObstacles.setRenderTextureToCanvas(this.popout.canvas);
+    this.renderer.setRenderTextureToCanvas(this.popout.canvas);
+  }
+
+  _render(viewer, target, viewerLocation, targetLocation) {
+    this.renderer.prerender();
+    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
   }
 
   percentVisible(viewer, target, viewerLocation, targetLocation) {
     const callback = (percentVisible, viewer, target) => this.updatePopoutFooter({ percentVisible, viewer, target });
-    const percentVis = this.calc.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
-    return 0;
+    return this.calc.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
   }
 
-  updateDebugForPercentVisible(_percentVisible, _viewer, _target, _viewerLocation, _targetLocation) {}
-}
-
-export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
-  /** @type {class} */
-  // static popoutClass = Area3dPopout; // PIXI version
-
-  /** @type {Token[]} */
-  get viewers() { return canvas.tokens.controlled; }
-
-  /** @type {Token[]} */
-  get targets() { return game.user.targets.values(); }
-
-  /** @type {object} */
-  config = {
-    useLitTargetShape: false,
-  };
-
-  constructor(opts) {
-    super(opts);
-  }
-
-  render() {
-    const { targets, viewers } = this;
-
-    if ( !(targets.length || viewers.length) ) return this.clearDebug();
-    this.clearDebug();
-
-    // Calculate points and pull the debug data.
-    for ( const viewer of viewers) {
-      this.calc.viewer = viewer;
-      this.calc.viewpoints = this.calc.initializeViewpoints();
-
-      for ( const target of targets) {
-        if ( viewer === target ) continue;
-        this.calc.target = target;
-        this.calc._drawCanvasDebug();
-        this.calc.percentVisible(target);
-      }
-    }
-  }
-
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calc.percentVisible(target);
-  }
-
-  /** @type {AbstractViewer} */
-  #calc;
-
-  get calc() {
-    if ( this.#calc ) return this.#calc;
-    this.#calc = buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
-    this.#calc.config.viewpointClass = PointsViewpoint;
-    this.#calc.config.debug = true;
-    this.#calc.config.debugDraw = this.debugDraw;
-    return this.#calc;
-  }
-
-  /**
-   * Triggered whenever a token is refreshed.
-   * @param {Token} token
-   * @param {RenderFlags} flags
-   */
-  onRefreshToken(token, flags) {
-    if ( !(this.viewers.some(viewer => viewer === token)
-        || this.targets.some(target => target === token)) ) return;
-    if ( !(flags.refreshPosition
-        || flags.refreshElevation
-        || flags.refreshSize ) ) return;
-    this.render();
+  destroy() {
+    // this.calc.destroy();
+    // this.renderer.destroy();
+    super.destroy();
   }
 }
 
@@ -480,7 +528,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.popout.pixiApp.stage.addChild(this.popoutContainer);
   }
 
-  _render(viewer, target, viewerLocation, targetLocation) {
+  _render(viewer, target, _viewerLocation, _targetLocation) {
     this.clearDebug();
     this.calc.viewer = this.viewer;
     this.calc.target = target;
@@ -488,7 +536,8 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.calc.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer);
   }
 
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
+  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
+    this.calc.viewer = this.viewer;
     return this.calc.percentVisible(target);
   }
 
@@ -504,18 +553,21 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   }
 
   clearCalc() {
-    if ( this.#calc ) this.#calc.destroy();
+    // if ( this.#calc ) this.#calc.destroy();
     this.#calc = undefined;
   }
 
   clearDebug() {
     super.clearDebug();
-    this.popoutDraw.clearDrawings();
+    if ( this.#popoutDraw ) this.#popoutDraw.clearDrawings();
   }
 
   destroy() {
     this.clearCalc();
-    if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) this.#popoutGraphics.destroy();
+    if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) {
+      this.#popoutGraphics.destroy();
+      this.#popoutDraw = undefined;
+    }
     if ( this.#popoutContainer && !this.#popoutContainer.destroyed ) this.#popoutContainer.destroy();
     super.destroy();
   }
