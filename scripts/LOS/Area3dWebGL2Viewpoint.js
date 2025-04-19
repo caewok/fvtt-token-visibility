@@ -501,9 +501,11 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
 
   // ----- NOTE: Debugging methods ----- //
 
-  _draw3dDebug() {
-    const renderer = this.popout.pixiApp.renderer;
+  _draw3dDebug(drawTool, renderer, container) {
+    // const renderer = this.popout.pixiApp.renderer;
     // Testing: renderer.state.setDepthTest = true;
+    container.removeChild(this.debugSprite); // Does nothing if sprite not already there.
+    container.addChild(this.debugSprite);
 
     const { debugShaders, debugRenderTexture } = this;
 
@@ -513,10 +515,6 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
     // Render obstacles. Render opaque first.
     this.#renderOpaqueObstacles(renderer, debugRenderTexture, debugShaders);
     this.#renderTransparentObstacles(renderer, debugRenderTexture, debugShaders, this._buildTileDebugShader.bind(this));
-  }
-
-  openDebugPopout() {
-    this.viewerLOS._addChildToPopout(this.debugSprite);
   }
 
   #buildTargetMesh(shaders) {

@@ -6,7 +6,6 @@ import { Settings } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 // import { AbstractCalculator } from "./LOS/AbstractCalculator.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
-import { Area3dViewerLOS } from "./LOS/Area3dViewerLOS.js";
 
 /** Testing
 api = game.modules.get("tokenvisibility").api
@@ -16,36 +15,11 @@ api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEO
 */
 
 export function buildLOSCalculator(token) {
-  const typesArea3d = new Set([
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL1,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID,
-    Settings.KEYS.LOS.TARGET.TYPES.WEBGL2,
-    Settings.KEYS.LOS.TARGET.TYPES.WEBGPU,
-    Settings.KEYS.LOS.TARGET.TYPES.WEBGPU_ASYNC,
-  ]);
-  const is3d = typesArea3d.has(Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM));
-  return is3d ? new Area3dViewerLOS(token) : new AbstractViewerLOS(token);
+  return new AbstractViewerLOS(token);
 }
 
 export function buildCustomLOSCalculator(token, algorithm) {
-  const typesArea3d = new Set([
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL1,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
-    Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID,
-    Settings.KEYS.LOS.TARGET.TYPES.WEBGL2,
-    Settings.KEYS.LOS.TARGET.TYPES.WEBGPU,
-    Settings.KEYS.LOS.TARGET.TYPES.WEBGPU_ASYNC,
-  ]);
-  const is3d = typesArea3d.has(algorithm);
-
-  // For non-3d, only points currently.
-  if ( !is3d ) return new AbstractViewerLOS(token);
-  const losCalc = new Area3dViewerLOS(token);
+  const losCalc = new AbstractViewerLOS(token);
   losCalc._updateAlgorithm(algorithm);
   return losCalc;
 }

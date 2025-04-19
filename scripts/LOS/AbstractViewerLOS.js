@@ -18,6 +18,12 @@ import { tokensOverlap } from "./util.js";
 // Viewpoint algorithms.
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PointsViewpoint } from "./PointsViewpoint.js";
+import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
+import { Area3dWebGL1Viewpoint } from "./Area3dWebGL1Viewpoint.js";
+import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
+import { Area3dHybridViewpoint } from "./Area3dHybridViewpoint.js";
+import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
+import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -55,7 +61,15 @@ export class AbstractViewerLOS {
 
   /** @type {enum<class>} */
   static VIEWPOINT_CLASSES = {
-    "los-points": PointsViewpoint
+    "los-points": PointsViewpoint,
+    "los-area-3d": Area3dGeometricViewpoint,
+    "los-area-3d-geometric": Area3dGeometricViewpoint,
+    "los-area-3d-webgl1": Area3dWebGL1Viewpoint,
+    "los-area-3d-webgl2": Area3dWebGL2Viewpoint,
+    "los-area-3d-hybrid": Area3dHybridViewpoint,
+    "los-webgl2": WebGL2Viewpoint,
+    "los-webgpu": WebGPUViewpoint,
+    "los-webgpu-async": WebGPUViewpointAsync,
   };
 
   /** @type {Token} */
@@ -70,10 +84,9 @@ export class AbstractViewerLOS {
   /**
    * @param {Token} viewer      The token whose LOS should be tested
    */
-  constructor(viewer) {
+  constructor(viewer, cfg) {
+    this.config = this.initializeConfig(cfg);
     this.viewer = viewer;
-    this.config = this.initializeConfig();
-    this.viewpoints = this.initializeViewpoints();
   }
 
   /**
@@ -138,6 +151,20 @@ export class AbstractViewerLOS {
 
   /** @type {number} */
   get visionAngle() { return this.viewer?.vision.data.angle ?? 360; }
+
+  /**
+   * The token associated with a camera location signifying the viewer.
+   * @type {Token}
+   */
+  #viewer;
+
+  get viewer() { return this.#viewer; }
+
+  set viewer(value) {
+    this.#viewer = value;
+    this.clearCache();
+    this.viewpoints = this.initializeViewpoints();
+  }
 
   /**
    * A token that is being tested for whether it is "viewable" from the point of view of the viewer.

@@ -70,8 +70,8 @@ export class Area3dHybridViewpoint extends Area3dGeometricViewpoint {
    * For debugging
    * Switch drawing depending on the algorithm used.
    */
-  _draw3dDebug() {
-    if ( this.blockingObjects.tiles.size ) this.#webGL2Class._draw3dDebug();
-    else super._draw3dDebug();
+  _draw3dDebug(drawTool, renderer) {
+    if ( this.blockingObjects.tiles.size ) this.#webGL2Class._draw3dDebug(drawTool, renderer);
+    else super._draw3dDebug(drawTool, renderer);
   }
 }

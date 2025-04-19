@@ -259,18 +259,12 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
     return this.#debugSprite;
   }
 
-  openDebugPopout() {
-    this.viewerLOS._addChildToPopout(this.debugSprite);
-  }
-
-  #debug = false;
-
-  _draw3dDebug() {
+  _draw3dDebug(drawTool, renderer, container) {
     // Set the renderer and re-run
-    this.renderer = this.popout.pixiApp.renderer;
-    this.#debug = true;
+    container.removeChild(this.debugSprite); // Does nothing if sprite not already there.
+    container.addChild(this.debugSprite);
+    this.renderer = renderer;
     this.percentVisible();
-    this.#debug = false;
     this.renderer = canvas.app.renderer;
   }
 }

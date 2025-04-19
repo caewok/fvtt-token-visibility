@@ -62,11 +62,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     // Round the percent seen so that near-zero areas are 0.
     // Because of trimming walls near the vision triangle, a small amount of token area can poke through
     const percentSeen = targetArea ? obscuredArea / targetArea : 0;
-    if ( this.viewerLOS.config.debug ) {
-      this._updatePercentVisibleLabel(percentSeen);
-      this._draw3dDebug();
-    }
-
     if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
     return percentSeen;
   }
@@ -269,80 +264,17 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
   destroy() {
     this.clearCache();
-    if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) this.#popoutGraphics.destroy();
-    if ( this.#percentVisibleLabel && !this.#percentVisibleLabel.destroyed ) this.#percentVisibleLabel.destroy();
-    this.#popoutGraphics = undefined;
-    this.#popoutDraw = undefined;
     super.destroy();
   }
 
   /* ----- NOTE: Debugging methods ----- */
 
-  /** @type {PIXI.Graphics} */
-  #popoutGraphics;
-
-  get popoutGraphics() { return (this.#popoutGraphics ??= new PIXI.Graphics()); }
-
-  /** @type {Draw} */
-  #popoutDraw;
-
-  get popoutDraw() { return (this.#popoutDraw ??= new Draw(this.popoutGraphics)); }
-
-  openDebugPopout() {
-    this.viewerLOS._addChildToPopout(this.popoutGraphics);
-    this.viewerLOS._addChildToPopout(this.percentVisibleLabel);
-  }
-
-  /** @type {PIXI.BitmapText} */
-  #percentVisibleLabel;
-
-  get percentVisibleLabel() {
-    if ( !this.#percentVisibleLabel ) {
-      this.#percentVisibleLabel = new PIXI.BitmapText("", {
-        fontName: `${MODULE_ID}_area3dPercentLabel`,
-        fontSize: 20,
-        align: 'left',
-      });
-
-      /*
-      this.#percentVisibleLabel = new PIXI.BitmapText("", {
-        fontName: 'Desyrel',
-        fontSize: 20,
-        align: 'center',
-      });
-      */
-      this.#percentVisibleLabel.x = 0; // TODO: Make dynamic to the popout box.
-      this.#percentVisibleLabel.y = 150;
-    }
-    return this.#percentVisibleLabel;
-  }
-
-  /**
-   * For debugging.
-   * Draw the percentage visible.
-   * @param {number} percent    The percent to draw in the window.
-   */
-  _updatePercentVisibleLabel(number) {
-    const label = this.percentVisibleLabel;
-    label.text = `${(number * 100).toFixed(1)}%`;
-    console.log(`Area3dGeometricViewpoint|_updatePercentVisibleLabel ${label.text}`);
-  }
-
-  _clear3dDebug() {
-    if ( this.#popoutGraphics ) this.#popoutGraphics.clear();
-    if ( this.#percentVisibleLabel ) this.#percentVisibleLabel.text = "";
-    console.log(`Area3dGeometricViewpoint|_clear3dDebug`);
-  }
-
   /**
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug() {
+  _draw3dDebug(drawTool, renderer) {
     if ( !this._targetPolys.length ) return;
-
-    const drawTool = this.popoutDraw;
-    drawTool.clearDrawings();
     const colors = Draw.COLORS;
 
     // Scale the target graphics to fit in the view window.

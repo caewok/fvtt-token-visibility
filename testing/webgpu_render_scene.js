@@ -106,6 +106,7 @@ let {
   PercentVisibleCalculatorWebGL2,
   DebugVisibilityViewerWebGL2,
   DebugVisibilityViewerPoints,
+  DebugVisibilityViewerArea3dPIXI,
 } = api.webgl
 
 device = await WebGPUDevice.getDevice()
@@ -165,6 +166,15 @@ debugViewer.render();
 debugViewer.destroy()
 
 debugViewer = new DebugVisibilityViewerWebGPUAsync({ device });
+await debugViewer.initialize();
+debugViewer.render();
+debugViewer.destroy()
+
+debugViewer = new DebugVisibilityViewerArea3dPIXI();
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_GEOMETRIC
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL1
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL2
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_HYBRID
 await debugViewer.initialize();
 debugViewer.render();
 debugViewer.destroy()
