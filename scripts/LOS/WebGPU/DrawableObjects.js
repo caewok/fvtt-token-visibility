@@ -751,7 +751,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       // If the edge is an open door or non-blocking wall, ignore.
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
-      if ( !this.placeableHandler.isBlocking(edge, this.senseType ) continue;
+      if ( !this.placeableHandler.isBlocking(edge, this.senseType) ) continue;
 
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }

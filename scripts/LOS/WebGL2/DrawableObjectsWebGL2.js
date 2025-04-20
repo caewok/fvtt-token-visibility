@@ -26,9 +26,6 @@ import {
 import * as twgl from "./twgl.js";
 
 class DrawableObjectsWebGL2Abstract {
-  /** @type {CONST.WALL_RESTRICTION_TYPES} */
-  senseType = "sight";
-
   /** @type {class} */
   static handlerClass;
 
@@ -84,12 +81,11 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {Uint16Array[]} */
   indices = [];
 
-  constructor(gl, camera, { senseType = "sight", debugViewNormals = false } = {}) {
+  constructor(gl, camera, { debugViewNormals = false } = {}) {
     this.webGL2 = new WebGL2(gl);
     this.camera = camera;
-    this.senseType = senseType;
     this.#debugViewNormals = debugViewNormals;
-    this.placeableHandler = new this.constructor.handlerClass({ senseType });
+    this.placeableHandler = new this.constructor.handlerClass();
     this.uniforms = {
       uPerspectiveMatrix: camera.perspectiveMatrix.arr,
       uLookAtMatrix: camera.lookAtMatrix.arr,
@@ -408,6 +404,9 @@ class DrawableObjectsWebGL2Abstract {
 }
 
 export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  senseType = "sight";
+
   /** @type {class} */
   static handlerClass = NonDirectionalWallInstanceHandler;
 
@@ -416,6 +415,11 @@ export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   /** @type {boolean} */
   static directional = false;
+
+  constructor(gl, camera, { senseType = "sight", ...opts } = {}) {
+    super(gl, camera, opts);
+    this.senseType = senseType;
+  }
 
   _initializeGeoms() {
     this.geom = new this.constructor.geomClass({
@@ -441,6 +445,7 @@ export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
     // Drop open doors.
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
+      if ( !this.placeableHandler.isBlocking(edge, this.senseType) ) continue;
       if ( visionTriangle.containsEdge(edge) ) instanceSet.add(idx);
     }
   }
