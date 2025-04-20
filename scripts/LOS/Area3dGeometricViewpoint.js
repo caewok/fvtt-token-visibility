@@ -12,7 +12,7 @@ import { MODULE_ID } from "../const.js";
 // LOS folder
 import { minMaxPolygonCoordinates } from "./util.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { PolygonVerticalTriangles, Polygon2dTriangles, Square2dTriangles } from "./PlaceableTriangles.js";
+import { Grid3dTriangles  } from "./PlaceableTriangles.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -192,51 +192,16 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
   /* ----- NOTE: Blocking objects ----- */
 
 
-  /** @type {AbstractPolygonTriangles[3]} */
-  static _grid3dShape;
+  /** @type {AbstractPolygonTriangles[]} */
+  static #grid3dShape;
 
   static get grid3dShape() {
-    const SIDES = 0;
-    const TOP = 1;
-    const BOTTOM = 2;
-
-    // Need a getter b/c the grid shape changes when loading new scenes.
-    if ( this._grid3dShape ) return this._grid3dShape;
-
-    const size = canvas.grid.size;
-    const size_1_2 = size * 0.5;
-    this._grid3dShape = Array(3);
-    if ( canvas.grid.isHexagonal ) {
-      const poly = new PIXI.Polygon(canvas.grid.getShape());
-      this._grid3dShape[SIDES] = new PolygonVerticalTriangles(poly);
-      this._grid3dShape[TOP] = new Polygon2dTriangles(poly);
-      this._grid3dShape[BOTTOM] = new Polygon2dTriangles(poly);
-
-      // Already set to correct size.
-      // Move the top and bottom squares to correct elevation.
-      const translateTopM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, size_1_2);
-      const translateBottomM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, -size_1_2);
-      this._grid3dShape[TOP].initialize(translateTopM); // Should be centered at 0,0.
-      this._grid3dShape[BOTTOM].initialize(translateBottomM);
-
-    } else {
-      // For gridless, canvas.grid.getShape() does not work.
-      const rect = new PIXI.Rectangle(-size_1_2, -size_1_2, size, size);
-      this._grid3dShape[SIDES] = new PolygonVerticalTriangles(rect);
-      this._grid3dShape[TOP] = new Square2dTriangles();
-      this._grid3dShape[BOTTOM] = new Square2dTriangles();
-
-      // Move the top and bottom squares to correct elevation.
-      // Set size for the squares.
-      const scaleM = CONFIG.GeometryLib.MatrixFlat.scale(size_1_2, size_1_2, 1);
-      const translateTopM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, size_1_2);
-      const translateBottomM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, -size_1_2);
-      const topM = scaleM.multiply4x4(translateTopM);
-      const bottomM = scaleM.multiply4x4(translateBottomM);
-      this._grid3dShape[TOP].initialize(topM); // Should be centered at 0,0.
-      this._grid3dShape[BOTTOM].initialize(bottomM);
-    }
-    return this._grid3dShape;
+    // TODO: Fix to use static method.
+    if ( this.#grid3dShape ) return this.#grid3dShape;
+    const gridTri = new Grid3dTriangles();
+    gridTri.initialize();
+    this.#grid3dShape = gridTri.trianglesForGridShape();
+    return this.#grid3dShape;
   }
 
   /**
