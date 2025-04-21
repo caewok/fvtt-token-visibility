@@ -17,7 +17,6 @@ import { Settings, SETTINGS } from "./settings.js";
 
 // For API
 import * as bench from "./benchmark.js";
-import * as util from "./util.js";
 
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
@@ -158,9 +157,6 @@ Hooks.once("init", function() {
 
   game.modules.get(MODULE_ID).api = {
     bench,
-
-
-    util,
     range,
 
     triangles: {
