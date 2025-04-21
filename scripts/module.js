@@ -40,8 +40,6 @@ import { extractPixels } from "./LOS/extract-pixels.js";
 
 import * as range from "./visibility_range.js";
 
-import { BVH2d, BVH3d } from "./LOS/BVH.js";
-import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriangle2d, BaryTriangle3d, BaryTriangle3dNormal } from "./LOS/BlockingObject.js";
 import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
@@ -191,17 +189,6 @@ Hooks.once("init", function() {
       HorizontalPoints3d,
       Settings,
       AlphaCutoffFilter
-    },
-
-    bvh: {
-      BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken,
-      BVH2d, BVH3d,
-      Ray2d, Ray3d,
-      BaryTriangle2d,
-      BaryTriangle3d,
-      BaryTriangle3dNormal,
-      VisionPolygon,
-      VisionTriangle
     },
 
     triangles: {
