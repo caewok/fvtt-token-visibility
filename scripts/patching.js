@@ -19,7 +19,6 @@ import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 
 // LOS
 import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
-import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
 import { PATCHES as PATCHES_WallLOS } from "./LOS/Wall.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
@@ -35,7 +34,6 @@ const PATCHES = {
   PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
-  Tile: PATCHES_Tile,
   Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
   "foundry.canvas.sources.PointVisionSource": PATCHES_VisionSource,
   Wall: foundry.utils.mergeObject(PATCHES_Wall, PATCHES_WallLOS),

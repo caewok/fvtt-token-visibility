@@ -83,9 +83,6 @@ async render:
 */
 
 class DrawableObjectsAbstract {
-  /** @type {CONST.WALL_RESTRICTION_TYPES} */
-  senseType = "sight";
-
   static handlerClass;
 
   static shaderFile = "";
@@ -182,15 +179,13 @@ class DrawableObjectsAbstract {
    * @type {GPUDevice} device
    * @type {MaterialsTracker} materials
    * @type {object} [opts]
-   * @type {CONST.WALL_RESTRICTION_TYPES} [opts.senseType="sight"]
    */
-  constructor(device, materials, camera, { senseType = "sight", debugViewNormals = false } = {}) {
+  constructor(device, materials, camera, { debugViewNormals = false } = {}) {
     this.device = device;
     this.materials = materials;
     this.camera = camera;
-    this.senseType = senseType;
     this.#debugViewNormals = debugViewNormals;
-    this.placeableHandler = new this.constructor.handlerClass(this.senseType);
+    this.placeableHandler = new this.constructor.handlerClass();
   }
 
   /** @type {boolean} */
@@ -679,6 +674,14 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   /** @type {string} */
   static shaderFile = "wall";
 
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  senseType = "sight";
+
+  constructor(device, materials, camera, { senseType = "sight", ...opts } = {}) {
+    super(device, materials, camera, opts);
+    this.senseType = senseType;
+  }
+
   /**
    * Define static geometries for the shapes handled in this class.
    */
@@ -746,8 +749,10 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      // If the edge is an open door, ignore.
+      // If the edge is an open door or non-blocking wall, ignore.
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
+      if ( !WallInstanceHandler.isBlocking(edge, this.senseType) ) continue;
+
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
     super.filterObjects(visionTriangle);
@@ -1204,7 +1209,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     const materialBG = this.materials.bindGroups.get("obstacle");
     const numInstances = 1;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      if ( !token.isConstrainedTokenBorder ) return;
+      if ( !token.isConstrainedTokenBorder ) continue;
       const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
       this.geometries.set(token.id, geom);
       this.drawables.set(token.id, {

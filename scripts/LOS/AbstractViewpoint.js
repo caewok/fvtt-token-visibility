@@ -15,7 +15,7 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { VisionPolygon, VisionTriangle } from "./VisionPolygon.js";
-import { PlaceableTrianglesHandler } from "./PlaceableTrianglesHandler.js";
+import { AbstractPolygonTriangles } from "./PlaceableTriangles.js";
 
 import {
   insetPoints,
@@ -271,7 +271,7 @@ export class AbstractViewpoint {
   }
 
   _filterPlaceableTrianglesByViewpoint(placeable) {
-    return placeable[PlaceableTrianglesHandler.ID].triangles
+    return placeable[AbstractPolygonTriangles.ID].triangles
       .filter(tri => tri.isFacing(this.viewpoint));
   }
 

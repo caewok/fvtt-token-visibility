@@ -85,7 +85,7 @@ let {
   WebGPUTexture,
   Camera,
   GeometryWallDesc,
-  GeometryTokenDesc,
+  GeometryCubeDesc,
   GeometryTileDesc,
   GeometryConstrainedTokenDesc,
   RenderWalls,
@@ -109,10 +109,15 @@ let {
   DebugVisibilityViewerArea3dPIXI,
 } = api.webgl
 
+
+
+
 device = await WebGPUDevice.getDevice()
 
 viewer = _token
 target = game.user.targets.first()
+
+
 
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
@@ -132,6 +137,8 @@ popout.context.configure({
   format: presentationFormat,
   alphamode: "premultiplied", // Instead of "opaque"
 });
+
+
 
 
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
