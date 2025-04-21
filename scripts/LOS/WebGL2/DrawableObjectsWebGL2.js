@@ -14,6 +14,7 @@ import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "../WebGPU/GeometryTile.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/GeometryToken.js";
 import {
+  WallInstanceHandler,
   NonDirectionalWallInstanceHandler,
   DirectionalWallInstanceHandler,
   NonDirectionalTerrainWallInstanceHandler,
@@ -445,7 +446,7 @@ export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
     // Drop open doors.
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
-      if ( !this.placeableHandler.isBlocking(edge, this.senseType) ) continue;
+      if ( !WallInstanceHandler.isBlocking(edge, this.senseType) ) continue;
       if ( visionTriangle.containsEdge(edge) ) instanceSet.add(idx);
     }
   }
