@@ -1209,7 +1209,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     const materialBG = this.materials.bindGroups.get("obstacle");
     const numInstances = 1;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      if ( !token.isConstrainedTokenBorder ) return;
+      if ( !token.isConstrainedTokenBorder ) continue;
       const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
       this.geometries.set(token.id, geom);
       this.drawables.set(token.id, {
