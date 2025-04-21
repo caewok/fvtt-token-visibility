@@ -19,7 +19,6 @@ import { tokensOverlap } from "./util.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PointsViewpoint } from "./PointsViewpoint.js";
 import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
-import { Area3dWebGL1Viewpoint } from "./Area3dWebGL1Viewpoint.js";
 import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
 import { Area3dHybridViewpoint } from "./Area3dHybridViewpoint.js";
 import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
@@ -64,7 +63,6 @@ export class AbstractViewerLOS {
     "los-points": PointsViewpoint,
     "los-area-3d": Area3dGeometricViewpoint,
     "los-area-3d-geometric": Area3dGeometricViewpoint,
-    "los-area-3d-webgl1": Area3dWebGL1Viewpoint,
     "los-area-3d-webgl2": Area3dWebGL2Viewpoint,
     "los-area-3d-hybrid": Area3dHybridViewpoint,
     "los-webgl2": WebGL2Viewpoint,
