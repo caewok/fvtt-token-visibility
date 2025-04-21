@@ -111,16 +111,28 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
 
     // Center everything.
     const renderTexture = this.renderTexture;
-    renderTexture.resize(100, 100, true);
-    targetGraphics.position = new PIXI.Point(50, 50);
-    blockingContainer.position = new PIXI.Point(50, 50);
+    renderTexture.resize(400, 400, true);
+    targetGraphics.position = new PIXI.Point(200, 200);
+    blockingContainer.position = new PIXI.Point(200, 200);
+
+    // Construct polygons representing the perspective view of the target and blocking objects.
+    const targetLookAtTris = this._lookAtObject(this.viewerLOS.target, lookAtM);
+    const multiplier = this._calculateTargetSizeMultiplier(targetLookAtTris);
+    const { walls, tokens, terrainWalls } = this.blockingObjects;
+
+    const targetPolys = targetLookAtTris
+      .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
+
+    const blockingPolys = [...walls, ...tokens].flatMap(obj =>
+      this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
+
+    const blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
+       this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
 
     // Draw the target shape.
     targetGraphics.clear();
     const draw = new Draw(targetGraphics);
-    const targetPolys = this._calculateTargetPerspectivePolygons(lookAtM);
     targetPolys.forEach(poly => draw.shape(poly, drawOpts));
-
 
     // If large target, measure the viewable area of a unit grid shape.
     let sumGridCube = 100_000;
@@ -160,8 +172,6 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
       drawOpts.fill = OBSTACLE_COLOR;
 
       // Draw the blocking shapes.
-      const blockingPolys = this._calculateBlockingPerspectivePolygons(
-        [...blockingObjs.walls, ...blockingObjs.tokens], lookAtM);
       blockingPolys.forEach(poly => draw.shape(poly, drawOpts));
     }
 
@@ -179,7 +189,6 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
       drawOpts.fillAlpha = 0.5;
 
       // Draw the blocking shapes.
-      const blockingTerrainPolys = this._calculateBlockingPerspectivePolygons(blockingObjs.terrainWalls, lookAtM);
       blockingTerrainPolys.forEach(poly => draw.shape(poly, drawOpts));
     }
 
@@ -200,7 +209,7 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
 
       // Determine the polygon transform.
       // TODO: Fix to use the tile rectangle.
-      const polys = this._calculateBlockingPerspectivePolygon(tile, lookAtM);
+      const polys = this._lookAtObjectWithPerspective(tile, lookAtM, multiplier);
       const perspectivePoints = [];
       for ( const poly of polys ) {
         const pts = poly.points;
