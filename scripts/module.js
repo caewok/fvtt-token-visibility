@@ -28,13 +28,6 @@ import { TilePoints3d } from "./LOS/PlaceablesPoints/TilePoints3d.js";
 import { VerticalPoints3d } from "./LOS/PlaceablesPoints/VerticalPoints3d.js";
 import { HorizontalPoints3d } from "./LOS/PlaceablesPoints/HorizontalPoints3d.js";
 
-import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
-import { PointsLOS } from "./LOS/PointsLOS.js";
-import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
-import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
-import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
-import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
-
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
@@ -184,15 +177,6 @@ Hooks.once("init", function() {
 
     PixelCache,
     extractPixels,
-
-    losCalcMethods: {
-      AlternativeLOS,
-      PointsLOS,
-      Area3dLOSGeometric,
-      Area3dLOSWebGL,
-      Area3dLOSWebGL2,
-      Area3dLOSHybrid
-    },
 
     util,
     range,
