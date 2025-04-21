@@ -72,6 +72,8 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
   _gridPolys;
 
+
+
   /**
    * Construct polygons that are used to form the 2d perspective.
    */
@@ -81,7 +83,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     // Construct polygons representing the perspective view of the target and blocking objects.
     const lookAtM = this.targetLookAtMatrix;
     const targetLookAtTris = this._lookAtObject(this.viewerLOS.target, lookAtM);
-    const multiplier = this._calculateTargetSizeMultiplier(targetLookAtTris);
+    const multiplier = this.targetMultiplier = this._calculateTargetSizeMultiplier(targetLookAtTris);
 
     const targetPolys = this._targetPolys = targetLookAtTris
       .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
@@ -125,21 +127,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 //       .union()
 //       .clean();
 
-    // TODO: Finish implementing.
-    if ( this.viewerLOS.config.largeTarget ) {
-      // Construct the grid shape at this perspective.
-//       const ctr = this.viewerLOS.target.center;
-//       const grid3dShape = this.constructor.grid3dShape;
-//       const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
-//       grid3dShape.forEach(shape => shape.update(translateM));
-//       const multiplier = 100 / this.maxTargetValue;
-//       const gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
-//         .filter(tri => tri.isFacing(this.viewpoint))
-//         .map(tri => tri.transform(lookAtM))
-//         .map(tri => tri.perspectiveTransform(multiplier))
-//         .map(tri => tri.toPolygon());
-    }
-
     // Use Clipper to calculate area of the polygon shapes.
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor });
@@ -157,7 +144,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     return { targetArea, obscuredArea: diff.area };
   }
 
-  maxTargetValue = 1;
+  targetMultiplier = 1;
 
   _calculateTargetSizeMultiplier(targetLookAtTriangles) {
     let maxZ = Number.NEGATIVE_INFINITY;
@@ -180,8 +167,8 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     });
     // xy / z = f
     // 100 = f * m
-    this.maxTargetValue = (maxZ * 100) / maxXY;
-    return this.maxTargetValue;
+    this.targetMultiplier = (maxZ * 100) / maxXY;
+    return this.targetMultiplier;
   }
 
   _lookAtObject(object, lookAtM) {
@@ -210,21 +197,29 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * @returns {number}
    */
    _gridSquareArea(lookAtM) {
-     lookAtM ??= this.targetLookAtMatrix;
-     const ctr = this.viewerLOS.target.center;
-     const grid3dShape = this.constructor.grid3dShape;
-     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
-     grid3dShape.forEach(shape => shape.update(translateM));
-     const multiplier = 100 / this.maxTargetValue;
-     const gridPolys = this._gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
-      .filter(tri => tri.isFacing(this.viewpoint))
-      .map(tri => tri.transform(lookAtM))
-      .map(tri => tri.perspectiveTransform(multiplier))
-      .map(tri => tri.toPolygon());
+     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM);
      const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();
      return gridPaths.area;
-   }
+  }
+
+  _gridPolygons(lookAtM) {
+     lookAtM ??= this.targetLookAtMatrix;
+     const target = this.viewerLOS.target;
+     const multiplier = this.targetMultiplier;
+
+     const { x, y } = target.center;
+     const z = target.bottomZ + (target.topZ - target.bottomZ);
+     const gridTris = Grid3dTriangles.trianglesForGridShape();
+     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(x, y, z);
+     return gridTris
+       .filter(tri => tri.isFacing(this.viewpoint))
+       .map(tri => tri
+         .transform(translateM)
+         .transform(lookAtM)
+         .perspectiveTransform(multiplier)
+         .toPolygon());
+  }
 
   /* ----- NOTE: Other helper methods ----- */
 
