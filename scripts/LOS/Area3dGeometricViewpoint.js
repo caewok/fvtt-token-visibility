@@ -159,47 +159,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
   maxTargetValue = 1;
 
-  _calculateTargetPerspectivePolygons(lookAtM, scale = 100) {
-    lookAtM ??= this.targetLookAtMatrix;
-
-    // Build the target shape.
-    // Determine multiplier to set the target to be 100x100.
-    // TODO: View and clip? Reuse triangle?
-    const targetTriangles = this._filterPlaceableTrianglesByViewpoint(this.viewerLOS.target);
-    this.maxTargetValue = Number.NEGATIVE_INFINITY;
-    return targetTriangles
-      .map(tri => {
-        const out = tri.transform(lookAtM);
-        this.maxTargetValue = Math.max(
-          this.maxTargetValue,
-          Math.abs(out.a.x),
-          Math.abs(out.b.x),
-          Math.abs(out.c.x),
-          Math.abs(out.a.y),
-          Math.abs(out.b.y),
-          Math.abs(out.c.y));
-        return out;
-      }).map(tri => tri.perspectiveTransform(scale / this.maxTargetValue).toPolygon());
-  }
-
-  _calculateBlockingPerspectivePolygons(objects, lookAtM, scale = 100) {
-    lookAtM ??= this.targetLookAtMatrix;
-    const blockingPolys = [];
-    const multiplier = scale / this.maxTargetValue;
-    for ( const obj of objects ) {
-      const polys = this._calculateBlockingPerspectivePolygon(obj, lookAtM, multiplier);
-      blockingPolys.push(...polys);
-    }
-    return blockingPolys;
-  }
-
-  _calculateBlockingPerspectivePolygon(object, lookAtM, multiplier) {
-    lookAtM ??= this.targetLookAtMatrix;
-    multiplier ??= 100 / this.maxTargetValue;
-    return this._filterPlaceableTrianglesByViewpoint(object)
-      .map(tri => tri.transform(lookAtM).perspectiveTransform(multiplier).toPolygon());
-  }
-
   _calculateTargetSizeMultiplier(targetLookAtTriangles) {
     let maxZ = Number.NEGATIVE_INFINITY;
     let maxXY = Number.NEGATIVE_INFINITY;
