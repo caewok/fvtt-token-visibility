@@ -35,12 +35,8 @@ import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
-import { PixelCache } from "./LOS/PixelCache.js";
-import { extractPixels } from "./LOS/extract-pixels.js";
-
 import * as range from "./visibility_range.js";
 
-import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
 import {
@@ -173,8 +169,6 @@ Hooks.once("init", function() {
     bench,
     benchFunctions,
 
-    PixelCache,
-    extractPixels,
 
     util,
     range,
