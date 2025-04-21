@@ -17,7 +17,6 @@ import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 
 // LOS
-import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
 import { PATCHES as PATCHES_WallLOS } from "./LOS/Wall.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
@@ -30,7 +29,6 @@ const PATCHES = {
   CanvasVisibility: PATCHES_CanvasVisibility,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
-  PointSourcePolygon: PATCHES_PointSourcePolygon,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
   Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
