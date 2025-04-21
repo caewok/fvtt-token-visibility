@@ -20,14 +20,6 @@ import * as bench from "./benchmark.js";
 import * as benchFunctions from "./benchmark_functions.js";
 import * as util from "./util.js";
 
-import { PlanePoints3d } from "./LOS/PlaceablesPoints/PlanePoints3d.js";
-import { TokenPoints3d } from "./LOS/PlaceablesPoints/TokenPoints3d.js";
-import { DrawingPoints3d } from "./LOS/PlaceablesPoints/DrawingPoints3d.js";
-import { WallPoints3d } from "./LOS/PlaceablesPoints/WallPoints3d.js";
-import { TilePoints3d } from "./LOS/PlaceablesPoints/TilePoints3d.js";
-import { VerticalPoints3d } from "./LOS/PlaceablesPoints/VerticalPoints3d.js";
-import { HorizontalPoints3d } from "./LOS/PlaceablesPoints/HorizontalPoints3d.js";
-
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
 import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
@@ -172,18 +164,6 @@ Hooks.once("init", function() {
 
     util,
     range,
-
-    points3d: {
-      PlanePoints3d,
-      TokenPoints3d,
-      DrawingPoints3d,
-      WallPoints3d,
-      TilePoints3d,
-      VerticalPoints3d,
-      HorizontalPoints3d,
-      Settings,
-      AlphaCutoffFilter
-    },
 
     triangles: {
       Triangle,
