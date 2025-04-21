@@ -138,20 +138,12 @@ export class Area3dWebGL1Viewpoint extends Area3dGeometricViewpoint {
     let sumGridCube = 100_000;
     if ( this.viewerLOS.config.largeTarget ) {
       // Construct the grid shape at this perspective.
-      const ctr = this.viewerLOS.target.center;
-      const grid3dShape = this.constructor.grid3dShape;
-      const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
-      grid3dShape.forEach(shape => shape.update(translateM));
-      const gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
-        .filter(tri => tri.isFacing(this.viewpoint))
-        .map(tri => tri.transform(lookAtM))
-        .map(tri => tri.perspectiveTransform(100 / this.multiplier))
-        .map(tri => tri.toPolygon());
+      const gridPolys = this._gridPolys = this._gridPolygons(lookAtM);
 
       // Draw the grid shape to a PIXI.Graphics container.
       const gridGraphics = this.gridGraphics;
       gridGraphics.clear();
-      this.gridGraphics.position = new PIXI.Point(50, 50);
+      this.gridGraphics.position = new PIXI.Point(200, 200);
       const draw = new Draw(gridGraphics);
       gridPolys.forEach(poly => draw.shape(poly, drawOpts))
 
