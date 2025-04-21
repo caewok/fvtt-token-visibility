@@ -58,15 +58,9 @@ import {
   WallTriangles,
   TileTriangles,
   TokenTriangles,
-  Square2dTriangles,
-  Square2dDoubleTriangles,
-  SquareVerticalTriangles,
-  SquareVerticalDoubleTriangles,
-  Polygon2dTriangles,
-  Polygon2dDoubleTriangles,
-  PolygonVerticalTriangles
+  ConstrainedTokenTriangles,
+  Grid3dTriangles,
  } from "./LOS/PlaceableTriangles.js";
-import { PlaceableTrianglesHandler, TokenTrianglesHandler, TileTrianglesHandler, WallTrianglesHandler  } from "./LOS/PlaceableTrianglesHandler.js";
 
 import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/WebGPU/Camera.js";
@@ -114,7 +108,7 @@ import {
 
 import * as twgl from "./LOS/WebGL2/twgl.js";
 import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./LOS/WebGL2/PercentVisibleCalculator.js";
-import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU } from "./LOS/WebGL2/DebugVisibilityViewer.js";
+import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync, DebugVisibilityViewerPoints, DebugVisibilityViewerArea3dPIXI } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -232,13 +226,8 @@ Hooks.once("init", function() {
       WallTriangles,
       TileTriangles,
       TokenTriangles,
-      Square2dTriangles,
-      Square2dDoubleTriangles,
-      SquareVerticalTriangles,
-      SquareVerticalDoubleTriangles,
-      Polygon2dTriangles,
-      Polygon2dDoubleTriangles,
-      PolygonVerticalTriangles
+      ConstrainedTokenTriangles,
+      Grid3dTriangles,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,
@@ -267,6 +256,8 @@ Hooks.once("init", function() {
       twgl,
       PercentVisibleCalculatorWebGL2,
       DebugVisibilityViewerWebGL2,
+      DebugVisibilityViewerPoints,
+      DebugVisibilityViewerArea3dPIXI,
     },
 
     webgpu: {
@@ -294,6 +285,8 @@ Hooks.once("init", function() {
       PercentVisibleCalculatorWebGPU,
       DebugVisibilityViewerWebGPU,
       PercentVisibleCalculatorWebGPUAsync,
+      DebugVisibilityViewerWebGPUAsync,
+      DebugVisibilityViewerArea3dPIXI,
     },
 
     glmatrix: {
@@ -342,15 +335,15 @@ Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   Settings.initializeDebugGraphics();
 
-  WallTrianglesHandler.registerPlaceables();
-  TileTrianglesHandler.registerPlaceables();
-  TokenTrianglesHandler.registerPlaceables();
+//   WallTriangles.registerPlaceableHooks();
+//   TileTriangles.registerPlaceableHooks();
+//   TokenTriangles.registerPlaceableHooks();
 
   // Update triangles for all placeables.
-  canvas.tiles.placeables.forEach(tile => tile[PlaceableTrianglesHandler.ID].update());
-  canvas.walls.placeables.forEach(wall => wall[PlaceableTrianglesHandler.ID].update());
-  canvas.tokens.placeables.forEach(token => token[PlaceableTrianglesHandler.ID].update());
-
+//   canvas.tiles.placeables.forEach(tile => TileTriangles._onPlaceableCreation(tile));
+//   canvas.walls.placeables.forEach(wall => WallTriangles._onPlaceableCreation(wall));
+//   canvas.tokens.placeables.forEach(token => TokenTriangles._onPlaceableCreation(token));
+//
   CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
 
   WebGPUDevice.getDevice().then(device => {

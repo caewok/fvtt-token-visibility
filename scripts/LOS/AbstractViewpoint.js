@@ -15,7 +15,7 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { VisionPolygon, VisionTriangle } from "./VisionPolygon.js";
-import { PlaceableTrianglesHandler } from "./PlaceableTrianglesHandler.js";
+import { AbstractPolygonTriangles } from "./PlaceableTriangles.js";
 
 import {
   insetPoints,
@@ -271,7 +271,7 @@ export class AbstractViewpoint {
   }
 
   _filterPlaceableTrianglesByViewpoint(placeable) {
-    return placeable[PlaceableTrianglesHandler.ID].triangles
+    return placeable[AbstractPolygonTriangles.ID].triangles
       .filter(tri => tri.isFacing(this.viewpoint));
   }
 
@@ -398,8 +398,9 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw the line of sight from token to target.
    */
-  _drawLineOfSight() {
-    this.viewerLOS.debugDraw.segment({ A: this.viewpoint, B: this.viewerLOS.target.center });
+  _drawLineOfSight(debugDraw) {
+    debugDraw ??= this.viewerLOS.config.debugDraw;
+    debugDraw.segment({ A: this.viewpoint, B: this.viewerLOS.target.center });
     console.log("Drawing line of sight.")
   }
 
@@ -407,16 +408,15 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw outlines for the various objects that can be detected on the canvas.
    */
-  _drawDetectedObjects() {
+  _drawDetectedObjects(debugDraw) {
     // if ( !this.#blockingObjects.initialized ) return;
-
-    const draw = this.viewerLOS.debugDraw;
+    debugDraw ??= this.viewerLOS.config.debugDraw;
     const colors = Draw.COLORS;
     const { walls, tiles, terrainWalls, tokens } = this.blockingObjects;
-    walls.forEach(w => draw.segment(w, { color: colors.red, fillAlpha: 0.3 }));
-    tiles.forEach(t => draw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
-    terrainWalls.forEach(w => draw.segment(w, { color: colors.lightgreen }));
-    tokens.forEach(t => draw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
+    walls.forEach(w => debugDraw.segment(w, { color: colors.red, fillAlpha: 0.3 }));
+    tiles.forEach(t => debugDraw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
+    terrainWalls.forEach(w => debugDraw.segment(w, { color: colors.lightgreen }));
+    tokens.forEach(t => debugDraw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
     console.log("Drawing detected objects.")
   }
 
@@ -424,9 +424,9 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw the vision triangle between viewer point and target.
    */
-  _drawVisionTriangle() {
-    const draw = this.viewerLOS.debugDraw;
-    draw.shape(this.visionPolygon, { width: 0, fill: Draw.COLORS.lightblue, fillAlpha: 0.2 });
+  _drawVisionTriangle(debugDraw) {
+    debugDraw ??= this.viewerLOS.config.debugDraw;
+    debugDraw.shape(this.visionPolygon, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
     console.log("Drawing vision triangle.")
   }
 }

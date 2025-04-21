@@ -78,7 +78,7 @@ export class PointsViewpoint extends AbstractViewpoint {
     const visibleTargetShape = this.viewerLOS.visibleTargetShape;
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
-    const debugDraw = this.viewerLOS.config.debug ? this.viewerLOS.debugDraw : undefined;
+    const debugDraw = this.viewerLOS.config.debugDraw;
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
       const outsideVisibleShape = visibleTargetShape
@@ -99,7 +99,7 @@ export class PointsViewpoint extends AbstractViewpoint {
 
       if ( this.viewerLOS.config.debug ) {
         const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
-        debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.3, width: 1, color });
+        debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.5, width: 1, color });
         console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
       }
     }
@@ -156,10 +156,14 @@ export class PointsViewpoint extends AbstractViewpoint {
     this.triangles.length = 0;
     this.terrainTriangles.length = 0;
     const { terrainWalls, tiles, tokens, walls } = this.blockingObjects;
-    this.terrainTriangles.push(...this._filterPlaceableTrianglesByViewpoint(terrainWalls))
-    this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(walls));
-    this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(tokens));
-    this.triangles.push(...this._filterPlaceableTrianglesByViewpoint(tiles));
+    for ( const terrainWall of terrainWalls ) {
+      const triangles = this._filterPlaceableTrianglesByViewpoint(terrainWall);
+      this.terrainTriangles.push(...triangles);
+    }
+    for ( const placeable of [...tiles, ...tokens, ...walls] ) {
+      const triangles = this._filterPlaceableTrianglesByViewpoint(placeable);
+      this.triangles.push(...triangles);
+    }
   }
 
   /* ----- NOTE: Static methods ----- */
@@ -184,7 +188,9 @@ export class PointsViewpoint extends AbstractViewpoint {
       if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
 
       const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
-      if ( !constrainedGridShape || constrainedGridShape.points.length < 6 ) continue;
+      if ( !constrainedGridShape
+        || ((constrainedGridShape instanceof PIXI.Polygon)
+         && (constrainedGridShape.points.length < 6)) ) continue;
       constrainedGridShapes.push(constrainedGridShape);
     }
 

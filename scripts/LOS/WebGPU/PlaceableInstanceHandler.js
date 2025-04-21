@@ -49,16 +49,12 @@ export class PlaceableInstanceHandler {
    */
   static refreshFlags = new Set();
 
-  /** @type {CONST.WALL_RESTRICTION_TYPES} */
-  senseType = "sight";
-
-  constructor({ senseType = "sight", keys = [] } = {}) {
-    keys.unshift(this.constructor.name, senseType);
+  constructor({ keys = [] } = {}) {
+    keys.unshift(this.constructor.name);
     const key = keys.join("_");
     const handlers = this.constructor.handlers;
     if ( handlers.has(key) ) return handlers.get(key);
     handlers.set(key, this);
-    this.senseType = senseType;
   }
 
   /** @type {Map<string, number>} */
@@ -411,7 +407,6 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * Certain edges, like scene borders, are excluded.
    */
   includePlaceable(edge) {
-    if ( edge[this.senseType] === CONST.WALL_SENSE_TYPES.NONE ) return false;
     if ( !this.edgeTypes.has(edge.type) ) return false;
     return true;
   }
@@ -510,8 +505,8 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @param {Edge} edge
    * @returns {boolean}
    */
-  isTerrain(edge) {
-    return edge[this.senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
+  isTerrain(edge, { senseType = "sight" } = {}) {
+    return edge[senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
   }
 
   /**
@@ -520,6 +515,16 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @returns {boolean}
    */
   static isDirectional(edge) { return Boolean(edge.direction); }
+
+  /**
+   * Is this a blocking edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  static isBlocking(edge, { senseType = "sight" } = {}) {
+    return edge[senseType] !== CONST.WALL_SENSE_TYPES.NONE;
+  }
+
 }
 
 export class NonTerrainWallInstanceHandler extends WallInstanceHandler {
@@ -599,7 +604,7 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
     if ( MODULES_ACTIVE.LEVELS
-      && this.senseType === "sight"
+      // && this.senseType === "sight"
       && tile.document?.flags?.levels?.noCollision ) return false;
 
     return true;

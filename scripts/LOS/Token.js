@@ -6,7 +6,6 @@ CONFIG
 
 // Patches for the Token class
 import { GEOMETRY_ID, TokenGeometryHandler } from "./Placeable3dGeometry.js";
-import { TokenTrianglesHandler } from "./PlaceableTrianglesHandler.js";
 
 export const PATCHES = {};
 PATCHES.LOS = {};
@@ -15,73 +14,6 @@ PATCHES.AREA3D = {};
 
 // ----- NOTE: Hooks ----- //
 
-/**
- * Hook: drawToken
- * @param {PlaceableObject} object    The object instance being drawn
- */
-function drawToken(token) {
-  new TokenTrianglesHandler(token);
-}
-
-/**
- * Hook: updateToken
- * If the token width/height changes, invalidate the tokenShape.
- * @param {Document} tokenD                         The existing Document which was updated
- * @param {object} change                           Differential data that was used to update the document
- * @param {DocumentModificationContext} options     Additional options which modified the update request
- * @param {string} userId                           The ID of the User who triggered the update workflow
- */
-function updateToken(tokenD, changed, _options, _userId) {
-  const token = tokenD.object;
-  if ( !token ) return;
-  const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
-
-  // Token shape changed; invalidate cached shape.
-  if ( changeKeys.has("width") || changeKeys.has("height") ) token._tokenShape = undefined;
-
-  token[TokenTrianglesHandler.ID].update(changeKeys);
-  // TODO: Only run if other modules are not present.
-  // Default to ATV, ATC, then Elevation Shadows.
-}
-
-
-/**
- * Hook Token refresh
- * Adjust elevation as the token moves.
- * Adjust cover calculations as the token moves.
- * @param {PlaceableObject} object    The object instance being refreshed
- * @param {RenderFlags} flags         Render flags associated with the refresh
- */
-function refreshToken(token, flags) {
-  // TODO: Change to using a dirty flag to mark changes.
-  const changeKeys = new Set();
-  if ( flags.refreshPosition ) {
-    changeKeys.add("x");
-    changeKeys.add("y");
-  }
-  if ( flags.refreshElevation ) changeKeys.add("elevation");
-  if ( flags.refreshSize ) {
-    changeKeys.add("width");
-    changeKeys.add("height");
-    token._tokenShape = undefined;
-  }
-  if ( changeKeys.size ) token[TokenTrianglesHandler.ID].update(changeKeys);
-}
-
-/**
- * Hook: destroyToken
- * @param {PlaceableObject} object    The object instance being destroyed
- */
-function destroyToken(token) {
-  token[TokenTrianglesHandler.ID] = null; // Currently, no destroy method to call.
-}
-
-PATCHES.LOS.HOOKS = {
-  drawToken,
-  updateToken,
-  destroyToken,
-  refreshToken
-};
 
 // ----- NOTE: Area3d Hooks ----- //
 

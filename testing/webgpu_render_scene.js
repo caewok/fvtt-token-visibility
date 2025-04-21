@@ -85,7 +85,7 @@ let {
   WebGPUTexture,
   Camera,
   GeometryWallDesc,
-  GeometryTokenDesc,
+  GeometryCubeDesc,
   GeometryTileDesc,
   GeometryConstrainedTokenDesc,
   RenderWalls,
@@ -98,17 +98,26 @@ let {
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
   DebugVisibilityViewerWebGPU,
+  DebugVisibilityViewerWebGPUAsync
   // wgsl
 } = api.webgpu
 
 let {
   PercentVisibleCalculatorWebGL2,
+  DebugVisibilityViewerWebGL2,
+  DebugVisibilityViewerPoints,
+  DebugVisibilityViewerArea3dPIXI,
 } = api.webgl
+
+
+
 
 device = await WebGPUDevice.getDevice()
 
 viewer = _token
 target = game.user.targets.first()
+
+
 
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
@@ -130,6 +139,8 @@ popout.context.configure({
 });
 
 
+
+
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
 await calcWebGL2.initialize()
 calcWebGL2.percentVisible(viewer, target)
@@ -140,17 +151,40 @@ await calcWebGPU.initialize()
 calcWebGPU.percentVisible(viewer, target)
 calcWebGPU._percentVisible(viewer, target)
 
-
 calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
 await calcWebGPUAsync.initialize()
 calcWebGPUAsync.percentVisible(viewer, target)
 await calcWebGPUAsync._percentVisibleAsync(viewer, target)
 await calcWebGPUAsync.percentVisibleAsync(viewer, target)
 
+debugViewer = new DebugVisibilityViewerPoints();
+await debugViewer.initialize();
+debugViewer.render();
+debugViewer.destroy()
+
+debugViewer = new DebugVisibilityViewerWebGL2();
+await debugViewer.initialize();
+debugViewer.render();
+debugViewer.destroy()
 
 debugViewer = new DebugVisibilityViewerWebGPU({ device });
 await debugViewer.initialize();
 debugViewer.render();
+debugViewer.destroy()
+
+debugViewer = new DebugVisibilityViewerWebGPUAsync({ device });
+await debugViewer.initialize();
+debugViewer.render();
+debugViewer.destroy()
+
+debugViewer = new DebugVisibilityViewerArea3dPIXI();
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_GEOMETRIC
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL1
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL2
+debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_HYBRID
+await debugViewer.initialize();
+debugViewer.render();
+debugViewer.destroy()
 
 
 tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)

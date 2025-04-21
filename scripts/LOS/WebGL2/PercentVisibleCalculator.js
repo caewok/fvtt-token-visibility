@@ -60,7 +60,7 @@ class PercentVisibleCalculatorAbstract {
    * @param {Point3d} [opts.targetLocation]   Where the camera is looking to in 3d space
    * @returns {number}
    */
-  percentVisible(viewer, target, { viewerLocation, targetLocation } = {}) {
+  percentVisible(viewer, target, { viewerLocation, targetLocation, ...opts } = {}) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
@@ -68,7 +68,7 @@ class PercentVisibleCalculatorAbstract {
     // Check if we already know this value for the given parameters.
     let cachedValue = null;
     if ( !this._updateCache(viewer, target, viewerLocation, targetLocation) ) {
-      cachedValue = this._percentVisibleCached(viewer, target, viewerLocation, targetLocation);
+      cachedValue = this._percentVisibleCached(viewer, target, viewerLocation, targetLocation, opts);
     }
     if ( Number.isNumeric(cachedValue) ) return cachedValue;
 
@@ -144,17 +144,17 @@ class PercentVisibleCalculatorAbstract {
       return true;
     }
     if ( this.tokenChanged(viewer) )  {
-      this.#clearTokenCache(viewer);
+      this._clearTokenCache(viewer);
       return true;
     }
     if ( this.tokenChanged(target) ) {
-      this.#clearTokenCache(target);
+      this._clearTokenCache(target);
       return true;
     }
     return false;
   }
 
-  #clearTokenCache(viewer) {
+  _clearTokenCache(viewer) {
     // Wipe every token that targets this viewer.
     const targetedSet = this._cache.get(viewer)?.get(TARGETED_BY_SET) || new Set();
     for ( const token of targetedSet ) {
@@ -169,8 +169,8 @@ class PercentVisibleCalculatorAbstract {
     this._updateTokenCacheKeys(viewer);
   }
 
-  _percentVisibleCached(viewer, target, viewerLocation, targetLocation) {
-   return this._getCachedPercentVisible(viewer, target, viewerLocation, targetLocation);
+  _percentVisibleCached(viewer, target, viewerLocation, targetLocation, opts) {
+   return this._getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts);
   }
 
   /** @type {PlaceableInstanceHandler} */
@@ -250,6 +250,24 @@ class PercentVisibleCalculatorAbstract {
     // Add viewer --> target to the target's targeted set.
     if ( !targetCache.has(TARGETED_BY_SET) ) targetCache.set(TARGETED_BY_SET, new Set());
     targetCache.get(TARGETED_BY_SET).add(viewer);
+  }
+
+  printCache() {
+    const res = [];
+    for ( const viewer of canvas.tokens.placeables ) {
+      const targetMap = this._cache.get(viewer);
+      if ( !targetMap ) continue;
+      for ( const target of canvas.tokens.placeables ) {
+        const locMap = targetMap.get(target);
+        if ( !locMap ) continue;
+        for ( const [key, value] of locMap.entries() ) {
+          if ( key === TARGETED_BY_SET ) continue;
+          res.push({ viewer: viewer.name, target: target.name, key, value });
+        }
+      }
+    }
+    console.table(res);
+    return res;
   }
 }
 
@@ -484,7 +502,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
   _updateAsyncCache(viewer, target, _viewerLocation, _targetLocation) {
     if ( this.obstacleChanged() ) {
       // Wipe everything. Cannot iterate a weak map, so use the tokens in the scene.
-      canvas.tokens.placeables.forEach(token => this.#clearTokenCache(token));
+      canvas.tokens.placeables.forEach(token => this._clearTokenCache(token));
 
       // Increment the cache keys.
       this._updateObstacleCacheKeys();
@@ -497,7 +515,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
       // Wipe every viewer that targets this viewer.
       targetedSet.add(viewer);
-      targetedSet.forEach(token => this.#clearTokenCache(token));
+      targetedSet.forEach(token => this._clearTokenCache(token));
       targetedSet.delete(viewer);
 
       // Increment the cache key to reflect these updates.
@@ -511,7 +529,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
       // Wipe every viewer that targets this target.
       targetedSet.add(target);
-      targetedSet.forEach(token => this.#clearTokenCache(token));
+      targetedSet.forEach(token => this._clearTokenCache(token));
       targetedSet.delete(target);
 
       // Increment the cache key to reflect these updates.
@@ -521,7 +539,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     return false;
   }
 
-  #clearTokenCache(viewer) {
+  _clearTokenCache(viewer) {
     const targetMap = this._cache.get(viewer);
     if ( !targetMap ) return;
 
@@ -541,7 +559,8 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
           .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)));
   }
 
-  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation) {
+
+  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts = {}) {
     this._addCache(viewer, target);
     const res = this._cache
       .get(viewer)
@@ -555,8 +574,9 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     // TODO: Trigger an LOS or Cover update? Pass through a callback to trigger?
     if ( res.dirty ) {
       const task = async () => {
-        const percentRed = await this._percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
+        const percentRed = await this._percentVisibleAsync(viewer, target, viewerLocation, targetLocation);
         this._setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentRed);
+        if ( opts.callback ) await opts.callback(percentRed, viewer, target, viewerLocation, targetLocation);
       }
       this.queue.enqueue(task)
       // TODO: Trigger an LOS / Cover update, probably using callback.
@@ -572,5 +592,25 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     res.value = percentVisible;
     res.dirty = false;
     locMap.set(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation), res);
+  }
+
+  printCache() {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const res = [];
+    for ( const viewer of canvas.tokens.placeables ) {
+      const targetMap = this._cache.get(viewer);
+      if ( !targetMap ) continue;
+      for ( const target of canvas.tokens.placeables ) {
+        const locMap = targetMap.get(target);
+        if ( !locMap ) continue;
+        for ( const [key, value] of locMap.entries() ) {
+          if ( key === TARGETED_BY_SET ) continue;
+          // const targetLoc = Point3d.invertKey(key.split("_")[0]); // Inversion not working for 3d keys
+          res.push({ viewer: viewer.name, target: target.name, key , value: value.value, dirty: value.dirty });
+        }
+      }
+    }
+    console.table(res);
+    return res;
   }
 }

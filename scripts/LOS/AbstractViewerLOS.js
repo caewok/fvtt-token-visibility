@@ -18,6 +18,12 @@ import { tokensOverlap } from "./util.js";
 // Viewpoint algorithms.
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PointsViewpoint } from "./PointsViewpoint.js";
+import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
+import { Area3dWebGL1Viewpoint } from "./Area3dWebGL1Viewpoint.js";
+import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
+import { Area3dHybridViewpoint } from "./Area3dHybridViewpoint.js";
+import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
+import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -55,7 +61,15 @@ export class AbstractViewerLOS {
 
   /** @type {enum<class>} */
   static VIEWPOINT_CLASSES = {
-    "los-points": PointsViewpoint
+    "los-points": PointsViewpoint,
+    "los-area-3d": Area3dGeometricViewpoint,
+    "los-area-3d-geometric": Area3dGeometricViewpoint,
+    "los-area-3d-webgl1": Area3dWebGL1Viewpoint,
+    "los-area-3d-webgl2": Area3dWebGL2Viewpoint,
+    "los-area-3d-hybrid": Area3dHybridViewpoint,
+    "los-webgl2": WebGL2Viewpoint,
+    "los-webgpu": WebGPUViewpoint,
+    "los-webgpu-async": WebGPUViewpointAsync,
   };
 
   /** @type {Token} */
@@ -70,10 +84,9 @@ export class AbstractViewerLOS {
   /**
    * @param {Token} viewer      The token whose LOS should be tested
    */
-  constructor(viewer) {
+  constructor(viewer, cfg) {
+    this.config = this.initializeConfig(cfg);
     this.viewer = viewer;
-    this.config = this.initializeConfig();
-    this.viewpoints = this.initializeViewpoints();
   }
 
   /**
@@ -90,6 +103,7 @@ export class AbstractViewerLOS {
     cfg.threshold ??= Settings.get(KEYS.LOS.TARGET.PERCENT);
     cfg.largeTarget ??= Settings.get(KEYS.LOS.TARGET.LARGE);
     cfg.debug ??= Settings.get(KEYS.DEBUG.LOS);
+    cfg.debugDraw ??= new CONFIG.GeometryLib.Draw();
 
     // Blocking canvas objects.
     cfg.block ??= {};
@@ -137,6 +151,20 @@ export class AbstractViewerLOS {
 
   /** @type {number} */
   get visionAngle() { return this.viewer?.vision.data.angle ?? 360; }
+
+  /**
+   * The token associated with a camera location signifying the viewer.
+   * @type {Token}
+   */
+  #viewer;
+
+  get viewer() { return this.#viewer; }
+
+  set viewer(value) {
+    this.#viewer = value;
+    this.clearCache();
+    this.viewpoints = this.initializeViewpoints();
+  }
 
   /**
    * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
@@ -246,7 +274,6 @@ export class AbstractViewerLOS {
    */
   percentVisible(target) {
     this.target = target;  // Important so the cache is reset.
-    if ( this.config.debug ) this._drawCanvasDebug();
     const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target);
     if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
@@ -254,7 +281,6 @@ export class AbstractViewerLOS {
 
   async percentVisibleAsync(target) {
     this.target = target;  // Important so the cache is reset.
-    if ( this.config.debug ) this._drawCanvasDebug();
     const percent = this._simpleVisibilityTest(target) ?? (await this._percentVisibleAsync(target));
     if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
@@ -397,10 +423,6 @@ export class AbstractViewerLOS {
    * Destroy any PIXI objects and remove hooks upon destroying.
    */
   destroy() {
-    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
-    this.#debugGraphics = undefined;
-    this.#debugDraw = undefined;
-
     this.#target = undefined;
     this.viewer = undefined;
     this.viewpoints.forEach(vp => vp.destroy());
@@ -409,36 +431,9 @@ export class AbstractViewerLOS {
 
   /* ----- NOTE: Debug ----- */
 
-  /** @type {PIXI.Graphics} */
-  #debugGraphics;
-
-  get debugGraphics() {
-    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = this._initializeDebugGraphics();
-    return this.#debugGraphics;
-  }
-
-  /** @type {Draw} */
-  #debugDraw;
-
-  get debugDraw() {
-    if ( !this.#debugDraw
-      || !this.#debugGraphics
-      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
-    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
-  }
-
-  _initializeDebugGraphics() {
-    const g = new PIXI.Graphics();
-    g.tokenvisibility_losDebug = this.viewer.id;
-    g.eventMode = "passive"; // Allow targeting, selection to pass through.
-    canvas.tokens.addChild(g);
-    return g;
-  }
-
   clearDebug() {
-    if ( !this.#debugGraphics ) return;
-    console.log("Clearing debug.")
-    this.#debugGraphics.clear();
+    if ( !this.config.debugDraw ) return;
+    this.config.debugDraw.clear();
   }
 
   /**
@@ -447,12 +442,12 @@ export class AbstractViewerLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawCanvasDebug() {
-    this.clearDebug();
+    const draw = this.config.debugDraw;
     this._drawVisibleTokenBorder();
     this.viewpoints.forEach(vp => {
-      vp._drawLineOfSight();
-      vp._drawVisionTriangle();
-      vp._drawDetectedObjects();
+      // vp._drawLineOfSight(draw);
+      vp._drawVisionTriangle(draw);
+      vp._drawDetectedObjects(draw);
     });
   }
 
@@ -462,7 +457,7 @@ export class AbstractViewerLOS {
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawVisibleTokenBorder() {
-    const draw = this.debugDraw;
+    const draw = this.config.debugDraw;
     let color = Draw.COLORS.blue;
 
     // Fill in the constrained border on canvas

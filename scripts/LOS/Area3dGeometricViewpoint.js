@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 PIXI
 */
@@ -7,12 +6,11 @@ PIXI
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../const.js";
 
 // LOS folder
 import { minMaxPolygonCoordinates } from "./util.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { PolygonVerticalTriangles, Polygon2dTriangles, Square2dTriangles } from "./PlaceableTriangles.js";
+import { Grid3dTriangles  } from "./PlaceableTriangles.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -62,11 +60,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     // Round the percent seen so that near-zero areas are 0.
     // Because of trimming walls near the vision triangle, a small amount of token area can poke through
     const percentSeen = targetArea ? obscuredArea / targetArea : 0;
-    if ( this.viewerLOS.config.debug ) {
-      this._updatePercentVisibleLabel(percentSeen);
-      this._draw3dDebug();
-    }
-
     if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
     return percentSeen;
   }
@@ -78,6 +71,31 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
   _targetPolys;
 
   _gridPolys;
+
+
+
+  /**
+   * Construct polygons that are used to form the 2d perspective.
+   */
+  _constructPerspectivePolygons() {
+    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
+
+    // Construct polygons representing the perspective view of the target and blocking objects.
+    const lookAtM = this.targetLookAtMatrix;
+    const targetLookAtTris = this._lookAtObject(this.viewerLOS.target, lookAtM);
+    const multiplier = this.targetMultiplier = this._calculateTargetSizeMultiplier(targetLookAtTris);
+
+    const targetPolys = this._targetPolys = targetLookAtTris
+      .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
+
+    const blockingPolys = this._blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
+      this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
+
+    const blockingTerrainPolys = this._blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
+       this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
+
+    return { targetPolys, blockingPolys, blockingTerrainPolys };
+  }
 
 
   /**
@@ -95,13 +113,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size) ) return { targetArea: 1, obscuredArea: 0 };
 
     // Construct polygons representing the perspective view of the target and blocking objects.
-    const lookAtM = this.targetLookAtMatrix;
-    const targetPolys = this._targetPolys = this._calculateTargetPerspectivePolygons(lookAtM);
-    const blockingPolys = this._blockingPolys = this._calculateBlockingPerspectivePolygons(
-      [...walls, ...tiles, ...tokens], lookAtM);
-    const blockingTerrainPolys = this._blockingTerrainPolys = this._calculateBlockingPerspectivePolygons(terrainWalls, lookAtM);
-
-
+    const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
 
     // TODO: union, combine, joinPaths, or add? Use clean?
 
@@ -114,21 +126,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 //     const blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor })
 //       .union()
 //       .clean();
-
-    // TODO: Finish implementing.
-    if ( this.viewerLOS.config.largeTarget ) {
-      // Construct the grid shape at this perspective.
-      const ctr = this.viewerLOS.target.center;
-      const grid3dShape = this.constructor.grid3dShape;
-      const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
-      grid3dShape.forEach(shape => shape.update(translateM));
-      const multiplier = 100 / this.maxTargetValue;
-      const gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
-        .filter(tri => tri.isFacing(this.viewpoint))
-        .map(tri => tri.transform(lookAtM))
-        .map(tri => tri.perspectiveTransform(multiplier))
-        .map(tri => tri.toPolygon());
-    }
 
     // Use Clipper to calculate area of the polygon shapes.
     const scalingFactor = this.constructor.SCALING_FACTOR;
@@ -147,47 +144,41 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     return { targetArea, obscuredArea: diff.area };
   }
 
-  maxTargetValue = 1;
+  targetMultiplier = 1;
 
-  _calculateTargetPerspectivePolygons(lookAtM, scale = 100) {
-    lookAtM ??= this.targetLookAtMatrix;
-
-    // Build the target shape.
-    // Determine multiplier to set the target to be 100x100.
-    // TODO: View and clip? Reuse triangle?
-    const targetTriangles = this._filterPlaceableTrianglesByViewpoint(this.viewerLOS.target);
-    this.maxTargetValue = Number.NEGATIVE_INFINITY;
-    return targetTriangles
-      .map(tri => {
-        const out = tri.transform(lookAtM);
-        this.maxTargetValue = Math.max(
-          this.maxTargetValue,
-          Math.abs(out.a.x),
-          Math.abs(out.b.x),
-          Math.abs(out.c.x),
-          Math.abs(out.a.y),
-          Math.abs(out.b.y),
-          Math.abs(out.c.y));
-        return out;
-      }).map(tri => tri.perspectiveTransform(scale / this.maxTargetValue).toPolygon());
+  _calculateTargetSizeMultiplier(targetLookAtTriangles) {
+    let maxZ = Number.NEGATIVE_INFINITY;
+    let maxXY = Number.NEGATIVE_INFINITY;
+    targetLookAtTriangles.forEach(tri => {
+      maxZ = Math.max(
+        maxZ,
+        Math.abs(tri.a.z),
+        Math.abs(tri.b.z),
+        Math.abs(tri.c.z)
+      );
+      maxXY = Math.max(
+        Math.abs(tri.a.x),
+        Math.abs(tri.b.x),
+        Math.abs(tri.c.x),
+        Math.abs(tri.a.y),
+        Math.abs(tri.b.y),
+        Math.abs(tri.c.y),
+      );
+    });
+    // xy / z = f
+    // 100 = f * m
+    this.targetMultiplier = (maxZ * 100) / maxXY;
+    return this.targetMultiplier;
   }
 
-  _calculateBlockingPerspectivePolygons(objects, lookAtM, scale = 100) {
-    lookAtM ??= this.targetLookAtMatrix;
-    const blockingPolys = [];
-    const multiplier = scale / this.maxTargetValue;
-    for ( const obj of objects ) {
-      const polys = this._calculateBlockingPerspectivePolygon(obj, lookAtM, multiplier);
-      blockingPolys.push(...polys);
-    }
-    return blockingPolys;
-  }
-
-  _calculateBlockingPerspectivePolygon(object, lookAtM, multiplier) {
-    lookAtM ??= this.targetLookAtMatrix;
-    multiplier ??= 100 / this.maxTargetValue;
+  _lookAtObject(object, lookAtM) {
     return this._filterPlaceableTrianglesByViewpoint(object)
-      .map(tri => tri.transform(lookAtM).perspectiveTransform(multiplier).toPolygon());
+      .map(tri => tri.transform(lookAtM));
+  }
+
+  _lookAtObjectWithPerspective(object, lookAtM, multiplier = 1) {
+    return this._lookAtObject(object, lookAtM)
+      .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
   }
 
 
@@ -197,152 +188,55 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
   /* ----- NOTE: Blocking objects ----- */
 
 
-  /** @type {AbstractPolygonTriangles[3]} */
-  static _grid3dShape;
+  /** @type {AbstractPolygonTriangles[]} */
+  static get grid3dShape() { return Grid3dTriangles.trianglesForGridShape(); }
 
-  static get grid3dShape() {
-    const SIDES = 0;
-    const TOP = 1;
-    const BOTTOM = 2;
-
-    // Need a getter b/c the grid shape changes when loading new scenes.
-    if ( this._grid3dShape ) return this._grid3dShape;
-
-    const size = canvas.grid.size;
-    const size_1_2 = size * 0.5;
-    this._grid3dShape = Array(3);
-    if ( canvas.grid.isHexagonal ) {
-      const poly = new PIXI.Polygon(canvas.grid.getShape());
-      this._grid3dShape[SIDES] = new PolygonVerticalTriangles(poly);
-      this._grid3dShape[TOP] = new Polygon2dTriangles(poly);
-      this._grid3dShape[BOTTOM] = new Polygon2dTriangles(poly);
-
-      // Already set to correct size.
-      // Move the top and bottom squares to correct elevation.
-      const translateTopM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, size_1_2);
-      const translateBottomM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, -size_1_2);
-      this._grid3dShape[TOP].initialize(translateTopM); // Should be centered at 0,0.
-      this._grid3dShape[BOTTOM].initialize(translateBottomM);
-
-    } else {
-      // For gridless, canvas.grid.getShape() does not work.
-      const rect = new PIXI.Rectangle(-size_1_2, -size_1_2, size, size);
-      this._grid3dShape[SIDES] = new PolygonVerticalTriangles(rect);
-      this._grid3dShape[TOP] = new Square2dTriangles();
-      this._grid3dShape[BOTTOM] = new Square2dTriangles();
-
-      // Move the top and bottom squares to correct elevation.
-      // Set size for the squares.
-      const scaleM = CONFIG.GeometryLib.MatrixFlat.scale(size_1_2, size_1_2, 1);
-      const translateTopM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, size_1_2);
-      const translateBottomM = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, -size_1_2);
-      const topM = scaleM.multiply4x4(translateTopM);
-      const bottomM = scaleM.multiply4x4(translateBottomM);
-      this._grid3dShape[TOP].initialize(topM); // Should be centered at 0,0.
-      this._grid3dShape[BOTTOM].initialize(bottomM);
-    }
-    return this._grid3dShape;
-  }
 
   /**
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
    _gridSquareArea(lookAtM) {
-     lookAtM ??= this.targetLookAtMatrix;
-     const ctr = this.viewerLOS.target.center;
-     const grid3dShape = this.constructor.grid3dShape;
-     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, this.viewerLOS.target.bottomZ);
-     grid3dShape.forEach(shape => shape.update(translateM));
-     const multiplier = 100 / this.maxTargetValue;
-     const gridPolys = this._gridPolys = [...grid3dShape[0].triangles, ...grid3dShape[1].triangles, ...grid3dShape[2].triangles]
-      .filter(tri => tri.isFacing(this.viewpoint))
-      .map(tri => tri.transform(lookAtM))
-      .map(tri => tri.perspectiveTransform(multiplier))
-      .map(tri => tri.toPolygon());
+     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM);
      const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();
      return gridPaths.area;
-   }
+  }
+
+  _gridPolygons(lookAtM) {
+     lookAtM ??= this.targetLookAtMatrix;
+     const target = this.viewerLOS.target;
+     const multiplier = this.targetMultiplier;
+
+     const { x, y } = target.center;
+     const z = target.bottomZ + (target.topZ - target.bottomZ);
+     const gridTris = Grid3dTriangles.trianglesForGridShape();
+     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(x, y, z);
+     return gridTris
+       .filter(tri => tri.isFacing(this.viewpoint))
+       .map(tri => tri
+         .transform(translateM)
+         .transform(lookAtM)
+         .perspectiveTransform(multiplier)
+         .toPolygon());
+  }
 
   /* ----- NOTE: Other helper methods ----- */
 
   destroy() {
     this.clearCache();
-    if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) this.#popoutGraphics.destroy();
-    if ( this.#percentVisibleLabel && !this.#percentVisibleLabel.destroyed ) this.#percentVisibleLabel.destroy();
-    this.#popoutGraphics = undefined;
-    this.#popoutDraw = undefined;
     super.destroy();
   }
 
   /* ----- NOTE: Debugging methods ----- */
 
-  /** @type {PIXI.Graphics} */
-  #popoutGraphics;
-
-  get popoutGraphics() { return (this.#popoutGraphics ??= new PIXI.Graphics()); }
-
-  /** @type {Draw} */
-  #popoutDraw;
-
-  get popoutDraw() { return (this.#popoutDraw ??= new Draw(this.popoutGraphics)); }
-
-  openDebugPopout() {
-    this.viewerLOS._addChildToPopout(this.popoutGraphics);
-    this.viewerLOS._addChildToPopout(this.percentVisibleLabel);
-  }
-
-  /** @type {PIXI.BitmapText} */
-  #percentVisibleLabel;
-
-  get percentVisibleLabel() {
-    if ( !this.#percentVisibleLabel ) {
-      this.#percentVisibleLabel = new PIXI.BitmapText("", {
-        fontName: `${MODULE_ID}_area3dPercentLabel`,
-        fontSize: 20,
-        align: 'left',
-      });
-
-      /*
-      this.#percentVisibleLabel = new PIXI.BitmapText("", {
-        fontName: 'Desyrel',
-        fontSize: 20,
-        align: 'center',
-      });
-      */
-      this.#percentVisibleLabel.x = 0; // TODO: Make dynamic to the popout box.
-      this.#percentVisibleLabel.y = 150;
-    }
-    return this.#percentVisibleLabel;
-  }
-
-  /**
-   * For debugging.
-   * Draw the percentage visible.
-   * @param {number} percent    The percent to draw in the window.
-   */
-  _updatePercentVisibleLabel(number) {
-    const label = this.percentVisibleLabel;
-    label.text = `${(number * 100).toFixed(1)}%`;
-    console.log(`Area3dGeometricViewpoint|_updatePercentVisibleLabel ${label.text}`);
-  }
-
-  _clear3dDebug() {
-    if ( this.#popoutGraphics ) this.#popoutGraphics.clear();
-    if ( this.#percentVisibleLabel ) this.#percentVisibleLabel.text = "";
-    console.log(`Area3dGeometricViewpoint|_clear3dDebug`);
-  }
-
   /**
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug() {
-    if ( !this._targetPolys.length ) return;
-
-    const drawTool = this.popoutDraw;
-    drawTool.clearDrawings();
+  _draw3dDebug(drawTool, _renderer) {
+    // Recalculate the 3d objects.
+    const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
 
     // Scale the target graphics to fit in the view window.
@@ -358,15 +252,15 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
     // TODO: Do the target polys need to be translated back to 0,0?
     // Draw the target in 3d, centered on 0,0
-    this._targetPolys.forEach(poly => drawTool.shape(poly, { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.5 }));
+    targetPolys.forEach(poly => drawTool.shape(poly, { color: colors.orange, fill: colors.lightred, fillAlpha: 0.5 }));
 
     // Draw the grid shape.
     if ( this.viewerLOS.config.largeTarget ) this._gridPolys.forEach(poly =>
-      drawTool.shape(poly, { color: colors.lightred, fillAlpha: 0.4 }));
+      drawTool.shape(poly, { color: colors.lightorange, fillAlpha: 0.4 }));
 
     // Draw the detected objects in 3d, centered on 0,0
-    this._blockingPolys.forEach(poly => drawTool.shape(poly, { color: colors.blue, fill: colors.lightblue, fillAlpha: 0.5 }));
-    this._blockingTerrainPolys.forEach(poly => drawTool.shape(poly, { color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
+    blockingPolys.forEach(poly => drawTool.shape(poly, { color: colors.blue, fill: colors.lightblue, fillAlpha: 0.5 }));
+    blockingTerrainPolys.forEach(poly => drawTool.shape(poly, { color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
   }
 
 

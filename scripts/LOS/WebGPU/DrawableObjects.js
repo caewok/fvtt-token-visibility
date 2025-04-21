@@ -83,9 +83,6 @@ async render:
 */
 
 class DrawableObjectsAbstract {
-  /** @type {CONST.WALL_RESTRICTION_TYPES} */
-  senseType = "sight";
-
   static handlerClass;
 
   static shaderFile = "";
@@ -182,15 +179,13 @@ class DrawableObjectsAbstract {
    * @type {GPUDevice} device
    * @type {MaterialsTracker} materials
    * @type {object} [opts]
-   * @type {CONST.WALL_RESTRICTION_TYPES} [opts.senseType="sight"]
    */
-  constructor(device, materials, camera, { senseType = "sight", debugViewNormals = false } = {}) {
+  constructor(device, materials, camera, { debugViewNormals = false } = {}) {
     this.device = device;
     this.materials = materials;
     this.camera = camera;
-    this.senseType = senseType;
     this.#debugViewNormals = debugViewNormals;
-    this.placeableHandler = new this.constructor.handlerClass(this.senseType);
+    this.placeableHandler = new this.constructor.handlerClass();
   }
 
   /** @type {boolean} */
@@ -242,7 +237,13 @@ class DrawableObjectsAbstract {
    * Called whenever a placeable is added, deleted, or updated.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  prerender() {}
+  prerender() {
+    if ( this.placeableHandler.bufferId < this.#placeableHandlerBufferId ) {
+      // One or more placeables were added/removed. Re-do the buffers.
+      this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
+      this.initializePlaceableBuffers();
+    }
+  }
 
   /**
    * Render this drawable.
@@ -365,117 +366,21 @@ class DrawableObjectsAbstract {
 
   // ----- NOTE: Placeable updating ----- //
 
+  #placeableHandlerUpdateId = 0;
+
+  #placeableHandlerBufferId = 0;
+
+  get placeableHandlerUpdateId() { return this.#placeableHandlerUpdateId; }
+
+  get placeableHandlerBufferId() { return this.#placeableHandlerBufferId; }
+
+  set placeableHandlerUpdateId(value) { this.#placeableHandlerUpdateId = value; }
+
   _hooks = [];
 
   registerPlaceableHooks() {}
 
   deregisterPlaceableHooks() { this._hooks.forEach(hook => Hooks.off(hook.name, hook.id)); }
-
-  /**
-   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
-   * @param {Document} document                       The new Document instance which has been created
-   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
-   * @param {string} userId                           The ID of the User who triggered the creation workflow
-   */
-  _onPlaceableCreation(document, _options, _userId) {
-    this.addPlaceable(document.object);
-    // TODO: How to detect non-wall edge creation?
-  }
-
-  /**
-   * A hook event that fires for every Document type after conclusion of an update workflow.
-   * @param {Document} document                       The existing Document which was updated
-   * @param {object} changed                          Differential data that was used to update the document
-   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
-   * @param {string} userId                           The ID of the User who triggered the update workflow
-   */
-  _onPlaceableUpdate(document, changed, _options, _userId) {
-    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
-    const docUpdateKeys = this.placeableHandler.constructor.docUpdateKeys;
-    const updateNeeded = changeKeys.some(key => docUpdateKeys.has(key));
-    this.updatePlaceable(document.object, updateNeeded);
-  }
-
-  /**
-   * A hook event that fires for every Document type after conclusion of an deletion workflow.
-   * @param {Document} document                       The existing Document which was deleted
-   * @param {Partial<DatabaseDeleteOperation>} options Additional options which modified the deletion request
-   * @param {string} userId                           The ID of the User who triggered the deletion workflow
-   */
-  _onPlaceableDeletion(document, _options, _userId) {
-    this.removePlaceable(document.id);
-    // TODO: How to detect non-wall edge deletion?
-  }
-
-  /**
-   * A hook event that fires when a {@link PlaceableObject} is initially drawn.
-   * @param {PlaceableObject} object    The object instance being drawn
-   */
-  _onPlaceableDraw(object, _opts) {
-    this.addPlaceable(object);
-  }
-
-  /**
-   * A hook event that fires when a {@link PlaceableObject} is incrementally refreshed.
-   * @param {PlaceableObject} object    The object instance being refreshed
-   * @param {RenderFlags} flags
-   */
-  _onPlaceableRefresh(object, flags) {
-    /* Wall flags
-    refreshLine: refreshes when the wall coordinates or type changes
-    refreshEndpoints: refreshes when the wall position or state changes
-    refreshDirection: refreshes when wall direction changes
-    refreshHighlight: Occurs when wall control or position changes
-    refreshState: refresh the displayed state of the wall. alpha & zIndex
-    */
-    const refreshFlags = this.placeableHandler.constructor.refreshFlags;
-    const updateNeeded = Object.keys(flags).some(f => refreshFlags.has(f));
-    this.updatePlaceable(object, updateNeeded);
-  }
-
-  /**
-   * A hook event that fires when a {@link PlaceableObject} is destroyed.
-   * @param {PlaceableObject} object    The object instance being destroyed
-   */
-  _onPlaceableDestroy(object, _opts) {
-    this.removePlaceable(object.id);
-  }
-
-  addPlaceable(object) {
-    if ( this.placeableHandler.instanceIndexFromId.has(object.id) ) return;
-    if ( !this.placeableHandler.includePlaceable(object) ) return;
-    this._addPlaceable(object)
-  }
-
-  _addPlaceable(_object) {
-    this.initializePlaceableBuffers();
-    this.prerender();
-  }
-
-  updatePlaceable(object, updateNeeded = true) {
-    // Possible that the placeable needs to be added or removed instead of simply updated.
-    const alreadyTracking = this.placeableHandler.instanceIndexFromId.has(object.id);
-    const shouldTrack = this.placeableHandler.includePlaceable(object);
-    if ( !(alreadyTracking && shouldTrack) ) return;
-    if ( alreadyTracking && !shouldTrack ) return this._removePlaceable(object);
-    else if ( !alreadyTracking && shouldTrack ) return this._addPlaceable(object, shouldTrack);
-    if ( updateNeeded ) this._updatePlaceable(object);
-  }
-
-  _updatePlaceable(_object) { this.prerender(); }
-
-  removePlaceable(placeableId) {
-    if ( !this.placeableHandler.instanceIndexFromId.has(placeableId) ) return;
-    this._removePlaceable(placeableId);
-  }
-
-  _removePlaceable(_placeableId) {
-    // Rebuild the instance buffer.
-    // Could track empty indices and swap in/out as edges are added or deleted but that would
-    /// be complicated and possibly for little gain.
-    this.initializePlaceableBuffers();
-    this.prerender();
-  }
 
   destroy() {
     this.deregisterPlaceableHooks();
@@ -549,12 +454,15 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
     renderPass.setBindGroup(this.constructor.GROUP_NUM.INSTANCE, this.bindGroups.instance);
   }
 
-  _updatePlaceable(object) {
-    const idx = this.placeableHandler.instanceIndexFromId(object.id);
-    if ( typeof idx === "undefined" ) return;
-    this.placeableHandler.updateInstanceBuffer(idx);
-    this.partialUpdateInstanceBuffer(idx);
-    this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer); // Debugging.
+  prerender() {
+    super.prerender();
+    const placeableHandler = this.placeableHandler;
+    if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return; // No changes since last update.
+    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
+      if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
+      this.partialUpdateInstanceBuffer(idx);
+    }
+    this.placeableHandlerUpdateId = placeableHandler.updateId;
   }
 
   /**
@@ -766,6 +674,14 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   /** @type {string} */
   static shaderFile = "wall";
 
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  senseType = "sight";
+
+  constructor(device, materials, camera, { senseType = "sight", ...opts } = {}) {
+    super(device, materials, camera, opts);
+    this.senseType = senseType;
+  }
+
   /**
    * Define static geometries for the shapes handled in this class.
    */
@@ -833,8 +749,10 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      // If the edge is an open door, ignore.
+      // If the edge is an open door or non-blocking wall, ignore.
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
+      if ( !WallInstanceHandler.isBlocking(edge, this.senseType) ) continue;
+
       if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
     }
     super.filterObjects(visionTriangle);
@@ -1291,7 +1209,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     const materialBG = this.materials.bindGroups.get("obstacle");
     const numInstances = 1;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      if ( !token.isConstrainedTokenBorder ) return;
+      if ( !token.isConstrainedTokenBorder ) continue;
       const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
       this.geometries.set(token.id, geom);
       this.drawables.set(token.id, {
