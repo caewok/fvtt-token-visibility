@@ -15,7 +15,6 @@ import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasic
 import { PATCHES as PATCHES_Setting } from "./settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
-import { PATCHES as PATCHES_VisionSource } from "./VisionSource.js";
 
 // LOS
 import { PATCHES as PATCHES_PointSourcePolygon } from "./LOS/PointSourcePolygon.js";
@@ -35,7 +34,6 @@ const PATCHES = {
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
   Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
-  "foundry.canvas.sources.PointVisionSource": PATCHES_VisionSource,
   Wall: foundry.utils.mergeObject(PATCHES_Wall, PATCHES_WallLOS),
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
 };
