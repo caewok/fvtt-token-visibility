@@ -59,6 +59,7 @@ import {
   TileTriangles,
   TokenTriangles,
   ConstrainedTokenTriangles,
+  Grid3dTriangles,
  } from "./LOS/PlaceableTriangles.js";
 
 import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
@@ -226,6 +227,7 @@ Hooks.once("init", function() {
       TileTriangles,
       TokenTriangles,
       ConstrainedTokenTriangles,
+      Grid3dTriangles,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,

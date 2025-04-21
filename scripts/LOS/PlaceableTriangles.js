@@ -20,9 +20,12 @@ import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, Tok
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|PlaceableTriangles|canvasReady`);
-  WallTriangles.linkToScene();
-  TileTriangles.linkToScene();
-  TokenTriangles.linkToScene();
+  WallTriangles.registerExistingPlaceables();
+  TileTriangles.registerExistingPlaceables();
+  TokenTriangles.registerExistingPlaceables();
+  WallTriangles.registerPlaceableHooks();
+  TileTriangles.registerPlaceableHooks();
+  TokenTriangles.registerPlaceableHooks();
 });
 
 /**
@@ -320,8 +323,8 @@ export class Triangle {
    */
   static fromVertices(vertices, indices) {
     // const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    if ( vertices.length % 9 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 9: ${vertices.length}`);
-    indices ??= Array.fromRange(Math.floor(vertices.length / 9));
+    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
     if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
     const tris = new Array(Math.floor(indices.length / 3));
     for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
@@ -362,10 +365,25 @@ export class Triangle {
 function pointFromVertices(i, vertices, indices, outPoint) {
   outPoint ??= new CONFIG.GeometryLib.threeD.Point3d;
   const idx = indices[i];
-  const v = vertices.slice[idx, idx + 3];
+  const v = vertices.slice(idx * 3, (idx * 3) + 3);
   outPoint.set(v[0], v[1], v[2]);
   return outPoint;
 }
+
+function fromVertices(vertices, indices) {
+    // const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
+    if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
+    // const tris = new Array(Math.floor(indices.length / 3));
+    for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
+      const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
+      const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
+      const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
+      tris[j] = Triangle.fromPoints(a, b, c);
+    }
+    return tris;
+  }
 
 
 const SENSE_TYPES = {};
@@ -378,44 +396,41 @@ CONST.WALL_RESTRICTION_TYPES.forEach(type => SENSE_TYPES[type] = Symbol(type));
 export class AbstractPolygonTriangles {
   static ID = "tokenvisibility";
 
-  static geom = new GeometryDesc();
+  static geom;
 
   /** @type {Triangle[]} */
-  static prototypeTriangles = Triangle.fromVertices(this.geom.vertices, this.geom.indices);
+  static #prototypeTriangles;
+
+  static get prototypeTriangles() {
+    return (AbstractPolygonTriangles.#prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices));
+  }
 
   /** @type {class} */
   static instanceHandlerClass = PlaceableInstanceHandler;
 
-  static linkToScene() {
-    const sceneObj = canvas.scene[this.ID] ??= {};
-    const map = sceneObj.triangleHandlersMap ??= new WeakMap();
-    if ( !map.has(this) ) {
-      const instance = new this();
-      instance.initialize();
-      instance.registerExistingPlaceables();
-      instance.registerPlaceableHooks();
-      map.set(this, instance);
-    }
-  }
-
   /** @type {PlaceableInstanceHandler} */
-  instanceHandler;
+  static _instanceHandler; // Cannot use # with static getter if it will change based on child class.
 
-  initialize() {
-    this.instanceHandler = new this.constructor.instanceHandlerClass();
-    this.instanceHandler.initializePlaceables();
+  static get instanceHandler() {
+    if ( this._instanceHandler ) return this._instanceHandler;
+    this._instanceHandler = new this.instanceHandlerClass();
+    this._instanceHandler.initializePlaceables();
+    return this._instanceHandler;
   }
 
-  trianglesForPlaceable(placeable) {
-    const idx = this.instanceHandler.instanceIndexFromId(placeable.id);
-    const M = this.matrices[idx];
-    return this.constructor.prototypeTriangles.map(tri => tri.transform(M));
+
+
+  static trianglesForPlaceable(placeable) {
+    const idx = this.instanceHandler.instanceIndexFromId.get(placeable.id);
+    const M = this.instanceHandler.matrices[idx];
+    if ( !M ) return [];
+    return this.prototypeTriangles.map(tri => tri.transform(M));
   }
 
   /* ----- Hooks ----- */
 
   /** @type {number[]} */
-  _hooks = [];
+  static _hooks = [];
 
   /**
    * @typedef {object} PlaceableHookData
@@ -428,52 +443,49 @@ export class AbstractPolygonTriangles {
   /**
    * Register hooks for this placeable that record updates.
    */
-  registerPlaceableHooks() {
+  static registerPlaceableHooks() {
     if ( this._hooks.length ) return; // Only register once.
-    for ( const hookDatum of this.constructor.HOOKS ) {
+    for ( const hookDatum of this.HOOKS ) {
       const [name, methodName] = Object.entries(hookDatum)[0];
       const id = Hooks.on(name, this[methodName].bind(this));
       this._hooks.push({ name, methodName, id });
     }
   }
 
-  deregisterPlaceableHooks() {
+  static deregisterPlaceableHooks() {
     this._hooks.forEach(hook => Hooks.off(hook.name, hook.id));
     this._hooks.length = 0;
   }
 
-  registerExistingPlaceables(placeables) {
+  static registerExistingPlaceables(placeables) {
     placeables.forEach(placeable => this._onPlaceableCreation(placeable));
   }
 
   /**
-   * On placeable creation hook, add an instance of this to the placeable.
+   * On placeable creation hook, add getter to the placeable.
    */
-  _onPlaceableCreation(placeable) {
+  static _onPlaceableCreation(placeable) {
     const obj = placeable[this.ID] ??= {};
-    obj._trianglesHandler = this;
+    const self = this;
     Object.defineProperty(obj, "triangles", {
-      get() {
-        return this._trianglesHandler.trianglesForPlaceable(placeable);
-      },
+      get() { return self.trianglesForPlaceable(placeable); },
       configurable: true,
     });
   }
 
 
-
   /* ----- Debug ----- */
 
-  draw(placeable, opts) { this.trianglesForPlaceable(placeable).forEach(tri => tri.draw(opts)); }
+  static draw(placeable, opts) { this.trianglesForPlaceable(placeable).forEach(tri => tri.draw(opts)); }
 
-  drawPrototypes(opts) { this.constructor.prototypeTriangles.forEach(tri => tri.draw(opts)); }
+  static drawPrototypes(opts) { this.prototypeTriangles.forEach(tri => tri.draw(opts)); }
 
   /**
    * Draw shape but swap z and y positions.
    */
-  drawSplayed(placeable, opts) { this.trianglesForPlaceable(placeable).forEach(tri => tri.drawSplayed(opts)); }
+  static drawSplayed(placeable, opts) { this.trianglesForPlaceable(placeable).forEach(tri => tri.drawSplayed(opts)); }
 
-  drawPrototypesSplayed(opts) { this.constructor.prototypeTriangles.forEach(tri => tri.drawSplayed(opts)); }
+  static drawPrototypesSplayed(opts) { this.prototypeTriangles.forEach(tri => tri.drawSplayed(opts)); }
 }
 
 
@@ -492,50 +504,26 @@ export class WallTriangles extends AbstractPolygonTriangles {
   /**
    * On placeable creation hook, add an instance of this to the placeable.
    */
-  _onPlaceableCreation(placeable) {
+  static _onPlaceableCreation(placeable) {
     const obj = placeable[this.ID] ??= {};
-    obj._trianglesHandler = this;
     Object.defineProperty(obj, "triangles", {
       configurable: true,
       get() {
-        const sceneObj = canvas.scene[this.ID];
         const instance = WallInstanceHandler.isDirectional(placeable.edge)
-          ? sceneObj.get(DirectionalWallTriangles) : sceneObj.get(WallTriangles);
+          ? DirectionalWallTriangles : WallTriangles;
         return instance.trianglesForPlaceable(placeable);
       },
     });
   }
 
-  registerExistingPlaceables() {
+  static registerExistingPlaceables() {
     canvas.walls.placeables.forEach(wall => this._onPlaceableCreation(wall));
   }
 }
 
-export class DirectionalWallTriangles extends AbstractPolygonTriangles {
+export class DirectionalWallTriangles extends WallTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryWallDesc({ directional: true });
-
-  /** @type {class} */
-  static instanceHandlerClass = WallInstanceHandler;
-
-  /** @type {object[]} */
-  static HOOKS = [
-    { createWall: "_onPlaceableCreation" },
-  ];
-
-  static linkToScene() {
-    const sceneObj = canvas.scene[this.ID] ??= {};
-    const map = sceneObj.triangleHandlersMap ??= new WeakMap();
-    if ( !map.has(this) ) {
-      const instance = new this();
-      instance.initialize();
-      map.set(this, instance);
-    }
-  }
-
-  registerExistingPlaceables() {
-    canvas.walls.placeables.forEach(wall => this._onPlaceableCreation(wall));
-  }
 }
 
 export class TileTriangles extends AbstractPolygonTriangles {
@@ -550,7 +538,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
     { createTile: "_onPlaceableCreation" },
   ];
 
-  registerExistingPlaceables() {
+  static registerExistingPlaceables() {
     canvas.tiles.placeables.forEach(tile => this._onPlaceableCreation(tile));
   }
 }
@@ -570,51 +558,27 @@ export class TokenTriangles extends AbstractPolygonTriangles {
   /**
    * On placeable creation hook, add an instance of this to the placeable.
    */
-  _onPlaceableCreation(placeable) {
+  static _onPlaceableCreation(placeable) {
     const obj = placeable[this.ID] ??= {};
-    obj._trianglesHandler = this;
     Object.defineProperty(obj, "triangles", {
       configurable: true,
       get() {
-        const sceneObj = canvas.scene[this.ID];
         const instance = placeable.isConstrainedTokenBorder
-          ? sceneObj.get(ConstrainedTokenTriangles) : sceneObj.get(TokenTriangles);
+          ? ConstrainedTokenTriangles : TokenTriangles;
         return instance.trianglesForPlaceable(placeable);
       },
     });
   }
 
-  registerExistingPlaceables() {
+  static registerExistingPlaceables() {
     canvas.tokens.placeables.forEach(token => this._onPlaceableCreation(token));
   }
 }
 
-export class ConstrainedTokenTriangles extends AbstractPolygonTriangles {
-  /** @type {GeometryDesc} */
-  static geom = new GeometryCubeDesc();
-
-  /** @type {class} */
-  static instanceHandlerClass = null;
-
-  initialize() { return; }
-
-  trianglesForPlaceable(token) {
+export class ConstrainedTokenTriangles extends TokenTriangles {
+  static trianglesForPlaceable(token) {
     const geom = new GeometryConstrainedTokenDesc({ token });
     return Triangle.fromVertices(geom.vertices, geom.indices);
-  }
-
-  registerExistingPlaceables() {
-    canvas.tokens.placeables.forEach(token => this._onPlaceableCreation(token));
-  }
-
-  static linkToScene() {
-    const sceneObj = canvas.scene[this.ID] ??= {};
-    const map = sceneObj.triangleHandlersMap ??= new WeakMap();
-    if ( !map.has(this) ) {
-      const instance = new this();
-      instance.initialize();
-      map.set(this, instance);
-    }
   }
 }
 
@@ -622,25 +586,31 @@ export class ConstrainedTokenTriangles extends AbstractPolygonTriangles {
 //       Can these be reset on scene load? Maybe a hook?
 
 export class Grid3dTriangles extends AbstractPolygonTriangles {
-  /** @type {GeometryDesc} */
-  static geom = new GeometryCubeDesc();
 
   /** @type {class} */
   static instanceHandlerClass = null;
 
-  initialize() {
+  #geom;
+
+  // This override would not work if defined in the constructor.
+  // Would then need to delete the parent geom field.
+  // See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa
+  static get geom() { return (Grid3dTriangles.#geom ??= this.buildGridGeom()); }
+
+  static buildGridGeom() {
     // TODO: Hex grids
     const w = canvas.grid.sizeX;
     const d = canvas.grid.sizeY;
     const h = canvas.dimensions.size;
-    this.constructor.geom = new GeometryCubeDesc({ w, d, h });
-    this.constructor.prototypeTriangles = Triangle.fromVertices(this.constructor.geom.vertices, this.constructor.geom.indices);
+    const geom = new GeometryCubeDesc({ w, d, h });
+    this.prototypeTriangles = Triangle.fromVertices(geom.vertices, geom.indices);
   }
 
-  trianglesForGridShape() {
-    return this.constructor.prototypeTriangles.map(tri => tri.clone());
+  static trianglesForGridShape() {
+    return this.prototypeTriangles.map(tri => tri.clone());
   }
 }
+
 
 
 /* Orient3dFast license
