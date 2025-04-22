@@ -58,8 +58,7 @@ import {
   TileInstanceHandler,
   TokenInstanceHandler,
  } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
-import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
-import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
+
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
 import {
   DrawableNonDirectionalWallWebGL2,
@@ -173,8 +172,6 @@ Hooks.once("init", function() {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,
       Placeable3dDebugShader, Tile3dDebugShader,
-      DrawableWallInstancesPIXI,
-      RenderWallsPIXI,
       WebGL2,
       DrawableNonDirectionalWallWebGL2,
       DrawableDirectionalWallWebGL2,
