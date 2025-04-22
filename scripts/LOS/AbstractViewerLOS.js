@@ -101,15 +101,15 @@ export class AbstractViewerLOS {
     cfg.debugDraw ??= new CONFIG.GeometryLib.Draw();
 
     // Blocking canvas objects.
-    cfg.block ??= {};
-    cfg.block.walls ??= true;
-    cfg.block.tiles ??= true;
+    cfg.blocking ??= {};
+    cfg.blocking.walls ??= true;
+    cfg.blocking.tiles ??= true;
 
     // Blocking tokens.
-    cfg.block.tokens ??= {};
-    cfg.block.tokens.dead ??= Settings.get(KEYS.DEAD_TOKENS_BLOCK);
-    cfg.block.tokens.live ??= Settings.get(KEYS.LIVE_TOKENS_BLOCK);
-    cfg.block.tokens.prone ??= Settings.get(KEYS.PRONE_TOKENS_BLOCK);
+    cfg.blocking.tokens ??= {};
+    cfg.blocking.tokens.dead ??= Settings.get(KEYS.DEAD_TOKENS_BLOCK);
+    cfg.blocking.tokens.live ??= Settings.get(KEYS.LIVE_TOKENS_BLOCK);
+    cfg.blocking.tokens.prone ??= Settings.get(KEYS.PRONE_TOKENS_BLOCK);
 
     // Viewpoints.
     cfg.viewerPoints = Settings.get(KEYS.LOS.VIEWER.NUM_POINTS);

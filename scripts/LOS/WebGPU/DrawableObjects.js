@@ -309,6 +309,10 @@ class DrawableObjectsAbstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
   filterObjects(_visionTriangle, _opts) {}
 
@@ -740,12 +744,19 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle) {
+  filterObjects(visionTriangle, { blocking = {} } = {}) {
     const keys = this.constructor.FILTER_KEYS;
     const instanceSets = {};
     for ( const key of keys ) instanceSets[key] = this.drawables.get(key).instanceSet
     Object.values(instanceSets).forEach(s => s.clear());
+
+    blocking.walls ??= true;
+    if ( !blocking.walls ) return;
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
@@ -933,19 +944,22 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, opts = {}) {
-    const { viewer, target } = opts;
-    opts.tokens ??= {};
-    opts.tokens.dead ??= true;
-    opts.tokens.live ??= true;
-    opts.tokens.prone ??= true;
+  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
 
     // Limit tokens as obstacles.
     const drawable = this.drawables.get("token");
     drawable.instanceSet.clear();
 
-    if ( opts.tokens.dead || opts.tokens.live ) {
+    if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
       const api = MODULES_ACTIVE.API.RIDEABLE;
       for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
@@ -1157,12 +1171,17 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle) {
+  filterObjects(visionTriangle, { blocking = {} } = {}) {
     // Filter non-viewable tiles.
+    blocking.tiles ??= true;
     for ( const tile of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       const drawable = this.drawables.get(tile.id);
-      drawable.numInstances = Boolean(visionTriangle.containsTile(tile));
+      drawable.numInstances = Boolean(blocking.tiles && visionTriangle.containsTile(tile));
     }
     super.filterObjects(visionTriangle);
   }
@@ -1226,13 +1245,16 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, opts = {}) {
-    const { viewer, target } = opts;
-    opts.tokens ??= {};
-    opts.tokens.dead ??= true;
-    opts.tokens.live ??= true;
-    opts.tokens.prone ??= true;
+  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
 
     const api = MODULES_ACTIVE.API.RIDEABLE;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {

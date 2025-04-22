@@ -252,7 +252,7 @@ export class AbstractViewpoint {
     if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer) || api.RidingConnection(t, target));
 
     // Filter live or dead tokens.
-    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = this.viewerLOS.config.block.tokens;
+    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = this.viewerLOS.config.blocking.tokens;
     if ( liveTokensBlock ^ deadTokensBlock ) {
       const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
       tokens = tokens.filter(t => {
