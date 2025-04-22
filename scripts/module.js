@@ -14,20 +14,17 @@ import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import { Patcher, HookPatch, MethodPatch, LibWrapperPatch } from "./Patcher.js";
 import { Settings, SETTINGS } from "./settings.js";
+import { getObjectProperty } from "./LOS/util.js";
 
 // For API
 import * as bench from "./benchmark.js";
 
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
-import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
-
 import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
 import * as range from "./visibility_range.js";
-
-import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
 import {
   Triangle,
@@ -139,7 +136,7 @@ Hooks.once("init", function() {
      * Calculator for percent visible tokens using sight.
      * @type {PercentVisibleCalculatorAbstract}
      */
-    percentVisibleWebGL2: new PercentVisibleCalculatorWebGL2({ senseType: "sight" }),
+    percentVisibleWebGL2: null,
 
     /**
      * Function to determine if a token is alive
@@ -255,7 +252,7 @@ function tokenIsDead(token) {
   if ( deadStatus && token.actor.statuses.has(deadStatus.id) ) return true;
 
   const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
-  const hp = util.getObjectProperty(token.actor, tokenHPAttribute);
+  const hp = getObjectProperty(token.actor, tokenHPAttribute);
   if ( typeof hp !== "number" ) return false;
   return hp <= 0;
 }
@@ -281,6 +278,8 @@ Hooks.on("canvasReady", function() {
 //   canvas.walls.placeables.forEach(wall => WallTriangles._onPlaceableCreation(wall));
 //   canvas.tokens.placeables.forEach(token => TokenTriangles._onPlaceableCreation(token));
 //
+
+  CONFIG[MODULE_ID].percentVisibleWebGL2 = new PercentVisibleCalculatorWebGL2({ senseType: "sight" })
   CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
 
   WebGPUDevice.getDevice().then(device => {

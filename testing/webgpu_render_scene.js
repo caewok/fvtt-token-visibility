@@ -137,6 +137,8 @@ popout.context.configure({
 });
 
 
+calcWebGL2 = CONFIG.tokenvisibility.percentVisibleWebGL2
+
 
 
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
