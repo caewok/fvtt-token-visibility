@@ -52,7 +52,6 @@ import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
 import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
-import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
 import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
@@ -215,7 +214,6 @@ Hooks.once("init", function() {
       RenderWalls,
       RenderObstacles,
       WebGPUSumRedPixels,
-      PercentVisibleCalculator,
       wgsl,
       AsyncQueue,
       SumPixelsWebGL2,
