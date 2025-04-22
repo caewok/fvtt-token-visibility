@@ -376,8 +376,8 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   }
 
   destroy() {
-    // this.calc.destroy();
-    // if ( this.renderer ) this.renderer.destroy();
+    if ( this.calc ) this.calc.destroy();
+    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }
@@ -424,8 +424,8 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
   }
 
   destroy() {
-    // this.calc.destroy();
-    // this.renderer.destroy();
+    if ( this.calc ) this.calc.destroy();
+    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }
@@ -477,8 +477,8 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
   }
 
   destroy() {
-    // this.calc.destroy();
-    // this.renderer.destroy();
+    if ( this.calc ) this.calc.destroy();
+    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }
@@ -545,18 +545,14 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     return this.#calc;
   }
 
-  clearCalc() {
-    // if ( this.#calc ) this.#calc.destroy();
-    this.#calc = undefined;
-  }
-
   clearDebug() {
     super.clearDebug();
     if ( this.#popoutDraw ) this.#popoutDraw.clearDrawings();
   }
 
   destroy() {
-    this.clearCalc();
+    if ( this.#calc ) this.#calc.destroy();
+    this.#calc = undefined;
     if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) {
       this.#popoutGraphics.destroy();
       this.#popoutDraw = undefined;

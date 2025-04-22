@@ -194,6 +194,10 @@ export class RenderObstaclesAbstractWebGL2 {
     };
     camera.refresh();
   }
+
+  destroy() {
+
+  }
 }
 
 

@@ -74,6 +74,7 @@ MatrixFlat = CONFIG.GeometryLib.MatrixFlat
 MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32
 Area3dPopout = api.Area3dPopout
 Area3dPopoutCanvas = api.Area3dPopoutCanvas
+Settings = api.Settings
 
 
 let {
