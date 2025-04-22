@@ -376,8 +376,8 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   }
 
   destroy() {
-    // this.calc.destroy();
-    // if ( this.renderer ) this.renderer.destroy();
+    if ( this.calc ) this.calc.destroy();
+    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }
@@ -424,8 +424,8 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
   }
 
   destroy() {
-    // this.calc.destroy();
-    // this.renderer.destroy();
+    if ( this.calc ) this.calc.destroy();
+    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }
@@ -477,8 +477,8 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
   }
 
   destroy() {
-    // this.calc.destroy();
-    // this.renderer.destroy();
+    if ( this.calc ) this.calc.destroy();
+    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }
@@ -486,13 +486,6 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPopoutAbstract {
   /** @type {class} */
   static popoutClass = Area3dPopout;
-
-  static ALGORITHMS = {
-    AREA3D_GEOMETRIC: SETTINGS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
-    AREA3D_WEBGL1: SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL1,
-    AREA3D_WEBGL2: SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
-    AREA3D_HYBRID: SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID,
-  };
 
   /** @type {PIXI.Graphics} */
   #popoutGraphics;
@@ -520,7 +513,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     console.log(`${this.calc.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
-  algorithm = this.constructor.ALGORITHMS.AREA3D_WEBGL2;
+  algorithm = SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
 
   async openPopout(opts) {
     await super.openPopout(opts);
@@ -552,18 +545,14 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     return this.#calc;
   }
 
-  clearCalc() {
-    // if ( this.#calc ) this.#calc.destroy();
-    this.#calc = undefined;
-  }
-
   clearDebug() {
     super.clearDebug();
     if ( this.#popoutDraw ) this.#popoutDraw.clearDrawings();
   }
 
   destroy() {
-    this.clearCalc();
+    if ( this.#calc ) this.#calc.destroy();
+    this.#calc = undefined;
     if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) {
       this.#popoutGraphics.destroy();
       this.#popoutDraw = undefined;

@@ -144,6 +144,17 @@ class RenderObstaclesAbstractPIXI {
       height: renderTextureSize
     };
   }
+
+  destroy() {
+    if ( this.#obstacleContainer ) this.#obstacleContainer.destroy();
+    if ( this.#debugObstacleContainer ) this.#debugObstacleContainer.destroy();
+    if ( this.#renderTexture ) this.#renderTexture.destroy();
+    if ( this.#debugRenderTexture ) this.#debugRenderTexture.destroy();
+    this.#obstacleContainer = undefined;
+    this.#renderTexture = undefined;
+    this.#debugObstacleContainer = undefined;
+    this.#debugRenderTexture = undefined;
+  }
 }
 
 export class RenderWallsPIXI extends RenderObstaclesAbstractPIXI {

@@ -73,7 +73,7 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   // Test whether this vision source has line-of-sight to the target, cache, and return.
   let callback = undefined;
   if ( losCalc.config.viewpointClass === WebGPUViewpointAsync ) {
-    callback = () => test._refreshVisibility();
+    callback = () => visionSource.object._refreshVisibility();
   }
   hasLOS = losCalc.hasLOS(target, { callback });
 
@@ -107,12 +107,22 @@ function _testRange(wrapped, visionSource, mode, target, test) {
   // Duplicate below so that the if test does not need to be inside the loop.
   if ( Settings.get(SETTINGS.DEBUG.RANGE) ) {
     const draw = new Draw(Settings.DEBUG_RANGE);
-    return testPoints.some(pt => {
+
+    // Sort the unique elevations and draw largest radius for bottom.
+    const elevationSet = new Set(testPoints.map(pt => pt.z));
+    const elevationArr = [...elevationSet];
+    elevationArr.sort((a, b) => a - b);
+
+    // Color all the points red or green.
+    // Need to draw test points from lowest to highest elevation.
+    testPoints.sort((a, b) => a.z - b.z);
+    testPoints.forEach(pt => {
       const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
       const inRange = dist2 <= radius2;
-      draw.point(pt, { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
-      return inRange;
-    });
+      const radius = elevationArr.length < 2 ? 3
+        : [7, 5, 3][elevationArr.findIndex(elem => elem === pt.z)] ?? 3;
+      draw.point(pt, { alpha: 1, radius, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
+    })
   }
 
   return testPoints.some(pt => {

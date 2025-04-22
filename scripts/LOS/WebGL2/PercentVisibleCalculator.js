@@ -273,6 +273,10 @@ class PercentVisibleCalculatorAbstract {
     console.table(res);
     return res;
   }
+
+  destroy() {
+    if ( this.renderObstacles ) this.renderObstacles.destroy();
+  }
 }
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {

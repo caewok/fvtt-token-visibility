@@ -419,6 +419,12 @@ class RenderAbstract {
     this.#renderSize.height = value.height;
     this._allocateRenderTargets();
   }
+
+  destroy() {
+    if ( this.#renderTexture ) this.#renderTexture = this.#renderTexture.destroy(); // Sets to undefined.
+    if ( this.msaaColorTexture ) this.msaaColorTexture = this.msaaColorTexture.destroy();
+    if ( this.depthTexture ) this.depthTexture = this.depthTexture.destroy();
+  }
 }
 
 export class RenderWalls extends RenderAbstract {

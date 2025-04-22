@@ -59,6 +59,6 @@ export function registerArea3d() {
   TokenGeometryHandler.registerPlaceables();
 }
 
-export function registerDebug() { PATCHER.registerGroup("DEBUG"); }
+export function registerDebug() { }//PATCHER.registerGroup("DEBUG"); }
 
-export function deregisterDebug() { PATCHER.deregisterGroup("DEBUG"); }
+export function deregisterDebug() { }//PATCHER.deregisterGroup("DEBUG"); }

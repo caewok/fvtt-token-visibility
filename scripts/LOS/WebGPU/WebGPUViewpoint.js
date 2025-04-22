@@ -20,8 +20,7 @@ export class WebGPUViewpoint extends AbstractViewpoint {
 
   constructor(...args) {
     super(...args);
-    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPU //|| CONFIG[MODULE_ID].percentVisibleWebGL2;
-    if ( !this.calc ) console.error("WebGPUViewpoint|percentVisibleWebGPU not found.");
+    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPU || CONFIG[MODULE_ID].percentVisibleWebGL2;
   }
 
   /** @type {boolean} */
@@ -44,8 +43,7 @@ export class WebGPUViewpointAsync extends AbstractViewpoint {
 
   constructor(...args) {
     super(...args);
-    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPUAsync // || CONFIG[MODULE_ID].percentVisibleWebGL2;
-    if ( !this.calc ) console.error("WebGPUViewpointAsync|percentVisibleWebGPUAsync not found.");
+    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPUAsync || CONFIG[MODULE_ID].percentVisibleWebGL2;
   }
 
   /** @type {boolean} */

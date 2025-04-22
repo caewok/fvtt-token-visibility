@@ -9,9 +9,15 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-import { registerArea3d, registerDebug, deregisterDebug } from "./patching.js";
+import { registerArea3d } from "./patching.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { buildLOSCalculator } from "./LOSCalculator.js";
+import {
+  DebugVisibilityViewerArea3dPIXI,
+  DebugVisibilityViewerPoints,
+  DebugVisibilityViewerWebGL2,
+  DebugVisibilityViewerWebGPU,
+  DebugVisibilityViewerWebGPUAsync } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -34,6 +40,8 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-dead")
 await api.bench.QBenchmarkLoopFn(N, getSetting, "cached","cover-token-live")
 await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 */
+
+
 
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
@@ -138,27 +146,75 @@ export class Settings extends ModuleSettingsAbstract {
     this.DEBUG_RANGE.clear();
   }
 
-  static toggleLOSDebugGraphics(enabled = false) {
-    if ( enabled ) {
-      registerDebug();
-      canvas.tokens.placeables.forEach(token => {
-          const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-          if ( !losCalc ) return;
-          losCalc.config.debug = true;
-      });
-    }
+  static #debugViewers = new WeakMap();
+
+  static getDebugViewer(type) {
+    type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
+    const sym = ALG_SYMBOLS[type];
+    return this.#debugViewers.get(sym);
+  }
+
+  static async initializeDebugViewer(type) {
+    type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
+    const sym = ALG_SYMBOLS[type];
+    let debugViewer;
+    if ( this.#debugViewers.has(sym) ) debugViewer = this.#debugViewers.get(sym);
     else {
-      if ( canvas.tokens?.placeables ) {
-        canvas.tokens.placeables.forEach(token => {
-          const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-          if ( !losCalc ) return;
-          losCalc.clearDebug();
-          losCalc?.closeDebugPopout();
-          losCalc.config.debug = false;
-        });
+      const TYPES = this.KEYS.LOS.TARGET.TYPES;
+      switch ( type ) {
+        case TYPES.POINTS: debugViewer = new DebugVisibilityViewerPoints(); break;
+        case TYPES.AREA3D:
+        case TYPES.AREA3D_GEOMETRIC: {
+          debugViewer = new DebugVisibilityViewerArea3dPIXI();
+          debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_GEOMETRIC;
+          break;
+        }
+        case TYPES.AREA3D_WEBGL2: {
+          debugViewer = new DebugVisibilityViewerArea3dPIXI();
+          debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL2;
+          break;
+        }
+        case TYPES.AREA3D_HYBRID: {
+          debugViewer = new DebugVisibilityViewerArea3dPIXI();
+          debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_HYBRID;
+          break;
+        }
+        case TYPES.WEBGL2: debugViewer = new DebugVisibilityViewerWebGL2(); break;
+        case TYPES.WEBGPU: {
+          debugViewer = CONFIG[MODULE_ID].webGPUDevice
+          ? new DebugVisibilityViewerWebGPU({ device: CONFIG[MODULE_ID].webGPUDevice })
+          : new DebugVisibilityViewerWebGL2();
+          break;
+        }
+        case TYPES.WEBGPU_ASYNC: {
+          debugViewer = CONFIG[MODULE_ID].webGPUDevice
+          ? new DebugVisibilityViewerWebGPUAsync({ device: CONFIG[MODULE_ID].webGPUDevice })
+          : new DebugVisibilityViewerWebGL2();
+          break;
+        }
       }
-      deregisterDebug();
     }
+    await debugViewer.initialize();
+    debugViewer.render();
+    this.#debugViewers.set(sym, debugViewer);
+  }
+
+  static destroyAllDebugViewers() {
+    for ( const type of Object.values(this.KEYS.LOS.TARGET.TYPES) ) this.destroyDebugViewer(type);
+  }
+
+  static destroyDebugViewer(type) {
+    type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
+    const sym = ALG_SYMBOLS[type];
+    if ( !this.#debugViewers.has(sym) ) return;
+    const debugViewer = this.#debugViewers.get(sym);
+    debugViewer.destroy();
+    this.#debugViewers.delete(sym);
+  }
+
+  static toggleLOSDebugGraphics(enabled = false) {
+    if ( enabled ) this.initializeDebugViewer();
+    else this.destroyAllDebugViewers();
   }
 
   /**
@@ -170,7 +226,7 @@ export class Settings extends ModuleSettingsAbstract {
     const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
     const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
     const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES,
-      { POINTS: 0, AREA3D_GEOMETRIC: 0, AREA3D_WEBGL2: 0, AREA3D_WEBGL2: 0, AREA3D_HYBRID: 0, WEBGL2: 0, WEBGPU: 0, WEBGPU_ASYNC: 0 });
+      { POINTS: 0, AREA3D_GEOMETRIC: 0, AREA3D_WEBGL2: 0, AREA3D_HYBRID: 0, WEBGL2: 0, WEBGPU: 0, WEBGPU_ASYNC: 0 });
     const losChoices = {};
     const ptChoices = {};
     const rangeChoices = {};
@@ -484,7 +540,7 @@ export class Settings extends ModuleSettingsAbstract {
 
     // ----- NOTE: Triggers based on starting settings ---- //
     // Start debug
-    if ( this.get(this.KEYS.DEBUG.LOS) ) registerDebug();
+    if ( this.get(this.KEYS.DEBUG.LOS) ) this.toggleLOSDebugGraphics(true);
 
     // Register the Area3D methods on initial load.
     if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
@@ -514,6 +570,9 @@ export class Settings extends ModuleSettingsAbstract {
       obj.losCalc?.destroy();
       obj.losCalc = buildLOSCalculator(token);
     });
+
+    // Start up a new debug viewer.
+    if ( this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
   }
 
   static losSettingChange(key, value) {
@@ -525,3 +584,6 @@ export class Settings extends ModuleSettingsAbstract {
     });
   }
 }
+
+const ALG_SYMBOLS = {};
+Object.values(SETTINGS.LOS.TARGET.TYPES).forEach(value => ALG_SYMBOLS[value] = Symbol(value));
