@@ -78,6 +78,8 @@ class PercentVisibleCalculatorAbstract {
     return percentRed;
   }
 
+  async percentVisibleAsync(...args) { return this.percentVisible(...args); }
+
   /**
    * Determine percent visible based on current 3d view
    * @param {Token} viewer                  Token representing the camera/sight
@@ -94,6 +96,8 @@ class PercentVisibleCalculatorAbstract {
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
     return this._percentRedPixels();
   }
+
+  async _percentVisibleAsync(...args) { return this._percentVisible(...args); }
 
   _percentRedPixels() { console.error("PercentVisibleCalculator|Must be overriden by child class.") }
 

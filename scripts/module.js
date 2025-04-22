@@ -17,23 +17,6 @@ import { Settings, SETTINGS } from "./settings.js";
 
 // For API
 import * as bench from "./benchmark.js";
-import * as benchFunctions from "./benchmark_functions.js";
-import * as util from "./util.js";
-
-import { PlanePoints3d } from "./LOS/PlaceablesPoints/PlanePoints3d.js";
-import { TokenPoints3d } from "./LOS/PlaceablesPoints/TokenPoints3d.js";
-import { DrawingPoints3d } from "./LOS/PlaceablesPoints/DrawingPoints3d.js";
-import { WallPoints3d } from "./LOS/PlaceablesPoints/WallPoints3d.js";
-import { TilePoints3d } from "./LOS/PlaceablesPoints/TilePoints3d.js";
-import { VerticalPoints3d } from "./LOS/PlaceablesPoints/VerticalPoints3d.js";
-import { HorizontalPoints3d } from "./LOS/PlaceablesPoints/HorizontalPoints3d.js";
-
-import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
-import { PointsLOS } from "./LOS/PointsLOS.js";
-import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
-import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
-import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
-import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
 
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
@@ -42,14 +25,8 @@ import { AlphaCutoffFilter } from "./LOS/AlphaCutoffFilter.js";
 import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
-import { PixelCache } from "./LOS/PixelCache.js";
-import { extractPixels } from "./LOS/extract-pixels.js";
-
 import * as range from "./visibility_range.js";
 
-import { BVH2d, BVH3d } from "./LOS/BVH.js";
-import { BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken, BaryTriangle2d, BaryTriangle3d, BaryTriangle3dNormal } from "./LOS/BlockingObject.js";
-import { Ray2d, Ray3d } from "./LOS/Ray.js";
 import { VisionPolygon, VisionTriangle } from "./LOS/VisionPolygon.js";
 
 import {
@@ -75,7 +52,6 @@ import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
 import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
-import { PercentVisibleCalculator } from "./LOS/WebGPU/PercentVisibleCalculator.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
 import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
@@ -180,45 +156,7 @@ Hooks.once("init", function() {
 
   game.modules.get(MODULE_ID).api = {
     bench,
-    benchFunctions,
-
-    PixelCache,
-    extractPixels,
-
-    losCalcMethods: {
-      AlternativeLOS,
-      PointsLOS,
-      Area3dLOSGeometric,
-      Area3dLOSWebGL,
-      Area3dLOSWebGL2,
-      Area3dLOSHybrid
-    },
-
-    util,
     range,
-
-    points3d: {
-      PlanePoints3d,
-      TokenPoints3d,
-      DrawingPoints3d,
-      WallPoints3d,
-      TilePoints3d,
-      VerticalPoints3d,
-      HorizontalPoints3d,
-      Settings,
-      AlphaCutoffFilter
-    },
-
-    bvh: {
-      BlockingTriangle, BlockingTile, BlockingEdge, BlockingToken,
-      BVH2d, BVH3d,
-      Ray2d, Ray3d,
-      BaryTriangle2d,
-      BaryTriangle3d,
-      BaryTriangle3dNormal,
-      VisionPolygon,
-      VisionTriangle
-    },
 
     triangles: {
       Triangle,
@@ -276,7 +214,6 @@ Hooks.once("init", function() {
       RenderWalls,
       RenderObstacles,
       WebGPUSumRedPixels,
-      PercentVisibleCalculator,
       wgsl,
       AsyncQueue,
       SumPixelsWebGL2,

@@ -11,7 +11,7 @@ Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d;
 api = game.modules.get("tokenvisibility").api;
 Area3dLOS = api.Area3dLOS;
-PixelCache = api.PixelCache
+PixelCache = CONFIG.GeometryLib.PixelCache
 
 let [viewer] = canvas.tokens.controlled;
 let [target] = game.user.targets;

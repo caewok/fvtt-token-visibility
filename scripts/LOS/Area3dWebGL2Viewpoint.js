@@ -369,9 +369,7 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
     return this.#debugSprite;
   }
 
-
   _percentVisible() {
-    performance.mark("startWebGL2");
     const { renderTexture, shaders, blockingObjects } = this;
     const renderer = canvas.app.renderer;
 
@@ -388,28 +386,23 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
 
     // Build target mesh to measure the target viewable area.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
-    performance.mark("renderTarget");
     this.#renderTarget(renderer, renderTexture, shaders);
 
     // Calculate visible area of the target.
-    performance.mark("targetCache");
     const targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
     const sumTarget = sumRedPixels(targetCache);
 
     // Render obstacles. Render opaque first.
-    performance.mark("obstacleMesh");
     this.#renderOpaqueObstacles(renderer, renderTexture, shaders);
     this.#renderTransparentObstacles(renderer, renderTexture, shaders, this._buildTileShader.bind(this));
 
     // Calculate target area remaining after obstacles.
-    performance.mark("obstacleCache");
     const obstacleSum = blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
     const obstacleCache = renderer.extract._rawPixels(renderTexture);
     const sumWithObstacles = obstacleSum(obstacleCache);
 
     // Cleanup and calculate final percentage visible.
     const denom = Math.min(sumGridCube, sumTarget);
-    performance.mark("endWebGL2");
     return sumWithObstacles / denom;
   }
 

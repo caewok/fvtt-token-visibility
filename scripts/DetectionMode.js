@@ -8,7 +8,8 @@ import { MODULE_ID } from "./const.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { SETTINGS, Settings } from "./settings.js";
-import { AlternativeLOS } from "./LOS/AlternativeLOS.js";
+import { targetWithinLimitedAngleVision } from "./LOS/util.js";
+import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};
@@ -70,18 +71,11 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   losCalc.config.useLitTargetShape = useLitTargetShape;
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-  hasLOS = losCalc.hasLOS(target);
-
-  const vc = losCalc.center;
-  const tc = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(losCalc.target);
-
-  /*
-  console.debug(`${losCalc.viewer.name} -> ${losCalc.target.name} ${vc.toString()}->${tc.toString()}`);
-  for ( const vp of losCalc.viewpoints ) {
-    console.debug(`\t${vp.viewpoint.toString()}: ${vp.percentVisible()}%`);
+  let callback = undefined;
+  if ( losCalc.config.viewpointClass === WebGPUViewpointAsync ) {
+    callback = () => test._refreshVisibility();
   }
-  */
-
+  hasLOS = losCalc.hasLOS(target, { callback });
 
   test.los.set(visionSource, hasLOS);
   return hasLOS;
@@ -142,71 +136,7 @@ function _testAngle(wrapped, visionSource, mode, target, test) {
 
   // If completely outside the angle, we can return false.
   // Otherwise, handled in visible Token
-  return AlternativeLOS.targetWithinLimitedAngleVision(visionSource, target);
+  return targetWithinLimitedAngleVision(visionSource, target);
 }
 
 PATCHES.BASIC.MIXES = { _testLOS, _testRange, _testAngle };
-
-
-/* Benchmark limited vision testing
-api = game.modules.get("tokenvisibility").api
-QBenchmarkLoopFn = api.bench.QBenchmarkLoopFn
-let [viewer] = canvas.tokens.controlled;
-let [target] = game.user.targets;
-visionSource = viewer.vision
-
-function overlapLimitedAngle(target, visionSource) {
-  const constrainedTokenBorder = target.constrainedTokenBorder;
-  const { angle, rotation, externalRadius } = visionSource.data;
-  const radius = canvas.dimensions.maxR;
-  const limitedAnglePoly = new LimitedAnglePolygon(visionSource, { radius, angle, rotation, externalRadius });
-  return constrainedTokenBorder.overlaps(limitedAnglePoly)
-}
-
-function testLimitedAngle(target, visionSource) {
-  return targetWithinLimitedAngleVision(visionSource, target)
-}
-
-function envelopsLimitedAngle(target, visionSource) {
-  const constrainedTokenBorder = target.constrainedTokenBorder;
-  const { angle, rotation, externalRadius } = visionSource.data;
-  const radius = canvas.dimensions.maxR;
-  const limitedAnglePoly = new LimitedAnglePolygon(visionSource, { radius, angle, rotation, externalRadius });
-  return limitedAnglePoly.envelops(constrainedTokenBorder);
-}
-
-N = 10000
-await QBenchmarkLoopFn(N, overlapLimitedAngle, "Overlaps limited angle", target, visionSource);
-await QBenchmarkLoopFn(N, testLimitedAngle, "Test limited angle", target, visionSource);
-await QBenchmarkLoopFn(N, envelopsLimitedAngle, "Envelops limited angle", target, visionSource);
-
-Overlaps limited angle | 10000 iterations | 223.5ms | 0.0223ms per | 10/50/90: 0 / 0 / 0.1
-Test limited angle | 10000 iterations | 30.2ms | 0.003ms per | 10/50/90: 0 / 0 / 0
-Envelops limited angle | 10000 iterations | 190ms | 0.019ms per | 10/50/90: 0 / 0 / 0.1
-
-*/
-
-/**
- * Take a token and intersects it with the vision angle.
- * @param {PIXI.Rectangle|PIXI.Polygon|ClipperPaths} visibleShape
- * @param {VisionSource} visionSource
- * @param {number} detectionAngle       Angle
- * @returns {PIXI.Polygon[]|PIXI.Rectangle[]|PIXI.Polygon}
- */
-// function constrainByVisionAngle(visibleShape, visionSource) {
-//   const { angle, rotation, externalRadius } = visionSource.data;
-//   if ( angle >= 360 ) return visibleShape;
-//
-//   // Build a limited angle for the vision source.
-//   const radius = canvas.dimensions.maxR;
-//   const limitedAnglePoly = new LimitedAnglePolygon(visionSource, { radius, angle, rotation, externalRadius });
-//
-//   // If the limited angle envelops the token shape, then we are done.
-//   if ( limitedAnglePoly.envelops(visibleShape) ) return visibleShape;
-//
-//   // If the visible shape does not overlap, we are done.
-//   // if ( !visibleShape.overlaps(limitedAnglePoly) ) return null;
-//
-//   // Intersect the vision polygon with the visible token shape.
-//   return visibleShape.intersectPolygon(limitedAnglePoly);
-// }
