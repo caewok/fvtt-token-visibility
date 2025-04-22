@@ -80,8 +80,8 @@ export class AbstractViewpoint {
    * @param {Token} target
    * @returns {number}
    */
-  percentVisible() {
-    const percent = this._simpleVisibilityTest() ?? this._percentVisible();
+  percentVisible(callback) {
+    const percent = this._simpleVisibilityTest() ?? this._percentVisible(callback);
     if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
@@ -93,7 +93,7 @@ export class AbstractViewpoint {
   }
 
   /** @override */
-  _percentVisible() { return 1; }
+  _percentVisible(_callback) { return 1; }
 
   async _percentVisibleAsync() { return this._percentVisible(); }
 

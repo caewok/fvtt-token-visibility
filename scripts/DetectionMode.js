@@ -9,6 +9,7 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { SETTINGS, Settings } from "./settings.js";
 import { targetWithinLimitedAngleVision } from "./LOS/util.js";
+import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};
@@ -70,7 +71,11 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   losCalc.config.useLitTargetShape = useLitTargetShape;
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-  hasLOS = losCalc.hasLOS(target);
+  let callback = undefined;
+  if ( losCalc.config.viewpointClass === WebGPUViewpointAsync ) {
+    callback = () => test._refreshVisibility();
+  }
+  hasLOS = losCalc.hasLOS(target, { callback });
 
   test.los.set(visionSource, hasLOS);
   return hasLOS;

@@ -70,9 +70,6 @@ export class AbstractViewerLOS {
     "los-webgpu-async": WebGPUViewpointAsync,
   };
 
-  /** @type {Token} */
-  viewer;
-
   /** @type {ViewerLOSConfig} */
   config = {};
 
@@ -248,9 +245,9 @@ export class AbstractViewerLOS {
    * @param {number} [threshold]    Percentage to be met to be considered visible
    * @returns {boolean}
    */
-  hasLOS(target, threshold) {
+  hasLOS(target, { threshold, callback } = {}) {
     threshold ??= this.config.threshold;
-    const percent = this.percentVisible(target); // Percent visible will reset the cache.
+    const percent = this.percentVisible(target, callback); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
     if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
@@ -270,9 +267,9 @@ export class AbstractViewerLOS {
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
    */
-  percentVisible(target) {
+  percentVisible(target, callback) {
     this.target = target;  // Important so the cache is reset.
-    const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target);
+    const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target, callback);
     if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
@@ -284,10 +281,10 @@ export class AbstractViewerLOS {
     return percent;
   }
 
-  _percentVisible(target) {
+  _percentVisible(target, callback) {
     let max = 0;
     for ( const vp of this.viewpoints ) {
-      max = Math.max(max, vp.percentVisible(target));
+      max = Math.max(max, vp.percentVisible(callback));
       if ( max === 1 ) return max;
     }
     return max;
@@ -296,7 +293,7 @@ export class AbstractViewerLOS {
   async _percentVisibleAsync(target) {
     let max = 0;
     for ( const vp of this.viewpoints ) {
-      max = Math.max(max, (await vp.percentVisibleAsync(target)));
+      max = Math.max(max, (await vp.percentVisibleAsync()));
       if ( max === 1 ) return max;
     }
     return max;

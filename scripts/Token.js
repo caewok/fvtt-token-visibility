@@ -44,6 +44,7 @@ function initializeVisionSource(wrapped, options) {
   if ( !this.vision ) return;
   const obj = this.vision[MODULE_ID] ??= {};
   obj.losCalc ??= buildLOSCalculator(this);
+
 }
 
 PATCHES.BASIC.WRAPS = { initializeVisionSource };
