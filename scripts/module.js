@@ -284,7 +284,11 @@ Hooks.on("canvasReady", function() {
   CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
 
   WebGPUDevice.getDevice().then(device => {
-    if ( !device ) return console.warn("No WebGPU device located. Falling back to WebGL2.");
+    if ( !device ) {
+      return console.warn("No WebGPU device located. Falling back to WebGL2.");
+    }
+    CONFIG[MODULE_ID].webGPUDevice = device;
+
     CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
     CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
 
