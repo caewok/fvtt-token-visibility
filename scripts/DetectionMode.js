@@ -107,12 +107,13 @@ function _testRange(wrapped, visionSource, mode, target, test) {
   // Duplicate below so that the if test does not need to be inside the loop.
   if ( Settings.get(SETTINGS.DEBUG.RANGE) ) {
     const draw = new Draw(Settings.DEBUG_RANGE);
-    return testPoints.some(pt => {
+
+    // Color all the points red or green.
+    testPoints.forEach(pt => {
       const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
       const inRange = dist2 <= radius2;
       draw.point(pt, { alpha: 1, radius: 3, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
-      return inRange;
-    });
+    })
   }
 
   return testPoints.some(pt => {
