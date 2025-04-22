@@ -487,13 +487,6 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   /** @type {class} */
   static popoutClass = Area3dPopout;
 
-  static ALGORITHMS = {
-    AREA3D_GEOMETRIC: SETTINGS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
-    AREA3D_WEBGL1: SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL1,
-    AREA3D_WEBGL2: SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
-    AREA3D_HYBRID: SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID,
-  };
-
   /** @type {PIXI.Graphics} */
   #popoutGraphics;
 
@@ -520,7 +513,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     console.log(`${this.calc.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
-  algorithm = this.constructor.ALGORITHMS.AREA3D_WEBGL2;
+  algorithm = SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
 
   async openPopout(opts) {
     await super.openPopout(opts);
