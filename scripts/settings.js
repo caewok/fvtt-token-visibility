@@ -148,6 +148,12 @@ export class Settings extends ModuleSettingsAbstract {
 
   static #debugViewers = new WeakMap();
 
+  static getDebugViewer(type) {
+    type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
+    const sym = ALG_SYMBOLS[type];
+    return this.#debugViewers.get(sym);
+  }
+
   static async initializeDebugViewer(type) {
     type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
     const sym = ALG_SYMBOLS[type];
@@ -176,7 +182,7 @@ export class Settings extends ModuleSettingsAbstract {
         case TYPES.WEBGL2: debugViewer = new DebugVisibilityViewerWebGL2(); break;
         case TYPES.WEBGPU: {
           debugViewer = CONFIG[MODULE_ID].webGPUDevice
-          ? new DebugVisibilityViewerWebGPU({ device: CONFIG[MODULE_ID].webGPUDevice });
+          ? new DebugVisibilityViewerWebGPU({ device: CONFIG[MODULE_ID].webGPUDevice })
           : new DebugVisibilityViewerWebGL2();
           break;
         }
@@ -194,7 +200,7 @@ export class Settings extends ModuleSettingsAbstract {
   }
 
   static destroyAllDebugViewers() {
-    for ( const type of this.KEYS.LOS.TARGET.TYPES.values() ) this.destroyDebugViewer(type);
+    for ( const type of Object.values(this.KEYS.LOS.TARGET.TYPES) ) this.destroyDebugViewer(type);
   }
 
   static destroyDebugViewer(type) {
