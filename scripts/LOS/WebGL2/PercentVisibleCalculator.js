@@ -49,6 +49,8 @@ class PercentVisibleCalculatorAbstract {
     for ( const token of this.tokenHandler.placeableFromInstanceIndex.values() ) this._updateTokenCacheKeys(token);
   }
 
+
+
   // ----- NOTE: Visibility testing ----- //
 
   /**

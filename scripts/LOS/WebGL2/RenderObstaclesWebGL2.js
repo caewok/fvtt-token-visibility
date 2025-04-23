@@ -6,6 +6,7 @@ CONFIG,
 
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionPolygon.js";
+import { Settings } from "../../settings.js";
 import {
   DrawableNonDirectionalWallWebGL2,
   DrawableDirectionalWallWebGL2,
@@ -78,6 +79,22 @@ export class RenderObstaclesAbstractWebGL2 {
     return Promise.allSettled(promises);
   }
 
+  /** @type {ViewerLOSConfig} */
+  config = {
+    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE),
+    useLitTargetShape: true,
+    visibleTargetShape: null,
+    blocking: {
+      walls: true,
+      tiles: true,
+      tokens: {
+        dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
+        live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
+        prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
+      }
+    }
+  };
+
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
@@ -88,7 +105,7 @@ export class RenderObstaclesAbstractWebGL2 {
 
   render(viewerLocation, target, { viewer, targetLocation } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    const opts = { viewer, target }; // TODO: Add BlockOptions.
+    const opts = { viewer, target, blocking: this.config.blocking };
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = VisionTriangle.build(viewerLocation, target);
     this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));

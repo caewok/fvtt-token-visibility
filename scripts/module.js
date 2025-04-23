@@ -58,8 +58,7 @@ import {
   TileInstanceHandler,
   TokenInstanceHandler,
  } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
-import { RenderWallsPIXI } from "./LOS/WebGL2/RenderObstaclesPIXI.js";
-import { DrawableWallInstancesPIXI } from "./LOS/WebGL2/DrawableObjectsPIXI.js";
+
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
 import {
   DrawableNonDirectionalWallWebGL2,
@@ -173,8 +172,6 @@ Hooks.once("init", function() {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,
       Placeable3dDebugShader, Tile3dDebugShader,
-      DrawableWallInstancesPIXI,
-      RenderWallsPIXI,
       WebGL2,
       DrawableNonDirectionalWallWebGL2,
       DrawableDirectionalWallWebGL2,
@@ -261,12 +258,29 @@ function tokenIsDead(token) {
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
-
   CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
+
+  // Must create after settings are registered.
+  CONFIG[MODULE_ID].percentVisibleWebGL2 = new PercentVisibleCalculatorWebGL2({ senseType: "sight" }),
+  WebGPUDevice.getDevice().then(device => {
+    if ( !device ) return console.warn("No WebGPU device located. Falling back to WebGL2.");
+    CONFIG[MODULE_ID].webGPUDevice = device;
+    CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
+    CONFIG[MODULE_ID].percentVisibleWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device });
+  });
+
 });
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
+
+  CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
+
+  if ( CONFIG[MODULE_ID].webGPUDevice ) {
+    CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
+    CONFIG[MODULE_ID].percentVisibleWebGPUAsync.initialize(); // Async
+  };
+
   Settings.initializeDebugGraphics();
 
 //   WallTriangles.registerPlaceableHooks();
@@ -279,21 +293,8 @@ Hooks.on("canvasReady", function() {
 //   canvas.tokens.placeables.forEach(token => TokenTriangles._onPlaceableCreation(token));
 //
 
-  CONFIG[MODULE_ID].percentVisibleWebGL2 = new PercentVisibleCalculatorWebGL2({ senseType: "sight" })
-  CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
-
-  WebGPUDevice.getDevice().then(device => {
-    if ( !device ) {
-      return console.warn("No WebGPU device located. Falling back to WebGL2.");
-    }
-    CONFIG[MODULE_ID].webGPUDevice = device;
-
-    CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
-    CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
-
-    CONFIG[MODULE_ID].percentVisibleWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device });
-    CONFIG[MODULE_ID].percentVisibleWebGPUAsync.initialize(); // Async
-  });
+  // Once canvas is loaded, process the placeables.
+  // PlaceableInstanceHandler.handlers.values().forEach(handler => handler.initializePlaceables());
 
 });
 

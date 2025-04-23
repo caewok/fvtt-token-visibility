@@ -396,6 +396,10 @@ class DrawableObjectsWebGL2Abstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
   filterObjects(_visionTriangle, _opts) {
     const instanceSet = this.instanceSet;
@@ -436,11 +440,11 @@ export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
    */
-  filterObjects(visionTriangle, opts = {}) {
+  filterObjects(visionTriangle, { blocking = {} } = {}) {
     const instanceSet = this.instanceSet;
     instanceSet.clear();
-    opts.walls ??= true;
-    if ( !opts.walls ) return;
+    blocking.walls ??= true;
+    if ( !blocking.walls ) return;
 
     // Limit to walls within the vision triangle
     // Drop open doors.
@@ -581,12 +585,16 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
    * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, opts = {}) {
+  filterObjects(visionTriangle, { blocking = {} } = {}) {
     const instanceSet = this.instanceSet;
     instanceSet.clear();
-    opts.tiles ??= true;
-    if ( !opts.tiles ) return;
+    blocking.tiles ??= true;
+    if ( !blocking.tiles ) return;
 
     // Limit to tiles within the vision triangle
     for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
@@ -689,24 +697,26 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
-   * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, opts = {}) {
+  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
     const instanceSet = this.instanceSet;
     instanceSet.clear();
-    opts.tokens ??= {};
-    opts.tokens.dead ??= true;
-    opts.tokens.live ??= true;
-    opts.tokens.prone ??= true;
-    if ( !(opts.tokens.dead || opts.tokens.live) ) return;
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
+    if ( !(blocking.tokens.dead || blocking.tokens.live) ) return;
 
     // Limit to tokens within the vision triangle.
     // Drop excluded token categories.
-    const { viewer, target } = opts;
     const api = MODULES_ACTIVE.API.RIDEABLE;
     for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       if ( token === viewer || token === target ) continue;
-      if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+      if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
 
       // Filter tokens that directly overlaps the viewer.
       if ( tokensOverlap(token, viewer) ) continue;

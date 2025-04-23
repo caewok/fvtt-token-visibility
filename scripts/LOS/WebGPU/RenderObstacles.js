@@ -6,6 +6,7 @@ CONFIG,
 
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
+import { Settings } from "../../settings.js";
 import { VisionTriangle } from "../VisionPolygon.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
@@ -147,6 +148,22 @@ class RenderAbstract {
     return Promise.allSettled(promises);
   }
 
+  /** @type {ViewerLOSConfig} */
+  config = {
+    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE),
+    useLitTargetShape: true,
+    visibleTargetShape: null,
+    blocking: {
+      walls: true,
+      tiles: true,
+      tokens: {
+        dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
+        live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
+        prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
+      }
+    }
+  };
+
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
@@ -161,7 +178,7 @@ class RenderAbstract {
   }
 
   render(viewerLocation, target, { viewer, targetLocation } = {}) {
-    const opts = { viewer, target };
+    const opts = { viewer, target, blocking: this.config.blocking };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = VisionTriangle.build(viewerLocation, target);

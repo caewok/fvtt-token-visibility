@@ -309,6 +309,10 @@ class DrawableObjectsAbstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
   filterObjects(_visionTriangle, _opts) {}
 
@@ -424,10 +428,10 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
   }
 
   _createInstanceBuffer() {
-    if ( this.buffers.instance ) this.buffers.instance.destroy();
     if ( !this.placeableHandler.numInstances ) return;
     const device = this.device;
 
+    if ( this.buffers.instance ) this.buffers.instance.destroy();
     this.buffers.instance = this.device.createBuffer({
       label: `${this.constructor.name}`,
       size: this.placeableHandler.instanceArrayBuffer.byteLength,
@@ -513,10 +517,9 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // Track the indirect draw commands for each drawable.
     // Used in conjunction with the culling buffer.
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
-
-    if ( this.buffers.indirect ) this.buffers.indirect.destroy();
     if ( !this.placeableHandler.numInstances ) return;
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
+    if ( this.buffers.indirect ) this.buffers.indirect.destroy();
     this.buffers.indirect = this.device.createBuffer({
       label: "Indirect Buffer",
       size: size * this.drawables.size,
@@ -540,7 +543,6 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
    */
   _createCulledBuffer() {
-    if ( this.buffers.culled ) this.buffers.culled.destroy();
     if ( !this.placeableHandler.numInstances ) return;
 
     // To create a single buffer the offset must be a multiple of 256.
@@ -551,6 +553,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     const minSize = 256;
     const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
 
+    if ( this.buffers.culled ) this.buffers.culled.destroy();
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
       size: size * this.drawables.size,
@@ -740,12 +743,19 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle) {
+  filterObjects(visionTriangle, { blocking = {} } = {}) {
     const keys = this.constructor.FILTER_KEYS;
     const instanceSets = {};
     for ( const key of keys ) instanceSets[key] = this.drawables.get(key).instanceSet
     Object.values(instanceSets).forEach(s => s.clear());
+
+    blocking.walls ??= true;
+    if ( !blocking.walls ) return;
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
@@ -933,24 +943,27 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, opts = {}) {
-    const { viewer, target } = opts;
-    opts.tokens ??= {};
-    opts.tokens.dead ??= true;
-    opts.tokens.live ??= true;
-    opts.tokens.prone ??= true;
+  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
 
     // Limit tokens as obstacles.
     const drawable = this.drawables.get("token");
     drawable.instanceSet.clear();
 
-    if ( opts.tokens.dead || opts.tokens.live ) {
+    if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
       const api = MODULES_ACTIVE.API.RIDEABLE;
       for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
         if ( token === viewer || token === target ) continue;
-        if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+        if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
 
         // Filter tokens that directly overlaps the viewer.
         if ( tokensOverlap(token, viewer) ) continue;
@@ -1157,12 +1170,17 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle) {
+  filterObjects(visionTriangle, { blocking = {} } = {}) {
     // Filter non-viewable tiles.
+    blocking.tiles ??= true;
     for ( const tile of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       const drawable = this.drawables.get(tile.id);
-      drawable.numInstances = Boolean(visionTriangle.containsTile(tile));
+      drawable.numInstances = Boolean(blocking.tiles && visionTriangle.containsTile(tile));
     }
     super.filterObjects(visionTriangle);
   }
@@ -1226,13 +1244,16 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, opts = {}) {
-    const { viewer, target } = opts;
-    opts.tokens ??= {};
-    opts.tokens.dead ??= true;
-    opts.tokens.live ??= true;
-    opts.tokens.prone ??= true;
+  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
 
     const api = MODULES_ACTIVE.API.RIDEABLE;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
@@ -1240,7 +1261,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
       if ( !drawable ) continue;
       drawable.numInstances = 0; // Default to not drawing this token.
       if ( token === viewer || token === target ) continue;
-      if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+      if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
 
       // Filter tokens that directly overlaps the viewer.
       if ( tokensOverlap(token, viewer) ) continue;
@@ -1257,7 +1278,6 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
       drawable.numInstances = 1;
       drawable.materialBG = this.materials.bindGroups.get("target");
     }
-    super.filterObjects(visionTriangle, opts);
   }
 
   static includeToken(token, { dead = true, live = true, prone = true } = {}) {
