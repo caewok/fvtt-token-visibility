@@ -428,10 +428,10 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
   }
 
   _createInstanceBuffer() {
-    if ( this.buffers.instance ) this.buffers.instance.destroy();
     if ( !this.placeableHandler.numInstances ) return;
     const device = this.device;
 
+    if ( this.buffers.instance ) this.buffers.instance.destroy();
     this.buffers.instance = this.device.createBuffer({
       label: `${this.constructor.name}`,
       size: this.placeableHandler.instanceArrayBuffer.byteLength,
@@ -517,10 +517,9 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // Track the indirect draw commands for each drawable.
     // Used in conjunction with the culling buffer.
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
-
-    if ( this.buffers.indirect ) this.buffers.indirect.destroy();
     if ( !this.placeableHandler.numInstances ) return;
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
+    if ( this.buffers.indirect ) this.buffers.indirect.destroy();
     this.buffers.indirect = this.device.createBuffer({
       label: "Indirect Buffer",
       size: size * this.drawables.size,
@@ -544,7 +543,6 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
    */
   _createCulledBuffer() {
-    if ( this.buffers.culled ) this.buffers.culled.destroy();
     if ( !this.placeableHandler.numInstances ) return;
 
     // To create a single buffer the offset must be a multiple of 256.
@@ -555,6 +553,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     const minSize = 256;
     const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
 
+    if ( this.buffers.culled ) this.buffers.culled.destroy();
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
       size: size * this.drawables.size,
@@ -964,7 +963,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       const api = MODULES_ACTIVE.API.RIDEABLE;
       for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
         if ( token === viewer || token === target ) continue;
-        if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+        if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
 
         // Filter tokens that directly overlaps the viewer.
         if ( tokensOverlap(token, viewer) ) continue;
@@ -1262,7 +1261,7 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
       if ( !drawable ) continue;
       drawable.numInstances = 0; // Default to not drawing this token.
       if ( token === viewer || token === target ) continue;
-      if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+      if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
 
       // Filter tokens that directly overlaps the viewer.
       if ( tokensOverlap(token, viewer) ) continue;
@@ -1279,7 +1278,6 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
       drawable.numInstances = 1;
       drawable.materialBG = this.materials.bindGroups.get("target");
     }
-    super.filterObjects(visionTriangle, opts);
   }
 
   static includeToken(token, { dead = true, live = true, prone = true } = {}) {
