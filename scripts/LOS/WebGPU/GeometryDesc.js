@@ -88,9 +88,31 @@ export class GeometryDesc {
   _defineVerticesAndIndices(opts) {
     const arr = this.constructor.defineVertices(opts);
     const res = trimVertexData(arr, { addNormals: opts.addNormals, addUVs: opts.addUVs });
+    this.translateVertices(res.vertices, { ...opts, length: res.length });
     this.vertices = res.vertices;
     this.indices = res.indices;
     this.numVertices = res.numVertices;
+  }
+
+  /**
+   * Translate an array of x,y,z vertices in place.
+   * Assumed that x,y,z are the start of the data.
+   * @param {number[]} vertices       Modified in place
+   * @param {object} [opts]
+   * @param {number} [opts.x=1]       Number of x units to move
+   * @param {number} [opts.y=1]       Number of y units to move
+   * @param {number} [opts.z=1]       Number of z units to move
+   * @param {number} [opts.length=8]  How many parameters per vertex
+   * @returns {number[]} The modified vertices, for convenience
+   */
+  static translateVertices(vertices, { x = 0, y = 0, z = 0, length = 8 } = {}) {
+    if ( !(x || y || z) ) return vertices;
+    for ( let i = 0, iMax = vertices.length; i < iMax; i += length ) {
+      vertices[i] += x;
+      vertices[i + 1] += y;
+      vertices[i + 2] += z;
+    }
+    return vertices;
   }
 
   /**
@@ -357,6 +379,7 @@ function trimVertexData(arr, { addNormals = false, addUVs = false } = {}) {
     indices,
     vertices: new Float32Array(vertices),
     numVertices: uniqueV.size,
+    length,
   };
 }
 

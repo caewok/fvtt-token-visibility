@@ -6,7 +6,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// BBEdit notes: mark, fixme, fix-me, note, nyi, review, todo, to-do, xxx, ???, !!!
+// BBEdit notes: mark, fixme, fi-me, note, nyi, review, todo, to-do, xxx, ???, !!!
 // TODO: todo
 // FIXME: fixme!
 // REVIEW: review
@@ -35,11 +35,11 @@ export class GeometryCubeDesc extends GeometryDesc {
    * @param {number} [opts.w]           Width of the token (in x direction)
    * @param {number} [opts.d]           Depth of the token (in y direction)
    * @param {number} [opts.h]           Height of token (in z direction)
-   * @param {number} [opts.x]           Location on x-axis
-   * @param {number} [opts.y]           Location on y-axis
-   * @param {number} [opts.z]           Location on z-axis
+   * @param {number} [opts.x]           Location on -axis
+   * @param {number} [opts.y]           Location on -axis
+   * @param {number} [opts.z]           Location on -axis
    */
-  static defineVertices({ x, y, z, w, d, h } = {}) {
+  static defineVertices({ w, d, h } = {}) {
 //     const indices = [
 //       0, 1, 2, 3, 0, 2,        // S facing 0–3
 //       4, 5, 6, 4, 6, 7,        // N facing 4–7
@@ -50,64 +50,64 @@ export class GeometryCubeDesc extends GeometryDesc {
 //     ];
 
     return [
-      // Position    UV Normal
-      // Side CCW if token goes from x-w to x+w.
+      // Position    Normal   UV
+      // Side CCW if token goes from -w to w.
       // S facing
-      x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
-      x-w, y+d, z+h,  0, 1, 0,  0, 0, // b       1
-      x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
-      x+w, y+d, z-h,  0, 1, 0,  1, 1, // d       3
+      w, d, h,  0, 1, 0,  1, 0, // a, e    0
+      -w, d, h,  0, 1, 0,  0, 0, // b       1
+      -w, d, -h,  0, 1, 0,  0, 1, // c, f    2
+      w, d, -h,  0, 1, 0,  1, 1, // d       3
 
-      x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
-      x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
+      w, d, h,  0, 1, 0,  1, 0, // a, e    0
+      -w, d, -h,  0, 1, 0,  0, 1, // c, f    2
 
       // N facing: reverse of South. c,b,a,f,e,d
-      x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
-      x-w, y-d, z+h,  0, -1, 0,  1, 0, // b      5
-      x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+      -w, -d, -h,  0, -1, 0,  1, 1, // c, f   4
+      -w, -d, h,  0, -1, 0,  1, 0, // b      5
+      w, -d, h,  0, -1, 0,  0, 0, // a, e   6
 
-      x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
-      x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+      -w, -d, -h,  0, -1, 0,  1, 1, // c, f   4
+      w, -d, h,  0, -1, 0,  0, 0, // a, e   6
 
-      x+w, y-d, z-h,  0, -1, 0,  0, 1, // d      7
+      w, -d, -h,  0, -1, 0,  0, 1, // d      7
 
       // W facing
-      x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a, e   8
-      x-w, y-d, z+h,  -1, 0, 0,  0, 0, // b      9
-      x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
-      x-w, y+d, z-h,  -1, 0, 0,  1, 1, // d      11
+      -w, d, h,  -1, 0, 0,  1, 0, // a, e   8
+      -w, -d, h,  -1, 0, 0,  0, 0, // b      9
+      -w, -d, -h,  -1, 0, 0,  0, 1, // c, f   10
+      -w, d, -h,  -1, 0, 0,  1, 1, // d      11
 
-      x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a, e   8
-      x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
+      -w, d, h,  -1, 0, 0,  1, 0, // a, e   8
+      -w, -d, -h,  -1, 0, 0,  0, 1, // c, f   10
 
       // E facing: reverse of West c,b,a,f,e,d
-      x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
-      x+w, y-d, z+h,  1, 0, 0,  1, 0, // b        13
-      x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+      w, -d, -h,  1, 0, 0,  1, 1, // c, f     12
+      w, -d, h,  1, 0, 0,  1, 0, // b        13
+      w, d, h,  1, 0, 0,  0, 0, // a, e     14
 
-      x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
-      x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+      w, -d, -h,  1, 0, 0,  1, 1, // c, f     12
+      w, d, h,  1, 0, 0,  0, 0, // a, e     14
 
-      x+w, y+d, z-h,  1, 0, 0,  0, 1, // d        15
+      w, d, -h,  1, 0, 0,  0, 1, // d        15
 
       // Top
-      x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a, e   16
-      x-w, y+d, z+h,  0, 0, 1,   0, 1,  // b      17
-      x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
-      x+w, y-d, z+h,  0, 0, 1,   1, 0,  // d      19
+      -w, -d, h,  0, 0, 1,   0, 0,  // a, e   16
+      -w, d, h,  0, 0, 1,   0, 1,  // b      17
+      w, d, h,  0, 0, 1,   1, 1,  // c, f   18
+      w, -d, h,  0, 0, 1,   1, 0,  // d      19
 
-      x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a, e   16
-      x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
+      -w, -d, h,  0, 0, 1,   0, 0,  // a, e   16
+      w, d, h,  0, 0, 1,   1, 1,  // c, f   18
 
       // Bottom: reverse of Top c,b,a,f,e,d
-      x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
-      x-w, y+d, z-h,  0, 0, -1,  0, 0,  // b      21
-      x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+      w, d, -h,  0, 0, -1,  1, 0,  // c, f   20
+      -w, d, -h,  0, 0, -1,  0, 0,  // b      21
+      -w, -d, -h,  0, 0, -1,  0, 1,  // a, e   22
 
-      x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
-      x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+      w, d, -h,  0, 0, -1,  1, 0,  // c, f   20
+      -w, -d, -h,  0, 0, -1,  0, 1,  // a, e   22
 
-      x+w, y-d, z-h,  0, 0, -1,  1, 1,  // d      23
+      w, -d, -h,  0, 0, -1,  1, 1,  // d      23
     ];
   }
 }
@@ -125,14 +125,14 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
   token;
 
   static defineVertices({ token } = {}) {
-    const border = token.constrainedTokenBorder;
+    // Set the token border to center at 0,0,0 to match handling of other geometries.
+    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const border = token.constrainedTokenBorder.translate(-ctr.x, -ctr.y, -ctr.z));
     const { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
       const w = token.document.width * canvas.dimensions.size;
       const d = token.document.height * canvas.dimensions.size;
-      const h = topZ - bottomZ;
-      const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-      return GeometryCubeDesc.defineVertices({ w, d, h, ...ctr});
+      return GeometryCubeDesc.defineVertices({ w, d, h });
     }
 
     // Build structure from the border polygon, with rectangular sides along each edge.
@@ -172,7 +172,7 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
   static polygonTopBottomFaces(poly, { elevation = 0, top = true } = {}) {
      if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
 
-     // Because Foundry uses y- axis to move "up", CCW and CW will get flipped in WebGPU.
+     // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
      const flip = top;
 
      /* Testing
@@ -196,7 +196,7 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
      const vertices = new Float32Array(numVertices * 8);
      const indices = new Uint16Array(PIXI.utils.earcut(poly.points));
 
-     // For Foundry's y+ coordinate system, indices are always CCW triangles.
+     // For Foundry's  coordinate system, indices are always CCW triangles.
      // Flip to make CW if constructing the bottom face.
      if ( flip ) {
        for ( let i = 0, imax = indices.length; i < imax; i += 3 ) {
@@ -331,6 +331,154 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
   }
 }
 
+/**
+ * Describe a hexagon by its vertices, normals, and uvs.
+ * By default, hex centered at origin 0,0,0.
+ * See https://en.wikipedia.org/wiki/Hexagon
+ * Maximum circumradius of 0.5, so diameter of 1 and side length of 0.5.
+ * Minimal diameter is twice the inradius.
+ * r = SQRT3 / 2
+ */
+export class GeometryHexRowDesc extends GeometryDesc {
+  /** @type {string} */
+  label = "HexRow"
+
+  /**
+   * Define the vertices and optional indices for this geometry.
+   * @param {object} [opts]
+   * @param {number} [opts.w]           Width of the token (in x direction)
+   * @param {number} [opts.d]           Depth of the token (in y direction)
+   * @param {number} [opts.h]           Height of token (in z direction)
+   * @param {number} [opts.x]           Location on -axis
+   * @param {number} [opts.y]           Location on -axis
+   * @param {number} [opts.z]           Location on -axis
+   */
+  static defineVertices({ r, R, h } = {}) {
+/*
+R = 0.5
+r = sqrt(3) / 2 * R
+yLen = R^2 - r^2 = 1 - sqrt(r)
+
+
+T:  0.0, -R
+B:  0.0, R
+TR: r, -yLen
+BR: r, yLen
+TL: -r, -yLen
+BL: -r, yLen
+
+
+
+       T
+     /  \
+    /    \
+  TL      TR
+  |       |
+  |       |
+  BL      BR
+   \     /
+    \   /
+      B
+*/
+    R ??= 0.5;
+    r ??= (Math.SQRT3 / 2) * R;
+    const yLen = Math.pow(R, 2) - Math.pow(r, 2);
+    const t = h * 0.5;
+    const b = h * -0.5;
+
+    // CCW
+    const vertices = [
+      // Position     UV      Normal
+      // Top
+      0.0, -R, t,     0, 0,   0, 0, 1,    // T
+      -r, -yLen, t,   0, 0,   0, 0, 1,    // TL
+      r, -yLen, t,    0, 0,   0, 0, 1,    // TR
+
+      r, -yLen, t,    0, 0,   0, 0, 1,    // TR
+      -r, -yLen, t,   0, 0,   0, 0, 1,    // TL
+      r, yLen, t,     0, 0,   0, 0, 1,    // BR
+
+      r, yLen, t,     0, 0,   0, 0, 1,    // BR
+      -r, -yLen, t,   0, 0,   0, 0, 1,    // TL
+      -r, yLen, t,    0, 0,   0, 0, 1,    // BL
+
+      -r, yLen, t,    0, 0,   0, 0, 1,    // BL
+      0.0, R, t,      0, 0,   0, 0, 1,    // B
+      r, yLen, t,     0, 0,   0, 0, 1,    // BR
+
+
+      // Bottom: reverse of top (CW)
+      0.0, -R, b,     0, 0,   0, 0, -1,    // T
+      r, -yLen, b,    0, 0,   0, 0, -1,    // TR
+      -r, -yLen, b,   0, 0,   0, 0, -1,    // TL
+
+      -r, -yLen, b,   0, 0,   0, 0, -1,    // TL
+      r, -yLen, b,    0, 0,   0, 0, -1,    // TR
+      -r, yLen, b,    0, 0,   0, 0, -1,    // BL
+
+      -r, yLen, b,    0, 0,   0, 0, -1,    // BL
+      r, -yLen, b,    0, 0,   0, 0, -1,    // TR
+      r, yLen, b,     0, 0,   0, 0, -1,    // BR
+
+      r, yLen, b,     0, 0,   0, 0, -1,    // BR
+      0.0, R, b,      0, 0,   0, 0, -1,    // B
+      -r, yLen, b,    0, 0,   0, 0, -1,    // BL
+
+      // Face East
+      r, yLen, t,     0, 0,   1, 0, 0,    // BR up
+      r, yLen, b,     0, 0,   1, 0, 0,    // BR down
+      r, -yLen, b,    0, 0,   1, 0, 0,    // TR down
+
+      r, -yLen, b,    0, 0,   1, 0, 0,    // TR down
+      r, -yLen, t,    0, 0,   1, 0, 0,    // TR up
+      r, yLen, t,     0, 0,   1, 0, 0,    // BR up
+
+      // Face TR -- T
+      r, -yLen, t,    0, 0,   1, 0, 0,    // TR up
+      r, -yLen, b,    0, 0,   1, 0, 0,    // TR down
+      0.0, -R, b,     0, 0,   1, 0, 0,    // T down
+
+      0.0, -R, b,     0, 0,   1, 0, 0,    // T down
+      0.0, -R, t,     0, 0,   1, 0, 0,    // T up
+      r, -yLen, t,    0, 0,   1, 0, 0,    // TR up
+
+      // Face T -- TL
+      0.0, -R, t,     0, 0,   1, 0, 0,    // T up
+      0.0, -R, b,     0, 0,   1, 0, 0,    // T down
+      -r, -yLen, b,   0, 0,   1, 0, 0,    // TL down
+
+      -r, -yLen, b,   0, 0,   1, 0, 0,    // TL down
+      -r, -yLen, t,   0, 0,   1, 0, 0,    // TL up
+      0.0, -R, t,     0, 0,   1, 0, 0,    // T up
+
+      // Face West
+      -r, -yLen, t,   0, 0,   1, 0, 0,    // TL up
+      -r, -yLen, b,   0, 0,   1, 0, 0,    // TL down
+      -r, yLen, b,    0, 0,   0, 0, -1,    // BL
+
+      // Face BL -- B
+
+      // Face B -- BR
+
+    ];
+
+    // Add sides
+
+    // Add in UVs by translating center to upper right (add 0.5).
+    // Normalize to 1 by dividing by D (R * 2)
+    const D = R * 2;
+    const invD = 1 / D;
+    for ( let i = 0, iMax = vertices.length; i += 8 ) {
+      const x = vertices[i];
+      const y = vertices[i + 1];
+      vertices[i + 3] = (x + 0.5) * invD;  // u
+      vertices[i + 4] = (y + 0.5) * invD;  // v
+    }
+    return vertices;
+  }
+
+}
+
 /* Test for normal
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 poly = target.constrainedTokenBorder
@@ -386,65 +534,65 @@ const indices = [
 
 arr = [
   // Position     Normal     UV
-  // Side CCW if token goes from x-w to x+w.
+  // Side CCW if token goes from -w to w.
   // S facing
-  x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
-  x-w, y+d, z+h,  0, 1, 0,  0, 0, // b       1
-  x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
-  x+w, y+d, z-h,  0, 1, 0,  1, 1, // d       3
+  w, d, h,  0, 1, 0,  1, 0, // a, e    0
+  -w, d, h,  0, 1, 0,  0, 0, // b       1
+  -w, d, -h,  0, 1, 0,  0, 1, // c, f    2
+  w, d, -h,  0, 1, 0,  1, 1, // d       3
 
-  x+w, y+d, z+h,  0, 1, 0,  1, 0, // a, e    0
-  x-w, y+d, z-h,  0, 1, 0,  0, 1, // c, f    2
+  w, d, h,  0, 1, 0,  1, 0, // a, e    0
+  -w, d, -h,  0, 1, 0,  0, 1, // c, f    2
 
 
   // N facing: reverse of South. c,b,a,f,e,d
-  x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
-  x-w, y-d, z+h,  0, -1, 0,  1, 0, // b      5
-  x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+  -w, -d, -h,  0, -1, 0,  1, 1, // c, f   4
+  -w, -d, h,  0, -1, 0,  1, 0, // b      5
+  w, -d, h,  0, -1, 0,  0, 0, // a, e   6
 
-  x-w, y-d, z-h,  0, -1, 0,  1, 1, // c, f   4
-  x+w, y-d, z+h,  0, -1, 0,  0, 0, // a, e   6
+  -w, -d, -h,  0, -1, 0,  1, 1, // c, f   4
+  w, -d, h,  0, -1, 0,  0, 0, // a, e   6
 
-  x+w, y-d, z-h,  0, -1, 0,  0, 1, // d      7
+  w, -d, -h,  0, -1, 0,  0, 1, // d      7
 
   // W facing
-  x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a, e   8
-  x-w, y-d, z+h,  -1, 0, 0,  0, 0, // b      9
-  x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
-  x-w, y+d, z-h,  -1, 0, 0,  1, 1, // d      11
+  -w, d, h,  -1, 0, 0,  1, 0, // a, e   8
+  -w, -d, h,  -1, 0, 0,  0, 0, // b      9
+  -w, -d, -h,  -1, 0, 0,  0, 1, // c, f   10
+  -w, d, -h,  -1, 0, 0,  1, 1, // d      11
 
-  x-w, y+d, z+h,  -1, 0, 0,  1, 0, // a, e   8
-  x-w, y-d, z-h,  -1, 0, 0,  0, 1, // c, f   10
+  -w, d, h,  -1, 0, 0,  1, 0, // a, e   8
+  -w, -d, -h,  -1, 0, 0,  0, 1, // c, f   10
 
 
   // E facing: reverse of West c,b,a,f,e,d
-  x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
-  x+w, y-d, z+h,  1, 0, 0,  1, 0, // b        13
-  x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+  w, -d, -h,  1, 0, 0,  1, 1, // c, f     12
+  w, -d, h,  1, 0, 0,  1, 0, // b        13
+  w, d, h,  1, 0, 0,  0, 0, // a, e     14
 
-  x+w, y-d, z-h,  1, 0, 0,  1, 1, // c, f     12
-  x+w, y+d, z+h,  1, 0, 0,  0, 0, // a, e     14
+  w, -d, -h,  1, 0, 0,  1, 1, // c, f     12
+  w, d, h,  1, 0, 0,  0, 0, // a, e     14
 
-  x+w, y+d, z-h,  1, 0, 0,  0, 1, // d        15
+  w, d, -h,  1, 0, 0,  0, 1, // d        15
 
   // Top
-  x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a, e   16
-  x-w, y+d, z+h,  0, 0, 1,   0, 1,  // b      17
-  x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
-  x+w, y-d, z+h,  0, 0, 1,   1, 0,  // d      19
+  -w, -d, h,  0, 0, 1,   0, 0,  // a, e   16
+  -w, d, h,  0, 0, 1,   0, 1,  // b      17
+  w, d, h,  0, 0, 1,   1, 1,  // c, f   18
+  w, -d, h,  0, 0, 1,   1, 0,  // d      19
 
-  x-w, y-d, z+h,  0, 0, 1,   0, 0,  // a, e   16
-  x+w, y+d, z+h,  0, 0, 1,   1, 1,  // c, f   18
+  -w, -d, h,  0, 0, 1,   0, 0,  // a, e   16
+  w, d, h,  0, 0, 1,   1, 1,  // c, f   18
 
   // Bottom: reverse of Top c,b,a,f,e,d
-  x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
-  x-w, y+d, z-h,  0, 0, -1,  0, 0,  // b      21
-  x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+  w, d, -h,  0, 0, -1,  1, 0,  // c, f   20
+  -w, d, -h,  0, 0, -1,  0, 0,  // b      21
+  -w, -d, -h,  0, 0, -1,  0, 1,  // a, e   22
 
-  x+w, y+d, z-h,  0, 0, -1,  1, 0,  // c, f   20
-  x-w, y-d, z-h,  0, 0, -1,  0, 1,  // a, e   22
+  w, d, -h,  0, 0, -1,  1, 0,  // c, f   20
+  -w, -d, -h,  0, 0, -1,  0, 1,  // a, e   22
 
-  x+w, y-d, z-h,  0, 0, -1,  1, 1,  // d      23
+  w, -d, -h,  0, 0, -1,  1, 1,  // d      23
 ];
 
 // Convert to indices

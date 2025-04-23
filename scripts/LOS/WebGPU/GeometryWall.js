@@ -27,20 +27,21 @@ export class GeometryWallDesc extends GeometryDesc {
    * @param {boolean} [opts.directional]  If true, the wall blocks only one direction; only one set of triangles drawn
    * @override
    */
-  static defineVertices({ x, y, z, w, h, directional } = {}) {
+  static defineVertices({ w, h, directional } = {}) {
+    const y = 0;
     const arr = [
       // Position     Normal     UV
       // Side faces south.
       // Side CCW if wall goes from x-w to x+w.
       // Normal vectors are times -1 b/c the triangles are CCW.
       // a, b, c, d, e, f
-      x+w, y, z+h,  0, 1, 0,  1, 0, // a, e
-      x-w, y, z+h,  0, 1, 0,  0, 0, // b
-      x-w, y, z-h,  0, 1, 0,  0, 1, // c, f
-      x+w, y, z-h,  0, 1, 0,  1, 1, // d
+      w, y, h,  0, 1, 0,  1, 0, // a, e
+      -w, y, h,  0, 1, 0,  0, 0, // b
+      -w, y, -h,  0, 1, 0,  0, 1, // c, f
+      w, y, -h,  0, 1, 0,  1, 1, // d
 
-      x+w, y, z+h,  0, 1, 0,  1, 0, // a, e
-      x-w, y, z-h,  0, 1, 0,  0, 1, // c, f
+      w, y, h,  0, 1, 0,  1, 0, // a, e
+      -w, y, -h,  0, 1, 0,  0, 1, // c, f
     ];
     // const indices = [0, 1, 2, 3, 0, 2];
 
@@ -49,14 +50,14 @@ export class GeometryWallDesc extends GeometryDesc {
         // Side faces north.
         // Side CW if wall goes from x-w to x+w
         // c, b, a, f, e, d
-        x-w, y, z-h,  0, -1, 0,  1, 1, // c, f
-        x-w, y, z+h,  0, -1, 0,  1, 0, // b
-        x+w, y, z+h,  0, -1, 0,  0, 0, // a, e
+        -w, y, -h,  0, -1, 0,  1, 1, // c, f
+        -w, y, h,  0, -1, 0,  1, 0, // b
+        w, y, h,  0, -1, 0,  0, 0, // a, e
 
-        x-w, y, z-h,  0, -1, 0,  1, 1, // c, f
-        x+w, y, z+h,  0, -1, 0,  0, 0, // a, e
+        -w, y, -h,  0, -1, 0,  1, 1, // c, f
+        w, y, h,  0, -1, 0,  0, 0, // a, e
 
-        x+w, y, z-h,  0, -1, 0,  0, 1, // d
+        w, y, -h,  0, -1, 0,  0, 1, // d
       );
       // indices.push(4, 5, 6, 4, 6, 7);
       // this.numVertices += 4;

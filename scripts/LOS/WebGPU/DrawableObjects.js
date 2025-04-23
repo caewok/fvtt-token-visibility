@@ -1228,7 +1228,10 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     const numInstances = 1;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       if ( !token.isConstrainedTokenBorder ) continue;
-      const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
+
+      // Translate so that instance matrix does not need to be applied.
+      const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false, x, y, z })
       this.geometries.set(token.id, geom);
       this.drawables.set(token.id, {
         label: `Token drawable ${token.id}`,
