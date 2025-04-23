@@ -258,12 +258,29 @@ function tokenIsDead(token) {
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
-
   CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
+
+  // Must create after settings are registered.
+  CONFIG[MODULE_ID].percentVisibleWebGL2 = new PercentVisibleCalculatorWebGL2({ senseType: "sight" }),
+  WebGPUDevice.getDevice().then(device => {
+    if ( !device ) return console.warn("No WebGPU device located. Falling back to WebGL2.");
+    CONFIG[MODULE_ID].webGPUDevice = device;
+    CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
+    CONFIG[MODULE_ID].percentVisibleWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device });
+  });
+
 });
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
+
+  CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
+
+  if ( CONFIG[MODULE_ID].webGPUDevice ) {
+    CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
+    CONFIG[MODULE_ID].percentVisibleWebGPUAsync.initialize(); // Async
+  };
+
   Settings.initializeDebugGraphics();
 
 //   WallTriangles.registerPlaceableHooks();
@@ -276,21 +293,8 @@ Hooks.on("canvasReady", function() {
 //   canvas.tokens.placeables.forEach(token => TokenTriangles._onPlaceableCreation(token));
 //
 
-  CONFIG[MODULE_ID].percentVisibleWebGL2 = new PercentVisibleCalculatorWebGL2({ senseType: "sight" })
-  CONFIG[MODULE_ID].percentVisibleWebGL2.initialize(); // Async
-
-  WebGPUDevice.getDevice().then(device => {
-    if ( !device ) {
-      return console.warn("No WebGPU device located. Falling back to WebGL2.");
-    }
-    CONFIG[MODULE_ID].webGPUDevice = device;
-
-    CONFIG[MODULE_ID].percentVisibleWebGPU = new PercentVisibleCalculatorWebGPU({ device });
-    CONFIG[MODULE_ID].percentVisibleWebGPU.initialize(); // Async
-
-    CONFIG[MODULE_ID].percentVisibleWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device });
-    CONFIG[MODULE_ID].percentVisibleWebGPUAsync.initialize(); // Async
-  });
+  // Once canvas is loaded, process the placeables.
+  // PlaceableInstanceHandler.handlers.values().forEach(handler => handler.initializePlaceables());
 
 });
 

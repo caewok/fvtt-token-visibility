@@ -6,6 +6,7 @@ CONFIG,
 
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
+import { Settings } from "../../settings.js";
 import { VisionTriangle } from "../VisionPolygon.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
@@ -149,16 +150,16 @@ class RenderAbstract {
 
   /** @type {ViewerLOSConfig} */
   config = {
-    largeTarget: Settings.get(KEYS.LOS.TARGET.LARGE),
+    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE),
     useLitTargetShape: true,
     visibleTargetShape: null,
     blocking: {
       walls: true,
       tiles: true,
       tokens: {
-        dead: Settings.get(KEYS.DEAD_TOKENS_BLOCK),
-        live: Settings.get(KEYS.LIVE_TOKENS_BLOCK),
-        prone: Settings.get(KEYS.PRONE_TOKENS_BLOCK),
+        dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
+        live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
+        prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
       }
     }
   };
@@ -177,7 +178,7 @@ class RenderAbstract {
   }
 
   render(viewerLocation, target, { viewer, targetLocation } = {}) {
-    const opts = { viewer, target, blocking: config.blocking };
+    const opts = { viewer, target, blocking: this.config.blocking };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = VisionTriangle.build(viewerLocation, target);

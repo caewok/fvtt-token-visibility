@@ -6,6 +6,7 @@ CONFIG,
 
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionPolygon.js";
+import { Settings } from "../../settings.js";
 import {
   DrawableNonDirectionalWallWebGL2,
   DrawableDirectionalWallWebGL2,
@@ -80,16 +81,16 @@ export class RenderObstaclesAbstractWebGL2 {
 
   /** @type {ViewerLOSConfig} */
   config = {
-    largeTarget: Settings.get(KEYS.LOS.TARGET.LARGE),
+    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE),
     useLitTargetShape: true,
     visibleTargetShape: null,
     blocking: {
       walls: true,
       tiles: true,
       tokens: {
-        dead: Settings.get(KEYS.DEAD_TOKENS_BLOCK),
-        live: Settings.get(KEYS.LIVE_TOKENS_BLOCK),
-        prone: Settings.get(KEYS.PRONE_TOKENS_BLOCK),
+        dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
+        live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
+        prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
       }
     }
   };
@@ -104,7 +105,7 @@ export class RenderObstaclesAbstractWebGL2 {
 
   render(viewerLocation, target, { viewer, targetLocation } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    const opts = { viewer, target, blocking: config.blocking };
+    const opts = { viewer, target, blocking: this.config.blocking };
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = VisionTriangle.build(viewerLocation, target);
     this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));

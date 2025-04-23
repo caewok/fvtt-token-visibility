@@ -178,7 +178,7 @@ export class AbstractViewpoint {
     const target = this.viewerLOS.target;
     if ( !target ) throw Error(`${MODULE_ID}|AbstractViewpoint|findBlockingObjects target is undefined!`);
 
-    const blocking = this.viewerLOS.config.block;
+    const blocking = this.viewerLOS.config.blocking;
 
     // Remove old blocking objects.
     const blockingObjs = this.#blockingObjects;

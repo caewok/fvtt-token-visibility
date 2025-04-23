@@ -716,7 +716,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const api = MODULES_ACTIVE.API.RIDEABLE;
     for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       if ( token === viewer || token === target ) continue;
-      if ( !this.constructor.includeToken(token, opts.tokens) ) continue;
+      if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
 
       // Filter tokens that directly overlaps the viewer.
       if ( tokensOverlap(token, viewer) ) continue;
