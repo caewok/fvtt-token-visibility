@@ -451,6 +451,17 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
     return (res.red - res.redBlocked) / res.red;
   }
 
+  _percentVisible(viewer, target, viewerLocation, targetLocation) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    viewerLocation ??= Point3d.fromTokenCenter(viewer);
+    targetLocation ??= Point3d.fromTokenCenter(target);
+
+    this.renderObstacles.prerender();
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+    const res = this.sumPixels.computeSync(this.renderObstacles.renderTexture);
+    return (res.red - res.redBlocked) / res.red;
+  }
+
   /** @type {PlaceableInstanceHandler} */
   get tokenHandler() { return this.renderObstacles.drawableTokens[0].placeableHandler; }
 
@@ -569,6 +580,17 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
           .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)));
   }
 
+  _getCachedValue(viewer, target, viewerLocation, targetLocation, opts = {}) {
+    this._addCache(viewer, target);
+    return this._cache
+      .get(viewer)
+        .get(target)
+          .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)) ?? {
+      value: 0,
+      dirty: true,
+    };
+  }
+
 
   _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts = {}) {
     this._addCache(viewer, target);
@@ -579,6 +601,8 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
       value: 0,
       dirty: true,
     };
+
+    /*
 
     // If the cache is dirty, return the old value for now and run an async task to update with the new value.
     // TODO: Trigger an LOS or Cover update? Pass through a callback to trigger?
@@ -591,7 +615,8 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
       this.queue.enqueue(task)
       // TODO: Trigger an LOS / Cover update, probably using callback.
    }
-    return res.value;
+   */
+    return res.dirty ? null : res.value;
   }
 
   _setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentVisible) {
