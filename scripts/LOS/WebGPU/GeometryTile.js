@@ -26,7 +26,8 @@ export class GeometryHorizontalPlaneDesc extends GeometryDesc {
    * @param {number} [opts.z]           Location on z-axis
    * @override
    */
-  static defineVertices({ x, y, z, w, d } = {}) {
+  static defineVertices({ w, d } = {}) {
+    const z = 0;
     return [
       // Position     Normal     UV
       // CCW if tile goes from x-w to x+w.
@@ -35,25 +36,25 @@ export class GeometryHorizontalPlaneDesc extends GeometryDesc {
       // WebGPU uses 0->1 u/x and 0->1 v/y where y increases as it moves down.
       // Top
       // a, b, c, d, e, f
-      x-w, y-d, z,  0, 0, 1,   0, 0,  // a, e
-      x-w, y+d, z,  0, 0, 1,   0, 1,  // b
-      x+w, y+d, z,  0, 0, 1,   1, 1,  // c, f
-      x+w, y-d, z,  0, 0, 1,   1, 0,  // d
+      -w, -d, z,  0, 0, 1,   0, 0,  // a, e
+      -w, d, z,  0, 0, 1,   0, 1,  // b
+      w, d, z,  0, 0, 1,   1, 1,  // c, f
+      w, -d, z,  0, 0, 1,   1, 0,  // d
 
-      x-w, y-d, z,  0, 0, 1,   0, 0,  // a, e
-      x+w, y+d, z,  0, 0, 1,   1, 1,  // c, f
+      -w, -d, z,  0, 0, 1,   0, 0,  // a, e
+      w, d, z,  0, 0, 1,   1, 1,  // c, f
 
       // Bottom
       // We want the texture always facing up, not down as one might typically expect.
       // Thus the texture keeps the same coordinates.
       // c, b, a, f, e, d
-      x+w, y+d, z,  0, 0, -1,  1, 1,  // c, f
-      x-w, y+d, z,  0, 0, -1,  0, 1,  // b
-      x-w, y-d, z,  0, 0, -1,  0, 0,  // a, e
+      w, d, z,  0, 0, -1,  1, 1,  // c, f
+      -w, d, z,  0, 0, -1,  0, 1,  // b
+      -w, -d, z,  0, 0, -1,  0, 0,  // a, e
 
-      x+w, y+d, z,  0, 0, -1,  1, 1,  // c, f
-      x-w, y-d, z,  0, 0, -1,  0, 0,  // a, e
-      x+w, y-d, z,  0, 0, -1,  1, 0,  // d
+      w, d, z,  0, 0, -1,  1, 1,  // c, f
+      -w, -d, z,  0, 0, -1,  0, 0,  // a, e
+      w, -d, z,  0, 0, -1,  1, 0,  // d
     ];
 //     const indices = [
 //       0, 1, 2, 3, 0, 2, // Top (0–3)

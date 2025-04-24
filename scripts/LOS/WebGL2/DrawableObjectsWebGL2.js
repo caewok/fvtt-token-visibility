@@ -12,7 +12,7 @@ import { WebGL2 } from "./WebGL2.js";
 import { GeometryDesc } from "../WebGPU/GeometryDesc.js";
 import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "../WebGPU/GeometryTile.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryHexTokenShapesDesc } from "../WebGPU/GeometryToken.js";
 import {
   WallInstanceHandler,
   NonDirectionalWallInstanceHandler,
@@ -750,7 +750,7 @@ export class UnconstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
 
 export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
   static includeToken(token, opts) {
-    if ( !token.isConstrainedTokenBorder ) return false;
+    if ( !token.isConstrainedTokenBorder && !canvas.grid.isHexagonal ) return false;
     return DrawableTokenWebGL2.includeToken(token, opts);
   }
 
@@ -764,8 +764,11 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
     this.geoms.length = ph.numInstances;
     const addUVs = this.constructor.addUVs;
     const addNormals = this.debugViewNormals;
-    ph.placeableFromInstanceIndex.entries().forEach(([idx, token]) =>
-      this.geoms[idx] = new GeometryConstrainedTokenDesc({ token, addUVs, addNormals }));
+    ph.placeableFromInstanceIndex.entries().forEach(([idx, token]) => {
+      // Translate so that instance matrix does not need to be applied.
+      const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      this.geoms[idx] = new GeometryConstrainedTokenDesc({ token, addUVs, addNormals, x, y, z });
+    });
   }
 
   _updateAllInstances() {
@@ -846,6 +849,31 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
       }
     }
   }
+}
+
+export class ConstrainedDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenWebGL2 {
+  static includeToken(token, opts) {
+    return DrawableTokenWebGL2.includeToken(token, opts);
+  }
+
+  renderTarget(target) {
+    DrawableTokenWebGL2.prototype.renderTarget.call(this, target); // Render all, not just constrained tokens.
+  }
+
+  _updateInstances() {
+    const placeableHandler = this.placeableHandler;
+    if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return DrawableTokenWebGL2.prototype._updateInstances.call(this); // No changes since last update.
+
+    // If any constrained token has changed, need to rebuild.
+    // If the token is now unconstrained, that is fine (will be skipped).
+    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
+      if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
+      const token = placeableHandler.placeableFromInstanceIndex.get(idx);
+      return this._updateAllInstances();
+    }
+    DrawableTokenWebGL2.prototype._updateInstances.call(this);
+  }
+
 }
 
 

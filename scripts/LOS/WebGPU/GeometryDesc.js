@@ -1,7 +1,12 @@
 /* globals
+CONFIG,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
+
+import { combineTypedArrays } from "../util.js";
+
 
 // BBEdit notes: mark, fixme, fix-me, note, nyi, review, todo, to-do, xxx, ???, !!!
 // TODO: todo
@@ -88,9 +93,31 @@ export class GeometryDesc {
   _defineVerticesAndIndices(opts) {
     const arr = this.constructor.defineVertices(opts);
     const res = trimVertexData(arr, { addNormals: opts.addNormals, addUVs: opts.addUVs });
+    this.constructor.translateVertices(res.vertices, { ...opts, length: res.length });
     this.vertices = res.vertices;
     this.indices = res.indices;
     this.numVertices = res.numVertices;
+  }
+
+  /**
+   * Translate an array of x,y,z vertices in place.
+   * Assumed that x,y,z are the start of the data.
+   * @param {number[]} vertices       Modified in place
+   * @param {object} [opts]
+   * @param {number} [opts.x=1]       Number of x units to move
+   * @param {number} [opts.y=1]       Number of y units to move
+   * @param {number} [opts.z=1]       Number of z units to move
+   * @param {number} [opts.length=8]  How many parameters per vertex
+   * @returns {number[]} The modified vertices, for convenience
+   */
+  static translateVertices(vertices, { x = 0, y = 0, z = 0, length = 8 } = {}) {
+    if ( !(x || y || z) ) return vertices;
+    for ( let i = 0, iMax = vertices.length; i < iMax; i += length ) {
+      vertices[i] += x;
+      vertices[i + 1] += y;
+      vertices[i + 2] += z;
+    }
+    return vertices;
   }
 
   /**
@@ -300,6 +327,200 @@ export class GeometryDesc {
       ]
     }
   ];
+
+  static define3dPolygonVertices(poly, { topZ = 0, bottomZ = 0, top, bottom } = {}) {
+    top ??= this.polygonTopBottomFaces(poly, { elevation: topZ, top: true });
+    bottom ??= this.polygonTopBottomFaces(poly, { elevation: bottomZ, top: false });
+    const side = this.polygonSideFaces(poly, { topZ, bottomZ });
+    const vertices = combineTypedArrays(top.vertices, side.vertices, bottom.vertices);
+
+    // For indices, increase because they are getting combined into one.
+    side.indices = side.indices.map(elem => elem + top.numVertices);
+    bottom.indices = bottom.indices.map(elem => elem + top.numVertices + side.numVertices);
+    const indices = combineTypedArrays(top.indices, side.indices, bottom.indices);
+
+    // Expand the vertices based on indices, so they can be trimmed as needed.
+    const arr = new Array(indices.length * 8);
+    for ( let i = 0, n = indices.length; i < n; i += 1 ) {
+      const vertex = vertices.slice(indices[i] * 8, (indices[i] * 8) + 8);
+      const arrI = i * 8;
+      for ( let v = 0; v < 8; v += 1 ) arr[arrI + v] = vertex[v];
+    }
+    return arr;
+  }
+
+  /**
+   * Return vertices for the top or bottom of the polygon.
+   * Requires that the polygon be sufficiently convex that it can be described by a fan of
+   * polygons joined at its centroid.
+   * @param {PIXI.Polygon} poly
+   * @param {object} [opts]
+   * @param {number} [opts.elevation]     Elevation of the face
+   * @param {boolean} [opts.flip]         If true, treat as bottom face
+   * @returns {object}
+   * - @prop {Float32Array} vertices
+   * - @prop {Uint16Array} indices
+   */
+  static polygonTopBottomFaces(poly, { elevation = 0, top = true } = {}) {
+     if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
+
+     // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
+     const flip = top;
+
+     /* Testing
+     poly = _token.constrainedTokenBorder
+     vs = PIXI.utils.earcut(poly.points)
+     pts = [...poly.iteratePoints({ close: false })]
+     tris = [];
+     for ( let i = 0; i < vs.length; i += 3 ) {
+       const a = pts[vs[i]];
+       const b = pts[vs[i+1]];
+       const c = pts[vs[i+2]];
+       Draw.connectPoints([a, b, c], { color: Draw.COLORS.red })
+       tris.push({a, b, c})
+     }
+     // Earcut appears to keep the counterclockwise order.
+     tris.map(tri => foundry.utils.orient2dFast(tri.a, tri.b, tri.c))
+     */
+
+     // Earcut to determine indices. Then construct the vertices.
+     const numVertices = Math.floor(poly.points.length / 2);
+     const vertices = new Float32Array(numVertices * 8);
+     const indices = new Uint16Array(PIXI.utils.earcut(poly.points));
+
+     // For Foundry's  coordinate system, indices are always CCW triangles.
+     // Flip to make CW if constructing the bottom face.
+     if ( flip ) {
+       for ( let i = 0, imax = indices.length; i < imax; i += 3 ) {
+         const v0 = indices[i];
+         const v2 = indices[i + 2];
+         indices[i] = v2;
+         indices[i + 2] = v0;
+       }
+     }
+
+     // Set UVs to the coordinate within the bounding box.
+     const xMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 === 0))
+     const yMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 !== 0))
+     const width = xMinMax.max - xMinMax.min;
+     const height = yMinMax.max - yMinMax.min;
+
+     const uOrig = x => (x - xMinMax.min) / width;
+     const vOrig = y => (y - yMinMax.min) / height;
+     let u = uOrig;
+     let v = vOrig;
+     let n = 1;
+     if ( flip ) {
+       n = -1;
+       u = x => 1 - uOrig(x);
+       v = y => 1 - vOrig(y);
+     }
+     let i = 0;
+     for ( const pt of poly.iteratePoints({ closed: false }) ) {
+       // Position
+       vertices[i++] = pt.x;
+       vertices[i++] = pt.y;
+       vertices[i++] = elevation;
+
+       // Normal: 0, 0, 1 or -1
+       i++; i++;
+       vertices[i++] = n;
+
+       // UV
+       vertices[i++] = u(pt.x);
+       vertices[i++] = v(pt.y);
+     }
+
+     return { indices, vertices, numVertices };
+  }
+
+  /**
+   * Return vertices for the sides of the polygon. Forms squares based on the polygon points.
+   * @param {PIXI.Polygon} poly
+   * @param {number} [opts.topZ]     Elevation of the top face
+   * @param {number} [opts.bottomZ]  Elevation of the bottom face
+   * @param {boolean} [opts.flip]         If true, treat as bottom face
+   * @returns {object}
+   * - @prop {Float32Array} vertices
+   * - @prop {Uint16Array} indices
+   */
+  static polygonSideFaces(poly, { flip = false, topZ = 0, bottomZ = 0 } = {}) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
+    if ( poly.isClockwise ^ flip ) poly.reverseOrientation();
+
+    // Some temporary points.
+    const a = new Point3d();
+    const b = new Point3d();
+    const c = new Point3d();
+    const d = new Point3d();
+    const triPts = [a, b, c, d];
+    const n = new Point3d();
+
+    /* Looking at a side face
+    a  b     uv: 0,0    1,0
+    c  d         0,1    1,1
+
+     CCW edge A -> B, so...
+     a and c are taken from A
+     b and d are taken from B
+
+     // Indices go b, a, c, d, b, c.
+    */
+
+    // UVs match a, b, c, d
+    const uvs = [
+      { u: 0, v: 0 },
+      { u: 0, v: 1 },
+      { u: 1, v: 0 },
+      { u: 1, v: 1 },
+    ];
+
+    const nEdges = Math.floor(poly.points.length / 2); // Each point has an edge.
+    const numVertices = 4 * nEdges;
+    const nIndices = 6 * nEdges;
+    const vertices = new Float32Array(numVertices * 8);
+    const indices = new Uint16Array(nIndices);
+    let i = 0;
+    let j = 0;
+    let k = 0;
+    for ( const { A, B } of poly.iterateEdges({ closed: true }) ) {
+      // Position                   Normal          UV
+      // B.x, B.y, topZ     nx, ny, nz      0, 0
+      // A.x, A.y, topZ     nx, ny, nz      0, 0
+      // A.x, A.y, bottomZ  nx, ny, nz      0, 0
+      // B.x, B.y, bottomZ  nx, ny, nz      0, 0
+      // B.x, B.y, topZ     nx, ny, nz      0, 0
+      // A.x, A.y, bottomZ  nx, ny, nz      0, 0
+
+      a.set(A.x, A.y, topZ);
+      b.set(B.x, B.y, topZ);
+      c.set(A.x, A.y, bottomZ);
+      d.set(B.x, B.y, bottomZ);
+
+      // Calculate the normal
+      const deltaAB = b.subtract(a, Point3d._tmp2);
+      const deltaAC = c.subtract(a, Point3d._tmp3);
+      deltaAB.cross(deltaAC, n).normalize(n);
+
+      // Indices go b, a, c, d, b, c.
+      const idxArr = [1, 0, 2, 3, 1, 2].map(elem => elem + k);
+      indices.set(idxArr, i);
+      i += 6; // Increment number of indices in the array.
+      k += 4; // Increment index: 0–3, 4–7, 8–11, ...
+
+      // Define each vertex.
+      // Position     Normal          UV
+      // x, y, z      n.x, n.y, n.z   u, v
+      for ( let i = 0; i < 4; i += 1 ) {
+        const pt = triPts[i];
+        const uv = uvs[i];
+        vertices.set([pt.x, pt.y, pt.z, n.x, n.y, n.z, uv.u, uv.v], j);
+        j += 8;
+      }
+    }
+    return { indices, vertices, numVertices };
+  }
 }
 
 
@@ -357,6 +578,7 @@ function trimVertexData(arr, { addNormals = false, addUVs = false } = {}) {
     indices,
     vertices: new Float32Array(vertices),
     numVertices: uniqueV.size,
+    length,
   };
 }
 

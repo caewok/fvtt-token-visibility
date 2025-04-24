@@ -1,4 +1,5 @@
 /* globals
+canvas,
 CONFIG,
 CONST,
 foundry,
@@ -13,7 +14,7 @@ import { combineTypedArrays, tokensOverlap } from "../util.js";
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryHexTokenShapesDesc } from "./GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
 import {
   WallInstanceHandler,
@@ -908,15 +909,16 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
   _createStaticDrawables() {
     this.materials.create({ b: 1.0, label: "obstacle" });
     this.materials.create({ r: 1.0, label: "target" });
+    const geom = this.geometries.get("token");
     this.drawables.set("token", {
       label: "Token obstacle",
-      geom: this.geometries.get("token"),
+      geom,
       materialBG: this.materials.bindGroups.get("obstacle"),
       instanceSet: new Set(),
     });
     this.drawables.set("target", {
       label: "Token target",
-      geom: this.geometries.get("token"),
+      geom,
       materialBG: this.materials.bindGroups.get("target"),
       instanceSet: new Set(),
     });
@@ -1043,6 +1045,174 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
   }
 
+}
+
+export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
+  /** @type {TokenInstanceHandler} */
+  static handlerClass = TokenInstanceHandler;
+
+  /** @type {string} */
+  static shaderFile = "token";
+
+  static HEX_SIZES = new Set([0.5, 1, 2, 3]);
+
+  _createStaticGeometries() {
+    // Create geometries for all basic token types.
+
+    for ( const hexagonalShape of Object.values(CONST.TOKEN_HEXAGONAL_SHAPES) ) {
+      for ( const size of this.constructor.HEX_SIZES.values() ) {
+        const label = `${size}x${size}_${hexagonalShape}`;
+        this.geometries.set(label, new GeometryHexTokenShapesDesc({ width: size, height: size, hexagonalShape, addNormals: this.debugViewNormals, addUVs: false }));
+      }
+    }
+  }
+
+  /**
+   * Insert drawables that rarely change into the drawables map.
+   */
+  _createStaticDrawables() {
+    this.materials.create({ b: 1.0, label: "obstacle" });
+    this.materials.create({ r: 1.0, label: "target" });
+    for ( const key of this.geometries.keys() ) {
+      const geom = this.geometries.get(key);
+      this.drawables.set(`token_${key}`, {
+        label: "Token obstacle",
+        geom,
+        materialBG: this.materials.bindGroups.get("obstacle"),
+        instanceSet: new Set(),
+      });
+      this.drawables.set(`target_${key}`, {
+        label: "Token target",
+        geom,
+        materialBG: this.materials.bindGroups.get("target"),
+        instanceSet: new Set(),
+      });
+    }
+  }
+
+  #unconstrainedTokenIndices = new Map();
+
+  /**
+   * Set up parts of the render chain that change often but not necessarily every render.
+   * E.g., tokens that move a lot vs a camera view that changes every render.
+   */
+  prerender() {
+    super.prerender();
+
+    // Determine the number of constrained tokens and separate from instance set.
+    // Essentially subset the instance set.
+    this.#unconstrainedTokenIndices.clear();
+    for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      if ( !token.isConstrainedTokenBorder ) this.#unconstrainedTokenIndices.set(idx, token);
+    }
+  }
+
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   */
+  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
+
+    // Clear all drawables' instance sets.
+    this.drawables.forEach(drawable => drawable.instanceSet.clear());
+
+    if ( blocking.tokens.dead || blocking.tokens.live ) {
+      // Add in all viewable tokens.
+      const api = MODULES_ACTIVE.API.RIDEABLE;
+      for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
+        if ( token === viewer || token === target ) continue;
+        if ( !DrawableTokenInstances.includeToken(token, blocking.tokens) ) continue;
+
+        // Filter tokens that directly overlaps the viewer.
+        if ( tokensOverlap(token, viewer) ) continue;
+
+        // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
+        if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
+
+        // Only tokens within the viewable area.
+        if ( !visionTriangle.containsToken(token) ) continue;
+
+        // Determine which hex geometry this token uses.
+        const key = `${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`;
+        const drawable = this.drawables.get(key);
+        if ( !drawable ) continue; // Uneven tokens or unknown handled by constrained token shape.
+        drawable.instanceSet.add(idx);
+      }
+    }
+
+    // Add target as a distinct drawable.
+    const targetDrawable = this.drawables.get("target");
+    targetDrawable.instanceSet.clear();
+    if ( target && !target.isConstrainedTokenBorder ) {
+      const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
+
+      // Determine which hex geometry this token uses.
+      const key = `${target.document.width}x${target.document.height}_${target.document.hexagonalShape}`;
+      const drawable = this.drawables.get(key);
+      if ( drawable ) drawable.instanceSet.add(targetIdx);; // Uneven tokens or unknown handled by constrained token shape.
+    }
+    super.filterObjects(visionTriangle);
+  }
+
+  _createPipeline() {
+    super._createPipeline();
+    if ( !this.debugViewNormals ) {
+      const target = this.RENDER_PIPELINE_OPTS.fragment.targets[0];
+      target.writeMask = GPUColorWrite.RED | GPUColorWrite.ALPHA;
+    }
+    this.pipeline.target = this.device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
+  }
+
+  // Skipped until render.
+  _initializeRenderPass(_renderPass) { return; }
+
+  /**
+   * Render only the target token.
+   */
+  renderTarget(renderPass, _target) {
+    for ( const drawable of this.drawables.values ) {
+      if ( drawable.label !== "Token target" ) continue;
+      this._renderDrawable(renderPass, drawable);
+    }
+  }
+
+  /**
+   * Render all but the target
+   */
+  renderObstacles(renderPass, _target) {
+    for ( const drawable of this.drawables.values ) {
+      if ( drawable.label === "Token target" ) continue;
+      this._renderDrawable(renderPass, drawable);
+    }
+  }
+
+  _renderDrawable(renderPass, drawable) {
+    if ( !drawable.instanceSet.size ) return;
+
+    // Skipped initialize, so do here. Change if drawing the target.
+    const pipelineName = drawable.label === "Token target" ? "target" : "default";
+    super._initializeRenderPass(renderPass, pipelineName);
+    super._renderDrawable(renderPass, drawable);
+  }
+
+  registerPlaceableHooks() {
+//     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
+//     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
+//     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
+    this._hooks.push({ name: "drawToken", id: Hooks.on("drawToken", this._onPlaceableDraw.bind(this)) });
+    this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
+    this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
+  }
 }
 
 // Tile instances.
@@ -1228,7 +1398,10 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     const numInstances = 1;
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       if ( !token.isConstrainedTokenBorder ) continue;
-      const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
+
+      // Translate so that instance matrix does not need to be applied.
+      const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false, x, y, z })
       this.geometries.set(token.id, geom);
       this.drawables.set(token.id, {
         label: `Token drawable ${token.id}`,
@@ -1268,6 +1441,11 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
 
       // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
       if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
+
+      // Filter out basic hex shapes; rendered using instancing.
+      if ( canvas.grid.isHexagonal
+        && token.document.width === token.document.height
+        && DrawableHexTokenInstances.HEX_SIZES.has(token.document.width) ) continue;
 
       drawable.numInstances = Number(visionTriangle.containsToken(token));
     }
