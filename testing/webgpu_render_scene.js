@@ -145,18 +145,20 @@ calcWebGL2 = CONFIG.tokenvisibility.percentVisibleWebGL2
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
 await calcWebGL2.initialize()
 calcWebGL2.percentVisible(viewer, target)
-calcWebGL2._percentVisible(viewer, target)
+await calcWebGL2.percentVisibleAsync(viewer, target)
 
 calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
 await calcWebGPU.initialize()
 calcWebGPU.percentVisible(viewer, target)
-calcWebGPU._percentVisible(viewer, target)
+await calcWebGPU.percentVisibleAsync(viewer, target)
 
 calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
 await calcWebGPUAsync.initialize()
 calcWebGPUAsync.percentVisible(viewer, target)
-await calcWebGPUAsync._percentVisibleAsync(viewer, target)
 await calcWebGPUAsync.percentVisibleAsync(viewer, target)
+
+
+await calcWebGPUAsync._percentVisible(viewer, target)
 
 debugViewer = new DebugVisibilityViewerPoints();
 await debugViewer.initialize();
@@ -185,8 +187,53 @@ debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL2
 debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_HYBRID
 await debugViewer.initialize();
 debugViewer.render();
-debugViewer.destroy()
+debugViewer.destroy();
 
+
+QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop
+QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn
+
+function percentFn(calc) {
+  const tokens = canvas.tokens.placeables;
+  const out = [];
+  for ( const viewer of tokens ) {
+    for ( const target of tokens ) {
+      if ( viewer === target ) continue;
+      out.push(calc.percentVisible(viewer, target));
+    }
+  }
+  return out;
+}
+
+async function percentFnAsync(calc) {
+  const tokens = canvas.tokens.placeables;
+  const out = [];
+  for ( const viewer of tokens ) {
+    for ( const target of tokens ) {
+      if ( viewer === target ) continue;
+      out.push(await calc.percentVisibleAsync(viewer, target));
+    }
+  }
+  return out;
+}
+
+N = 1000
+await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
+await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
+
+
+N = 100
+await QBenchmarkLoopFn(N, percentFn, "WebGL", calcWebGL2)
+await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU)
+await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync)
+await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
+await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
+await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync)
 
 tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)
 tri.draw()
