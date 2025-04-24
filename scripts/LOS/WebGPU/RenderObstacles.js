@@ -12,6 +12,7 @@ import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
   DrawableWallInstances,
   DrawableTokenInstances,
+  DrawableHexTokenInstances,
   DrawableTileInstances,
   DrawableConstrainedTokens,
   DrawableNonTerrainWallInstances,
@@ -104,9 +105,12 @@ class RenderAbstract {
     this.materials = new MaterialsTracker(this.device);
 
     for ( const cl of this.constructor.drawableClasses ) {
+      if ( cl === DrawableHexTokenInstances && !canvas.grid.isHexagonal ) continue;
+      if ( cl === DrawableTokenInstances && canvas.grid.isHexagonal ) continue;
+
       const drawableObj = new cl(this.device, this.materials, this.camera, { senseType, debugViewNormals });
       this.drawableObjects.push(drawableObj);
-      const categoryArr = cl === DrawableTokenInstances || cl === DrawableConstrainedTokens
+      const categoryArr = cl === DrawableTokenInstances || cl === DrawableConstrainedTokens || cl === DrawableHexTokenInstances
         ? this.drawableTokens : this.drawableObstacles;
       categoryArr.push(drawableObj);
     }
@@ -453,7 +457,7 @@ export class RenderTiles extends RenderAbstract {
 }
 
 export class RenderTokens extends RenderAbstract {
-  static drawableClasses = [DrawableTokenInstances, DrawableConstrainedTokens];
+  static drawableClasses = [DrawableTokenInstances, DrawableConstrainedTokens, DrawableHexTokenInstances];
 }
 
 export class RenderObstacles extends RenderAbstract {
@@ -463,5 +467,6 @@ export class RenderObstacles extends RenderAbstract {
     DrawableTileInstances,
     DrawableTokenInstances,
     DrawableConstrainedTokens,
+    DrawableHexTokenInstances
   ];
 }

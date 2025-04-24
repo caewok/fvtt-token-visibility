@@ -1,4 +1,5 @@
 /* globals
+canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -17,6 +18,7 @@ import {
   UnconstrainedDrawableTokenWebGL2,
   ConstrainedDrawableTokenWebGL2,
   DrawableSceneBackgroundWebGL2,
+  ConstrainedDrawableHexTokenWebGL2,
 } from "./DrawableObjectsWebGL2.js";
 
 export class RenderObstaclesAbstractWebGL2 {
@@ -56,11 +58,17 @@ export class RenderObstaclesAbstractWebGL2 {
     // Construct the various drawable instances.
     const clOpts = { senseType, debugViewNormals };
     for ( const cl of this.constructor.drawableClasses ) {
+      if ( cl === ConstrainedDrawableHexTokenWebGL2 && !canvas.grid.isHexagonal ) continue;
+      if ( canvas.grid.isHexagonal
+        && (cl === ConstrainedDrawableTokenWebGL2
+         || cl === UnconstrainedDrawableTokenWebGL2) ) continue;
+
       const drawableObj = new cl(gl, this.camera, clOpts);
       this.drawableObjects.push(drawableObj);
       switch ( cl ) {
         case DrawableTokenWebGL2:
         case UnconstrainedDrawableTokenWebGL2:
+        case ConstrainedDrawableHexTokenWebGL2:
         case ConstrainedDrawableTokenWebGL2: this.drawableTargets.push(drawableObj); this.drawableObstacles.push(drawableObj); break;
         case DrawableSceneBackgroundWebGL2: this.drawableFloor = drawableObj; break;
         case DrawableNonDirectionalTerrainWallWebGL2:
@@ -248,6 +256,7 @@ export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
     DrawableDirectionalTerrainWallWebGL2,
     UnconstrainedDrawableTokenWebGL2,
     ConstrainedDrawableTokenWebGL2,
+    ConstrainedDrawableHexTokenWebGL2,
   ];
 }
 
@@ -260,6 +269,7 @@ export class RenderObstaclesWithBackgroundWebGL2 extends RenderObstaclesWebGL2 {
     DrawableDirectionalTerrainWallWebGL2,
     DrawableSceneBackgroundWebGL2,
     UnconstrainedDrawableTokenWebGL2,
-    ConstrainedDrawableTokenWebGL2
+    ConstrainedDrawableTokenWebGL2,
+    ConstrainedDrawableHexTokenWebGL2,
   ];
 }
