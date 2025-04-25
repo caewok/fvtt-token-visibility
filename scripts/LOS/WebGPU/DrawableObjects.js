@@ -341,12 +341,6 @@ class DrawableObjectsAbstract {
   }
 
   /**
-   * Called after the render pass has ended for this render object (at given viewpoint, target).
-   * @param {object} [opts]
-   */
-  _postRenderPass(_opts = {}) {}
-
-  /**
    * Define the settings used for the render pipeline.
    */
   _setRenderPipelineOpts() {
@@ -655,7 +649,6 @@ export class DrawableObjectRBCulledInstancesAbstract extends DrawableObjectCulle
     // Call the parent so executeBundles is not called.
     super.render(encoder, opts);
     this.renderBundle = encoder.finish();
-    this._postRenderPass(opts)
   }
 
   initializePlaceableBuffers() {
@@ -1468,18 +1461,18 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * Called after the render pass has ended for this render object (at given viewpoint, target).
    * @param {object} [opts]
    */
-  _postRenderPass({ viewer, target } = {}) {
-    // Reset viewer and target in the drawables.
-    if ( viewer && this.drawables.has(viewer.id) ) {
-      const drawable = this.drawables.get(viewer.id);
-      drawable.numInstances = 1;
-    }
-
-    if ( target && this.drawables.has(target.id) ) {
-      const drawable = this.drawables.get(target.id);
-      drawable.materialBG = this.materials.bindGroups.get("obstacles");
-    }
-  }
+//   _postRenderPass({ viewer, target } = {}) {
+//     // Reset viewer and target in the drawables.
+//     if ( viewer && this.drawables.has(viewer.id) ) {
+//       const drawable = this.drawables.get(viewer.id);
+//       drawable.numInstances = 1;
+//     }
+//
+//     if ( target && this.drawables.has(target.id) ) {
+//       const drawable = this.drawables.get(target.id);
+//       drawable.materialBG = this.materials.bindGroups.get("obstacles");
+//     }
+//   }
 
   _createPipeline() {
     super._createPipeline();

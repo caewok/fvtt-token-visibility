@@ -214,9 +214,6 @@ class RenderAbstract {
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
-
-    // Clean up.
-    this.drawableObjects.forEach(drawableObj => drawableObj._postRenderPass(opts));
   }
 
   /**
