@@ -51,7 +51,6 @@ import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/W
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
-import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
 import {
   PlaceableInstanceHandler,
   WallInstanceHandler,
@@ -215,7 +214,6 @@ Hooks.once("init", function() {
       WebGPUSumRedPixels,
       wgsl,
       AsyncQueue,
-      SumPixelsWebGL2,
       PlaceableInstanceHandler,
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
       PercentVisibleCalculatorWebGPU,
