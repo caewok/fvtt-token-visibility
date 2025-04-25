@@ -543,7 +543,8 @@ export class Settings extends ModuleSettingsAbstract {
     if ( this.get(this.KEYS.DEBUG.LOS) ) this.toggleLOSDebugGraphics(true);
 
     // Register the Area3D methods on initial load.
-    if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
+    // if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
+    registerArea3d();
   }
 
   static typesWebGL2 = new Set([

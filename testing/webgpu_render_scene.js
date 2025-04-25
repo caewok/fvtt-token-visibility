@@ -99,6 +99,7 @@ let {
   DebugVisibilityViewerWebGPU,
   DebugVisibilityViewerWebGPUAsync,
   PointsPercentVisibleCalculator,
+  Area3dWebGL2VisibleCalculator,
   // wgsl
 } = api.webgpu
 
@@ -145,6 +146,11 @@ calcPoints = new PointsPercentVisibleCalculator()
 await calcPoints.initialize()
 calcPoints.percentVisible(viewer, target)
 await calcPoints.percentVisibleAsync(viewer, target)
+
+calcArea3dWebGL2 = new Area3dWebGL2VisibleCalculator()
+await calcArea3dWebGL2.initialize()
+calcArea3dWebGL2.percentVisible(viewer, target)
+await calcArea3dWebGL2.percentVisibleAsync(viewer, target)
 
 
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
@@ -197,21 +203,25 @@ debugViewer.destroy();
 
 // All at once
 calcPoints = new PointsPercentVisibleCalculator()
+calcArea3dWebGL2 = new Area3dWebGL2VisibleCalculator()
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
 calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
 calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
 
 await calcPoints.initialize()
+await calcArea3dWebGL2.initialize()
 await calcWebGL2.initialize()
 await calcWebGPU.initialize()
 await calcWebGPUAsync.initialize()
 
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
+  calcArea3dWebGL2: calcArea3dWebGL2.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
+  asyc_calcArea3dWebGL2: await calcArea3dWebGL2.percentVisibleAsync(viewer, target),
   async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
   async_calcWebGPU: await calcWebGPU.percentVisibleAsync(viewer, target),
   async_calcWebGPUAsync: await calcWebGPUAsync.percentVisibleAsync(viewer, target),
@@ -252,6 +262,7 @@ async function percentFnAsync(calc) {
 
 N = 1000
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcArea3dWebGL2, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
@@ -259,11 +270,13 @@ await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
 await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcArea3dWebGL2, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 
 
 N = 100
 await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
+await QBenchmarkLoopFn(N, percentFn, "calcArea3dWebGL2", calcArea3dWebGL2)
 await QBenchmarkLoopFn(N, percentFn, "WebGL", calcWebGL2)
 await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU)
 await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync)

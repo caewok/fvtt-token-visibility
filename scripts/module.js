@@ -9,6 +9,9 @@ PIXI,
 
 import { MODULE_ID } from "./const.js";
 
+import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
+
+
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
@@ -80,6 +83,7 @@ import {
 import * as twgl from "./LOS/WebGL2/twgl.js";
 import {
   PointsPercentVisibleCalculator,
+  Area3dWebGL2VisibleCalculator,
   PercentVisibleCalculatorWebGL2,
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
@@ -222,6 +226,7 @@ Hooks.once("init", function() {
       DebugVisibilityViewerWebGPUAsync,
       DebugVisibilityViewerArea3dPIXI,
       PointsPercentVisibleCalculator,
+      Area3dWebGL2VisibleCalculator,
     },
 
     glmatrix: {
@@ -287,15 +292,19 @@ Hooks.on("canvasReady", function() {
 
   Settings.initializeDebugGraphics();
 
+  WallGeometryHandler.registerPlaceables();
+  TileGeometryHandler.registerPlaceables();
+  TokenGeometryHandler.registerPlaceables();
+
 //   WallTriangles.registerPlaceableHooks();
 //   TileTriangles.registerPlaceableHooks();
 //   TokenTriangles.registerPlaceableHooks();
-
-  // Update triangles for all placeables.
+//
+//   // Update triangles for all placeables.
 //   canvas.tiles.placeables.forEach(tile => TileTriangles._onPlaceableCreation(tile));
 //   canvas.walls.placeables.forEach(wall => WallTriangles._onPlaceableCreation(wall));
 //   canvas.tokens.placeables.forEach(token => TokenTriangles._onPlaceableCreation(token));
-//
+
 
   // Once canvas is loaded, process the placeables.
   // PlaceableInstanceHandler.handlers.values().forEach(handler => handler.initializePlaceables());
