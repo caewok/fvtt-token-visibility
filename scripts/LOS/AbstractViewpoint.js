@@ -40,6 +40,9 @@ export class AbstractViewpoint {
   /** @type {object} */
   config;
 
+  /** @type {VisionTriangle} */
+  static visionTriangle = new VisionTriangle();
+
   /**
    * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"
    * @param {Point3d} viewpointDiff     The location of the eye relative to the viewer
@@ -166,6 +169,8 @@ export class AbstractViewpoint {
   }
 
 
+
+
   /**
    * Filter relevant objects in the scene using the vision triangle.
    * For the z dimension, keeps objects that are between the lowest target point,
@@ -176,7 +181,7 @@ export class AbstractViewpoint {
    *   - @property {Set<Token>} tokens
    */
   static findBlockingObjects(viewpoint, target, { viewer, senseType = "sight", blockingOpts = {} } = {}) {
-    const visionTri = VisionTriangle.build(viewpoint, target);
+    const visionTri = this.visionTriangle.rebuild(viewpoint, target);
     blockingOpts.walls ??= true;
     blockingOpts.tiles ??= true;
     blockingOpts.tokens ??= {};

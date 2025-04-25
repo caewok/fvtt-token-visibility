@@ -44,6 +44,9 @@ export class RenderObstaclesAbstractWebGL2 {
   /** @type {DrawableObjectsAbstract[]} */
   drawableFloor;
 
+  /** @type {VisionTriangle} */
+  visionTriangle = new VisionTriangle();
+
   /** @type {Camera} */
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
 
@@ -115,7 +118,7 @@ export class RenderObstaclesAbstractWebGL2 {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     const opts = { viewer, target, blocking: this.config.blocking };
     this._setCamera(viewerLocation, target, { targetLocation });
-    const visionTriangle = VisionTriangle.build(viewerLocation, target);
+    const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
     this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
     renderFn.call(this, target, viewer, visionTriangle);

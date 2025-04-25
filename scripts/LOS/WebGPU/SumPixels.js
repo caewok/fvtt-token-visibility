@@ -247,6 +247,18 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     return this.device.queue.onSubmittedWorkDone();
   }
 
+  /**
+   * Run the compute pipeline.
+   * @param {GPUTexture} texture    Texture to sum
+   * @returns {*} Output of the computation.
+   */
+  async compute(texture) {
+//     this._computeSync(texture, false); // This should be faster but is definitely not. Maybe polling for onSubmittedWorkDone is faster than awaiting the buffer?
+//     return this._postCompute(texture);
+    await this._compute(texture);
+    return this._postCompute(texture);
+  }
+
   _computeSync(texture, sync = true) {
     this._defineTextureBindGroup(texture);
 

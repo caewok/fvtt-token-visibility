@@ -229,12 +229,12 @@ export class VisionTriangle {
   /** @type {PIXI.Rectangle} */
   bounds = new PIXI.Rectangle;
 
-  constructor(a, b, c, { maxElevation = Number.POSITIVE_INFINITY, minElevation = Number.NEGATIVE_INFINITY } = {}) {
-    this.a.copyFrom(a);
-    this.b.copyFrom(b);
-    this.c.copyFrom(c);
-    this.elevationZ.max = maxElevation;
-    this.elevationZ.min = minElevation;
+  constructor(a, b, c, elevationZ = { min: Number.NEGATIVE_INFINITY, max: Number.POSITIVE_INFINITY }) {
+    if ( a ) this.a.copyFrom(a);
+    if ( b ) this.b.copyFrom(b);
+    if ( c ) this.c.copyFrom(c);
+    this.elevationZ.min = elevationZ.min;
+    this.elevationZ.max = elevationZ.max;
     this.setBounds();
   }
 
@@ -260,6 +260,11 @@ export class VisionTriangle {
    * @returns {VisionPolygon}
    */
   static build(viewpoint, target, targetBorder) {
+    const res = this.computeTriangle(viewpoint, target, targetBorder)
+    return new this(res.a, res.b, res.c, res.elevationZ);
+  }
+
+  static computeTriangle(viewpoint, target, targetBorder) {
     targetBorder ??= target.constrainedTokenBorder;
     const keyPoints = targetBorder.viewablePoints(viewpoint, { outermostOnly: false }) ?? [];
     let b;
@@ -294,7 +299,28 @@ export class VisionTriangle {
         b = keyPoints[0];
         c = keyPoints.at(-1);
     }
-    return new this(viewpoint, b, c, { minElevation: this.elevationZMin(viewpoint, target), maxElevation: this.elevationZMax(viewpoint, target) });
+
+    const elevationZ = this.elevationZMinMax(viewpoint, target);
+    return { a: viewpoint, b, c, elevationZ };
+  }
+
+  rebuild(viewpoint, target, targetBorder) {
+    const res = this.constructor.computeTriangle(viewpoint, target, targetBorder);
+    this.a.copyFrom(res.a);
+    this.b.copyFrom(res.b);
+    this.c.copyFrom(res.c);
+    this.elevationZ.min = res.elevationZ.min;
+    this.elevationZ.max = res.elevationZ.max;
+    this.setBounds();
+    return this; // For convenience.
+  }
+
+  static elevationZMinMax(viewpoint, target) {
+    const vBottomZ = viewpoint.z ?? Number.NEGATIVE_INFINITY;
+    const vTopZ = viewpoint.z ?? Number.POSITIVE_INFINITY;
+    const tBottomZ = target.bottomZ ?? Number.NEGATIVE_INFINITY;
+    const tTopZ = target.topZ ?? Number.POSITIVE_INFINITY;
+    return Math.minMax(vBottomZ, vTopZ, tBottomZ, tTopZ);
   }
 
   /**

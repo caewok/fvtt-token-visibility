@@ -88,6 +88,9 @@ class RenderAbstract {
   /** @type {MaterialTracker} */
   materials;
 
+  /** @type {VisionTriangle} */
+  visionTriangle = new VisionTriangle();
+
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   #senseType = "sight";
 
@@ -185,7 +188,7 @@ class RenderAbstract {
     const opts = { viewer, target, blocking: this.config.blocking };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
-    const visionTriangle = VisionTriangle.build(viewerLocation, target);
+    const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
 
     this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 

@@ -263,7 +263,7 @@ await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 
 
 N = 100
-await QBenchmarkLoopFn(N, percentFn, "WebGL", calcPoints)
+await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
 await QBenchmarkLoopFn(N, percentFn, "WebGL", calcWebGL2)
 await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU)
 await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync)
