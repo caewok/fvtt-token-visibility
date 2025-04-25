@@ -214,8 +214,6 @@ export class TilePIXIHandler {
   get shader() { return this.constructor.shader; }
 
   get mesh() { return this.constructor.mesh; }
-
-  lookAtPerspective(perspectiveM, lookAtM) {
     // TODO: Can we store the model matrix by linking the uniform to the instance matrix?
     // If so, can then just call uniform.update as needed.
     const h = this.instanceHandler;
@@ -359,7 +357,7 @@ export class TokenPIXIHandler {
          || this.token.document.width > 1));
   }
 
-  lookAtPerspective(perspectiveM, lookAtM, isTarget = false) {
+  lookAtPerspective(lookAtM, perspectiveM,, isTarget = false) {
     // TODO: Can we store the model matrix by linking the uniform to the instance matrix?
     // If so, can then just call uniform.update as needed.
     const h = this.instanceHandler;
