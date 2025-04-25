@@ -383,6 +383,12 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.renderObstacles.setRenderTextureToCanvas(this.constructor.gpuCanvas);
   }
 
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    // Same as PercentVisibleCalculatorAbstract.prototype._calculatePercentVisible
+    // Skip the PercentVisibleCalculatorWebGL2 parent class.
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+  }
+
   /**
    * Must first render to the gpuCanvas.
    * Then call this to retrieve the pixel data.
