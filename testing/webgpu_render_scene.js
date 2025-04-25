@@ -180,7 +180,7 @@ await debugViewer.initialize();
 debugViewer.render();
 debugViewer.destroy()
 
-debugViewer = new DebugVisibilityViewerWebGPUAsync({ device });
+debugViewer = new DebugVisibilityViewerWebGPUAsync({ device, debugView: false });
 await debugViewer.initialize();
 debugViewer.render();
 debugViewer.destroy()

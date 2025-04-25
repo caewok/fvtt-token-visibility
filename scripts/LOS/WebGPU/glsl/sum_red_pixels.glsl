@@ -7,6 +7,8 @@ const wgSize: u32 = wgDim.x * wgDim.y;
 var<workgroup> redData: array<u32, wgSize>;
 var<workgroup> obstacleData: array<u32, wgSize>;
 
+const TERRAIN_THRESHOLD = 0.75;
+
 @compute @workgroup_size(${workgroupSize.x}, ${workgroupSize.y}, 1)
 fn computeMain(
   @builtin(global_invocation_id) global_invocation_id: vec3u,
@@ -21,7 +23,8 @@ fn computeMain(
   if ( all(position < size) ) {
     let color = textureLoad(tex, position);
     if ( color.r > 0.0 ) { redData[threadId] = 1u; }
-    if ( color.r > 0.0 && color.b > 0.0 ) { obstacleData[threadId] = 1u; }
+    if ( color.r > 0.0
+      && (color.b > 0.75 || color.g > 0.75) ) { obstacleData[threadId] = 1u; }
   }
 
   // Sync all the threads.
