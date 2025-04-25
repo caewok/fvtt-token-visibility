@@ -247,6 +247,18 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     return this.device.queue.onSubmittedWorkDone();
   }
 
+  /**
+   * Run the compute pipeline.
+   * @param {GPUTexture} texture    Texture to sum
+   * @returns {*} Output of the computation.
+   */
+  async compute(texture) {
+//     this._computeSync(texture, false); // This should be faster but is definitely not. Maybe polling for onSubmittedWorkDone is faster than awaiting the buffer?
+//     return this._postCompute(texture);
+    await this._compute(texture);
+    return this._postCompute(texture);
+  }
+
   _computeSync(texture, sync = true) {
     this._defineTextureBindGroup(texture);
 
@@ -283,23 +295,28 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     // this.buffers.counterResult.unmap();
     // Getting errors re Failed to execute 'mapAsync' on 'GPUBuffer': Buffer already has an outstanding map pending.
     // Use lock to try to avoid.
-    return await navigator.locks.request("SumPixels|_postCompute", async (lock ) => {
+    //return await navigator.locks.request("SumPixels|_postCompute", async (lock ) => {
       await this.buffers.counterResult.mapAsync(GPUMapMode.READ);
       const counterPixels = new Uint32Array(this.buffers.counterResult.getMappedRange());
       const red = counterPixels[0];
       const redBlocked = counterPixels[1];
       this.buffers.counterResult.unmap();
       return { red, redBlocked };
-    });
+    // });
   }
 
   _postComputeSync(_opts) {
-    console.error(`${this.constructor.name}|_postComputeSync not enabled.`);
     this.buffers.counterResultSync.mapSync(GPUMapMode.READ);
-    const counterPixels = new Uint32Array(this.buffers.counterResultSync.getMappedRange());
-    const red = counterPixels[0];
-    const redBlocked = counterPixels[1];
+    const counterPixels = new Uint8Array(this.buffers.counterResultSync.getMappedRange());
+    // const counterPixels = new Uint32Array(this.buffers.counterResultSync.getMappedRange());
+    const red = convertUintPixel(counterPixels.slice(0, 4))
+    const redBlocked = convertUintPixel(counterPixels.slice(4, 8))
     this.buffers.counterResultSync.unmap();
     return { red, redBlocked };
   }
+}
+
+function convertUintPixel(arr) {
+  const lastValue = arr[3] === 255 ? 0 : arr[3];
+  return arr[0] + (arr[1] << 8) + (arr[2] << 16) + (lastValue << 24)
 }

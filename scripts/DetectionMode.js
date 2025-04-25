@@ -71,11 +71,14 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   losCalc.config.useLitTargetShape = useLitTargetShape;
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-  let callback = undefined;
-  if ( losCalc.config.viewpointClass === WebGPUViewpointAsync ) {
-    callback = () => visionSource.object._refreshVisibility();
-  }
-  hasLOS = losCalc.hasLOS(target, { callback });
+//   let callback = undefined;
+//   if ( losCalc.config.viewpointClass === WebGPUViewpointAsync ) {
+//     losCalc.hasLOSAsync(target).then(value => {
+//       test.los.set(visionSource, hasLOS);
+//     }
+//     callback = () => visionSource.object._refreshVisibility();
+//   } else
+  hasLOS = losCalc.hasLOS(target);
 
   test.los.set(visionSource, hasLOS);
   return hasLOS;

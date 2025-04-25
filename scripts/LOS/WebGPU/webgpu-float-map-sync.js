@@ -170,40 +170,6 @@ function getDeviceReadbackHelpers(device) {
     `,
   });
 
-/*
-Conversion to/from Uint8:
-
-f32(bytes & 0xffu) / 255.0,
-f32((bytes >> 8u) & 0xffu) / 255.0,
-f32((bytes >> 16u) & 0xffu) / 255.0,
-f32((bytes >> 24u) & 0xffu) / 255.0
-
-parseInt("0xffu", 16) = 255
-
-[6775, 1710] ==> [119, 26, 0, 255, 174, 6, 0, 255]
-
-6775 & 255         = 119
-(6775 >> 8)  & 255 = 26
-(6775 >> 16) & 255 = 0
-(6775 >> 24) & 255 = 0 (255?)
-
-1710 & 255         = 174
-(1710 >> 8)  & 255 = 6
-(1710 >> 16) & 255 = 0
-(1710 >> 24) & 255 = 0 (255?)
-
-119     = 119
-26 << 8 = 6556
-0 << 16 = 0
-0 << 24 = 0
-  total:  6775
-
-174 + (6 << 8) + (0 << 16) + (0 << 24) = 1710
-
-
-
-*/
-
   const pipeline = device.createRenderPipeline({
     layout: "auto",
     vertex: {
@@ -250,7 +216,7 @@ function bufferReadSync(device, buffer, offset, size) {
   gpuCanvas.height = height;
   gpuCtx.configure({
     device,
-    format: 'bgra8unorm',
+    format: 'rgba16float',
   });
 
   // Draw the buffer contents to the WebGPU canvas
@@ -299,9 +265,9 @@ function bufferReadSync(device, buffer, offset, size) {
 
   // Copy the WebGPU canvas to a WebGL framebuffer and read back the pixels.
   const readbackSize = width * height * 4;
-  let bufferData = new Uint8Array(readbackSize);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, gpuCanvas);
-  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, bufferData);
+  let bufferData = new Float16Array(readbackSize);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gpuCanvas); // Or FLOAT and Float32Array?
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.HALF_FLOAT, bufferData);
 
   // Return the array buffer for the readPixels data.
   if (alignedOffset != offset || readbackSize != size) {

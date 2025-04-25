@@ -51,7 +51,6 @@ import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/W
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
-import { SumPixelsWebGL2 } from "./LOS/WebGPU/SumPixelsWebGL2.js"
 import {
   PlaceableInstanceHandler,
   WallInstanceHandler,
@@ -79,12 +78,17 @@ import {
 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
 import * as twgl from "./LOS/WebGL2/twgl.js";
-import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./LOS/WebGL2/PercentVisibleCalculator.js";
+import {
+  PointsPercentVisibleCalculator,
+  PercentVisibleCalculatorWebGL2,
+  PercentVisibleCalculatorWebGPU,
+  PercentVisibleCalculatorWebGPUAsync,
+} from "./LOS/WebGL2/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync, DebugVisibilityViewerPoints, DebugVisibilityViewerArea3dPIXI } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
 // Other self-executing hooks
 import "./changelog.js";
-// import "./LOS/WebGPU/webgpu-map-sync.js";
+import "./LOS/WebGPU/webgpu-map-sync.js";
 
 Hooks.once("init", function() {
   // Load bitmap font
@@ -210,7 +214,6 @@ Hooks.once("init", function() {
       WebGPUSumRedPixels,
       wgsl,
       AsyncQueue,
-      SumPixelsWebGL2,
       PlaceableInstanceHandler,
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
       PercentVisibleCalculatorWebGPU,
@@ -218,6 +221,7 @@ Hooks.once("init", function() {
       PercentVisibleCalculatorWebGPUAsync,
       DebugVisibilityViewerWebGPUAsync,
       DebugVisibilityViewerArea3dPIXI,
+      PointsPercentVisibleCalculator,
     },
 
     glmatrix: {

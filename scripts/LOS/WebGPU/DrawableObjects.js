@@ -341,12 +341,6 @@ class DrawableObjectsAbstract {
   }
 
   /**
-   * Called after the render pass has ended for this render object (at given viewpoint, target).
-   * @param {object} [opts]
-   */
-  _postRenderPass(_opts = {}) {}
-
-  /**
    * Define the settings used for the render pipeline.
    */
   _setRenderPipelineOpts() {
@@ -655,7 +649,6 @@ export class DrawableObjectRBCulledInstancesAbstract extends DrawableObjectCulle
     // Call the parent so executeBundles is not called.
     super.render(encoder, opts);
     this.renderBundle = encoder.finish();
-    this._postRenderPass(opts)
   }
 
   initializePlaceableBuffers() {
@@ -724,21 +717,14 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
       materialBG: this.materials.bindGroups.get("terrain"),
       instanceSet: new Set(),
     });
-
-    // Determine the initial distribution of placeables among the drawable types.
-//     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-//       this.drawables.get(this.edgeDrawableKey(edge)).instanceSet.add(idx);
-//     }
   }
+
+  static EDGE_KEYS = ["wall", "wall-terrain", "wall-dir", "wall-dir-terrain"];
 
   edgeDrawableKey(edge) {
-    const props = ["wall"];
-    if ( edge.direction !== CONST.WALL_DIRECTIONS.BOTH ) props.push("dir");
-    if ( edge[this.senseType] === CONST.WALL_SENSE_TYPES.LIMITED ) props.push("terrain");
-    return props.join("-");
+    const key = ((edge.direction === CONST.WALL_DIRECTIONS.BOTH) * 2) + (edge[this.senseType] === CONST.WALL_SENSE_TYPES.LIMITED);
+    return this.constructor.EDGE_KEYS[key];
   }
-
-  static FILTER_KEYS = ["wall", "wall-dir", "wall-terrain", "wall-dir-terrain"];
 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
@@ -750,11 +736,10 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
   filterObjects(visionTriangle, { blocking = {} } = {}) {
-    const keys = this.constructor.FILTER_KEYS;
-    const instanceSets = {};
-    for ( const key of keys ) instanceSets[key] = this.drawables.get(key).instanceSet
-    Object.values(instanceSets).forEach(s => s.clear());
+    // Default to zero objects to draw.
+    this.drawables.forEach(drawable => drawable.instanceSet.clear());
 
+    // If walls do not block, we can skip the rest.
     blocking.walls ??= true;
     if ( !blocking.walls ) return;
 
@@ -762,12 +747,18 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       // If the edge is an open door or non-blocking wall, ignore.
       if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
+      if ( !this.includeEdge(edge) ) continue;
       if ( !WallInstanceHandler.isBlocking(edge, this.senseType) ) continue;
+      if ( !visionTriangle.containsEdge(edge) ) continue;
 
-      if ( visionTriangle.containsEdge(edge) ) instanceSets[this.edgeDrawableKey(edge)].add(idx);
+      // Add this edge to the drawable set.
+      const key = this.edgeDrawableKey(edge);
+      this.drawables.get(key).instanceSet.add(idx);
     }
     super.filterObjects(visionTriangle);
   }
+
+  includeEdge(edge) { return true; }
 
   registerPlaceableHooks() {
     this._hooks.push({ name: "createWall", id: Hooks.on("createWall", this._onPlaceableCreation.bind(this)) });
@@ -828,7 +819,7 @@ export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
     });
   }
 
-  static FILTER_KEYS = ["wall", "wall-dir"];
+  includeEdge(edge) { return edge[this.senseType] !== CONST.WALL_SENSE_TYPES.LIMITED; }
 }
 
 // Instances of walls. Could include tokens but prefer to keep separate both for simplicity
@@ -855,8 +846,6 @@ export class DrawableTerrainWallInstances extends DrawableWallInstances {
       instanceSet: new Set(),
     });
   }
-
-  static FILTER_KEYS = ["wall-terrain", "wall-dir-terrain"];
 
   _setRenderPipelineOpts() {
     super._setRenderPipelineOpts();
@@ -887,6 +876,8 @@ export class DrawableTerrainWallInstances extends DrawableWallInstances {
     this.RENDER_PIPELINE_OPTS.depthStencil.depthCompare = "always"; // Effectively turn off depth testing.
     this.RENDER_PIPELINE_OPTS.depthStencil.depthWriteEnabled = false;
   }
+
+  includeEdge(edge) { return edge[this.senseType] === CONST.WALL_SENSE_TYPES.LIMITED; }
 }
 
 export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
@@ -1131,6 +1122,12 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
       const api = MODULES_ACTIVE.API.RIDEABLE;
       for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
         if ( token === viewer || token === target ) continue;
+
+        // Determine which hex geometry this token uses.
+        const key = `${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`;
+        const drawable = this.drawables.get(key);
+        if ( !drawable ) continue; // Uneven tokens or unknown handled by constrained token shape.
+
         if ( !DrawableTokenInstances.includeToken(token, blocking.tokens) ) continue;
 
         // Filter tokens that directly overlaps the viewer.
@@ -1140,13 +1137,7 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
         if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
 
         // Only tokens within the viewable area.
-        if ( !visionTriangle.containsToken(token) ) continue;
-
-        // Determine which hex geometry this token uses.
-        const key = `${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`;
-        const drawable = this.drawables.get(key);
-        if ( !drawable ) continue; // Uneven tokens or unknown handled by constrained token shape.
-        drawable.instanceSet.add(idx);
+        if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
       }
     }
 
@@ -1154,12 +1145,13 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
     const targetDrawable = this.drawables.get("target");
     targetDrawable.instanceSet.clear();
     if ( target && !target.isConstrainedTokenBorder ) {
-      const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
-
       // Determine which hex geometry this token uses.
       const key = `${target.document.width}x${target.document.height}_${target.document.hexagonalShape}`;
       const drawable = this.drawables.get(key);
-      if ( drawable ) drawable.instanceSet.add(targetIdx);; // Uneven tokens or unknown handled by constrained token shape.
+      if ( drawable ) {
+        const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
+        drawable.instanceSet.add(targetIdx);
+      }
     }
     super.filterObjects(visionTriangle);
   }
@@ -1469,18 +1461,18 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * Called after the render pass has ended for this render object (at given viewpoint, target).
    * @param {object} [opts]
    */
-  _postRenderPass({ viewer, target } = {}) {
-    // Reset viewer and target in the drawables.
-    if ( viewer && this.drawables.has(viewer.id) ) {
-      const drawable = this.drawables.get(viewer.id);
-      drawable.numInstances = 1;
-    }
-
-    if ( target && this.drawables.has(target.id) ) {
-      const drawable = this.drawables.get(target.id);
-      drawable.materialBG = this.materials.bindGroups.get("obstacles");
-    }
-  }
+//   _postRenderPass({ viewer, target } = {}) {
+//     // Reset viewer and target in the drawables.
+//     if ( viewer && this.drawables.has(viewer.id) ) {
+//       const drawable = this.drawables.get(viewer.id);
+//       drawable.numInstances = 1;
+//     }
+//
+//     if ( target && this.drawables.has(target.id) ) {
+//       const drawable = this.drawables.get(target.id);
+//       drawable.materialBG = this.materials.bindGroups.get("obstacles");
+//     }
+//   }
 
   _createPipeline() {
     super._createPipeline();

@@ -4,7 +4,6 @@ CONST,
 canvas,
 foundry,
 PIXI,
-Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -16,6 +15,7 @@ import { Settings } from "../settings.js";
 // LOS folder
 import { VisionPolygon, VisionTriangle } from "./VisionPolygon.js";
 import { AbstractPolygonTriangles } from "./PlaceableTriangles.js";
+import { NULL_SET } from "./util.js";
 
 import {
   insetPoints,
@@ -39,6 +39,9 @@ export class AbstractViewpoint {
 
   /** @type {object} */
   config;
+
+  /** @type {VisionTriangle} */
+  static visionTriangle = new VisionTriangle();
 
   /**
    * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"
@@ -165,6 +168,9 @@ export class AbstractViewpoint {
     return this.#blockingObjects;
   }
 
+
+
+
   /**
    * Filter relevant objects in the scene using the vision triangle.
    * For the z dimension, keeps objects that are between the lowest target point,
@@ -174,29 +180,33 @@ export class AbstractViewpoint {
    *   - @property {Set<Tile>} tiles
    *   - @property {Set<Token>} tokens
    */
-  findBlockingObjects() {
-    const target = this.viewerLOS.target;
-    if ( !target ) throw Error(`${MODULE_ID}|AbstractViewpoint|findBlockingObjects target is undefined!`);
+  static findBlockingObjects(viewpoint, target, { viewer, senseType = "sight", blockingOpts = {} } = {}) {
+    const visionTri = this.visionTriangle.rebuild(viewpoint, target);
+    blockingOpts.walls ??= true;
+    blockingOpts.tiles ??= true;
+    blockingOpts.tokens ??= {};
+    blockingOpts.tokens.live ??= true;
+    blockingOpts.tokens.dead ??= true;
 
-    const blocking = this.viewerLOS.config.blocking;
-
-    // Remove old blocking objects.
-    const blockingObjs = this.#blockingObjects;
-    Object.values(blockingObjs).forEach(objs => objs.clear());
-
-    const visionPolygon = VisionTriangle.build(this.viewpoint, target);
-    if ( blocking.walls ) blockingObjs.walls = this._filterWallsByVisionPolygon(visionPolygon);
-    if ( blocking.tiles ) blockingObjs.tiles = this._filterTilesByVisionPolygon(visionPolygon);
-    if ( blocking.tokens.live || blocking.tokens.dead ) blockingObjs.tokens = this._filterTokensByVisionPolygon(visionPolygon);
+    const blockingObjs = {
+      walls: NULL_SET,
+      tiles: NULL_SET,
+      terrainWalls: new Set(),
+      tokens: NULL_SET,
+    };
+    if ( blockingOpts.walls ) blockingObjs.walls = this.filterWallsByVisionTriangle(visionTri, { senseType });
+    if ( blockingOpts.tiles ) blockingObjs.tiles = this.filterTilesByVisionTriangle(visionTri, { senseType });
+    if ( blockingOpts.tokens.live
+      || blockingObjs.tokens.dead ) blockingObjs.tokens = this.filterTokensByVisionTriangle(visionTri,
+        { senseType, viewer, blockingTokensOpts: blockingOpts.tokens });
 
     // Separate walls into terrain and normal.
     blockingObjs.walls.forEach(w => {
-      if ( w.document[this.viewerLOS.config.type] === CONST.WALL_SENSE_TYPES.LIMITED ) {
+      if ( w.document[senseType] === CONST.WALL_SENSE_TYPES.LIMITED ) {
         blockingObjs.walls.delete(w);
         blockingObjs.terrainWalls.add(w);
       }
     });
-    this.#blockingObjects.initialized = true;
     return blockingObjs;
   }
 
@@ -205,11 +215,10 @@ export class AbstractViewpoint {
    * target (or other two points). Only considers 2d top-down view.
    * @return {Set<Wall>}
    */
-  _filterWallsByVisionPolygon(visionPolygon) {
-    return visionPolygon.findWalls()
-      // Ignore walls that are not blocking for the type.
-      // Ignore walls with open doors.
-      .filter(w => w.document[this.viewerLOS.config.type] && !w.isOpen);
+  static filterWallsByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+    // Ignore walls that are not blocking for the type.
+    // Ignore walls with open doors.
+    return visionTri.findWalls().filter(w => w.document[senseType] && !w.isOpen);
   }
 
   /**
@@ -217,11 +226,11 @@ export class AbstractViewpoint {
    * target (or other two points). Only considers 2d top-down view.
    * @return {Set<Tile>}
    */
-  _filterTilesByVisionPolygon(visionPolygon) {
-    const tiles = visionPolygon.findTiles();
+  static filterTilesByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+    const tiles = visionTri.findTiles();
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
-    if ( MODULES_ACTIVE.LEVELS && this.viewerLOS.config.type === "sight" ) {
+    if ( MODULES_ACTIVE.LEVELS && senseType === "sight" ) {
       return tiles.filter(t => !t.document?.flags?.levels?.noCollision);
     }
     return tiles;
@@ -234,25 +243,28 @@ export class AbstractViewpoint {
    * token under the viewer point.
    * @return {Set<Token>}
    */
-  _filterTokensByVisionPolygon(visionPolygon) {
-    const viewer = this.viewerLOS.viewer;
-    const target = this.viewerLOS.target;
-    let tokens = visionPolygon.findTokens();
+  static filterTokensByVisionTriangle(visionTri, {
+    viewer,
+    target,
+    blockingTokensOpts = { live: true, dead: true, prone: true } } = {}) {
+
+    let tokens = visionTri.findTokens();
 
     // Filter out the viewer and target from the token set.
-    tokens.delete(target);
-    tokens.delete(viewer);
-
-    // Filter tokens that directly overlaps the viewer.
-    // Example: viewer is on a dragon.
-    if ( viewer instanceof Token ) tokens = tokens.filter(t => tokensOverlap(viewer, t))
-
     // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
     const api = MODULES_ACTIVE.API.RIDEABLE;
-    if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer) || api.RidingConnection(t, target));
+    if ( target ) {
+      tokens.delete(target);
+      if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, target))
+    }
+    if ( viewer ) {
+      tokens.delete(viewer);
+      tokens = tokens.filter(t => tokensOverlap(  viewer, t));
+      if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer))
+    }
 
     // Filter live or dead tokens.
-    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = this.viewerLOS.config.blocking.tokens;
+    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = blockingTokensOpts;
     if ( liveTokensBlock ^ deadTokensBlock ) {
       const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
       tokens = tokens.filter(t => {
@@ -268,6 +280,38 @@ export class AbstractViewpoint {
     if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
 
     return tokens;
+  }
+
+  /**
+   * Filter relevant objects in the scene using the vision triangle.
+   * For the z dimension, keeps objects that are between the lowest target point,
+   * highest target point, and the viewing point.
+   * @returns {object} Object with possible properties:
+   *   - @property {Set<Wall>} walls
+   *   - @property {Set<Tile>} tiles
+   *   - @property {Set<Token>} tokens
+   */
+  findBlockingObjects() {
+    const target = this.viewerLOS.target;
+    if ( !target ) throw Error(`${MODULE_ID}|AbstractViewpoint|findBlockingObjects target is undefined!`);
+
+    // Remove old blocking objects.
+    const blockingObjs = this.#blockingObjects;
+    Object.values(blockingObjs).forEach(objs => objs.clear());
+
+    const res = this.constructor.findBlockingObjects(this.viewpoint, target, {
+      viewer: this.viewerLOS.viewer,
+      senseType: this.viewerLOS.config.type,
+      blockingOpts: this.viewerLOS.config.blocking,
+    });
+    for ( const [key, objs] of Object.entries(res) ) blockingObjs[key] = objs;
+    this.#blockingObjects.initialized = true;
+    return blockingObjs;
+  }
+
+  static filterPlaceableTrianglesByViewpoint(placeable, viewpoint) {
+    return placeable[AbstractPolygonTriangles.ID].triangles
+      .filter(tri => tri.isFacing(viewpoint));
   }
 
   _filterPlaceableTrianglesByViewpoint(placeable) {

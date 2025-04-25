@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -10,6 +9,11 @@ import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
 import { WebGPUDevice } from "../WebGPU/WebGPU.js";
 import { AsyncQueue } from "../WebGPU/AsyncQueue.js";
 import { WebGPUSumRedPixels } from "../WebGPU/SumPixels.js";
+import { AbstractViewerLOS } from "../AbstractViewerLOS.js";
+import { AbstractViewpoint } from "../AbstractViewpoint.js";
+import { PointsViewpoint } from "../PointsViewpoint.js";
+import { VisionTriangle } from "../VisionPolygon.js";
+import { Settings } from "../../settings.js";
 
 /* Percent visible calculator
 
@@ -18,15 +22,7 @@ Caches values based on the viewer, viewer location, target, target location.
 - Cache is tied to the placeable updates.
 */
 
-const TARGETED_BY_SET = Symbol("TARGETED_SET");
-
 class PercentVisibleCalculatorAbstract {
-
-  /** @type {number} */
-  static WIDTH = 128;
-
-  /** @type {number} */
-  static HEIGHT = 128;
 
   /** @type {number} */
   static TERRAIN_THRESHOLD = 255 * 0.75;
@@ -34,22 +30,11 @@ class PercentVisibleCalculatorAbstract {
   /** @type {string} */
   senseType = "sight";
 
-  /** @type {RenderObstaclesWebGL2} */
-  renderObstacles;
-
   constructor({ senseType = "sight" } = {}) {
     this.senseType = senseType;
   }
 
-  async initialize() {
-    await this.renderObstacles.initialize();
-
-    // Track the update ids for each.
-    this._updateObstacleCacheKeys();
-    for ( const token of this.tokenHandler.placeableFromInstanceIndex.values() ) this._updateTokenCacheKeys(token);
-  }
-
-
+  async initialize() { return; }
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -67,213 +52,256 @@ class PercentVisibleCalculatorAbstract {
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
-    // Check if we already know this value for the given parameters.
-    let cachedValue = null;
-    if ( !this._updateCache(viewer, target, viewerLocation, targetLocation) ) {
-      cachedValue = this._percentVisibleCached(viewer, target, viewerLocation, targetLocation, opts);
-    }
-    if ( Number.isNumeric(cachedValue) ) return cachedValue;
-
-    // Recalculate the percent visible for the given parameters, and cache the value.
-    const percentRed = this._percentVisible(viewer, target, viewerLocation, targetLocation);
-    this._setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentRed);
-    return percentRed;
+    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation)
+    return this._percentRedPixels();
   }
 
-  async percentVisibleAsync(...args) { return this.percentVisible(...args); }
-
-  /**
-   * Determine percent visible based on current 3d view
-   * @param {Token} viewer                  Token representing the camera/sight
-   * @param {Token} target                  What the viewer is looking at
-   * @param {Point3d} viewerLocation        Where the camera is located
-   * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
-   * @returns {number}
-   */
-  _percentVisible(viewer, target, viewerLocation, targetLocation) {
+  async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation, ...opts } = {}) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-    return this._percentRedPixels();
+    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation)
+    return this._percentRedPixelsAsync();
   }
 
-  async _percentVisibleAsync(...args) { return this._percentVisible(...args); }
-
-  _percentRedPixels() { console.error("PercentVisibleCalculator|Must be overriden by child class.") }
-
-  // ----- NOTE: Caching ----- //
-
   /**
-   * Retrieve a unique key based on viewer and target locations.
-   * @param {Point3d} viewerLocation
-   * @param {Point3d} targetLocation
-   * @returns {string}
-   */
-  static locationKey(viewerLocation, targetLocation) { return `${viewerLocation.key}_${targetLocation.key}`; }
-
-  /** @type {WeakMap<Token|PlaceableInstanceHandler>} */
-  #updateKeys = new WeakMap();
-
-  /**
-   * @typedef {WeakMap<Token, WeakMap>} Cache
-   * Cached visibility percentages, organized by viewer, token, and viewerLocation_targetLocation.
-   * Organized by viewer --> target --> location key --> percent visible
-   *                     --> set of tokens that target this viewer
-   * @keys {Token} Viewer tokens
-   * @elements {WeakMap<Token|TARGETED_BY_SET, Map|Set>}
-   *   - @keys {Token} Tokens targeted by the viewer
-   *     - @elements {Map<string, number>} Percent visible
-   *   - @keys {TARGETED_BY_SET} Set
-   *     - @elements {Set<Token>} Set of tokens that target the viewer
-   */
-
-  /** @type {Cache} */
-  _cache = new WeakMap();
-
-  /**
-   * Determine if a cache update is required and mark/update the cache accordingly
+   * Do any preparatory calculations for determining the percent visible.
    * @param {Token} viewer                  Token representing the camera/sight
    * @param {Token} target                  What the viewer is looking at
    * @param {Point3d} viewerLocation        Where the camera is located
    * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
-   * @returns {boolean} Returns true if an update was required.
+   * @override
    */
-  _updateCache(viewer, target, _viewerLocation, _targetLocation) {
-    // Caching here is tricky.
-    // If a token is updated, relationship between it and other tokens must be redone.
-    // If anything else updated, assume all relationships must be redone.
-    if ( this.obstacleChanged() ) {
-      this._cache = new WeakMap(); // Wipe everything; cannot clear a WeakMap.
-      this._updateObstacleCacheKeys();
-      return true;
-    }
-    if ( this.tokenChanged(viewer) )  {
-      this._clearTokenCache(viewer);
-      return true;
-    }
-    if ( this.tokenChanged(target) ) {
-      this._clearTokenCache(target);
-      return true;
-    }
-    return false;
-  }
-
-  _clearTokenCache(viewer) {
-    // Wipe every token that targets this viewer.
-    const targetedSet = this._cache.get(viewer)?.get(TARGETED_BY_SET) || new Set();
-    for ( const token of targetedSet ) {
-      const locMap = this._cache.get(token).get(viewer);
-      if ( locMap ) locMap.clear();
-    }
-
-    // Wipe every viewer that targets this viewer.
-    this._cache.set(viewer, new WeakMap()); // Wipe everything for this viewer; cannot clear a WeakMap.
-
-    // Increment the cache key to reflect these updates.
-    this._updateTokenCacheKeys(viewer);
-  }
-
-  _percentVisibleCached(viewer, target, viewerLocation, targetLocation, opts) {
-   return this._getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts);
-  }
-
-  /** @type {PlaceableInstanceHandler} */
-  get tokenHandler() { return this.renderObstacles.drawableTargets[0].placeableHandler; }
-
-  /** @type {PlaceableInstanceHandler[]} */
-  #obstacleHandlers = [];
-
-  get obstacleHandlers() {
-    if ( this.#obstacleHandlers.length ) return this.#obstacleHandlers;
-
-    // Excludes tokens.
-    const tokenHandler = this.tokenHandler;
-    this.renderObstacles.drawableObstacles.forEach(drawableObj => {
-      if ( drawableObj.placeableHandler === tokenHandler ) return;
-      this.#obstacleHandlers.push(drawableObj.placeableHandler);
-    });
-    this.renderObstacles.drawableTerrain.forEach(drawableObj => this.#obstacleHandlers.push(drawableObj.placeableHandler));
-    return this.#obstacleHandlers;
-  }
+  _calculatePercentVisible(_viewer, _target, _viewerLocation, _targetLocation) { return; }
 
   /**
-   * Has a given token changed?
-   * @param {Token} token       Token to test against the token placeable handler
-   * @returns {boolean}
+   * Determine the percentage red pixels for the current view.
+   * @returns {number}
+   * @override
    */
-  tokenChanged(token) {
-    // Check if this specific token needs updating.
-    const ph = this.tokenHandler;
-    const idx = ph.instanceIndexFromId.get(token.id);
-    return ph.instanceLastUpdated.get(idx) > (this.#updateKeys.get(token) || 0);
+  _percentRedPixels() { console.error("PercentVisibleCalculator|Must be overriden by child class.") }
+
+  async _percentRedPixelsAsync() { return this._percentRedPixels(); }
+
+  destroy() { return; }
+}
+
+/**
+ * Handle points algorithm.
+ */
+export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbstract {
+  /** @type {ViewpointConfig} */
+  config = {};
+
+  visionTriangle;
+
+  /** @type {Points3d[][]} */
+  targetPoints = [];
+
+  async initialize() {
+    this.config = this.initializeConfig();
   }
+
+  _calculatePercentVisible(viewer, target, viewerLocation, _targetLocation) {
+    this.viewpoint = viewerLocation;
+    this.visibleTargetShape = this._calculateVisibleTargetShape(target);
+    this.visionTriangle = VisionTriangle.build(viewerLocation, target);
+    this.filterPotentiallyBlockingTriangles(viewer, viewerLocation, target);
+    this.targetPoints = this.constructTargetPoints(target);
+  }
+
+  _percentRedPixels() {
+    return (1 - this._testTargetPoints(this.targetPoints, this.viewpoint, this.visibleTargetShape));
+  }
+
+  /* ----- NOTE: Target points ----- */
 
   /**
-   * Have the walls or tiles changed?
-   * @returns {boolean}
+   * Sets configuration to the current settings.
+   * @param {ViewpointConfig} [cfg]
+   * @returns {ViewpointConfig}
    */
-  obstacleChanged() {
-    return this.obstacleHandlers.some(ph => ph.updateId > (this.#updateKeys.get(ph) || 0));
+  initializeConfig(cfg = {}) {
+    // Configs specific to the Points algorithm.
+    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+    cfg.useLitTargetShape ??= true;
+
+    // Blocking canvas objects.
+    cfg.blocking ??= {};
+    cfg.blocking.walls ??= true;
+    cfg.blocking.tiles ??= true;
+
+    // Blocking tokens.
+    cfg.blocking.tokens ??= {};
+    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+
+    return cfg;
   }
 
-  /**
-   * Update the cache keys for obstacles to match current update id for each placeable.
+  /*
+   * Similar to _constructViewerPoints but with a complication:
+   * - Grid. When set, points are constructed per grid space covered by the token.
+   * @param {Token} target
+   * @returns {Points3d[][]}
    */
-  _updateObstacleCacheKeys() {
-    this.obstacleHandlers.forEach(ph => this.#updateKeys.set(ph, ph.updateId));
-  }
+  constructTargetPoints(target) {
+    const { pointAlgorithm, targetInset, points3d, largeTarget } = this.config;
+    const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
 
-  /**
-   * Update the cache keys for tokens to match current update id for a given token.
-   */
-  _updateTokenCacheKeys(token) {
-    const ph = this.tokenHandler;
-    const idx = ph.instanceIndexFromId.get(token.id);
-    const updateId = ph.instanceLastUpdated.get(idx);
-    this.#updateKeys.set(token, updateId);
-  }
+    if ( largeTarget ) {
+      // Construct points for each target subshape, defined by grid spaces under the target.
+      const targetShapes = PointsViewpoint.constrainedGridShapesUnderToken(target);
 
-  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this._addCache(viewer, target);
-    this._cache.get(viewer).get(target).get(this.constructor.locationKey(viewerLocation, targetLocation));
-  }
-
-  _setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentVisible) {
-    this._addCache(viewer, target);
-    this._cache.get(viewer).get(target).set(this.constructor.locationKey(viewerLocation, targetLocation), percentVisible);
-  }
-
-  _addCache(viewer, target) {
-    if ( !this._cache.has(viewer) ) this._cache.set(viewer, new WeakMap());
-    const viewerCache = this._cache.get(viewer);
-    if ( !viewerCache.has(target) ) viewerCache.set(target, new Map());
-
-    if ( !this._cache.has(target) ) this._cache.set(target, new WeakMap());
-    const targetCache = this._cache.get(target);
-
-    // Add viewer --> target to the target's targeted set.
-    if ( !targetCache.has(TARGETED_BY_SET) ) targetCache.set(TARGETED_BY_SET, new Set());
-    targetCache.get(TARGETED_BY_SET).add(viewer);
-  }
-
-  printCache() {
-    const res = [];
-    for ( const viewer of canvas.tokens.placeables ) {
-      const targetMap = this._cache.get(viewer);
-      if ( !targetMap ) continue;
-      for ( const target of canvas.tokens.placeables ) {
-        const locMap = targetMap.get(target);
-        if ( !locMap ) continue;
-        for ( const [key, value] of locMap.entries() ) {
-          if ( key === TARGETED_BY_SET ) continue;
-          res.push({ viewer: viewer.name, target: target.name, key, value });
-        }
+      // Issue #8: possible for targetShapes to be undefined or not an array??
+      if ( targetShapes && targetShapes.length ) {
+        const targetPointsArray = targetShapes.map(targetShape => {
+          cfg.tokenShape = targetShape;
+          const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
+          if ( points3d ) return PointsViewpoint.elevatePoints(target, targetPoints);
+          return targetPoints;
+        });
+        return targetPointsArray;
       }
     }
-    console.table(res);
-    return res;
+
+    // Construct points under this constrained token border.
+    cfg.tokenShape = target.constrainedTokenBorder;
+    const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
+    if ( points3d ) return [PointsViewpoint.elevatePoints(target, targetPoints)];
+    return [targetPoints];
+  }
+
+  /* ----- NOTE: Collision testing ----- */
+
+  /** @param {Triangle[]} */
+  triangles = [];
+
+  terrainTriangles = [];
+
+  /**
+   * Filter the triangles that might block the viewer from the target.
+   */
+  filterPotentiallyBlockingTriangles(viewer, viewerLocation, target) {
+    this.triangles.length = 0;
+    this.terrainTriangles.length = 0;
+    const blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
+      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+
+    const { terrainWalls, tiles, tokens, walls } = blockingObjects;
+    for ( const terrainWall of terrainWalls ) {
+      const triangles = AbstractViewpoint.filterPlaceableTrianglesByViewpoint(terrainWall, viewerLocation);
+      this.terrainTriangles.push(...triangles);
+    }
+    for ( const placeable of [...tiles, ...tokens, ...walls] ) {
+      const triangles = AbstractViewpoint.filterPlaceableTrianglesByViewpoint(placeable, viewerLocation);
+      this.triangles.push(...triangles);
+    }
+  }
+
+  /* ----- NOTE: Visibility testing ----- */
+
+
+  _calculateVisibleTargetShape(target) {
+    return this.config.useLitTargetShape
+      ? AbstractViewerLOS.constructLitTargetShape(target) : target.constrainedTokenBorder;
+  }
+
+  /**
+   * Test an array of token points against an array of target points.
+   * Each tokenPoint will be tested against every array of targetPoints.
+   * @param {Point3d[][]} targetPointsArray   Array of array of target points to test.
+   * @returns {number} Minimum percent blocked for the token points
+   */
+  _testTargetPoints(targetPointsArray, viewpoint, visibleTargetShape) {
+    targetPointsArray ??= this.targetPoints;
+    visibleTargetShape ??= this.visibleTargetShape;
+    let minBlocked = 1;
+    if ( this.config.debug ) this.debugPoints.length = 0;
+    for ( const targetPoints of targetPointsArray ) {
+      const percentBlocked = this._testPointToPoints(targetPoints, viewpoint, visibleTargetShape);
+
+      // We can escape early if this is completely visible.
+      if ( !percentBlocked ) return 0;
+      minBlocked = Math.min(minBlocked, percentBlocked);
+    }
+    return minBlocked;
+  }
+
+  debugPoints = [];
+
+  /**
+   * Helper that tests collisions between a given point and a target points.
+   * @param {Point3d} tokenPoint        Point on the token to use.
+   * @param {Point3d[]} targetPoints    Array of points on the target to test
+   * @returns {number} Percent points blocked
+   */
+  _testPointToPoints(targetPoints, viewpoint, visibleTargetShape) {
+    let numPointsBlocked = 0;
+    const ln = targetPoints.length;
+    // const debugDraw = this.viewerLOS.config.debugDraw;
+    let debugPoints = [];
+    if ( this.config.debug ) this.debugPoints.push(debugPoints);
+    for ( let i = 0; i < ln; i += 1 ) {
+      const targetPoint = targetPoints[i];
+      const outsideVisibleShape = visibleTargetShape
+        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
+      if ( outsideVisibleShape ) continue;
+
+      // For the intersection test, 0 can be treated as no intersection b/c we don't need
+      // intersections at the origin.
+      // Note: cannot use Point3d._tmp with intersection.
+      // TODO: Does intersection return t values if the intersection is outside the viewpoint --> target?
+      let nCollisions = 0;
+      let hasCollision = this.triangles.some(tri => tri.intersection(viewpoint, targetPoint.subtract(viewpoint)))
+        || this.terrainTriangles.some(tri => {
+        nCollisions += Boolean(tri.intersection(viewpoint, targetPoint.subtract(viewpoint)));
+        return nCollisions >= 2;
+      });
+      numPointsBlocked += hasCollision;
+
+      if ( this.config.debug ) {
+        debugPoints = { A: viewpoint, B: targetPoint, hasCollision };
+//         const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
+//         debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.5, width: 1, color });
+//         console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
+      }
+    }
+    return numPointsBlocked / ln;
+  }
+
+}
+
+/**
+ * Handles classes that use RenderObstacles to draw a 3d view of the scene from the viewer perspective.
+ */
+export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalculatorAbstract {
+  /** @type {number} */
+  static WIDTH = 128;
+
+  /** @type {number} */
+  static HEIGHT = 128;
+
+  /** @type {RenderObstaclesWebGL2|RenderObstacles} */
+  renderObstacles;
+
+  async initialize() {
+    await this.renderObstacles.initialize();
+  }
+
+  percentVisible(...args) {
+    this.renderObstacles.prerender();
+    return super.percentVisible(...args);
+  }
+
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
   }
 
   destroy() {
@@ -281,7 +309,7 @@ class PercentVisibleCalculatorAbstract {
   }
 }
 
-export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
+export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculatorAbstract {
   /** @type {Uint8Array} */
   bufferData;
 
@@ -300,11 +328,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 
-  _percentVisible(...args) {
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-    return super._percentVisible(...args);
+    super._calculatePercentVisible(viewer, target, viewerLocation, targetLocation)
   }
 
   _percentRedPixels() {
@@ -325,7 +353,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     }
     return (countRed - countRedBlocked) / countRed;
   }
-
 }
 
 export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebGL2 {
@@ -335,7 +362,6 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
 
   /** @type {GPUCanvasContext} */
   gpuCtx;
-
 
   constructor({ device, ...opts } = {}) {
     super(opts);
@@ -350,13 +376,6 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
       format: WebGPUDevice.presentationFormat,
       alphamode: "premultiplied", // Instead of "opaque"
     });
-
-//     const gl = this.gl;
-//     this.texture = gl.createTexture();
-//     this.framebuffer = gl.createFramebuffer();
-//     gl.bindTexture(gl.TEXTURE_2D, this.texture);
-//     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-//     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
   }
 
   async initialize() {
@@ -364,40 +383,24 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.renderObstacles.setRenderTextureToCanvas(this.constructor.gpuCanvas);
   }
 
-  _percentVisible(...args) {
-    this.renderObstacles.prerender(); // TODO: Can we move prerender into render?
-    return super._percentVisible(...args);
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    // Same as PercentVisibleCalculatorAbstract.prototype._calculatePercentVisible
+    // Skip the PercentVisibleCalculatorWebGL2 parent class.
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
   }
 
   /**
    * Must first render to the gpuCanvas.
    * Then call this to retrieve the pixel data.
    */
-  _readRenderResult() {
+  _percentRedPixels() {
     const gl = this.gl;
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
-    super._readRenderResult();
-    // return { pixels: this.bufferData, x: 0, y: 0, width, height };
-  }
-
-  /** @type {PlaceableInstanceHandler} */
-  get tokenHandler() { return this.renderObstacles.drawableTokens[0].placeableHandler; }
-
-  /** @type {PlaceableInstanceHandler[]} */
-  #obstacleHandlers = [];
-
-  get obstacleHandlers() {
-    if ( this.#obstacleHandlers.length ) return this.#obstacleHandlers;
-
-    // Excludes tokens.
-    this.renderObstacles.drawableObstacles.forEach(drawableObj => {
-      this.#obstacleHandlers.push(drawableObj.placeableHandler);
-    });
-    return this.#obstacleHandlers;
+    return super._percentRedPixels();
   }
 }
 
-export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculatorAbstract {
+export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCalculatorAbstract {
   /** @type {WebGPUSumRedPixels} */
   sumPixels;
 
@@ -412,215 +415,17 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 
   async initialize() {
     await super.initialize();
-    this.renderObstacles.setRenderTextureToInternalTexture()
     await this.sumPixels.initialize();
+    this.renderObstacles.setRenderTextureToInternalTexture()
   }
 
-  _percentVisible(...args) {
-    this.renderObstacles.prerender(); // TODO: Can we move prerender into render?
-    return super._percentVisible(...args);
-  }
-
-  async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation } = {}) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    viewerLocation ??= Point3d.fromTokenCenter(viewer);
-    targetLocation ??= Point3d.fromTokenCenter(target);
-
-    // Check if we already know this value for the given parameters.
-    let cachedValue = null;
-    if ( !this._updateAsyncCache(viewer, target, viewerLocation, targetLocation)
-       && this._hasCachedValue(viewer, target, viewerLocation, targetLocation) ) {
-      cachedValue = this._percentVisibleCached(viewer, target, viewerLocation, targetLocation);
-    }
-    if ( Number.isNumeric(cachedValue) ) return cachedValue;
-
-    // Recalculate the percent visible for the given parameters, and cache the value.
-    const percentRed = await this._percentVisibleAsync(viewer, target, viewerLocation, targetLocation);
-    this._setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentRed);
-    return percentRed;
-  }
-
-  async _percentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    viewerLocation ??= Point3d.fromTokenCenter(viewer);
-    targetLocation ??= Point3d.fromTokenCenter(target);
-
-    this.renderObstacles.prerender();
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+  async _percentRedPixelsAsync() {
     const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
     return (res.red - res.redBlocked) / res.red;
   }
 
-  /** @type {PlaceableInstanceHandler} */
-  get tokenHandler() { return this.renderObstacles.drawableTokens[0].placeableHandler; }
-
-  /** @type {PlaceableInstanceHandler[]} */
-  #obstacleHandlers = [];
-
-  get obstacleHandlers() {
-    if ( this.#obstacleHandlers.length ) return this.#obstacleHandlers;
-
-    // Excludes tokens.
-    this.renderObstacles.drawableObstacles.forEach(drawableObj => {
-      this.#obstacleHandlers.push(drawableObj.placeableHandler);
-    });
-    return this.#obstacleHandlers;
-  }
-
-  // ----- NOTE: Caching ----- //
-
-  /**
-   * Retrieve a unique key based on viewer and target locations.
-   * For this async version, track the differential between viewer/viewerloc and target/targetloc.
-   * This is so as the token moves, its last value based on location can still be determined.
-   * @param {Token} viewer
-   * @param {Token} target
-   * @param {Point3d} viewerLocation
-   * @param {Point3d} targetLocation
-   * @returns {string}
-   */
-  static locationKey(viewer, target, viewerLocation, targetLocation) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const viewerCtr = Point3d.fromTokenCenter(viewer, Point3d._tmp1);
-    const targetCtr = Point3d.fromTokenCenter(target, Point3d._tmp2);
-    const viewerLoc = viewerCtr.subtract(viewerLocation, viewerCtr);
-    const targetLoc = targetCtr.subtract(targetLocation, targetCtr);
-    return `${viewerLoc.key}_${targetLoc.key}`;
-  }
-
-  /**
-   * Determine if a cache update is required and mark/update the cache accordingly
-   * @param {Token} viewer                  Token representing the camera/sight
-   * @param {Token} target                  What the viewer is looking at
-   * @param {Point3d} viewerLocation        Where the camera is located
-   * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
-   * @returns {boolean} Returns false because the cached value should always be used until async compute is done
-   */
-  _updateCache(viewer, target, viewerLocation, targetLocation) {
-    this._updateAsyncCache(viewer, target, viewerLocation, targetLocation);
-    return false;
-  }
-
-  /**
-   * Determine if a cache update is required and mark/update the cache accordingly
-   * @param {Token} viewer                  Token representing the camera/sight
-   * @param {Token} target                  What the viewer is looking at
-   * @param {Point3d} viewerLocation        Where the camera is located
-   * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
-   * @returns {boolean} Returns true if a cache update was required.
-   */
-  _updateAsyncCache(viewer, target, _viewerLocation, _targetLocation) {
-    if ( this.obstacleChanged() ) {
-      // Wipe everything. Cannot iterate a weak map, so use the tokens in the scene.
-      canvas.tokens.placeables.forEach(token => this._clearTokenCache(token));
-
-      // Increment the cache keys.
-      this._updateObstacleCacheKeys();
-      return true;
-    }
-
-    if ( this.tokenChanged(viewer) && this._cache.has(viewer) ) {
-      // Wipe every token that targets this viewer.
-      const targetedSet = this._cache.get(viewer).get(TARGETED_BY_SET) || new Set();
-
-      // Wipe every viewer that targets this viewer.
-      targetedSet.add(viewer);
-      targetedSet.forEach(token => this._clearTokenCache(token));
-      targetedSet.delete(viewer);
-
-      // Increment the cache key to reflect these updates.
-      this._updateTokenCacheKeys(viewer);
-      return true;
-    }
-
-    if ( this.tokenChanged(target) && this._cache.has(target) ) {
-      // Wipe every token that targets this target.
-      const targetedSet = this._cache.get(target).get(TARGETED_BY_SET) || new Set();
-
-      // Wipe every viewer that targets this target.
-      targetedSet.add(target);
-      targetedSet.forEach(token => this._clearTokenCache(token));
-      targetedSet.delete(target);
-
-      // Increment the cache key to reflect these updates.
-      this._updateTokenCacheKeys(target);
-      return true;
-    }
-    return false;
-  }
-
-  _clearTokenCache(viewer) {
-    const targetMap = this._cache.get(viewer);
-    if ( !targetMap ) return;
-
-    // Mark each location for the viewer-target pair as dirty.
-    for ( const tokenT of canvas.tokens.placeables ) {
-      const locMap = targetMap.get(tokenT);
-      if ( !locMap ) continue;
-      for ( const obj of locMap.values() ) obj.dirty = true;
-    }
-  }
-
-  _hasCachedValue(viewer, target, viewerLocation, targetLocation) {
-    this._addCache(viewer, target);
-    return Boolean(this._cache
-      .get(viewer)
-        .get(target)
-          .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)));
-  }
-
-
-  _getCachedPercentVisible(viewer, target, viewerLocation, targetLocation, opts = {}) {
-    this._addCache(viewer, target);
-    const res = this._cache
-      .get(viewer)
-        .get(target)
-          .get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)) ?? {
-      value: 0,
-      dirty: true,
-    };
-
-    // If the cache is dirty, return the old value for now and run an async task to update with the new value.
-    // TODO: Trigger an LOS or Cover update? Pass through a callback to trigger?
-    if ( res.dirty ) {
-      const task = async () => {
-        const percentRed = await this._percentVisibleAsync(viewer, target, viewerLocation, targetLocation);
-        this._setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentRed);
-        if ( opts.callback ) await opts.callback(percentRed, viewer, target, viewerLocation, targetLocation);
-      }
-      this.queue.enqueue(task)
-      // TODO: Trigger an LOS / Cover update, probably using callback.
-   }
-    return res.value;
-  }
-
-  _setCachedPercentVisible(viewer, target, viewerLocation, targetLocation, percentVisible) {
-    this._addCache(viewer, target);
-    const locMap = this._cache.get(viewer).get(target);
-
-    const res = locMap.get(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation)) ?? {};
-    res.value = percentVisible;
-    res.dirty = false;
-    locMap.set(this.constructor.locationKey(viewer, target, viewerLocation, targetLocation), res);
-  }
-
-  printCache() {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const res = [];
-    for ( const viewer of canvas.tokens.placeables ) {
-      const targetMap = this._cache.get(viewer);
-      if ( !targetMap ) continue;
-      for ( const target of canvas.tokens.placeables ) {
-        const locMap = targetMap.get(target);
-        if ( !locMap ) continue;
-        for ( const [key, value] of locMap.entries() ) {
-          if ( key === TARGETED_BY_SET ) continue;
-          // const targetLoc = Point3d.invertKey(key.split("_")[0]); // Inversion not working for 3d keys
-          res.push({ viewer: viewer.name, target: target.name, key , value: value.value, dirty: value.dirty });
-        }
-      }
-    }
-    console.table(res);
-    return res;
+  _percentRedPixels() {
+    const res = this.sumPixels.computeSync(this.renderObstacles.renderTexture);
+    return (res.red - res.redBlocked) / res.red;
   }
 }
