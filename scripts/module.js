@@ -79,7 +79,12 @@ import {
 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
 import * as twgl from "./LOS/WebGL2/twgl.js";
-import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./LOS/WebGL2/PercentVisibleCalculator.js";
+import {
+  PointsPercentVisibleCalculator,
+  PercentVisibleCalculatorWebGL2,
+  PercentVisibleCalculatorWebGPU,
+  PercentVisibleCalculatorWebGPUAsync,
+} from "./LOS/WebGL2/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync, DebugVisibilityViewerPoints, DebugVisibilityViewerArea3dPIXI } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
 // Other self-executing hooks
@@ -218,6 +223,7 @@ Hooks.once("init", function() {
       PercentVisibleCalculatorWebGPUAsync,
       DebugVisibilityViewerWebGPUAsync,
       DebugVisibilityViewerArea3dPIXI,
+      PointsPercentVisibleCalculator,
     },
 
     glmatrix: {

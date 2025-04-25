@@ -306,7 +306,13 @@ export class AbstractViewerLOS {
    *   (Because cannot currently handle 2+ distinct target shapes.)
    */
   _constructLitTargetShape(target) {
-    const shape = this.constructor.constrainTargetShapeWithLights(target);
+    // TODO: Remove the method; keep only static method.
+    return this.constructor.constructLitTargetShape(target);
+
+  }
+
+  static constructLitTargetShape(target) {
+    const shape = this.constrainTargetShapeWithLights(target);
     if ( !(shape instanceof CONFIG.GeometryLib.ClipperPaths )) return shape;
 
     // Multiple polygons present. Ignore holes. Return remaining polygon or
