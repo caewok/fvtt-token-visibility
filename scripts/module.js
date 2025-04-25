@@ -10,7 +10,7 @@ PIXI,
 import { MODULE_ID } from "./const.js";
 
 import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
-
+import { WallPIXIHandler, TilePIXIHandler, TokenPIXIHandler } from "./LOS/PIXI/PlaceablePIXIHandler.js";
 
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
@@ -295,6 +295,11 @@ Hooks.on("canvasReady", function() {
   WallGeometryHandler.registerPlaceables();
   TileGeometryHandler.registerPlaceables();
   TokenGeometryHandler.registerPlaceables();
+
+  canvas.tiles.placeables.forEach(tile => new TilePIXIHandler(tile));
+  canvas.tokens.placeables.forEach(token => new TokenPIXIHandler(token));
+  canvas.walls.placeables.forEach(wall => new WallPIXIHandler(wall));
+
 
 //   WallTriangles.registerPlaceableHooks();
 //   TileTriangles.registerPlaceableHooks();
