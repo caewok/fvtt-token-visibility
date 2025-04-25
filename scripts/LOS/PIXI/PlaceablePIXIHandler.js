@@ -137,7 +137,8 @@ export class WallPIXIHandler {
    */
   /** @type {object[]} */
   static HOOKS = [
-    { createWall: "_onPlaceableCreation" }
+    { createWall: "_onPlaceableCreation" },
+    { destroyWall: "_onPlaceableDestroy"},
   ];
 
   /**
@@ -246,7 +247,8 @@ export class TilePIXIHandler {
    */
   /** @type {object[]} */
   static HOOKS = [
-    { createWall: "_onPlaceableCreation" }
+    { createTile: "_onPlaceableCreation" },
+    { destroyTile: "_onPlaceableDestroy" }
   ];
 
   /**
@@ -398,7 +400,8 @@ export class TokenPIXIHandler {
    */
   /** @type {object[]} */
   static HOOKS = [
-    { createWall: "_onPlaceableCreation" }
+    { drawToken: "_onPlaceableCreation" },
+    { destroyToken: "_onPlaceableDestroy" }
   ];
 
   /**
