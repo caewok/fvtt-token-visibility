@@ -283,14 +283,14 @@ export class WebGPUSumRedPixels extends WebGPUComputeAbstract {
     // this.buffers.counterResult.unmap();
     // Getting errors re Failed to execute 'mapAsync' on 'GPUBuffer': Buffer already has an outstanding map pending.
     // Use lock to try to avoid.
-    return await navigator.locks.request("SumPixels|_postCompute", async (lock ) => {
+    //return await navigator.locks.request("SumPixels|_postCompute", async (lock ) => {
       await this.buffers.counterResult.mapAsync(GPUMapMode.READ);
       const counterPixels = new Uint32Array(this.buffers.counterResult.getMappedRange());
       const red = counterPixels[0];
       const redBlocked = counterPixels[1];
       this.buffers.counterResult.unmap();
       return { red, redBlocked };
-    });
+    // });
   }
 
   _postComputeSync(_opts) {
