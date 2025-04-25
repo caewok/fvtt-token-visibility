@@ -195,6 +195,31 @@ debugViewer.render();
 debugViewer.destroy();
 
 
+// All at once
+calcPoints = new PointsPercentVisibleCalculator()
+calcWebGL2 = new PercentVisibleCalculatorWebGL2()
+calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
+calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
+
+await calcPoints.initialize()
+await calcWebGL2.initialize()
+await calcWebGPU.initialize()
+await calcWebGPUAsync.initialize()
+
+console.table({
+  calcPoints: calcPoints.percentVisible(viewer, target),
+  calcWebGL2: calcWebGL2.percentVisible(viewer, target),
+  calcWebGPU: calcWebGPU.percentVisible(viewer, target),
+  calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
+  async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
+  async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
+  async_calcWebGPU: await calcWebGPU.percentVisibleAsync(viewer, target),
+  async_calcWebGPUAsync: await calcWebGPUAsync.percentVisibleAsync(viewer, target),
+})
+
+
+
+
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn
 
