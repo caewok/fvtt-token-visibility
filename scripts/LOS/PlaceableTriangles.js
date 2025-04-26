@@ -371,11 +371,11 @@ function pointFromVertices(i, vertices, indices, outPoint) {
 }
 
 function fromVertices(vertices, indices) {
-    // const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
     indices ??= Array.fromRange(Math.floor(vertices.length / 3));
     if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
-    // const tris = new Array(Math.floor(indices.length / 3));
+    const tris = new Array(Math.floor(indices.length / 3));
     for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
       const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
       const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
@@ -399,10 +399,10 @@ export class AbstractPolygonTriangles {
   static geom;
 
   /** @type {Triangle[]} */
-  static #prototypeTriangles;
+  static _prototypeTriangles;
 
   static get prototypeTriangles() {
-    return (AbstractPolygonTriangles.#prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices));
+    return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices));
   }
 
   /** @type {class} */
@@ -417,8 +417,6 @@ export class AbstractPolygonTriangles {
     this._instanceHandler.initializePlaceables();
     return this._instanceHandler;
   }
-
-
 
   static trianglesForPlaceable(placeable) {
     const idx = this.instanceHandler.instanceIndexFromId.get(placeable.id);
@@ -493,6 +491,9 @@ export class WallTriangles extends AbstractPolygonTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryWallDesc({ directional: false });
 
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
+
   /** @type {class} */
   static instanceHandlerClass = WallInstanceHandler;
 
@@ -524,11 +525,18 @@ export class WallTriangles extends AbstractPolygonTriangles {
 export class DirectionalWallTriangles extends WallTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryWallDesc({ directional: true });
+
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
+
 }
 
 export class TileTriangles extends AbstractPolygonTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryHorizontalPlaneDesc();
+
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
 
   /** @type {class} */
   static instanceHandlerClass = TileInstanceHandler;
@@ -546,6 +554,9 @@ export class TileTriangles extends AbstractPolygonTriangles {
 export class TokenTriangles extends AbstractPolygonTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryCubeDesc();
+
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
 
   /** @type {class} */
   static instanceHandlerClass = TokenInstanceHandler;
@@ -590,12 +601,8 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
   /** @type {class} */
   static instanceHandlerClass = null;
 
-  #geom;
-
-  // This override would not work if defined in the constructor.
-  // Would then need to delete the parent geom field.
-  // See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa
-  static get geom() { return (Grid3dTriangles.#geom ??= this.buildGridGeom()); }
+  /** @type {Triangle[]} */
+  static prototypeTriangles;
 
   static buildGridGeom() {
     // TODO: Hex grids
@@ -607,6 +614,7 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
   }
 
   static trianglesForGridShape() {
+    if ( !this.prototypeTriangles ) this.buildGridGeom();
     return this.prototypeTriangles.map(tri => tri.clone());
   }
 }
