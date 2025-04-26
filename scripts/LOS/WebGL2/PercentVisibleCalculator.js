@@ -642,12 +642,8 @@ export class Area3dWebGL2VisibleCalculator extends PercentVisibleCalculatorAbstr
 }
 
 export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAbstract {
-  /**
-   * Vector representing the up position on the canvas.
-   * Used to construct the token camera and view matrices.
-   * @type {Point3d}
-   */
-  static get upVector() { return new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1); };
+  /** @type {Camera} */
+  camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
 
   /**
    * Scaling factor used with Clipper
@@ -705,6 +701,10 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     this.target = target;
     this.viewpoint = viewerLocation;
     this.targetLocation = targetLocation;
+
+    this.camera.cameraPosition = this.viewpoint;
+    this.camera.targetPosition = this.viewerLOS.targetCenter;
+    this.camera.setTargetTokenFrustrum(this.viewerLOS.target);
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
@@ -766,7 +766,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor });
     const blockingTerrainPaths = this._combineTerrainPaths(blockingTerrainPolys);
     let blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor });
-    if ( blockingTerrainPaths && Math.abs(blockingTerrainPaths.area) > 1 ) {
+    if ( blockingTerrainPaths && !blockingTerrainPaths.area.almostEqual(0) ) {
       blockingPaths = blockingPaths.add(blockingTerrainPaths).combine();
     }
 
@@ -815,87 +815,48 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
 
     // Construct polygons representing the perspective view of the target and blocking objects.
-    const lookAtM = this.targetLookAtMatrix;
-    const targetLookAtTris = this._lookAtObject(this.target, lookAtM);
-    const multiplier = this.targetMultiplier = this._calculateTargetSizeMultiplier(targetLookAtTris);
-
-    const targetPolys = this._targetPolys = targetLookAtTris
-      .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    const targetPolys = this._lookAtObjectWithPerspective(this.viewerLOS.target, lookAtM, perspectiveM);
 
     const blockingPolys = this._blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
-      this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
+      this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
 
     const blockingTerrainPolys = this._blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
-       this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
+       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
 
     return { targetPolys, blockingPolys, blockingTerrainPolys };
   }
 
-  get targetLookAtMatrix() {
-    return CONFIG.GeometryLib.MatrixFlat.lookAt(
-      this.viewpoint,
-      this.targetLocation,
-      this.constructor.upVector
-    ).Minv;
-  }
-
-  targetMultiplier = 1;
-
-  _calculateTargetSizeMultiplier(targetLookAtTriangles) {
-    let maxZ = Number.NEGATIVE_INFINITY;
-    let maxXY = Number.NEGATIVE_INFINITY;
-    targetLookAtTriangles.forEach(tri => {
-      maxZ = Math.max(
-        maxZ,
-        Math.abs(tri.a.z),
-        Math.abs(tri.b.z),
-        Math.abs(tri.c.z)
-      );
-      maxXY = Math.max(
-        Math.abs(tri.a.x),
-        Math.abs(tri.b.x),
-        Math.abs(tri.c.x),
-        Math.abs(tri.a.y),
-        Math.abs(tri.b.y),
-        Math.abs(tri.c.y),
-      );
-    });
-    // xy / z = f
-    // 100 = f * m
-    this.targetMultiplier = (maxZ * 100) / maxXY;
-    return this.targetMultiplier;
-  }
-
   _lookAtObject(object, lookAtM) {
-    return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
-      .map(tri => tri.transform(lookAtM));
+    return this._filterPlaceableTrianglesByViewpoint(object)
+      .map(tri => tri.transform(lookAtM).toPolygon());
   }
 
-  _lookAtObjectWithPerspective(object, lookAtM, multiplier = 1) {
-    return this._lookAtObject(object, lookAtM)
-      .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
+  _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
+    return this._filterPlaceableTrianglesByViewpoint(object)
+      .map(tri => tri
+        .transform(lookAtM)
+        .transform(perspectiveM)
+        .toPolygon());
   }
 
   /** @type {AbstractPolygonTriangles[]} */
   static get grid3dShape() { return Grid3dTriangles.trianglesForGridShape(); }
 
-
   /**
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
-   _gridSquareArea(lookAtM) {
-     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM);
+  _gridSquareArea(lookAtM, perspectiveM) {
+     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
      const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();
      return gridPaths.area;
   }
 
-  _gridPolygons(lookAtM) {
-     lookAtM ??= this.targetLookAtMatrix;
+  _gridPolygons(lookAtM, perspectiveM) {
      const target = this.viewerLOS.target;
-     const multiplier = this.targetMultiplier;
-
      const { x, y } = target.center;
      const z = target.bottomZ + (target.topZ - target.bottomZ);
      const gridTris = Grid3dTriangles.trianglesForGridShape();
@@ -905,7 +866,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
        .map(tri => tri
          .transform(translateM)
          .transform(lookAtM)
-         .perspectiveTransform(multiplier)
+         .transform(perspectiveM)
          .toPolygon());
   }
 

@@ -39,12 +39,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     this.camera.cameraPosition = this.viewpoint;
     this.camera.targetPosition = this.viewerLOS.targetCenter;
     return this.camera.lookAtMatrix;
-
-//     return CONFIG.GeometryLib.MatrixFlat.lookAt(
-//       this.viewpoint,
-//       this.viewerLOS.targetCenter,
-//       this.constructor.upVector
-//     ).Minv;
   }
 
   get targetPerspectiveMatrix() {
@@ -60,6 +54,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    */
   _percentVisible() {
     let { targetArea, obscuredArea } = this._obscuredArea();
+    // console.debug({ targetArea, obscuredArea });
     if ( this.viewerLOS.config.largeTarget ) targetArea = Math.min(this._gridSquareArea() || 100_000, targetArea);
 
     // Round the percent seen so that near-zero areas are 0.
@@ -134,7 +129,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor });
     const blockingTerrainPaths = this._combineTerrainPaths(blockingTerrainPolys);
     let blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor });
-    if ( Math.abs(blockingTerrainPaths.area) > 1 ) {
+    if ( blockingTerrainPaths && !blockingTerrainPaths.area.almostEqual(0) ) {
       blockingPaths = blockingPaths.add(blockingTerrainPaths).combine();
     }
 
@@ -192,18 +187,15 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
-   _gridSquareArea(lookAtM) {
-     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM);
+   _gridSquareArea(lookAt, perspectiveMM) {
+     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
      const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();
      return gridPaths.area;
   }
 
-  _gridPolygons(lookAtM) {
-     lookAtM ??= this.targetLookAtMatrix;
+  _gridPolygons(lookAtM, perspectiveM) {
      const target = this.viewerLOS.target;
-     const multiplier = this.targetMultiplier;
-
      const { x, y } = target.center;
      const z = target.bottomZ + (target.topZ - target.bottomZ);
      const gridTris = Grid3dTriangles.trianglesForGridShape();
@@ -213,7 +205,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
        .map(tri => tri
          .transform(translateM)
          .transform(lookAtM)
-         .perspectiveTransform(multiplier)
+         .transform(perspectiveM)
          .toPolygon());
   }
 
