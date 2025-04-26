@@ -63,6 +63,7 @@ export class WallPIXIHandler {
     this.constructor.initializeShader();
     this.constructor.initializeMesh();
     this.instanceHandler = new WallInstanceHandler();
+    this.instanceHandler.initializePlaceables();
   }
 
   static initializeGeometry() {
@@ -109,9 +110,9 @@ export class WallPIXIHandler {
     // TODO: Can we store the model matrix by linking the uniform to the instance matrix?
     // If so, can then just call uniform.update as needed.
     const h = this.instanceHandler;
-    this.shader.uniforms.uModelMatrix = h.matrices[h.instanceIndexFromId(this.wall.id)];
-    this.shader.uniforms.perspectiveM = perspectiveM;
-    this.shader.uniforms.lookAtM = lookAtM;
+    this.shader.uniforms.uModelMatrix = h.matrices[h.instanceIndexFromId.get(this.wall.id)];
+    this.shader.uniforms.perspectiveM = perspectiveM.arr;
+    this.shader.uniforms.lookAtM = lookAtM.arr;
     this.shader.uniformGroup.update();
   }
 
@@ -190,13 +191,27 @@ export class TilePIXIHandler {
     this.constructor.initializeShader();
     this.constructor.initializeMesh();
     this.instanceHandler = new TileInstanceHandler();
+    this.instanceHandler.initializePlaceables();
   }
 
   static initializeGeometry() {
-    this.geom ??= new GeometryHorizontalPlaneDesc();
+    this.geom ??= new GeometryHorizontalPlaneDesc({ addUVs: true });
     if ( !this.geomPIXI || this.geomPIXI.destroyed ) {
       this.geomPIXI = new PIXI.Geometry();
-      this.geomPIXI.addAttribute("aVertex", this.geom.vertices);
+
+      // Split out the UVs from the vertices.
+      // TODO: Handle this by calling GeometryHorizontalPlaneDesc twice.
+      const vertices = new Float32Array(this.geom.vertices.length / 5 * 3);
+      const uvs = new Float32Array(this.geom.vertices.length / 5 * 2);
+      for ( let i = 0, j = 3, k = 0, l = 0, iMax = this.geom.vertices.length; i < iMax; i += 5, j += 5 ) {
+        vertices[k++] = this.geom.vertices[i];
+        vertices[k++] = this.geom.vertices[i+1];
+        vertices[k++] = this.geom.vertices[i+2];
+        uvs[l++] = this.geom.vertices[j];
+        uvs[l++] = this.geom.vertices[j+1];
+      }
+      this.geomPIXI.addAttribute("aVertex", vertices);
+      this.geomPIXI.addAttribute("aTextureCoord", uvs, 2);
       this.geomPIXI.addIndex(this.geom.indices);
     }
   }
@@ -214,12 +229,14 @@ export class TilePIXIHandler {
   get shader() { return this.constructor.shader; }
 
   get mesh() { return this.constructor.mesh; }
+
+  lookAtPerspective(lookAtM, perspectiveM) {
     // TODO: Can we store the model matrix by linking the uniform to the instance matrix?
     // If so, can then just call uniform.update as needed.
     const h = this.instanceHandler;
-    this.shader.uniforms.uModelMatrix = h.matrices[h.instanceIndexFromId(this.tile.id)];
-    this.shader.uniforms.perspectiveM = perspectiveM;
-    this.shader.uniforms.lookAtM = lookAtM;
+    this.shader.uniforms.uModelMatrix = h.matrices[h.instanceIndexFromId.get(this.tile.id)];
+    this.shader.uniforms.perspectiveM = perspectiveM.arr;
+    this.shader.uniforms.lookAtM = lookAtM.arr;
     this.shader.uTileTexture = this.tile.texture.baseTexture;
     this.shader.uniformGroup.update();
   }
@@ -304,6 +321,7 @@ export class TokenPIXIHandler {
     this.constructor.initializeShader();
     this.constructor.initializeMesh();
     this.instanceHandler = new TokenInstanceHandler();
+    this.instanceHandler.initializePlaceables();
   }
 
   static initializeGeometry() {
@@ -357,13 +375,13 @@ export class TokenPIXIHandler {
          || this.token.document.width > 1));
   }
 
-  lookAtPerspective(lookAtM, perspectiveM,, isTarget = false) {
+  lookAtPerspective(lookAtM, perspectiveM, isTarget = false) {
     // TODO: Can we store the model matrix by linking the uniform to the instance matrix?
     // If so, can then just call uniform.update as needed.
     const h = this.instanceHandler;
-    this.shader.uniforms.uModelMatrix = h.matrices[h.instanceIndexFromId(this.token.id)];
-    this.shader.uniforms.perspectiveM = perspectiveM;
-    this.shader.uniforms.lookAtM = lookAtM;
+    this.shader.uniforms.uModelMatrix = h.matrices[h.instanceIndexFromId.get(this.token.id)];
+    this.shader.uniforms.perspectiveM = perspectiveM.arr;
+    this.shader.uniforms.lookAtM = lookAtM.arr;
     if ( isTarget ) {
       this.shader.uniforms.uColor[0] = 1;
       this.shader.uniforms.uColor[2] = 0;

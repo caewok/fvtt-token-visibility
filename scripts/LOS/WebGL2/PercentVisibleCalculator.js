@@ -24,6 +24,9 @@ import { Placeable3dShader, Tile3dShader } from "../Placeable3dShader.js";
 import { sumRedPixels, sumRedObstaclesPixels } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 
+import { MODULE_ID } from "../../const.js";
+import { Camera } from "../WebGPU/Camera.js";
+
 const RADIANS_90 = Math.toRadians(90);
 
 /* Percent visible calculator
@@ -628,6 +631,214 @@ export class Area3dWebGL2VisibleCalculator extends PercentVisibleCalculatorAbstr
   }
 
 }
+
+export class Area3dPIXIVisibleCalculator extends PercentVisibleCalculatorAbstract {
+  /** @type {number} */
+  static WIDTH = 128;
+
+  /** @type {number} */
+  static HEIGHT = 128;
+
+  /**
+   * Sets configuration to the current settings.
+   * @param {ViewpointConfig} [cfg]
+   * @returns {ViewpointConfig}
+   */
+  initializeConfig(cfg = {}) {
+    // Configs specific to the Points algorithm.
+    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+    cfg.useLitTargetShape ??= true;
+
+    // Blocking canvas objects.
+    cfg.blocking ??= {};
+    cfg.blocking.walls ??= true;
+    cfg.blocking.tiles ??= true;
+
+    // Blocking tokens.
+    cfg.blocking.tokens ??= {};
+    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+
+    return cfg;
+  }
+
+  /** @type {PIXI.RenderTexture} */
+  #renderTexture;
+
+  get renderTexture() {
+    if ( !this.#renderTexture || this.#renderTexture.destroyed ) {
+      this.#renderTexture = PIXI.RenderTexture.create(this.constructor.renderTextureConfiguration);
+      this.#renderTexture.framebuffer.enableDepth();
+    }
+    return this.#renderTexture;
+  }
+
+  static renderTextureConfiguration = {
+    resolution: 1,
+    scaleMode: PIXI.SCALE_MODES.NEAREST,
+    multisample: PIXI.MSAA_QUALITY.NONE,
+    alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA,
+    width: this.WIDTH,
+    height: this.HEIGHT,
+  };
+
+  camera = new Camera({ glType: "webGL2" });
+
+  #renderTarget(renderer, renderTexture, clear = true) {
+    const isTarget = true;
+    const ID = "atvPIXIHandler";
+    const h = this.target[MODULE_ID][ID];
+    const { perspectiveMatrix, lookAtMatrix } = this.camera;
+    h.lookAtPerspective(perspectiveMatrix, lookAtMatrix, isTarget);
+    renderer.render(h.mesh, { renderTexture, clear });
+  }
+
+  /**
+   * Render the opaque blocking walls and token shapes to the render texture.
+   * @param {PIXI.Renderer} renderer
+   * @param {PIXI.RenderTexture} renderTexture
+   * @param {PIXI.Shader[]} shaders
+   */
+  #renderOpaqueObstacles(renderer, renderTexture) {
+    // Walls/Tokens
+    const blockingObjects = this.blockingObjects;
+    const nTokens = blockingObjects.tokens.size;
+    const nWalls = blockingObjects.walls.size;
+    if ( !(nTokens || nWalls) ) return;
+
+    const ID = "atvPIXIHandler";
+    const { perspectiveMatrix, lookAtMatrix } = this.camera;
+    const isTerrain = false;
+    for ( const wall of blockingObjects.walls ) {
+      const h = wall[MODULE_ID][ID];
+      h.lookAtPerspective(perspectiveMatrix, lookAtMatrix, isTerrain);
+      renderer.render(h.mesh, { renderTexture, clear: false }); // Render sequentially so mesh can be reused.
+    }
+
+    const isTarget = false;
+    for ( const token of blockingObjects.tokens ) {
+      const h = token[MODULE_ID][ID];
+      h.lookAtPerspective(perspectiveMatrix, lookAtMatrix, isTarget);
+      renderer.render(h.mesh, { renderTexture, clear: false }); // Render sequentially so mesh can be reused.
+    }
+  }
+
+  /**
+   * Render the obstacles with transparency: tiles and terrain walls.
+   * So that transparency works with depth, render furthest to closest from the viewer.
+   * @param {PIXI.Renderer} renderer
+   * @param {PIXI.RenderTexture} renderTexture
+   * @param {PIXI.Shader[]} shaders
+   */
+  #renderTransparentObstacles(renderer, renderTexture) {
+    const ID = "atvPIXIHandler";
+    let blockingObjects = this.blockingObjects;
+    const nTerrainWalls = blockingObjects.terrainWalls.size;
+    const nTiles = blockingObjects.tiles.size;
+    if ( !(nTerrainWalls || nTiles) ) return;
+
+    // Build mesh from each obstacle and
+    // measure distance along ray from viewer point to target center.
+    const toSort = [];
+    const rayDir = this.targetLocation.subtract(this.viewpoint);
+    const isTerrain = true;
+    for ( const terrainWall of blockingObjects.terrainWalls ) {
+      const plane = CONFIG.GeometryLib.threeD.Plane.fromWall(terrainWall);
+      const ix = plane.rayIntersection(this.viewpoint, rayDir);
+      if ( ix <= 0 ) continue;
+      toSort.push({ ix, h: terrainWall[MODULE_ID][ID] });
+    }
+
+    for ( const tile of blockingObjects.tiles ) {
+      const plane = new CONFIG.GeometryLib.threeD.Plane(new CONFIG.GeometryLib.threeD.Point3d(0, 0, tile.elevationZ))
+      const ix = plane.rayIntersection(this.viewpoint, rayDir);
+      if ( ix <= 0 ) continue;
+      toSort.push({ ix, h: tile[MODULE_ID][ID] });
+    }
+
+    // Sort and render each in turn
+    toSort.sort((a, b) => b.ix - a.ix);
+    const { perspectiveMatrix, lookAtMatrix } = this.camera;
+    for ( const obj of toSort ) {
+      obj.h.lookAtPerspective(perspectiveMatrix, lookAtMatrix, isTerrain);
+      renderer.render(obj.h.mesh, { renderTexture, clear: false });
+    }
+  }
+
+  async initialize() {
+    this.config = this.initializeConfig();
+  }
+
+  /**
+   * Do any preparatory calculations for determining the percent visible.
+   * @param {Token} viewer                  Token representing the camera/sight
+   * @param {Token} target                  What the viewer is looking at
+   * @param {Point3d} viewerLocation        Where the camera is located
+   * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
+   * @override
+   */
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    this.viewer = viewer;
+    this.target = target;
+    this.viewpoint = viewerLocation;
+    this.targetLocation = targetLocation;
+    this.camera.cameraPosition = viewerLocation;
+    this.camera.targetPosition = targetLocation;
+    this.camera.setTargetTokenFrustrum(target);
+
+    this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
+      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+
+    const { renderTexture, shaders } = this;
+    const renderer = canvas.app.renderer;
+    if ( this.useLargeTarget ) {
+      const gridCubeGeometry = new Grid3dGeometry(target);
+      gridCubeGeometry.updateObjectPoints(); // Necessary if just created?
+      gridCubeGeometry.updateVertices();     // Necessary if just created?
+
+      const gridCubeMesh = Area3dWebGL2Viewpoint.buildMesh(this.gridCubeGeometry, shaders.target);
+      renderer.render(gridCubeMesh, { renderTexture, clear: true });
+      this.gridCubeCache = renderer.extract._rawPixels(renderTexture);
+    }
+
+    // Build target mesh to measure the target viewable area.
+    // TODO: This will always calculate the full area, even if a wall intersects the target.
+    this.#renderTarget(renderer, renderTexture);
+    this.targetCache = canvas.app.renderer.extract._rawPixels(renderTexture);
+
+    // Render obstacles. Render opaque first.
+    this.#renderOpaqueObstacles(renderer, renderTexture);
+    this.#renderTransparentObstacles(renderer, renderTexture);
+
+    // Calculate target area remaining after obstacles.
+    this.obstacleCache = renderer.extract._rawPixels(renderTexture);
+  }
+
+  /**
+   * Determine the percentage red pixels for the current view.
+   * @returns {number}
+   * @override
+   */
+  _percentRedPixels() {
+    const sumGridCube = (this.useLargeTarget ? sumRedPixels(this.gridCubeCache) : 0) || Number.POSITIVE_INFINITY;
+    const sumTarget = sumRedPixels(this.targetCache);
+    const obstacleSum = this.blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
+    const sumWithObstacles = obstacleSum(this.obstacleCache);
+    const denom = Math.min(sumGridCube, sumTarget);
+    return sumWithObstacles / denom;
+  }
+
+  destroy() {
+    if ( this.#renderTexture ) this.#renderTexture = this.#renderTexture.destroy();
+  }
+
+}
+
 
 
 /**

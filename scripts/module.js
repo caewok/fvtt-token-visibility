@@ -84,6 +84,7 @@ import * as twgl from "./LOS/WebGL2/twgl.js";
 import {
   PointsPercentVisibleCalculator,
   Area3dWebGL2VisibleCalculator,
+  Area3dPIXIVisibleCalculator,
   PercentVisibleCalculatorWebGL2,
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
@@ -227,6 +228,7 @@ Hooks.once("init", function() {
       DebugVisibilityViewerArea3dPIXI,
       PointsPercentVisibleCalculator,
       Area3dWebGL2VisibleCalculator,
+      Area3dPIXIVisibleCalculator,
     },
 
     glmatrix: {
