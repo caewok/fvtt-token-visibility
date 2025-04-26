@@ -1,6 +1,5 @@
 /* globals
-CONFIG,
-PIXI
+CONFIG
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -8,24 +7,18 @@ PIXI
 // Base folder
 
 // LOS folder
-import { minMaxPolygonCoordinates } from "./util.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { Grid3dTriangles  } from "./PlaceableTriangles.js";
+
+import  { Camera } from "./WebGPU/Camera.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
 import { ClipperPaths } from "../geometry/ClipperPaths.js";
 
 export class Area3dGeometricViewpoint extends AbstractViewpoint {
-  /** @type {Shadow[]} */
-  wallShadows = [];
-
-  /**
-   * Vector representing the up position on the canvas.
-   * Used to construct the token camera and view matrices.
-   * @type {Point3d}
-   */
-  static get upVector() { return new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1); };
+  /** @type {Camera} */
+  camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
 
   /**
    * Scaling factor used with Clipper
@@ -41,12 +34,24 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
   // ----- NOTE: Visibility testing ----- //
 
+  // TODO: Change lookAt and perspective when changing viewer or target
   get targetLookAtMatrix() {
-    return CONFIG.GeometryLib.MatrixFlat.lookAt(
-      this.viewpoint,
-      this.viewerLOS.targetCenter,
-      this.constructor.upVector
-    ).Minv;
+    this.camera.cameraPosition = this.viewpoint;
+    this.camera.targetPosition = this.viewerLOS.targetCenter;
+    return this.camera.lookAtMatrix;
+
+//     return CONFIG.GeometryLib.MatrixFlat.lookAt(
+//       this.viewpoint,
+//       this.viewerLOS.targetCenter,
+//       this.constructor.upVector
+//     ).Minv;
+  }
+
+  get targetPerspectiveMatrix() {
+    this.camera.cameraPosition = this.viewpoint;
+    this.camera.targetPosition = this.viewerLOS.targetCenter;
+    this.camera.setTargetTokenFrustrum(this.viewerLOS.target);
+    return this.camera.perspectiveMatrix;
   }
 
   /**
@@ -82,17 +87,14 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
     // Construct polygons representing the perspective view of the target and blocking objects.
     const lookAtM = this.targetLookAtMatrix;
-    const targetLookAtTris = this._lookAtObject(this.viewerLOS.target, lookAtM);
-    const multiplier = this.targetMultiplier = this._calculateTargetSizeMultiplier(targetLookAtTris);
-
-    const targetPolys = this._targetPolys = targetLookAtTris
-      .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
+    const perspectiveM = this.targetPerspectiveMatrix;
+    const targetPolys = this._lookAtObjectWithPerspective(this.viewerLOS.target, lookAtM, perspectiveM);
 
     const blockingPolys = this._blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
-      this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
+      this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
 
     const blockingTerrainPolys = this._blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
-       this._lookAtObjectWithPerspective(obj, lookAtM, multiplier));
+       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
 
     return { targetPolys, blockingPolys, blockingTerrainPolys };
   }
@@ -162,41 +164,17 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     return blockingTerrainPaths.combine();
   }
 
-  targetMultiplier = 1;
-
-  _calculateTargetSizeMultiplier(targetLookAtTriangles) {
-    let maxZ = Number.NEGATIVE_INFINITY;
-    let maxXY = Number.NEGATIVE_INFINITY;
-    targetLookAtTriangles.forEach(tri => {
-      maxZ = Math.max(
-        maxZ,
-        Math.abs(tri.a.z),
-        Math.abs(tri.b.z),
-        Math.abs(tri.c.z)
-      );
-      maxXY = Math.max(
-        Math.abs(tri.a.x),
-        Math.abs(tri.b.x),
-        Math.abs(tri.c.x),
-        Math.abs(tri.a.y),
-        Math.abs(tri.b.y),
-        Math.abs(tri.c.y),
-      );
-    });
-    // xy / z = f
-    // 100 = f * m
-    this.targetMultiplier = (maxZ * 100) / maxXY;
-    return this.targetMultiplier;
-  }
-
   _lookAtObject(object, lookAtM) {
     return this._filterPlaceableTrianglesByViewpoint(object)
-      .map(tri => tri.transform(lookAtM));
+      .map(tri => tri.transform(lookAtM).toPolygon());
   }
 
-  _lookAtObjectWithPerspective(object, lookAtM, multiplier = 1) {
-    return this._lookAtObject(object, lookAtM)
-      .map(tri => tri.perspectiveTransform(multiplier).toPolygon())
+  _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
+    return this._filterPlaceableTrianglesByViewpoint(object)
+      .map(tri => tri
+        .transform(lookAtM)
+        .transform(perspectiveM)
+        .toPolygon());
   }
 
 
@@ -252,33 +230,22 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(drawTool, _renderer) {
+  _draw3dDebug(drawTool, _renderer, _container, { width = 100, height = 100 } = {}) {
     // Recalculate the 3d objects.
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
 
+    // Draw the target in 3d, centered at 0,0.
     // Scale the target graphics to fit in the view window.
-    const { xMinMax, yMinMax } = minMaxPolygonCoordinates(this._targetPolys);
-    const maxCoord = 200;
-    const scale = Math.min(1,
-      maxCoord / xMinMax.max,
-      -maxCoord / xMinMax.min,
-      maxCoord / yMinMax.max,
-      -maxCoord / yMinMax.min
-    );
-    drawTool.g.scale = new PIXI.Point(scale, scale);
-
-    // TODO: Do the target polys need to be translated back to 0,0?
-    // Draw the target in 3d, centered on 0,0
-    targetPolys.forEach(poly => drawTool.shape(poly, { color: colors.orange, fill: colors.lightred, fillAlpha: 0.5 }));
+    targetPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.red, width: 2, fill: colors.lightred, fillAlpha: 0.5 }));
 
     // Draw the grid shape.
     if ( this.viewerLOS.config.largeTarget ) this._gridPolys.forEach(poly =>
-      drawTool.shape(poly, { color: colors.lightorange, fillAlpha: 0.4 }));
+      drawTool.shape(poly.scale(width, height), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
 
-    // Draw the detected objects in 3d, centered on 0,0
-    blockingPolys.forEach(poly => drawTool.shape(poly, { color: colors.blue, fill: colors.lightblue, fillAlpha: 0.5 }));
-    blockingTerrainPolys.forEach(poly => drawTool.shape(poly, { color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
+    // Draw the detected obstacles.
+    blockingPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
+    blockingTerrainPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
   }
 
 

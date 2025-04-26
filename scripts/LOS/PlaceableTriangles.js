@@ -152,6 +152,14 @@ export class Triangle {
     return tri;
   }
 
+  scale(multiplier = 1, tri) {
+    tri = this.clone(tri);
+    tri.a.multiplyScalar(multiplier, tri.a);
+    tri.b.multiplyScalar(multiplier, tri.b);
+    tri.c.multiplyScalar(multiplier, tri.c);
+    return tri;
+  }
+
   /**
    * View from a given position.
    * Transforms and clips the points, then applies perspective transform.
