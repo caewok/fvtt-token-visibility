@@ -62,10 +62,8 @@ Instance requires another 4 vec2 vertices + 4 vec2 uvs (+ 4 vec3 normals)
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("tokenvisibility").api
-WallTriangles = api.triangles.WallTriangles
 Plane = CONFIG.GeometryLib.threeD.Plane
 ClipperPaths = CONFIG.GeometryLib.ClipperPaths
-let { PolygonVerticalTriangles, Square2dTriangles, SquareVerticalTriangles, Triangle } = api.triangles
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn
 QBenchmarkLoopFnWithSleep = CONFIG.GeometryLib.bench.QBenchmarkLoopFnWithSleep
 extractPixels = CONFIG.GeometryLib.utils.extractPixels
@@ -101,6 +99,7 @@ let {
   PointsPercentVisibleCalculator,
   Area3dWebGL2VisibleCalculator,
   Area3dPIXIVisibleCalculator,
+  Area3dGeometricVisibleCalculator,
   // wgsl
 } = api.webgpu
 
@@ -111,7 +110,15 @@ let {
   DebugVisibilityViewerArea3dPIXI,
 } = api.webgl
 
-
+let {
+  Triangle,
+  ConstrainedTokenTriangles,
+  DirectionalWallTriangles,
+  Grid3dTriangles,
+  TileTriangles,
+  TokenTriangles,
+  WallTriangles,
+} = api.triangles
 
 
 device = await WebGPUDevice.getDevice()
@@ -147,6 +154,11 @@ calcPoints = new PointsPercentVisibleCalculator()
 await calcPoints.initialize()
 calcPoints.percentVisible(viewer, target)
 await calcPoints.percentVisibleAsync(viewer, target)
+
+calcGeometric = new Area3dGeometricVisibleCalculator()
+await calcGeometric.initialize()
+calcGeometric.percentVisible(viewer, target)
+await calcGeometric.percentVisibleAsync(viewer, target)
 
 calcArea3dWebGL2 = new Area3dWebGL2VisibleCalculator()
 await calcArea3dWebGL2.initialize()
@@ -197,10 +209,10 @@ debugViewer.render();
 debugViewer.destroy()
 
 debugViewer = new DebugVisibilityViewerArea3dPIXI();
-debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_GEOMETRIC
-debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL1
-debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL2
-debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_HYBRID
+debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC
+debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL1
+debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2
+debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID
 await debugViewer.initialize();
 debugViewer.render();
 debugViewer.destroy();
@@ -208,6 +220,7 @@ debugViewer.destroy();
 
 // All at once
 calcPoints = new PointsPercentVisibleCalculator()
+calcGeometric = new Area3dGeometricVisibleCalculator()
 calcArea3dWebGL2 = new Area3dWebGL2VisibleCalculator()
 calcArea3dPIXI = new Area3dPIXIVisibleCalculator()
 calcWebGL2 = new PercentVisibleCalculatorWebGL2()
@@ -215,6 +228,7 @@ calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
 calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
 
 await calcPoints.initialize()
+await calcGeometric.initialize()
 await calcArea3dWebGL2.initialize()
 await calcArea3dPIXI.initialize()
 await calcWebGL2.initialize()
@@ -223,6 +237,7 @@ await calcWebGPUAsync.initialize()
 
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
+  calcGeometric: calcGeometric.percentVisible(viewer, target),
   calcArea3dWebGL2: calcArea3dWebGL2.percentVisible(viewer, target),
   calcArea3dPIXI: calcArea3dPIXI.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
@@ -271,6 +286,7 @@ async function percentFnAsync(calc) {
 
 N = 1000
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcArea3dWebGL2, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcArea3dPIXI, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
@@ -282,17 +298,20 @@ await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcArea3dPIXI, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcArea3dWebGL2, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 
 
 N = 100
 await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
+await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
 await QBenchmarkLoopFn(N, percentFn, "calcArea3dWebGL2", calcArea3dWebGL2)
 await QBenchmarkLoopFn(N, percentFn, "calcArea3dPIXI", calcArea3dPIXI)
 await QBenchmarkLoopFn(N, percentFn, "WebGL", calcWebGL2)
 await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU)
 await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync)
 await QBenchmarkLoopFn(N, percentFnAsync, "async Points", calcPoints)
+await QBenchmarkLoopFn(N, percentFnAsync, "async calcGeometric", calcGeometric)
 await QBenchmarkLoopFn(N, percentFnAsync, "async calcArea3dWebGL2", calcArea3dWebGL2)
 await QBenchmarkLoopFn(N, percentFnAsync, "async calcArea3dPIXI", calcArea3dPIXI)
 await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)

@@ -130,18 +130,36 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     // Use Clipper to calculate area of the polygon shapes.
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor });
-    const blockingTerrainPaths = ClipperPaths.fromPolygons(blockingTerrainPolys, { scalingFactor });
-    const blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor });
-
-    // TODO: Combine terrain polygons with other blocking.
+    const blockingTerrainPaths = this._combineTerrainPaths(blockingTerrainPolys);
+    let blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor });
+    if ( Math.abs(blockingTerrainPaths.area) > 1 ) {
+      blockingPaths = blockingPaths.add(blockingTerrainPaths).combine();
+    }
 
     // Construct the obscured shape by taking the difference between the target polygons and
     // the blocking polygons.
-    const targetArea = targetPaths.area;
-    if ( targetArea < 0 || targetArea.almostEqual(0) ) return { targetArea, obscuredArea: 0 };
+    const targetArea = Math.abs(targetPaths.area);
+    if ( targetArea.almostEqual(0) ) return { targetArea, obscuredArea: 0 };
 
     const diff = blockingPaths.diffPaths(targetPaths); // TODO: Correct order?
-    return { targetArea, obscuredArea: diff.area };
+    return { targetArea, obscuredArea: Math.abs(diff.area) };
+  }
+
+  _combineTerrainPaths(blockingTerrainPolys) {
+    const scalingFactor = this.constructor.SCALING_FACTOR;
+    const blockingTerrainPaths = new ClipperPaths()
+
+    // The intersection of each two terrain polygons forms a blocking path.
+    for ( const poly1 of blockingTerrainPolys ) {
+      const path1 = ClipperPaths.fromPolygons([poly1], { scalingFactor });
+      for ( const poly2 of blockingTerrainPolys ) {
+        if ( poly1 === poly2 ) continue;
+        const newPath = path1.intersectPolygon(poly2);
+        if ( Math.abs(newPath.area) < 1 ) continue; // Skip very small intersections.
+        blockingTerrainPaths.add(newPath);
+      }
+    }
+    return blockingTerrainPaths.combine();
   }
 
   targetMultiplier = 1;

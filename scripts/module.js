@@ -85,6 +85,7 @@ import {
   PointsPercentVisibleCalculator,
   Area3dWebGL2VisibleCalculator,
   Area3dPIXIVisibleCalculator,
+  Area3dGeometricVisibleCalculator,
   PercentVisibleCalculatorWebGL2,
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
@@ -229,6 +230,7 @@ Hooks.once("init", function() {
       PointsPercentVisibleCalculator,
       Area3dWebGL2VisibleCalculator,
       Area3dPIXIVisibleCalculator,
+      Area3dGeometricVisibleCalculator,
     },
 
     glmatrix: {
