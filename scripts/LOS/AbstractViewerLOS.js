@@ -425,7 +425,7 @@ export class AbstractViewerLOS {
    */
   destroy() {
     this.#target = undefined;
-    this.viewer = undefined;
+    this.#viewer = undefined;
     this.viewpoints.forEach(vp => vp.destroy());
     this.viewpoints.length = 0;
   }
