@@ -10,7 +10,7 @@ PIXI,
 import { MODULE_ID } from "./const.js";
 
 import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
-
+import { WallPIXIHandler, TilePIXIHandler, TokenPIXIHandler } from "./LOS/PIXI/PlaceablePIXIHandler.js";
 
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
@@ -84,6 +84,7 @@ import * as twgl from "./LOS/WebGL2/twgl.js";
 import {
   PointsPercentVisibleCalculator,
   Area3dWebGL2VisibleCalculator,
+  Area3dPIXIVisibleCalculator,
   PercentVisibleCalculatorWebGL2,
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
@@ -227,6 +228,7 @@ Hooks.once("init", function() {
       DebugVisibilityViewerArea3dPIXI,
       PointsPercentVisibleCalculator,
       Area3dWebGL2VisibleCalculator,
+      Area3dPIXIVisibleCalculator,
     },
 
     glmatrix: {
@@ -295,6 +297,11 @@ Hooks.on("canvasReady", function() {
   WallGeometryHandler.registerPlaceables();
   TileGeometryHandler.registerPlaceables();
   TokenGeometryHandler.registerPlaceables();
+
+  canvas.tiles.placeables.forEach(tile => new TilePIXIHandler(tile));
+  canvas.tokens.placeables.forEach(token => new TokenPIXIHandler(token));
+  canvas.walls.placeables.forEach(wall => new WallPIXIHandler(wall));
+
 
 //   WallTriangles.registerPlaceableHooks();
 //   TileTriangles.registerPlaceableHooks();
