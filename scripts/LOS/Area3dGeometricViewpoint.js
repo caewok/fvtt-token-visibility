@@ -1,5 +1,6 @@
 /* globals
-CONFIG
+CONFIG,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -9,7 +10,7 @@ CONFIG
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { Grid3dTriangles  } from "./PlaceableTriangles.js";
-
+import { Point3d } from "../geometry/3d/Point3d.js";
 import  { Camera } from "./WebGPU/Camera.js";
 
 // Debug
@@ -18,7 +19,12 @@ import { ClipperPaths } from "../geometry/ClipperPaths.js";
 
 export class Area3dGeometricViewpoint extends AbstractViewpoint {
   /** @type {Camera} */
-  camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
+  camera = new Camera({
+    glType: "webGL2",
+    perspectiveType: "perspective",
+    up: new Point3d(0, 0, -1),
+    mirrorMDiag: new Point3d(1, 1, 1),
+  });
 
   /**
    * Scaling factor used with Clipper
@@ -168,8 +174,9 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     return this._filterPlaceableTrianglesByViewpoint(object)
       .map(tri => tri
         .transform(lookAtM)
-        .transform(perspectiveM)
-        .toPolygon());
+        ._clipPoints()
+        .map(pt => perspectiveM.multiplyPoint3d(pt, pt)))
+      .map(pts => new PIXI.Polygon(pts)); // PIXI.Polygon will drop the z values, which should all be ~ 1.
   }
 
 
@@ -187,7 +194,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
-   _gridSquareArea(lookAt, perspectiveMM) {
+   _gridSquareArea(lookAtM, perspectiveM) {
      const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
      const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();

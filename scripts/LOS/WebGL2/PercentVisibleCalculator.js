@@ -268,7 +268,7 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
   _testPointToPoints(targetPoints, viewpoint, visibleTargetShape) {
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
-    // const debugDraw = this.viewerLOS.config.debugDraw;
+    // const debugDraw = this.config.debugDraw;
     let debugPoints = [];
     if ( this.config.debug ) this.debugPoints.push(debugPoints);
     for ( let i = 0; i < ln; i += 1 ) {
@@ -702,9 +702,9 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     this.viewpoint = viewerLocation;
     this.targetLocation = targetLocation;
 
-    this.camera.cameraPosition = this.viewpoint;
-    this.camera.targetPosition = this.viewerLOS.targetCenter;
-    this.camera.setTargetTokenFrustrum(this.viewerLOS.target);
+    this.camera.cameraPosition = viewerLocation;
+    this.camera.targetPosition = targetLocation;
+    this.camera.setTargetTokenFrustrum(target);
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
@@ -817,7 +817,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     // Construct polygons representing the perspective view of the target and blocking objects.
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    const targetPolys = this._lookAtObjectWithPerspective(this.viewerLOS.target, lookAtM, perspectiveM);
+    const targetPolys = this._lookAtObjectWithPerspective(this.target, lookAtM, perspectiveM);
 
     const blockingPolys = this._blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
@@ -829,12 +829,12 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
   }
 
   _lookAtObject(object, lookAtM) {
-    return this._filterPlaceableTrianglesByViewpoint(object)
+    return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
       .map(tri => tri.transform(lookAtM).toPolygon());
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
-    return this._filterPlaceableTrianglesByViewpoint(object)
+    return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
       .map(tri => tri
         .transform(lookAtM)
         .transform(perspectiveM)
@@ -856,7 +856,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
   }
 
   _gridPolygons(lookAtM, perspectiveM) {
-     const target = this.viewerLOS.target;
+     const target = this.target;
      const { x, y } = target.center;
      const z = target.bottomZ + (target.topZ - target.bottomZ);
      const gridTris = Grid3dTriangles.trianglesForGridShape();
@@ -897,7 +897,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     targetPolys.forEach(poly => drawTool.shape(poly, { color: colors.orange, fill: colors.lightred, fillAlpha: 0.5 }));
 
     // Draw the grid shape.
-    if ( this.viewerLOS.config.largeTarget ) this._gridPolys.forEach(poly =>
+    if ( this.config.largeTarget ) this._gridPolys.forEach(poly =>
       drawTool.shape(poly, { color: colors.lightorange, fillAlpha: 0.4 }));
 
     // Draw the detected objects in 3d, centered on 0,0

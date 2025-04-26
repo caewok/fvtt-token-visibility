@@ -11,6 +11,8 @@ export class Camera {
 
   static UP = new Point3d(0, 0, 1); // Cannot use CONFIG.GeometryLib.threeD.Point3d in static defs.
 
+  static MIRRORM_DIAG = new Point3d(-1, 1, 1);
+
   /**
    * @typedef {object} CameraStruct
    * @param {mat4x4f} perspectiveM          The perspective matrix
@@ -79,13 +81,21 @@ export class Camera {
    * @type {Point3d} [opts.glType="webGPU"]     Whether the NDC Z range is [-1, 1] ("webGL") or [0, 1] ("webGPU").
    * @type {string} [opts.perspectiveType="perspective"]      Type of perspective: "orthogonal" or "perspective"
    */
-  constructor({ cameraPosition, targetPosition, glType = "webGPU", perspectiveType = "perspective" } = {}) {
+  constructor({
+    cameraPosition,
+    targetPosition,
+    glType = "webGPU",
+    perspectiveType = "perspective",
+    up = this.constructor.UP,
+    mirrorMDiag = this.constructor.MIRRORM_DIAG } = {}) {
     if ( cameraPosition ) this.cameraPosition = cameraPosition;
     if ( targetPosition ) this.targetPosition = targetPosition;
-    this.UP.copyFrom(this.constructor.UP);
+    this.UP.copyFrom(up);
 
     // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
-    this.mirrorM.setIndex(0, 0, -1);
+    this.mirrorM.setIndex(0, 0, mirrorMDiag.x);
+    this.mirrorM.setIndex(1, 1, mirrorMDiag.y);
+    this.mirrorM.setIndex(2, 2, mirrorMDiag.z);
 
     const fnName = `${perspectiveType}${glType === "webGPU" ? "ZO" : ""}`;
     this.#perspectiveFn = CONFIG.GeometryLib.MatrixFloat32[fnName];
@@ -136,7 +146,7 @@ export class Camera {
 
     // zFar is the straight-line distance to the target.
     // Buffer by adding in half the target diagonal.
-    const targetDiag = Math.sqrt(Math.pow(targetWidth, 2) + Math.pow(targetHeight, 2))
+    // const targetDiag = Math.sqrt(Math.pow(targetWidth, 2) + Math.pow(targetHeight, 2))
     // const zFar = Point3d.distanceBetween(this.cameraPosition, this.targetPosition) + (targetDiag * 0.5);
     const zFar = Infinity;
     this.perspectiveParameters = { fov: halfAngle * 2, zFar };

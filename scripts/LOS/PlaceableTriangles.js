@@ -574,6 +574,22 @@ export class TokenTriangles extends AbstractPolygonTriangles {
     { createToken: "_onPlaceableCreation" },
   ];
 
+
+  /* Debugging
+  static get prototypeTriangles() {
+    // 12 triangles total, 36 indices.
+    // South facing (first 2 triangles)
+    // return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices.slice(3*0, 3*2)));
+
+    // Top facing (second to last 2 triangles)
+    // return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices.slice(3*8, 3*10)));
+
+    // Bottom facing (last 2 triangles)
+    return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices.slice(3*8, 3*10)));
+  }
+  */
+
+
   /**
    * On placeable creation hook, add an instance of this to the placeable.
    */
