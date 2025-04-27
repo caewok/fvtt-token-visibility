@@ -713,7 +713,7 @@ class PlaceableGeometryHandler {
   // If the object already has a geometry handler, that handler is returned
   constructor(object) {
     const existingHandler = object[GEOMETRY_ID];
-    if ( existingHandler ) return existingHandler;  // eslint-disable-line no-constructor-return
+    if ( existingHandler ) return existingHandler;
     this.object = object;
     object[GEOMETRY_ID] = this;
   }

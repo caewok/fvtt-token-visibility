@@ -100,6 +100,7 @@ let {
   Area3dWebGL2VisibleCalculator,
   Area3dPIXIVisibleCalculator,
   Area3dGeometricVisibleCalculator,
+  PlaceableInstanceHandler
   // wgsl
 } = api.webgpu
 
@@ -1065,6 +1066,9 @@ Now can write one texture for all:
 - Sum red if not 100% green and not 100% blue to get area of target w/ obstacles.
 
 */
+
+
+
 
 
 

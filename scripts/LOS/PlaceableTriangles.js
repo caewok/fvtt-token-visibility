@@ -17,6 +17,7 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./WebGPU/Geometr
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
+import * as MarchingSquares from "../marchingsquares-esm.js";
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|PlaceableTriangles|canvasReady`);
@@ -378,20 +379,20 @@ function pointFromVertices(i, vertices, indices, outPoint) {
   return outPoint;
 }
 
-function fromVertices(vertices, indices) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
-    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
-    if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
-    const tris = new Array(Math.floor(indices.length / 3));
-    for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
-      const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
-      const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
-      const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
-      tris[j] = Triangle.fromPoints(a, b, c);
-    }
-    return tris;
-  }
+// function fromVertices(vertices, indices) {
+//     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+//     if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+//     indices ??= Array.fromRange(Math.floor(vertices.length / 3));
+//     if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
+//     const tris = new Array(Math.floor(indices.length / 3));
+//     for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
+//       const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
+//       const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
+//       const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
+//       tris[j] = Triangle.fromPoints(a, b, c);
+//     }
+//     return tris;
+//   }
 
 
 const SENSE_TYPES = {};
@@ -556,6 +557,112 @@ export class TileTriangles extends AbstractPolygonTriangles {
 
   static registerExistingPlaceables() {
     canvas.tiles.placeables.forEach(tile => this._onPlaceableCreation(tile));
+  }
+
+  /**
+   * On placeable creation hook, also add isoband polygons representing solid areas of the tile.
+   */
+  static _onPlaceableCreation(tile) {
+    AbstractPolygonTriangles._onPlaceableCreation(tile);
+    const obj = tile[this.ID] ??= {};
+    obj.alphaThresholdPolygons = this.convertTileToIsoBands(tile);
+    obj.alphaThresholdTriangles = obj.alphaThresholdPolygons
+      ? this.polygonsToFaceTriangles(obj.alphaThresholdPolygons) : null;
+
+    const self = this;
+    Object.defineProperty(obj, "alphaTriangles", {
+      get() { return self.alphaTrianglesForPlaceable(tile); },
+      configurable: true,
+    });
+  }
+
+  /** @type {Triangle[]} */
+  _prototypeAlphaTriangles;
+
+  static polygonsToFaceTriangles(polys) {
+    // Convert the polygons to top and bottom faces.
+    // Then make these into triangles.
+    // Trickier than leaving as polygons but can dramatically cut down the number of polys
+    // for more complex shapes.
+    const tris = [];
+    for ( const poly of polys ) {
+      // Keep elevation 0.
+      const topFace = GeometryDesc.polygonTopBottomFaces(poly, { top: true, addUVs: false, addNormals: false });
+      const bottomFace = GeometryDesc.polygonTopBottomFaces(poly, { top: false, addUVs: false, addNormals: false });
+      tris.push(
+        ...Triangle.fromVertices(topFace.vertices, topFace.indices),
+        ...Triangle.fromVertices(bottomFace.vertices, bottomFace.indices)
+      );
+    }
+    return tris;
+  }
+
+  static convertTileToIsoBands(tile) {
+    // TODO: What about holes?
+
+    if ( !CONFIG[MODULE_ID].alphaThreshold
+      || !tile.evPixelCache ) return null;
+    const threshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
+    const pixels = tile.evPixelCache.pixels;
+
+    // Convert pixels to isobands.
+    const width = tile.evPixelCache.width
+    const height = tile.evPixelCache.height
+    const rowViews = new Array(height);
+    for ( let r = 0, start = 0, rMax = height; r < rMax; r += 1, start += width ) {
+      rowViews[r] = [...pixels.slice(start, start + width)];
+    }
+
+    let bands;
+    try {
+      bands = MarchingSquares.isoBands(rowViews, threshold, 256 - threshold);
+    } catch ( err ) {
+      console.error(err);
+      return [tile.evPixelCache.getThresholdLocalBoundingBox(CONFIG[MODULE_ID].alphaThreshold).toPolygon()];
+    }
+
+
+    /* Don't want to scale between 0 and 1 b/c using evPixelCache transform on the local coordinates.
+    // Create polygons scaled between 0 and 1, based on width and height.
+    const invWidth = 1 / width;
+    const invHeight = 1 / height;
+    const nPolys = lines.length;
+    const polys = new Array(nPolys);
+    for ( let i = 0; i < nPolys; i += 1 ) {
+      polys[i] = new PIXI.Polygon(bands[i].flatMap(pt => [pt[0] * invWidth, pt[1] * invHeight]))
+    }
+    */
+    const nPolys = bands.length;
+    const polys = new Array(nPolys);
+    for ( let i = 0; i < nPolys; i += 1 ) {
+      polys[i] = new PIXI.Polygon(bands[i].flatMap(pt => pt)); // TODO: Can we lose the flatMap?
+    }
+
+    // Use Clipper to clean the polygons.
+    const paths = CONFIG.GeometryLib.ClipperPaths.fromPolygons(polys, { scalingFactor: 100 });
+    return paths.clean().toPolygons();
+  }
+
+  static alphaTrianglesForPlaceable(tile) {
+    if ( !this.instanceHandler.instanceIndexFromId.has(tile.id) ) return [];
+
+    const obj = tile[MODULE_ID] ?? {};
+    if ( !obj.alphaThresholdTriangles || !tile.evPixelCache ) return this.trianglesForPlaceable(tile);
+
+    // Expand the canvas conversion matrix to 4x4.
+    // Last row of the 3x3 is the translation matrix, which should be moved to row 4.
+    const toCanvasM3x3 = tile.evPixelCache.toCanvasTransform;
+    const toCanvasM = CONFIG.GeometryLib.MatrixFlat.identity(4, 4);
+    toCanvasM.setElements((elem, r, c) => {
+      if ( r < 2 && c < 3 ) return toCanvasM3x3.arr[r][c];
+      if ( r === 3 && c < 2 ) return  toCanvasM3x3.arr[2][c];
+      return elem;
+    });
+
+    // Add elevation translation.
+    const elevationT = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, tile.elevationZ);
+    const M = toCanvasM.multiply4x4(elevationT);
+    return obj.alphaThresholdTriangles.map(tri => tri.transform(M));
   }
 }
 

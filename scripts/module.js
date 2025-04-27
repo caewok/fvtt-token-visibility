@@ -92,6 +92,9 @@ import {
 } from "./LOS/WebGL2/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync, DebugVisibilityViewerPoints, DebugVisibilityViewerArea3dPIXI } from "./LOS/WebGL2/DebugVisibilityViewer.js";
 
+import * as MarchingSquares from "./marchingsquares-esm.js";
+
+
 // Other self-executing hooks
 import "./changelog.js";
 import "./LOS/WebGPU/webgpu-map-sync.js";
@@ -238,6 +241,8 @@ Hooks.once("init", function() {
       quat, quat2,
       vec2, vec3, vec4
     },
+
+    MarchingSquares,
 
     PATCHER,
     Patcher, HookPatch, MethodPatch, LibWrapperPatch

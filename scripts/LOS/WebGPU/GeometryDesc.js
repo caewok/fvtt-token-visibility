@@ -361,77 +361,83 @@ export class GeometryDesc {
    * - @prop {Float32Array} vertices
    * - @prop {Uint16Array} indices
    */
-  static polygonTopBottomFaces(poly, { elevation = 0, top = true } = {}) {
-     if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
+  static polygonTopBottomFaces(poly, { elevation = 0, top = true, addUVs = true, addNormals = true } = {}) {
+    if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
 
-     // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
-     const flip = top;
+    // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
+    const flip = top;
 
-     /* Testing
-     poly = _token.constrainedTokenBorder
-     vs = PIXI.utils.earcut(poly.points)
-     pts = [...poly.iteratePoints({ close: false })]
-     tris = [];
-     for ( let i = 0; i < vs.length; i += 3 ) {
-       const a = pts[vs[i]];
-       const b = pts[vs[i+1]];
-       const c = pts[vs[i+2]];
-       Draw.connectPoints([a, b, c], { color: Draw.COLORS.red })
-       tris.push({a, b, c})
-     }
-     // Earcut appears to keep the counterclockwise order.
-     tris.map(tri => foundry.utils.orient2dFast(tri.a, tri.b, tri.c))
-     */
+    /* Testing
+    poly = _token.constrainedTokenBorder
+    vs = PIXI.utils.earcut(poly.points)
+    pts = [...poly.iteratePoints({ close: false })]
+    tris = [];
+    for ( let i = 0; i < vs.length; i += 3 ) {
+     const a = pts[vs[i]];
+     const b = pts[vs[i+1]];
+     const c = pts[vs[i+2]];
+     Draw.connectPoints([a, b, c], { color: Draw.COLORS.red })
+     tris.push({a, b, c})
+    }
+    // Earcut appears to keep the counterclockwise order.
+    tris.map(tri => foundry.utils.orient2dFast(tri.a, tri.b, tri.c))
+    */
 
-     // Earcut to determine indices. Then construct the vertices.
-     const numVertices = Math.floor(poly.points.length / 2);
-     const vertices = new Float32Array(numVertices * 8);
-     const indices = new Uint16Array(PIXI.utils.earcut(poly.points));
+    // Earcut to determine indices. Then construct the vertices.
+    const numVertices = Math.floor(poly.points.length / 2);
+    const nCoords = 3 + (2 * addUVs) + (3 * addNormals);
+    const vertices = new Float32Array(numVertices * nCoords);
+    const indices = new Uint16Array(PIXI.utils.earcut(poly.points));
 
-     // For Foundry's  coordinate system, indices are always CCW triangles.
-     // Flip to make CW if constructing the bottom face.
-     if ( flip ) {
-       for ( let i = 0, imax = indices.length; i < imax; i += 3 ) {
-         const v0 = indices[i];
-         const v2 = indices[i + 2];
-         indices[i] = v2;
-         indices[i + 2] = v0;
-       }
-     }
+    // For Foundry's  coordinate system, indices are always CCW triangles.
+    // Flip to make CW if constructing the bottom face.
+    if ( flip ) {
+      for ( let i = 0, imax = indices.length; i < imax; i += 3 ) {
+        const v0 = indices[i];
+        const v2 = indices[i + 2];
+        indices[i] = v2;
+        indices[i + 2] = v0;
+      }
+    }
 
-     // Set UVs to the coordinate within the bounding box.
-     const xMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 === 0))
-     const yMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 !== 0))
-     const width = xMinMax.max - xMinMax.min;
-     const height = yMinMax.max - yMinMax.min;
+    let u;
+    let v;
+    if ( addUVs ) {
+      // Set UVs to the coordinate within the bounding box.
+      const xMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 === 0))
+      const yMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 !== 0))
+      const width = xMinMax.max - xMinMax.min;
+      const height = yMinMax.max - yMinMax.min;
+      const uOrig = x => (x - xMinMax.min) / width;
+      const vOrig = y => (y - yMinMax.min) / height;
+      u = uOrig;
+      v = vOrig;
+      if ( flip ) {
+        u = x => 1 - uOrig(x);
+        v = y => 1 - vOrig(y);
+      }
+    }
+    const n = 1 * (-flip); // Flip is true: -1; flip is false: 1.
 
-     const uOrig = x => (x - xMinMax.min) / width;
-     const vOrig = y => (y - yMinMax.min) / height;
-     let u = uOrig;
-     let v = vOrig;
-     let n = 1;
-     if ( flip ) {
-       n = -1;
-       u = x => 1 - uOrig(x);
-       v = y => 1 - vOrig(y);
-     }
-     let i = 0;
-     for ( const pt of poly.iteratePoints({ closed: false }) ) {
-       // Position
-       vertices[i++] = pt.x;
-       vertices[i++] = pt.y;
-       vertices[i++] = elevation;
+    let i = 0;
+    for ( const pt of poly.iteratePoints({ closed: false }) ) {
+      // Position
+      vertices[i++] = pt.x;
+      vertices[i++] = pt.y;
+      vertices[i++] = elevation;
 
-       // Normal: 0, 0, 1 or -1
-       i++; i++;
-       vertices[i++] = n;
+      if ( addNormals ) {
+        // Normal: 0, 0, 1 or -1
+        i++; i++;
+        vertices[i++] = n;
+      }
+      if ( addUVs ) {
+        vertices[i++] = u(pt.x);
+        vertices[i++] = v(pt.y);
+      }
+    }
 
-       // UV
-       vertices[i++] = u(pt.x);
-       vertices[i++] = v(pt.y);
-     }
-
-     return { indices, vertices, numVertices };
+    return { indices, vertices, numVertices };
   }
 
   /**
