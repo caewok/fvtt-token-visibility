@@ -154,15 +154,19 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const blockingTerrainPaths = new ClipperPaths()
 
     // The intersection of each two terrain polygons forms a blocking path.
-    for ( const poly1 of blockingTerrainPolys ) {
-      const path1 = ClipperPaths.fromPolygons([poly1], { scalingFactor });
-      for ( const poly2 of blockingTerrainPolys ) {
-        if ( poly1 === poly2 ) continue;
-        const newPath = path1.intersectPolygon(poly2);
-        if ( Math.abs(newPath.area) < 1 ) continue; // Skip very small intersections.
+    // Only need to test each combination once.
+    const nBlockingPolys = blockingTerrainPolys.length;
+    if ( nBlockingPolys < 2 ) return null;
+    for ( let i = 0; i < nBlockingPolys; i += 1 ) {
+      const iPath = ClipperPaths.fromPolygons(blockingTerrainPolys.slice(i, i + 1), { scalingFactor });
+      for ( let j = i + 1; j < nBlockingPolys; j += 1 ) {
+        const newPath = iPath.intersectPolygon(blockingTerrainPolys[j]);
+        if ( newPath.area.almostEqual(0) ) continue; // Skip very small intersections.
         blockingTerrainPaths.add(newPath);
       }
     }
+
+    if ( !blockingTerrainPaths.paths.length ) return null;
     return blockingTerrainPaths.combine();
   }
 

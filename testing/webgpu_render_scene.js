@@ -303,7 +303,7 @@ await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 
 
-N = 100
+N = 20
 await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
 await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
 await QBenchmarkLoopFn(N, percentFn, "calcArea3dWebGL2", calcArea3dWebGL2)

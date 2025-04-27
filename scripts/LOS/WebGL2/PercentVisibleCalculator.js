@@ -165,6 +165,8 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
 
+    cfg.useAlphaTriangles = true;
+
     return cfg;
   }
 
@@ -675,6 +677,8 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
 
+    cfg.useAlphaTriangles = true;
+
     return cfg;
   }
 
@@ -779,7 +783,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     return { targetArea, obscuredArea: Math.abs(diff.area) };
   }
 
-   _combineTerrainPaths(blockingTerrainPolys) {
+  _combineTerrainPaths(blockingTerrainPolys) {
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const blockingTerrainPaths = new ClipperPaths()
 
@@ -837,8 +841,9 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
       .map(tri => tri
         .transform(lookAtM)
-        .transform(perspectiveM)
-        .toPolygon());
+        ._clipPoints()
+        .map(pt => perspectiveM.multiplyPoint3d(pt, pt)))
+      .map(pts => new PIXI.Polygon(pts)); // PIXI.Polygon will drop the z values, which should all be ~ 1.
   }
 
   /** @type {AbstractPolygonTriangles[]} */
@@ -871,38 +876,105 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
   }
 
   /* ----- NOTE: Debugging methods ----- */
-
   /**
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(drawTool, _renderer) {
+  _draw3dDebug(drawTool, _renderer, _container, { width = 100, height = 100 } = {}) {
     // Recalculate the 3d objects.
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
 
-    // Scale the target graphics to fit in the view window.
-    const { xMinMax, yMinMax } = minMaxPolygonCoordinates(this._targetPolys);
-    const maxCoord = 200;
-    const scale = Math.min(1,
-      maxCoord / xMinMax.max,
-      -maxCoord / xMinMax.min,
-      maxCoord / yMinMax.max,
-      -maxCoord / yMinMax.min
-    );
-    drawTool.g.scale = new PIXI.Point(scale, scale);
+    // Locate obstacles behind the target.
+    const backgroundTiles = this.constructor.visionTriangle.findBackgroundTiles();
+    const backgroundWalls = this.constructor.visionTriangle.findBackgroundWalls();
 
-    // TODO: Do the target polys need to be translated back to 0,0?
-    // Draw the target in 3d, centered on 0,0
-    targetPolys.forEach(poly => drawTool.shape(poly, { color: colors.orange, fill: colors.lightred, fillAlpha: 0.5 }));
+    // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
+    // Simpler:
+    //   Mainly we are looking at approx. a 2d overhead view.
+    //   So measure closest intersect to the vision triangle, testing edges and center.
+    //   Test only the 2d line—wall or tile triangle.
+    //   If no intersect, test from center of triangle.
+    //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
+
+    const lookAtM = this.targetLookAtMatrix;
+    const perspectiveM = this.targetPerspectiveMatrix;
+
+    const backgroundPolys = [];
+    const { a, b, c } = this.constructor.visionTriangle;
+    backgroundTiles.forEach(tile => {
+      const tris = this._filterPlaceableTrianglesByViewpoint(tile);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, b, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, b, tri.c, tri.a),
+          foundry.utils.lineLineIntersection(a, c, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, c, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, c, tri.c, tri.a)
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
+        backgroundPolys.push({
+          poly,
+          dist2,
+          color: colors.orange,
+          fill: colors.orange,
+        });
+      });
+    });
+    backgroundWalls.forEach(wall => {
+      const tris = this._filterPlaceableTrianglesByViewpoint(wall);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, wall.edge.a, wall.edge.b),
+          foundry.utils.lineLineIntersection(a, c, wall.edge.a, wall.edge.b),
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
+        backgroundPolys.push({
+          poly,
+          dist2,
+          color: colors.gray,
+          fill: colors.gray,
+        });
+      });
+    });
+
+    backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
+    backgroundPolys.forEach(obj => drawTool.shape(obj.poly.scale(width, height), { color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }))
+
+    // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    // const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    // backgroundTilesPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
+    // backgroundWallsPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
+
+    // Draw the target in 3d, centered at 0,0.
+    // Scale the target graphics to fit in the view window.
+    targetPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.red, width: 2, fill: colors.lightred, fillAlpha: 0.5 }));
 
     // Draw the grid shape.
-    if ( this.config.largeTarget ) this._gridPolys.forEach(poly =>
-      drawTool.shape(poly, { color: colors.lightorange, fillAlpha: 0.4 }));
+    if ( this.viewerLOS.config.largeTarget ) this._gridPolys.forEach(poly =>
+      drawTool.shape(poly.scale(width, height), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
 
-    // Draw the detected objects in 3d, centered on 0,0
-    blockingPolys.forEach(poly => drawTool.shape(poly, { color: colors.blue, fill: colors.lightblue, fillAlpha: 0.5 }));
-    blockingTerrainPolys.forEach(poly => drawTool.shape(poly, { color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
+    // Draw the detected obstacles.
+    blockingPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
+    blockingTerrainPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
   }
 }
 
