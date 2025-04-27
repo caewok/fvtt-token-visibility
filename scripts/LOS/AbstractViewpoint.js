@@ -309,14 +309,15 @@ export class AbstractViewpoint {
     return blockingObjs;
   }
 
-  static filterPlaceableTrianglesByViewpoint(placeable, viewpoint) {
-    return placeable[AbstractPolygonTriangles.ID].triangles
-      .filter(tri => tri.isFacing(viewpoint));
+  static filterPlaceableTrianglesByViewpoint(placeable, viewpoint, useAlphaTriangles = true) {
+    const triangles = ( useAlphaTriangles && (placeable instanceof Tile) )
+      ? placeable[AbstractPolygonTriangles.ID].alphaTriangles
+      : placeable[AbstractPolygonTriangles.ID].triangles;
+    return triangles.filter(tri => tri.isFacing(viewpoint));
   }
 
   _filterPlaceableTrianglesByViewpoint(placeable) {
-    return placeable[AbstractPolygonTriangles.ID].triangles
-      .filter(tri => tri.isFacing(this.viewpoint));
+    return this.constructor.filterPlaceableTrianglesByViewpoint(placeable, this.viewpoint, this.config.useAlphaTriangles);
   }
 
   /**

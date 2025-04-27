@@ -1,5 +1,6 @@
 /* globals
 CONFIG,
+foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -233,6 +234,85 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     // Recalculate the 3d objects.
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
+
+    // Locate obstacles behind the target.
+    const backgroundTiles = this.constructor.visionTriangle.findBackgroundTiles();
+    const backgroundWalls = this.constructor.visionTriangle.findBackgroundWalls();
+
+    // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
+    // Simpler:
+    //   Mainly we are looking at approx. a 2d overhead view.
+    //   So measure closest intersect to the vision triangle, testing edges and center.
+    //   Test only the 2d line—wall or tile triangle.
+    //   If no intersect, test from center of triangle.
+    //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
+
+    const lookAtM = this.targetLookAtMatrix;
+    const perspectiveM = this.targetPerspectiveMatrix;
+
+    const backgroundPolys = [];
+    const { a, b, c } = this.constructor.visionTriangle;
+    backgroundTiles.forEach(tile => {
+      const tris = this._filterPlaceableTrianglesByViewpoint(tile);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, b, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, b, tri.c, tri.a),
+          foundry.utils.lineLineIntersection(a, c, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, c, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, c, tri.c, tri.a)
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
+        backgroundPolys.push({
+          poly,
+          dist2,
+          color: colors.orange,
+          fill: colors.orange,
+        });
+      });
+    });
+    backgroundWalls.forEach(wall => {
+      const tris = this._filterPlaceableTrianglesByViewpoint(wall);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, wall.edge.a, wall.edge.b),
+          foundry.utils.lineLineIntersection(a, c, wall.edge.a, wall.edge.b),
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
+        backgroundPolys.push({
+          poly,
+          dist2,
+          color: colors.gray,
+          fill: colors.gray,
+        });
+      });
+    });
+
+    backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
+    backgroundPolys.forEach(obj => drawTool.shape(obj.poly.scale(width, height), { color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }))
+
+    // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    // const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    // backgroundTilesPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
+    // backgroundWallsPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
 
     // Draw the target in 3d, centered at 0,0.
     // Scale the target graphics to fit in the view window.

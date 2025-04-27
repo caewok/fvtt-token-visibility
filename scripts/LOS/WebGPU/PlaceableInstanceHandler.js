@@ -32,7 +32,7 @@ export class PlaceableInstanceHandler {
    * Only keep one instance of each handler type. Class and sense type.
    * @type {Map<string, PlaceableInstanceHandler>}
    */
-  static handlers = new Map();
+  static handlers = new WeakMap();
 
   /** @type {number} */
   static INSTANCE_ELEMENT_LENGTH = 16; // Single mat4x4.
@@ -49,12 +49,10 @@ export class PlaceableInstanceHandler {
    */
   static refreshFlags = new Set();
 
-  constructor({ keys = [] } = {}) {
-    keys.unshift(this.constructor.name);
-    const key = keys.join("_");
+  constructor() {
     const handlers = this.constructor.handlers;
-    if ( handlers.has(key) ) return handlers.get(key);
-    handlers.set(key, this);
+    if ( handlers.has(this.constructor) ) return handlers.get(this.constructor);
+    handlers.set(this.constructor, this);
   }
 
   /** @type {Map<string, number>} */
@@ -654,6 +652,7 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
 
   /**
    * Determine the tile 3d dimensions, in pixel units.
+   * Omits alpha border.
    * @param {Tile} tile
    * @returns {object}
    * @prop {number} width       In x direction
