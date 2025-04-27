@@ -361,77 +361,102 @@ export class GeometryDesc {
    * - @prop {Float32Array} vertices
    * - @prop {Uint16Array} indices
    */
-  static polygonTopBottomFaces(poly, { elevation = 0, top = true } = {}) {
-     if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
+  static polygonTopBottomFaces(poly, { elevation = 0, top = true, addUVs = true, addNormals = true } = {}) {
+    /* Testing
+    poly = _token.constrainedTokenBorder
+    vs = PIXI.utils.earcut(poly.points)
+    pts = [...poly.iteratePoints({ close: false })]
+    tris = [];
+    for ( let i = 0; i < vs.length; i += 3 ) {
+     const a = pts[vs[i]];
+     const b = pts[vs[i+1]];
+     const c = pts[vs[i+2]];
+     Draw.connectPoints([a, b, c], { color: Draw.COLORS.red })
+     tris.push({a, b, c})
+    }
+    // Earcut appears to keep the counterclockwise order.
+    tris.map(tri => foundry.utils.orient2dFast(tri.a, tri.b, tri.c))
+    */
 
-     // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
-     const flip = top;
+    // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
+    const flip = top;
 
-     /* Testing
-     poly = _token.constrainedTokenBorder
-     vs = PIXI.utils.earcut(poly.points)
-     pts = [...poly.iteratePoints({ close: false })]
-     tris = [];
-     for ( let i = 0; i < vs.length; i += 3 ) {
-       const a = pts[vs[i]];
-       const b = pts[vs[i+1]];
-       const c = pts[vs[i+2]];
-       Draw.connectPoints([a, b, c], { color: Draw.COLORS.red })
-       tris.push({a, b, c})
-     }
-     // Earcut appears to keep the counterclockwise order.
-     tris.map(tri => foundry.utils.orient2dFast(tri.a, tri.b, tri.c))
-     */
+    let vertices2d;
+    let holes;
 
-     // Earcut to determine indices. Then construct the vertices.
-     const numVertices = Math.floor(poly.points.length / 2);
-     const vertices = new Float32Array(numVertices * 8);
-     const indices = new Uint16Array(PIXI.utils.earcut(poly.points));
+    // Earcut to determine indices. Then construct the vertices.
+    if ( poly instanceof CONFIG.GeometryLib.ClipperPaths ) {
+      // Assume a more complex shape, possibly with holes. See ClipperPaths.prototype.earcut.
+      const coords = poly.toEarcutCoordinates();
+      vertices2d = coords.vertices;
+      if ( poly.scalingFactor !== 1 ) {
+        const invScale = 1 / poly.scalingFactor;
+        for ( let i = 0, iMax = vertices2d.length; i < iMax; i += 1 ) vertices2d[i] *= invScale; // In place; faster than using map.
+      }
+      holes = coords.holes;
+    } else {
+      if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
+      vertices2d = poly.points;
+    }
 
-     // For Foundry's  coordinate system, indices are always CCW triangles.
-     // Flip to make CW if constructing the bottom face.
-     if ( flip ) {
-       for ( let i = 0, imax = indices.length; i < imax; i += 3 ) {
-         const v0 = indices[i];
-         const v2 = indices[i + 2];
-         indices[i] = v2;
-         indices[i + 2] = v0;
-       }
-     }
+    const indices = new Uint16Array(PIXI.utils.earcut(vertices2d, holes)); // Note: dimensions = 2.
 
-     // Set UVs to the coordinate within the bounding box.
-     const xMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 === 0))
-     const yMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 !== 0))
-     const width = xMinMax.max - xMinMax.min;
-     const height = yMinMax.max - yMinMax.min;
 
-     const uOrig = x => (x - xMinMax.min) / width;
-     const vOrig = y => (y - yMinMax.min) / height;
-     let u = uOrig;
-     let v = vOrig;
-     let n = 1;
-     if ( flip ) {
-       n = -1;
-       u = x => 1 - uOrig(x);
-       v = y => 1 - vOrig(y);
-     }
-     let i = 0;
-     for ( const pt of poly.iteratePoints({ closed: false }) ) {
-       // Position
-       vertices[i++] = pt.x;
-       vertices[i++] = pt.y;
-       vertices[i++] = elevation;
+    // For Foundry's  coordinate system, indices are always CCW triangles.
+    // Flip to make CW if constructing the bottom face.
+    if ( flip ) {
+      for ( let i = 0, imax = indices.length; i < imax; i += 3 ) {
+        const v0 = indices[i];
+        const v2 = indices[i + 2];
+        indices[i] = v2;
+        indices[i + 2] = v0;
+      }
+    }
 
-       // Normal: 0, 0, 1 or -1
-       i++; i++;
-       vertices[i++] = n;
+    let u;
+    let v;
+    if ( addUVs ) {
+      // Set UVs to the coordinate within the bounding box.
+      const xMinMax = Math.minMax(...vertices2d.filter((_coord, idx) => idx % 2 === 0))
+      const yMinMax = Math.minMax(...vertices2d.filter((_coord, idx) => idx % 2 !== 0))
+      const width = xMinMax.max - xMinMax.min;
+      const height = yMinMax.max - yMinMax.min;
+      const uOrig = x => (x - xMinMax.min) / width;
+      const vOrig = y => (y - yMinMax.min) / height;
+      u = uOrig;
+      v = vOrig;
+      if ( flip ) {
+        u = x => 1 - uOrig(x);
+        v = y => 1 - vOrig(y);
+      }
+    }
+    const n = 1 * (-flip); // Flip is true: -1; flip is false: 1.
 
-       // UV
-       vertices[i++] = u(pt.x);
-       vertices[i++] = v(pt.y);
-     }
+    // Copy the 2d points to 3d
+    const numVertices = vertices2d.length * 0.5;
+    const nCoords = 3 + (2 * addUVs) + (3 * addNormals);
+    const vertices = new Float32Array(numVertices * nCoords);
+    let i = 0;
+    for ( let j = 0, jMax = vertices2d.length; j < jMax; j += 2 ) {
+      const x = vertices2d[j];
+      const y = vertices2d[j + 1];
 
-     return { indices, vertices, numVertices };
+      // Position
+      vertices[i++] = x;
+      vertices[i++] = y;
+      vertices[i++] = elevation;
+
+      if ( addNormals ) {
+        // Normal: 0, 0, 1 or -1
+        i++; i++;
+        vertices[i++] = n;
+      }
+      if ( addUVs ) {
+        vertices[i++] = u(x);
+        vertices[i++] = v(y);
+      }
+    }
+    return { indices, vertices, numVertices };
   }
 
   /**

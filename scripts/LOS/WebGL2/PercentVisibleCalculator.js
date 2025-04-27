@@ -13,19 +13,28 @@ import { AsyncQueue } from "../WebGPU/AsyncQueue.js";
 import { WebGPUSumRedPixels } from "../WebGPU/SumPixels.js";
 import { AbstractViewerLOS } from "../AbstractViewerLOS.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { VisionTriangle } from "../VisionPolygon.js";
+import { VisionTriangle } from "../VisionTriangle.js";
 import { Settings } from "../../settings.js";
 
 import { PointsViewpoint } from "../PointsViewpoint.js";
 
+// ??
 import { Area3dWebGL2Viewpoint } from "../Area3dWebGL2Viewpoint.js";
 import { Grid3dGeometry, GEOMETRY_ID } from "../Placeable3dGeometry.js";
 import { Placeable3dShader, Tile3dShader } from "../Placeable3dShader.js";
 import { sumRedPixels, sumRedObstaclesPixels } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 
+// PIXI
 import { MODULE_ID } from "../../const.js";
 import { Camera } from "../WebGPU/Camera.js";
+
+
+// Geometric
+import { Draw } from "../../geometry/Draw.js";
+import { ClipperPaths } from "../../geometry/ClipperPaths.js";
+import { minMaxPolygonCoordinates } from "../util.js";
+import { Grid3dTriangles  } from "../PlaceableTriangles.js";
 
 const RADIANS_90 = Math.toRadians(90);
 
@@ -156,6 +165,8 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
 
+    cfg.useAlphaTriangles = true;
+
     return cfg;
   }
 
@@ -259,7 +270,7 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
   _testPointToPoints(targetPoints, viewpoint, visibleTargetShape) {
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
-    // const debugDraw = this.viewerLOS.config.debugDraw;
+    // const debugDraw = this.config.debugDraw;
     let debugPoints = [];
     if ( this.config.debug ) this.debugPoints.push(debugPoints);
     for ( let i = 0; i < ln; i += 1 ) {
@@ -630,6 +641,341 @@ export class Area3dWebGL2VisibleCalculator extends PercentVisibleCalculatorAbstr
     this._tileShaders.clear();
   }
 
+}
+
+export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAbstract {
+  /** @type {Camera} */
+  camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
+
+  /**
+   * Scaling factor used with Clipper
+   */
+  static SCALING_FACTOR = 100;
+
+  /**
+   * Sets configuration to the current settings.
+   * @param {ViewpointConfig} [cfg]
+   * @returns {ViewpointConfig}
+   */
+  initializeConfig(cfg = {}) {
+    // Configs specific to the Points algorithm.
+    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+    cfg.useLitTargetShape ??= true;
+
+    // Blocking canvas objects.
+    cfg.blocking ??= {};
+    cfg.blocking.walls ??= true;
+    cfg.blocking.tiles ??= true;
+
+    // Blocking tokens.
+    cfg.blocking.tokens ??= {};
+    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+
+    cfg.useAlphaTriangles = true;
+
+    return cfg;
+  }
+
+  async initialize() {
+    this.config = this.initializeConfig();
+  }
+
+  viewer;
+
+  target;
+
+  viewpoint;
+
+  targetLocation;
+
+  targetArea = 0;
+
+  obscuredArea = 0;
+
+  gridSquareArea = 0;
+
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    this.viewer = viewer;
+    this.target = target;
+    this.viewpoint = viewerLocation;
+    this.targetLocation = targetLocation;
+
+    this.camera.cameraPosition = viewerLocation;
+    this.camera.targetPosition = targetLocation;
+    this.camera.setTargetTokenFrustrum(target);
+
+    this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
+      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+
+    const res = this._obscuredArea();
+    this.targetArea = res.targetArea;
+    this.obscuredArea = res.obscuredArea;
+
+    if ( this.config.largeTarget ) this.gridSquareArea = this._gridSquareArea();
+  }
+
+
+  /**
+   * Determine the percentage red pixels for the current view.
+   * @returns {number}
+   * @override
+   */
+  _percentRedPixels() {
+    if ( this.config.largeTarget ) this.targetArea = Math.min(this.gridSquareArea || 100_000, this.targetArea);
+
+    // Round the percent seen so that near-zero areas are 0.
+    // Because of trimming walls near the vision triangle, a small amount of token area can poke through
+    const percentSeen = this.targetArea ? this.obscuredArea / this.targetArea : 0;
+    if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
+    return percentSeen;
+  }
+
+  /**
+   * Construct 2d perspective projection of each blocking points object.
+   * Combine them into a single array of blocking polygons.
+   * For each visible side of the target, build the 2d perspective polygon for that side.
+   * Take the difference between that side and the blocking polygons to determine the
+   * visible portion of that side.
+   * @returns {object} { obscuredSides: PIXI.Polygon[], sidePolys: PIXI.Polygon[]}
+   *   sidePolys: The sides of the target, in 2d perspective.
+   *   obscuredSides: The unobscured portions of the sidePolys
+   */
+  _obscuredArea() {
+    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
+    if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size) ) return { targetArea: 1, obscuredArea: 0 };
+
+    // Construct polygons representing the perspective view of the target and blocking objects.
+    const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
+
+    // TODO: union, combine, joinPaths, or add? Use clean?
+
+//     const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor })
+//       .union()
+//       .clean();
+//     const blockingTerrainPaths = ClipperPaths.fromPolygons(blockingTerrainPolys, { scalingFactor })
+//       .union()
+//       .clean();
+//     const blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor })
+//       .union()
+//       .clean();
+
+    // Use Clipper to calculate area of the polygon shapes.
+    const scalingFactor = this.constructor.SCALING_FACTOR;
+    const targetPaths = ClipperPaths.fromPolygons(targetPolys, { scalingFactor });
+    const blockingTerrainPaths = this._combineTerrainPaths(blockingTerrainPolys);
+    let blockingPaths = ClipperPaths.fromPolygons(blockingPolys, { scalingFactor });
+    if ( blockingTerrainPaths && !blockingTerrainPaths.area.almostEqual(0) ) {
+      blockingPaths = blockingPaths.add(blockingTerrainPaths).combine();
+    }
+
+    // Construct the obscured shape by taking the difference between the target polygons and
+    // the blocking polygons.
+    const targetArea = Math.abs(targetPaths.area);
+    if ( targetArea.almostEqual(0) ) return { targetArea, obscuredArea: 0 };
+
+    const diff = blockingPaths.diffPaths(targetPaths); // TODO: Correct order?
+    return { targetArea, obscuredArea: Math.abs(diff.area) };
+  }
+
+  _combineTerrainPaths(blockingTerrainPolys) {
+    const scalingFactor = this.constructor.SCALING_FACTOR;
+    const blockingTerrainPaths = new ClipperPaths()
+
+    // The intersection of each two terrain polygons forms a blocking path.
+    // Only need to test each combination once.
+    const nBlockingPolys = blockingTerrainPolys.length;
+    if ( nBlockingPolys < 2 ) return null;
+    for ( let i = 0; i < nBlockingPolys; i += 1 ) {
+      const iPath = ClipperPaths.fromPolygons(blockingTerrainPolys.slice(i, i + 1), { scalingFactor });
+      for ( let j = i + 1; j < nBlockingPolys; j += 1 ) {
+        const newPath = iPath.intersectPolygon(blockingTerrainPolys[j]);
+        if ( newPath.area.almostEqual(0) ) continue; // Skip very small intersections.
+        blockingTerrainPaths.add(newPath);
+      }
+    }
+
+    if ( !blockingTerrainPaths.paths.length ) return null;
+    return blockingTerrainPaths.combine();
+  }
+
+  _blockingTerrainPolys;
+
+  _blockingPolys;
+
+  _targetPolys;
+
+  _gridPolys;
+
+  /**
+   * Construct polygons that are used to form the 2d perspective.
+   */
+  _constructPerspectivePolygons() {
+    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
+
+    // Construct polygons representing the perspective view of the target and blocking objects.
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    const targetPolys = this._lookAtObjectWithPerspective(this.target, lookAtM, perspectiveM);
+
+    const blockingPolys = this._blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
+      this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    const blockingTerrainPolys = this._blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
+       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    return { targetPolys, blockingPolys, blockingTerrainPolys };
+  }
+
+  _lookAtObject(object, lookAtM) {
+    return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
+      .map(tri => tri.transform(lookAtM).toPolygon());
+  }
+
+  _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
+    return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
+      .map(tri => tri
+        .transform(lookAtM)
+        ._clipPoints()
+        .map(pt => perspectiveM.multiplyPoint3d(pt, pt)))
+      .map(pts => new PIXI.Polygon(pts)); // PIXI.Polygon will drop the z values, which should all be ~ 1.
+  }
+
+  /** @type {AbstractPolygonTriangles[]} */
+  static get grid3dShape() { return Grid3dTriangles.trianglesForGridShape(); }
+
+  /**
+   * Area of a basic grid square to use for the area estimate when dealing with large tokens.
+   * @returns {number}
+   */
+  _gridSquareArea(lookAtM, perspectiveM) {
+     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
+     const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
+     gridPaths.combine().clean();
+     return gridPaths.area;
+  }
+
+  _gridPolygons(lookAtM, perspectiveM) {
+     const target = this.target;
+     const { x, y } = target.center;
+     const z = target.bottomZ + (target.topZ - target.bottomZ);
+     const gridTris = Grid3dTriangles.trianglesForGridShape();
+     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(x, y, z);
+     return gridTris
+       .filter(tri => tri.isFacing(this.viewpoint))
+       .map(tri => tri
+         .transform(translateM)
+         .transform(lookAtM)
+         .transform(perspectiveM)
+         .toPolygon());
+  }
+
+  /* ----- NOTE: Debugging methods ----- */
+  /**
+   * For debugging.
+   * Draw the 3d objects in the popout.
+   */
+  _draw3dDebug(drawTool, _renderer, _container, { width = 100, height = 100 } = {}) {
+    // Recalculate the 3d objects.
+    const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
+    const colors = Draw.COLORS;
+
+    // Locate obstacles behind the target.
+    const backgroundTiles = this.constructor.visionTriangle.findBackgroundTiles();
+    const backgroundWalls = this.constructor.visionTriangle.findBackgroundWalls();
+
+    // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
+    // Simpler:
+    //   Mainly we are looking at approx. a 2d overhead view.
+    //   So measure closest intersect to the vision triangle, testing edges and center.
+    //   Test only the 2d line—wall or tile triangle.
+    //   If no intersect, test from center of triangle.
+    //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
+
+    const lookAtM = this.targetLookAtMatrix;
+    const perspectiveM = this.targetPerspectiveMatrix;
+
+    const backgroundPolys = [];
+    const { a, b, c } = this.constructor.visionTriangle;
+    backgroundTiles.forEach(tile => {
+      const tris = this._filterPlaceableTrianglesByViewpoint(tile);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, b, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, b, tri.c, tri.a),
+          foundry.utils.lineLineIntersection(a, c, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, c, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, c, tri.c, tri.a)
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
+        backgroundPolys.push({
+          poly,
+          dist2,
+          color: colors.orange,
+          fill: colors.orange,
+        });
+      });
+    });
+    backgroundWalls.forEach(wall => {
+      const tris = this._filterPlaceableTrianglesByViewpoint(wall);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, wall.edge.a, wall.edge.b),
+          foundry.utils.lineLineIntersection(a, c, wall.edge.a, wall.edge.b),
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
+        backgroundPolys.push({
+          poly,
+          dist2,
+          color: colors.gray,
+          fill: colors.gray,
+        });
+      });
+    });
+
+    backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
+    backgroundPolys.forEach(obj => drawTool.shape(obj.poly.scale(width, height), { color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }))
+
+    // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    // const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    // backgroundTilesPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
+    // backgroundWallsPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
+
+    // Draw the target in 3d, centered at 0,0.
+    // Scale the target graphics to fit in the view window.
+    targetPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.red, width: 2, fill: colors.lightred, fillAlpha: 0.5 }));
+
+    // Draw the grid shape.
+    if ( this.viewerLOS.config.largeTarget ) this._gridPolys.forEach(poly =>
+      drawTool.shape(poly.scale(width, height), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
+
+    // Draw the detected obstacles.
+    blockingPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
+    blockingTerrainPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
+  }
 }
 
 export class Area3dPIXIVisibleCalculator extends PercentVisibleCalculatorAbstract {

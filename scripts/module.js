@@ -85,11 +85,15 @@ import {
   PointsPercentVisibleCalculator,
   Area3dWebGL2VisibleCalculator,
   Area3dPIXIVisibleCalculator,
+  Area3dGeometricVisibleCalculator,
   PercentVisibleCalculatorWebGL2,
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
 } from "./LOS/WebGL2/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync, DebugVisibilityViewerPoints, DebugVisibilityViewerArea3dPIXI } from "./LOS/WebGL2/DebugVisibilityViewer.js";
+
+import * as MarchingSquares from "./marchingsquares-esm.js";
+
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -119,6 +123,13 @@ Hooks.once("init", function() {
      * @type {number}
      */
     alphaThreshold: 0.75,
+
+    /**
+     * Limit the tile alpha pixels by contiguous area.
+     * Limits when a portion of the tile is considered an obstacle.
+     * For points or geometric algorithm, this will not be considered blocking.
+     */
+    alphaAreaThreshold: 25, // Area in pixels, e.g. 5x5 or ~ 8 x 3
 
     /**
      * Size of the render texture (width and height) used in the webGL LOS algorithms.
@@ -229,6 +240,7 @@ Hooks.once("init", function() {
       PointsPercentVisibleCalculator,
       Area3dWebGL2VisibleCalculator,
       Area3dPIXIVisibleCalculator,
+      Area3dGeometricVisibleCalculator,
     },
 
     glmatrix: {
@@ -236,6 +248,8 @@ Hooks.once("init", function() {
       quat, quat2,
       vec2, vec3, vec4
     },
+
+    MarchingSquares,
 
     PATCHER,
     Patcher, HookPatch, MethodPatch, LibWrapperPatch

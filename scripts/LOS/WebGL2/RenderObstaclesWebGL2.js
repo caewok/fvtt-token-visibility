@@ -6,7 +6,7 @@ CONFIG,
 "use strict";
 
 import { Camera } from "../WebGPU/Camera.js";
-import { VisionTriangle } from "../VisionPolygon.js";
+import { VisionTriangle } from "../VisionTriangle.js";
 import { Settings } from "../../settings.js";
 import {
   DrawableNonDirectionalWallWebGL2,

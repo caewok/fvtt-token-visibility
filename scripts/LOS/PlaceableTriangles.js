@@ -17,6 +17,7 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./WebGPU/Geometr
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
+import * as MarchingSquares from "../marchingsquares-esm.js";
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|PlaceableTriangles|canvasReady`);
@@ -149,6 +150,14 @@ export class Triangle {
     this.constructor.perspectiveTransform(this.a, multiplier, tri.a);
     this.constructor.perspectiveTransform(this.b, multiplier, tri.b);
     this.constructor.perspectiveTransform(this.c, multiplier, tri.c);
+    return tri;
+  }
+
+  scale(multiplier = 1, tri) {
+    tri = this.clone(tri);
+    tri.a.multiplyScalar(multiplier, tri.a);
+    tri.b.multiplyScalar(multiplier, tri.b);
+    tri.c.multiplyScalar(multiplier, tri.c);
     return tri;
   }
 
@@ -370,20 +379,20 @@ function pointFromVertices(i, vertices, indices, outPoint) {
   return outPoint;
 }
 
-function fromVertices(vertices, indices) {
-    // const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
-    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
-    if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
-    // const tris = new Array(Math.floor(indices.length / 3));
-    for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
-      const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
-      const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
-      const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
-      tris[j] = Triangle.fromPoints(a, b, c);
-    }
-    return tris;
-  }
+// function fromVertices(vertices, indices) {
+//     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+//     if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+//     indices ??= Array.fromRange(Math.floor(vertices.length / 3));
+//     if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
+//     const tris = new Array(Math.floor(indices.length / 3));
+//     for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
+//       const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
+//       const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
+//       const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
+//       tris[j] = Triangle.fromPoints(a, b, c);
+//     }
+//     return tris;
+//   }
 
 
 const SENSE_TYPES = {};
@@ -399,10 +408,10 @@ export class AbstractPolygonTriangles {
   static geom;
 
   /** @type {Triangle[]} */
-  static #prototypeTriangles;
+  static _prototypeTriangles;
 
   static get prototypeTriangles() {
-    return (AbstractPolygonTriangles.#prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices));
+    return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices));
   }
 
   /** @type {class} */
@@ -417,8 +426,6 @@ export class AbstractPolygonTriangles {
     this._instanceHandler.initializePlaceables();
     return this._instanceHandler;
   }
-
-
 
   static trianglesForPlaceable(placeable) {
     const idx = this.instanceHandler.instanceIndexFromId.get(placeable.id);
@@ -493,6 +500,9 @@ export class WallTriangles extends AbstractPolygonTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryWallDesc({ directional: false });
 
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
+
   /** @type {class} */
   static instanceHandlerClass = WallInstanceHandler;
 
@@ -524,11 +534,18 @@ export class WallTriangles extends AbstractPolygonTriangles {
 export class DirectionalWallTriangles extends WallTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryWallDesc({ directional: true });
+
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
+
 }
 
 export class TileTriangles extends AbstractPolygonTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryHorizontalPlaneDesc();
+
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
 
   /** @type {class} */
   static instanceHandlerClass = TileInstanceHandler;
@@ -541,11 +558,119 @@ export class TileTriangles extends AbstractPolygonTriangles {
   static registerExistingPlaceables() {
     canvas.tiles.placeables.forEach(tile => this._onPlaceableCreation(tile));
   }
+
+  /**
+   * On placeable creation hook, also add isoband polygons representing solid areas of the tile.
+   */
+  static _onPlaceableCreation(tile) {
+    AbstractPolygonTriangles._onPlaceableCreation(tile);
+    const obj = tile[this.ID] ??= {};
+    obj.alphaThresholdPolygon = this.convertTileToIsoBands(tile); // ClipperPaths or Polygon
+    obj.alphaThresholdTriangles = obj.alphaThresholdPolygon
+      ? this.polygonsToFaceTriangles(obj.alphaThresholdPolygon) : null;
+
+    const self = this;
+    Object.defineProperty(obj, "alphaTriangles", {
+      get() { return self.alphaTrianglesForPlaceable(tile); },
+      configurable: true,
+    });
+  }
+
+  /** @type {Triangle[]} */
+  _prototypeAlphaTriangles;
+
+  static polygonsToFaceTriangles(polys) {
+    // Convert the polygons to top and bottom faces.
+    // Then make these into triangles.
+    // Trickier than leaving as polygons but can dramatically cut down the number of polys
+    // for more complex shapes.
+    const tris = [];
+    const topFace = GeometryDesc.polygonTopBottomFaces(polys, { top: true, addUVs: false, addNormals: false });
+    const bottomFace = GeometryDesc.polygonTopBottomFaces(polys, { top: false, addUVs: false, addNormals: false });
+    tris.push(
+      ...Triangle.fromVertices(topFace.vertices, topFace.indices),
+      ...Triangle.fromVertices(bottomFace.vertices, bottomFace.indices)
+    );
+    return tris;
+  }
+
+  static convertTileToIsoBands(tile) {
+    if ( !CONFIG[MODULE_ID].alphaThreshold
+      || !tile.evPixelCache ) return null;
+    const threshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
+    const pixels = tile.evPixelCache.pixels;
+
+    // Convert pixels to isobands.
+    const width = tile.evPixelCache.width
+    const height = tile.evPixelCache.height
+    const rowViews = new Array(height);
+    for ( let r = 0, start = 0, rMax = height; r < rMax; r += 1, start += width ) {
+      rowViews[r] = [...pixels.slice(start, start + width)];
+    }
+
+    let bands;
+    try {
+      bands = MarchingSquares.isoBands(rowViews, threshold, 256 - threshold);
+    } catch ( err ) {
+      console.error(err);
+      return [tile.evPixelCache.getThresholdLocalBoundingBox(CONFIG[MODULE_ID].alphaThreshold).toPolygon()];
+    }
+
+
+    /* Don't want to scale between 0 and 1 b/c using evPixelCache transform on the local coordinates.
+    // Create polygons scaled between 0 and 1, based on width and height.
+    const invWidth = 1 / width;
+    const invHeight = 1 / height;
+    const nPolys = lines.length;
+    const polys = new Array(nPolys);
+    for ( let i = 0; i < nPolys; i += 1 ) {
+      polys[i] = new PIXI.Polygon(bands[i].flatMap(pt => [pt[0] * invWidth, pt[1] * invHeight]))
+    }
+    */
+    const nPolys = bands.length;
+    const polys = new Array(nPolys);
+    for ( let i = 0; i < nPolys; i += 1 ) {
+      const poly = new PIXI.Polygon(bands[i].flatMap(pt => pt)); // TODO: Can we lose the flatMap?
+
+      // Polys from MarchingSquares are CW if hole; reverse
+      poly.reverseOrientation();
+      polys[i] = poly;
+    }
+
+    // Use Clipper to clean the polygons. Leave as clipper paths for earcut later.
+    const paths = CONFIG.GeometryLib.ClipperPaths.fromPolygons(polys, { scalingFactor: 100 });
+    return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold);
+  }
+
+  static alphaTrianglesForPlaceable(tile) {
+    if ( !this.instanceHandler.instanceIndexFromId.has(tile.id) ) return [];
+
+    const obj = tile[MODULE_ID] ?? {};
+    if ( !obj.alphaThresholdTriangles || !tile.evPixelCache ) return this.trianglesForPlaceable(tile);
+
+    // Expand the canvas conversion matrix to 4x4.
+    // Last row of the 3x3 is the translation matrix, which should be moved to row 4.
+    const toCanvasM3x3 = tile.evPixelCache.toCanvasTransform;
+    const toCanvasM = CONFIG.GeometryLib.MatrixFlat.identity(4, 4);
+    toCanvasM.setElements((elem, r, c) => {
+      if ( r < 2 && c < 3 ) return toCanvasM3x3.arr[r][c];
+      if ( r === 3 && c < 2 ) return  toCanvasM3x3.arr[2][c];
+      return elem;
+    });
+
+    // Add elevation translation.
+    const elevationT = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, tile.elevationZ);
+    const M = toCanvasM.multiply4x4(elevationT);
+    return obj.alphaThresholdTriangles.map(tri => tri.transform(M));
+  }
 }
 
 export class TokenTriangles extends AbstractPolygonTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryCubeDesc();
+
+  /** @type {Triangle[]} */
+  static _prototypeTriangles;
 
   /** @type {class} */
   static instanceHandlerClass = TokenInstanceHandler;
@@ -554,6 +679,22 @@ export class TokenTriangles extends AbstractPolygonTriangles {
   static HOOKS = [
     { createToken: "_onPlaceableCreation" },
   ];
+
+
+  /* Debugging
+  static get prototypeTriangles() {
+    // 12 triangles total, 36 indices.
+    // South facing (first 2 triangles)
+    // return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices.slice(3*0, 3*2)));
+
+    // Top facing (second to last 2 triangles)
+    // return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices.slice(3*8, 3*10)));
+
+    // Bottom facing (last 2 triangles)
+    return (this._prototypeTriangles ??= Triangle.fromVertices(this.geom.vertices, this.geom.indices.slice(3*8, 3*10)));
+  }
+  */
+
 
   /**
    * On placeable creation hook, add an instance of this to the placeable.
@@ -590,12 +731,8 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
   /** @type {class} */
   static instanceHandlerClass = null;
 
-  #geom;
-
-  // This override would not work if defined in the constructor.
-  // Would then need to delete the parent geom field.
-  // See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa
-  static get geom() { return (Grid3dTriangles.#geom ??= this.buildGridGeom()); }
+  /** @type {Triangle[]} */
+  static prototypeTriangles;
 
   static buildGridGeom() {
     // TODO: Hex grids
@@ -607,6 +744,7 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
   }
 
   static trianglesForGridShape() {
+    if ( !this.prototypeTriangles ) this.buildGridGeom();
     return this.prototypeTriangles.map(tri => tri.clone());
   }
 }

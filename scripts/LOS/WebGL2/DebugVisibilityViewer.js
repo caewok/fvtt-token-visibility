@@ -490,12 +490,18 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   /** @type {PIXI.Graphics} */
   #popoutGraphics;
 
-  get popoutGraphics() { return (this.#popoutGraphics ??= new PIXI.Graphics()); }
+  get popoutGraphics() {
+    if ( !this.#popoutGraphics ) {
+      this.#popoutGraphics = new PIXI.Graphics();
+      this.popoutContainer.addChild(this.#popoutGraphics);
+    }
+    return (this.#popoutGraphics ??= new PIXI.Graphics());
+  }
 
   /** @type {PIXI.Container} */
   #popoutContainer;
 
-  get popoutContainer() { return this.#popoutContainer ??= new PIXI.Container(); }
+  get popoutContainer() { return (this.#popoutContainer ??= new PIXI.Container()); }
 
   /** @type {Draw} */
   #popoutDraw;
@@ -517,7 +523,6 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   async openPopout(opts) {
     await super.openPopout(opts);
-    this.popout.pixiApp.stage.addChild(this.popoutGraphics);
     this.popout.pixiApp.stage.addChild(this.popoutContainer);
   }
 
@@ -526,7 +531,8 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.calc.viewer = this.viewer;
     this.calc.target = target;
     this.calc._drawCanvasDebug();
-    this.calc.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer);
+    this.calc.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer,
+      { width: this.constructor.WIDTH * .5, height: this.constructor.HEIGHT * .5 });
   }
 
   percentVisible(viewer, target, _viewerLocation, _targetLocation) {

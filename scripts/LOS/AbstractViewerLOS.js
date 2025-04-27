@@ -116,6 +116,9 @@ export class AbstractViewerLOS {
     cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[Settings.get(KEYS.LOS.TARGET.ALGORITHM)]
       ?? AbstractViewpoint;
 
+    // Tiles
+    cfg.useAlphaTriangles = true;
+
     return cfg;
   }
 
@@ -425,7 +428,7 @@ export class AbstractViewerLOS {
    */
   destroy() {
     this.#target = undefined;
-    this.viewer = undefined;
+    this.#viewer = undefined;
     this.viewpoints.forEach(vp => vp.destroy());
     this.viewpoints.length = 0;
   }
