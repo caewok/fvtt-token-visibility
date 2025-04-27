@@ -125,6 +125,13 @@ Hooks.once("init", function() {
     alphaThreshold: 0.75,
 
     /**
+     * Limit the tile alpha pixels by contiguous area.
+     * Limits when a portion of the tile is considered an obstacle.
+     * For points or geometric algorithm, this will not be considered blocking.
+     */
+    alphaAreaThreshold: 25, // Area in pixels, e.g. 5x5 or ~ 8 x 3
+
+    /**
      * Size of the render texture (width and height) used in the webGL LOS algorithms.
      * @type {number}
      */

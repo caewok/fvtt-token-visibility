@@ -565,9 +565,9 @@ export class TileTriangles extends AbstractPolygonTriangles {
   static _onPlaceableCreation(tile) {
     AbstractPolygonTriangles._onPlaceableCreation(tile);
     const obj = tile[this.ID] ??= {};
-    obj.alphaThresholdPolygons = this.convertTileToIsoBands(tile);
-    obj.alphaThresholdTriangles = obj.alphaThresholdPolygons
-      ? this.polygonsToFaceTriangles(obj.alphaThresholdPolygons) : null;
+    obj.alphaThresholdPolygon = this.convertTileToIsoBands(tile); // ClipperPaths or Polygon
+    obj.alphaThresholdTriangles = obj.alphaThresholdPolygon
+      ? this.polygonsToFaceTriangles(obj.alphaThresholdPolygon) : null;
 
     const self = this;
     Object.defineProperty(obj, "alphaTriangles", {
@@ -585,21 +585,16 @@ export class TileTriangles extends AbstractPolygonTriangles {
     // Trickier than leaving as polygons but can dramatically cut down the number of polys
     // for more complex shapes.
     const tris = [];
-    for ( const poly of polys ) {
-      // Keep elevation 0.
-      const topFace = GeometryDesc.polygonTopBottomFaces(poly, { top: true, addUVs: false, addNormals: false });
-      const bottomFace = GeometryDesc.polygonTopBottomFaces(poly, { top: false, addUVs: false, addNormals: false });
-      tris.push(
-        ...Triangle.fromVertices(topFace.vertices, topFace.indices),
-        ...Triangle.fromVertices(bottomFace.vertices, bottomFace.indices)
-      );
-    }
+    const topFace = GeometryDesc.polygonTopBottomFaces(polys, { top: true, addUVs: false, addNormals: false });
+    const bottomFace = GeometryDesc.polygonTopBottomFaces(polys, { top: false, addUVs: false, addNormals: false });
+    tris.push(
+      ...Triangle.fromVertices(topFace.vertices, topFace.indices),
+      ...Triangle.fromVertices(bottomFace.vertices, bottomFace.indices)
+    );
     return tris;
   }
 
   static convertTileToIsoBands(tile) {
-    // TODO: What about holes?
-
     if ( !CONFIG[MODULE_ID].alphaThreshold
       || !tile.evPixelCache ) return null;
     const threshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
@@ -635,12 +630,16 @@ export class TileTriangles extends AbstractPolygonTriangles {
     const nPolys = bands.length;
     const polys = new Array(nPolys);
     for ( let i = 0; i < nPolys; i += 1 ) {
-      polys[i] = new PIXI.Polygon(bands[i].flatMap(pt => pt)); // TODO: Can we lose the flatMap?
+      const poly = new PIXI.Polygon(bands[i].flatMap(pt => pt)); // TODO: Can we lose the flatMap?
+
+      // Polys from MarchingSquares are CW if hole; reverse
+      poly.reverseOrientation();
+      polys[i] = poly;
     }
 
-    // Use Clipper to clean the polygons.
+    // Use Clipper to clean the polygons. Leave as clipper paths for earcut later.
     const paths = CONFIG.GeometryLib.ClipperPaths.fromPolygons(polys, { scalingFactor: 100 });
-    return paths.clean().toPolygons();
+    return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold);
   }
 
   static alphaTrianglesForPlaceable(tile) {

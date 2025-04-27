@@ -132,71 +132,31 @@ polys.forEach(poly => {
   Draw.shape(poly.scale(width, height))
 })
 
+// Add to Clipper
+// Polys from MarchingSquares are CW if hole; reverse
+polys.forEach(poly => poly.reverseOrientation())
+cp = ClipperPaths.fromPolygons(polys, { scalingFactor: 100 })
+cleanedPolys = cp.clean().toPolygons()
 
-
-
-
-
-
-
-
-
-
-buffer = new ArrayBuffer((pixels.length) * Uint8Array.BYTES_PER_ELEMENT)
-bufferArr = new Uint8Array(buffer)
-for ( let i = 3, j = 0, iMax = pixels.length; i < iMax; i += 4, j += 1 ) {
-  bufferArr[j] = pixels[i];
-}
-summarizeSinglePixelData(pixels)
-
-threshold = 255 * 0.75
-width = tile.evPixelCache.width
-height = tile.evPixelCache.height
-for ( let x = 0; x < width; x += 4 ) {
-  for ( let y = 0; y < height; y += 4 ) {
-    const i = y * width + x;
-    if ( bufferArr > threshold ) Draw.point({ x, y }, { radius: 1 })
-  }
-}
-
-/* Doesn't like Uint8Arrays
-rowViews = [];
-width = tile.evPixelCache.width / 4
-height = tile.evPixelCache.height / 4
-r = 0
-start = 0
-end = width
-for ( r = 0, start = 0, end = width, rMax = height; r < rMax; r += 1, start += width, end += width ) {
-  rowViews[r] = new Uint8Array(buffer, start * Uint8Array.BYTES_PER_ELEMENT, width);
-}
-
-lines = api.MarchingSquares.isoLines(rowViews, 255 * 0.75)
-*/
-
-width = tile.evPixelCache.width / 4
-height = tile.evPixelCache.height / 4
-rowViews = new Array(height);
-r = 0
-start = 0
-end = width
-for ( r = 0, start = 0, end = width, rMax = height; r < rMax; r += 1, start += width, end += width ) {
-  rowViews[r] = [...bufferArr.slice(start, end)];
-}
-
-lines = api.MarchingSquares.isoLines(rowViews, 255 * 0.75)
-
-// Create polygons scaled between 0 and 1, based on width and height.
-invWidth = 1 / width;
-invHeight = 1 / height;
-nPolys = lines.length;
-polys = new Array(nPolys);
-for ( let i = 0; i < nPolys; i += 1 ) {
-  polys[i] = new PIXI.Polygon(lines[i].flatMap(pt => [pt[0] * invWidth, pt[1] * invHeight]))
-}
-
-// Draw each
-polys.forEach(poly => {
-  Draw.shape(poly.scale(500, 500))
+// Draw non-holes for testing
+cleanedPolys.forEach(poly => {
+  if ( poly.isHole ) return;
+  Draw.shape(poly, { color: Draw.COLORS.blue })
 })
 
+cleanedPolys.map(poly => poly.area)
 
+// Drop polys with very small areas
+cleanedPolys = cleanedPolys.filter(poly => poly.area > 10);
+cleanedPolys.forEach(poly => Draw.shape(poly, { color: Draw.COLORS.blue }))
+
+// Earcut the polys
+cp = ClipperPaths.fromPolygons(polys, { scalingFactor: 100 })
+cpCleaned = cp.clean().;
+
+
+polys = tile.tokenvisibility.alphaThresholdPolygon.toPolygons()
+polys.forEach(poly => Draw.shape(poly, { color: Draw.COLORS.blue, fill: Draw.COLORS.blue, fillAlpha: 0.25 }))
+
+tris = tile.tokenvisibility.alphaThresholdTriangles
+tris.forEach(tri => Draw.shape(tri.toPolygon(), { color: Draw.COLORS.blue, fill: Draw.COLORS.blue, fillAlpha: 0.25 }))

@@ -362,11 +362,6 @@ export class GeometryDesc {
    * - @prop {Uint16Array} indices
    */
   static polygonTopBottomFaces(poly, { elevation = 0, top = true, addUVs = true, addNormals = true } = {}) {
-    if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
-
-    // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
-    const flip = top;
-
     /* Testing
     poly = _token.constrainedTokenBorder
     vs = PIXI.utils.earcut(poly.points)
@@ -383,11 +378,29 @@ export class GeometryDesc {
     tris.map(tri => foundry.utils.orient2dFast(tri.a, tri.b, tri.c))
     */
 
+    // Because Foundry uses - axis to move "up", CCW and CW will get flipped in WebGPU.
+    const flip = top;
+
+    let vertices2d;
+    let holes;
+
     // Earcut to determine indices. Then construct the vertices.
-    const numVertices = Math.floor(poly.points.length / 2);
-    const nCoords = 3 + (2 * addUVs) + (3 * addNormals);
-    const vertices = new Float32Array(numVertices * nCoords);
-    const indices = new Uint16Array(PIXI.utils.earcut(poly.points));
+    if ( poly instanceof CONFIG.GeometryLib.ClipperPaths ) {
+      // Assume a more complex shape, possibly with holes. See ClipperPaths.prototype.earcut.
+      const coords = poly.toEarcutCoordinates();
+      vertices2d = coords.vertices;
+      if ( poly.scalingFactor !== 1 ) {
+        const invScale = 1 / poly.scalingFactor;
+        for ( let i = 0, iMax = vertices2d.length; i < iMax; i += 1 ) vertices2d[i] *= invScale; // In place; faster than using map.
+      }
+      holes = coords.holes;
+    } else {
+      if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
+      vertices2d = poly.points;
+    }
+
+    const indices = new Uint16Array(PIXI.utils.earcut(vertices2d, holes)); // Note: dimensions = 2.
+
 
     // For Foundry's  coordinate system, indices are always CCW triangles.
     // Flip to make CW if constructing the bottom face.
@@ -404,8 +417,8 @@ export class GeometryDesc {
     let v;
     if ( addUVs ) {
       // Set UVs to the coordinate within the bounding box.
-      const xMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 === 0))
-      const yMinMax = Math.minMax(...poly.points.filter((_coord, idx) => idx % 2 !== 0))
+      const xMinMax = Math.minMax(...vertices2d.filter((_coord, idx) => idx % 2 === 0))
+      const yMinMax = Math.minMax(...vertices2d.filter((_coord, idx) => idx % 2 !== 0))
       const width = xMinMax.max - xMinMax.min;
       const height = yMinMax.max - yMinMax.min;
       const uOrig = x => (x - xMinMax.min) / width;
@@ -419,11 +432,18 @@ export class GeometryDesc {
     }
     const n = 1 * (-flip); // Flip is true: -1; flip is false: 1.
 
+    // Copy the 2d points to 3d
+    const numVertices = vertices2d.length * 0.5;
+    const nCoords = 3 + (2 * addUVs) + (3 * addNormals);
+    const vertices = new Float32Array(numVertices * nCoords);
     let i = 0;
-    for ( const pt of poly.iteratePoints({ closed: false }) ) {
+    for ( let j = 0, jMax = vertices2d.length; j < jMax; j += 2 ) {
+      const x = vertices2d[j];
+      const y = vertices2d[j + 1];
+
       // Position
-      vertices[i++] = pt.x;
-      vertices[i++] = pt.y;
+      vertices[i++] = x;
+      vertices[i++] = y;
       vertices[i++] = elevation;
 
       if ( addNormals ) {
@@ -432,11 +452,10 @@ export class GeometryDesc {
         vertices[i++] = n;
       }
       if ( addUVs ) {
-        vertices[i++] = u(pt.x);
-        vertices[i++] = v(pt.y);
+        vertices[i++] = u(x);
+        vertices[i++] = v(y);
       }
     }
-
     return { indices, vertices, numVertices };
   }
 
