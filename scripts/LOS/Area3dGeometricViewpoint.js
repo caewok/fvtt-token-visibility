@@ -234,6 +234,19 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
 
+    // Locate obstacles behind the target.
+    const backgroundTiles = this.constructor.visionTriangle.findBackgroundTiles();
+    const backgroundWalls = this.constructor.visionTriangle.findBackgroundWalls();
+
+    // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
+    const lookAtM = this.targetLookAtMatrix;
+    const perspectiveM = this.targetPerspectiveMatrix;
+    const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    backgroundTilesPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
+    backgroundWallsPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
+
     // Draw the target in 3d, centered at 0,0.
     // Scale the target graphics to fit in the view window.
     targetPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.red, width: 2, fill: colors.lightred, fillAlpha: 0.5 }));

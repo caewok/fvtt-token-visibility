@@ -1,4 +1,5 @@
 /* globals
+canvas,
 ClipperLib,
 CONFIG,
 foundry,
@@ -357,6 +358,15 @@ export class VisionTriangle {
     return (oAB * oBC >= 0) && (oAB * orient2d(this.c, this.a, p) >= 0);
   }
 
+  pointInsideInfiniteTriangle(p) {
+    const orient2d = foundry.utils.orient2dFast;
+
+    // All orientations must be the same sign or 0.
+    const oAB = orient2d(this.a, this.b, p);
+    const oCA = orient2d(this.c, this.a, p);
+    return (oAB * oCA >= 0)
+  }
+
   draw(opts = {}) {
     Draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
   }
@@ -373,7 +383,7 @@ export class VisionTriangle {
     top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
     bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
 
-    if ( top < this.elevationZ.min || bottom > this.elevationZ.max ) return false;
+    if ( top <= this.elevationZ.min || bottom >= this.elevationZ.max ) return false;
 
     // Ignore walls not within the elevation vision rectangle.
     const { a, b } = edge;
@@ -388,14 +398,53 @@ export class VisionTriangle {
 
   containsWall(wall) { return this.containsEdge(wall.edge); }
 
+  wallInBackground(wall) { return this.edgeInBackground(wall.edge); }
+
+  infinitePoints() {
+    const dist2 = Math.pow(canvas.dimensions.maxR, 2);
+    const b = this.a.towardsPointSquared(this.b, dist2);
+    const c = this.a.towardsPointSquared(this.c, dist2);
+    return { b, c };
+  }
+
+  edgeInBackground(edge) {
+    // Either it is a foreground wall or a background wall.
+    if ( this.containsEdge(edge) ) return false;
+
+    // Use an infinite triangle.
+    if ( this.pointInsideInfiniteTriangle(edge.a)
+      || this.pointInsideInfiniteTriangle(edge.b) ) return true;
+
+    const { b, c } = this.infinitePoints();
+    const lsi = foundry.utils.lineSegmentIntersects;
+    return ( lsi(this.a, b, edge.a, edge.b) || lsi(this.a, c, edge.a, edge.b) );
+  }
+
+  tileInBackground(tile) {
+    // Only overhead tiles count for blocking vision
+    if ( tile.elevationE < tile.document.parent?.foregroundElevation ) return false;
+
+    // Either it is a foreground tile or a background tile.
+    if ( this.containsTile(tile) ) return false;
+
+    // Use an infinite triangle.
+    const alphaThreshold = CONFIG[MODULE_ID].alphaThreshold;
+    const tBounds = tile.evPixelCache.getThresholdCanvasBoundingBox(alphaThreshold);
+    const { b, c } = this.infinitePoints();
+    return tBounds.lineSegmentIntersects(this.a, b, { inside: true })
+      || tBounds.lineSegmentIntersects(this.a, c, { inside: true });
+  }
+
   containsTile(tile) {
+    // If the elevations don't change, the tile cannot be an obstacle.
+    if ( this.elevationZ.min === this.elevationZ.max ) return false;
 
     // Only overhead tiles count for blocking vision
     if ( tile.elevationE < tile.document.parent?.foregroundElevation ) return false;
 
     // Ignore tiles that are not within the elevation vision rectangle.
     const tileZ = tile.elevationZ
-    if ( tileZ < this.elevationZ.min || tileZ > this.elevationZ.max ) return false;
+    if ( tileZ <= this.elevationZ.min || tileZ >= this.elevationZ.max ) return false;
 
     // Use the alpha bounding box. This might be a polygon if the tile is rotated.
     const alphaThreshold = CONFIG[MODULE_ID].alphaThreshold;
@@ -418,6 +467,29 @@ export class VisionTriangle {
     const tBounds = token.constrainedTokenBorder;
     return tBounds.lineSegmentIntersects(this.a, this.b, { inside: true })
       || tBounds.lineSegmentIntersects(this.a, this.c, { inside: true });
+  }
+
+  backgroundBounds() {
+    const a = this.a;
+    const { b, c } = this.infinitePoints();
+    const xMinMax = Math.minMax(a.x, b.x, c.x);
+    const yMinMax = Math.minMax(a.y, b.y, c.y);
+    const bounds = new PIXI.Rectangle();
+    bounds.x = xMinMax.min;
+    bounds.y = yMinMax.min;
+    bounds.width = xMinMax.max - xMinMax.min;
+    bounds.height = yMinMax.max - yMinMax.min;
+    return bounds;
+  }
+
+  findBackgroundWalls() {
+    const collisionTest = o => this.wallInBackground(o.t);
+    return canvas.walls.quadtree.getObjects(this.backgroundBounds(), { collisionTest });
+  }
+
+  findBackgroundTiles() {
+    const collisionTest = o => this.tileInBackground(o.t);
+    return canvas.tiles.quadtree.getObjects(this.backgroundBounds(), { collisionTest });
   }
 
   /**
