@@ -1,5 +1,6 @@
 /* globals
 CONFIG,
+foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -244,38 +245,67 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     //   So measure closest intersect to the vision triangle, testing edges and center.
     //   Test only the 2d line—wall or tile triangle.
     //   If no intersect, test from center of triangle.
+    //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
 
     const lookAtM = this.targetLookAtMatrix;
     const perspectiveM = this.targetPerspectiveMatrix;
 
     const backgroundPolys = [];
+    const { a, b, c } = this.constructor.visionTriangle;
     backgroundTiles.forEach(tile => {
-      const triPts = this._filterPlaceableTrianglesByViewpoint(tile).map(tri => tri.transform(lookAtM)._clipPoints());
-      triPts.forEach(pts => {
-        const minZ = Math.min(pts[0].z, pts[1].z, pts[2].z);
-        const poly = new PIXI.Polygon(pts.map(pt => perspectiveM.multiplyPoint3d(pt, pt)));
+      const tris = this._filterPlaceableTrianglesByViewpoint(tile);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, b, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, b, tri.c, tri.a),
+          foundry.utils.lineLineIntersection(a, c, tri.a, tri.b),
+          foundry.utils.lineLineIntersection(a, c, tri.b, tri.c),
+          foundry.utils.lineLineIntersection(a, c, tri.c, tri.a)
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
         backgroundPolys.push({
           poly,
-          z: minZ,
+          dist2,
           color: colors.orange,
           fill: colors.orange,
         });
       });
     });
     backgroundWalls.forEach(wall => {
-      const triPts = this._filterPlaceableTrianglesByViewpoint(wall).map(tri => tri.transform(lookAtM)._clipPoints());
-      triPts.forEach(pts => {
-        const minZ = Math.min(pts[0].z, pts[1].z, pts[2].z);
-        const poly = new PIXI.Polygon(pts.map(pt => perspectiveM.multiplyPoint3d(pt, pt)));
+      const tris = this._filterPlaceableTrianglesByViewpoint(wall);
+      tris.forEach(tri => {
+        const ixs = [
+          foundry.utils.lineLineIntersection(a, b, wall.edge.a, wall.edge.b),
+          foundry.utils.lineLineIntersection(a, c, wall.edge.a, wall.edge.b),
+        ];
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+        }, Number.POSITIVE_INFINITY);
+        const pts = tri
+          .transform(lookAtM)
+          ._clipPoints()
+          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+        const poly = new PIXI.Polygon(pts);
         backgroundPolys.push({
           poly,
-          z: minZ,
+          dist2,
           color: colors.gray,
           fill: colors.gray,
         });
       });
     });
-    backgroundPolys.sort((a, b) => a.z - b.z);
+
+    backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
     backgroundPolys.forEach(obj => drawTool.shape(obj.poly.scale(width, height), { color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }))
 
     // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
