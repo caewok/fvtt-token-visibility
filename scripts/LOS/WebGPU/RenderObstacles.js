@@ -7,7 +7,7 @@ CONFIG,
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
 import { Settings } from "../../settings.js";
-import { VisionTriangle } from "../VisionPolygon.js";
+import { VisionTriangle } from "../VisionTriangle.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
   DrawableWallInstances,

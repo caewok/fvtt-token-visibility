@@ -4,6 +4,7 @@ CONST,
 canvas,
 foundry,
 PIXI,
+Tile,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -13,7 +14,7 @@ import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
-import { VisionPolygon, VisionTriangle } from "./VisionPolygon.js";
+import { VisionTriangle } from "./VisionTriangle.js";
 import { AbstractPolygonTriangles } from "./PlaceableTriangles.js";
 import { NULL_SET } from "./util.js";
 
@@ -65,18 +66,6 @@ export class AbstractViewpoint {
 
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
-
-  /**
-   * The viewable area between viewer and target.
-   * Typically, this is a triangle, but if viewed head-on, it will be a triangle
-   * with the portion of the target between viewer and target center added on.
-   * @typedef {PIXI.Polygon} visionPolygon
-   * @property {Segment[]} edges
-   * @property {PIXI.Rectangle} bounds
-   */
-  get visionPolygon() {
-    return VisionPolygon.build(this.viewpoint, this.viewerLOS.target);
-  }
 
   /**
    * Determine percentage of the token visible using the class methodology.

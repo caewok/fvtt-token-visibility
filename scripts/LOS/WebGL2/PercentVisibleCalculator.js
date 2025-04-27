@@ -13,7 +13,7 @@ import { AsyncQueue } from "../WebGPU/AsyncQueue.js";
 import { WebGPUSumRedPixels } from "../WebGPU/SumPixels.js";
 import { AbstractViewerLOS } from "../AbstractViewerLOS.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { VisionTriangle } from "../VisionPolygon.js";
+import { VisionTriangle } from "../VisionTriangle.js";
 import { Settings } from "../../settings.js";
 
 import { PointsViewpoint } from "../PointsViewpoint.js";
