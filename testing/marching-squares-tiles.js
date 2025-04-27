@@ -151,10 +151,18 @@ cleanedPolys = cleanedPolys.filter(poly => poly.area > 10);
 cleanedPolys.forEach(poly => Draw.shape(poly, { color: Draw.COLORS.blue }))
 
 // Earcut the polys
+polys.forEach(poly => poly.reverseOrientation())
 cp = ClipperPaths.fromPolygons(polys, { scalingFactor: 100 })
-cpCleaned = cp.clean().;
+cpCleaned = cp.clean().trimByArea(25);
+polys = cpCleaned.toPolygons()
+
+polys.forEach(poly => {
+  const color = (poly.isHole ?? !poly.isClockwise) ? Draw.COLORS.red : Draw.COLORS.blue;
+  Draw.shape(poly, { color })
+})
 
 
+// Testing
 polys = tile.tokenvisibility.alphaThresholdPolygon.toPolygons()
 polys.forEach(poly => Draw.shape(poly, { color: Draw.COLORS.blue, fill: Draw.COLORS.blue, fillAlpha: 0.25 }))
 

@@ -239,13 +239,50 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const backgroundWalls = this.constructor.visionTriangle.findBackgroundWalls();
 
     // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
+    // Simpler:
+    //   Mainly we are looking at approx. a 2d overhead view.
+    //   So measure closest intersect to the vision triangle, testing edges and center.
+    //   Test only the 2d line—wall or tile triangle.
+    //   If no intersect, test from center of triangle.
+
     const lookAtM = this.targetLookAtMatrix;
     const perspectiveM = this.targetPerspectiveMatrix;
-    const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-    const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
 
-    backgroundTilesPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
-    backgroundWallsPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
+    const backgroundPolys = [];
+    backgroundTiles.forEach(tile => {
+      const triPts = this._filterPlaceableTrianglesByViewpoint(tile).map(tri => tri.transform(lookAtM)._clipPoints());
+      triPts.forEach(pts => {
+        const minZ = Math.min(pts[0].z, pts[1].z, pts[2].z);
+        const poly = new PIXI.Polygon(pts.map(pt => perspectiveM.multiplyPoint3d(pt, pt)));
+        backgroundPolys.push({
+          poly,
+          z: minZ,
+          color: colors.orange,
+          fill: colors.orange,
+        });
+      });
+    });
+    backgroundWalls.forEach(wall => {
+      const triPts = this._filterPlaceableTrianglesByViewpoint(wall).map(tri => tri.transform(lookAtM)._clipPoints());
+      triPts.forEach(pts => {
+        const minZ = Math.min(pts[0].z, pts[1].z, pts[2].z);
+        const poly = new PIXI.Polygon(pts.map(pt => perspectiveM.multiplyPoint3d(pt, pt)));
+        backgroundPolys.push({
+          poly,
+          z: minZ,
+          color: colors.gray,
+          fill: colors.gray,
+        });
+      });
+    });
+    backgroundPolys.sort((a, b) => a.z - b.z);
+    backgroundPolys.forEach(obj => drawTool.shape(obj.poly.scale(width, height), { color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }))
+
+    // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    // const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    // backgroundTilesPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
+    // backgroundWallsPolys.forEach(poly => drawTool.shape(poly.scale(width, height), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
 
     // Draw the target in 3d, centered at 0,0.
     // Scale the target graphics to fit in the view window.
