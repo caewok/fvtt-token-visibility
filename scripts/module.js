@@ -94,6 +94,9 @@ import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU, DebugVisibili
 
 import * as MarchingSquares from "./marchingsquares-esm.js";
 
+// See https://github.com/ErikSom/Clipper2-WASM/tree/main
+import * as Clipper2Z from "./clipper2wasm/clipper2z.js";
+
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -254,6 +257,11 @@ Hooks.once("init", function() {
     PATCHER,
     Patcher, HookPatch, MethodPatch, LibWrapperPatch
   };
+
+  Clipper2Z.default({ locateFile: () => "./modules/tokenvisibility/scripts/clipper2wasm/clipper2z.wasm" }).then(clipper2 => {
+    game.modules.get(MODULE_ID).api.clipper2 = clipper2;
+    console.debug(`${MODULE_ID}|Clipper2 loaded.`);
+  });
 });
 
 
