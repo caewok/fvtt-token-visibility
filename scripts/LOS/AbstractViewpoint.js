@@ -299,9 +299,7 @@ export class AbstractViewpoint {
   }
 
   static filterPlaceableTrianglesByViewpoint(placeable, viewpoint, useAlphaTriangles = true) {
-    const triangles = ( useAlphaTriangles && (placeable instanceof Tile) )
-      ? placeable[AbstractPolygonTriangles.ID].alphaTriangles
-      : placeable[AbstractPolygonTriangles.ID].triangles;
+    const triangles = placeable[AbstractPolygonTriangles.ID].triangles;
     return triangles.filter(tri => tri.isFacing(viewpoint));
   }
 

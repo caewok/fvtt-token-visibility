@@ -7,18 +7,13 @@ PIXI,
 */
 "use strict";
 
-// Geometry folder
-import { Draw } from "../geometry/Draw.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
-import { orient3dFast } from "./util.js";
-
 import { MODULE_ID } from "../const.js";
 import { GeometryDesc } from "./WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./WebGPU/GeometryToken.js";
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
-import { Triangle3d } from "./Polygon3d.js";
+import { Polygon3d, Triangle3d } from "./Polygon3d.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
@@ -205,17 +200,20 @@ export class TileTriangles extends AbstractPolygonTriangles {
    * On placeable creation hook, also add isoband polygons representing solid areas of the tile.
    */
   static _onPlaceableCreation(tile) {
-    AbstractPolygonTriangles._onPlaceableCreation(tile);
     const obj = tile[this.ID] ??= {};
-    obj.alphaThresholdPolygon = this.convertTileToIsoBands(tile); // ClipperPaths or Polygon
-    obj.alphaThresholdTriangles = obj.alphaThresholdPolygon
-      ? this.polygonsToFaceTriangles(obj.alphaThresholdPolygon) : null;
-
     const self = this;
-    Object.defineProperty(obj, "alphaTriangles", {
-      get() { return self.alphaTrianglesForPlaceable(tile); },
+    Object.defineProperty(obj, "triangles", {
+      get() { return self.trianglesForPlaceable(tile); },
       configurable: true,
     });
+
+    obj.alphaThresholdPolygons = null;
+    obj.alphaThresholdTriangles = null;
+    obj.alphaThresholdPaths = this.convertTileToIsoBands(tile); // ClipperPaths or Polygon
+    if ( obj.alphaThresholdPaths ) {
+      obj.alphaThresholdPolygons = Polygon3d.fromClipperPaths(obj.alphaThresholdPaths);
+      obj.alphaThresholdTriangles = this.polygonsToFaceTriangles(obj.alphaThresholdPaths);
+    }
   }
 
   /** @type {Triangle3d[]} */
@@ -241,6 +239,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
       || !tile.evPixelCache ) return null;
     const threshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
     const pixels = tile.evPixelCache.pixels;
+    const ClipperPaths = CONFIG.GeometryLib.ClipperPaths;
 
     // Convert pixels to isobands.
     const width = tile.evPixelCache.width
@@ -255,9 +254,9 @@ export class TileTriangles extends AbstractPolygonTriangles {
       bands = MarchingSquares.isoBands(rowViews, threshold, 256 - threshold);
     } catch ( err ) {
       console.error(err);
-      return [tile.evPixelCache.getThresholdLocalBoundingBox(CONFIG[MODULE_ID].alphaThreshold).toPolygon()];
+      const poly = tile.evPixelCache.getThresholdLocalBoundingBox(CONFIG[MODULE_ID].alphaThreshold).toPolygon();
+      return ClipperPaths.fromPolygons([poly]);
     }
-
 
     /* Don't want to scale between 0 and 1 b/c using evPixelCache transform on the local coordinates.
     // Create polygons scaled between 0 and 1, based on width and height.
@@ -284,11 +283,14 @@ export class TileTriangles extends AbstractPolygonTriangles {
     return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold);
   }
 
-  static alphaTrianglesForPlaceable(tile) {
+  static trianglesForPlaceable(tile) {
     if ( !this.instanceHandler.instanceIndexFromId.has(tile.id) ) return [];
 
+    const triType = CONFIG[MODULE_ID].tileThresholdShape;
     const obj = tile[MODULE_ID] ?? {};
-    if ( !obj.alphaThresholdTriangles || !tile.evPixelCache ) return this.trianglesForPlaceable(tile);
+    if ( triType === "triangles"
+      || !Object.hasOwn(obj, triType) // Don't pull triType directly, which could result in infinite loop if it is "triangle".
+      || !tile.evPixelCache ) return AbstractPolygonTriangles.trianglesForPlaceable.call(this, tile);
 
     // Expand the canvas conversion matrix to 4x4.
     // Last row of the 3x3 is the translation matrix, which should be moved to row 4.
@@ -303,7 +305,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
     // Add elevation translation.
     const elevationT = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, tile.elevationZ);
     const M = toCanvasM.multiply4x4(elevationT);
-    return obj.alphaThresholdTriangles.map(tri => tri.transform(M));
+    return obj[triType].map(tri => tri.transform(M));
   }
 }
 
