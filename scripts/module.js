@@ -97,6 +97,9 @@ import * as MarchingSquares from "./marchingsquares-esm.js";
 // See https://github.com/ErikSom/Clipper2-WASM/tree/main
 import * as Clipper2Z from "./clipper2wasm/clipper2z.js";
 
+// See https://www.npmjs.com/package/clipper2-js
+import * as Clipper2 from "./clipper2_esm2020/clipper2-js.mjs";
+
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -253,6 +256,8 @@ Hooks.once("init", function() {
     },
 
     MarchingSquares,
+
+    Clipper2,
 
     PATCHER,
     Patcher, HookPatch, MethodPatch, LibWrapperPatch
