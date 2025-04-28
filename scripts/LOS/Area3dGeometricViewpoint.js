@@ -171,17 +171,17 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
   }
 
   _lookAtObject(object, lookAtM) {
-    return this._filterPlaceableTrianglesByViewpoint(object)
-      .map(tri => tri.transform(lookAtM).toPolygon());
+    return this._filterPlaceablePolygonsByViewpoint(object)
+      .map(poly => poly.transform(lookAtM).toPolygon());
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
-    return this._filterPlaceableTrianglesByViewpoint(object)
-      .map(tri => tri
+    return this._filterPlaceablePolygonsByViewpoint(object)
+      .map(poly => poly
         .transform(lookAtM)
-        ._clipPoints()
-        .map(pt => perspectiveM.multiplyPoint3d(pt, pt)))
-      .map(pts => new PIXI.Polygon(pts)); // PIXI.Polygon will drop the z values, which should all be ~ 1.
+        .clipZ()
+        .transform(perspectiveM))
+      .map(poly => poly.to2dPolygon()); // PIXI.Polygon will drop the z values, which should all be ~ 1.
   }
 
 
@@ -199,7 +199,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
-   _gridSquareArea(lookAtM, perspectiveM) {
+  _gridSquareArea(lookAtM, perspectiveM) {
      const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
      const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();
@@ -257,8 +257,8 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const backgroundPolys = [];
     const { a, b, c } = this.constructor.visionTriangle;
     backgroundTiles.forEach(tile => {
-      const tris = this._filterPlaceableTrianglesByViewpoint(tile);
-      tris.forEach(tri => {
+      const polys = this._filterPlaceablePolygonsByViewpoint(tile);
+      polys.forEach(poly => {
         const ixs = [
           foundry.utils.lineLineIntersection(a, b, tri.a, tri.b),
           foundry.utils.lineLineIntersection(a, b, tri.b, tri.c),
@@ -271,11 +271,11 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
           if ( !curr ) return acc;
           return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
         }, Number.POSITIVE_INFINITY);
-        const pts = tri
+        poly = poly
           .transform(lookAtM)
-          ._clipPoints()
-          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
-        const poly = new PIXI.Polygon(pts);
+          .clipZ()
+          .transform(perspectiveM)
+          .to2dPolygon();
         backgroundPolys.push({
           poly,
           dist2,
@@ -285,8 +285,8 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
       });
     });
     backgroundWalls.forEach(wall => {
-      const tris = this._filterPlaceableTrianglesByViewpoint(wall);
-      tris.forEach(tri => {
+      const polys = this._filterPlaceablePolygonsByViewpoint(wall);
+      polys.forEach(poly => {
         const ixs = [
           foundry.utils.lineLineIntersection(a, b, wall.edge.a, wall.edge.b),
           foundry.utils.lineLineIntersection(a, c, wall.edge.a, wall.edge.b),
@@ -295,11 +295,11 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
           if ( !curr ) return acc;
           return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
         }, Number.POSITIVE_INFINITY);
-        const pts = tri
+        poly = tri
           .transform(lookAtM)
-          ._clipPoints()
-          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
-        const poly = new PIXI.Polygon(pts);
+          .clipZ()
+          .transform(perspectiveM)
+          .to2dPolygon();
         backgroundPolys.push({
           poly,
           dist2,

@@ -130,7 +130,7 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
     this.viewpoint = viewerLocation;
     this.visibleTargetShape = this._calculateVisibleTargetShape(target);
     this.visionTriangle = VisionTriangle.build(viewerLocation, target);
-    this.filterPotentiallyBlockingTriangles(viewer, viewerLocation, target);
+    this.filterPotentiallyBlockingPolygons(viewer, viewerLocation, target);
     this.targetPoints = this.constructTargetPoints(target);
   }
 
@@ -164,8 +164,6 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
     cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
-
-    cfg.useAlphaTriangles = true;
 
     return cfg;
   }
@@ -205,28 +203,29 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
 
   /* ----- NOTE: Collision testing ----- */
 
-  /** @param {Triangle[]} */
-  triangles = [];
+  /** @param {Polygon3d[]} */
+  polygons = [];
 
-  terrainTriangles = [];
+  /** @param {Polygon3d[]} */
+  terrainPolygons = [];
 
   /**
-   * Filter the triangles that might block the viewer from the target.
+   * Filter the polygons that might block the viewer from the target.
    */
-  filterPotentiallyBlockingTriangles(viewer, viewerLocation, target) {
-    this.triangles.length = 0;
-    this.terrainTriangles.length = 0;
+  filterPotentiallyBlockingPolygons(viewer, viewerLocation, target) {
+    this.polygons.length = 0;
+    this.terrainPolygons.length = 0;
     const blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
 
     const { terrainWalls, tiles, tokens, walls } = blockingObjects;
     for ( const terrainWall of terrainWalls ) {
-      const triangles = AbstractViewpoint.filterPlaceableTrianglesByViewpoint(terrainWall, viewerLocation);
-      this.terrainTriangles.push(...triangles);
+      const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(terrainWall, viewerLocation);
+      this.terrainPolygons.push(...polygons);
     }
     for ( const placeable of [...tiles, ...tokens, ...walls] ) {
-      const triangles = AbstractViewpoint.filterPlaceableTrianglesByViewpoint(placeable, viewerLocation);
-      this.triangles.push(...triangles);
+      const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
+      this.polygons.push(...polygons);
     }
   }
 
@@ -284,8 +283,8 @@ export class PointsPercentVisibleCalculator extends PercentVisibleCalculatorAbst
       // Note: cannot use Point3d._tmp with intersection.
       // TODO: Does intersection return t values if the intersection is outside the viewpoint --> target?
       let nCollisions = 0;
-      let hasCollision = this.triangles.some(tri => tri.intersection(viewpoint, targetPoint.subtract(viewpoint)))
-        || this.terrainTriangles.some(tri => {
+      let hasCollision = this.polygons.some(tri => tri.intersection(viewpoint, targetPoint.subtract(viewpoint)))
+        || this.terrainPolygons.some(tri => {
         nCollisions += Boolean(tri.intersection(viewpoint, targetPoint.subtract(viewpoint)));
         return nCollisions >= 2;
       });
@@ -677,8 +676,6 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
 
-    cfg.useAlphaTriangles = true;
-
     return cfg;
   }
 
@@ -833,17 +830,17 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
   }
 
   _lookAtObject(object, lookAtM) {
-    return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
-      .map(tri => tri.transform(lookAtM).toPolygon());
+    return AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint)
+      .map(poly => poly.transform(lookAtM).toPolygon2d());
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
-    return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
-      .map(tri => tri
+    return AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint)
+      .map(poly => poly
         .transform(lookAtM)
         .clipZ()
-        .transform(perspectiveM))
-      .map(tri => tri.to2dPolygon());
+        .transform(perspectiveM)
+        .to2dPolygon())
   }
 
   /** @type {AbstractPolygonTriangles[]} */
@@ -903,8 +900,8 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     const backgroundPolys = [];
     const { a, b, c } = this.constructor.visionTriangle;
     backgroundTiles.forEach(tile => {
-      const tris = this._filterPlaceableTrianglesByViewpoint(tile);
-      tris.forEach(tri => {
+      const polys = this._filterPlaceablePolygonsByViewpoint(tile);
+      polys.forEach(tri => {
         const ixs = [
           foundry.utils.lineLineIntersection(a, b, tri.a, tri.b),
           foundry.utils.lineLineIntersection(a, b, tri.b, tri.c),
@@ -917,11 +914,11 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
           if ( !curr ) return acc;
           return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
         }, Number.POSITIVE_INFINITY);
-        const pts = tri
+        poly = poly
           .transform(lookAtM)
-          ._clipPoints()
-          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
-        const poly = new PIXI.Polygon(pts);
+          .clipZ()
+          .transform(perspectiveM)
+          .to2dPolygon();
         backgroundPolys.push({
           poly,
           dist2,
@@ -931,8 +928,8 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
       });
     });
     backgroundWalls.forEach(wall => {
-      const tris = this._filterPlaceableTrianglesByViewpoint(wall);
-      tris.forEach(tri => {
+      const polys = this._filterPlaceablePolygonsByViewpoint(wall);
+      polys.forEach(poly => {
         const ixs = [
           foundry.utils.lineLineIntersection(a, b, wall.edge.a, wall.edge.b),
           foundry.utils.lineLineIntersection(a, c, wall.edge.a, wall.edge.b),
@@ -941,11 +938,11 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
           if ( !curr ) return acc;
           return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
         }, Number.POSITIVE_INFINITY);
-        const pts = tri
+        poly = poly
           .transform(lookAtM)
-          ._clipPoints()
-          .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
-        const poly = new PIXI.Polygon(pts);
+          .clipZ()
+          .transform(perspectiveM)
+          .to2dPolygon();
         backgroundPolys.push({
           poly,
           dist2,

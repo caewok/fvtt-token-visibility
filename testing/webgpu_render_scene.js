@@ -286,8 +286,23 @@ async function percentFnAsync(calc) {
 
 
 N = 1000
+CONFIG.tokenvisibility.tileThresholdShape = "triangles"
+console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape}`)
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
+
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
+console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape}`)
+await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
+
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
+console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape}`)
+await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
+CONFIG.tokenvisibility.tileThresholdShape = "triangles"
+
+console.log(`\n3d`)
 await QBenchmarkLoop(N, calcArea3dWebGL2, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcArea3dPIXI, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
@@ -304,8 +319,23 @@ await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 
 
 N = 20
+CONFIG.tokenvisibility.tileThresholdShape = "triangles"
+console.log(`${CONFIG.tokenvisibility.tileThresholdShape}`)
 await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
 await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
+
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
+console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape}`)
+await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
+await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
+
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
+console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape}`)
+await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
+await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
+CONFIG.tokenvisibility.tileThresholdShape = "triangles"
+
+console.log(`\n3d`)
 await QBenchmarkLoopFn(N, percentFn, "calcArea3dWebGL2", calcArea3dWebGL2)
 await QBenchmarkLoopFn(N, percentFn, "calcArea3dPIXI", calcArea3dPIXI)
 await QBenchmarkLoopFn(N, percentFn, "WebGL", calcWebGL2)

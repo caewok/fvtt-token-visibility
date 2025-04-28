@@ -44,7 +44,7 @@ export class PointsViewpoint extends AbstractViewpoint {
    * @returns {number}
    */
   _percentVisible() {
-    this.filterPotentiallyBlockingTriangles();
+    this.filterPotentiallyBlockingPolygons();
     const targetPoints = this.constructTargetPoints();
     return (1 - this._testTargetPoints(targetPoints));
   }
@@ -90,8 +90,8 @@ export class PointsViewpoint extends AbstractViewpoint {
       // Note: cannot use Point3d._tmp with intersection.
       // TODO: Does intersection return t values if the intersection is outside the viewpoint --> target?
       let nCollisions = 0;
-      let hasCollision = this.triangles.some(tri => tri.intersection(viewpoint, targetPoint.subtract(viewpoint)))
-        || this.terrainTriangles.some(tri => {
+      let hasCollision = this.polygons.some(tri => tri.intersection(viewpoint, targetPoint.subtract(viewpoint)))
+        || this.terrainPolygons.some(tri => {
         nCollisions += Boolean(tri.intersection(viewpoint, targetPoint.subtract(viewpoint)));
         return nCollisions >= 2;
       });
@@ -145,24 +145,24 @@ export class PointsViewpoint extends AbstractViewpoint {
   /* ----- NOTE: Collision testing ----- */
 
   /** @param {Triangle[]} */
-  triangles = [];
+  polygons = [];
 
-  terrainTriangles = [];
+  terrainPolygons = [];
 
   /**
-   * Filter the triangles that might block the viewer from the target.
+   * Filter the polygons that might block the viewer from the target.
    */
-  filterPotentiallyBlockingTriangles() {
-    this.triangles.length = 0;
-    this.terrainTriangles.length = 0;
+  filterPotentiallyBlockingPolygons() {
+    this.polygons.length = 0;
+    this.terrainPolygons.length = 0;
     const { terrainWalls, tiles, tokens, walls } = this.blockingObjects;
     for ( const terrainWall of terrainWalls ) {
-      const triangles = this._filterPlaceableTrianglesByViewpoint(terrainWall);
-      this.terrainTriangles.push(...triangles);
+      const polygons = this._filterPlaceablePolygonsByViewpoint(terrainWall);
+      this.terrainPolygons.push(...polygons);
     }
     for ( const placeable of [...tiles, ...tokens, ...walls] ) {
-      const triangles = this._filterPlaceableTrianglesByViewpoint(placeable);
-      this.triangles.push(...triangles);
+      const polygons = this._filterPlaceablePolygonsByViewpoint(placeable);
+      this.polygons.push(...polygons);
     }
   }
 
