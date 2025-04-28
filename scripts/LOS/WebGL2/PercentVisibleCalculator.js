@@ -841,9 +841,9 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
     return AbstractViewpoint.filterPlaceableTrianglesByViewpoint(object, this.viewpoint)
       .map(tri => tri
         .transform(lookAtM)
-        ._clipPoints()
-        .map(pt => perspectiveM.multiplyPoint3d(pt, pt)))
-      .map(pts => new PIXI.Polygon(pts)); // PIXI.Polygon will drop the z values, which should all be ~ 1.
+        .clipZ()
+        .transform(perspectiveM))
+      .map(tri => tri.to2dPolygon());
   }
 
   /** @type {AbstractPolygonTriangles[]} */
