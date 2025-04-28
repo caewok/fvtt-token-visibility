@@ -81,6 +81,55 @@ export class Polygon3d {
     return out;
   }
 
+  static fromClipperPaths(cpObj, elevation = 0) {
+    return cpObj.paths.map(path => {
+      const n = path.length;
+      const invScale = 1 / cpObj.scalingFactor;
+      const poly3d = new this(n);
+      poly3d.forEach((pt, idx) => pt.set(path[idx].X * invScale, path[idx].Y * invScale, elevation));
+      return poly3d;
+    });
+  }
+
+  /**
+   * Iterate over the polygon's edges in order.
+   * If the polygon is closed, the last two points will be ignored.
+   * (Use close = true to return the last --> first edge.)
+   * @param {object} [options]
+   * @param {boolean} [close]   If true, return last point --> first point as edge.
+   * @returns { A: Point3d, B: Point3d } for each edge
+   * Edges link, such that edge0.B === edge.1.A.
+   */
+  *iterateEdges({close = true} = {}) {
+    const n = this.points.length;
+    if ( n < 2 ) return;
+
+    const firstA = this.points[0];
+    let A = firstA;
+    for ( let i = 1; i < n; i += 1 ) {
+      const B = this.points[i];
+      yield { A, B };
+      A = B;
+    }
+
+    if ( close ) {
+      const B = firstA;
+      yield { A, B };
+    }
+  }
+
+  /**
+   * Iterate over the polygon's {x, y} points in order.
+   * @param {object} [options]
+   * @param {boolean} [options.close]   If close, include the first point again.
+   * @returns {Point3d}
+   */
+  *iteratePoints({ close = true } = {}) {
+    const n = this.points.length;
+    for ( let i = 0; i < n; i += 1 ) yield this.points[i];
+    if ( close ) yield this.points[0];
+  }
+
   /**
    * Convert to 2d polygon, dropping z.
    * @returns {PIXI.Polygon}
@@ -215,7 +264,7 @@ export class Polygon3d {
    * @returns {PIXI.Point[]|Point3d[]} The new set of points as needed, or original points
    *   May return more points than provided (i.e, triangle clipped so it becomes a quad)
    */
-  static clipPlanePoints(points, { cutoff = 0, coordinate = "z", cmp = "lessThan" } = {}) {
+  clipPlanePoints({ cutoff = 0, coordinate = "z", cmp = "lessThan" } = {}) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     switch ( cmp ) {
       case "lessThanEqual": cmp = pt => pt[coordinate] <= cutoff; break;
@@ -228,17 +277,14 @@ export class Polygon3d {
     // If the edge crosses the z line, add a new point at the crossing point.
     // Discard all points that don't meet it.
     const toKeep = [];
-    const n = points.length;
-    let a = points.at(-1);
-    for ( let i = 0; i < n; i += 1 ) {
-      const b = points[i];
-      if ( cmp(a) ) toKeep.push(a);
-      if ( cmp(a) ^ cmp(b) ) {
+    for ( const edge of this.iterateEdges({ close: true }) ) {
+      const { A, B } = edge;
+      if ( cmp(A) ) toKeep.push(A);
+      if ( cmp(A) ^ cmp(B) ) {
         const newPt = new Point3d();
-        const res = a.projectToAxisValue(b, cutoff, coordinate, newPt);
-        if ( res && !(newPt.almostEqual(a) || newPt.almostEqual(b)) ) toKeep.push(newPt);
+        const res = A.projectToAxisValue(B, cutoff, coordinate, newPt);
+        if ( res && !(newPt.almostEqual(A) || newPt.almostEqual(B)) ) toKeep.push(newPt);
       }
-      a = b;
     }
     return toKeep;
   }
@@ -250,7 +296,7 @@ export class Polygon3d {
    * @returns {Polygon3d}
    */
   clipZ({ z = -0.1, keepLessThan = true } = {}) {
-    const toKeep = this.constructor.clipPlanePoints(this.points, {
+    const toKeep = this.clipPlanePoints({
       cutoff: z,
       coordinate: "z",
       cmp: keepLessThan ? "lessThan" : "greaterThan"
@@ -296,6 +342,8 @@ function pointFromVertices(i, vertices, indices, outPoint) {
 
 /* Testing
 Draw = CONFIG.GeometryLib.Draw
+Polygon3d = game.modules.get("tokenvisibility").api.triangles.Polygon3d
+Point3d = CONFIG.GeometryLib.threeD.Point3d
 
 poly = new PIXI.Polygon(
   100, 100,
@@ -304,6 +352,8 @@ poly = new PIXI.Polygon(
 )
 
 poly3d = Polygon3d.fromPolygon(poly, 20)
+poly3d.forEach((pt, idx) => console.log(`${idx} ${pt}`))
+
 rayOrigin = new Point3d(200, 300, 50)
 rayDirection = new Point3d(0, 0, -1)
 ix = poly3d.intersection(rayOrigin, rayDirection)
@@ -417,7 +467,7 @@ export class Triangle3d extends Polygon3d {
    * @returns {Polygon3d}
    */
   clipZ({ z = -0.1, keepLessThan = true } = {}) {
-    const toKeep = this.constructor.clipPlanePoints(this.points, {
+    const toKeep = this.clipPlanePoints({
       cutoff: z,
       coordinate: "z",
       cmp: keepLessThan ? "lessThan" : "greaterThan"
