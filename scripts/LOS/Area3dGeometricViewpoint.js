@@ -1,7 +1,5 @@
 /* globals
 CONFIG,
-foundry,
-PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -235,6 +233,8 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
    * Draw the 3d objects in the popout.
    */
   _draw3dDebug(drawTool, _renderer, _container, { width = 100, height = 100 } = {}) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
     // Recalculate the 3d objects.
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
@@ -255,60 +255,47 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     const perspectiveM = this.targetPerspectiveMatrix;
 
     const backgroundPolys = [];
-    const { a, b, c } = this.constructor.visionTriangle;
-    backgroundTiles.forEach(tile => {
-      const polys = this._filterPlaceablePolygonsByViewpoint(tile);
+    const { b, c } = this.constructor.visionTriangle;
+    const b3d = new Point3d(b.x, b.y, this.viewerLOS.targetCenter.z);
+    const c3d = new Point3d(c.x, c.y, this.viewerLOS.targetCenter.z);
+
+    const dirs = [
+      b3d.subtract(this.viewpoint).normalize(),
+      c3d.subtract(this.viewpoint).normalize(),
+      this.viewerLOS.targetCenter.subtract(this.viewpoint).normalize(),
+    ];
+
+    const backgroundTestFn = (placeable, color, fill) => {
+      const polys = this._filterPlaceablePolygonsByViewpoint(placeable);
       polys.forEach(poly => {
-        const ixs = [
-          foundry.utils.lineLineIntersection(a, b, tri.a, tri.b),
-          foundry.utils.lineLineIntersection(a, b, tri.b, tri.c),
-          foundry.utils.lineLineIntersection(a, b, tri.c, tri.a),
-          foundry.utils.lineLineIntersection(a, c, tri.a, tri.b),
-          foundry.utils.lineLineIntersection(a, c, tri.b, tri.c),
-          foundry.utils.lineLineIntersection(a, c, tri.c, tri.a)
-        ];
+        const ixs = [];
+        for ( const dir of dirs ) {
+          const ix = poly.intersection(this.viewpoint, dir);
+          if ( ix ) ixs.push(ix);
+        }
+        if ( !ixs.length ) ixs.push(poly.centroid());
+
         const dist2 = ixs.reduce((acc, curr) => {
           if ( !curr ) return acc;
-          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
+          return Math.min(acc, Point3d.distanceSquaredBetween(this.viewpoint, curr));
         }, Number.POSITIVE_INFINITY);
         poly = poly
           .transform(lookAtM)
           .clipZ()
           .transform(perspectiveM)
           .to2dPolygon();
+        if ( !poly.points.length ) return;
         backgroundPolys.push({
           poly,
           dist2,
-          color: colors.orange,
-          fill: colors.orange,
+          color,
+          fill,
         });
       });
-    });
-    backgroundWalls.forEach(wall => {
-      const polys = this._filterPlaceablePolygonsByViewpoint(wall);
-      polys.forEach(poly => {
-        const ixs = [
-          foundry.utils.lineLineIntersection(a, b, wall.edge.a, wall.edge.b),
-          foundry.utils.lineLineIntersection(a, c, wall.edge.a, wall.edge.b),
-        ];
-        const dist2 = ixs.reduce((acc, curr) => {
-          if ( !curr ) return acc;
-          return Math.min(acc, PIXI.Point.distanceSquaredBetween(a, curr));
-        }, Number.POSITIVE_INFINITY);
-        poly = tri
-          .transform(lookAtM)
-          .clipZ()
-          .transform(perspectiveM)
-          .to2dPolygon();
-        backgroundPolys.push({
-          poly,
-          dist2,
-          color: colors.gray,
-          fill: colors.gray,
-        });
-      });
-    });
+    }
 
+    backgroundTiles.forEach(tile => backgroundTestFn(tile, colors.orange, colors.orange));
+    backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
     backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
     backgroundPolys.forEach(obj => drawTool.shape(obj.poly.scale(width, height), { color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }))
 

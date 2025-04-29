@@ -218,6 +218,9 @@ await debugViewer.initialize();
 debugViewer.render();
 debugViewer.destroy();
 
+CONFIG.tokenvisibility.tileThresholdShape = "triangles"
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
 
 // All at once
 calcPoints = new PointsPercentVisibleCalculator()

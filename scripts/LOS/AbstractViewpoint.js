@@ -458,7 +458,7 @@ export class AbstractViewpoint {
    */
   _drawVisionTriangle(debugDraw) {
     debugDraw ??= this.viewerLOS.config.debugDraw;
-    debugDraw.shape(this.visionPolygon, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
+    //debugDraw.shape(this.constructor.visionTriangle, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
     console.log("Drawing vision triangle.")
   }
 }

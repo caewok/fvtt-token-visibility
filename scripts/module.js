@@ -137,9 +137,15 @@ Hooks.once("init", function() {
      * "triangles": Basic two flat triangles that form a rectangle
      * "alphaThresholdTriangles": triangles representing opaque parts of the tile texture (using earcut and marching squares)
      * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares)
-     * @type {"triangles"|"alphaThresholdTriangles"|"alphaThresholdPolygons"}
+     * @type {"triangles"|"alphaThresholdTriangles"|"alphaThresholdPolygons"} (See tileThresholdShapeOptions.)
      */
     tileThresholdShape: "triangles",
+
+    tileThresholdShapeOptions: {
+      BASIC_TRIANGLES: "triangles",
+      ALPHA_TRIANGLES: "alphaThresholdTriangles",
+      ALPHA_POLYGONS: "alphaThresholdPolygons",
+    },
 
     /**
      * Size of the render texture (width and height) used in the webGL LOS algorithms.

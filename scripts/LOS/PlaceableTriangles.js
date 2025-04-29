@@ -231,7 +231,10 @@ export class TileTriangles extends AbstractPolygonTriangles {
       ...Triangle3d.fromVertices(topFace.vertices, topFace.indices),
       ...Triangle3d.fromVertices(bottomFace.vertices, bottomFace.indices)
     );
-    return tris;
+
+    // Drop any triangles that are nearly collinear or have very small areas.
+    // Note: This works b/c the triangles all have z values of 0, which can be safely ignored.
+    return tris.filter(tri => !foundry.utils.orient2dFast(tri.a, tri.b, tri.c).almostEqual(0, 1e-06) );
   }
 
   static convertTileToIsoBands(tile) {

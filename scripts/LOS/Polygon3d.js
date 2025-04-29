@@ -9,6 +9,15 @@ import { orient3dFast } from "./util.js";
 const lte = (x, b) => x < b || x.almostEqual(b);
 const gte = (x, b) => x > b || x.almostEqual(b);
 
+function isNearCollinear3d(a, b, c) {
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+  // Collinear if the normal is 0,0,0.
+  const vAB = b.subtract(a, Point3d._tmp1);
+  const vAC = c.subtract(a, Point3d._tmp2);
+  const normal = vAB.cross(vAC, Point3d._tmp3);
+  return normal.almostEqual({ x: 0, y: 0, z: 0 });
+}
+
 /*
 3d Polygon representing a flat polygon plane.
 Can be transformed in 3d space.
@@ -31,6 +40,26 @@ export class Polygon3d {
     for ( let i = 0; i < n; i += 1 ) this.points[i] = new Point3d();
   }
 
+  /**
+   * Test and remove collinear points. Modified in place.
+   */
+  clean() {
+    // Drop collinear points.
+    const iter = this.iteratePoints({ close: true });
+    let a = iter.next().value;
+    let b = iter.next().value;
+    const newPoints = [a];
+    for ( let c of iter ) {
+      if ( !isNearCollinear3d(a, b, c) ) newPoints.push(b);
+      a = b;
+      b = c;
+    }
+    if ( newPoints.length < this.points.length ) {
+      this.points.length = newPoints.length;
+      this.points.forEach((pt, idx) => pt.copyFrom(newPoints[idx]));
+    }
+  }
+
   setZ(z = 0) { this.points.forEach(pt => pt.z = z); }
 
   get bounds() {
@@ -49,6 +78,12 @@ export class Polygon3d {
       y: Math.minMax(...ys),
       z: Math.minMax(...zs),
     };
+  }
+
+  get plane() {
+    // Assumes without testing that points are not collinear.
+    const Plane = CONFIG.GeometryLib.threeD.Plane;
+    return Plane.fromPoints(this.points[0], this.points[1], this.points[2]);
   }
 
   static fromPoints(pts) {
@@ -154,6 +189,21 @@ export class Polygon3d {
   }
 
   /**
+   * Centroid (center point) of this polygon.
+   * @returns {Point3d}
+   */
+  centroid() {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const plane = this.plane;
+
+    // Convert to 2d polygon and calculate centroid.
+    const M2d = plane.conversion2dMatrix;
+    const poly2d = new PIXI.Polygon(this.points.map(pt3d => M2d.multiplyPoint3d(pt3d).to2d()));
+    const ctr = poly2d.center;
+    return plane.conversion2dMatrixInverse.multiplyPoint3d(Point3d._tmp.set(ctr.x, ctr.y, 0));
+  }
+
+  /**
    * Iterator: a, b, c.
    */
   [Symbol.iterator]() {
@@ -225,8 +275,7 @@ export class Polygon3d {
   intersection(rayOrigin, rayDirection) {
     // First get the plane intersection.
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const Plane = CONFIG.GeometryLib.threeD.Plane;
-    const plane = Plane.fromPoints(this.points[0], this.points[1], this.points[2]);
+    const plane = this.plane;
     const t = plane.rayIntersection(rayOrigin, rayDirection);
     if ( t == null || t < 0 ) return null;
     if ( t.almostEqual(0) ) return rayOrigin;
@@ -339,42 +388,6 @@ function pointFromVertices(i, vertices, indices, outPoint) {
   outPoint.set(v[0], v[1], v[2]);
   return outPoint;
 }
-
-/* Testing
-Draw = CONFIG.GeometryLib.Draw
-Polygon3d = game.modules.get("tokenvisibility").api.triangles.Polygon3d
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-
-poly = new PIXI.Polygon(
-  100, 100,
-  100, 500,
-  500, 500,
-)
-
-poly3d = Polygon3d.fromPolygon(poly, 20)
-poly3d.forEach((pt, idx) => console.log(`${idx} ${pt}`))
-
-rayOrigin = new Point3d(200, 300, 50)
-rayDirection = new Point3d(0, 0, -1)
-ix = poly3d.intersection(rayOrigin, rayDirection)
-
-rayDirection = new Point3d(0, 0, 1)
-poly3d.intersection(rayOrigin, rayDirection)
-
-poly3d = Polygon3d.from3dPoints([
-  new Point3d(0, 100, -100),
-  new Point3d(0, 100, 500),
-  new Point3d(0, 500, 500)
-])
-
-clipped = poly3d.clipZ()
-clipped2 = poly3d.clipZ({ keepLessThan: false })
-
-poly3d.draw2d({ omitAxis: "x" })
-clipped.draw2d({ omitAxis: "x", color: Draw.COLORS.red })
-clipped2.draw2d({ omitAxis: "x", color: Draw.COLORS.blue })
-
-*/
 
 
 /**
@@ -516,3 +529,39 @@ export class Triangle3d extends Polygon3d {
   }
 }
 
+
+/* Testing
+Draw = CONFIG.GeometryLib.Draw
+Polygon3d = game.modules.get("tokenvisibility").api.triangles.Polygon3d
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+
+poly = new PIXI.Polygon(
+  100, 100,
+  100, 500,
+  500, 500,
+)
+
+poly3d = Polygon3d.fromPolygon(poly, 20)
+poly3d.forEach((pt, idx) => console.log(`${idx} ${pt}`))
+
+rayOrigin = new Point3d(200, 300, 50)
+rayDirection = new Point3d(0, 0, -1)
+ix = poly3d.intersection(rayOrigin, rayDirection)
+
+rayDirection = new Point3d(0, 0, 1)
+poly3d.intersection(rayOrigin, rayDirection)
+
+poly3d = Polygon3d.from3dPoints([
+  new Point3d(0, 100, -100),
+  new Point3d(0, 100, 500),
+  new Point3d(0, 500, 500)
+])
+
+clipped = poly3d.clipZ()
+clipped2 = poly3d.clipZ({ keepLessThan: false })
+
+poly3d.draw2d({ omitAxis: "x" })
+clipped.draw2d({ omitAxis: "x", color: Draw.COLORS.red })
+clipped2.draw2d({ omitAxis: "x", color: Draw.COLORS.blue })
+
+*/
