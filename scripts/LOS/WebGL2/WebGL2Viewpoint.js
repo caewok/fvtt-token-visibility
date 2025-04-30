@@ -20,7 +20,7 @@ export class WebGL2Viewpoint extends AbstractViewpoint {
 
   constructor(...args) {
     super(...args);
-    this.calc = CONFIG[MODULE_ID].percentVisibleWebGL2;
+    this.calc = CONFIG[MODULE_ID].sightCalculators.webGL2;
   }
 
   /** @type {boolean} */

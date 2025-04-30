@@ -7,6 +7,7 @@ CONFIG,
 
 // Base folder
 import { MODULE_ID } from "../const.js";
+import { Settings } from "../settings.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
@@ -14,11 +15,40 @@ import { Grid3dTriangles  } from "./PlaceableTriangles.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Camera } from "./WebGPU/Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
+import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
+/**
+ * An eye belong to a specific viewer.
+ * It defines a specific position, relative to the viewer, from which the viewpoint is used.
+ * Draws lines from the viewpoint to points on the target token to determine LOS.
+ */
 export class Area3dGeometricViewpoint extends AbstractViewpoint {
+  // TODO: Handle config and filtering obstacles.
+
+  constructor(...args) {
+    super(...args);
+    this.calc = CONFIG[MODULE_ID].sightCalculators.geometric;
+  }
+
+  /** @type {boolean} */
+  useCache = true;
+
+  _percentVisible() {
+    // TODO: Handle configuration options.
+    const viewer =  this.viewerLOS.viewer;
+    const target = this.viewerLOS.target;
+    const viewerLocation = this.viewpoint;
+    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+    if ( this.useCache ) return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
+    return this.calc._percentVisible(viewer, target, viewerLocation, targetLocation);
+  }
+}
+
+export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAbstract {
   /** @type {Camera} */
   camera = new Camera({
     glType: "webGL2",
@@ -33,76 +63,86 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
   static SCALING_FACTOR = 100;
 
   /**
-   * Clear any cached values related to the target or target location.
+   * Sets configuration to the current settings.
+   * @param {ViewpointConfig} [cfg]
+   * @returns {ViewpointConfig}
    */
-  clearCache() {
-    super.clearCache();
+  initializeConfig(cfg = {}) {
+    // Configs specific to the Points algorithm.
+    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+    cfg.useLitTargetShape ??= true;
+
+    // Blocking canvas objects.
+    cfg.blocking ??= {};
+    cfg.blocking.walls ??= true;
+    cfg.blocking.tiles ??= true;
+
+    // Blocking tokens.
+    cfg.blocking.tokens ??= {};
+    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+
+    return cfg;
   }
 
-  // ----- NOTE: Visibility testing ----- //
-
-  // TODO: Change lookAt and perspective when changing viewer or target
-  get targetLookAtMatrix() {
-    this.camera.cameraPosition = this.viewpoint;
-    this.camera.targetPosition = this.viewerLOS.targetCenter;
-    return this.camera.lookAtMatrix;
+  async initialize() {
+    this.config = this.initializeConfig();
   }
 
-  get targetPerspectiveMatrix() {
-    this.camera.cameraPosition = this.viewpoint;
-    this.camera.targetPosition = this.viewerLOS.targetCenter;
-    this.camera.setTargetTokenFrustrum(this.viewerLOS.target);
-    return this.camera.perspectiveMatrix;
+  viewer;
+
+  target;
+
+  viewpoint;
+
+  targetLocation;
+
+  targetArea = 0;
+
+  obscuredArea = 0;
+
+  gridSquareArea = 0;
+
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    this.viewer = viewer;
+    this.target = target;
+    this.viewpoint = viewerLocation;
+    this.targetLocation = targetLocation;
+
+    this.camera.cameraPosition = viewerLocation;
+    this.camera.targetPosition = targetLocation;
+    this.camera.setTargetTokenFrustrum(target);
+
+    this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
+      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+
+    const res = this._obscuredArea();
+    this.targetArea = res.targetArea;
+    this.obscuredArea = res.obscuredArea;
+
+    if ( this.config.largeTarget ) this.gridSquareArea = this._gridSquareArea();
   }
+
 
   /**
-   * Determine percentage area by estimating the blocking shapes geometrically.
+   * Determine the percentage red pixels for the current view.
    * @returns {number}
+   * @override
    */
-  _percentVisible() {
-    let { targetArea, obscuredArea } = this._obscuredArea();
-    // console.debug({ targetArea, obscuredArea });
-    if ( this.viewerLOS.config.largeTarget ) targetArea = Math.min(this._gridSquareArea() || 100_000, targetArea);
+  _percentRedPixels() {
+    if ( this.config.largeTarget ) this.targetArea = Math.min(this.gridSquareArea || 100_000, this.targetArea);
 
     // Round the percent seen so that near-zero areas are 0.
     // Because of trimming walls near the vision triangle, a small amount of token area can poke through
-    const percentSeen = targetArea ? obscuredArea / targetArea : 0;
+    const percentSeen = this.targetArea ? this.obscuredArea / this.targetArea : 0;
     if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
     return percentSeen;
   }
-
-  /** @type {Polygon3d} */
-  _blockingTerrainPolys;
-
-  /** @type {Polygon3d} */
-  _blockingPolys;
-
-  /** @type {Polygon3d} */
-  _targetPolys;
-
-  /** @type {Polygon3d} */
-  _gridPolys;
-
-
-  /**
-   * Construct polygons that are used to form the 2d perspective.
-   */
-  _constructPerspectivePolygons() {
-    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
-
-    // Construct polygons representing the perspective view of the target and blocking objects.
-    const lookAtM = this.targetLookAtMatrix;
-    const perspectiveM = this.targetPerspectiveMatrix;
-    const targetPolys = this._lookAtObjectWithPerspective(this.viewerLOS.target, lookAtM, perspectiveM);
-    const blockingPolys = this._blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
-      this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-
-    const blockingTerrainPolys = this._blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
-       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-
-    return { targetPolys, blockingPolys, blockingTerrainPolys };
-  }
-
 
   /**
    * Construct 2d perspective projection of each blocking points object.
@@ -170,7 +210,6 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
 
     let solution;
     let i = 0;
-
     if ( !nSimple ) {
       // Must be at least one polygon here.
       i += 1;
@@ -223,30 +262,37 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     return blockingTerrainPaths.combine();
   }
 
+
   /**
-   * @param {Placeable} object
-   * @param {Matrix} lookAtM
-   * @param {Matrix} perspectiveM
-   * @returns {Polygon3d}
+   * Construct polygons that are used to form the 2d perspective.
    */
+  _constructPerspectivePolygons() {
+    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
+
+    // Construct polygons representing the perspective view of the target and blocking objects.
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    const targetPolys = this._lookAtObjectWithPerspective(this.target, lookAtM, perspectiveM);
+
+    const blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
+      this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    const blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
+       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    return { targetPolys, blockingPolys, blockingTerrainPolys };
+  }
+
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
-    return this._filterPlaceablePolygonsByViewpoint(object)
+    return AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint)
       .map(poly => poly
         .transform(lookAtM)
         .clipZ()
-        .transform(perspectiveM));
+        .transform(perspectiveM))
   }
-
-
-  // ----- NOTE: Target properties ----- //
-
-
-  /* ----- NOTE: Blocking objects ----- */
-
 
   /** @type {AbstractPolygonTriangles[]} */
   static get grid3dShape() { return Grid3dTriangles.trianglesForGridShape(); }
-
 
   /**
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
@@ -260,7 +306,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
   }
 
   _gridPolygons(lookAtM, perspectiveM) {
-     const target = this.viewerLOS.target;
+     const target = this.target;
      const { x, y } = target.center;
      const z = target.bottomZ + (target.topZ - target.bottomZ);
      const gridTris = Grid3dTriangles.trianglesForGridShape();
@@ -274,15 +320,7 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
          .toPolygon());
   }
 
-  /* ----- NOTE: Other helper methods ----- */
-
-  destroy() {
-    this.clearCache();
-    super.destroy();
-  }
-
   /* ----- NOTE: Debugging methods ----- */
-
   /**
    * For debugging.
    * Draw the 3d objects in the popout.
@@ -371,6 +409,9 @@ export class Area3dGeometricViewpoint extends AbstractViewpoint {
     blockingPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
     blockingTerrainPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
   }
-
-
 }
+
+export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
+  algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC;
+}
+

@@ -17,7 +17,7 @@ import {
   DebugVisibilityViewerPoints,
   DebugVisibilityViewerWebGL2,
   DebugVisibilityViewerWebGPU,
-  DebugVisibilityViewerWebGPUAsync } from "./LOS/WebGL2/DebugVisibilityViewer.js";
+  DebugVisibilityViewerWebGPUAsync } from "./LOS/DebugVisibilityViewer.js";
 
 // Patches for the Setting class
 export const PATCHES = {};

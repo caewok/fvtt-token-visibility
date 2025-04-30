@@ -20,7 +20,7 @@ export class WebGPUViewpoint extends AbstractViewpoint {
 
   constructor(...args) {
     super(...args);
-    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPU || CONFIG[MODULE_ID].percentVisibleWebGL2;
+    this.calc = CONFIG[MODULE_ID].sightCalculators.webGPU;
   }
 
   /** @type {boolean} */
@@ -43,7 +43,7 @@ export class WebGPUViewpointAsync extends AbstractViewpoint {
 
   constructor(...args) {
     super(...args);
-    this.calc = CONFIG[MODULE_ID].percentVisibleWebGPUAsync || CONFIG[MODULE_ID].percentVisibleWebGL2;
+    this.calc = CONFIG[MODULE_ID].sightCalculators.webGPUAsync;
   }
 
   /** @type {boolean} */

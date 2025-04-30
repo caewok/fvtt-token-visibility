@@ -8,14 +8,14 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
-import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
-import { Area3dPopoutCanvas, Area3dPopout } from "../Area3dPopout.js";
+import { RenderObstaclesWebGL2 } from "./WebGL2/RenderObstaclesWebGL2.js";
+import { RenderObstacles } from "./WebGPU/RenderObstacles.js";
+import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
 import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./PercentVisibleCalculator.js";
-import { buildCustomLOSCalculator } from "../../LOSCalculator.js";
-import { Settings, SETTINGS } from "../../settings.js";
-import { PointsViewpoint } from "../PointsViewpoint.js";
-import { MODULE_ID } from "../../const.js";
+import { buildCustomLOSCalculator } from "../LOSCalculator.js";
+import { Settings, SETTINGS } from "../settings.js";
+import { PointsViewpoint } from "./PointsViewpoint.js";
+import { MODULE_ID } from "../const.js";
 
 /* Debug viewer
 
@@ -23,7 +23,7 @@ If a token is controlled and another is targeted, display a popup with the debug
 Calculates percentage visible for the viewer/target combo.
 */
 
-class DebugVisibilityViewerAbstract {
+export class DebugVisibilityViewerAbstract {
 
   /** @type {string} */
   senseType = "sight";
