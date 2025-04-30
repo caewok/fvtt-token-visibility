@@ -270,7 +270,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
       || !tile.evPixelCache ) return null;
     const threshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
     const pixels = tile.evPixelCache.pixels;
-    const ClipperPaths = CONFIG.GeometryLib.ClipperPaths;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
 
     // Convert pixels to isobands.
     const width = tile.evPixelCache.width
@@ -310,7 +310,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
     }
 
     // Use Clipper to clean the polygons. Leave as clipper paths for earcut later.
-    const paths = CONFIG.GeometryLib.ClipperPaths.fromPolygons(polys, { scalingFactor: 100 });
+    const paths = CONFIG[MODULE_ID].ClipperPaths.fromPolygons(polys, { scalingFactor: 100 });
     return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold);
   }
 

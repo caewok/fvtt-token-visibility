@@ -6,7 +6,7 @@ PIXI,
 */
 "use strict";
 
-import { ClipperPaths } from "../geometry/ClipperPaths.js";
+import { MODULE_ID } from "../const.js";
 import { orient3dFast } from "./util.js";
 
 const lte = (x, b) => x < b || x.almostEqual(b);
@@ -148,13 +148,24 @@ export class Polygon3d {
    * @returns {ClipperPaths}
    */
   toClipperPaths({ omitAxis = "z", scalingFactor = 1 } = {}) {
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+
     let points;
-    switch ( omitAxis ) {
-      case "x": points = this.points.map(pt => { return { X: pt.y, Y: pt.z } }); break;
-      case "y": points = this.points.map(pt => { return { X: pt.x, Y: pt.z } }); break;
-      case "z": points = this.points.map(pt => { return { X: pt.x, Y: pt.y } }); break;
+    if ( ClipperPaths === CONFIG.GeometryLib.Clipper2Paths ) {
+      switch ( omitAxis ) {
+        case "x": points = this.points.flatMap(pt => [pt.y, pt.z]); break;
+        case "y": points = this.points.flatMap(pt => [pt.x, pt.z]); break;
+        case "z": points = this.points.flatMap(pt => [pt.x, pt.y]); break;
+      }
+    } else {
+      switch ( omitAxis ) {
+        case "x": points = this.points.map(pt => { return { X: pt.y, Y: pt.z } }); break;
+        case "y": points = this.points.map(pt => { return { X: pt.x, Y: pt.z } }); break;
+        case "z": points = this.points.map(pt => { return { X: pt.x, Y: pt.y } }); break;
+      }
     }
-    const out = new ClipperPaths([points]);
+
+    const out = new CONFIG[MODULE_ID].ClipperPaths([points]);
     out.scalingFactor = scalingFactor;
     return out;
   }
@@ -652,7 +663,7 @@ export class Polygons3d extends Polygon3d {
    */
   toClipperPaths(opts) {
     const cpObjArr = this.#applyMethodToAllWithReturn("toClipperPaths", opts);
-    return ClipperPaths.joinPaths(cpObjArr);
+    return CONFIG[MODULE_ID].ClipperPaths.joinPaths(cpObjArr);
   }
 
   to2dPolygon(omitAxis) { return this.#applyMethodToAllWithReturn("to2dPolygon", omitAxis); }

@@ -385,7 +385,8 @@ export class GeometryDesc {
     let holes;
 
     // Earcut to determine indices. Then construct the vertices.
-    if ( poly instanceof CONFIG.GeometryLib.ClipperPaths ) {
+    if ( poly instanceof CONFIG.GeometryLib.ClipperPaths
+      || poly instanceof CONFIG.GeometryLib.Clipper2Paths ) {
       // Assume a more complex shape, possibly with holes. See ClipperPaths.prototype.earcut.
       const coords = poly.toEarcutCoordinates();
       vertices2d = coords.vertices;

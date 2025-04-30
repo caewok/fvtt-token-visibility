@@ -120,6 +120,11 @@ Hooks.once("init", function() {
   CONFIG[MODULE_ID] = {
 
     /**
+     * Which clipper version to use: 1 or 2.
+     */
+    clipperVersion: 1,
+
+    /**
      * The percent threshold under which a tile should be considered transparent at that pixel.
      * @type {number}
      */
@@ -185,6 +190,11 @@ Hooks.once("init", function() {
      */
     tokenIsDead,
   };
+
+  Object.defineProperty(CONFIG[MODULE_ID], "ClipperPaths", {
+    get: () => CONFIG[MODULE_ID].clipperVersion === 1
+      ? CONFIG.GeometryLib.ClipperPaths : CONFIG.GeometryLib.Clipper2Paths
+  });
 
   game.modules.get(MODULE_ID).api = {
     bench,

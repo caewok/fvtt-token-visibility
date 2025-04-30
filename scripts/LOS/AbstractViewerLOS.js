@@ -11,6 +11,7 @@ Ray
 
 // Base folder.
 import { Settings } from "../settings.js";
+import { MODULE_ID } from "../const.js";
 
 // LOS folder
 import { tokensOverlap } from "./util.js";
@@ -313,7 +314,8 @@ export class AbstractViewerLOS {
 
   static constructLitTargetShape(target) {
     const shape = this.constrainTargetShapeWithLights(target);
-    if ( !(shape instanceof CONFIG.GeometryLib.ClipperPaths )) return shape;
+    if ( !(shape instanceof CONFIG.GeometryLib.ClipperPaths
+        || shape instanceof CONFIG.GeometryLib.Clipper2Paths) ) return shape;
 
     // Multiple polygons present. Ignore holes. Return remaining polygon or
     // construct one from convex hull of remaining polygons.
@@ -352,7 +354,7 @@ export class AbstractViewerLOS {
     }
     if ( !lightShapes.length ) return undefined;
 
-    const ClipperPaths = CONFIG.GeometryLib.ClipperPaths;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     const combined = ClipperPaths.fromPolygons(lightShapes)
       .combine()
       .intersectPaths(ClipperPaths.fromPolygons([tokenBorder.toPolygon()]))

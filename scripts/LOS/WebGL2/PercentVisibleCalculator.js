@@ -33,7 +33,6 @@ import { Camera } from "../WebGPU/Camera.js";
 
 // Geometric
 import { Draw } from "../../geometry/Draw.js";
-import { ClipperPaths } from "../../geometry/ClipperPaths.js";
 import { Grid3dTriangles  } from "../PlaceableTriangles.js";
 import { Polygons3d } from "../Polygon3d.js";
 
@@ -780,9 +779,10 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
    * @param {Polygon3d|Polygons3d} blockingPolys
    */
   _combineObstaclePolys(blockingPolys) {
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const n = blockingPolys.length;
-    if ( !n ) return [];
+    if ( !n ) return new ClipperPaths(undefined, { scalingFactor });
 
     const opts = { omitAxis: "z", scalingFactor };
     if ( n === 1 ) return blockingPolys[0].toClipperPaths(opts);
@@ -832,7 +832,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
    */
   _combineTerrainPolys(blockingTerrainPolys) {
     const scalingFactor = this.constructor.SCALING_FACTOR;
-    const blockingTerrainPaths = new ClipperPaths()
+    const blockingTerrainPaths = new CONFIG[MODULE_ID].ClipperPaths()
 
     // The intersection of each two terrain polygons forms a blocking path.
     // Only need to test each combination once.
@@ -897,7 +897,7 @@ export class Area3dGeometricVisibleCalculator extends PercentVisibleCalculatorAb
    */
   _gridSquareArea(lookAtM, perspectiveM) {
      const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
-     const gridPaths = ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
+     const gridPaths = CONFIG[MODULE_ID].ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();
      return gridPaths.area;
   }

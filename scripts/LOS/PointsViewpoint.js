@@ -9,6 +9,7 @@ PIXI
 
 // Base folder
 import { Settings } from "../settings.js";
+import { MODULE_ID } from "../const.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
@@ -183,7 +184,7 @@ export class PointsViewpoint extends AbstractViewpoint {
 
     // For each gridShape, intersect against the constrained shape
     const constrainedGridShapes = [];
-    const constrainedPath = CONFIG.GeometryLib.ClipperPaths.fromPolygons([constrained]);
+    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([constrained]);
     for ( let gridShape of gridShapes ) {
       if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
 
