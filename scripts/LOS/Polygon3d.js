@@ -1,9 +1,12 @@
 /* globals
+canvas,
 CONFIG,
+foundry,
 PIXI,
 */
 "use strict";
 
+import { ClipperPaths } from "../geometry/ClipperPaths.js";
 import { orient3dFast } from "./util.js";
 
 const lte = (x, b) => x < b || x.almostEqual(b);
@@ -34,10 +37,27 @@ export class Polygon3d {
   /** @type {Point3d} */
   points = [];
 
+  /** @type {boolean} */
+  isHole = false;
+
   constructor(n = 0) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     this.points.length = n;
     for ( let i = 0; i < n; i += 1 ) this.points[i] = new Point3d();
+  }
+
+  /**
+   * @param {Points3d} points
+   * @returns {Points3d}
+   */
+  static convexHull(points) {
+    // Assuming flat points, determine plane and then convert to 2d
+    const Plane = CONFIG.GeometryLib.threeD.Plane;
+    const plane = Plane.fromPoints(points[0], points[1], points[2]);
+    const M2d = plane.conversion2dMatrix;
+    const points2d = points.map(pt3d => M2d.multiplyPoint3d(pt3d));
+    const convex2dPoints = convexHull(points2d);
+    return convex2dPoints.map(pt => plane.conversion2dMatrixInverse.multiplyPoint3d(pt))
   }
 
   /**
@@ -112,18 +132,31 @@ export class Polygon3d {
 
   static fromPolygon(poly, elevation = 0) {
     const out = new this(poly.points.length * 0.5);
+    if ( poly.isHole ) out.isHole = true;
     poly.iteratePoints({ close: false }).forEach((pt, idx) => out.points[idx].set(pt.x, pt.y, elevation));
     return out;
   }
 
   static fromClipperPaths(cpObj, elevation = 0) {
-    return cpObj.paths.map(path => {
-      const n = path.length;
-      const invScale = 1 / cpObj.scalingFactor;
-      const poly3d = new this(n);
-      poly3d.forEach((pt, idx) => pt.set(path[idx].X * invScale, path[idx].Y * invScale, elevation));
-      return poly3d;
-    });
+    return cpObj.toPolygons().map(poly => this.fromPolygon(poly, elevation));
+  }
+
+  /**
+   * @param {"x"|"y"|"z"} omitAxis    Which of the three axes to omit to drop this to 2d.
+   * @param {object} [opts]
+   * @param {number} [opts.scalingFactor]   How to scale the clipper points
+   * @returns {ClipperPaths}
+   */
+  toClipperPaths({ omitAxis = "z", scalingFactor = 1 } = {}) {
+    let points;
+    switch ( omitAxis ) {
+      case "x": points = this.points.map(pt => { return { X: pt.y, Y: pt.z } }); break;
+      case "y": points = this.points.map(pt => { return { X: pt.x, Y: pt.z } }); break;
+      case "z": points = this.points.map(pt => { return { X: pt.x, Y: pt.y } }); break;
+    }
+    const out = new ClipperPaths([points]);
+    out.scalingFactor = scalingFactor;
+    return out;
   }
 
   /**
@@ -170,11 +203,13 @@ export class Polygon3d {
    * @returns {PIXI.Polygon}
    */
   to2dPolygon(omitAxis = "z") {
+    let points;
     switch ( omitAxis ) {
-      case "x": return new PIXI.Polygon(this.points.flatMap(pt => [pt.y, pt.z]));
-      case "y": return new PIXI.Polygon(this.points.flatMap(pt => [pt.x, pt.z]));
-      case "z": return new PIXI.Polygon(this.points); // PIXI.Polygon ignores "z" attribute.
+      case "x": points = this.points.flatMap(pt => [pt.y, pt.z]); break;
+      case "y": points = this.points.flatMap(pt => [pt.x, pt.z]); break;
+      case "z": points = this.points; break; // PIXI.Polygon ignores "z" attribute.
     }
+    return new PIXI.Polygon(points);
   }
 
   /**
@@ -243,7 +278,14 @@ export class Polygon3d {
    */
   clone() {
     const out = new this.constructor(this.points.length);
+    out.isHole = this.isHole;
     this.points.forEach((pt, idx) => out.points[idx].copyFrom(pt));
+    return out;
+  }
+
+  _cloneEmpty() {
+    const out = new this.constructor(0);
+    out.isHole = this.isHole;
     return out;
   }
 
@@ -259,9 +301,16 @@ export class Polygon3d {
     return poly3d;
   }
 
-  scale(multiplier, poly3d) {
+  multiplyScalar(multiplier, poly3d) {
     poly3d ??= this.clone();
     poly3d.points.forEach(pt => pt.multiplyScalar(multiplier, pt));
+    return poly3d;
+  }
+
+  scale({ x = 1, y = 1, z = 1} = {}, poly3d) {
+    poly3d ??= this.clone();
+    const scalePt = CONFIG.GeometryLib.threeD.Point3d._tmp1.set(x, y, z);
+    poly3d.points.forEach(pt => pt.multiply(scalePt, pt));
     return poly3d;
   }
 
@@ -350,7 +399,7 @@ export class Polygon3d {
       coordinate: "z",
       cmp: keepLessThan ? "lessThan" : "greaterThan"
     });
-    const out = new this.constructor(0);
+    const out = this._cloneEmpty();
     out.points = toKeep;
     return out;
   }
@@ -376,8 +425,9 @@ export class Polygon3d {
 
   /* ----- NOTE: Debug ----- */
 
-  draw2d({ omitAxis = "z", ...opts } = {}) {
-    CONFIG.GeometryLib.Draw.shape(this.to2dPolygon(omitAxis), opts);
+  draw2d({ draw, omitAxis = "z", ...opts } = {}) {
+    draw ??= new CONFIG.GeometryLib.Draw;
+    draw.shape(this.to2dPolygon(omitAxis), opts);
   }
 }
 
@@ -486,6 +536,7 @@ export class Triangle3d extends Polygon3d {
       cmp: keepLessThan ? "lessThan" : "greaterThan"
     });
     const out = toKeep.length === 3 ? (new this.constructor()) : (new Polygon3d(0));
+    out.isHole = this.isHole;
     out.points.forEach((pt, idx) => pt.copyFrom(toKeep[idx]));
     return out;
   }
@@ -530,6 +581,265 @@ export class Triangle3d extends Polygon3d {
 }
 
 
+/**
+ * Represent 1+ polygons that represent a shape.
+ * Each can be a Polygon3d that is either a hole or outer (not hole). See Clipper Paths.
+ * An outer polygon may be contained within a hole. Parent-child structure not maintained.
+ */
+export class Polygons3d extends Polygon3d {
+  /** @type {Polygon3d[]} */
+  polygons = [];
+
+  // TODO: Determine the convex hull of the polygons to determine the points of this polygon?
+  constructor(n = 0) {
+    super(0);
+    this.polygons.length = n;
+  }
+
+  #applyMethodToAll(method, ...args) { this.polygons.forEach(poly => poly[method](...args)); }
+
+  #applyMethodToAllWithReturn(method, ...args) { return this.polygons.map(poly => poly[method](...args)); }
+
+  static #createSingleUsingMethod(method, ...args) {
+    const out = new this(1);
+    out.polygons[0] = Polygon3d[method](...args);
+    return out;
+  }
+
+  clean() { this.#applyMethodToAll("clean"); }
+
+  setZ(z) { this.#applyMethodToAll("setZ", z); }
+
+  get bounds() {
+    const allBounds = this.applyMethodToAllWithReturn("bounds");
+    return allBounds.reduce((acc, curr) => {
+      return {
+        x: Math.minMax(acc.x.min, acc.x.max, curr.x.min, curr.x.max),
+        y: Math.minMax(acc.y.min, acc.y.max, curr.y.min, curr.x.max),
+        z: Math.minMax(acc.z.min, acc.z.max, curr.z.min, curr.x.max),
+      };
+    })
+  }
+
+  get plane() { return this.polygons[0].plane; }
+
+  static fromPoints(pts) { return this.#createSingleUsingMethod("fromPoints", pts); }
+
+  static from2dPoints(pts, elevation) { return this.#createSingleUsingMethod("from2dPoints", pts, elevation); }
+
+  static from3dPoints(pts) { return this.#createSingleUsingMethod("from3dPoints", pts); }
+
+  static fromPolygon(poly, elevation) { return this.#createSingleUsingMethod("fromPolygon", poly, elevation); }
+
+  static fromPolygons(polys, elevation) {
+    const out = new this();
+    out.polygons = polys.map(poly => Polygon3d.fromPolygon(poly, elevation));
+    return out;
+  }
+
+  static fromClipperPaths(cpObj, elevation) {
+    const out = new this();
+    out.polygons = Polygon3d.fromClipperPaths(cpObj, elevation);
+    return out;
+  }
+
+
+  /**
+   * @param {"x"|"y"|"z"} omitAxis    Which of the three axes to omit to drop this to 2d.
+   * @param {object} [opts]
+   * @param {number} [opts.scalingFactor]   How to scale the clipper points
+   * @returns {ClipperPaths}
+   */
+  toClipperPaths(opts) {
+    const cpObjArr = this.#applyMethodToAllWithReturn("toClipperPaths", opts);
+    return ClipperPaths.joinPaths(cpObjArr);
+  }
+
+  to2dPolygon(omitAxis) { return this.#applyMethodToAllWithReturn("to2dPolygon", omitAxis); }
+
+  toPerspectivePolygon() { return this.#applyMethodToAllWithReturn("toPerspectivePolygon"); }
+
+  centroid() {
+    // Assuming flat points, determine plane and then convert to 2d
+    // TODO: This should really be cached as well.
+    const plane = this.plane;
+    const points = this.polygons.flatMap(poly => poly.points);
+    const M2d = plane.conversion2dMatrix;
+    const points2d = points.map(pt3d => M2d.multiplyPoint3d(pt3d));
+    const convex2dPoints = convexHull(points2d);
+
+    // Determine the centroid of the 2d convex polygon.
+    const convexPoly2d = new PIXI.Polygon(convex2dPoints);
+    return convexPoly2d.center;
+  }
+
+  /**
+   * Iterator: a, b, c.
+   */
+  [Symbol.iterator]() {
+    const n = this.polygons.length;
+    const data = this;
+    let index = 0;
+    return {
+      next() {
+        if ( index < n ) return {
+          value: data.polygons[index++],
+          done: false };
+        else return { done: true };
+      }
+    };
+  }
+
+  forEach(callback) {
+    for ( let i = 0, iMax = this.polygons.length; i < iMax; i += 1 ) callback(this.polygons[i], i, this);
+  }
+
+  isFacing(p) {
+    const poly = this.polygons[0];
+    return poly.isFacing(p) ^ poly.isHole; // Holes have reverse orientation.
+  }
+
+  reverseOrientation() { this.#applyMethodToAll("reverseOrientation"); }
+
+  clone() {
+    const out = new this.constructor(0);
+    out.polygons = this.polygons.map(poly => poly.clone());
+    return out;
+  }
+
+  transform(M, poly3d) {
+    poly3d ??= this.clone();
+    poly3d.polygons.forEach(poly => poly.transform(M, poly));
+    return poly3d;
+  }
+
+  multiplyScalar(multiplier, poly3d) {
+    poly3d ??= this.clone();
+    poly3d.polygons.forEach(poly => poly.multiplyScalar(multiplier, poly));
+    return poly3d;
+  }
+
+  scale(opts, poly3d) {
+    poly3d ??= this.clone();
+    poly3d.polygons.forEach(poly => poly.scale(opts, poly));
+    return poly3d;
+  }
+
+  /**
+   * Test if a ray intersects the polygon. Does not consider whether this polygon is facing.
+   * Ignores holes. If 2+ polygons overlap, it will count as an intersection if it intersects
+   * more outer than holes.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @returns {Point3d|null}
+   */
+  intersection(rayOrigin, rayDirection) {
+    let ixNum = 0;
+    let ix;
+    for ( const poly of this.polygons ) {
+      const polyIx = poly.intersection(rayOrigin, rayDirection);
+      if ( polyIx ) {
+        ix = polyIx;
+        ixNum += (poly.isHole ? -1 : 1);
+      }
+    }
+    return ixNum > 0 ? ix : null;
+  }
+
+  clipPlanePoints(...args) { this.#applyMethodToAllWithReturn("clipPlanePoints", ...args); }
+
+  clipZ(...args) {
+    const out = this._cloneEmpty();
+    out.polygons = this.#applyMethodToAllWithReturn("clipZ", ...args);
+    return out;
+  }
+
+  static fromVertices(vertices, indices) { this.#createSingleUsingMethod("fromVertices", vertices, indices); }
+
+  draw2d(opts = {}) {
+    const color = opts.color;
+    const fill = opts.fill;
+    const draw = opts.draw?.g || canvas.controls.debug;
+
+    // Sort so holes are last.
+    this.polygons.sort((a, b) => a.isHole - b.isHole);
+    for ( const poly of this.polygons ) {
+      if ( poly.isHole ) {
+        if ( !opts.holeColor ) draw.beginHole(); // If holeColor, don't treat as hole
+        opts.color = opts.holeColor || opts.color;
+        opts.fill = opts.holeFill || opts.fill;
+      }
+      poly.draw2d(opts);
+      if ( poly.isHole ) {
+        if ( !opts.holeColor ) draw.endHole();
+        opts.color = color;
+        opts.fill = fill;
+      }
+    }
+  }
+}
+
+
+/*
+(a.y - c.y) * (b.x - c.x) -  (a.x - c.x) * (b.y - c.y)
+(p.y - r.y) * (q.x - r.x) >= (p.x - r.x) * (q.y - r.y)
+
+orient2dFast(a, b, c) > 0 === (a.y - c.y) * (b.x - c.x) >=  (a.x - c.x) * (b.y - c.y)
+orient2dFast(p, q, r) > 0
+*/
+
+/**
+ * Comparison function used by convex hull function.
+ * @param {Point} a
+ * @param {Point} b
+ * @returns {boolean}
+ */
+function convexHullCmpFn(a, b) {
+  const dx = a.x - b.x;
+  return dx ? dx : a.y - b.y;
+}
+
+/**
+ * Test the point against existing hull points.
+ * @parma {PIXI.Point[]} hull
+ * @param {PIXI.Point} point
+*/
+function testHullPoint(hull, p) {
+  const orient2d = foundry.utils.orient2dFast;
+  while ( hull.length >= 2 ) {
+    const q = hull[hull.length - 1];
+    const r = hull[hull.length - 2];
+    if ( orient2d(p, q, r) >= 0 ) hull.pop();
+    else break;
+  }
+  hull.push(p);
+}
+
+function convexHull(points) {
+  const ln = points.length;
+  if ( ln <= 1 ) return points;
+
+  const newPoints = [...points];
+  newPoints.sort(convexHullCmpFn);
+
+  // Andrew's monotone chain algorithm.
+  const upperHull = [];
+  for ( let i = 0; i < ln; i += 1 ) testHullPoint(upperHull, newPoints[i]);
+  upperHull.pop();
+
+  const lowerHull = [];
+  for ( let i = ln - 1; i >= 0; i -= 1 ) testHullPoint(lowerHull, newPoints[i]);
+  lowerHull.pop();
+
+  if ( upperHull.length === 1
+    && lowerHull.length === 1
+    && upperHull[0].x === lowerHull[0].x
+    && upperHull[0].y === lowerHull[0].y ) return upperHull;
+
+  return upperHull.concat(lowerHull);
+}
+
+
 /* Testing
 Draw = CONFIG.GeometryLib.Draw
 Polygon3d = game.modules.get("tokenvisibility").api.triangles.Polygon3d
@@ -543,6 +853,9 @@ poly = new PIXI.Polygon(
 
 poly3d = Polygon3d.fromPolygon(poly, 20)
 poly3d.forEach((pt, idx) => console.log(`${idx} ${pt}`))
+
+Polygon3d.convexHull(poly3d.points)
+Polygon3d.convexHull2(poly3d.points)
 
 rayOrigin = new Point3d(200, 300, 50)
 rayDirection = new Point3d(0, 0, -1)
@@ -563,5 +876,64 @@ clipped2 = poly3d.clipZ({ keepLessThan: false })
 poly3d.draw2d({ omitAxis: "x" })
 clipped.draw2d({ omitAxis: "x", color: Draw.COLORS.red })
 clipped2.draw2d({ omitAxis: "x", color: Draw.COLORS.blue })
+
+
+Polygons3d = game.modules.get("tokenvisibility").api.triangles.Polygons3d
+
+poly = new PIXI.Polygon(
+  100, 100,
+  100, 500,
+  500, 500,
+)
+
+hole = new PIXI.Polygon(
+  150, 200,
+  200, 400,
+  300, 400,
+)
+hole.isHole = true;
+
+polys3d = Polygons3d.fromPolygons([poly, hole])
+polys3d.draw2d({ color: Draw.COLORS.blue, holeColor: Draw.COLORS.red })
+polys3d.draw2d({ color: Draw.COLORS.blue, fill: Draw.COLORS.blue, fillAlpha: 0.5 })
+
+rayOrigin = new Point3d(200, 300, 50)
+rayDirection = new Point3d(0, 0, -1)
+ix = polys3d.intersection(rayOrigin, rayDirection)
+
+rayOrigin = new Point3d(150, 450, 50)
+rayDirection = new Point3d(0, 0, -1)
+ix = polys3d.intersection(rayOrigin, rayDirection)
+
+
+points = [
+  new Point3d(0, 0, 0),
+  new Point3d(100, 0, 100),
+  new Point3d(0, 100, 0),
+  new Point3d(50, 50, 50),
+  new Point3d(200, 20, 200),
+  new Point3d(300, 50, 300),
+  new Point3d(300, 300, 300),
+  new Point3d(250, 75, 250),
+  new Point3d(0, 75, 0),
+  new Point3d(50, 250, 50),
+  new Point3d(25, 210, 25),
+  new Point3d(150, 150, 150),
+  new Point3d(150, 200, 150),
+]
+points.forEach(pt => Draw.point(pt))
+
+ptsC = Polygon3d.convexHull(points)
+ptsC2 = Polygon3d.convexHull2(points)
+
+polyC = Polygon3d.from3dPoints(ptsC)
+polyC2 = Polygon3d.from3dPoints(ptsC2)
+polyC.draw2d({ color: Draw.COLORS.blue })
+polyC2.draw2d({ color: Draw.COLORS.green })
+
+b = polyC2.bounds
+boundsRect = new PIXI.Rectangle(b.x.min, b.y.min, b.x.max - b.x.min, b.y.max - b.y.min)
+
+
 
 */

@@ -2,6 +2,7 @@
 canvas,
 CONFIG,
 CONST,
+foundry,
 Hooks,
 PIXI,
 */
@@ -13,7 +14,7 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./WebGPU/Geometr
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
-import { Polygon3d, Triangle3d } from "./Polygon3d.js";
+import { Polygons3d, Triangle3d } from "./Polygon3d.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
@@ -209,17 +210,36 @@ export class TileTriangles extends AbstractPolygonTriangles {
 
     obj.alphaThresholdPolygons = null;
     obj.alphaThresholdTriangles = null;
-    obj.alphaThresholdPaths = this.convertTileToIsoBands(tile); // ClipperPaths or Polygon
+    obj.alphaThresholdPaths = this.convertTileToIsoBands(tile);
     if ( obj.alphaThresholdPaths ) {
-      obj.alphaThresholdPolygons = Polygon3d.fromClipperPaths(obj.alphaThresholdPaths);
-      obj.alphaThresholdTriangles = this.polygonsToFaceTriangles(obj.alphaThresholdPaths);
+      obj.alphaThresholdPolygons = this.pathsToFacePolygons(obj.alphaThresholdPaths);
+      obj.alphaThresholdTriangles = this.pathsToFaceTriangles(obj.alphaThresholdPaths);
     }
   }
 
   /** @type {Triangle3d[]} */
   _prototypeAlphaTriangles;
 
-  static polygonsToFaceTriangles(polys) {
+  /**
+   * Convert clipper paths representing a tile shape to top and bottom faces.
+   * Bottom faces have opposite orientation.
+   * @param {ClipperPaths} paths
+   * @returns {Polygons3d[2]}
+   */
+  static pathsToFacePolygons(paths) {
+    const top = Polygons3d.fromClipperPaths(paths)
+    const bottom = top.clone();
+    bottom.reverseOrientation(); // Reverse orientation but keep the hole designations.
+    return [top, bottom];
+  }
+
+  /**
+   * Triangulate an array of polygons or clipper paths, then convert into 3d face triangles.
+   * Both top and bottom faces.
+   * @param {PIXI.Polygon|ClipperPaths} polys
+   * @returns {Triangle3d[]}
+   */
+  static pathsToFaceTriangles(polys) {
     // Convert the polygons to top and bottom faces.
     // Then make these into triangles.
     // Trickier than leaving as polygons but can dramatically cut down the number of polys
@@ -237,6 +257,14 @@ export class TileTriangles extends AbstractPolygonTriangles {
     return tris.filter(tri => !foundry.utils.orient2dFast(tri.a, tri.b, tri.c).almostEqual(0, 1e-06) );
   }
 
+  /**
+   * For a given tile, convert its pixels to an array of polygon isobands representing
+   * alpha values at or above the threshold. E.g., alpha between 0.75 and 1.
+   * @param {Tile} tile
+   * @returns {ClipperPaths|null} The polygon paths or, if error, the local alpha bounding box.
+   *   Coordinates returned are local to the tile pixels, between 0 and width/height of the tile pixels.
+   *   Null is returned if no alpha threshold is set or no evPixelCache is defined.
+   */
   static convertTileToIsoBands(tile) {
     if ( !CONFIG[MODULE_ID].alphaThreshold
       || !tile.evPixelCache ) return null;

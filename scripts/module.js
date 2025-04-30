@@ -29,7 +29,7 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 
 import * as range from "./visibility_range.js";
 
-import { Polygon3d, Triangle3d } from "./LOS/Polygon3d.js";
+import { Polygon3d, Triangle3d, Polygons3d } from "./LOS/Polygon3d.js";
 
 import {
   DirectionalWallTriangles,
@@ -193,6 +193,7 @@ Hooks.once("init", function() {
     triangles: {
       Polygon3d,
       Triangle3d,
+      Polygons3d,
       DirectionalWallTriangles,
       WallTriangles,
       TileTriangles,
