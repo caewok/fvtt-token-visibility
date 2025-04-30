@@ -298,15 +298,13 @@ export class AbstractViewpoint {
     return blockingObjs;
   }
 
-  static filterPlaceableTrianglesByViewpoint(placeable, viewpoint, useAlphaTriangles = true) {
-    const triangles = ( useAlphaTriangles && (placeable instanceof Tile) )
-      ? placeable[AbstractPolygonTriangles.ID].alphaTriangles
-      : placeable[AbstractPolygonTriangles.ID].triangles;
-    return triangles.filter(tri => tri.isFacing(viewpoint));
+  static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
+    const polys = placeable[AbstractPolygonTriangles.ID].triangles;
+    return polys.filter(poly => poly.isFacing(viewpoint));
   }
 
-  _filterPlaceableTrianglesByViewpoint(placeable) {
-    return this.constructor.filterPlaceableTrianglesByViewpoint(placeable, this.viewpoint, this.config.useAlphaTriangles);
+  _filterPlaceablePolygonsByViewpoint(placeable) {
+    return this.constructor.filterPlaceablePolygonsByViewpoint(placeable, this.viewpoint);
   }
 
   /**
@@ -460,7 +458,7 @@ export class AbstractViewpoint {
    */
   _drawVisionTriangle(debugDraw) {
     debugDraw ??= this.viewerLOS.config.debugDraw;
-    debugDraw.shape(this.visionPolygon, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
+    //debugDraw.shape(this.constructor.visionTriangle, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
     console.log("Drawing vision triangle.")
   }
 }

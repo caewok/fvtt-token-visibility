@@ -29,8 +29,9 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 
 import * as range from "./visibility_range.js";
 
+import { Polygon3d, Triangle3d, Polygons3d } from "./LOS/Polygon3d.js";
+
 import {
-  Triangle,
   DirectionalWallTriangles,
   WallTriangles,
   TileTriangles,
@@ -132,6 +133,21 @@ Hooks.once("init", function() {
     alphaAreaThreshold: 25, // Area in pixels, e.g. 5x5 or ~ 8 x 3
 
     /**
+     * What to use when testing tiles for visibility.
+     * "triangles": Basic two flat triangles that form a rectangle
+     * "alphaThresholdTriangles": triangles representing opaque parts of the tile texture (using earcut and marching squares)
+     * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares)
+     * @type {"triangles"|"alphaThresholdTriangles"|"alphaThresholdPolygons"} (See tileThresholdShapeOptions.)
+     */
+    tileThresholdShape: "triangles",
+
+    tileThresholdShapeOptions: {
+      BASIC_TRIANGLES: "triangles",
+      ALPHA_TRIANGLES: "alphaThresholdTriangles",
+      ALPHA_POLYGONS: "alphaThresholdPolygons",
+    },
+
+    /**
      * Size of the render texture (width and height) used in the webGL LOS algorithms.
      * @type {number}
      */
@@ -175,7 +191,9 @@ Hooks.once("init", function() {
     range,
 
     triangles: {
-      Triangle,
+      Polygon3d,
+      Triangle3d,
+      Polygons3d,
       DirectionalWallTriangles,
       WallTriangles,
       TileTriangles,

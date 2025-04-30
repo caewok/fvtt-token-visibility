@@ -116,9 +116,6 @@ export class AbstractViewerLOS {
     cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[Settings.get(KEYS.LOS.TARGET.ALGORITHM)]
       ?? AbstractViewpoint;
 
-    // Tiles
-    cfg.useAlphaTriangles = true;
-
     return cfg;
   }
 
@@ -450,7 +447,7 @@ export class AbstractViewerLOS {
     this._drawVisibleTokenBorder();
     this.viewpoints.forEach(vp => {
       // vp._drawLineOfSight(draw);
-      vp._drawVisionTriangle(draw);
+      // vp._drawVisionTriangle(draw);
       vp._drawDetectedObjects(draw);
     });
   }

@@ -424,3 +424,26 @@ export function targetWithinLimitedAngleVision(visionSource, targetShape) {
 
   return 0;
 }
+
+/**
+ * See https://github.com/mourner/robust-predicates/blob/main/src/orient3d.js
+ * Returns a positive value if the point d lies above the plane passing through a, b, and c,
+ * meaning that a, b, and c appear in counterclockwise order when viewed from d.
+ * Returns a negative value if d lies below the plane.
+ * Returns zero if the points are coplanar.
+ * The result is also an approximation of six times the signed volume of the tetrahedron defined by the four points.
+ * @param {Point3d} a
+ * @param {Point3d} b
+ * @param {Point3d} c
+ * @param {Point3d} d
+ * @returns {number}
+ */
+export function orient3dFast(a, b, c, d) {
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+  const ad = a.subtract(d, Point3d._tmp1);
+  const bd = b.subtract(d, Point3d._tmp2);
+  const cd = c.subtract(d, Point3d._tmp3);
+  return ad.x * (bd.y * cd.z - bd.z * cd.y) +
+        bd.x * (cd.y * ad.z - cd.z * ad.y) +
+        cd.x * (ad.y * bd.z - ad.z * bd.y);
+}
