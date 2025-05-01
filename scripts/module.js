@@ -85,6 +85,7 @@ import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./L
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
 import { PercentVisibleCalculatorPIXI, DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
+import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 import {
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
@@ -236,6 +237,7 @@ Hooks.once("init", function() {
       webGL2: PercentVisibleCalculatorWebGL2,
       webGPU: PercentVisibleCalculatorWebGPU,
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
+      hybrid: PercentVisibleCalculatorHybrid,
     },
 
     debugViewers: {
@@ -245,6 +247,7 @@ Hooks.once("init", function() {
       webGL2: DebugVisibilityViewerWebGL2,
       webGPU: DebugVisibilityViewerWebGPU,
       webGPUAsync: DebugVisibilityViewerWebGPUAsync,
+      hybrid: DebugVisibilityViewerHybrid,
     },
 
     webgl: {
@@ -343,6 +346,7 @@ Hooks.on("canvasReady", function() {
     "geometric",
     "webGL2",
     "PIXI",
+    "hybrid",
   ];
   const webGPUCalcs = [
     "webGPU",

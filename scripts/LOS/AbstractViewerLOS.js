@@ -21,7 +21,7 @@ import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PointsViewpoint } from "./PointsViewpoint.js";
 import { GeometricViewpoint } from "./GeometricViewpoint.js";
 import { PIXIViewpoint } from "./PIXIViewpoint.js";
-import { Area3dHybridViewpoint } from "./Area3dHybridViewpoint.js";
+import { Hybrid3dViewpoint } from "./Hybrid3dViewpoint.js";
 import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
 import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
@@ -65,7 +65,7 @@ export class AbstractViewerLOS {
     "los-area-3d": GeometricViewpoint,
     "los-area-3d-geometric": GeometricViewpoint,
     "los-area-3d-webgl2": PIXIViewpoint,
-    "los-area-3d-hybrid": Area3dHybridViewpoint,
+    "los-area-3d-hybrid": Hybrid3dViewpoint,
     "los-webgl2": WebGL2Viewpoint,
     "los-webgpu": WebGPUViewpoint,
     "los-webgpu-async": WebGPUViewpointAsync,
