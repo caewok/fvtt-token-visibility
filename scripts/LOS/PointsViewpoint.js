@@ -35,8 +35,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   /** @type {ViewpointConfig} */
   config = {};
 
-  visionTriangle;
-
   /** @type {Points3d[][]} */
   targetPoints = [];
 
@@ -47,7 +45,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   _calculatePercentVisible(viewer, target, viewerLocation, _targetLocation) {
     this.viewpoint = viewerLocation;
     this.visibleTargetShape = this._calculateVisibleTargetShape(target);
-    this.visionTriangle = VisionTriangle.build(viewerLocation, target);
     this.filterPotentiallyBlockingPolygons(viewer, viewerLocation, target);
     this.targetPoints = this.constructTargetPoints(target);
   }

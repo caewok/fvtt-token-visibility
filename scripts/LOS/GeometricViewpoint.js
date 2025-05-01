@@ -315,8 +315,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const colors = Draw.COLORS;
 
     // Locate obstacles behind the target.
-    const backgroundTiles = this.constructor.visionTriangle.findBackgroundTiles();
-    const backgroundWalls = this.constructor.visionTriangle.findBackgroundWalls();
+    const visionTriangle = AbstractViewpoint.visionTriangle.rebuild(this.viewpoint, this.target);
+    const backgroundTiles = visionTriangle.findBackgroundTiles();
+    const backgroundWalls = visionTriangle.findBackgroundWalls();
 
     // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
     // Simpler:
@@ -330,7 +331,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const perspectiveM = this.targetPerspectiveMatrix;
 
     const backgroundPolys = [];
-    const { b, c } = this.constructor.visionTriangle;
+    const { b, c } = visionTriangle;
     const b3d = new Point3d(b.x, b.y, this.viewerLOS.targetCenter.z);
     const c3d = new Point3d(c.x, c.y, this.viewerLOS.targetCenter.z);
 
