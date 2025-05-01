@@ -52,9 +52,19 @@ export class DebugVisibilityViewerAbstract {
     if ( !(viewer && target) ) return;
 
     viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
+
+    // Draw the canvas debug.
+    this.clearDebug();
+    this._drawLineOfSight(viewerLocation, targetLocation);
+    this._drawDetectedObjects(viewer, viewerLocation, target);
+    this._drawVisionTriangle(viewerLocation, target);
+
     this._render(viewer, target, viewerLocation, targetLocation);
     const percentVisible = this.percentVisible(viewer, target, viewerLocation, targetLocation);
     this.updateDebugForPercentVisible(percentVisible, viewer, target, viewerLocation, targetLocation);
+
+
+
   }
 
   _render(_viewer, _target, _viewerLocation, _targetLocation) {}
@@ -175,6 +185,44 @@ export class DebugVisibilityViewerAbstract {
   clearDebug() {
     if ( this.#debugGraphics ) this.#debugGraphics.clear();
   }
+
+  /* ----- NOTE: Debug ----- */
+
+  /**
+   * For debugging.
+   * Draw the line of sight from token to target.
+   */
+  _drawLineOfSight(viewerLocation, targetLocation) {
+    this.debugDraw.segment({ A: viewerLocation, B: targetLocation });
+  }
+
+  /**
+   * For debugging.
+   * Draw outlines for the various objects that can be detected on the canvas.
+   */
+  _drawDetectedObjects(viewer, viewerLocation, target) {
+    // if ( !this.#blockingObjects.initialized ) return;
+    const debugDraw = this.debugDraw;
+    const colors = Draw.COLORS;
+    const { walls, tiles, terrainWalls, tokens } = AbstractViewpoint
+      .findBlockingObjects(viewerLocation, target, { viewer, senseType: this.senseType });
+    walls.forEach(w => debugDraw.segment(w, { color: colors.red, fillAlpha: 0.3 }));
+    terrainWalls.forEach(w => debugDraw.segment(w, { color: colors.lightgreen }));
+    tiles.forEach(t =>
+      t[MODULE_ID].triangles.forEach(tri =>
+        tri.draw2d({ draw: debugDraw, color: colors.yellow, fillAlpha: 0.3 })));
+    tokens.forEach(t => debugDraw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
+  }
+
+  /**
+   * For debugging.
+   * Draw the vision triangle between viewer point and target.
+   */
+  _drawVisionTriangle(viewerLocation, target) {
+    const visionTriangle = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
+    this.debugDraw.shape(visionTriangle, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
+  }
+
 }
 
 
