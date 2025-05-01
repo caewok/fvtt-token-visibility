@@ -6,8 +6,8 @@
 // Base folder
 
 // LOS folder
-import { Area3dGeometricViewpoint } from "./Area3dGeometricViewpoint.js";
-import { Area3dWebGL2Viewpoint } from "./Area3dWebGL2Viewpoint.js";
+import { GeometricViewpoint } from "./GeometricViewpoint.js";
+import { PIXIViewpoint } from "./PIXIViewpoint.js";
 
 // Geometry folder
 import { addClassGetter } from "../geometry/util.js";
@@ -16,7 +16,7 @@ import { addClassGetter } from "../geometry/util.js";
 // Debug
 
 
-export class Area3dHybridViewpoint extends Area3dGeometricViewpoint {
+export class Area3dHybridViewpoint extends GeometricViewpoint {
 
   /**
    * The main class inherits from Geometric. This stored WebGL2 object handles tiles.
@@ -30,7 +30,7 @@ export class Area3dHybridViewpoint extends Area3dGeometricViewpoint {
    */
   constructor(viewerLOS, viewpoint) {
     super(viewerLOS, viewpoint);
-    this.#webGL2Class = new Area3dWebGL2Viewpoint(viewerLOS, viewpoint);
+    this.#webGL2Class = new PIXIViewpoint(viewerLOS, viewpoint);
 
     // Link getters to avoid repeated calculations.
     addClassGetter(this.#webGL2Class, "visionPolygon", this.#getVisionPolygon.bind(this));

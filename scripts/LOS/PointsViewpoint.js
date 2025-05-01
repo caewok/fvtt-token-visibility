@@ -1,8 +1,7 @@
 /* globals
 CONFIG,
-CONST,
 canvas,
-PIXI
+game,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -10,13 +9,15 @@ PIXI
 // Base folder
 import { Settings } from "../settings.js";
 import { MODULE_ID } from "../const.js";
+import { buildCustomLOSCalculator } from "../LOSCalculator.js";
 
 // LOS folder
+import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
+import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
+import { VisionTriangle } from "./VisionTriangle.js";
 
-// Debug
-import { Draw } from "../geometry/Draw.js";
 
 /**
  * An eye belong to a specific viewer.
@@ -24,6 +25,39 @@ import { Draw } from "../geometry/Draw.js";
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class PointsViewpoint extends AbstractViewpoint {
+  calc = CONFIG[MODULE_ID].sightCalculators.points;
+}
+
+/**
+ * Handle points algorithm.
+ */
+export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
+  /** @type {ViewpointConfig} */
+  config = {};
+
+  visionTriangle;
+
+  /** @type {Points3d[][]} */
+  targetPoints = [];
+
+  async initialize() {
+    this.config = this.initializeConfig();
+  }
+
+  _calculatePercentVisible(viewer, target, viewerLocation, _targetLocation) {
+    this.viewpoint = viewerLocation;
+    this.visibleTargetShape = this._calculateVisibleTargetShape(target);
+    this.visionTriangle = VisionTriangle.build(viewerLocation, target);
+    this.filterPotentiallyBlockingPolygons(viewer, viewerLocation, target);
+    this.targetPoints = this.constructTargetPoints(target);
+  }
+
+  _percentRedPixels() {
+    return (1 - this._testTargetPoints(this.targetPoints, this.viewpoint, this.visibleTargetShape));
+  }
+
+  /* ----- NOTE: Target points ----- */
+
   /**
    * Sets configuration to the current settings.
    * @param {ViewpointConfig} [cfg]
@@ -35,19 +69,90 @@ export class PointsViewpoint extends AbstractViewpoint {
     cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
     cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
     cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
-    return super.initializeConfig(cfg);
+    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+    cfg.useLitTargetShape ??= true;
+
+    // Blocking canvas objects.
+    cfg.blocking ??= {};
+    cfg.blocking.walls ??= true;
+    cfg.blocking.tiles ??= true;
+
+    // Blocking tokens.
+    cfg.blocking.tokens ??= {};
+    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+
+    return cfg;
+  }
+
+  /*
+   * Similar to _constructViewerPoints but with a complication:
+   * - Grid. When set, points are constructed per grid space covered by the token.
+   * @param {Token} target
+   * @returns {Points3d[][]}
+   */
+  constructTargetPoints(target) {
+    const { pointAlgorithm, targetInset, points3d, largeTarget } = this.config;
+    const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
+
+    if ( largeTarget ) {
+      // Construct points for each target subshape, defined by grid spaces under the target.
+      const targetShapes = PointsViewpoint.constrainedGridShapesUnderToken(target);
+
+      // Issue #8: possible for targetShapes to be undefined or not an array??
+      if ( targetShapes && targetShapes.length ) {
+        const targetPointsArray = targetShapes.map(targetShape => {
+          cfg.tokenShape = targetShape;
+          const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
+          if ( points3d ) return PointsViewpoint.elevatePoints(target, targetPoints);
+          return targetPoints;
+        });
+        return targetPointsArray;
+      }
+    }
+
+    // Construct points under this constrained token border.
+    cfg.tokenShape = target.constrainedTokenBorder;
+    const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
+    if ( points3d ) return [PointsViewpoint.elevatePoints(target, targetPoints)];
+    return [targetPoints];
+  }
+
+  /* ----- NOTE: Collision testing ----- */
+
+  /** @param {Polygon3d[]} */
+  polygons = [];
+
+  /** @param {Polygon3d[]} */
+  terrainPolygons = [];
+
+  /**
+   * Filter the polygons that might block the viewer from the target.
+   */
+  filterPotentiallyBlockingPolygons(viewer, viewerLocation, target) {
+    this.polygons.length = 0;
+    this.terrainPolygons.length = 0;
+    const blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
+      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+
+    const { terrainWalls, tiles, tokens, walls } = blockingObjects;
+    for ( const terrainWall of terrainWalls ) {
+      const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(terrainWall, viewerLocation);
+      this.terrainPolygons.push(...polygons);
+    }
+    for ( const placeable of [...tiles, ...tokens, ...walls] ) {
+      const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
+      this.polygons.push(...polygons);
+    }
   }
 
   /* ----- NOTE: Visibility testing ----- */
 
-  /**
-   * Determine percentage of the token visible using the class methodology.
-   * @returns {number}
-   */
-  _percentVisible() {
-    this.filterPotentiallyBlockingPolygons();
-    const targetPoints = this.constructTargetPoints();
-    return (1 - this._testTargetPoints(targetPoints));
+
+  _calculateVisibleTargetShape(target) {
+    return this.config.useLitTargetShape
+      ? AbstractViewerLOS.constructLitTargetShape(target) : target.constrainedTokenBorder;
   }
 
   /**
@@ -56,10 +161,13 @@ export class PointsViewpoint extends AbstractViewpoint {
    * @param {Point3d[][]} targetPointsArray   Array of array of target points to test.
    * @returns {number} Minimum percent blocked for the token points
    */
-  _testTargetPoints(targetPointsArray) {
+  _testTargetPoints(targetPointsArray, viewpoint, visibleTargetShape) {
+    targetPointsArray ??= this.targetPoints;
+    visibleTargetShape ??= this.visibleTargetShape;
     let minBlocked = 1;
+    if ( this.config.debug ) this.debugPoints.length = 0;
     for ( const targetPoints of targetPointsArray ) {
-      const percentBlocked = this._testPointToPoints(targetPoints);
+      const percentBlocked = this._testPointToPoints(targetPoints, viewpoint, visibleTargetShape);
 
       // We can escape early if this is completely visible.
       if ( !percentBlocked ) return 0;
@@ -68,18 +176,20 @@ export class PointsViewpoint extends AbstractViewpoint {
     return minBlocked;
   }
 
+  debugPoints = [];
+
   /**
    * Helper that tests collisions between a given point and a target points.
    * @param {Point3d} tokenPoint        Point on the token to use.
    * @param {Point3d[]} targetPoints    Array of points on the target to test
    * @returns {number} Percent points blocked
    */
-  _testPointToPoints(targetPoints) {
-    const viewpoint = this.viewpoint;
-    const visibleTargetShape = this.viewerLOS.visibleTargetShape;
+  _testPointToPoints(targetPoints, viewpoint, visibleTargetShape) {
     let numPointsBlocked = 0;
     const ln = targetPoints.length;
-    const debugDraw = this.viewerLOS.config.debugDraw;
+    // const debugDraw = this.config.debugDraw;
+    let debugPoints = [];
+    if ( this.config.debug ) this.debugPoints.push(debugPoints);
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
       const outsideVisibleShape = visibleTargetShape
@@ -98,135 +208,83 @@ export class PointsViewpoint extends AbstractViewpoint {
       });
       numPointsBlocked += hasCollision;
 
-      if ( this.viewerLOS.config.debug ) {
-        const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
-        debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.5, width: 1, color });
-        console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
+      if ( this.config.debug ) {
+        debugPoints = { A: viewpoint, B: targetPoint, hasCollision };
+//         const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
+//         debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.5, width: 1, color });
+//         console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
       }
     }
     return numPointsBlocked / ln;
   }
+}
 
-  /* ----- NOTE: Target points ----- */
+export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
+  /** @type {class} */
+  // static popoutClass = Area3dPopout; // PIXI version
 
-  /*
-   * Similar to _constructViewerPoints but with a complication:
-   * - Grid. When set, points are constructed per grid space covered by the token.
-   * @param {Token} target
-   * @returns {Points3d[][]}
-   */
-  constructTargetPoints() {
-    const target = this.viewerLOS.target;
-    const { pointAlgorithm, targetInset, points3d } = this.config;
-    const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
+  /** @type {Token[]} */
+  get viewers() { return canvas.tokens.controlled; }
 
-    if ( this.viewerLOS.config.largeTarget ) {
-      // Construct points for each target subshape, defined by grid spaces under the target.
-      const targetShapes = this.constructor.constrainedGridShapesUnderToken(target);
+  /** @type {Token[]} */
+  get targets() { return game.user.targets.values(); }
 
-      // Issue #8: possible for targetShapes to be undefined or not an array??
-      if ( targetShapes && targetShapes.length ) {
-        const targetPointsArray = targetShapes.map(targetShape => {
-          cfg.tokenShape = targetShape;
-          const targetPoints = this.constructor.constructTokenPoints(target, cfg);
-          if ( points3d ) return this.constructor.elevatePoints(target, targetPoints);
-          return targetPoints;
-        });
-        return targetPointsArray;
+  /** @type {object} */
+  config = {
+    useLitTargetShape: false,
+  };
+
+  constructor(opts) {
+    super(opts);
+  }
+
+  render() {
+    const { targets, viewers } = this;
+
+    if ( !(targets.length || viewers.length) ) return this.clearDebug();
+    this.clearDebug();
+
+    // Calculate points and pull the debug data.
+    for ( const viewer of viewers) {
+      this.calc.viewer = viewer;
+
+      for ( const target of targets) {
+        if ( viewer === target ) continue;
+        this.calc.target = target;
+        this.calc._drawCanvasDebug();
+        this.calc.percentVisible(target);
       }
     }
-
-    // Construct points under this constrained token border.
-    cfg.tokenShape = target.constrainedTokenBorder;
-    const targetPoints = this.constructor.constructTokenPoints(target, cfg);
-    if ( points3d ) return [this.constructor.elevatePoints(target, targetPoints)];
-    return [targetPoints];
   }
 
-  /* ----- NOTE: Collision testing ----- */
-
-  /** @param {Triangle[]} */
-  polygons = [];
-
-  terrainPolygons = [];
-
-  /**
-   * Filter the polygons that might block the viewer from the target.
-   */
-  filterPotentiallyBlockingPolygons() {
-    this.polygons.length = 0;
-    this.terrainPolygons.length = 0;
-    const { terrainWalls, tiles, tokens, walls } = this.blockingObjects;
-    for ( const terrainWall of terrainWalls ) {
-      const polygons = this._filterPlaceablePolygonsByViewpoint(terrainWall);
-      this.terrainPolygons.push(...polygons);
-    }
-    for ( const placeable of [...tiles, ...tokens, ...walls] ) {
-      const polygons = this._filterPlaceablePolygonsByViewpoint(placeable);
-      this.polygons.push(...polygons);
-    }
+  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
+    this.calc.viewer = viewer;
+    return this.calc.percentVisible(target);
   }
 
-  /* ----- NOTE: Static methods ----- */
+  /** @type {AbstractViewer} */
+  #calc;
+
+  get calc() {
+    if ( this.#calc ) return this.#calc;
+    this.#calc = buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
+    this.#calc.config.viewpointClass = PointsViewpoint;
+    this.#calc.config.debug = true;
+    this.#calc.config.debugDraw = this.debugDraw;
+    return this.#calc;
+  }
 
   /**
-   * Get polygons representing all grids under a token.
-   * If token is constrained, overlap the constrained polygon on the grid shapes.
+   * Triggered whenever a token is refreshed.
    * @param {Token} token
-   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   * @param {RenderFlags} flags
    */
-  static constrainedGridShapesUnderToken(token) {
-    const gridShapes = this.gridShapesUnderToken(token);
-    const constrained = token.constrainedTokenBorder;
-
-    // Token unconstrained by walls.
-    if ( constrained instanceof PIXI.Rectangle ) return gridShapes;
-
-    // For each gridShape, intersect against the constrained shape
-    const constrainedGridShapes = [];
-    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([constrained]);
-    for ( let gridShape of gridShapes ) {
-      if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
-
-      const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
-      if ( !constrainedGridShape
-        || ((constrainedGridShape instanceof PIXI.Polygon)
-         && (constrainedGridShape.points.length < 6)) ) continue;
-      constrainedGridShapes.push(constrainedGridShape);
-    }
-
-    return constrainedGridShapes;
+  onRefreshToken(token, flags) {
+    if ( !(this.viewers.some(viewer => viewer === token)
+        || this.targets.some(target => target === token)) ) return;
+    if ( !(flags.refreshPosition
+        || flags.refreshElevation
+        || flags.refreshSize ) ) return;
+    this.render();
   }
-
-  /**
-   * Get polygons representing all grids under a token.
-   * @param {Token} token
-   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
-   */
-  static gridShapesUnderToken(token) {
-    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) {
-      // Console.error("gridShapesUnderTarget called on gridless scene!");
-      return [token.bounds];
-    }
-    return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
-  }
-
-  /**
-   * Adds points to the provided points array that represent the
-   * top and bottom of the token.
-   * If top and bottom are equal, it just returns the points.
-   */
-  static elevatePoints(token, pts) {
-    const { topZ, bottomZ } = token;
-    if ( topZ.almostEqual(bottomZ) ) return pts;
-    pts.forEach(pt => {
-      const topPt = pt.clone();
-      const bottomPt = pt.clone();
-      topPt.z = topZ;
-      bottomPt.z = bottomZ;
-      pts.push(topPt, bottomPt);
-    });
-    return pts;
-  }
-
 }

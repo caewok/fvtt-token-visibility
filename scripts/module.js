@@ -81,20 +81,19 @@ import {
   RenderObstaclesWithBackgroundWebGL2,
 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
-import * as twgl from "./LOS/WebGL2/twgl.js";
-import { Area3dGeometricVisibleCalculator } from "./LOS/Area3dGeometricViewpoint.js";
+import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
+import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
+import { PercentVisibleCalculatorPIXI, DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
+import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import {
-  PointsPercentVisibleCalculator,
-  Area3dWebGL2VisibleCalculator,
-  Area3dPIXIVisibleCalculator,
-  PercentVisibleCalculatorWebGL2,
   PercentVisibleCalculatorWebGPU,
   PercentVisibleCalculatorWebGPUAsync,
-} from "./LOS/PercentVisibleCalculator.js";
-import { DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync, DebugVisibilityViewerPoints, DebugVisibilityViewerArea3dPIXI } from "./LOS/DebugVisibilityViewer.js";
+  DebugVisibilityViewerWebGPU,
+  DebugVisibilityViewerWebGPUAsync,
+} from "./LOS/WebGPU/WebGPUViewpoint.js";
 
+import * as twgl from "./LOS/WebGL2/twgl.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
-
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -178,10 +177,9 @@ Hooks.once("init", function() {
      * Each calculator can calculate visibility based on viewer, target, and optional viewer/target locations.
      */
     sightCalculators: {
-      points: PercentVisibleCalculatorWebGL2,
-      geometric: Area3dGeometricVisibleCalculator,
-      area3dWebGL2: Area3dWebGL2VisibleCalculator,
-      area3dPIXI: Area3dPIXIVisibleCalculator,
+      points: PercentVisibleCalculatorPoints,
+      geometric: PercentVisibleCalculatorGeometric,
+      PIXI: PercentVisibleCalculatorPIXI,
       webGL2: PercentVisibleCalculatorWebGL2,
       webGPU: PercentVisibleCalculatorWebGPU,
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
@@ -231,6 +229,24 @@ Hooks.once("init", function() {
 
     Settings,
 
+    calcs: {
+      points: PercentVisibleCalculatorPoints,
+      geometric: PercentVisibleCalculatorGeometric,
+      PIXI: PercentVisibleCalculatorPIXI,
+      webGL2: PercentVisibleCalculatorWebGL2,
+      webGPU: PercentVisibleCalculatorWebGPU,
+      webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
+    },
+
+    debugViewers: {
+      points: DebugVisibilityViewerPoints,
+      geometric: DebugVisibilityViewerGeometric,
+      PIXI: DebugVisibilityViewerPIXI,
+      webGL2: DebugVisibilityViewerWebGL2,
+      webGPU: DebugVisibilityViewerWebGPU,
+      webGPUAsync: DebugVisibilityViewerWebGPUAsync,
+    },
+
     webgl: {
       Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
       Placeable3dShader, Tile3dShader,
@@ -249,10 +265,6 @@ Hooks.once("init", function() {
       RenderObstaclesWebGL2,
       RenderObstaclesWithBackgroundWebGL2,
       twgl,
-      PercentVisibleCalculatorWebGL2,
-      DebugVisibilityViewerWebGL2,
-      DebugVisibilityViewerPoints,
-      DebugVisibilityViewerArea3dPIXI,
     },
 
     webgpu: {
@@ -275,15 +287,6 @@ Hooks.once("init", function() {
       AsyncQueue,
       PlaceableInstanceHandler,
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
-      PercentVisibleCalculatorWebGPU,
-      DebugVisibilityViewerWebGPU,
-      PercentVisibleCalculatorWebGPUAsync,
-      DebugVisibilityViewerWebGPUAsync,
-      DebugVisibilityViewerArea3dPIXI,
-      PointsPercentVisibleCalculator,
-      Area3dWebGL2VisibleCalculator,
-      Area3dPIXIVisibleCalculator,
-      Area3dGeometricVisibleCalculator,
     },
 
     glmatrix: {
@@ -338,9 +341,8 @@ Hooks.on("canvasReady", function() {
   const basicCalcs = [
     "points",
     "geometric",
-    "area3dWebGL2",
-    "area3dPIXI",
     "webGL2",
+    "PIXI",
   ];
   const webGPUCalcs = [
     "webGPU",

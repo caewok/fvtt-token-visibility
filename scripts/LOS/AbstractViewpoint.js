@@ -41,6 +41,9 @@ export class AbstractViewpoint {
   /** @type {object} */
   config;
 
+  /** @type {PercentVisibileCalculatorAbstract} */
+  calc;
+
   /** @type {VisionTriangle} */
   static visionTriangle = new VisionTriangle();
 
@@ -67,6 +70,15 @@ export class AbstractViewpoint {
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
 
+  /** @type {Point3d} */
+  get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.viewerLOS.target); }
+
+  /** @type {Token} */
+  get viewer() { return this.viewerLOS.viewer};
+
+  /** @type {Token} */
+  get target() { return this.viewerLOS.target; }
+
   /**
    * Determine percentage of the token visible using the class methodology.
    * @param {Token} target
@@ -85,9 +97,15 @@ export class AbstractViewpoint {
   }
 
   /** @override */
-  _percentVisible(_callback) { return 1; }
+  _percentVisible(viewer, target, viewerLocation, targetLocation) {
+    // TODO: Handle configuration options.
+    return this.calc.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+  }
 
-  async _percentVisibleAsync() { return this._percentVisible(); }
+  async _percentVisibleAsync() { return this._percentVisible();
+    // TODO: Handle configuration options.
+    return this.calc.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+  }
 
   /**
    * Clear any cached values related to the target or target location.
