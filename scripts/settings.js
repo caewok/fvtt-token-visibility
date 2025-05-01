@@ -12,12 +12,13 @@ import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { registerArea3d } from "./patching.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { buildLOSCalculator } from "./LOSCalculator.js";
-import {
-  DebugVisibilityViewerArea3dPIXI,
-  DebugVisibilityViewerPoints,
-  DebugVisibilityViewerWebGL2,
-  DebugVisibilityViewerWebGPU,
-  DebugVisibilityViewerWebGPUAsync } from "./LOS/WebGL2/DebugVisibilityViewer.js";
+import { DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
+import { DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
+import { DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
+import { DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
+import { DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
+import { DebugVisibilityViewerArea3dPIXI } from "./LOS/DebugVisibilityViewer.js";
+
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -164,32 +165,24 @@ export class Settings extends ModuleSettingsAbstract {
       switch ( type ) {
         case TYPES.POINTS: debugViewer = new DebugVisibilityViewerPoints(); break;
         case TYPES.AREA3D:
-        case TYPES.AREA3D_GEOMETRIC: {
-          debugViewer = new DebugVisibilityViewerArea3dPIXI();
-          debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_GEOMETRIC;
-          break;
-        }
-        case TYPES.AREA3D_WEBGL2: {
-          debugViewer = new DebugVisibilityViewerArea3dPIXI();
-          debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_WEBGL2;
-          break;
-        }
+        case TYPES.AREA3D_GEOMETRIC: debugViewer = new DebugVisibilityViewerGeometric(); break;
         case TYPES.AREA3D_HYBRID: {
           debugViewer = new DebugVisibilityViewerArea3dPIXI();
           debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_HYBRID;
           break;
         }
+        case TYPES.AREA3D_WEBGL2: debugViewer = new DebugVisibilityViewerPIXI(); break;
         case TYPES.WEBGL2: debugViewer = new DebugVisibilityViewerWebGL2(); break;
         case TYPES.WEBGPU: {
-          debugViewer = CONFIG[MODULE_ID].webGPUDevice
-          ? new DebugVisibilityViewerWebGPU({ device: CONFIG[MODULE_ID].webGPUDevice })
-          : new DebugVisibilityViewerWebGL2();
+          const device = CONFIG[MODULE_ID].webGPUDevice;
+          debugViewer = device ? new DebugVisibilityViewerWebGPU({ device })
+            : new DebugVisibilityViewerWebGL2();
           break;
         }
         case TYPES.WEBGPU_ASYNC: {
-          debugViewer = CONFIG[MODULE_ID].webGPUDevice
-          ? new DebugVisibilityViewerWebGPUAsync({ device: CONFIG[MODULE_ID].webGPUDevice })
-          : new DebugVisibilityViewerWebGL2();
+          const device = CONFIG[MODULE_ID].webGPUDevice;
+          debugViewer = device ? new DebugVisibilityViewerWebGPUAsync({ device })
+            : new DebugVisibilityViewerWebGL2();
           break;
         }
       }

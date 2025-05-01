@@ -8,14 +8,10 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
-import { RenderObstacles } from "../WebGPU/RenderObstacles.js";
-import { Area3dPopoutCanvas, Area3dPopout } from "../Area3dPopout.js";
-import { PercentVisibleCalculatorWebGL2, PercentVisibleCalculatorWebGPU, PercentVisibleCalculatorWebGPUAsync } from "./PercentVisibleCalculator.js";
-import { buildCustomLOSCalculator } from "../../LOSCalculator.js";
-import { Settings, SETTINGS } from "../../settings.js";
-import { PointsViewpoint } from "../PointsViewpoint.js";
-import { MODULE_ID } from "../../const.js";
+import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
+import { buildCustomLOSCalculator } from "../LOSCalculator.js";
+import { SETTINGS } from "../settings.js";
+import { MODULE_ID } from "../const.js";
 
 /* Debug viewer
 
@@ -23,7 +19,7 @@ If a token is controlled and another is targeted, display a popup with the debug
 Calculates percentage visible for the viewer/target combo.
 */
 
-class DebugVisibilityViewerAbstract {
+export class DebugVisibilityViewerAbstract {
 
   /** @type {string} */
   senseType = "sight";
@@ -181,75 +177,7 @@ class DebugVisibilityViewerAbstract {
   }
 }
 
-export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
-  /** @type {class} */
-  // static popoutClass = Area3dPopout; // PIXI version
 
-  /** @type {Token[]} */
-  get viewers() { return canvas.tokens.controlled; }
-
-  /** @type {Token[]} */
-  get targets() { return game.user.targets.values(); }
-
-  /** @type {object} */
-  config = {
-    useLitTargetShape: false,
-  };
-
-  constructor(opts) {
-    super(opts);
-  }
-
-  render() {
-    const { targets, viewers } = this;
-
-    if ( !(targets.length || viewers.length) ) return this.clearDebug();
-    this.clearDebug();
-
-    // Calculate points and pull the debug data.
-    for ( const viewer of viewers) {
-      this.calc.viewer = viewer;
-
-      for ( const target of targets) {
-        if ( viewer === target ) continue;
-        this.calc.target = target;
-        this.calc._drawCanvasDebug();
-        this.calc.percentVisible(target);
-      }
-    }
-  }
-
-  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
-    this.calc.viewer = viewer;
-    return this.calc.percentVisible(target);
-  }
-
-  /** @type {AbstractViewer} */
-  #calc;
-
-  get calc() {
-    if ( this.#calc ) return this.#calc;
-    this.#calc = buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
-    this.#calc.config.viewpointClass = PointsViewpoint;
-    this.#calc.config.debug = true;
-    this.#calc.config.debugDraw = this.debugDraw;
-    return this.#calc;
-  }
-
-  /**
-   * Triggered whenever a token is refreshed.
-   * @param {Token} token
-   * @param {RenderFlags} flags
-   */
-  onRefreshToken(token, flags) {
-    if ( !(this.viewers.some(viewer => viewer === token)
-        || this.targets.some(target => target === token)) ) return;
-    if ( !(flags.refreshPosition
-        || flags.refreshElevation
-        || flags.refreshSize ) ) return;
-    this.render();
-  }
-}
 
 export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityViewerAbstract {
   /** @type {number} */
@@ -333,152 +261,6 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
 
   destroy() {
     this.popout.close();
-    super.destroy();
-  }
-}
-
-
-export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {
-  static CONTEXT_TYPE = "webgl2";
-
-  /** @type {boolean} */
-  debugView = true;
-
-  constructor(opts = {}) {
-    super(opts);
-    this.debugView = opts.debugView ?? true;
-    this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.senseType });
-  }
-
-  async initialize() {
-    await super.initialize();
-    await this.calc.initialize();
-  }
-
-  async openPopout() {
-    await super.openPopout();
-    if ( this.renderer ) this.renderer.destroy();
-    this.renderer = new RenderObstaclesWebGL2({
-      senseType: this.senseType,
-      debugViewNormals: this.debugView,
-      gl: this.gl,
-    });
-    await this.renderer.initialize();
-  }
-
-  _render(viewer, target, viewerLocation, targetLocation) {
-    this.renderer.prerender();
-    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
-  }
-
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-  }
-
-  destroy() {
-    if ( this.calc ) this.calc.destroy();
-    if ( this.renderer ) this.renderer.destroy();
-    super.destroy();
-  }
-}
-
-export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopoutAbstract {
-  static CONTEXT_TYPE = "webgpu";
-
-  /** @type {PercentVisibleCalculator} */
-  calc;
-
-  /** @type {RenderObstacles} */
-  renderer;
-
-  constructor({ device, ...opts } = {}) {
-    super(opts);
-    this.debugView = opts.debugView ?? true;
-    this.device = device;
-    this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.senseType });
-    this.renderer = new RenderObstacles(this.device, {
-      senseType: this.senseType,
-      debugViewNormals: this.debugView,
-      width: this.constructor.WIDTH,
-      height: this.constructor.HEIGHT
-    });
-  }
-  async initialize() {
-    await super.initialize();
-    await this.calc.initialize();
-    await this.renderer.initialize();
-  }
-
-  async reinitialize() {
-    await super.reinitialize();
-    this.renderer.setRenderTextureToCanvas(this.popout.canvas);
-  }
-
-  _render(viewer, target, viewerLocation, targetLocation) {
-    this.renderer.prerender();
-    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
-  }
-
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-  }
-
-  destroy() {
-    if ( this.calc ) this.calc.destroy();
-    if ( this.renderer ) this.renderer.destroy();
-    super.destroy();
-  }
-}
-
-export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithPopoutAbstract {
-  static CONTEXT_TYPE = "webgpu";
-
-  /** @type {PercentVisibleCalculator} */
-  calc;
-
-  /** @type {RenderObstacles} */
-  renderer;
-
-  /** @type {boolean} */
-  debugView = true;
-
-  constructor({ device, ...opts } = {}) {
-    super(opts);
-    this.device = device;
-    this.debugView = opts.debugView ?? true;
-    this.calc = new PercentVisibleCalculatorWebGPUAsync({ device, senseType: this.senseType });
-    this.renderer = new RenderObstacles(this.device, {
-      senseType: this.senseType,
-      debugViewNormals: this.debugView,
-      width: this.constructor.WIDTH,
-      height: this.constructor.HEIGHT
-    });
-  }
-
-  async initialize() {
-    await super.initialize();
-    await this.calc.initialize();
-    await this.renderer.initialize();
-  }
-
-  async reinitialize() {
-    await super.reinitialize();
-    this.renderer.setRenderTextureToCanvas(this.popout.canvas);
-  }
-
-  _render(viewer, target, viewerLocation, targetLocation) {
-    this.renderer.prerender();
-    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
-  }
-
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    const callback = (percentVisible, viewer, target) => this.updatePopoutFooter({ percentVisible, viewer, target });
-    return this.calc.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
-  }
-
-  destroy() {
-    if ( this.calc ) this.calc.destroy();
-    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }

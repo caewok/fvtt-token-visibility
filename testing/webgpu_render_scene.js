@@ -76,6 +76,7 @@ Area3dPopoutCanvas = api.Area3dPopoutCanvas
 Settings = api.Settings
 
 
+
 let {
   WebGPUDevice,
   WebGPUShader,
@@ -91,26 +92,11 @@ let {
   RenderTiles,
   RenderObstacles,
   WebGPUSumRedPixels,
-  PercentVisibleCalculator,
   AsyncQueue,
-  PercentVisibleCalculatorWebGPU,
-  PercentVisibleCalculatorWebGPUAsync,
-  DebugVisibilityViewerWebGPU,
-  DebugVisibilityViewerWebGPUAsync,
-  PointsPercentVisibleCalculator,
-  Area3dWebGL2VisibleCalculator,
-  Area3dPIXIVisibleCalculator,
-  Area3dGeometricVisibleCalculator,
   PlaceableInstanceHandler
   // wgsl
 } = api.webgpu
 
-let {
-  PercentVisibleCalculatorWebGL2,
-  DebugVisibilityViewerWebGL2,
-  DebugVisibilityViewerPoints,
-  DebugVisibilityViewerArea3dPIXI,
-} = api.webgl
 
 let {
   Triangle,
@@ -152,37 +138,32 @@ popout.context.configure({
 
 calcWebGL2 = CONFIG.tokenvisibility.percentVisibleWebGL2
 
-calcPoints = new PointsPercentVisibleCalculator()
+calcPoints = new api.calcs.points()
 await calcPoints.initialize()
 calcPoints.percentVisible(viewer, target)
 await calcPoints.percentVisibleAsync(viewer, target)
 
-calcGeometric = new Area3dGeometricVisibleCalculator()
+calcGeometric = new api.calcs.geometric()
 await calcGeometric.initialize()
 calcGeometric.percentVisible(viewer, target)
 await calcGeometric.percentVisibleAsync(viewer, target)
 
-calcArea3dWebGL2 = new Area3dWebGL2VisibleCalculator()
-await calcArea3dWebGL2.initialize()
-calcArea3dWebGL2.percentVisible(viewer, target)
-await calcArea3dWebGL2.percentVisibleAsync(viewer, target)
-
-calcArea3dPIXI = new Area3dPIXIVisibleCalculator()
+calcArea3dPIXI = new api.calcs.PIXI()
 await calcArea3dPIXI.initialize()
 calcArea3dPIXI.percentVisible(viewer, target)
 await calcArea3dPIXI.percentVisibleAsync(viewer, target)
 
-calcWebGL2 = new PercentVisibleCalculatorWebGL2()
+calcWebGL2 = new api.calcs.webGL2()
 await calcWebGL2.initialize()
 calcWebGL2.percentVisible(viewer, target)
 await calcWebGL2.percentVisibleAsync(viewer, target)
 
-calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
+calcWebGPU = new api.calcs.webGPU({ device })
 await calcWebGPU.initialize()
 calcWebGPU.percentVisible(viewer, target)
 await calcWebGPU.percentVisibleAsync(viewer, target)
 
-calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
+calcWebGPUAsync = new api.calcs.webGPUAsync({ device })
 await calcWebGPUAsync.initialize()
 calcWebGPUAsync.percentVisible(viewer, target)
 await calcWebGPUAsync.percentVisibleAsync(viewer, target)
@@ -224,18 +205,16 @@ CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
 
 // All at once
-calcPoints = new PointsPercentVisibleCalculator()
-calcGeometric = new Area3dGeometricVisibleCalculator()
-calcArea3dWebGL2 = new Area3dWebGL2VisibleCalculator()
-calcArea3dPIXI = new Area3dPIXIVisibleCalculator()
-calcWebGL2 = new PercentVisibleCalculatorWebGL2()
-calcWebGPU = new PercentVisibleCalculatorWebGPU({ device })
-calcWebGPUAsync = new PercentVisibleCalculatorWebGPUAsync({ device })
+calcPoints = new api.calcs.points()
+calcGeometric = new api.calcs.geometric()
+calcPIXI = new api.calcs.PIXI()
+calcWebGL2 = new api.calcs.webGL2()
+calcWebGPU = new api.calcs.webGPU({ device })
+calcWebGPUAsync = new api.calcs.webGPUAsync({ device })
 
 await calcPoints.initialize()
 await calcGeometric.initialize()
-await calcArea3dWebGL2.initialize()
-await calcArea3dPIXI.initialize()
+await calcPIXI.initialize()
 await calcWebGL2.initialize()
 await calcWebGPU.initialize()
 await calcWebGPUAsync.initialize()
@@ -243,14 +222,11 @@ await calcWebGPUAsync.initialize()
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
   calcGeometric: calcGeometric.percentVisible(viewer, target),
-  calcArea3dWebGL2: calcArea3dWebGL2.percentVisible(viewer, target),
-  calcArea3dPIXI: calcArea3dPIXI.percentVisible(viewer, target),
-  calcWebGL2: calcWebGL2.percentVisible(viewer, target),
+  calcPIXI: calcPIXI.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
-  asyc_calcArea3dWebGL2: await calcArea3dWebGL2.percentVisibleAsync(viewer, target),
-  asyc_calcArea3dPIXI: await calcArea3dPIXI.percentVisibleAsync(viewer, target),
+  asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),
   async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
   async_calcWebGPU: await calcWebGPU.percentVisibleAsync(viewer, target),
   async_calcWebGPUAsync: await calcWebGPUAsync.percentVisibleAsync(viewer, target),
@@ -325,8 +301,7 @@ await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
 CONFIG.tokenvisibility.tileThresholdShape = "triangles"
 
 console.log(`\n3d`)
-await QBenchmarkLoop(N, calcArea3dWebGL2, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcArea3dPIXI, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcPIXI, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
@@ -334,8 +309,7 @@ await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
 await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcArea3dPIXI, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcArea3dWebGL2, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcPIXI, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 
@@ -366,15 +340,13 @@ for ( const clipperVersion of [1, 2] ) {
     console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
     await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
     await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
-    await QBenchmarkLoopFn(N, percentFn, "calcArea3dWebGL2", calcArea3dWebGL2)
-    await QBenchmarkLoopFn(N, percentFn, "calcArea3dPIXI", calcArea3dPIXI)
+    await QBenchmarkLoopFn(N, percentFn, "calcPIXI", calcPIXI)
     await QBenchmarkLoopFn(N, percentFn, "WebGL", calcWebGL2)
     await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU)
     await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync)
     await QBenchmarkLoopFn(N, percentFnAsync, "async Points", calcPoints)
     await QBenchmarkLoopFn(N, percentFnAsync, "async calcGeometric", calcGeometric)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async calcArea3dWebGL2", calcArea3dWebGL2)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async calcArea3dPIXI", calcArea3dPIXI)
+    await QBenchmarkLoopFn(N, percentFnAsync, "async calcPIXI", calcPIXI)
     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync)
