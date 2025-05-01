@@ -184,6 +184,7 @@ Hooks.once("init", function() {
       webGL2: PercentVisibleCalculatorWebGL2,
       webGPU: PercentVisibleCalculatorWebGPU,
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
+      hybrid: PercentVisibleCalculatorHybrid,
     },
 
     /**

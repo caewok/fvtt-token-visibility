@@ -1,20 +1,20 @@
 /* globals
+CONFIG
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 // Base folder
+import { MODULE_ID } from "../const.js";
+import { Settings } from "../settings.js";
 
 // LOS folder
-import { GeometricViewpoint } from "./GeometricViewpoint.js";
-import { PIXIViewpoint } from "./PIXIViewpoint.js";
-
-// Geometry folder
-import { addClassGetter } from "../geometry/util.js";
-
+import { GeometricViewpoint, PercentVisibleCalculatorGeometric } from "./GeometricViewpoint.js";
+import { AbstractViewpoint } from "./AbstractViewpoint.js";
+import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 
 // Debug
-export class Area3dHybridViewpoint extends GeometricViewpoint {
+export class Hybrid3dViewpoint extends GeometricViewpoint {
   calc = CONFIG[MODULE_ID].sightCalculators.hybrid;
 }
 
@@ -27,13 +27,11 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
 
   blockingTiles(viewerLocation, target) {
     const visionTri = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
-    return AbstractViewpoint.filterTilesByVisionTriangle(visionTri, { this.senseType });
+    return AbstractViewpoint.filterTilesByVisionTriangle(visionTri, { senseType: this.senseType });
   }
 
-
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    const this.#blockingTiles = this.blockingTiles(viewerLocation, target);
-
+    this.#blockingTiles = this.blockingTiles(viewerLocation, target);
     if ( this.#blockingTiles.size ) {
       return this.tileCalc._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
     } else {
@@ -42,12 +40,8 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
   }
 
   _percentRedPixels() {
-    if ( this.#blockingTiles.size ) {
-      return this.tileCalc._percentRedPixels(viewer, target, viewerLocation, targetLocation);
-    } else {
-      return super._percentRedPixels(viewer, target, viewerLocation, targetLocation);
-    }
-
+    if ( this.#blockingTiles.size ) return this.tileCalc._percentRedPixels();
+    else return super._percentRedPixels();
   }
 }
 
@@ -59,9 +53,9 @@ export class DebugVisibilityViewerHybrid extends DebugVisibilityViewerArea3dPIXI
    * For debugging
    * Switch drawing depending on the algorithm used.
    */
-  _draw3dDebug(drawTool, renderer) {
-    if ( this.blockingObjects.tiles.size ) this.#webGL2Class._draw3dDebug(drawTool, renderer);
-    else super._draw3dDebug(drawTool, renderer);
-  }
+//   _draw3dDebug(drawTool, renderer) {
+//     if ( this.blockingObjects.tiles.size ) this.._draw3dDebug(drawTool, renderer);
+//     else super._draw3dDebug(drawTool, renderer);
+//   }
 
 }
