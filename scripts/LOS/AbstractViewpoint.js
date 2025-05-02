@@ -4,7 +4,7 @@ CONST,
 canvas,
 foundry,
 PIXI,
-Tile,
+Wall,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -20,8 +20,7 @@ import { NULL_SET } from "./util.js";
 
 import {
   insetPoints,
-  tokensOverlap,
-  getObjectProperty } from "./util.js";
+  tokensOverlap } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -97,12 +96,12 @@ export class AbstractViewpoint {
   }
 
   /** @override */
-  _percentVisible(viewer, target, viewerLocation, targetLocation) {
+  _percentVisible() {
     // TODO: Handle configuration options.
     return this.calc.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
   }
 
-  async _percentVisibleAsync() { return this._percentVisible();
+  async _percentVisibleAsync() {
     // TODO: Handle configuration options.
     return this.calc.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
   }
@@ -228,6 +227,12 @@ export class AbstractViewpoint {
     return visionTri.findWalls().filter(w => w.document[senseType] && !w.isOpen);
   }
 
+  static filterEdgesByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+    // Ignore edges that are not blocking for the type.
+    // Ignore edges that are walls with open doors.
+    return visionTri.findEdges().filter(e => e[senseType] && !(e.object instanceof Wall && e.object.isOpen));
+  }
+
   /**
    * Filter tiles in the scene by a triangle representing the view from viewingPoint to
    * target (or other two points). Only considers 2d top-down view.
@@ -253,7 +258,7 @@ export class AbstractViewpoint {
   static filterTokensByVisionTriangle(visionTri, {
     viewer,
     target,
-    blockingTokensOpts = { live: true, dead: true, prone: true } } = {}) {
+    blockingTokensOpts }) {
 
     let tokens = visionTri.findTokens();
 
@@ -270,23 +275,15 @@ export class AbstractViewpoint {
       if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer))
     }
 
-    // Filter live or dead tokens.
-    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = blockingTokensOpts;
-    if ( liveTokensBlock ^ deadTokensBlock ) {
-      const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
-      tokens = tokens.filter(t => {
-        const hp = getObjectProperty(t.actor, tokenHPAttribute);
-        if ( typeof hp !== "number" ) return true;
-        if ( liveTokensBlock && hp > 0 ) return true;
-        if ( deadTokensBlock && hp <= 0 ) return true;
-        return false;
-      });
-    }
+    // Filter live, dead, prone tokens.
+    return tokens.filter(token => this.includeToken(token, blockingTokensOpts));
+  }
 
-    // Filter prone tokens.
-    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
-
-    return tokens;
+  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
+    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
+    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
+    if ( !prone && token.isProne ) return false;
+    return true;
   }
 
   /**

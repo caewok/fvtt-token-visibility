@@ -1,4 +1,5 @@
 /* globals
+canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
