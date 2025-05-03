@@ -676,6 +676,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   constructor(device, materials, camera, { senseType = "sight", ...opts } = {}) {
     super(device, materials, camera, opts);
     this.senseType = senseType;
+    this.placeableHandler.senseType = senseType;
   }
 
   /**
@@ -798,6 +799,16 @@ export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
   /** @type {WallInstanceHandler} */
   static handlerClass = NonTerrainWallInstanceHandler;
 
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; }
+
+  set senseType(value) {
+    this.#senseType = value;
+    if ( this.instanceHandler ) this.instanceHandler.senseType = value;
+  }
+
   /**
    * Insert drawables that rarely change into the drawables map.
    */
@@ -825,6 +836,16 @@ export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
 export class DrawableTerrainWallInstances extends DrawableWallInstances {
   /** @type {WallInstanceHandler} */
   static handlerClass = TerrainWallInstanceHandler;
+
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; }
+
+  set senseType(value) {
+    this.#senseType = value;
+    if ( this.instanceHandler ) this.instanceHandler.senseType = value;
+  }
 
   /**
    * Insert drawables that rarely change into the drawables map.

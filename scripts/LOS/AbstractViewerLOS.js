@@ -57,22 +57,24 @@ export class AbstractViewerLOS {
   };
 
   /** @type {enum<class>} */
-  static VIEWPOINT_CLASSES = {
-    "los-points": PointsViewpoint,
-    "los-area-3d": GeometricViewpoint,
-    "los-area-3d-geometric": GeometricViewpoint,
-    "los-area-3d-webgl2": PIXIViewpoint,
-    "los-area-3d-hybrid": Hybrid3dViewpoint,
-    "los-webgl2": WebGL2Viewpoint,
-    "los-webgpu": WebGPUViewpoint,
-    "los-webgpu-async": WebGPUViewpointAsync,
-    points: PointsViewpoint,
-    geometric: GeometricViewpoint,
-    PIXI: PIXIViewpoint,
-    hybrid: Hybrid3dViewpoint,
-    webGL2: WebGL2Viewpoint,
-    webGPU: WebGPUViewpoint,
-    webGPUAsync: WebGPUViewpointAsync,
+  static get VIEWPOINT_CLASSES() { // Cannot access PointsViewpoint, others, before initialization. So use a getter.
+    return {
+      "los-points": PointsViewpoint,
+      "los-area-3d": GeometricViewpoint,
+      "los-area-3d-geometric": GeometricViewpoint,
+      "los-area-3d-webgl2": PIXIViewpoint,
+      "los-area-3d-hybrid": Hybrid3dViewpoint,
+      "los-webgl2": WebGL2Viewpoint,
+      "los-webgpu": WebGPUViewpoint,
+      "los-webgpu-async": WebGPUViewpointAsync,
+      points: PointsViewpoint,
+      geometric: GeometricViewpoint,
+      PIXI: PIXIViewpoint,
+      hybrid: Hybrid3dViewpoint,
+      webGL2: WebGL2Viewpoint,
+      webGPU: WebGPUViewpoint,
+      webGPUAsync: WebGPUViewpointAsync,
+    }
   };
 
   /** @type {enum<string>} */
@@ -91,13 +93,15 @@ export class AbstractViewerLOS {
    * @param {Token} viewer      The token whose LOS should be tested
    * @param {object} [opts]
    * @param {VIEWPOINT_CLASSES|class} [opts.viewpointClass]   Class of the viewpoint algorithm
+   * @param {number|string} [opts.numViewpoints]              Number of viewpoints or associated algorithm
    * @param {number} [opts.viewpointOffset]                   Used to adjust the viewpoint location
-   * @param {}
+   * @param {WALL_RESTRICTION_TYPES} [opts.senseType]         What type of walls block this viewer (e.g., sight, light)
+   * @param {object} [...cfg]                                 Other options
    */
-  constructor(viewer, { viewpointClass, viewpointOffset, senseType, ...cfg } = {}) {
+  constructor(viewer, { viewpointClass, numViewpoints, viewpointOffset, senseType, ...cfg } = {}) {
     this.viewer = viewer;
     this.config = cfg;
-    this.setViewpointClass(viewpointClass, viewpointOffset, senseType);
+    this.setViewpointClass({ viewpointClass, numViewpoints, viewpointOffset, senseType });
   }
 
   /** @type {ViewerLOSConfig} */
@@ -124,8 +128,8 @@ export class AbstractViewerLOS {
     if ( cfg.numViewpoints && !Object.hasOwn(this.constructor.NUM_VIEWPOINTS, cfg.numViewpoints) ) {
       console.error(`${this.constructor.name}|Number of viewpoint configuration ${cfg.numViewpoints} not recognized.`);
     }
-    if ( Number.isNumeric(cfg.threshold) && cfg.threshold.between(0, 1) ) {
-      console.error(`${this.constructor.name}|Sense type configuration ${cfg.threshold} not recognized.`);
+    if ( Number.isNumeric(cfg.threshold) && !cfg.threshold.between(0, 1) ) {
+      console.error(`${this.constructor.name}|Threshold configuration ${cfg.threshold} not recognized.`);
     }
     foundry.utils.mergeObject(this._config, cfg);
   }
@@ -195,6 +199,8 @@ export class AbstractViewerLOS {
 
   #viewpointClass = PointsViewpoint;
 
+  #numViewpoints = this.constructor.POINT_TYPES.CENTER;
+
   #viewpointOffset = 0;
 
   #senseType = "sight";
@@ -203,6 +209,7 @@ export class AbstractViewerLOS {
 
   get viewpointOffset() { return this.#viewpointOffset; }
 
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
   get senseType() { return this.#senseType; }
 
   set senseType(value) {
@@ -213,15 +220,6 @@ export class AbstractViewerLOS {
     this.viewpoints.forEach(vp => vp.senseType = value);
   }
 
-  setViewpointClass(cl, offset, senseType) {
-    cl = this.constructor.VIEWPOINT_CLASSES[cl] || cl;
-    if ( cl ) this.#viewpointClass = cl;
-    if ( Number.isNumeric(offset) ) this.#viewpointOffset = offset;
-    if ( senseType ) this.#senseType = senseType;
-    this.clearCache();
-    this.#initializeViewpoints();
-  }
-
   /**
    * Determine the viewpoints for this viewer.
    * @returns {Point3d[]}
@@ -229,10 +227,21 @@ export class AbstractViewerLOS {
   #initializeViewpoints() {
     const cl = this.#viewpointClass;
     this.viewpoints = AbstractViewpoint.constructTokenPoints(this.viewer, {
-      pointAlgorithm: this.config.viewerPoints,
+      pointAlgorithm: this.#numViewpoints,
       inset: this.#viewpointOffset
     }).map(pt => new cl(this, pt, this.config));
   }
+
+  setViewpointClass({ viewpointClass, numViewpoints, viewpointOffset, senseType }) {
+    if ( viewpointClass ) this.#viewpointClass = this.constructor.VIEWPOINT_CLASSES[viewpointClass] || viewpointClass;
+    if ( numViewpoints ) this.#numViewpoints = this.constructor.NUM_VIEWPOINTS[numViewpoints] || numViewpoints;
+    if ( Number.isNumeric(viewpointOffset) ) this.#viewpointOffset = viewpointOffset;
+    if ( senseType ) this.#senseType = senseType;
+    this.clearCache();
+    this.#initializeViewpoints();
+  }
+
+
 
   // ----- NOTE: Target ---- //
 

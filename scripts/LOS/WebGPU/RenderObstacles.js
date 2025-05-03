@@ -157,20 +157,26 @@ class RenderAbstract {
   }
 
   /** @type {ViewerLOSConfig} */
-  config = {
-    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE),
-    useLitTargetShape: true,
-    visibleTargetShape: null,
+  _config = {
     blocking: {
       walls: true,
       tiles: true,
       tokens: {
-        dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
-        live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
-        prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
+        dead: true,
+        live: true,
+        prone: true,
       }
-    }
-  };
+    },
+    debug: false,
+    useLitTargetShape: false,
+    largeTarget: false,
+  }
+
+  get config() { return this._config; }
+
+  set config(cfg = {}) {
+    foundry.utils.mergeObject(this._config, cfg);
+  }
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.

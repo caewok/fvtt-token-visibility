@@ -503,7 +503,7 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @param {Edge} edge
    * @returns {boolean}
    */
-  isTerrain(edge, { senseType = "sight" } = {}) {
+  static isTerrain(edge, { senseType = "sight" } = {}) {
     return edge[senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
   }
 
@@ -513,29 +513,47 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @returns {boolean}
    */
   static isDirectional(edge) { return Boolean(edge.direction); }
-
-  /**
-   * Is this a blocking edge?
-   * @param {Edge} edge
-   * @returns {boolean}
-   */
-  static isBlocking(edge, { senseType = "sight" } = {}) {
-    return edge[senseType] !== CONST.WALL_SENSE_TYPES.NONE;
-  }
-
 }
 
 export class NonTerrainWallInstanceHandler extends WallInstanceHandler {
+  constructor({ senseType = "sight" } = {}) {
+    super();
+    this._senseType = senseType;
+  }
+
+  _senseType = "sight";
+
+  get senseType() { return this._senseType; }
+
+  set senseType(value) {
+    this._senseType = value;
+    this.initializePlaceables();
+  }
+
   includePlaceable(edge) {
     if ( !super.includePlaceable(edge) ) return false;
-    return !this.isTerrain(edge);
+    return !this.constructor.isTerrain(edge, { senseType: this.senseType });
   }
 }
 
 export class TerrainWallInstanceHandler extends WallInstanceHandler {
+  constructor({ senseType = "sight" } = {}) {
+    super();
+    this._senseType = senseType;
+  }
+
+  _senseType = "sight"; // Avoid # b/c TypeError: Cannot initialize #senseType twice on the same object
+
+  get senseType() { return this._senseType; }
+
+  set senseType(value) {
+    this._senseType = value;
+    this.initializePlaceables();
+  }
+
   includePlaceable(edge) {
     if ( !super.includePlaceable(edge) ) return false;
-    return this.isTerrain(edge);
+    return this.constructor.isTerrain(edge, { senseType: this.senseType });
   }
 }
 

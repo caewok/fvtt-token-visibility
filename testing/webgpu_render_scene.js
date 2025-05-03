@@ -77,6 +77,7 @@ Settings = api.Settings
 
 
 
+
 let {
   WebGPUDevice,
   WebGPUShader,
@@ -171,34 +172,17 @@ await calcWebGPUAsync.percentVisibleAsync(viewer, target)
 
 await calcWebGPUAsync._percentVisible(viewer, target)
 
-debugViewer = new DebugVisibilityViewerPoints();
+debugViewer = new api.debugViewers.points();
+debugViewer = new api.debugViewers.PIXI();
+debugViewer = new api.debugViewers.webGL2();
+debugViewer = new api.debugViewers.webGPU({ device });
+debugViewer = new api.debugViewers.webGPUAsync({ device });
+
 await debugViewer.initialize();
 debugViewer.render();
 debugViewer.destroy()
 
-debugViewer = new DebugVisibilityViewerWebGL2();
-await debugViewer.initialize();
-debugViewer.render();
-debugViewer.destroy()
 
-debugViewer = new DebugVisibilityViewerWebGPU({ device });
-await debugViewer.initialize();
-debugViewer.render();
-debugViewer.destroy()
-
-debugViewer = new DebugVisibilityViewerWebGPUAsync({ device, debugView: false });
-await debugViewer.initialize();
-debugViewer.render();
-debugViewer.destroy()
-
-debugViewer = new DebugVisibilityViewerArea3dPIXI();
-debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC
-debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL1
-debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2
-debugViewer.algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID
-await debugViewer.initialize();
-debugViewer.render();
-debugViewer.destroy();
 
 CONFIG.tokenvisibility.tileThresholdShape = "triangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"

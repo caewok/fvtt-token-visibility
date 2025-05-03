@@ -55,7 +55,7 @@ export class AbstractViewpoint {
 
   clearCache() { }
 
-  /** @type {object} */
+  /** @type {ViewerLOSConfig} */
   _config = {
     blocking: {
       walls: true,
@@ -88,6 +88,11 @@ export class AbstractViewpoint {
 
   /** @type {Token} */
   get target() { return this.viewerLOS.target; }
+
+  /** @type {WALL_RESTRICTION_TYPES} */
+  get senseType() { return this.viewerLOS.senseType; }
+
+  set senseType(value) { this.calc.senseType = senseType; }
 
   /**
    * Determine percentage of the token visible using the class methodology.
