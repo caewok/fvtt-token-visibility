@@ -303,7 +303,6 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
   }
 
   async initialize() {
-    this.config = this.initializeConfig();
     this._initializeShaders();
   }
 
