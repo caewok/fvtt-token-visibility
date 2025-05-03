@@ -211,6 +211,7 @@ calcPIXI = new api.calcs.PIXI()
 calcWebGL2 = new api.calcs.webGL2()
 calcWebGPU = new api.calcs.webGPU({ device })
 calcWebGPUAsync = new api.calcs.webGPUAsync({ device })
+calcHybrid = new api.calcs.hybrid()
 
 await calcPoints.initialize()
 await calcGeometric.initialize()
@@ -218,6 +219,7 @@ await calcPIXI.initialize()
 await calcWebGL2.initialize()
 await calcWebGPU.initialize()
 await calcWebGPUAsync.initialize()
+await calcHybrid.initialize()
 
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
@@ -225,15 +227,14 @@ console.table({
   calcPIXI: calcPIXI.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
+  calcHybrid: calcHybrid.percentVisible(viewer, target),
   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
   asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),
   async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
   async_calcWebGPU: await calcWebGPU.percentVisibleAsync(viewer, target),
   async_calcWebGPUAsync: await calcWebGPUAsync.percentVisibleAsync(viewer, target),
+  async_calcHybrid: await calcHybrid.percentVisibleAsync(viewer, target),
 })
-
-
-
 
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn
@@ -264,72 +265,32 @@ async function percentFnAsync(calc) {
 
 
 
-
-N = 1000
-CONFIG.tokenvisibility.clipperVersion = 1
-CONFIG.tokenvisibility.tileThresholdShape = "triangles"
-console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
-await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
-
-CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
-console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
-await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
-
-CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
-console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
-await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
-CONFIG.tokenvisibility.tileThresholdShape = "triangles"
-
-CONFIG.tokenvisibility.clipperVersion = 2
-CONFIG.tokenvisibility.tileThresholdShape = "triangles"
-console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
-await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
-
-CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
-console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
-await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
-
-CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
-console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
-await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
-CONFIG.tokenvisibility.tileThresholdShape = "triangles"
-
-console.log(`\n3d`)
-await QBenchmarkLoop(N, calcPIXI, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
-await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcPIXI, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
-await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
-
-
-
-CONFIG.tokenvisibility.clipperVersion = 1
-CONFIG.tokenvisibility.tileThresholdShape = "triangles"
-console.log(`${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
-
-
-
-await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
-await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
-
 CONFIG.tokenvisibility.tileThresholdShape = "triangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
 
 CONFIG.tokenvisibility.clipperVersion = 1
 CONFIG.tokenvisibility.clipperVersion = 2
+
+
+
+N = 20
+for ( const clipperVersion of [1, 2] ) {
+  for ( const shape of Object.values(CONFIG.tokenvisibility.tileThresholdShapeOptions) ) {
+    console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`);
+
+    await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
+    await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
+    await QBenchmarkLoop(N, calcHybrid, "percentVisible", viewer, target)
+    await QBenchmarkLoop(N, calcPIXI, "percentVisible", viewer, target)
+    await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
+    await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
+    await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
+    await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
+  }
+}
+
+
 
 N = 20
 for ( const clipperVersion of [1, 2] ) {
@@ -339,16 +300,18 @@ for ( const clipperVersion of [1, 2] ) {
 
     console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
     await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)
-    await QBenchmarkLoopFn(N, percentFn, "calcGeometric", calcGeometric)
-    await QBenchmarkLoopFn(N, percentFn, "calcPIXI", calcPIXI)
+    await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric)
+    await QBenchmarkLoopFn(N, percentFn, "Hybrid", calcHybrid)
+    await QBenchmarkLoopFn(N, percentFn, "PIXI", calcPIXI)
     await QBenchmarkLoopFn(N, percentFn, "WebGL", calcWebGL2)
     await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU)
     await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async Points", calcPoints)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async calcGeometric", calcGeometric)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async calcPIXI", calcPIXI)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
+//     await QBenchmarkLoopFn(N, percentFnAsync, "async Points", calcPoints)
+//     await QBenchmarkLoopFn(N, percentFnAsync, "async Geometric", calcGeometric)
+//     await QBenchmarkLoopFn(N, percentFnAsync, "async Hybrid", calcHybrid)
+//     await QBenchmarkLoopFn(N, percentFnAsync, "async PIXI", calcPIXI)
+//     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
+//     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync)
   }
 }

@@ -11,6 +11,7 @@ Caches values based on the viewer, viewer location, target, target location.
 - Cache is tied to the placeable updates.
 */
 
+
 export class PercentVisibleCalculatorAbstract {
 
   /** @type {number} */
@@ -19,9 +20,22 @@ export class PercentVisibleCalculatorAbstract {
   /** @type {string} */
   senseType = "sight";
 
-  constructor({ senseType = "sight" } = {}) {
+  constructor({ senseType = "sight", blocking = {} } = {}) {
     this.senseType = senseType;
+    foundry.utils.mergeObject(this.config, { blocking });
   }
+
+  config = {
+    blocking: {
+      walls: true,
+      tiles: true,
+      tokens: {
+        dead: true,
+        live: true,
+        prone: true,
+      }
+    }
+  };
 
   async initialize() { return; }
 
@@ -74,6 +88,7 @@ export class PercentVisibleCalculatorAbstract {
   async _percentRedPixelsAsync() { return this._percentRedPixels(); }
 
   destroy() { return; }
+
 }
 
 /**

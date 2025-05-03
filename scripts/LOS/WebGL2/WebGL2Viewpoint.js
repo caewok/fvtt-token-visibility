@@ -27,17 +27,13 @@ export class WebGL2Viewpoint extends AbstractViewpoint {
     this.calc = CONFIG[MODULE_ID].sightCalculators.webGL2;
   }
 
-  /** @type {boolean} */
-  useCache = true;
-
   _percentVisible() {
     // TODO: Handle configuration options.
     const viewer =  this.viewerLOS.viewer;
     const target = this.viewerLOS.target;
     const viewerLocation = this.viewpoint;
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    if ( this.useCache ) return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-    return this.calc._percentVisible(viewer, target, viewerLocation, targetLocation);
+    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
   }
 }
 

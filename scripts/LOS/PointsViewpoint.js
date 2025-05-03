@@ -16,7 +16,6 @@ import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
-import { VisionTriangle } from "./VisionTriangle.js";
 
 
 /**
@@ -32,15 +31,23 @@ export class PointsViewpoint extends AbstractViewpoint {
  * Handle points algorithm.
  */
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
-  /** @type {ViewpointConfig} */
-  config = {};
+
+  _config = {
+    ...super._config,
+    pointAlgorithm: AbstractViewerLOS.POINT_TYPES.CENTER,
+    targetInset: 0.75,
+    points3d: false,
+  };
+
+  set config(cfg = {}) {
+    if ( cfg.pointAlgorithm && !Object.values().some(value => value === cfg.pointAlgorithm) ) {
+      console.error(`${this.constructor.name}|Point algorithm ${cfg.pointAlgorithm} not recognized.`)
+    }
+    super.config = cfg;
+  }
 
   /** @type {Points3d[][]} */
   targetPoints = [];
-
-  async initialize() {
-    this.config = this.initializeConfig();
-  }
 
   _calculatePercentVisible(viewer, target, viewerLocation, _targetLocation) {
     this.viewpoint = viewerLocation;
@@ -60,28 +67,28 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @param {ViewpointConfig} [cfg]
    * @returns {ViewpointConfig}
    */
-  initializeConfig(cfg = {}) {
-    // Configs specific to the Points algorithm.
-    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
-    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
-    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
-    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
-    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
-    cfg.useLitTargetShape ??= true;
-
-    // Blocking canvas objects.
-    cfg.blocking ??= {};
-    cfg.blocking.walls ??= true;
-    cfg.blocking.tiles ??= true;
-
-    // Blocking tokens.
-    cfg.blocking.tokens ??= {};
-    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
-    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
-    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
-
-    return cfg;
-  }
+//   initializeConfig(cfg = {}) {
+//     // Configs specific to the Points algorithm.
+//     const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+//     cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+//     cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+//     cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+//     cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+//     cfg.useLitTargetShape ??= true;
+//
+//     // Blocking canvas objects.
+//     cfg.blocking ??= {};
+//     cfg.blocking.walls ??= true;
+//     cfg.blocking.tiles ??= true;
+//
+//     // Blocking tokens.
+//     cfg.blocking.tokens ??= {};
+//     cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+//     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+//     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+//
+//     return cfg;
+//   }
 
   /*
    * Similar to _constructViewerPoints but with a complication:

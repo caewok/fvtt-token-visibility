@@ -32,18 +32,13 @@ export class WebGPUViewpoint extends AbstractViewpoint {
     this.calc = CONFIG[MODULE_ID].sightCalculators.webGPU;
   }
 
-  /** @type {boolean} */
-  useCache = true;
-
   _percentVisible() {
     // TODO: Handle configuration options.
     const viewer =  this.viewerLOS.viewer;
     const target = this.viewerLOS.target;
     const viewerLocation = this.viewpoint;
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-
-    if ( this.useCache ) return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-    return this.calc._percentVisible(viewer, target, viewerLocation, targetLocation);
+    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
   }
 }
 
@@ -55,18 +50,13 @@ export class WebGPUViewpointAsync extends AbstractViewpoint {
     this.calc = CONFIG[MODULE_ID].sightCalculators.webGPUAsync;
   }
 
-  /** @type {boolean} */
-  useCache = true;
-
   _percentVisible() {
     // TODO: Handle configuration options.
     const viewer =  this.viewerLOS.viewer;
     const target = this.viewerLOS.target;
     const viewerLocation = this.viewpoint;
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-
-    if ( this.useCache ) return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-    return this.calc._percentVisible(viewer, target, { viewerLocation, targetLocation });
+    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
   }
 
   async _percentVisibleAsync() {
@@ -75,9 +65,7 @@ export class WebGPUViewpointAsync extends AbstractViewpoint {
     const target = this.viewerLOS.target;
     const viewerLocation = this.viewpoint;
     const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-
-    if ( this.useCache ) return this.calc.percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
-    return this.calc._percentVisibleAsync(viewer, target, viewerLocation, targetLocation);
+    return this.calc.percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
   }
 }
 

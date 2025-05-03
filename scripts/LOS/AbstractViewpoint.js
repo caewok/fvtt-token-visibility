@@ -30,6 +30,8 @@ import { Draw } from "../geometry/Draw.js";
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  */
 export class AbstractViewpoint {
+  /** @type {VisionTriangle} */
+  static visionTriangle = new VisionTriangle();
 
   /** @type {ViewerLOS} */
   viewerLOS;
@@ -37,34 +39,43 @@ export class AbstractViewpoint {
   /** @type {Point3d} */
   viewpointDiff;
 
-  /** @type {object} */
-  config;
-
   /** @type {PercentVisibileCalculatorAbstract} */
+  // @override
   calc;
-
-  /** @type {VisionTriangle} */
-  static visionTriangle = new VisionTriangle();
 
   /**
    * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"
    * @param {Point3d} viewpointDiff     The location of the eye relative to the viewer
    */
-  constructor(viewerLOS, viewpoint) {
+  constructor(viewerLOS, viewpoint, cfg = {}) {
     this.viewerLOS = viewerLOS;
     this.viewpointDiff = viewpoint.subtract(viewerLOS.center);
-    this.config = this.initializeConfig();
-
-    // Hide initialized property so we can iterate the object.
-    Object.defineProperty(this.#blockingObjects, "initialized", { enumerable: false});
+    this.config = cfg;
   }
 
-  /**
-   * Sets configuration to the current settings.
-   * @param {ViewpointConfig} [cfg]
-   * @returns {ViewpointConfig}
-   */
-  initializeConfig(cfg = {}) { return cfg; }
+  clearCache() { }
+
+  /** @type {object} */
+  _config = {
+    blocking: {
+      walls: true,
+      tiles: true,
+      tokens: {
+        dead: true,
+        live: true,
+        prone: true,
+      }
+    },
+    debug: false,
+    useLitTargetShape: false,
+    largeTarget: false,
+  }
+
+  get config() { return this._config; }
+
+  set config(cfg = {}) {
+    foundry.utils.mergeObject(this._config, cfg);
+  }
 
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
@@ -107,14 +118,6 @@ export class AbstractViewpoint {
   }
 
   /**
-   * Clear any cached values related to the target or target location.
-   */
-  clearCache() {
-    this.#blockingObjects.initialized = false;
-    Object.values(this.#blockingObjects).forEach(objs => objs.clear());
-  }
-
-  /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
    * @param {Token} target
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
@@ -148,34 +151,6 @@ export class AbstractViewpoint {
     if ( terrainWalls.size > 1 ) return true;
     return Object.values(otherObjects).some(objSet => objSet.size);
   }
-
-  /**
-   * Holds Foundry objects that are within the vision triangle.
-   * @typedef BlockingObjects
-   * @type {object}
-   * @property {Set<Wall>}    terrainWalls
-   * @property {Set<Tile>}    tiles
-   * @property {Set<Token>}   tokens
-   * @property {Set<Wall>}    walls
-   */
-  #blockingObjects = {
-    terrainWalls: new Set(),
-    tiles: new Set(),
-    tokens: new Set(),
-    walls: new Set(),
-    initialized: false
-  };
-
-  get blockingObjects() {
-    if ( !this.#blockingObjects.initialized ) this.findBlockingObjects();
-    // console.debug(`Blocking: \n\twalls: ${this.#blockingObjects.walls.size}\n\ttiles: ${this.#blockingObjects.tiles.size}\n\ttokens: ${this.#blockingObjects.tokens.size}`);
-    // console.debug(`Blocking walls: ${[...this.#blockingObjects.walls].map(w => w.id).join(", ")}`);
-
-    return this.#blockingObjects;
-  }
-
-
-
 
   /**
    * Filter relevant objects in the scene using the vision triangle.
@@ -284,33 +259,6 @@ export class AbstractViewpoint {
     if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
     if ( !prone && token.isProne ) return false;
     return true;
-  }
-
-  /**
-   * Filter relevant objects in the scene using the vision triangle.
-   * For the z dimension, keeps objects that are between the lowest target point,
-   * highest target point, and the viewing point.
-   * @returns {object} Object with possible properties:
-   *   - @property {Set<Wall>} walls
-   *   - @property {Set<Tile>} tiles
-   *   - @property {Set<Token>} tokens
-   */
-  findBlockingObjects() {
-    const target = this.viewerLOS.target;
-    if ( !target ) throw Error(`${MODULE_ID}|AbstractViewpoint|findBlockingObjects target is undefined!`);
-
-    // Remove old blocking objects.
-    const blockingObjs = this.#blockingObjects;
-    Object.values(blockingObjs).forEach(objs => objs.clear());
-
-    const res = this.constructor.findBlockingObjects(this.viewpoint, target, {
-      viewer: this.viewerLOS.viewer,
-      senseType: this.viewerLOS.config.type,
-      blockingOpts: this.viewerLOS.config.blocking,
-    });
-    for ( const [key, objs] of Object.entries(res) ) blockingObjs[key] = objs;
-    this.#blockingObjects.initialized = true;
-    return blockingObjs;
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
@@ -436,7 +384,6 @@ export class AbstractViewpoint {
    */
   destroy() {
     this.clearCache();
-    Object.values(this.#blockingObjects).forEach(objs => objs.clear());
   }
 
   /* ----- NOTE: Debug ----- */

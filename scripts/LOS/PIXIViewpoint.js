@@ -47,28 +47,28 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
    * @param {ViewpointConfig} [cfg]
    * @returns {ViewpointConfig}
    */
-  initializeConfig(cfg = {}) {
-    // Configs specific to the Points algorithm.
-    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
-    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
-    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
-    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
-    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
-    cfg.useLitTargetShape ??= true;
-
-    // Blocking canvas objects.
-    cfg.blocking ??= {};
-    cfg.blocking.walls ??= true;
-    cfg.blocking.tiles ??= true;
-
-    // Blocking tokens.
-    cfg.blocking.tokens ??= {};
-    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
-    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
-    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
-
-    return cfg;
-  }
+//   initializeConfig(cfg = {}) {
+//     // Configs specific to the Points algorithm.
+//     const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+//     cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+//     cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+//     cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+//     cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+//     cfg.useLitTargetShape ??= true;
+//
+//     // Blocking canvas objects.
+//     cfg.blocking ??= {};
+//     cfg.blocking.walls ??= true;
+//     cfg.blocking.tiles ??= true;
+//
+//     // Blocking tokens.
+//     cfg.blocking.tokens ??= {};
+//     cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+//     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+//     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+//
+//     return cfg;
+//   }
 
   /** @type {PIXI.RenderTexture} */
   #renderTexture;
@@ -320,6 +320,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     this.target = target;
     this.viewpoint = viewerLocation;
     this.targetLocation = targetLocation;
+    this._constructFrustrum();
 //     for ( const shader of Object.values(this.shaders) ) {
 //       shader._initializeLookAtMatrix(viewerLocation, targetLocation);
 //       shader._calculatePerspectiveMatrix();
@@ -375,6 +376,11 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
   }
 
 }
+
+export class DebugVisibilityViewerPIXI extends DebugVisibilityViewerArea3dPIXI {
+  algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
+}
+
 
 
 
@@ -872,6 +878,3 @@ export class Area3dWebGL2Viewpoint extends AbstractViewpoint {
   }
 }
 
-export class DebugVisibilityViewerPIXI extends DebugVisibilityViewerArea3dPIXI {
-  algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
-}
