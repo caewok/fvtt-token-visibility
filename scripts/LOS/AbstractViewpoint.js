@@ -30,6 +30,8 @@ import { Draw } from "../geometry/Draw.js";
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  */
 export class AbstractViewpoint {
+  static calcClass;
+
   /** @type {VisionTriangle} */
   static visionTriangle = new VisionTriangle();
 
@@ -39,43 +41,22 @@ export class AbstractViewpoint {
   /** @type {Point3d} */
   viewpointDiff;
 
-  /** @type {PercentVisibileCalculatorAbstract} */
-  // @override
-  calc;
-
   /**
-   * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"
-   * @param {Point3d} viewpointDiff     The location of the eye relative to the viewer
+   * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"; handles most of the config
+   * @param {Point3d} viewpoint        The location of the eye; this will be translated to be relative to the viewer
    */
-  constructor(viewerLOS, viewpoint, cfg = {}) {
+  constructor(viewerLOS, viewpoint) {
+    if ( viewerLOS.calculator && !(viewerLOS.calculator instanceof this.constructor.calcClass) ) {
+      console.error(`{this.constructor.name}|Calculator must be ${this.constructor.calcClass.name}.`, this.viewerLOS.calculator);
+    }
     this.viewerLOS = viewerLOS;
     this.viewpointDiff = viewpoint.subtract(viewerLOS.center);
-    this.config = cfg;
   }
 
-  clearCache() { }
-
-  /** @type {ViewerLOSConfig} */
-  _config = {
-    blocking: {
-      walls: true,
-      tiles: true,
-      tokens: {
-        dead: true,
-        live: true,
-        prone: true,
-      }
-    },
-    debug: false,
-    useLitTargetShape: false,
-    largeTarget: false,
+  async initialize() {
+    return this.calculator.initialize();
   }
 
-  get config() { return this._config; }
-
-  set config(cfg = {}) {
-    foundry.utils.mergeObject(this._config, cfg);
-  }
 
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
@@ -92,7 +73,12 @@ export class AbstractViewpoint {
   /** @type {WALL_RESTRICTION_TYPES} */
   get senseType() { return this.viewerLOS.senseType; }
 
-  set senseType(value) { this.calc.senseType = senseType; }
+  set senseType(value) { this.calculator.senseType = senseType; }
+
+  /** @type {PercentVisibileCalculatorAbstract} */
+  get calculator() { return this.viewerLOS.calculator; }
+
+  get config() { return this.viewerLOS.config; }
 
   /**
    * Determine percentage of the token visible using the class methodology.
@@ -114,12 +100,12 @@ export class AbstractViewpoint {
   /** @override */
   _percentVisible() {
     // TODO: Handle configuration options.
-    return this.calc.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+    return this.calculator.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
   }
 
   async _percentVisibleAsync() {
     // TODO: Handle configuration options.
-    return this.calc.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+    return this.calculator.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
   }
 
   /**
@@ -387,9 +373,7 @@ export class AbstractViewpoint {
   /**
    * Clean up memory-intensive objects.
    */
-  destroy() {
-    this.clearCache();
-  }
+  destroy() {}
 
   /* ----- NOTE: Debug ----- */
 
@@ -400,7 +384,6 @@ export class AbstractViewpoint {
   _drawLineOfSight(debugDraw) {
     debugDraw ??= this.viewerLOS.config.debugDraw;
     debugDraw.segment({ A: this.viewpoint, B: this.viewerLOS.target.center });
-    console.log("Drawing line of sight.")
   }
 
   /**
@@ -416,7 +399,6 @@ export class AbstractViewpoint {
     tiles.forEach(t => debugDraw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
     terrainWalls.forEach(w => debugDraw.segment(w, { color: colors.lightgreen }));
     tokens.forEach(t => debugDraw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
-    console.log("Drawing detected objects.")
   }
 
   /**
@@ -426,6 +408,7 @@ export class AbstractViewpoint {
   _drawVisionTriangle(debugDraw) {
     debugDraw ??= this.viewerLOS.config.debugDraw;
     //debugDraw.shape(this.constructor.visionTriangle, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
-    console.log("Drawing vision triangle.")
+
+
   }
 }

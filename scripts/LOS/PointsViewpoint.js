@@ -1,15 +1,13 @@
 /* globals
-CONFIG,
 canvas,
+CONFIG,
 game,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 // Base folder
-import { Settings } from "../settings.js";
 import { MODULE_ID } from "../const.js";
-import { buildCustomLOSCalculator } from "../LOSCalculator.js";
 
 // LOS folder
 import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
@@ -24,13 +22,15 @@ import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class PointsViewpoint extends AbstractViewpoint {
-  calc = CONFIG[MODULE_ID].sightCalculators.points;
+  static get calcClass() { return PercentVisibleCalculatorPoints; }
 }
 
 /**
  * Handle points algorithm.
  */
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
+
+  static get viewpointClass() { return PointsViewpoint; }
 
   _config = {
     ...super._config,
@@ -213,7 +213,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
       numPointsBlocked += hasCollision;
 
       if ( this.config.debug ) {
-        debugPoints = { A: viewpoint, B: targetPoint, hasCollision };
+        debugPoints.push({ A: viewpoint, B: targetPoint, hasCollision });
 //         const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
 //         debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.5, width: 1, color });
 //         console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
@@ -221,11 +221,21 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
     return numPointsBlocked / ln;
   }
+
+  drawDebugPoints(debugDraw) {
+    const Draw = CONFIG.GeometryLib.Draw;
+    for ( const debugPoints of this.debugPoints ) {
+      for ( const debugPoint of debugPoints) {
+        const { A, B, hasCollision } = debugPoint;
+        const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
+        debugDraw.segment({ A, B }, { alpha: 0.5, width: 1, color });
+      }
+    }
+  }
 }
 
 export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
-  /** @type {class} */
-  // static popoutClass = Area3dPopout; // PIXI version
+  viewpointClass = PercentVisibleCalculatorPoints;
 
   /** @type {Token[]} */
   get viewers() { return canvas.tokens.controlled; }
@@ -233,49 +243,19 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
   /** @type {Token[]} */
   get targets() { return game.user.targets.values(); }
 
-  /** @type {object} */
-  config = {
-    useLitTargetShape: false,
-  };
-
-  constructor(opts) {
-    super(opts);
-  }
-
-  render() {
-    const { targets, viewers } = this;
-
-    if ( !(targets.length || viewers.length) ) return this.clearDebug();
-    this.clearDebug();
-
+  updateDebugForPercentVisible(_percentVisible) {
     // Calculate points and pull the debug data.
-    for ( const viewer of viewers) {
-      this.calc.viewer = viewer;
+    for ( const viewer of this.viewers) {
+      this.calculator.viewer = viewer;
 
-      for ( const target of targets) {
+      for ( const target of this.targets) {
         if ( viewer === target ) continue;
-        this.calc.target = target;
-        this.calc._drawCanvasDebug();
-        this.calc.percentVisible(target);
+        this.viewerLOS.target = target;
+        this.viewerLOS.percentVisible(viewer, target);
+        this.viewerLOS._drawCanvasDebug(this.debugDraw);
+        this.viewerLOS.drawDebugPoints(this.debugDraw);
       }
     }
-  }
-
-  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
-    this.calc.viewer = viewer;
-    return this.calc.percentVisible(target);
-  }
-
-  /** @type {AbstractViewer} */
-  #calc;
-
-  get calc() {
-    if ( this.#calc ) return this.#calc;
-    this.#calc = buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
-    this.#calc.config.viewpointClass = PointsViewpoint;
-    this.#calc.config.debug = true;
-    this.#calc.config.debugDraw = this.debugDraw;
-    return this.#calc;
   }
 
   /**

@@ -22,6 +22,8 @@ import { getObjectProperty } from "./LOS/util.js";
 // For API
 import * as bench from "./benchmark.js";
 
+import { buildLOSCalculator, buildCustomLOSCalculator, buildDebugViewer } from "./LOSCalculator.js";
+
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
 import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
@@ -240,6 +242,10 @@ Hooks.once("init", function() {
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
       hybrid: PercentVisibleCalculatorHybrid,
     },
+
+    buildLOSCalculator,
+    buildCustomLOSCalculator,
+    buildDebugViewer,
 
     debugViewers: {
       points: DebugVisibilityViewerPoints,

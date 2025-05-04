@@ -25,51 +25,15 @@ import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewe
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class WebGPUViewpoint extends AbstractViewpoint {
-  // TODO: Handle config and filtering obstacles.
-
-  constructor(...args) {
-    super(...args);
-    this.calc = CONFIG[MODULE_ID].sightCalculators.webGPU;
-  }
-
-  _percentVisible() {
-    // TODO: Handle configuration options.
-    const viewer =  this.viewerLOS.viewer;
-    const target = this.viewerLOS.target;
-    const viewerLocation = this.viewpoint;
-    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-  }
+  static get calcClass() { return PercentVisibleCalculatorWebGPU; }
 }
 
 export class WebGPUViewpointAsync extends AbstractViewpoint {
-  // TODO: Handle config and filtering obstacles.
-
-  constructor(...args) {
-    super(...args);
-    this.calc = CONFIG[MODULE_ID].sightCalculators.webGPUAsync;
-  }
-
-  _percentVisible() {
-    // TODO: Handle configuration options.
-    const viewer =  this.viewerLOS.viewer;
-    const target = this.viewerLOS.target;
-    const viewerLocation = this.viewpoint;
-    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-  }
-
-  async _percentVisibleAsync() {
-    // TODO: Handle configuration options.
-    const viewer =  this.viewerLOS.viewer;
-    const target = this.viewerLOS.target;
-    const viewerLocation = this.viewpoint;
-    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    return this.calc.percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
-  }
+  static get calcClass() { return PercentVisibleCalculatorWebGPUAsync; }
 }
 
 export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebGL2 {
+  static get viewpointClass() { return WebGPUViewpoint; }
 
   /** @type {OffScreenCanvas} */
   static gpuCanvas;
@@ -79,17 +43,31 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
 
   constructor({ device, ...opts } = {}) {
     super(opts);
-    this.device = device;
+    device ??= CONFIG[MODULE_ID].webGPUDevice;
     this.renderObstacles = new RenderObstacles(device,
       { senseType: this.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT });
 
     this.constructor.gpuCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
-    this.gpuCtx.configure({
-      device,
-      format: WebGPUDevice.presentationFormat,
-      alphamode: "premultiplied", // Instead of "opaque"
-    });
+
+    if ( !device ) {
+      const self = this;
+      WebGPUDevice.getDevice().then(device => {
+        self.device = device
+        self.gpuCtx.configure({
+          device,
+          format: WebGPUDevice.presentationFormat,
+          alphamode: "premultiplied", // Instead of "opaque"
+        });
+      });
+    } else {
+      this.device = device
+      this.gpuCtx.configure({
+        device,
+        format: WebGPUDevice.presentationFormat,
+        alphamode: "premultiplied", // Instead of "opaque"
+      });
+    }
   }
 
   async initialize() {
@@ -120,11 +98,22 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
 
   constructor({ device, ...opts } = {}) {
     super(opts);
-    this.device = device;
-    this.renderObstacles = new RenderObstacles(device,
-      { senseType: this.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT })
-    this.sumPixels = new WebGPUSumRedPixels(device);
     this.queue = new AsyncQueue();
+    device ??= CONFIG[MODULE_ID].webGPUDevice;
+    if ( !device ) {
+      const self = this;
+      WebGPUDevice.getDevice().then(device => {
+        self.device = device
+        self.renderObstacles = new RenderObstacles(device,
+          { senseType: self.senseType, width: self.constructor.WIDTH, height: self.constructor.HEIGHT })
+        self.sumPixels = new WebGPUSumRedPixels(device);
+      });
+    } else {
+      this.device = device;
+      this.renderObstacles = new RenderObstacles(device,
+        { senseType: this.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT })
+      this.sumPixels = new WebGPUSumRedPixels(device);
+    }
   }
 
   async initialize() {
@@ -167,7 +156,7 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
   }
   async initialize() {
     await super.initialize();
-    await this.calc.initialize();
+    await this.calculator.initialize();
     await this.renderer.initialize();
   }
 
@@ -182,11 +171,11 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
   }
 
   percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
+    return this.calculator.percentVisible(viewer, target, { viewerLocation, targetLocation });
   }
 
   destroy() {
-    if ( this.calc ) this.calc.destroy();
+    if ( this.calc ) this.calculator.destroy();
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
@@ -219,7 +208,7 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 
   async initialize() {
     await super.initialize();
-    await this.calc.initialize();
+    await this.calculator.initialize();
     await this.renderer.initialize();
   }
 
@@ -235,11 +224,11 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 
   percentVisible(viewer, target, viewerLocation, targetLocation) {
     const callback = (percentVisible, viewer, target) => this.updatePopoutFooter({ percentVisible, viewer, target });
-    return this.calc.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
+    return this.calculator.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
   }
 
   destroy() {
-    if ( this.calc ) this.calc.destroy();
+    if ( this.calc ) this.calculator.destroy();
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }

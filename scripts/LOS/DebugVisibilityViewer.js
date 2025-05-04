@@ -9,9 +9,9 @@ PIXI,
 "use strict";
 
 import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
-import { buildCustomLOSCalculator } from "../LOSCalculator.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
+import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
 
 /* Debug viewer
 
@@ -21,15 +21,21 @@ Calculates percentage visible for the viewer/target combo.
 
 export class DebugVisibilityViewerAbstract {
 
-  /** @type {string} */
-  senseType = "sight";
+  /** @type {class} */
+  viewpointClass;
 
-  constructor({ senseType = "sight" } = {}) {
-    this.senseType = senseType;
+  /** @type {PercentVisibleCalculator} */
+  viewerLOS;
+
+  constructor(config = {}) {
+    config.debug = true;
+    config.viewpointKey = this.viewpointClass;
+    this.viewerLOS = new AbstractViewerLOS(undefined, config);
   }
 
   async initialize() {
     this.registerHooks();
+    return this.viewerLOS.initialize();
   }
 
   /** @type {Token} */
@@ -37,41 +43,41 @@ export class DebugVisibilityViewerAbstract {
 
   get viewer() { return (this.#viewer ??= canvas.tokens.controlled[0]); }
 
-  set viewer(value) { this.#viewer = value; }
+  set viewer(value) {
+    this.#viewer = value;
+    this.viewerLOS.viewer = value;
+  }
+
 
   /** @type {Token} */
   #target;
 
   get target() { return (this.#target ??= game.user.targets.first()); }
 
-  set target(value) { this.#target = value; }
-
-  render(viewerLocation, target, { viewer, targetLocation } = {}) {
-    viewer ??= this.viewer;
-    target ??= this.target;
-    if ( !(viewer && target) ) return;
-
-    viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
-
-    // Draw the canvas debug.
-    this.clearDebug();
-    this._drawLineOfSight(viewerLocation, targetLocation);
-    this._drawDetectedObjects(viewer, viewerLocation, target);
-    this._drawVisionTriangle(viewerLocation, target);
-
-    this._render(viewer, target, viewerLocation, targetLocation);
-    const percentVisible = this.percentVisible(viewer, target, viewerLocation, targetLocation);
-    this.updateDebugForPercentVisible(percentVisible, viewer, target, viewerLocation, targetLocation);
-
-
-
+  set target(value) {
+    this.#target = value;
+    this.viewerLOS.target = value;
   }
 
-  _render(_viewer, _target, _viewerLocation, _targetLocation) {}
+  render() {
+    this.clearDebug();
 
-  updateDebugForPercentVisible(_percentVisible, _viewer, _target, _viewerLocation, _targetLocation) {}
+    if ( !(this.viewer && this.target ) ) return;
 
-  percentVisible(_viewer, _target, _viewerLocation, _targetLocation) {}
+    // First draw the basic debugging graphics for the canvas.
+    this._drawCanvasDebug();
+
+    // Then determine the percent visible using the algorithm and
+    // update debug view specific to that algorithm.
+    const percentVisible = this.percentVisible();
+    this.updateDebugForPercentVisible(percentVisible);
+  }
+
+  updateDebugForPercentVisible(_percentVisible) {}
+
+  percentVisible() {
+    return this.losViewer.percentVisible();
+  }
 
   /** @type {number[]} */
   hooks = [];
@@ -152,6 +158,8 @@ export class DebugVisibilityViewerAbstract {
     this.deregisterHooks();
     canvas.tokens.removeChild(this.#debugGraphics);
     if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
+    this.viewerLOS.calculator.destroy();
+    this.viewerLOS.destroy();
   }
 
   /* ----- Canvas graphics ----- */
@@ -188,41 +196,7 @@ export class DebugVisibilityViewerAbstract {
 
   /* ----- NOTE: Debug ----- */
 
-  /**
-   * For debugging.
-   * Draw the line of sight from token to target.
-   */
-  _drawLineOfSight(viewerLocation, targetLocation) {
-    this.debugDraw.segment({ A: viewerLocation, B: targetLocation });
-  }
-
-  /**
-   * For debugging.
-   * Draw outlines for the various objects that can be detected on the canvas.
-   */
-  _drawDetectedObjects(viewer, viewerLocation, target) {
-    // if ( !this.#blockingObjects.initialized ) return;
-    const debugDraw = this.debugDraw;
-    const colors = Draw.COLORS;
-    const { walls, tiles, terrainWalls, tokens } = AbstractViewpoint
-      .findBlockingObjects(viewerLocation, target, { viewer, senseType: this.senseType });
-    walls.forEach(w => debugDraw.segment(w, { color: colors.red, fillAlpha: 0.3 }));
-    terrainWalls.forEach(w => debugDraw.segment(w, { color: colors.lightgreen }));
-    tiles.forEach(t =>
-      t[MODULE_ID].triangles.forEach(tri =>
-        tri.draw2d({ draw: debugDraw, color: colors.yellow, fillAlpha: 0.3 })));
-    tokens.forEach(t => debugDraw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
-  }
-
-  /**
-   * For debugging.
-   * Draw the vision triangle between viewer point and target.
-   */
-  _drawVisionTriangle(viewerLocation, target) {
-    const visionTriangle = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
-    this.debugDraw.shape(visionTriangle, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
-  }
-
+  _drawCanvasDebug() { this.viewerLOS._drawCanvasDebug(this.debugDraw); }
 }
 
 
@@ -284,27 +258,22 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
     return `${moduleName} 3D Debug`;
   }
 
-  updatePopoutFooter({ percentVisible, viewer, target } = {}) {
-    viewer ??= this.viewer;
-    target ??= this.target;
+  updatePopoutFooter(percentVisible) {
+    const viewer = this.viewer;
+    const target = this.target;
     const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
     visibleTextElem.innerHTML = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible`;
     console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
   }
 
-  render(viewerLocation, target, { viewer, targetLocation } = {}) {
-    viewer ??= this.viewer;
-    target ??= this.target;
-    if ( !(viewer && target) ) return;
-    if ( !this.popoutIsRendered ) {
-      return this.reinitialize().then(() =>
-        super.render(viewerLocation, target, { viewer, targetLocation }));
-    }
-    super.render(viewerLocation, target, { viewer, targetLocation });
+  render() {
+    if ( !(this.viewer && this.target) ) return;
+    if ( !this.popoutIsRendered ) return this.reinitialize().then(() => super.render());
+    super.render();
   }
 
-  updateDebugForPercentVisible(percentVisible, viewer, target, _viewerLocation, _targetLocation) {
-    this.updatePopoutFooter({ viewer, target, percentVisible });
+  updateDebugForPercentVisible(percentVisible) {
+    this.updatePopoutFooter(percentVisible);
   }
 
   destroy() {
@@ -346,7 +315,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   _updatePercentVisibleLabel(number) {
     const label = this.percentVisibleLabel;
     label.text = `${(number * 100).toFixed(1)}%`;
-    console.log(`${this.calc.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
+    console.log(`${this.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
   algorithm = SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
@@ -358,27 +327,22 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   _render(viewer, target, _viewerLocation, _targetLocation) {
     this.clearDebug();
-    this.calc.viewer = this.viewer;
-    this.calc.target = target;
-    this.calc._drawCanvasDebug();
-    this.calc.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer,
+    this.calculator.viewer = this.viewer;
+    this.calculator.target = target;
+    this.calculator._drawCanvasDebug();
+    this.calculator.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer,
       { width: this.constructor.WIDTH * .5, height: this.constructor.HEIGHT * .5 });
   }
 
   percentVisible(viewer, target, _viewerLocation, _targetLocation) {
-    this.calc.viewer = this.viewer;
-    return this.calc.percentVisible(target);
+    this.calculator.viewer = this.viewer;
+    return this.calculator.percentVisible(target);
   }
 
-  /** @type {AbstractViewer} */
-  #calc;
+  updateDebugForPercentVisible(percentVisible) {
+    this.losViewer._draw3dDebug();
 
-  get calc() {
-    if ( this.#calc ) return this.#calc;
-    this.#calc = buildCustomLOSCalculator(this.viewer, this.algorithm);
-    this.#calc.config.debug = true;
-    this.#calc.config.debugDraw = this.debugDraw;
-    return this.#calc;
+    super.updateDebugForPercentVisible(percentVisible);
   }
 
   clearDebug() {
@@ -387,8 +351,6 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   }
 
   destroy() {
-    if ( this.#calc ) this.#calc.destroy();
-    this.#calc = undefined;
     if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) {
       this.#popoutGraphics.destroy();
       this.#popoutDraw = undefined;

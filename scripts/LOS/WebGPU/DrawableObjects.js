@@ -206,6 +206,7 @@ class DrawableObjectsAbstract {
 
     // Define shader and pipeline.
     const debugViewNormals = this.debugViewNormals;
+    if ( this.module ) this.module.destroy();
     this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`, { debugViewNormals });
     this._createPipeline();
 

@@ -30,10 +30,12 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 const RADIANS_90 = Math.toRadians(90);
 
 export class PIXIViewpoint extends AbstractViewpoint {
-  calc = CONFIG[MODULE_ID].sightCalculators.PIXI;
+  static get calcClass() { return PercentVisibleCalculatorPIXI; }
 }
 
 export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstract {
+  static get viewpointClass() { return PIXIViewpoint; }
+
   /** @type {number} */
   static get WIDTH() { return CONFIG[MODULE_ID].renderTextureSize; }
 

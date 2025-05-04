@@ -27,10 +27,12 @@ import { Draw } from "../geometry/Draw.js";
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class GeometricViewpoint extends AbstractViewpoint {
-  calc = CONFIG[MODULE_ID].sightCalculators.geometric;
+  static get calcClass() { return PercentVisibleCalculatorGeometric; }
 }
 
 export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
+  static get viewpointClass() { return GeometricViewpoint; }
+
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
   /** @type {Camera} */
@@ -393,6 +395,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 }
 
 export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
+  viewpointClass = PercentVisibleCalculatorGeometric;
+
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC;
 }
 

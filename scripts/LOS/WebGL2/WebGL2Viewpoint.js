@@ -20,24 +20,12 @@ import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewe
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class WebGL2Viewpoint extends AbstractViewpoint {
-  // TODO: Handle config and filtering obstacles.
-
-  constructor(...args) {
-    super(...args);
-    this.calc = CONFIG[MODULE_ID].sightCalculators.webGL2;
-  }
-
-  _percentVisible() {
-    // TODO: Handle configuration options.
-    const viewer =  this.viewerLOS.viewer;
-    const target = this.viewerLOS.target;
-    const viewerLocation = this.viewpoint;
-    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-  }
+  static get calcClass() { return PercentVisibleCalculatorWebGL2; }
 }
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculatorAbstract {
+  static get viewpointClass() { return WebGL2Viewpoint; }
+
   /** @type {Uint8Array} */
   bufferData;
 
@@ -97,7 +85,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
   async initialize() {
     await super.initialize();
-    await this.calc.initialize();
+    await this.calculator.initialize();
   }
 
   async openPopout() {
@@ -117,11 +105,11 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   }
 
   percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
+    return this.calculator.percentVisible(viewer, target, { viewerLocation, targetLocation });
   }
 
   destroy() {
-    if ( this.calc ) this.calc.destroy();
+    if ( this.calc ) this.calculator.destroy();
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
