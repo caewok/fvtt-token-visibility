@@ -236,6 +236,8 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
         if ( viewer === target ) continue;
         this.viewerLOS.target = target;
 
+        if ( this.viewerLOS._simpleVisibilityTest(target) ) continue;
+
         // Draw each set of points separately.
         this.viewerLOS.viewpoints.forEach(vp => {
           const percentVisible = vp.percentVisible();
