@@ -190,6 +190,19 @@ Hooks.once("init", function() {
     },
 
     /**
+     * Classes used to view the debugger for different algorithms.
+     */
+    debugViewers: {
+      points: DebugVisibilityViewerPoints,
+      geometric: DebugVisibilityViewerGeometric,
+      PIXI: DebugVisibilityViewerPIXI,
+      webGL2: DebugVisibilityViewerWebGL2,
+      webGPU: DebugVisibilityViewerWebGPU,
+      webGPUAsync: DebugVisibilityViewerWebGPUAsync,
+      hybrid: DebugVisibilityViewerHybrid,
+    },
+
+    /**
      * Calculator for percent visible tokens using sight.
      * @type {PercentVisibleCalculatorAbstract}
      */

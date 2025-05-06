@@ -152,12 +152,14 @@ await calc.percentVisibleAsync(viewer, target)
 
 
 // debugViewer = new api.debugViewers.points();
+// debugViewer = new api.debugViewers.geometry();
 // debugViewer = new api.debugViewers.PIXI();
 // debugViewer = new api.debugViewers.webGL2();
 // debugViewer = new api.debugViewers.webGPU({ device });
 // debugViewer = new api.debugViewers.webGPUAsync({ device });
 
 debugViewer = buildDebugViewer(api.debugViewers.points)
+debugViewer = buildDebugViewer(api.debugViewers.geometric)
 
 await debugViewer.initialize();
 debugViewer.render();

@@ -318,7 +318,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   _updatePercentVisibleLabel(number) {
     const label = this.percentVisibleLabel;
     label.text = `${(number * 100).toFixed(1)}%`;
-    console.log(`${this.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
+    console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
   algorithm = SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
@@ -328,22 +328,9 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.popout.pixiApp.stage.addChild(this.popoutContainer);
   }
 
-  _render(viewer, target, _viewerLocation, _targetLocation) {
-    this.clearDebug();
-    this.calculator.viewer = this.viewer;
-    this.calculator.target = target;
-    this.calculator._drawCanvasDebug();
-    this.calculator.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer,
-      { width: this.constructor.WIDTH * .5, height: this.constructor.HEIGHT * .5 });
-  }
-
-  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
-    this.calculator.viewer = this.viewer;
-    return this.calculator.percentVisible(target);
-  }
-
   updateDebugForPercentVisible(percentVisible) {
-    this.viewerLOS._draw3dDebug();
+    this.viewerLOS.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer,
+      { width: this.constructor.WIDTH * .5, height: this.constructor.HEIGHT * .5 });
 
     super.updateDebugForPercentVisible(percentVisible);
   }
