@@ -101,7 +101,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.camera.setTargetTokenFrustrum(target);
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+      { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
     const res = this._obscuredArea();
     this.targetArea = res.targetArea;
@@ -395,7 +395,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 }
 
 export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
-  viewpointClass = PercentVisibleCalculatorGeometric;
+  static viewpointClass = GeometricViewpoint;
 
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC;
 }

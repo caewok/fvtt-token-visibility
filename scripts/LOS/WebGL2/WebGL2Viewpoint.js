@@ -26,6 +26,11 @@ export class WebGL2Viewpoint extends AbstractViewpoint {
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculatorAbstract {
   static get viewpointClass() { return WebGL2Viewpoint; }
 
+  static defaultConfiguration = {
+    ...PercentVisibleRenderCalculatorAbstract.defaultConfiguration,
+    alphaThreshold: 0.75,
+  }
+
   /** @type {Uint8Array} */
   bufferData;
 
@@ -40,7 +45,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { WIDTH, HEIGHT } = this.constructor;
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
     const gl = this.gl = this.constructor.glCanvas.getContext("webgl2");
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.senseType });
+    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 
@@ -55,7 +60,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const gl = this.gl;
     this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
-    const terrainThreshold = this.constructor.TERRAIN_THRESHOLD;
+    const terrainThreshold = this.config.alphaThreshold * 255;
     let countRed = 0;
     let countRedBlocked = 0;
     for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
@@ -72,6 +77,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
 }
 
 export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {
+  static viewpointClass = WebGL2Viewpoint;
+
   static CONTEXT_TYPE = "webgl2";
 
   /** @type {boolean} */
@@ -80,7 +87,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   constructor(opts = {}) {
     super(opts);
     this.debugView = opts.debugView ?? true;
-    this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.senseType });
+    this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.config.senseType });
   }
 
   async initialize() {
@@ -92,7 +99,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     await super.openPopout();
     if ( this.renderer ) this.renderer.destroy();
     this.renderer = new RenderObstaclesWebGL2({
-      senseType: this.senseType,
+      senseType: this.config.senseType,
       debugViewNormals: this.debugView,
       gl: this.gl,
     });

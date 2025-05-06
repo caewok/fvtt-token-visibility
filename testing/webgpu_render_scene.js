@@ -76,7 +76,7 @@ Area3dPopoutCanvas = api.Area3dPopoutCanvas
 Settings = api.Settings
 
 
-
+buildDebugViewer = api.buildDebugViewer
 
 let {
   WebGPUDevice,
@@ -137,46 +137,27 @@ popout.context.configure({
 });
 
 
-calcWebGL2 = CONFIG.tokenvisibility.percentVisibleWebGL2
+calc = new api.calcs.points();
+calc = new api.calcs.geometric();
+calc = new api.calcs.PIXI();
+calc = new api.calcs.webGL2();
+calc = new api.calcs.webGPU({ device })
+calc = new api.calcs.webGPUAsync({ device })
 
-calcPoints = new api.calcs.points()
-await calcPoints.initialize()
-calcPoints.percentVisible(viewer, target)
-await calcPoints.percentVisibleAsync(viewer, target)
-
-calcGeometric = new api.calcs.geometric()
-await calcGeometric.initialize()
-calcGeometric.percentVisible(viewer, target)
-await calcGeometric.percentVisibleAsync(viewer, target)
-
-calcArea3dPIXI = new api.calcs.PIXI()
-await calcArea3dPIXI.initialize()
-calcArea3dPIXI.percentVisible(viewer, target)
-await calcArea3dPIXI.percentVisibleAsync(viewer, target)
-
-calcWebGL2 = new api.calcs.webGL2()
-await calcWebGL2.initialize()
-calcWebGL2.percentVisible(viewer, target)
-await calcWebGL2.percentVisibleAsync(viewer, target)
-
-calcWebGPU = new api.calcs.webGPU({ device })
-await calcWebGPU.initialize()
-calcWebGPU.percentVisible(viewer, target)
-await calcWebGPU.percentVisibleAsync(viewer, target)
-
-calcWebGPUAsync = new api.calcs.webGPUAsync({ device })
-await calcWebGPUAsync.initialize()
-calcWebGPUAsync.percentVisible(viewer, target)
-await calcWebGPUAsync.percentVisibleAsync(viewer, target)
+await calc.initialize()
+calc.percentVisible(viewer, target)
+await calc.percentVisibleAsync(viewer, target)
 
 
-await calcWebGPUAsync._percentVisible(viewer, target)
 
-debugViewer = new api.debugViewers.points();
-debugViewer = new api.debugViewers.PIXI();
-debugViewer = new api.debugViewers.webGL2();
-debugViewer = new api.debugViewers.webGPU({ device });
-debugViewer = new api.debugViewers.webGPUAsync({ device });
+
+// debugViewer = new api.debugViewers.points();
+// debugViewer = new api.debugViewers.PIXI();
+// debugViewer = new api.debugViewers.webGL2();
+// debugViewer = new api.debugViewers.webGPU({ device });
+// debugViewer = new api.debugViewers.webGPUAsync({ device });
+
+debugViewer = buildDebugViewer(api.debugViewers.points)
 
 await debugViewer.initialize();
 debugViewer.render();

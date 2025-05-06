@@ -328,7 +328,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 //     }
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+      { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
     const { renderTexture, shaders } = this;
     const renderer = canvas.app.renderer;
@@ -379,6 +379,8 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 }
 
 export class DebugVisibilityViewerPIXI extends DebugVisibilityViewerArea3dPIXI {
+  static viewpointClass = PIXIViewpoint;
+
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
 }
 

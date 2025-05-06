@@ -12,6 +12,7 @@ import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
 import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
+import { AbstractViewpoint } from "./AbstractViewpoint.js";
 
 /* Debug viewer
 
@@ -22,14 +23,14 @@ Calculates percentage visible for the viewer/target combo.
 export class DebugVisibilityViewerAbstract {
 
   /** @type {class} */
-  viewpointClass;
+  static viewpointClass = AbstractViewpoint;
 
   /** @type {PercentVisibleCalculator} */
   viewerLOS;
 
   constructor(config = {}) {
     config.debug = true;
-    config.viewpointKey = this.viewpointClass;
+    config.viewpointKey = this.constructor.viewpointClass;
     this.viewerLOS = new AbstractViewerLOS(undefined, config);
   }
 
@@ -63,6 +64,8 @@ export class DebugVisibilityViewerAbstract {
     this.clearDebug();
 
     if ( !(this.viewer && this.target ) ) return;
+    this.viewerLOS.viewer = this.viewer;
+    this.viewerLOS.target = this.target;
 
     // First draw the basic debugging graphics for the canvas.
     this._drawCanvasDebug();
@@ -76,7 +79,7 @@ export class DebugVisibilityViewerAbstract {
   updateDebugForPercentVisible(_percentVisible) {}
 
   percentVisible() {
-    return this.losViewer.percentVisible();
+    return this.viewerLOS.percentVisible(this.target);
   }
 
   /** @type {number[]} */
@@ -340,7 +343,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   }
 
   updateDebugForPercentVisible(percentVisible) {
-    this.losViewer._draw3dDebug();
+    this.viewerLOS._draw3dDebug();
 
     super.updateDebugForPercentVisible(percentVisible);
   }

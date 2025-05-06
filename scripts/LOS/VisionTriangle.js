@@ -15,7 +15,7 @@ import { Draw } from "../geometry/Draw.js";
 
 /**
  * The viewable area between viewer and target.
- * Triangle
+ * TODO: Could make this a pyramid, containing four Triangle3d with a rectangle3d base.
  *
  */
 export class VisionTriangle {
@@ -175,8 +175,9 @@ export class VisionTriangle {
     return (oAB * oCA >= 0)
   }
 
-  draw(opts = {}) {
-    Draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
+  draw({ draw, ...opts } = {}) {
+    draw ??= new CONFIG.GeometryLib.Draw;
+    draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
   }
 
   containsEdge(edge) {

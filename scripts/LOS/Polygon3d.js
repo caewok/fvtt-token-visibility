@@ -281,7 +281,7 @@ export class Polygon3d {
   /**
    * Reverse the orientation of this polygon
    */
-  reverseOrientation() { this.points.reverse(); }
+  reverseOrientation() { this.points.reverse(); return this; }
 
   /**
    * Make a copy of this polygon.
@@ -470,7 +470,7 @@ export class Triangle3d extends Polygon3d {
   get c() { return this.points[2]; }
 
 
-  static fromPoints(a, b, c) {
+  static from3Points(a, b, c) {
     const tri = new this();
     tri.a.copyFrom(a);
     tri.b.copyFrom(b);
@@ -478,7 +478,7 @@ export class Triangle3d extends Polygon3d {
     return tri;
   }
 
-  static fromPartialPoints(a, b, c) {
+  static fromPartial3Points(a, b, c) {
     const tri = new this();
     tri.a.copyPartial(a);
     tri.b.copyPartial(b);
@@ -569,7 +569,7 @@ export class Triangle3d extends Polygon3d {
       const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
       const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
       const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
-      tris[j] = this.fromPoints(a, b, c);
+      tris[j] = this.from3Points(a, b, c);
     }
     return tris;
   }
@@ -710,7 +710,7 @@ export class Polygons3d extends Polygon3d {
     return poly.isFacing(p) ^ poly.isHole; // Holes have reverse orientation.
   }
 
-  reverseOrientation() { this.#applyMethodToAll("reverseOrientation"); }
+  reverseOrientation() { this.#applyMethodToAll("reverseOrientation"); return this; }
 
   clone() {
     const out = new this.constructor(0);

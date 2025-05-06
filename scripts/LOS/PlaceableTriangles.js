@@ -217,9 +217,6 @@ export class TileTriangles extends AbstractPolygonTriangles {
     }
   }
 
-  /** @type {Triangle3d[]} */
-  _prototypeAlphaTriangles;
-
   /**
    * Convert clipper paths representing a tile shape to top and bottom faces.
    * Bottom faces have opposite orientation.
@@ -314,14 +311,41 @@ export class TileTriangles extends AbstractPolygonTriangles {
     return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold);
   }
 
+  static triangles3dForAlphaBounds(tile) {
+    if ( !tile.evPixelCache ) return this.prototypeTriangles;
+    const bounds = tile.evPixelCache.getThresholdLocalBoundingBox(CONFIG[MODULE_ID].alphaThreshold);
+    const pts = [...bounds.iteratePoints({ close: false })];
+
+    const tri0 = Triangle3d.from2dPoints(pts.slice(0,3));
+    const tri1 = Triangle3d.from2dPoints([pts[0], pts[2], pts[3]]);
+    return [
+      tri0,
+      tri1,
+      tri0.clone().reverseOrientation(),
+      tri1.clone().reverseOrientation(),
+    ];
+
+    /* Or could use polygon3d.
+    const poly = Polygon3d.from2dPoints([...bounds.iteratePoints({ close: false })], 0);
+    return [
+      poly,
+      poly.clone().reverseOrientation().
+    ];
+    */
+  }
+
+
   static trianglesForPlaceable(tile) {
     if ( !this.instanceHandler.instanceIndexFromId.has(tile.id) ) return [];
+    if ( !tile.evPixelCache ) return AbstractPolygonTriangles.trianglesForPlaceable.call(this, tile);
+
 
     const triType = CONFIG[MODULE_ID].tileThresholdShape;
     const obj = tile[MODULE_ID] ?? {};
-    if ( triType === "triangles"
-      || !Object.hasOwn(obj, triType) // Don't pull triType directly, which could result in infinite loop if it is "triangle".
-      || !tile.evPixelCache ) return AbstractPolygonTriangles.trianglesForPlaceable.call(this, tile);
+
+    // Don't pull triType directly, which could result in infinite loop if it is "triangle".
+    const tris = (triType === "triangles"|| !Object.hasOwn(obj, triType))
+      ? this.triangles3dForAlphaBounds(tile) : obj[triType];
 
     // Expand the canvas conversion matrix to 4x4.
     // Last row of the 3x3 is the translation matrix, which should be moved to row 4.
@@ -336,7 +360,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
     // Add elevation translation.
     const elevationT = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, tile.elevationZ);
     const M = toCanvasM.multiply4x4(elevationT);
-    return obj[triType].map(tri => tri.transform(M));
+    return tris.map(tri => tri.transform(M));
   }
 }
 

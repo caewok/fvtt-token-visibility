@@ -1,31 +1,23 @@
 /* globals
 CONFIG,
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 /* Percent visible calculator
 
-Track percent visibility for tokens.
-Caches values based on the viewer, viewer location, target, target location.
-- Cache is tied to the placeable updates.
-*/
+Calculate percent visibility for a token viewer looking at a target token.
 
+*/
 
 export class PercentVisibleCalculatorAbstract {
 
-  /** @type {number} */
-  static TERRAIN_THRESHOLD = 255 * 0.75;
-
-  /** @type {string} */
-  senseType = "sight";
-
-  constructor({ senseType = "sight", blocking = {} } = {}) {
-    this.senseType = senseType;
-    foundry.utils.mergeObject(this.config, { blocking });
+  getVisibleTargetShape(target) {
+    return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
   }
 
-  config = {
+  static defaultConfiguration = {
     blocking: {
       walls: true,
       tiles: true,
@@ -34,8 +26,32 @@ export class PercentVisibleCalculatorAbstract {
         live: true,
         prone: true,
       }
-    }
+    },
+    useLitTargetShape: false,
+    senseType: "sight",
+    debug: false,
   };
+
+  /**
+   * The configuration object, if provided, will be kept and can be updated externally.
+   * For example, it can be dynamically updated based on settings and shared among multiple
+   * calculators.
+   */
+  constructor(cfg = {}) {
+    // First merge in the default configuration, overriding where appropriate.
+    const tmp = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false })
+    this._config = cfg; // Link the configuration object.
+    this.config = tmp; // Update in place with the merged configuration file.
+  }
+
+  _config = {};
+
+  get config() { return this._config; }
+
+  set config(cfg = {}) {
+    // Copy the config in place so the linked configuration object is not broken.
+    foundry.utils.mergeObject(this._config, cfg, { inplace: true})
+  }
 
   async initialize() { return; }
 
@@ -51,12 +67,14 @@ export class PercentVisibleCalculatorAbstract {
    * @returns {number}
    */
   percentVisible(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
+    if ( !this.getVisibleTargetShape(target) ) return 0;
+
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
-    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation)
-    return this._percentRedPixels();
+    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+    return this._percentRedPixels(viewer, target, viewerLocation, targetLocation);
   }
 
   async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
@@ -64,8 +82,8 @@ export class PercentVisibleCalculatorAbstract {
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
-    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation)
-    return this._percentRedPixelsAsync();
+    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+    return this._percentRedPixelsAsync(viewer, target, viewerLocation, targetLocation);
   }
 
   /**
@@ -83,9 +101,9 @@ export class PercentVisibleCalculatorAbstract {
    * @returns {number}
    * @override
    */
-  _percentRedPixels() { console.error("PercentVisibleCalculator|Must be overriden by child class.") }
+  _percentRedPixels(_viewer, _target, _viewerLocation, _targetLocation) { console.error("PercentVisibleCalculator|Must be overriden by child class.") }
 
-  async _percentRedPixelsAsync() { return this._percentRedPixels(); }
+  async _percentRedPixelsAsync(_viewer, _target, _viewerLocation, _targetLocation) { return this._percentRedPixels(); }
 
   destroy() { return; }
 

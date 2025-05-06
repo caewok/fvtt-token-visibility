@@ -33,7 +33,7 @@ export class WebGPUViewpointAsync extends AbstractViewpoint {
 }
 
 export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebGL2 {
-  static get viewpointClass() { return WebGPUViewpoint; }
+  static viewpointClass = WebGPUViewpoint;
 
   /** @type {OffScreenCanvas} */
   static gpuCanvas;
@@ -45,7 +45,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     super(opts);
     device ??= CONFIG[MODULE_ID].webGPUDevice;
     this.renderObstacles = new RenderObstacles(device,
-      { senseType: this.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT });
+      { senseType: this.config.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT });
 
     this.constructor.gpuCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
@@ -93,6 +93,8 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
 }
 
 export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCalculatorAbstract {
+  static viewpointClass = WebGPUViewpointAsync;
+
   /** @type {WebGPUSumRedPixels} */
   sumPixels;
 
@@ -111,7 +113,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
     } else {
       this.device = device;
       this.renderObstacles = new RenderObstacles(device,
-        { senseType: this.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT })
+        { senseType: this.config.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT })
       this.sumPixels = new WebGPUSumRedPixels(device);
     }
   }
@@ -146,9 +148,9 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
     super(opts);
     this.debugView = opts.debugView ?? true;
     this.device = device;
-    this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.senseType });
+    this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.config.senseType });
     this.renderer = new RenderObstacles(this.device, {
-      senseType: this.senseType,
+      senseType: this.config.senseType,
       debugViewNormals: this.debugView,
       width: this.constructor.WIDTH,
       height: this.constructor.HEIGHT
@@ -197,9 +199,9 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
     super(opts);
     this.device = device;
     this.debugView = opts.debugView ?? true;
-    this.calc = new PercentVisibleCalculatorWebGPUAsync({ device, senseType: this.senseType });
+    this.calc = new PercentVisibleCalculatorWebGPUAsync({ device, senseType: this.config.senseType });
     this.renderer = new RenderObstacles(this.device, {
-      senseType: this.senseType,
+      senseType: this.config.senseType,
       debugViewNormals: this.debugView,
       width: this.constructor.WIDTH,
       height: this.constructor.HEIGHT
