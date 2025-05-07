@@ -289,26 +289,155 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   /** @type {class} */
   static popoutClass = Area3dPopout;
 
-  /** @type {PIXI.Graphics} */
-  #popoutGraphics;
+  /** @type {PIXI.Container} */
+  #popoutContainers = [];
 
-  get popoutGraphics() {
-    if ( !this.#popoutGraphics ) {
-      this.#popoutGraphics = new PIXI.Graphics();
-      this.popoutContainer.addChild(this.#popoutGraphics);
+  get popoutContainers() {
+    if ( !this.#popoutContainers.length ) {
+      const { WIDTH, HEIGHT } = this.constructor;
+
+      // Divide in the popout space.
+      const PT = this.viewerLOS.constructor.POINT_TYPES;
+      const positions = [];
+      switch ( this.viewerLOS.config.numViewpoints ) {
+        case PT.CENTER: positions.push([0, 0]); break;
+
+        // ----- | -----
+        case PT.TWO: positions.push(
+          [WIDTH * -0.25, 0],
+          [WIDTH * 0.25, 0],
+        ); break;
+
+        //     -----
+        // ----- | -----
+        case PT.THREE: positions.push([
+          [0, HEIGHT * -0.25],
+          [WIDTH * -0.25, HEIGHT * 0.25],
+          [WIDTH * 0.25, HEIGHT * 0.25],
+        ]); break;
+
+        // ----- | -----
+        // ----- | -----
+        case PT.FOUR: positions.push([
+          [WIDTH * -0.25, HEIGHT * -0.25],
+          [WIDTH * 0.25, HEIGHT * -0.25],
+          [WIDTH * -0.25, HEIGHT * 0.25],
+          [WIDTH * 0.25, HEIGHT * 0.25],
+        ]); break;
+
+        //  ----- | -----
+        // --- | --- | ---
+        case PT.FIVE: positions.push([
+          [WIDTH * -0.25, HEIGHT * -0.25],
+          [WIDTH * 0.25, HEIGHT * -0.25],
+          [WIDTH * -0.33, HEIGHT * 0.25],
+          [0, HEIGHT * 0.25],
+          [WIDTH * 0.33, HEIGHT * 0.25],
+        ]); break;
+
+        // --- | --- | ---
+        // --- |     | ---
+        // --- | --- | ---
+        case PT.EIGHT: positions.push([
+          [WIDTH * -0.33, HEIGHT * -0.33],
+          [WIDTH * 0, HEIGHT * -0.33],
+          [WIDTH * 0.33, HEIGHT * -0.33],
+
+          [WIDTH * -0.33, HEIGHT * 0],
+          // [0, 0],
+          [WIDTH * 0.33, HEIGHT * 0],
+
+          [WIDTH * -0.33, HEIGHT * 0.33],
+          [0, HEIGHT * 0.33],
+          [WIDTH * 0.33, HEIGHT * 0.33],
+        ]); break;
+
+        // --- | --- | ---
+        // --- | --- | ---
+        // --- | --- | ---
+        case PT.NINE: positions.push([
+          [WIDTH * -0.33, HEIGHT * -0.33],
+          [WIDTH * 0, HEIGHT * -0.33],
+          [WIDTH * 0.33, HEIGHT * -0.33],
+
+          [WIDTH * -0.33, HEIGHT * 0],
+          [WIDTH * 0, HEIGHT * 0],
+          [WIDTH * 0.33, HEIGHT * 0],
+
+          [WIDTH * -0.33, HEIGHT * 0.33],
+          [WIDTH * 0, HEIGHT * 0.33],
+          [WIDTH * 0.33, HEIGHT * 0.33],
+        ]); break;
+      }
+
+      /* For 2, width = 400, height = 400
+      [-100, 0], [100, 0]
+      #1
+      size = 100
+      scale = 100 / 400 * 2 = 0.5
+      size = 100 * 1 / 0.5 = 200
+      */
+
+      positions.forEach(([x, y]) => {
+        const c = new PIXI.Container();
+        c.position.set(x, y);
+
+        // Shrink the scale if there are more items to display.
+        let size = Math.max(Math.abs(x), Math.abs(y));
+        const scale = size / Math.max(WIDTH, HEIGHT) * 2;
+        size *= (1 / scale);
+        c.scale.set(scale, scale);
+
+        // Mask the container so it only displays over a portion of the canvas.
+        // See https://pixijs.com/7.x/guides/components/containers
+        const mask = new PIXI.Graphics();
+        mask.beginFill(0xffffff);
+        mask.drawRect(-size, -size, size*2, size*2);
+        mask.endFill();
+        c.mask = mask;
+        c.addChild(mask);
+
+        this.#popoutContainers.push(c);
+      });
     }
-    return (this.#popoutGraphics ??= new PIXI.Graphics());
+    return this.#popoutContainers;
   }
 
-  /** @type {PIXI.Container} */
-  #popoutContainer;
+  getPopoutContainer(idx) {
+    return this.popoutContainers[idx];
+  }
 
-  get popoutContainer() { return (this.#popoutContainer ??= new PIXI.Container()); }
+  /** @type {PIXI.Graphics} */
+  #popoutGraphics = [];
+
+  get popoutGraphics() {
+    if ( !this.#popoutGraphics.length ) {
+      this.popoutContainers.forEach(c => {
+        const g = new PIXI.Graphics();
+        this.#popoutGraphics.push(g);
+        c.addChild(g);
+      });
+    }
+    return this.#popoutGraphics;
+  }
+
+  getPopoutGraphic(idx) { return this.popoutGraphics[idx]; }
+
 
   /** @type {Draw} */
-  #popoutDraw;
+  #popoutDraws = [];
 
-  get popoutDraw() { return (this.#popoutDraw ??= new CONFIG.GeometryLib.Draw(this.popoutGraphics)); }
+  get popoutDraws() {
+    if ( !this.#popoutDraws.length ) {
+      this.popoutGraphics.forEach(g => {
+        const d = new CONFIG.GeometryLib.Draw(g);
+        this.#popoutDraws.push(d);
+      });
+    }
+    return this.#popoutDraws;
+  }
+
+  getPopoutDraw(idx) { return this.popoutDraws[idx]; }
 
   /**
    * For debugging.
@@ -325,27 +454,48 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   async openPopout(opts) {
     await super.openPopout(opts);
-    this.popout.pixiApp.stage.addChild(this.popoutContainer);
+    this.popoutContainers.forEach(c => this.popout.pixiApp.stage.addChild(c));
   }
 
   updateDebugForPercentVisible(percentVisible) {
-    this.viewerLOS.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer,
-      { width: this.constructor.WIDTH * .5, height: this.constructor.HEIGHT * .5 });
+    const PT = this.viewerLOS.constructor.POINT_TYPES;
+    let width = this.constructor.WIDTH;
+    let height = this.constructor.HEIGHT;
 
+    // Keep width and height even.
+    switch ( this.viewerLOS.config.numViewpoints ) {
+      case PT.CENTER: width *= 0.5; height *= 0.5; break;
+      case PT.TWO:
+      case PT.FOUR: width *= .25; height *= .25; break;
+      case PT.THREE:
+      case PT.FIVE:
+      case PT.EIGHT:
+      case PT.NINE: width *= (0.5 / 3); height *= (0.5 / 3); break;
+    }
+
+    this.viewerLOS.viewpoints.forEach((vp, idx) => {
+      const draw = this.getPopoutDraw(idx);
+      const c = this.getPopoutContainer(idx);
+      vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
+    })
     super.updateDebugForPercentVisible(percentVisible);
   }
 
   clearDebug() {
     super.clearDebug();
-    if ( this.#popoutDraw ) this.#popoutDraw.clearDrawings();
+    this.#popoutDraws.forEach(d => d.clearDrawings());
   }
 
   destroy() {
-    if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) {
-      this.#popoutGraphics.destroy();
-      this.#popoutDraw = undefined;
-    }
-    if ( this.#popoutContainer && !this.#popoutContainer.destroyed ) this.#popoutContainer.destroy();
+    this.#popoutGraphics.forEach(g => {
+      if ( !g.destroyed ) g.destroy();
+    });
+    this.#popoutContainers.forEach(c => {
+      if ( !c.destroyed ) c.destroy();
+    });
+    this.#popoutGraphics.length = 0;
+    this.#popoutDraws.length = 0;
+    this.#popoutContainers.length = 0;
     super.destroy();
   }
 }
