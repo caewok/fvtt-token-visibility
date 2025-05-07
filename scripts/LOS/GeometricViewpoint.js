@@ -38,7 +38,8 @@ export class GeometricViewpoint extends AbstractViewpoint {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const { viewpoint, target, targetLocation, calculator } = this;
 
-    // Recalculate the 3d objects.
+    // Recalculate the 3d objects if needed.
+    if ( !calculator.blockingObjects ) this._percentVisible();
     const { targetPolys, blockingPolys, blockingTerrainPolys } = calculator._constructPerspectivePolygons();
     const colors = Draw.COLORS;
 
@@ -201,6 +202,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     if ( this.config.largeTarget ) this.gridSquareArea = this._gridSquareArea();
   }
+
+
 
 
   /**
