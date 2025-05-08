@@ -31,6 +31,28 @@ const RADIANS_90 = Math.toRadians(90);
 
 export class PIXIViewpoint extends AbstractViewpoint {
   static get calcClass() { return PercentVisibleCalculatorPIXI; }
+
+  _draw3dDebug(drawTool, renderer, container, { width, height } = {}) {
+    container.removeChild(this.debugSprite); // Does nothing if sprite not already there.
+    container.addChild(this.debugSprite);
+
+    // Use the popout renderer
+    this.calculator._calculatePercentVisible(this.viewer, this.target, this.viewpoint, this.targetLocation, renderer);
+    this.debugSprite.width = width * 4;
+    this.debugSprite.height = height * 4;
+  }
+
+  /** @type {PIXI.Sprite} */
+  #debugSprite;
+
+  get debugSprite() {
+    if ( !this.#debugSprite || this.#debugSprite.destroyed ) {
+      const s = this.#debugSprite = PIXI.Sprite.from(this.calculator.renderTexture);
+      s.scale = new PIXI.Point(1, -1); // Flip y-axis.
+      s.anchor = new PIXI.Point(0.5, 0.5); // Centered on the debug window.
+    }
+    return this.#debugSprite;
+  }
 }
 
 export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstract {
@@ -316,7 +338,8 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
    * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
    * @override
    */
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation, renderer) {
+    renderer ??= canvas.app.renderer;
     this.viewer = viewer;
     this.target = target;
     this.viewpoint = viewerLocation;
@@ -331,7 +354,6 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
     const { renderTexture, shaders } = this;
-    const renderer = canvas.app.renderer;
     if ( this.useLargeTarget ) {
       const gridCubeGeometry = new Grid3dGeometry(target);
       gridCubeGeometry.updateObjectPoints(); // Necessary if just created?
@@ -375,6 +397,10 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     this._tileShaders.forEach(s => s.destroy());
     this._tileShaders.clear();
   }
+
+
+
+
 
 }
 

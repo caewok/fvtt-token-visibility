@@ -160,6 +160,7 @@ await calc.percentVisibleAsync(viewer, target)
 
 debugViewer = buildDebugViewer(api.debugViewers.points)
 debugViewer = buildDebugViewer(api.debugViewers.geometric)
+debugViewer = buildDebugViewer(api.debugViewers.PIXI)
 
 await debugViewer.initialize();
 debugViewer.render();
