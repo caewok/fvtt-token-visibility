@@ -35,91 +35,7 @@ export class GeometricViewpoint extends AbstractViewpoint {
    * Draw the 3d objects in the popout.
    */
   _draw3dDebug(draw, _renderer, _container, { width = 100, height = 100 } = {}) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const { viewpoint, target, targetLocation, calculator } = this;
-
-    // Recalculate the 3d objects if needed.
-    if ( !calculator.blockingObjects ) this._percentVisible();
-    const { targetPolys, blockingPolys, blockingTerrainPolys } = calculator._constructPerspectivePolygons();
-    const colors = Draw.COLORS;
-
-    // Locate obstacles behind the target.
-    const visionTriangle = AbstractViewpoint.visionTriangle.rebuild(viewpoint, target);
-    const backgroundTiles = visionTriangle.findBackgroundTiles();
-    const backgroundWalls = visionTriangle.findBackgroundWalls();
-
-    // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
-    // Simpler:
-    //   Mainly we are looking at approx. a 2d overhead view.
-    //   So measure closest intersect to the vision triangle, testing edges and center.
-    //   Test only the 2d line—wall or tile triangle.
-    //   If no intersect, test from center of triangle.
-    //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
-
-    const lookAtM = calculator.camera.lookAtMatrix;
-    const perspectiveM = calculator.camera.perspectiveMatrix;
-
-    const backgroundPolys = [];
-    const { b, c } = visionTriangle;
-    const b3d = new Point3d(b.x, b.y, targetLocation.z);
-    const c3d = new Point3d(c.x, c.y, targetLocation.z);
-
-    const dirs = [
-      b3d.subtract(viewpoint).normalize(),
-      c3d.subtract(viewpoint).normalize(),
-      this.viewerLOS.targetCenter.subtract(viewpoint).normalize(),
-    ];
-
-    const backgroundTestFn = (placeable, color, fill) => {
-      const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewpoint);
-      polys.forEach(poly => {
-        const ixs = [];
-        for ( const dir of dirs ) {
-          const ix = poly.intersection(viewpoint, dir);
-          if ( ix ) ixs.push(ix);
-        }
-        if ( !ixs.length ) ixs.push(poly.centroid());
-
-        const dist2 = ixs.reduce((acc, curr) => {
-          if ( !curr ) return acc;
-          return Math.min(acc, Point3d.distanceSquaredBetween(viewpoint, curr));
-        }, Number.POSITIVE_INFINITY);
-        poly = poly
-          .transform(lookAtM)
-          .clipZ()
-          .transform(perspectiveM);
-        backgroundPolys.push({
-          poly,
-          dist2,
-          color,
-          fill,
-        });
-      });
-    }
-
-    backgroundTiles.forEach(tile => backgroundTestFn(tile, colors.orange, colors.orange));
-    backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
-    backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
-    backgroundPolys.forEach(obj => obj.poly.scale({ x: width, y: height }).draw2d({ draw, color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }));
-
-    // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-    // const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-
-    // backgroundTilesPolys.forEach(poly => draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
-    // backgroundWallsPolys.forEach(poly => draw.shape(poly.scale({ x: width, y: height }), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
-
-    // Draw the target in 3d, centered at 0,0.
-    // Scale the target graphics to fit in the view window.
-    targetPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.red, width: 2, fill: colors.lightred, fillAlpha: 0.5 }));
-
-    // Draw the grid shape.
-    // TODO: Fix; use Polygon3d
-    if ( this.config.largeTarget ) calculator._gridPolys.forEach(poly =>
-      draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
-
-    // Draw the detected obstacles.
-    blockingPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
-    blockingTerrainPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
+    this.calculator._draw3dDebug(this.viewer, this.target, this.viewpoint, this.targetLocation, { draw, width, height });
   }
 }
 
@@ -395,6 +311,99 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
          .transform(lookAtM)
          .transform(perspectiveM)
          .toPolygon());
+  }
+
+  /* ----- NOTE: Debugging methods ----- */
+  /**
+   * For debugging.
+   * Draw the 3d objects in the popout.
+   */
+  _draw3dDebug(viewer, target, viewerLocation, targetLocation, { draw, width = 100, height = 100 } = {}) {
+    draw ??= new CONFIG.GeometryLib.Draw();
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+
+    // Recalculate the 3d objects
+    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+    const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
+    const colors = Draw.COLORS;
+
+    // Locate obstacles behind the target.
+    const visionTriangle = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
+    const backgroundTiles = visionTriangle.findBackgroundTiles();
+    const backgroundWalls = visionTriangle.findBackgroundWalls();
+
+    // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
+    // Simpler:
+    //   Mainly we are looking at approx. a 2d overhead view.
+    //   So measure closest intersect to the vision triangle, testing edges and center.
+    //   Test only the 2d line—wall or tile triangle.
+    //   If no intersect, test from center of triangle.
+    //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
+
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+
+    const backgroundPolys = [];
+    const { b, c } = visionTriangle;
+    const b3d = new Point3d(b.x, b.y, targetLocation.z);
+    const c3d = new Point3d(c.x, c.y, targetLocation.z);
+
+    const dirs = [
+      b3d.subtract(viewerLocation).normalize(),
+      c3d.subtract(viewerLocation).normalize(),
+      targetLocation.subtract(viewerLocation).normalize(),
+    ];
+
+    const backgroundTestFn = (placeable, color, fill) => {
+      const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
+      polys.forEach(poly => {
+        const ixs = [];
+        for ( const dir of dirs ) {
+          const ix = poly.intersection(viewerLocation, dir);
+          if ( ix ) ixs.push(ix);
+        }
+        if ( !ixs.length ) ixs.push(poly.centroid());
+
+        const dist2 = ixs.reduce((acc, curr) => {
+          if ( !curr ) return acc;
+          return Math.min(acc, Point3d.distanceSquaredBetween(viewerLocation, curr));
+        }, Number.POSITIVE_INFINITY);
+        poly = poly
+          .transform(lookAtM)
+          .clipZ()
+          .transform(perspectiveM);
+        backgroundPolys.push({
+          poly,
+          dist2,
+          color,
+          fill,
+        });
+      });
+    }
+
+    backgroundTiles.forEach(tile => backgroundTestFn(tile, colors.orange, colors.orange));
+    backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
+    backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
+    backgroundPolys.forEach(obj => obj.poly.scale({ x: width, y: height }).draw2d({ draw, color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }));
+
+    // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    // const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+
+    // backgroundTilesPolys.forEach(poly => draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
+    // backgroundWallsPolys.forEach(poly => draw.shape(poly.scale({ x: width, y: height }), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
+
+    // Draw the target in 3d, centered at 0,0.
+    // Scale the target graphics to fit in the view window.
+    targetPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.red, width: 2, fill: colors.lightred, fillAlpha: 0.5 }));
+
+    // Draw the grid shape.
+    // TODO: Fix; use Polygon3d
+    if ( this.config.largeTarget ) this._gridPolys.forEach(poly =>
+      draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
+
+    // Draw the detected obstacles.
+    blockingPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
+    blockingTerrainPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
   }
 }
 
