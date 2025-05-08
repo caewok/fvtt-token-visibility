@@ -299,46 +299,47 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       // Divide in the popout space.
       const PT = this.viewerLOS.constructor.POINT_TYPES;
       const positions = [];
+      let viewSize;
       switch ( this.viewerLOS.config.numViewpoints ) {
-        case PT.CENTER: positions.push([0, 0]); break;
+        case PT.CENTER: positions.push([0, 0]); viewSize = WIDTH; break;
 
         // ----- | -----
         case PT.TWO: positions.push(
           [WIDTH * -0.25, 0],
           [WIDTH * 0.25, 0],
-        ); break;
+        ); viewSize = WIDTH / 2; break;
 
         //     -----
         // ----- | -----
-        case PT.THREE: positions.push([
+        case PT.THREE: positions.push(
           [0, HEIGHT * -0.25],
           [WIDTH * -0.25, HEIGHT * 0.25],
           [WIDTH * 0.25, HEIGHT * 0.25],
-        ]); break;
+        ); viewSize = WIDTH / 3; break;
 
         // ----- | -----
         // ----- | -----
-        case PT.FOUR: positions.push([
+        case PT.FOUR: positions.push(
           [WIDTH * -0.25, HEIGHT * -0.25],
           [WIDTH * 0.25, HEIGHT * -0.25],
           [WIDTH * -0.25, HEIGHT * 0.25],
           [WIDTH * 0.25, HEIGHT * 0.25],
-        ]); break;
+        ); viewSize = WIDTH / 2; break;
 
         //  ----- | -----
         // --- | --- | ---
-        case PT.FIVE: positions.push([
+        case PT.FIVE: positions.push(
           [WIDTH * -0.25, HEIGHT * -0.25],
           [WIDTH * 0.25, HEIGHT * -0.25],
           [WIDTH * -0.33, HEIGHT * 0.25],
           [0, HEIGHT * 0.25],
           [WIDTH * 0.33, HEIGHT * 0.25],
-        ]); break;
+        ); viewSize = WIDTH / 3; break;
 
         // --- | --- | ---
         // --- |     | ---
         // --- | --- | ---
-        case PT.EIGHT: positions.push([
+        case PT.EIGHT: positions.push(
           [WIDTH * -0.33, HEIGHT * -0.33],
           [WIDTH * 0, HEIGHT * -0.33],
           [WIDTH * 0.33, HEIGHT * -0.33],
@@ -350,12 +351,12 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
           [WIDTH * -0.33, HEIGHT * 0.33],
           [0, HEIGHT * 0.33],
           [WIDTH * 0.33, HEIGHT * 0.33],
-        ]); break;
+        ); viewSize = WIDTH / 3; break;
 
         // --- | --- | ---
         // --- | --- | ---
         // --- | --- | ---
-        case PT.NINE: positions.push([
+        case PT.NINE: positions.push(
           [WIDTH * -0.33, HEIGHT * -0.33],
           [WIDTH * 0, HEIGHT * -0.33],
           [WIDTH * 0.33, HEIGHT * -0.33],
@@ -367,7 +368,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
           [WIDTH * -0.33, HEIGHT * 0.33],
           [WIDTH * 0, HEIGHT * 0.33],
           [WIDTH * 0.33, HEIGHT * 0.33],
-        ]); break;
+        ); viewSize = WIDTH / 3; break;
       }
 
       /* For 2, width = 400, height = 400
