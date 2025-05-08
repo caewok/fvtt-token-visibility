@@ -340,7 +340,7 @@ export class AbstractViewerLOS {
     const percent = this.percentVisible(target, callback); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
-    if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
+    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
 
@@ -349,7 +349,7 @@ export class AbstractViewerLOS {
     const percent = await this.percentVisibleAsync(target); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
-    if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
+    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
 

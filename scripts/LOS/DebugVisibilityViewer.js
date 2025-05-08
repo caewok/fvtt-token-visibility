@@ -266,7 +266,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
     const target = this.target;
     const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
     visibleTextElem.innerHTML = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible`;
-    console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
+    // console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
   }
 
   render() {
