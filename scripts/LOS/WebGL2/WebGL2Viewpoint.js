@@ -90,11 +90,6 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.config.senseType });
   }
 
-  async initialize() {
-    await super.initialize();
-    await this.calculator.initialize();
-  }
-
   async openPopout() {
     await super.openPopout();
     if ( this.renderer ) this.renderer.destroy();

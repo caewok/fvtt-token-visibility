@@ -177,11 +177,7 @@ export class AbstractViewerLOS {
     if ( Object.hasOwn(cfg, "viewpointClass") ) cfg.viewpointClass = this.VIEWPOINT_CLASSES[cfg.viewpointClass] || cfg.viewpointClass;
   }
 
-  async initialize() {
-    const promises = [];
-    this.viewpoints.forEach(vp => promises.push(vp.initialize));
-    return Promise.allSettled(promises);
-  }
+  async initialize() { return this.calculator.initialize(); }
 
   /**
    * Sets configuration to the current settings.

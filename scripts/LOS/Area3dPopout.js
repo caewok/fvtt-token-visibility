@@ -83,7 +83,7 @@ export class Area3dPopout extends Application {
   close() {
     this.#savedTop = this.position.top;
     this.#savedLeft = this.position.left;
-    if ( !this.closing && this.pixiApp ) this.pixiApp.destroy();
+    if ( !this.closing && this.pixiApp & this.pixiApp.renderer ) this.pixiApp.destroy();
     super.close();
     OPEN_POPOUTS.delete(this);
   }

@@ -53,10 +53,6 @@ export class AbstractViewpoint {
     this.viewpointDiff = viewpoint.subtract(viewerLOS.center);
   }
 
-  async initialize() {
-    return this.calculator.initialize();
-  }
-
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
 

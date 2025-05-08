@@ -374,7 +374,10 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       /* For 2, width = 400, height = 400
       [-100, 0], [100, 0]
       #1
+      viewSize = 400 / 2 = 200
+      scale = 200 / 400 = 0.5
       size = 100
+
       scale = 100 / 400 * 2 = 0.5
       size = 100 * 1 / 0.5 = 200
       */
@@ -384,21 +387,23 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
         c.position.set(x, y);
 
         // Shrink the scale if there are more items to display.
-        let size = Math.max(Math.abs(x), Math.abs(y));
-        const scale = size / Math.max(WIDTH, HEIGHT) * 2;
-        size *= (1 / scale);
+        const scale = viewSize / Math.max(WIDTH, HEIGHT);
         c.scale.set(scale, scale);
+        const size = viewSize / scale;
 
         // Mask the container so it only displays over a portion of the canvas.
         // See https://pixijs.com/7.x/guides/components/containers
         const mask = new PIXI.Graphics();
         mask.beginFill(0xffffff);
-        mask.drawRect(-size, -size, size*2, size*2);
+        mask.drawRect(-size * 0.5, -size * 0.5, size, size);
         mask.endFill();
         c.mask = mask;
         c.addChild(mask);
 
         this.#popoutContainers.push(c);
+
+        console.debug(`Container at ${x},${y} with scale ${scale}, viewSize ${viewSize}, size ${size}.`);
+
       });
     }
     return this.#popoutContainers;
@@ -448,7 +453,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   _updatePercentVisibleLabel(number) {
     const label = this.percentVisibleLabel;
     label.text = `${(number * 100).toFixed(1)}%`;
-    console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
+    // console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
   algorithm = SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2;

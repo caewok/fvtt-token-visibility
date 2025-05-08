@@ -103,7 +103,7 @@ export class PercentVisibleCalculatorAbstract {
    */
   _percentRedPixels(_viewer, _target, _viewerLocation, _targetLocation) { console.error("PercentVisibleCalculator|Must be overriden by child class.") }
 
-  async _percentRedPixelsAsync(_viewer, _target, _viewerLocation, _targetLocation) { return this._percentRedPixels(); }
+  async _percentRedPixelsAsync(viewer, target, viewerLocation, targetLocation) { return this._percentRedPixels(viewer, target, viewerLocation, targetLocation); }
 
   destroy() { return; }
 
