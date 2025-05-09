@@ -25,6 +25,9 @@ import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugSha
 // Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
 
+// WebGL
+import { Camera } from "./WebGPU/Camera.js";
+
 // Debug
 
 const RADIANS_90 = Math.toRadians(90);
@@ -64,7 +67,21 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
   /** @type {number} */
   static get HEIGHT() { return CONFIG[MODULE_ID].renderTextureSize; }
 
+  /** @type {Camera} */
+  camera = new Camera({
+    glType: "webGL2",
+    perspectiveType: "perspective",
+    up: new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1),
+    mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
+  });
+
   _tileShaders = new Map();
+
+  constructor(cfg = {}) {
+    cfg.width ??= this.constructor.WIDTH;
+    cfg.height ??= this.constructor.HEIGHT;
+    super(cfg);
+  }
 
   /**
    * Sets configuration to the current settings.
@@ -99,7 +116,10 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 
   get renderTexture() {
     if ( !this.#renderTexture || this.#renderTexture.destroyed ) {
-      this.#renderTexture = PIXI.RenderTexture.create(this.constructor.renderTextureConfiguration);
+      const renderCfg = this.constructor.renderTextureConfiguration;
+      renderCfg.width = this.config.width;
+      renderCfg.height = this.config.height;
+      this.#renderTexture = PIXI.RenderTexture.create(renderCfg);
       this.#renderTexture.framebuffer.enableDepth();
     }
     return this.#renderTexture;
@@ -128,53 +148,15 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
   shaders = {};
 
   _initializeShaders() {
-    const shaders = [
-      "target",
-      "obstacle",
-      "terrainWall"
-    ];
+    const shaders = {
+      target: [1, 0, 0, 1], // Red
+      obstacle: [0, 0, 1, 1], // Blue
+      terrainWall: [0, 0, 1, 0.5], // Blue, half-alpha
+    };
 
-    for ( const shaderName of shaders ) {
-      this.shaders[shaderName] = Placeable3dShader.create(Point3d._tmp, Point3d._tmp);
+    for ( const [shaderName, uColor] of Object.entries(shaders) ) {
+      this.shaders[shaderName] = Placeable3dShader.create(this.camera, { uColor });
     }
-
-    // Set color for each shader.
-    this.shaders.target.setColor(1, 0, 0, 1); // Red
-    this.shaders.obstacle.setColor(0, 0, 1, 1);  // Blue
-    this.shaders.terrainWall.setColor(0, 0, 1, 0.5); // Blue, half-alpha
-  }
-
-  frustrum = {
-    near: 1,
-    far: null,
-    fov: RADIANS_90,
-  };
-
-  /**
-   * Calculate the relevant frustrum properties for this viewer and target.
-   * We want the target token to be completely within the viewable frustrum but
-   * take up as much as the frustrum frame as possible, while limiting the size of the frame.
-   */
-  _constructFrustrum() {
-    const viewerAngle = Math.toRadians(this.viewer.vision?.data?.angle) || Math.PI * 2;
-
-    // Determine the optimal fov given the distance.
-    // https://docs.unity3d.com/Manual/FrustumSizeAtDistance.html
-    // Use near instead of far to ensure frame at start of token is large enough.
-    const { diagonal, nearDistance } = this._calculateTargetDistance3dProperties();
-    let angleRad = 2 * Math.atan(diagonal * (0.5 / nearDistance));
-    angleRad = Math.min(angleRad, viewerAngle);
-    angleRad ??= RADIANS_90;
-    this.frustrum.fov = this.frustrum.fov || angleRad;// + RADIANS_1;
-
-    // Far distance is distance to the furthest point of the target.
-    // this.#frustrum.far = this.#frustrumFar || farDistance;
-
-    // Near distance has to be close to the viewer.
-    // We can assume we don't want to view anything within the viewer token.
-    // (If the viewer point is on the edge, we want basically everything.)
-    // this.frustrum.near = this.frustrumNear;
-    // if ( !this.frustrum.near ) this.frustrum.near ||= 1;
   }
 
   static #tokenBoundaryPoints = {
@@ -220,10 +202,6 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 
   #buildTargetMesh(shaders) {
     const targetShader = shaders.target;
-    const { near, far, fov } = this.frustrum;
-    targetShader._initializeLookAtMatrix(this.viewpoint, this.targetLocation);
-
-    targetShader._initializePerspectiveMatrix(fov, 1, near, far);
     return Area3dWebGL2Viewpoint.buildMesh(this.target[GEOMETRY_ID].geometry, targetShader);
   }
 
@@ -244,12 +222,9 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     const otherBlocking = blockingObjects.walls.union(blockingObjects.tokens);
     if ( !otherBlocking.size ) return;
 
-    const { viewpoint, frustrum, obstacleContainer } = this;
+    const { obstacleContainer } = this;
     const buildMesh = Area3dWebGL2Viewpoint.buildMesh;
-    const { near, far, fov } = frustrum;
     const obstacleShader = shaders.obstacle;
-    obstacleShader._initializeLookAtMatrix(viewpoint, this.targetLocation);
-    obstacleShader._initializePerspectiveMatrix(fov, 1, near, far);
     for ( const obj of otherBlocking ) {
       const mesh = buildMesh(obj[GEOMETRY_ID].geometry, obstacleShader);
       obstacleContainer.addChild(mesh);
@@ -276,15 +251,12 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     // Build mesh from each obstacle and
     // measure distance along ray from viewer point to target center.
     const buildMesh = Area3dWebGL2Viewpoint.buildMesh;
-    const { viewpoint, frustrum } = this;
+    const { viewpoint } = this;
     const targetCenter = this.targetLocation;
     const rayDir = targetCenter.subtract(viewpoint);
-    const { near, far, fov } = frustrum;
     const meshes = [];
     if ( nTerrainWalls ) {
       const terrainWallShader = shaders.terrainWall;
-      terrainWallShader._initializeLookAtMatrix(viewpoint, targetCenter);
-      terrainWallShader._initializePerspectiveMatrix(fov, 1, near, far);
       blockingObjects.terrainWalls.forEach(wall => {
         const mesh = buildMesh(wall[GEOMETRY_ID].geometry, terrainWallShader);
         const plane = CONFIG.GeometryLib.threeD.Plane.fromWall(wall);
@@ -296,7 +268,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 
     if ( nTiles ) {
       blockingObjects.tiles.forEach(tile => {
-        const tileShader = tileMethod(fov, near, far, tile);
+        const tileShader = tileMethod(tile);
         const mesh = buildMesh(tile[GEOMETRY_ID].geometry, tileShader);
         const plane = new CONFIG.GeometryLib.threeD.Plane(new CONFIG.GeometryLib.threeD.Point3d(0, 0, tile.elevationZ));
         mesh._atvIx = plane.rayIntersection(viewpoint, rayDir);
@@ -311,18 +283,14 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     meshes.forEach(mesh => mesh.destroy());
   }
 
-  _buildTileShader(fov, near, far, tile) {
-    const targetCenter = this.targetLocation;
+  _buildTileShader(tile) {
     if ( !this._tileShaders.has(tile) ) {
-      const shader = Tile3dShader.create(this.viewpoint, targetCenter,
-        { uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
-      shader.setColor(0, 0, 1, 1); // Blue
+      const shader = Tile3dShader.create(this.camera,
+        { uColor: [0, 0, 1, 1], uTileTexture: tile.texture.baseTexture, uAlphaThreshold: 0.7 });
       this._tileShaders.set(tile, shader);
     }
-
     const shader = this._tileShaders.get(tile);
-    shader._initializeLookAtMatrix(this.viewpoint, targetCenter);
-    shader._initializePerspectiveMatrix(fov, 1, near, far);
+    shader.update();
     return shader;
   }
 
@@ -344,11 +312,12 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     this.target = target;
     this.viewpoint = viewerLocation;
     this.targetLocation = targetLocation;
-    this._constructFrustrum();
-//     for ( const shader of Object.values(this.shaders) ) {
-//       shader._initializeLookAtMatrix(viewerLocation, targetLocation);
-//       shader._calculatePerspectiveMatrix();
-//     }
+
+    this.camera.cameraPosition = viewerLocation;
+    this.camera.targetPosition = targetLocation;
+    this.camera.setTargetTokenFrustrum(target);
+
+    Object.values(this.shaders).forEach(shader => shader.update());
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
@@ -397,11 +366,6 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     this._tileShaders.forEach(s => s.destroy());
     this._tileShaders.clear();
   }
-
-
-
-
-
 }
 
 export class DebugVisibilityViewerPIXI extends DebugVisibilityViewerArea3dPIXI {

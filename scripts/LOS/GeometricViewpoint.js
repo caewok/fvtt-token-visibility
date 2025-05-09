@@ -12,7 +12,6 @@ import { Settings } from "../settings.js";
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { Grid3dTriangles  } from "./PlaceableTriangles.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
 import { Camera } from "./WebGPU/Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
@@ -48,8 +47,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   camera = new Camera({
     glType: "webGL2",
     perspectiveType: "perspective",
-    up: new Point3d(0, 0, -1),
-    mirrorMDiag: new Point3d(1, 1, 1),
+    up: new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1),
+    mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
   });
 
   /**
@@ -118,9 +117,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     if ( this.config.largeTarget ) this.gridSquareArea = this._gridSquareArea();
   }
-
-
-
 
   /**
    * Determine the percentage red pixels for the current view.

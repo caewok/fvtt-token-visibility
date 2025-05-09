@@ -20,6 +20,7 @@ import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
 import { PATCHES as PATCHES_WallLOS } from "./LOS/Wall.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
+import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
@@ -31,9 +32,10 @@ const PATCHES = {
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
+  Tile: PATCHES_Tile,
   Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
   Wall: foundry.utils.mergeObject(PATCHES_Wall, PATCHES_WallLOS),
-  "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler
+  "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,
 };
 
 export const PATCHER = new Patcher();
