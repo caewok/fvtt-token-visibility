@@ -87,31 +87,28 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   constructor(opts = {}) {
     super(opts);
     this.debugView = opts.debugView ?? true;
-    this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.config.senseType });
   }
 
   async openPopout() {
     await super.openPopout();
     if ( this.renderer ) this.renderer.destroy();
     this.renderer = new RenderObstaclesWebGL2({
-      senseType: this.config.senseType,
+      senseType: this.viewerLOS.config.senseType,
       debugViewNormals: this.debugView,
       gl: this.gl,
     });
     await this.renderer.initialize();
   }
 
-  _render(viewer, target, viewerLocation, targetLocation) {
+  updateDebugForPercentVisible(percentVisible) {
+    super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
+    // TODO: Handle multiple viewpoints.
+    const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[0];
     this.renderer.render(viewerLocation, target, { viewer, targetLocation });
   }
 
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calculator.percentVisible(viewer, target, { viewerLocation, targetLocation });
-  }
-
   destroy() {
-    if ( this.calc ) this.calculator.destroy();
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }

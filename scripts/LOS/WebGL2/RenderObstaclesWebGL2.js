@@ -138,7 +138,7 @@ export class RenderObstaclesAbstractWebGL2 {
    */
   _renderColorCoded(target, viewer, visionTriangle) {
     const gl = this.gl;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
@@ -179,7 +179,7 @@ export class RenderObstaclesAbstractWebGL2 {
    */
   _renderDebug(target, viewer, visionTriangle) {
     const gl = this.gl;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
