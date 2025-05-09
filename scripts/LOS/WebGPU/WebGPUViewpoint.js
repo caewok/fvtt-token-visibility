@@ -136,6 +136,8 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
 }
 
 export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopoutAbstract {
+  static viewpointClass = WebGPUViewpoint;
+
   static CONTEXT_TYPE = "webgpu";
 
   /** @type {PercentVisibleCalculator} */
@@ -147,10 +149,10 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
   constructor({ device, ...opts } = {}) {
     super(opts);
     this.debugView = opts.debugView ?? true;
-    this.device = device;
-    this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.config.senseType });
+    this.device = device || CONFIG[MODULE_ID].webGPUDevice;
+    this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.viewerLOS.config.senseType });
     this.renderer = new RenderObstacles(this.device, {
-      senseType: this.config.senseType,
+      senseType: this.viewerLOS.config.senseType,
       debugViewNormals: this.debugView,
       width: this.constructor.WIDTH,
       height: this.constructor.HEIGHT
@@ -158,7 +160,6 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
   }
   async initialize() {
     await super.initialize();
-    await this.calculator.initialize();
     await this.renderer.initialize();
   }
 
@@ -167,23 +168,23 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
     this.renderer.setRenderTextureToCanvas(this.popout.canvas);
   }
 
-  _render(viewer, target, viewerLocation, targetLocation) {
+  updateDebugForPercentVisible(percentVisible) {
+    super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
+    // TODO: Handle multiple viewpoints.
+    const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[0];
     this.renderer.render(viewerLocation, target, { viewer, targetLocation });
   }
 
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calculator.percentVisible(viewer, target, { viewerLocation, targetLocation });
-  }
-
   destroy() {
-    if ( this.calc ) this.calculator.destroy();
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }
 
 export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithPopoutAbstract {
+  static viewpointClass = WebGPUViewpointAsync;
+
   static CONTEXT_TYPE = "webgpu";
 
   /** @type {PercentVisibleCalculator} */
@@ -197,11 +198,10 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 
   constructor({ device, ...opts } = {}) {
     super(opts);
-    this.device = device;
+    this.device = device || CONFIG[MODULE_ID].webGPUDevice;
     this.debugView = opts.debugView ?? true;
-    this.calc = new PercentVisibleCalculatorWebGPUAsync({ device, senseType: this.config.senseType });
     this.renderer = new RenderObstacles(this.device, {
-      senseType: this.config.senseType,
+      senseType: this.viewerLOS.config.senseType,
       debugViewNormals: this.debugView,
       width: this.constructor.WIDTH,
       height: this.constructor.HEIGHT
@@ -210,7 +210,6 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 
   async initialize() {
     await super.initialize();
-    await this.calculator.initialize();
     await this.renderer.initialize();
   }
 
@@ -219,14 +218,17 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
     this.renderer.setRenderTextureToCanvas(this.popout.canvas);
   }
 
-  _render(viewer, target, viewerLocation, targetLocation) {
+  updateDebugForPercentVisible(percentVisible) {
+    super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
+    // TODO: Handle multiple viewpoints.
+    const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[0];
     this.renderer.render(viewerLocation, target, { viewer, targetLocation });
   }
 
   percentVisible(viewer, target, viewerLocation, targetLocation) {
     const callback = (percentVisible, viewer, target) => this.updatePopoutFooter({ percentVisible, viewer, target });
-    return this.calculator.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
+    return this.viewerLOS.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
   }
 
   destroy() {

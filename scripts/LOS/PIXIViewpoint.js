@@ -61,12 +61,6 @@ export class PIXIViewpoint extends AbstractViewpoint {
 export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstract {
   static get viewpointClass() { return PIXIViewpoint; }
 
-  /** @type {number} */
-  static get WIDTH() { return CONFIG[MODULE_ID].renderTextureSize; }
-
-  /** @type {number} */
-  static get HEIGHT() { return CONFIG[MODULE_ID].renderTextureSize; }
-
   /** @type {Camera} */
   camera = new Camera({
     glType: "webGL2",
@@ -78,8 +72,8 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
   _tileShaders = new Map();
 
   constructor(cfg = {}) {
-    cfg.width ??= this.constructor.WIDTH;
-    cfg.height ??= this.constructor.HEIGHT;
+    cfg.width ||= CONFIG[MODULE_ID].renderTextureSize || 128;
+    cfg.height ||= CONFIG[MODULE_ID].renderTextureSize || 128;
     super(cfg);
   }
 
@@ -131,8 +125,8 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
       scaleMode: PIXI.SCALE_MODES.NEAREST,
       multisample: PIXI.MSAA_QUALITY.NONE,
       alphaMode: PIXI.ALPHA_MODES.NO_PREMULTIPLIED_ALPHA,
-      width: this.WIDTH,
-      height: this.HEIGHT,
+      width: CONFIG[MODULE_ID].renderTextureSize || 128,
+      height: CONFIG[MODULE_ID].renderTextureSize || 128,
     };
   }
 
