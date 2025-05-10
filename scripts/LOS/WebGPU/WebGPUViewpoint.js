@@ -68,6 +68,10 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
         alphamode: "premultiplied", // Instead of "opaque"
       });
     }
+
+    const gl = this.gl;
+    this.texture = gl.createTexture();
+    this.framebuffer = gl.createFramebuffer();
   }
 
   async initialize() {
@@ -87,6 +91,10 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
    */
   _percentRedPixels() {
     const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
+
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
     return super._percentRedPixels();
   }
