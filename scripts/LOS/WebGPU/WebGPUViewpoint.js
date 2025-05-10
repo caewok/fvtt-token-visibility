@@ -140,9 +140,6 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
 
   static CONTEXT_TYPE = "webgpu";
 
-  /** @type {PercentVisibleCalculator} */
-  calc;
-
   /** @type {RenderObstacles} */
   renderer;
 
@@ -150,7 +147,6 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
     super(opts);
     this.debugView = opts.debugView ?? true;
     this.device = device || CONFIG[MODULE_ID].webGPUDevice;
-    this.calc = new PercentVisibleCalculatorWebGPU({ device, senseType: this.viewerLOS.config.senseType });
     this.renderer = new RenderObstacles(this.device, {
       senseType: this.viewerLOS.config.senseType,
       debugViewNormals: this.debugView,
@@ -187,9 +183,6 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 
   static CONTEXT_TYPE = "webgpu";
 
-  /** @type {PercentVisibleCalculator} */
-  calc;
-
   /** @type {RenderObstacles} */
   renderer;
 
@@ -219,20 +212,15 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
   }
 
   updateDebugForPercentVisible(percentVisible) {
-    super.updateDebugForPercentVisible(percentVisible);
+    percentVisible.then(value => super.updateDebugForPercentVisible(value));
+
     this.renderer.prerender();
     // TODO: Handle multiple viewpoints.
     const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[0];
     this.renderer.render(viewerLocation, target, { viewer, targetLocation });
   }
 
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    const callback = (percentVisible, viewer, target) => this.updatePopoutFooter({ percentVisible, viewer, target });
-    return this.viewerLOS.percentVisible(viewer, target, { callback, viewerLocation, targetLocation });
-  }
-
   destroy() {
-    if ( this.calc ) this.calculator.destroy();
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
