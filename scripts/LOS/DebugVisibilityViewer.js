@@ -402,7 +402,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
         this.#popoutContainers.push(c);
 
-        console.debug(`Container at ${x},${y} with scale ${scale}, viewSize ${viewSize}, size ${size}.`);
+        // console.debug(`Container at ${x},${y} with scale ${scale}, viewSize ${viewSize}, size ${size}.`);
 
       });
     }

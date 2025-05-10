@@ -357,7 +357,7 @@ export class AbstractViewerLOS {
     if ( !this.viewer ) return 0;
     this.target = target;
     const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target, { stopAtThreshold });
-    if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
+    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
@@ -365,7 +365,7 @@ export class AbstractViewerLOS {
     if ( !this.viewer ) return 0;
     this.target = target;
     const percent = this._simpleVisibilityTest(target) ?? (await this._percentVisibleAsync(target, { stopAtThreshold }));
-    if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
+    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
