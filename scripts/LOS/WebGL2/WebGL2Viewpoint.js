@@ -104,8 +104,99 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
     // TODO: Handle multiple viewpoints.
-    const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[0];
-    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
+
+    const frames = this._canvasDimensionsForViewpoints();
+    for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
+      const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
+      const frame = frames[i];
+      const clear = i === 0;
+      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+    }
+  }
+
+  _canvasDimensionsForViewpoints() {
+    let { width, height } = this.popout.canvas;
+     // const dpr = window.devicePixelRatio; // Does not work as expected.
+
+    // gl.viewport is from bottom 0, 0.
+    const w_1_2 = width * 0.5;
+    const h_1_2 = height * 0.5;
+    const w_1_3 = width * 1/3;
+    const h_1_3 = height * 1/3;
+    const w_2_3 = width * 2/3;
+    const h_2_3 = height * 2/3;
+
+    switch ( this.viewerLOS.viewpoints.length ) {
+      case 1: return [new PIXI.Rectangle(0, 0, width, height)];
+
+      // ----- | -----
+      case 2: return [
+        new PIXI.Rectangle(0,     0, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0, w_1_2, h_1_2),
+      ];
+
+      //     -----
+      // ----- | -----
+      case 3: return [
+        new PIXI.Rectangle(w_1_3, h_1_2, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_2_3, 0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
+      ];
+
+      // ----- | -----
+      // ----- | -----
+      case 4: return [
+        new PIXI.Rectangle(0,     0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(0,     h_1_2, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, h_1_2, w_1_2, h_1_2),
+      ];
+
+      //  ----- | -----
+      // --- | --- | ---
+      case 5: return [
+        new PIXI.Rectangle(w_1_3 * 0.5,           h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3 - (w_1_3 * 0.5), h_2_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+      ];
+
+      // --- | --- | ---
+      // --- |     | ---
+      // --- | --- | ---
+      case 8: return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+
+      ];
+
+      // --- | --- | ---
+      // --- | --- | ---
+      // --- | --- | ---
+      case 9: return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+      ];
+    }
   }
 
   destroy() {
