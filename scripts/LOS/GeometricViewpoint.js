@@ -16,6 +16,7 @@ import { Camera } from "./WebGPU/Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
+import { NULL_SET } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -98,6 +99,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
   gridSquareArea = 0;
 
+  blockingObjects = {
+    tiles: NULL_SET,
+    tokens: NULL_SET,
+    walls: NULL_SET,
+    terrainWalls: NULL_SET,
+  };
+
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
     this.viewer = viewer;
     this.target = target;
@@ -107,6 +115,14 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
     this.camera.setTargetTokenFrustrum(target);
+    /*
+    this.camera.perspectiveParameters = {
+      fov: Math.toRadians(90),
+      aspect: 1,
+      zNear: 1,
+      zFar: Infinity,
+    };
+    */
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
@@ -277,7 +293,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
       .map(poly => poly
         .transform(lookAtM)
         .clipZ()
-        .transform(perspectiveM))
+        .transform(perspectiveM)
+      )
+      .filter(poly => poly.points.length > 2);
   }
 
   /** @type {AbstractPolygonTriangles[]} */

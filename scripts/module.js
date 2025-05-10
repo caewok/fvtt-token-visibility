@@ -22,6 +22,8 @@ import { getObjectProperty } from "./LOS/util.js";
 // For API
 import * as bench from "./benchmark.js";
 
+import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
+
 import { buildLOSCalculator, buildCustomLOSCalculator, buildDebugViewer } from "./LOSCalculator.js";
 
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
@@ -311,6 +313,8 @@ Hooks.once("init", function() {
       PlaceableInstanceHandler,
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
     },
+
+    AbstractViewpoint,
 
     glmatrix: {
       mat2, mat2d, mat3, mat4,

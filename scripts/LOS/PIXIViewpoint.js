@@ -17,6 +17,7 @@ import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { sumRedPixels, sumRedObstaclesPixels } from "./util.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
+import { NULL_SET } from "./util.js";
 
 // GLSL
 import { Grid3dGeometry, GEOMETRY_ID } from "./Placeable3dGeometry.js";
@@ -291,6 +292,13 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
   async initialize() {
     this._initializeShaders();
   }
+
+  blockingObjects = {
+    tiles: NULL_SET,
+    tokens: NULL_SET,
+    walls: NULL_SET,
+    terrainWalls: NULL_SET,
+  };
 
   /**
    * Do any preparatory calculations for determining the percent visible.

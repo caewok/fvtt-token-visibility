@@ -325,6 +325,16 @@ export class Polygon3d {
     return poly3d;
   }
 
+  divideByZ(poly3d) {
+    poly3d ??= this.clone();
+    poly3d.points.forEach(pt => {
+      const zInv = 1 / pt.z;
+      pt.x *= zInv;
+      pt.y *= zInv;
+      pt.z = 1;
+    });
+    return poly3d;
+  }
 
   /**
    * Test if a ray intersects the polygon. Does not consider whether this polygon is facing.
@@ -546,7 +556,8 @@ export class Triangle3d extends Polygon3d {
       coordinate: "z",
       cmp: keepLessThan ? "lessThan" : "greaterThan"
     });
-    const out = toKeep.length === 3 ? (new this.constructor()) : (new Polygon3d(0));
+    const nPoints = toKeep.length;
+    const out = nPoints === 3 ? (new this.constructor()) : (new Polygon3d(nPoints));
     out.isHole = this.isHole;
     out.points.forEach((pt, idx) => pt.copyFrom(toKeep[idx]));
     return out;
@@ -733,6 +744,12 @@ export class Polygons3d extends Polygon3d {
   scale(opts, poly3d) {
     poly3d ??= this.clone();
     poly3d.polygons.forEach(poly => poly.scale(opts, poly));
+    return poly3d;
+  }
+
+  divideByZ(poly3d) {
+    poly3d ??= this.clone();
+    poly3d.polygons.forEach(poly => poly.divideByZ(poly));
     return poly3d;
   }
 

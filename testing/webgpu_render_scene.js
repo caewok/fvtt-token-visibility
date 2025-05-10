@@ -63,6 +63,7 @@ Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("tokenvisibility").api
 Plane = CONFIG.GeometryLib.threeD.Plane
+AbstractViewpoint = api.AbstractViewpoint
 // ClipperPaths = CONFIG.GeometryLib.ClipperPaths
 
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn
@@ -174,6 +175,19 @@ debugViewer.destroy()
 CONFIG.tokenvisibility.tileThresholdShape = "triangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
+
+
+debugViewers = {};
+for ( const key of ["geometric", "webGL2", "webGPU", "webGPUAsync"] ) {
+  const debugViewer = buildDebugViewer(api.debugViewers[key])
+  await debugViewer.initialize();
+  debugViewer.render();
+  debugViewers[key] = debugViewer
+}
+Object.values(debugViewers).forEach(debugViewer => debugViewer.destroy())
+
+
+
 
 // All at once
 calcPoints = new api.calcs.points()

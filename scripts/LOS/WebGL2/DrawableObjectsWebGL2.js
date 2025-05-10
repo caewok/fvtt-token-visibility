@@ -768,7 +768,7 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
       const token = placeableHandler.placeableFromInstanceIndex.get(idx);
-      if ( token.isConstrainedTokenBorder ) return this._updateAllInstances();
+      if ( token?.isConstrainedTokenBorder ) return this._updateAllInstances();
     }
     super._updateInstances();
   }
@@ -852,7 +852,7 @@ export class ConstrainedDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenW
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
       const token = placeableHandler.placeableFromInstanceIndex.get(idx);
-      if ( token.isConstrainedTokenBorder ) this._updateAllInstances();
+      if ( token?.isConstrainedTokenBorder ) this._updateAllInstances();
     }
     DrawableTokenWebGL2.prototype._updateInstances.call(this);
   }

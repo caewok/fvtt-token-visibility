@@ -219,6 +219,10 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
     this.renderer.setRenderTextureToCanvas(this.popout.canvas);
   }
 
+  percentVisible() {
+    return this.viewerLOS.percentVisibleAsync(this.target);
+  }
+
   updateDebugForPercentVisible(percentVisible) {
     percentVisible.then(value => super.updateDebugForPercentVisible(value));
 
