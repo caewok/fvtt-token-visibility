@@ -248,7 +248,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
    */
   _updatePopoutTitle(title) {
     if ( !this.popoutIsRendered ) return;
-    title ??= this.popoutTitle();
+    title ??= this.popoutTitle;
     const popout = this.popout;
     const elem = popout.element.find(".window-title");
     elem[0].textContent = title;
@@ -258,7 +258,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   /** @type {string} */
   get popoutTitle() {
     const moduleName = game.i18n.localize(`${MODULE_ID}.nameAbbr`);
-    return `${moduleName} 3D Debug`;
+    return `${moduleName}|${this.constructor.name}`;
   }
 
   updatePopoutFooter(percentVisible) {
