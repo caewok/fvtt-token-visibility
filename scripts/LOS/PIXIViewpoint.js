@@ -21,7 +21,7 @@ import { NULL_SET } from "./util.js";
 
 // GLSL
 import { Grid3dGeometry, GEOMETRY_ID } from "./Placeable3dGeometry.js";
-import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./Placeable3dShader.js";
+import { Placeable3dShader, Tile3dShader } from "./Placeable3dShader.js";
 
 // Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -30,8 +30,6 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { Camera } from "./WebGPU/Camera.js";
 
 // Debug
-
-const RADIANS_90 = Math.toRadians(90);
 
 export class PIXIViewpoint extends AbstractViewpoint {
   static get calcClass() { return PercentVisibleCalculatorPIXI; }
@@ -197,7 +195,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 
   #buildTargetMesh(shaders) {
     const targetShader = shaders.target;
-    return Area3dWebGL2Viewpoint.buildMesh(this.target[GEOMETRY_ID].geometry, targetShader);
+    return this.constructor.buildMesh(this.target[GEOMETRY_ID].geometry, targetShader);
   }
 
   #renderTarget(renderer, renderTexture, shaders, clear = true) {
@@ -218,10 +216,9 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     if ( !otherBlocking.size ) return;
 
     const { obstacleContainer } = this;
-    const buildMesh = Area3dWebGL2Viewpoint.buildMesh;
     const obstacleShader = shaders.obstacle;
     for ( const obj of otherBlocking ) {
-      const mesh = buildMesh(obj[GEOMETRY_ID].geometry, obstacleShader);
+      const mesh = this.constructor.buildMesh(obj[GEOMETRY_ID].geometry, obstacleShader);
       obstacleContainer.addChild(mesh);
     }
 
@@ -245,7 +242,6 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 
     // Build mesh from each obstacle and
     // measure distance along ray from viewer point to target center.
-    const buildMesh = Area3dWebGL2Viewpoint.buildMesh;
     const { viewpoint } = this;
     const targetCenter = this.targetLocation;
     const rayDir = targetCenter.subtract(viewpoint);
@@ -253,7 +249,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     if ( nTerrainWalls ) {
       const terrainWallShader = shaders.terrainWall;
       blockingObjects.terrainWalls.forEach(wall => {
-        const mesh = buildMesh(wall[GEOMETRY_ID].geometry, terrainWallShader);
+        const mesh = this.constructor.buildMesh(wall[GEOMETRY_ID].geometry, terrainWallShader);
         const plane = CONFIG.GeometryLib.threeD.Plane.fromWall(wall);
         mesh._atvIx = plane.rayIntersection(viewpoint, rayDir);
         if ( mesh._atvIx > 0 ) meshes.push(mesh);
@@ -264,7 +260,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     if ( nTiles ) {
       blockingObjects.tiles.forEach(tile => {
         const tileShader = tileMethod(tile);
-        const mesh = buildMesh(tile[GEOMETRY_ID].geometry, tileShader);
+        const mesh = this.constructor.buildMesh(tile[GEOMETRY_ID].geometry, tileShader);
         const plane = new CONFIG.GeometryLib.threeD.Plane(new CONFIG.GeometryLib.threeD.Point3d(0, 0, tile.elevationZ));
         mesh._atvIx = plane.rayIntersection(viewpoint, rayDir);
         if ( mesh._atvIx > 0 ) meshes.push(mesh);
@@ -330,7 +326,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
       gridCubeGeometry.updateObjectPoints(); // Necessary if just created?
       gridCubeGeometry.updateVertices();     // Necessary if just created?
 
-      const gridCubeMesh = Area3dWebGL2Viewpoint.buildMesh(this.gridCubeGeometry, shaders.target);
+      const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
       renderer.render(gridCubeMesh, { renderTexture, clear: true });
       this.gridCubeCache = renderer.extract._rawPixels(renderTexture);
     }
@@ -346,6 +342,15 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
 
     // Calculate target area remaining after obstacles.
     this.obstacleCache = renderer.extract._rawPixels(renderTexture);
+  }
+
+  static buildMesh(geometry, shader) {
+    const mesh = new PIXI.Mesh(geometry, shader);
+    mesh.state.depthTest = true;
+    mesh.state.culling = true;
+    mesh.state.clockwiseFrontFace = true;
+    mesh.state.depthMask = true;
+    return mesh;
   }
 
   /**
