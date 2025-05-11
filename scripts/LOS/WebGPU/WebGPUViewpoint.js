@@ -174,8 +174,8 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
   updateDebugForPercentVisible(percentVisible) {
     super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
-    // TODO: Handle multiple viewpoints.
 
+    // Render once for each viewpoint.
     const frames = DebugVisibilityViewerWebGL2.prototype._canvasDimensionsForViewpoints.call(this);
     for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
       const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
@@ -230,11 +230,16 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 
   updateDebugForPercentVisible(percentVisible) {
     percentVisible.then(value => super.updateDebugForPercentVisible(value));
-
     this.renderer.prerender();
-    // TODO: Handle multiple viewpoints.
-    const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[0];
-    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
+
+    // Render once for each viewpoint.
+    const frames = DebugVisibilityViewerWebGL2.prototype._canvasDimensionsForViewpoints.call(this);
+    for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
+      const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
+      const frame = frames[i];
+      const clear = i === 0;
+      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+    }
   }
 
   destroy() {
