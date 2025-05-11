@@ -14,10 +14,9 @@ import { MODULE_ID } from "../../const.js";
 
 // LOS folder
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { PercentVisibleCalculatorWebGL2 } from "../WebGL2/WebGL2Viewpoint.js";
+import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "../WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleRenderCalculatorAbstract }  from "../PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
-
 
 /**
  * An eye belong to a specific viewer.
@@ -176,8 +175,14 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
     super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
     // TODO: Handle multiple viewpoints.
-    const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[0];
-    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
+
+    const frames = DebugVisibilityViewerWebGL2.prototype._canvasDimensionsForViewpoints.call(this);
+    for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
+      const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
+      const frame = frames[i];
+      const clear = i === 0;
+      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+    }
   }
 
   destroy() {

@@ -1,13 +1,13 @@
 /* globals
 canvas,
 CONFIG,
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { Settings } from "../../settings.js";
 import { VisionTriangle } from "../VisionTriangle.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
@@ -191,7 +191,7 @@ class RenderAbstract {
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  render(viewerLocation, target, { viewer, targetLocation } = {}) {
+  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true } = {}) {
     const opts = { viewer, target, blocking: this.config.blocking };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
@@ -207,9 +207,20 @@ class RenderAbstract {
       this.colorAttachment.resolveTarget = undefined;
     }
 
+    // When using viewport, may want to prevent clearing of the texture between renders.
+    // FYI, cannot set clearValue of the attachment to null.
+    const renderPassDesc = this.renderPassDescriptor;
+    let loadOp;
+    if ( !clear ) {
+      loadOp = renderPassDesc.colorAttachments[0].loadOp;
+      renderPassDesc.colorAttachments[0].loadOp = "load";
+    }
+
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
+
+    if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
 
     // Render the target.
     // Render first so full red of target is recorded.
@@ -224,6 +235,9 @@ class RenderAbstract {
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
+
+    if ( !clear ) renderPassDesc.colorAttachments[0].loadOp = loadOp; // Reset to default value.
+
   }
 
   /**
