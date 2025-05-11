@@ -1,22 +1,19 @@
 /* globals
 canvas,
 CONFIG,
+CONST,
 foundry,
 LimitedAnglePolygon,
-PIXI,
 Ray
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder.
-import { Settings } from "../settings.js";
-import { MODULE_ID } from "../const.js";
-
 // LOS folder
 import { tokensOverlap } from "./util.js";
 
 // Viewpoint algorithms.
+import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PointsViewpoint } from "./PointsViewpoint.js";
 import { GeometricViewpoint } from "./GeometricViewpoint.js";
@@ -24,10 +21,6 @@ import { PIXIViewpoint } from "./PIXIViewpoint.js";
 import { Hybrid3dViewpoint } from "./Hybrid3dViewpoint.js";
 import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
 import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
-
-// Debug
-import { Draw } from "../geometry/Draw.js";
-
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -44,103 +37,185 @@ import { Draw } from "../geometry/Draw.js";
  */
 
 /**
+ * @typedef {object} ViewpointConfig    Configuration settings passed to viewpoints
+ *
+
+/**
  * @typedef {object} ViewerLOSConfig  Configuration settings for this class.
- * @property {CONST.WALL_RESTRICTION_TYPES} type    Type of source (light, sight, etc.)
+ * @property {CONST.WALL_RESTRICTION_TYPES} senseType    Type of source (light, sight, etc.)
  * @property {BlockingConfig} blocking              Do various canvas objects block?
- * @property {Point3d} visionOffset                 Offset delta from the viewer center for vision point
  * @property {boolean} largeTarget                  Use special handling for targets larger than grid square
  * @property {number} threshold                     Numeric threshold for determining LOS from percent visible
- * @property {PIXI.Polygon} visibleTargetShape      Portion of the token shape that is visible
  * @property {boolean} useLitTargetShape            Should the illuminated target shape be used?
- * @property {Settings.KEYS.POINT_TYPES} viewerPoints   Algorithm defining the viewer viewpoints
- * @property {class} viewpointClass                 Class of the viewpoints
  */
 export class AbstractViewerLOS {
   /** @type {enum<string>} */
-  static get POINT_TYPES() { return Settings.KEYS.POINT_TYPES; }
-
-  /** @type {enum<class>} */
-  static VIEWPOINT_CLASSES = {
-    "los-points": PointsViewpoint,
-    "los-area-3d": GeometricViewpoint,
-    "los-area-3d-geometric": GeometricViewpoint,
-    "los-area-3d-webgl2": PIXIViewpoint,
-    "los-area-3d-hybrid": Hybrid3dViewpoint,
-    "los-webgl2": WebGL2Viewpoint,
-    "los-webgpu": WebGPUViewpoint,
-    "los-webgpu-async": WebGPUViewpointAsync,
+  static POINT_TYPES = {
+    CENTER: "points-center",
+    TWO: "points-two",
+    THREE: "points-three", //
+    FOUR: "points-four", // Five without center
+    FIVE: "points-five", // Corners + center
+    EIGHT: "points-eight", // Nine without center
+    NINE: "points-nine" // Corners, midpoints, center
   };
 
-  /** @type {ViewerLOSConfig} */
-  config = {};
+  /** @type {enum<class>} */
+  static get VIEWPOINT_CLASSES() { // Cannot access PointsViewpoint, others, before initialization. So use a getter.
+    return {
+      "los-points": PointsViewpoint,
+      "los-area-3d": GeometricViewpoint,
+      "los-area-3d-geometric": GeometricViewpoint,
+      "los-area-3d-webgl2": PIXIViewpoint,
+      "los-area-3d-hybrid": Hybrid3dViewpoint,
+      "los-webgl2": WebGL2Viewpoint,
+      "los-webgpu": WebGPUViewpoint,
+      "los-webgpu-async": WebGPUViewpointAsync,
+      points: PointsViewpoint,
+      geometric: GeometricViewpoint,
+      PIXI: PIXIViewpoint,
+      hybrid: Hybrid3dViewpoint,
+      webGL2: WebGL2Viewpoint,
+      webGPU: WebGPUViewpoint,
+      webGPUAsync: WebGPUViewpointAsync,
+    }
+  };
 
-  /** @type {AbstractViewpoint} */
-  viewpoints = [];
+  static NUM_VIEWPOINTS_OPTIONS = new Set([
+    this.POINT_TYPES.CENTER,
+    this.POINT_TYPES.TWO,
+    this.POINT_TYPES.THREE,
+    this.POINT_TYPES.FOUR,
+    this.POINT_TYPES.FIVE,
+    this.POINT_TYPES.EIGHT,
+    this.POINT_TYPES.NINE,
+  ]);
+
+  /** @type {enum<string>} */
+  static NUM_VIEWPOINTS = {
+    1: this.POINT_TYPES.CENTER,
+    2: this.POINT_TYPES.TWO,
+    3: this.POINT_TYPES.THREE,
+    4: this.POINT_TYPES.FOUR,
+    5: this.POINT_TYPES.FIVE,
+    8: this.POINT_TYPES.EIGHT,
+    9: this.POINT_TYPES.NINE,
+    ...this.POINT_TYPES,
+  };
+
+  static defaultConfiguration = {
+    // Viewpoint configuration
+    viewpointClass: AbstractViewpoint,
+    numViewpoints: this.POINT_TYPES.CENTER,
+    viewpointOffset: 0,
+
+    // Other configs used in AbstractViewerLOS
+    useLitTargetShape: false,
+    threshold: 0.75, // Percent used for LOS
+  }
 
   /**
    * @param {Token} viewer      The token whose LOS should be tested
+   * @param {object} [opts]
+   * @param {VIEWPOINT_CLASSES|class} [opts.viewpointClass]   Class of the viewpoint algorithm
+   * @param {number|string} [opts.numViewpoints]              Number of viewpoints or associated algorithm
+   * @param {number} [opts.viewpointOffset]                   Used to adjust the viewpoint location
+   * @param {WALL_RESTRICTION_TYPES} [opts.senseType]         What type of walls block this viewer (e.g., sight, light)
+   * @param {object} [...cfg]                                 Other options
    */
-  constructor(viewer, cfg) {
-    this.config = this.initializeConfig(cfg);
-    this.viewer = viewer;
+  constructor(viewer, cfg = {}) {
+    // First merge in the default configuration, overriding where appropriate.
+    const tmp = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false })
+    this._config = cfg; // Link the configuration object.
+    this.config = tmp; // Update in place with the merged configuration file.
+
+    this.viewer = viewer; // Must happen after configuration is set.
   }
+
+
+  /** @type {ViewerLOSConfig} */
+  get config() { return this._config; }
+
+  set config(cfg = {}) {
+    this.constructor.verifyConfiguration(cfg);
+
+    // If viewpointKey is included, set the calculator and viewpoint class.
+    const rebuildViewpoints = Object.hasOwn(cfg, "viewpointKey", "viewpointClass", "numViewpoints", "viewpointOffset");
+    let rebuildCalculator = false;
+    if ( cfg.viewpointKey ) {
+      if ( cfg.viewpointKey instanceof PercentVisibleCalculatorAbstract ) {
+        this.#calculator = cfg.viewpointKey;
+        cfg.viewpointClass = cfg.viewpointKey.constructor.viewpointClass;
+      } else {
+        cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[cfg.viewpointKey] || cfg.viewpointKey;
+        rebuildCalculator = true;
+        // NOTE: Calc must later be initialized.
+      }
+      delete cfg.viewpointKey;
+    }
+
+    foundry.utils.mergeObject(this._config, cfg, { inplace: true });
+    if ( rebuildCalculator ) this.#calculator = new cfg.viewpointClass.calcClass(this._config);
+    if ( rebuildViewpoints ) this.#initializeViewpoints();
+  }
+
+  static verifyConfiguration(cfg) {
+    if ( Object.hasOwn(cfg, "threshold") && !cfg.threshold.between(0, 1) ) {
+      console.error(`${this.constructor.name}|Threshold configuration ${cfg.threshold} not recognized.`);
+    }
+
+    if ( Object.hasOwn(cfg, "senseType") && !CONST.WALL_RESTRICTION_TYPES.some(elem => elem === cfg.senseType) ) {
+      console.error(`${this.constructor.name}|Sense type configuration ${cfg.senseType} not recognized.`);
+    }
+
+    if ( Object.hasOwn(cfg, "numViewpoints") ) {
+      cfg.numViewpoints = this.NUM_VIEWPOINTS[cfg.numViewpoints] || cfg.numViewpoints;
+      if ( !this.NUM_VIEWPOINTS_OPTIONS.has(cfg.numViewpoints) ) {
+        console.error(`${this.constructor.name}|Number of viewpoint configuration ${cfg.numViewpoints} not recognized.`);
+      }
+    }
+    if ( Object.hasOwn(cfg, "viewpointClass") ) cfg.viewpointClass = this.VIEWPOINT_CLASSES[cfg.viewpointClass] || cfg.viewpointClass;
+  }
+
+  async initialize() { return this.calculator.initialize(); }
 
   /**
    * Sets configuration to the current settings.
    * @param {ViewerLOSConfig} [cfg]
    * @returns {ViewerLOSConfig}
    */
-  initializeConfig(cfg = {}) {
-    const KEYS = Settings.KEYS;
+//   initializeConfig(cfg = {}) {
+//     const KEYS = Settings.KEYS;
+//
+//     // Basic configs.
+//     cfg.type ??= "sight";
+//     cfg.useLitTargetShape ??= true;
+//     cfg.threshold ??= Settings.get(KEYS.LOS.TARGET.PERCENT);
+//     cfg.largeTarget ??= Settings.get(KEYS.LOS.TARGET.LARGE);
+//     cfg.debug ??= Settings.get(KEYS.DEBUG.LOS);
+//     cfg.debugDraw ??= new CONFIG.GeometryLib.Draw();
+//
+//     // Blocking canvas objects.
+//     cfg.blocking ??= {};
+//     cfg.blocking.walls ??= true;
+//     cfg.blocking.tiles ??= true;
+//
+//     // Blocking tokens.
+//     cfg.blocking.tokens ??= {};
+//     cfg.blocking.tokens.dead ??= Settings.get(KEYS.DEAD_TOKENS_BLOCK);
+//     cfg.blocking.tokens.live ??= Settings.get(KEYS.LIVE_TOKENS_BLOCK);
+//     cfg.blocking.tokens.prone ??= Settings.get(KEYS.PRONE_TOKENS_BLOCK);
+//
+//     // Viewpoints.
+//     cfg.viewerPoints = Settings.get(KEYS.LOS.VIEWER.NUM_POINTS);
+//     cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[Settings.get(KEYS.LOS.TARGET.ALGORITHM)]
+//       ?? AbstractViewpoint;
+//
+//     return cfg;
+//   }
 
-    // Basic configs.
-    cfg.type ??= "sight";
-    cfg.useLitTargetShape ??= true;
-    cfg.threshold ??= Settings.get(KEYS.LOS.TARGET.PERCENT);
-    cfg.largeTarget ??= Settings.get(KEYS.LOS.TARGET.LARGE);
-    cfg.debug ??= Settings.get(KEYS.DEBUG.LOS);
-    cfg.debugDraw ??= new CONFIG.GeometryLib.Draw();
 
-    // Blocking canvas objects.
-    cfg.blocking ??= {};
-    cfg.blocking.walls ??= true;
-    cfg.blocking.tiles ??= true;
-
-    // Blocking tokens.
-    cfg.blocking.tokens ??= {};
-    cfg.blocking.tokens.dead ??= Settings.get(KEYS.DEAD_TOKENS_BLOCK);
-    cfg.blocking.tokens.live ??= Settings.get(KEYS.LIVE_TOKENS_BLOCK);
-    cfg.blocking.tokens.prone ??= Settings.get(KEYS.PRONE_TOKENS_BLOCK);
-
-    // Viewpoints.
-    cfg.viewerPoints = Settings.get(KEYS.LOS.VIEWER.NUM_POINTS);
-    cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[Settings.get(KEYS.LOS.TARGET.ALGORITHM)]
-      ?? AbstractViewpoint;
-
-    return cfg;
-  }
-
-  /**
-   * Determine the viewpoints for this viewer.
-   * @returns {Point3d[]}
-   */
-  initializeViewpoints() {
-    const cl = this.config.viewpointClass;
-    return AbstractViewpoint.constructTokenPoints(this.viewer, {
-      pointAlgorithm: this.config.viewerPoints,
-      inset: this.config.inset
-    }).map(pt => new cl(this, pt));
-  }
-
-  /**
-   * Update the viewpoint class.
-   * Resets the viewpoints to the new algorithm.
-   * @param {Settings.KEYS.LOS.TARGET.TYPES} alg
-   */
-  _updateAlgorithm(alg) {
-    this.config.viewpointClass = this.constructor.VIEWPOINT_CLASSES[alg] ?? AbstractViewpoint;
-    this.viewpoints = this.initializeViewpoints();
-  }
+  // ----- NOTE: Viewer ----- //
 
   /** @type {Point3d} */
   get center() { return this.viewer ? CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.viewer) : undefined; }
@@ -157,10 +232,34 @@ export class AbstractViewerLOS {
   get viewer() { return this.#viewer; }
 
   set viewer(value) {
+    if ( this.#viewer === value ) return;
     this.#viewer = value;
-    this.clearCache();
-    this.viewpoints = this.initializeViewpoints();
+    this.#initializeViewpoints();
   }
+
+  // ----- NOTE: Viewpoints ----- //
+
+  /** @type {AbstractViewpoint} */
+  viewpoints = [];
+
+  #calculator;
+
+  get calculator() { return this.#calculator; }
+
+  /**
+   * Determine the viewpoints for this viewer.
+   * @returns {Point3d[]}
+   */
+  #initializeViewpoints() {
+    if ( !this.viewer ) return;
+    const cl = this.config.viewpointClass;
+    this.viewpoints = AbstractViewpoint.constructTokenPoints(this.viewer, {
+      pointAlgorithm: this.config.numViewpoints,
+      inset: this.config.viewpointOffset
+    }).map(pt => new cl(this, pt));
+  }
+
+  // ----- NOTE: Target ---- //
 
   /**
    * A token that is being tested for whether it is "viewable" from the point of view of the viewer.
@@ -176,7 +275,6 @@ export class AbstractViewerLOS {
 
   set target(value) {
     this.#target = value;
-    this.clearCache();
   }
 
   /** @type {Point3d} */
@@ -184,25 +282,10 @@ export class AbstractViewerLOS {
     return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target);
   }
 
-  /**
-   * The target shape, constrained by overlapping walls and (if `useLitTargetShape`) overlapping lights.
-   * @type {PIXI.Polygon|PIXI.Rectangle|undefined}
-   */
-  #visibleTargetShape;
-
-  get visibleTargetShape() { return (this.#visibleTargetShape ??= this._calculateVisibleTargetShape(this.target)); }
-
-  _calculateVisibleTargetShape(target) {
-    return this.config.useLitTargetShape
-      ? this._constructLitTargetShape(target) : target.constrainedTokenBorder;
-  }
-
-  /**
-   * Clear cached items that must be reset when the viewpoint or target moves.
-   */
-  clearCache() {
-    this.#visibleTargetShape = undefined;
-    this.viewpoints.forEach(vp => vp.clearCache());
+  get visibleTargetShape() {
+    const target = this.target;
+    if ( !target ) return undefined;
+    return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
   }
 
   /**
@@ -211,7 +294,7 @@ export class AbstractViewerLOS {
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
   _simpleVisibilityTest(target) {
-    this.target = target; // Important so the cache is reset.
+    this.target = target; // Important so the viewpoints know the target.
     const viewer = this.viewer;
 
     // To avoid obvious errors.
@@ -225,9 +308,9 @@ export class AbstractViewerLOS {
 
     // Target is not lit.
     if ( this.config.useLitTargetShape ) {
-      const shape = this.visibleTargetShape;
+      // const shape = this.visibleTargetShape;
+      const shape = target.constrainedTokenBorder;
       if ( !shape ) return 0;
-      if ( shape instanceof PIXI.Polygon && shape.points < 6 ) return 0;
     };
 
     // If all viewpoints are blocked, return 0; if any unblocked, return 1.
@@ -243,7 +326,9 @@ export class AbstractViewerLOS {
   /**
    * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
    * @param {Token} target
-   * @param {number} [threshold]    Percentage to be met to be considered visible
+   * @param {object} [opts]
+   * @param {number} [opts.threshold]    Percentage to be met to be considered visible
+   * @param {}
    * @returns {boolean}
    */
   hasLOS(target, { threshold, callback } = {}) {
@@ -251,7 +336,7 @@ export class AbstractViewerLOS {
     const percent = this.percentVisible(target, callback); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
-    if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
+    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
 
@@ -260,7 +345,7 @@ export class AbstractViewerLOS {
     const percent = await this.percentVisibleAsync(target); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
-    if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
+    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
 
@@ -268,107 +353,41 @@ export class AbstractViewerLOS {
    * Determine percentage of the token visible using the class methodology.
    * @returns {number}
    */
-  percentVisible(target, callback) {
-    this.target = target;  // Important so the cache is reset.
-    const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target, callback);
-    if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
+  percentVisible(target, { stopAtThreshold = true } = {}) {
+    if ( !this.viewer ) return 0;
+    this.target = target;
+    const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target, { stopAtThreshold });
+    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
-  async percentVisibleAsync(target) {
-    this.target = target;  // Important so the cache is reset.
-    const percent = this._simpleVisibilityTest(target) ?? (await this._percentVisibleAsync(target));
-    if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
+  async percentVisibleAsync(target, { stopAtThreshold = true } = {}) {
+    if ( !this.viewer ) return 0;
+    this.target = target;
+    const percent = this._simpleVisibilityTest(target) ?? (await this._percentVisibleAsync(target, { stopAtThreshold }));
+    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
-  _percentVisible(target, callback) {
+  _percentVisible(_target, { stopAtThreshold = true } = {}) {
     let max = 0;
+    const threshold = stopAtThreshold ? this.config.threshold : 1;
     for ( const vp of this.viewpoints ) {
-      max = Math.max(max, vp.percentVisible(callback));
-      if ( max === 1 ) return max;
+      max = Math.max(max, vp.percentVisible());
+      if ( max >= threshold ) return max;
     }
     return max;
   }
 
-  async _percentVisibleAsync(target) {
+  async _percentVisibleAsync(_target, { stopAtThreshold = true } = {}) {
     let max = 0;
+    const threshold = stopAtThreshold ? this.config.threshold : 1;
     for ( const vp of this.viewpoints ) {
       max = Math.max(max, (await vp.percentVisibleAsync()));
-      if ( max === 1 ) return max;
+      if ( max >= threshold ) return max;
     }
     return max;
   }
-
-  /**
-   * Use the lights that overlap the target shape to construct the shape.
-   * @returns {PIXI.Polygon|PIXI.Rectangle|undefined} If no overlap, returns undefined.
-   *   If 2+ lights create holes or multiple polygons, the convex hull is returned.
-   *   (Because cannot currently handle 2+ distinct target shapes.)
-   */
-  _constructLitTargetShape(target) {
-    // TODO: Remove the method; keep only static method.
-    return this.constructor.constructLitTargetShape(target);
-
-  }
-
-  static constructLitTargetShape(target) {
-    const shape = this.constrainTargetShapeWithLights(target);
-    if ( !(shape instanceof CONFIG.GeometryLib.ClipperPaths
-        || shape instanceof CONFIG.GeometryLib.Clipper2Paths) ) return shape;
-
-    // Multiple polygons present. Ignore holes. Return remaining polygon or
-    // construct one from convex hull of remaining polygons.
-    const polys = shape.toPolygons().filter(poly => !poly.isHole);
-    if ( polys.length === 0 ) return undefined;
-    if ( polys.length === 1 ) return polys[0];
-
-    // Construct convex hull.
-    const pts = [];
-    for ( const poly of polys ) pts.push(...poly.iteratePoints({ close: false }));
-    return PIXI.Polygon.convexHull(pts);
-  }
-
-  /**
-   * Take a token and intersects it with a set of lights.
-   * @param {Token} token
-   * @returns {PIXI.Polygon|PIXI.Rectangle|ClipperPaths|undefined}
-   */
-  static constrainTargetShapeWithLights(token) {
-    const tokenBorder = token.constrainedTokenBorder;
-
-    // If the global light source is present, then we can use the whole token.
-    if ( canvas.environment.globalLightSource.active ) return tokenBorder;
-
-    // Cannot really use quadtree b/c it doesn't contain all light sources.
-    const lightShapes = [];
-    for ( const light of canvas.effects.lightSources.values() ) {
-      const lightShape = light.shape;
-      if ( !light.active || lightShape.points < 6 ) continue; // Avoid disabled or broken lights.
-
-      // If a light envelops the token shape, then we can use the entire token shape.
-      if ( lightShape.envelops(tokenBorder) ) return tokenBorder;
-
-      // If the token overlaps the light, then we may need to intersect the shape.
-      if ( tokenBorder.overlaps(lightShape) ) lightShapes.push(lightShape);
-    }
-    if ( !lightShapes.length ) return undefined;
-
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
-    const combined = ClipperPaths.fromPolygons(lightShapes)
-      .combine()
-      .intersectPaths(ClipperPaths.fromPolygons([tokenBorder.toPolygon()]))
-      .clean()
-      .simplify();
-    return combined;
-  }
-
-  /** @type {enum} */
-  static TARGET_WITHIN_ANGLE = {
-    OUTSIDE: 0,
-    INSIDE: 1,
-    INTERSECTS: 2
-  };
 
   /**
    * Test if any part of the target is within the limited angle vision of the token.
@@ -411,7 +430,7 @@ export class AbstractViewerLOS {
 
     // TODO: Would it be more performant to assign an angle to each target point?
     // Or maybe just check orientation of ray to each point?
-    const edges = this.visibleTargetShape.toPolygon().iterateEdges();
+    const edges = targetShape.toPolygon().iterateEdges();
     for ( const edge of edges ) {
       if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return 2;
       if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return 2;
@@ -430,28 +449,24 @@ export class AbstractViewerLOS {
     this.#viewer = undefined;
     this.viewpoints.forEach(vp => vp.destroy());
     this.viewpoints.length = 0;
+
+    // DO NOT destroy calculator, as that depends on whether the calculator was a one-off.
   }
 
   /* ----- NOTE: Debug ----- */
 
-  clearDebug() {
-    if ( !this.config.debugDraw ) return;
-    this.config.debugDraw.clear();
-  }
+//   clearDebug() {
+//     if ( !this.config.debugDraw ) return;
+//     this.config.debugDraw.clear();
+//   }
 
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
-   * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawCanvasDebug() {
-    const draw = this.config.debugDraw;
-    this._drawVisibleTokenBorder();
-    this.viewpoints.forEach(vp => {
-      // vp._drawLineOfSight(draw);
-      // vp._drawVisionTriangle(draw);
-      vp._drawDetectedObjects(draw);
-    });
+  _drawCanvasDebug(draw) {
+    this._drawVisibleTokenBorder(draw);
+    this.viewpoints.forEach(vp => vp._drawCanvasDebug(draw));
   }
 
   /**
@@ -459,15 +474,15 @@ export class AbstractViewerLOS {
    * Draw the constrained token border and visible shape, if any.
    * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
-  _drawVisibleTokenBorder() {
-    const draw = this.config.debugDraw;
-    let color = Draw.COLORS.blue;
+  _drawVisibleTokenBorder(draw) {
+    const { blue, yellow } = CONFIG.GeometryLib.Draw.COLORS;
+    let color = blue;
 
     // Fill in the constrained border on canvas
     draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
 
     // Separately fill in the visible target shape
-    if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color: Draw.COLORS.yellow });
-    console.log("Drawing visible token border.")
+    if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color: yellow });
+    // console.log("Drawing visible token border.")
   }
 }

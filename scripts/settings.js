@@ -11,7 +11,7 @@ import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { registerArea3d } from "./patching.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { buildLOSCalculator } from "./LOSCalculator.js";
+import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
 import { DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
 import { DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
 import { DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
@@ -47,15 +47,7 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
   SUBMENU: "submenu",
-  POINT_TYPES: {
-    CENTER: "points-center",
-    TWO: "points-two",
-    THREE: "points-three", //
-    FOUR: "points-four", // Five without center
-    FIVE: "points-five", // Corners + center
-    EIGHT: "points-eight", // Nine without center
-    NINE: "points-nine" // Corners, midpoints, center
-  },
+  POINT_TYPES: AbstractViewerLOS.POINT_TYPES,
 
   RANGE: {
     ALGORITHM: "range-algorithm",
@@ -301,7 +293,8 @@ export class Settings extends ModuleSettingsAbstract {
       type: String,
       choices: ptChoices,
       default: PT_TYPES.CENTER,
-      tab: "losViewer"
+      tab: "losViewer",
+      onChange: value => this.losViewpointChange(VIEWER.NUM_POINTS, value)
     });
 
     register(VIEWER.INSET, {
@@ -316,7 +309,8 @@ export class Settings extends ModuleSettingsAbstract {
       config: false,
       default: 0.75,
       type: Number,
-      tab: "losViewer"
+      tab: "losViewer",
+      onChange: value => this.losViewpointChange(VIEWER.INSET, value)
     });
 
     // ----- NOTE: Line-of-sight target tab ----- //
@@ -341,7 +335,7 @@ export class Settings extends ModuleSettingsAbstract {
       choices: losChoices,
       default: LTYPES.NINE,
       tab: "losTarget",
-      onChange: value => this.losAlgorithmChange(TARGET.ALGORITHM, value)
+      onChange: value => this.losViewpointChange(TARGET.ALGORITHM, value)
     });
 
     register(TARGET.PERCENT, {
@@ -553,30 +547,51 @@ export class Settings extends ModuleSettingsAbstract {
     SETTINGS.LOS.TARGET.TYPES.WEBGL2,
     SETTINGS.LOS.TARGET.TYPES.WEBGPU,
     SETTINGS.LOS.TARGET.TYPES.WEBGPU_ASYNC,
-  ])
+  ]);
 
-  static losAlgorithmChange(key, value) {
+  static losViewpointChange(key, value) {
     this.cache.delete(key);
-    if ( this.typesWebGL2.has(value) ) registerArea3d();
+    const config = { [configKeyForSetting[key]]: value };
     canvas.tokens.placeables.forEach(token => {
-      if ( !token.vision ) return;
-      const obj = token.vision[MODULE_ID] ??= {};
-      obj.losCalc?.destroy();
-      obj.losCalc = buildLOSCalculator(token);
+      const obj = token.vision?.[MODULE_ID];
+      if ( !obj ) return;
+      obj.losCalc.setViewpointClass(config);
     });
 
     // Start up a new debug viewer.
-    if ( this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
+    if ( this.get(this.KEYS.DEBUG.LOS)
+      && key === SETTINGS.LOS.TARGET.ALGORITHM ) this.initializeDebugViewer(value);
   }
 
   static losSettingChange(key, value) {
     this.cache.delete(key);
+    const config = { [configKeyForSetting[key]]: value };
     canvas.tokens.placeables.forEach(token => {
       const calc = token.vision?.[MODULE_ID]?.losCalc;
       if ( !calc ) return;
-      calc.config[key] = value;
+      calc.config = config;
     });
   }
+}
+
+const configKeyForSetting = {
+  [SETTINGS.LOS.TARGET.LARGE]: "largeTarget",
+  [SETTINGS.LOS.TARGET.PERCENT]: "threshold",
+
+  // Viewpoints.
+  [SETTINGS.LOS.TARGET.ALGORITHM]: "viewpointClass",
+  [SETTINGS.LOS.VIEWER.NUM_POINTS]: "numViewpoints",
+  [SETTINGS.LOS.VIEWER.INSET]: "viewpointOffset",
+
+  // Points viewpoints.
+  [SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS]: "pointAlgorithm",
+  [SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET]: "targetInset",
+  [SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS3D]: "points3d",
+
+  // Blocking
+  [SETTINGS.LIVE_TOKENS_BLOCK]: "blocking.tokens.live",
+  [SETTINGS.DEAD_TOKENS_BLOCK]: "blocking.tokens.dead",
+  [SETTINGS.PRONE_TOKENS_BLOCK]: "blocking.tokens.prone",
 }
 
 const ALG_SYMBOLS = {};

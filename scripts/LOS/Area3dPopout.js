@@ -52,15 +52,15 @@ export class Area3dPopout extends Application {
   async _render(force=false, options={}) {
     await super._render(force, options);
     const pixiApp = this.pixiApp = new PIXI.Application({
-      width: 400,
-      height: 400,
+      width: this.options.width,
+      height: this.options.height - 75, // Leave space at bottom for text (percent visibility).
       view: document.getElementById(`${this.id}_canvas`),
       backgroundColor: 0xD3D3D3
     });
 
     // Center of window should be 0,0
-    pixiApp.stage.position.x = 200;  // 200 for width 400
-    pixiApp.stage.position.y = 200;  // 200 for height 400
+    pixiApp.stage.position.x = this.options.width * 0.5;  // 200 for width 400
+    pixiApp.stage.position.y = (this.options.height - 75) * 0.5;  // 200 for height 400
 
     // Scale to give a bit more room in the popout
     pixiApp.stage.scale.x = 1;
@@ -83,7 +83,7 @@ export class Area3dPopout extends Application {
   close() {
     this.#savedTop = this.position.top;
     this.#savedLeft = this.position.left;
-    if ( !this.closing && this.pixiApp ) this.pixiApp.destroy();
+    if ( !this.closing && this.pixiApp & this.pixiApp.renderer ) this.pixiApp.destroy();
     super.close();
     OPEN_POPOUTS.delete(this);
   }

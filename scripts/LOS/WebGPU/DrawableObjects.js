@@ -4,17 +4,16 @@ CONFIG,
 CONST,
 foundry,
 Hooks,
-Wall,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, MODULES_ACTIVE } from "../../const.js";
-import { combineTypedArrays, tokensOverlap } from "../util.js";
+import { combineTypedArrays } from "../util.js";
+import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryHexTokenShapesDesc } from "./GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc, GeometryHexTokenShapesDesc } from "./GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
 import {
   WallInstanceHandler,
@@ -207,6 +206,7 @@ class DrawableObjectsAbstract {
 
     // Define shader and pipeline.
     const debugViewNormals = this.debugViewNormals;
+    if ( this.module ) this.module.destroy();
     this.module = await WebGPUShader.fromGLSLFile(device, this.constructor.shaderFile, `${this.constructor.name} Shader`, { debugViewNormals });
     this._createPipeline();
 
@@ -677,6 +677,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   constructor(device, materials, camera, { senseType = "sight", ...opts } = {}) {
     super(device, materials, camera, opts);
     this.senseType = senseType;
+    this.placeableHandler.senseType = senseType;
   }
 
   /**
@@ -744,12 +745,11 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     if ( !blocking.walls ) return;
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
+    const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       // If the edge is an open door or non-blocking wall, ignore.
-      if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
+      if ( !edges.has(edge) ) continue;
       if ( !this.includeEdge(edge) ) continue;
-      if ( !WallInstanceHandler.isBlocking(edge, this.senseType) ) continue;
-      if ( !visionTriangle.containsEdge(edge) ) continue;
 
       // Add this edge to the drawable set.
       const key = this.edgeDrawableKey(edge);
@@ -758,7 +758,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     super.filterObjects(visionTriangle);
   }
 
-  includeEdge(edge) { return true; }
+  includeEdge(_edge) { return true; }
 
   registerPlaceableHooks() {
     this._hooks.push({ name: "createWall", id: Hooks.on("createWall", this._onPlaceableCreation.bind(this)) });
@@ -800,6 +800,16 @@ export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
   /** @type {WallInstanceHandler} */
   static handlerClass = NonTerrainWallInstanceHandler;
 
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; }
+
+  set senseType(value) {
+    this.#senseType = value;
+    if ( this.instanceHandler ) this.instanceHandler.senseType = value;
+  }
+
   /**
    * Insert drawables that rarely change into the drawables map.
    */
@@ -827,6 +837,16 @@ export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
 export class DrawableTerrainWallInstances extends DrawableWallInstances {
   /** @type {WallInstanceHandler} */
   static handlerClass = TerrainWallInstanceHandler;
+
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; }
+
+  set senseType(value) {
+    this.#senseType = value;
+    if ( this.instanceHandler ) this.instanceHandler.senseType = value;
+  }
 
   /**
    * Insert drawables that rarely change into the drawables map.
@@ -953,18 +973,10 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const api = MODULES_ACTIVE.API.RIDEABLE;
+      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+        { viewer, target, blockingTokensOpts: blocking.tokens });
       for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
-        if ( token === viewer || token === target ) continue;
-        if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
-
-        // Filter tokens that directly overlaps the viewer.
-        if ( tokensOverlap(token, viewer) ) continue;
-
-        // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
-        if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
-
-        if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
+        if ( tokens.has(token) ) drawable.instanceSet.add(idx);
       }
     }
 
@@ -979,13 +991,6 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
     }
     super.filterObjects(visionTriangle);
-  }
-
-  static includeToken(token, { dead = true, live = true, prone =  true } = {}) {
-    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
-    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
-    if ( !prone && token.isProne ) return false;
-    return true;
   }
 
   _createPipeline() {
@@ -1119,25 +1124,18 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const api = MODULES_ACTIVE.API.RIDEABLE;
+      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+        { viewer, target, blockingTokensOpts: blocking.tokens })
       for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
-        if ( token === viewer || token === target ) continue;
+        // Only tokens within the viewable area.
+        if ( !tokens.has(token) ) continue;
 
         // Determine which hex geometry this token uses.
         const key = `${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`;
         const drawable = this.drawables.get(key);
         if ( !drawable ) continue; // Uneven tokens or unknown handled by constrained token shape.
 
-        if ( !DrawableTokenInstances.includeToken(token, blocking.tokens) ) continue;
-
-        // Filter tokens that directly overlaps the viewer.
-        if ( tokensOverlap(token, viewer) ) continue;
-
-        // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
-        if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
-
-        // Only tokens within the viewable area.
-        if ( visionTriangle.containsToken(token) ) drawable.instanceSet.add(idx);
+        drawable.instanceSet.add(idx);
       }
     }
 
@@ -1340,9 +1338,15 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
   filterObjects(visionTriangle, { blocking = {} } = {}) {
     // Filter non-viewable tiles.
     blocking.tiles ??= true;
+    if ( !blocking.tiles ) {
+      this.drawables.forEach(drawable => drawable.numInstances = 0);
+      return;
+    }
+
+    const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle)
     for ( const tile of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       const drawable = this.drawables.get(tile.id);
-      drawable.numInstances = Boolean(blocking.tiles && visionTriangle.containsTile(tile));
+      drawable.numInstances = Boolean(tiles.has(tile));
     }
     super.filterObjects(visionTriangle);
   }
@@ -1414,65 +1418,18 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
-    blocking.tokens ??= {};
-    blocking.tokens.dead ??= true;
-    blocking.tokens.live ??= true;
-    blocking.tokens.prone ??= true;
-
-    const api = MODULES_ACTIVE.API.RIDEABLE;
-    for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      const drawable = this.drawables.get(token.id);
-      if ( !drawable ) continue;
-      drawable.numInstances = 0; // Default to not drawing this token.
-      if ( token === viewer || token === target ) continue;
-      if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
-
-      // Filter tokens that directly overlaps the viewer.
-      if ( tokensOverlap(token, viewer) ) continue;
-
-      // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
-      if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
-
-      // Filter out basic hex shapes; rendered using instancing.
-      if ( canvas.grid.isHexagonal
-        && token.document.width === token.document.height
-        && DrawableHexTokenInstances.HEX_SIZES.has(token.document.width) ) continue;
-
-      drawable.numInstances = Number(visionTriangle.containsToken(token));
-    }
+  filterObjects(visionTriangle, { target, useLitTargetShape = false } = {}) {
+    // Only draw target as lit.
+    this.drawables.forEach(drawable => drawable.numInstances = 0);
 
     // Set material for target and set it to be drawn.
-    if ( target && this.drawables.has(target.id) ) {
+    if ( target && this.drawables.has(target.id)
+      && (!useLitTargetShape || target.constrainedTokenBorder.equals(target.litTokenBorder)) ) {
       const drawable = this.drawables.get(target.id);
       drawable.numInstances = 1;
       drawable.materialBG = this.materials.bindGroups.get("target");
     }
   }
-
-  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
-    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
-    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
-    if ( !prone && token.isProne ) return false;
-    return true;
-  }
-
-  /**
-   * Called after the render pass has ended for this render object (at given viewpoint, target).
-   * @param {object} [opts]
-   */
-//   _postRenderPass({ viewer, target } = {}) {
-//     // Reset viewer and target in the drawables.
-//     if ( viewer && this.drawables.has(viewer.id) ) {
-//       const drawable = this.drawables.get(viewer.id);
-//       drawable.numInstances = 1;
-//     }
-//
-//     if ( target && this.drawables.has(target.id) ) {
-//       const drawable = this.drawables.get(target.id);
-//       drawable.materialBG = this.materials.bindGroups.get("obstacles");
-//     }
-//   }
 
   _createPipeline() {
     super._createPipeline();
@@ -1526,5 +1483,80 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     this._hooks.push({ name: "drawToken", id: Hooks.on("drawToken", this._onPlaceableDraw.bind(this)) });
     this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
     this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
+  }
+}
+
+// Handle lit tokens and the target token in red.
+export class DrawableLitTokens extends DrawableConstrainedTokens {
+
+  prerender() {
+    DrawableObjectsAbstract.prototype.prerender.call(this);
+
+    // Create a geometry for each constrained token.
+    this.geometries.clear();
+    this.drawables.clear();
+    const materialBG = this.materials.bindGroups.get("obstacle");
+    const numInstances = 1;
+    for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      if ( token.constrainedTokenBorder.equals(token.litTokenBorder) ) continue;
+
+      // Translate so that instance matrix does not need to be applied.
+      const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      const geom = new GeometryLitTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false, x, y, z })
+      this.geometries.set(token.id, geom);
+      this.drawables.set(token.id, {
+        label: `Token drawable ${token.id}`,
+        geom,
+        materialBG,
+        numInstances,
+      });
+    }
+    this._setStaticGeometriesBuffers();
+  }
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   */
+  filterObjects(visionTriangle, { viewer, target, blocking = {}, useLitTargetShape = true } = {}) {
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
+
+    if ( useLitTargetShape && (blocking.tokens.live || blocking.tokens.dead) ) {
+      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+        { viewer, target, blockingTokenOpts: blocking.tokens });
+      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+        const drawable = this.drawables.get(token.id);
+        if ( !drawable ) continue;
+        drawable.numInstances = 0; // Default to not drawing this token.
+
+        if ( target.constrainedTokenBorder.equals(target.litTokenBorder) ) continue;
+
+        // Filter out basic hex shapes; rendered using instancing.
+        if ( canvas.grid.isHexagonal
+          && token.document.width === token.document.height
+          && DrawableHexTokenInstances.HEX_SIZES.has(token.document.width) ) continue;
+
+        drawable.numInstances = Number(tokens.has(token));
+      }
+    } else this.drawables.forEach(drawable => drawable.numInstances = 0);
+
+    // Set material for target and set it to be drawn.
+    if ( useLitTargetShape
+      && target
+      && this.drawables.has(target.id)
+      && !target.constrainedTokenBorder.equals(target.litTokenBorder) ) {
+
+      const drawable = this.drawables.get(target.id);
+      drawable.numInstances = 1;
+      drawable.materialBG = this.materials.bindGroups.get("target");
+    }
   }
 }

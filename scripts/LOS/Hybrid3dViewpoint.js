@@ -15,10 +15,11 @@ import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 
 // Debug
 export class Hybrid3dViewpoint extends GeometricViewpoint {
-  calc = CONFIG[MODULE_ID].sightCalculators.hybrid;
+  static get calcClass() { return PercentVisibleCalculatorHybrid; }
 }
 
 export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeometric {
+  static get viewpointClass() { return HybridViewpoint; }
 
   /** @type {PercentVisibleCalculatorAbstract} */
   tileCalc = CONFIG[MODULE_ID].sightCalculators.webGL2;
@@ -27,7 +28,7 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
 
   blockingTiles(viewerLocation, target) {
     const visionTri = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
-    return AbstractViewpoint.filterTilesByVisionTriangle(visionTri, { senseType: this.senseType });
+    return AbstractViewpoint.filterTilesByVisionTriangle(visionTri, { senseType: this.config.senseType });
   }
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
@@ -46,6 +47,8 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
 }
 
 export class DebugVisibilityViewerHybrid extends DebugVisibilityViewerArea3dPIXI {
+  static viewpointClass = Hybrid3dViewpoint;
+
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID;
 
   /**

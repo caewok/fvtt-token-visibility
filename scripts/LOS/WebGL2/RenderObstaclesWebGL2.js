@@ -91,20 +91,26 @@ export class RenderObstaclesAbstractWebGL2 {
   }
 
   /** @type {ViewerLOSConfig} */
-  config = {
-    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE),
-    useLitTargetShape: true,
-    visibleTargetShape: null,
+  _config = {
     blocking: {
       walls: true,
       tiles: true,
       tokens: {
-        dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
-        live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
-        prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
+        dead: true,
+        live: true,
+        prone: true,
       }
-    }
-  };
+    },
+    debug: false,
+    useLitTargetShape: false,
+    largeTarget: false,
+  }
+
+  get config() { return this._config; }
+
+  set config(cfg = {}) {
+    foundry.utils.mergeObject(this._config, cfg);
+  }
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -114,14 +120,18 @@ export class RenderObstaclesAbstractWebGL2 {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
   }
 
-  render(viewerLocation, target, { viewer, targetLocation } = {}) {
+  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     const opts = { viewer, target, blocking: this.config.blocking };
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
     this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
-    renderFn.call(this, target, viewer, visionTriangle);
+
+    // See https://webgl2fundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
+    // Ignore dpr.
+    frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+    renderFn.call(this, target, viewer, visionTriangle, frame, clear);
   }
 
   /**
@@ -130,13 +140,14 @@ export class RenderObstaclesAbstractWebGL2 {
    * Obstacles are rendered into the blue channel.
    * Terrain is rendered into the green channel at 50%, such that 2+ terrain === full green.
    */
-  _renderColorCoded(target, viewer, visionTriangle) {
+  _renderColorCoded(target, viewer, visionTriangle, frame, clear = true) {
     const gl = this.gl;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
+    gl.viewport(frame.x, frame.y, frame.width, frame.height);
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     // gl.cullFace(gl.FRONT);
@@ -171,13 +182,14 @@ export class RenderObstaclesAbstractWebGL2 {
   /**
    * Render the scene in a manner that makes sense for a human viewer.
    */
-  _renderDebug(target, viewer, visionTriangle) {
+  _renderDebug(target, viewer, visionTriangle, frame, clear = true) {
     const gl = this.gl;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
+    // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
+    gl.viewport(frame.x, frame.y, frame.width, frame.height)
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     // gl.cullFace(gl.FRONT);
@@ -215,11 +227,26 @@ export class RenderObstaclesAbstractWebGL2 {
     const camera = this.camera;
     camera.cameraPosition = viewerLocation;
     camera.targetPosition = targetLocation;
+
+    /*
+    camera.perspectiveParameters = {
+      fov: Math.toRadians(90),
+      aspect: 1,
+      zNear: 1,
+      zFar: Infinity,
+    };
+    */
+
+
     camera.setTargetTokenFrustrum(target);
+
+    /*
     camera.perspectiveParameters = {
       fov: camera.perspectiveParameters.fov * 2,
       zFar: Infinity, // camera.perspectiveParameters.zFar + 50
     };
+    */
+
     camera.refresh();
   }
 

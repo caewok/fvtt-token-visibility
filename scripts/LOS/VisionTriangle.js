@@ -15,7 +15,7 @@ import { Draw } from "../geometry/Draw.js";
 
 /**
  * The viewable area between viewer and target.
- * Triangle
+ * TODO: Could make this a pyramid, containing four Triangle3d with a rectangle3d base.
  *
  */
 export class VisionTriangle {
@@ -175,8 +175,9 @@ export class VisionTriangle {
     return (oAB * oCA >= 0)
   }
 
-  draw(opts = {}) {
-    Draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
+  draw({ draw, ...opts } = {}) {
+    draw ??= new CONFIG.GeometryLib.Draw;
+    draw.shape(new PIXI.Polygon(this.a, this.b, this.c), opts)
   }
 
   containsEdge(edge) {
@@ -277,17 +278,25 @@ export class VisionTriangle {
       || tBounds.lineSegmentIntersects(this.a, this.c, { inside: true });
   }
 
+  /**
+   * Boundary rectangle that extends from the viewpoint beyond the edge of the canvas.
+   * @returns {PIXI.Rectangle}
+   */
   backgroundBounds() {
     const a = this.a;
     const { b, c } = this.infinitePoints();
     const xMinMax = Math.minMax(a.x, b.x, c.x);
     const yMinMax = Math.minMax(a.y, b.y, c.y);
-    const bounds = new PIXI.Rectangle();
-    bounds.x = xMinMax.min;
-    bounds.y = yMinMax.min;
-    bounds.width = xMinMax.max - xMinMax.min;
-    bounds.height = yMinMax.max - yMinMax.min;
-    return bounds;
+    return new PIXI.Rectangle(xMinMax.min, yMinMax.min, xMinMax.max - xMinMax.min, yMinMax.max - yMinMax.min);
+  }
+
+  /**
+   * Using quadtree, locate all the edges within the background triangle.
+   * @returns {PIXI.Rectangle}
+   */
+  findBackgroundEdges() {
+    const collisionTest = o => this.edgeInBackground(o.t);
+    return canvas.edges.quadtree.getObjects(this.backgroundBounds(), { collisionTest });
   }
 
   findBackgroundWalls() {
@@ -301,6 +310,24 @@ export class VisionTriangle {
   }
 
   /**
+   * Find edges in the scene by a triangle representing the view from viewingPoint to some
+   * token (or other two points). Checks for one-directional walls; ignores those facing away from viewpoint.
+   * Pass an includes function to test others.
+   * @return {Set<Edge>}
+   */
+  findEdges() {
+    const collisionTest = o => this.containsEdge(o.t);
+    return canvas.edges.quadtree.getObjects(this.bounds, { collisionTest });
+  }
+
+  /**
+   * Same as findEdges but filters based on an existing edge set.
+   * @param {Edge[]|Set<Edge>} edges
+   * @returns {Edge[]|Set<Edge>}
+   */
+  filterEdges(edges) { return edges.filter(e => this.containsEdge(e)); }
+
+  /**
    * Find walls in the scene by a triangle representing the view from viewingPoint to some
    * token (or other two points). Checks for one-directional walls; ignores those facing away from viewpoint.
    * Pass an includes function to test others.
@@ -311,6 +338,11 @@ export class VisionTriangle {
     return canvas.walls.quadtree.getObjects(this.bounds, { collisionTest });
   }
 
+  /**
+   * Same as findWalls but filters based on an existing set.
+   * @param {Wall[]|Set<Wall>} edges
+   * @returns {Wall[]|Set<Wall>}
+   */
   filterWalls(walls) { return walls.filter(w => this.containsWall(w)); }
 
   /**
@@ -323,6 +355,11 @@ export class VisionTriangle {
     return canvas.tiles.quadtree.getObjects(this.bounds, { collisionTest });
   }
 
+  /**
+   * Same as findTiles but filters based on an existing set.
+   * @param {Tile[]|Set<Tile>} edges
+   * @returns {Tile[]|Set<Tile>}
+   */
   filterTiles(tiles) { return tiles.filter(t => this.containsTile(t)); }
 
   /**
@@ -335,6 +372,11 @@ export class VisionTriangle {
     return canvas.tokens.quadtree.getObjects(this.bounds, { collisionTest });
   }
 
+  /**
+   * Same as findTokens but filters based on an existing set.
+   * @param {Token[]|Set<Token>} tokens
+   * @returns {Token[]|Set<Token>}
+   */
   filterTokens(tokens) { return tokens.filter(t => this.containsToken(t)); }
 }
 

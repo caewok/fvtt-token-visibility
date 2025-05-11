@@ -11,12 +11,15 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { Grid3dTriangles  } from "./PlaceableTriangles.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
+import { AbstractPolygonTrianglesID, Grid3dTriangles  } from "./PlaceableTriangles.js";
 import { Camera } from "./WebGPU/Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
+import { NULL_SET } from "./util.js";
+
+// GPU Folder
+import { GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -27,16 +30,29 @@ import { Draw } from "../geometry/Draw.js";
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class GeometricViewpoint extends AbstractViewpoint {
-  calc = CONFIG[MODULE_ID].sightCalculators.geometric;
+  static get calcClass() { return PercentVisibleCalculatorGeometric; }
+
+  /* ----- NOTE: Debugging methods ----- */
+  /**
+   * For debugging.
+   * Draw the 3d objects in the popout.
+   */
+  _draw3dDebug(draw, _renderer, _container, { width = 100, height = 100 } = {}) {
+    this.calculator._draw3dDebug(this.viewer, this.target, this.viewpoint, this.targetLocation, { draw, width, height });
+  }
 }
 
 export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
+  static get viewpointClass() { return GeometricViewpoint; }
+
+  static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
+
   /** @type {Camera} */
   camera = new Camera({
     glType: "webGL2",
     perspectiveType: "perspective",
-    up: new Point3d(0, 0, -1),
-    mirrorMDiag: new Point3d(1, 1, 1),
+    up: new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1),
+    mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
   });
 
   /**
@@ -49,32 +65,28 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * @param {ViewpointConfig} [cfg]
    * @returns {ViewpointConfig}
    */
-  initializeConfig(cfg = {}) {
-    // Configs specific to the Points algorithm.
-    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
-    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
-    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
-    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
-    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
-    cfg.useLitTargetShape ??= true;
-
-    // Blocking canvas objects.
-    cfg.blocking ??= {};
-    cfg.blocking.walls ??= true;
-    cfg.blocking.tiles ??= true;
-
-    // Blocking tokens.
-    cfg.blocking.tokens ??= {};
-    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
-    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
-    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
-
-    return cfg;
-  }
-
-  async initialize() {
-    this.config = this.initializeConfig();
-  }
+//   initializeConfig(cfg = {}) {
+//     // Configs specific to the Points algorithm.
+//     const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+//     cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+//     cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+//     cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+//     cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+//     cfg.useLitTargetShape ??= true;
+//
+//     // Blocking canvas objects.
+//     cfg.blocking ??= {};
+//     cfg.blocking.walls ??= true;
+//     cfg.blocking.tiles ??= true;
+//
+//     // Blocking tokens.
+//     cfg.blocking.tokens ??= {};
+//     cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+//     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+//     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+//
+//     return cfg;
+//   }
 
   viewer;
 
@@ -90,6 +102,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
   gridSquareArea = 0;
 
+  blockingObjects = {
+    tiles: NULL_SET,
+    tokens: NULL_SET,
+    walls: NULL_SET,
+    terrainWalls: NULL_SET,
+  };
+
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
     this.viewer = viewer;
     this.target = target;
@@ -99,9 +118,17 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
     this.camera.setTargetTokenFrustrum(target);
+    /*
+    this.camera.perspectiveParameters = {
+      fov: Math.toRadians(90),
+      aspect: 1,
+      zNear: 1,
+      zFar: Infinity,
+    };
+    */
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+      { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
     const res = this._obscuredArea();
     this.targetArea = res.targetArea;
@@ -109,7 +136,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     if ( this.config.largeTarget ) this.gridSquareArea = this._gridSquareArea();
   }
-
 
   /**
    * Determine the percentage red pixels for the current view.
@@ -252,9 +278,11 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
 
     // Construct polygons representing the perspective view of the target and blocking objects.
+    const viewpoint = this.viewpoint
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    const targetPolys = this._lookAtObjectWithPerspective(this.target, lookAtM, perspectiveM);
+    const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
+    const targetPolys = this._applyPerspective(facingPolys, lookAtM, perspectiveM);
 
     const blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
@@ -265,12 +293,34 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     return { targetPolys, blockingPolys, blockingTerrainPolys };
   }
 
+  /**
+   * Construct target polygons.
+   */
+  _targetPolygons() {
+    const target = this.target;
+
+    // Prefer the constrained token triangles whenever possible.
+    if ( !this.config.useLitTargetShape ) return target[AbstractPolygonTrianglesID].triangles;
+
+    const shape = target.litTokenBorder;
+    if ( shape.equals(target.constrainedTokenBorder)
+      || shape.equals(target.tokenBorder) ) return target[AbstractPolygonTrianglesID].triangles;
+
+    return LitTokenTriangles.trianglesForPlaceable(target);
+  }
+
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
-    return AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint)
-      .map(poly => poly
+    const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint);
+    return this._applyPerspective(polys, lookAtM, perspectiveM);
+  }
+
+  _applyPerspective(polys, lookAtM, perspectiveM) {
+    return polys.map(poly => poly
         .transform(lookAtM)
         .clipZ()
-        .transform(perspectiveM))
+        .transform(perspectiveM)
+      )
+      .filter(poly => poly.points.length > 2);
   }
 
   /** @type {AbstractPolygonTriangles[]} */
@@ -307,16 +357,19 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(draw, _renderer, _container, { width = 100, height = 100 } = {}) {
+  _draw3dDebug(viewer, target, viewerLocation, targetLocation, { draw, width = 100, height = 100 } = {}) {
+    draw ??= new CONFIG.GeometryLib.Draw();
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
 
-    // Recalculate the 3d objects.
+    // Recalculate the 3d objects
+    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
 
     // Locate obstacles behind the target.
-    const backgroundTiles = this.constructor.visionTriangle.findBackgroundTiles();
-    const backgroundWalls = this.constructor.visionTriangle.findBackgroundWalls();
+    const visionTriangle = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
+    const backgroundTiles = visionTriangle.findBackgroundTiles();
+    const backgroundWalls = visionTriangle.findBackgroundWalls();
 
     // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
     // Simpler:
@@ -326,33 +379,33 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     //   If no intersect, test from center of triangle.
     //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
 
-    const lookAtM = this.targetLookAtMatrix;
-    const perspectiveM = this.targetPerspectiveMatrix;
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
 
     const backgroundPolys = [];
-    const { b, c } = this.constructor.visionTriangle;
-    const b3d = new Point3d(b.x, b.y, this.viewerLOS.targetCenter.z);
-    const c3d = new Point3d(c.x, c.y, this.viewerLOS.targetCenter.z);
+    const { b, c } = visionTriangle;
+    const b3d = new Point3d(b.x, b.y, targetLocation.z);
+    const c3d = new Point3d(c.x, c.y, targetLocation.z);
 
     const dirs = [
-      b3d.subtract(this.viewpoint).normalize(),
-      c3d.subtract(this.viewpoint).normalize(),
-      this.viewerLOS.targetCenter.subtract(this.viewpoint).normalize(),
+      b3d.subtract(viewerLocation).normalize(),
+      c3d.subtract(viewerLocation).normalize(),
+      targetLocation.subtract(viewerLocation).normalize(),
     ];
 
     const backgroundTestFn = (placeable, color, fill) => {
-      const polys = this._filterPlaceablePolygonsByViewpoint(placeable);
+      const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
       polys.forEach(poly => {
         const ixs = [];
         for ( const dir of dirs ) {
-          const ix = poly.intersection(this.viewpoint, dir);
+          const ix = poly.intersection(viewerLocation, dir);
           if ( ix ) ixs.push(ix);
         }
         if ( !ixs.length ) ixs.push(poly.centroid());
 
         const dist2 = ixs.reduce((acc, curr) => {
           if ( !curr ) return acc;
-          return Math.min(acc, Point3d.distanceSquaredBetween(this.viewpoint, curr));
+          return Math.min(acc, Point3d.distanceSquaredBetween(viewerLocation, curr));
         }, Number.POSITIVE_INFINITY);
         poly = poly
           .transform(lookAtM)
@@ -384,7 +437,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     // Draw the grid shape.
     // TODO: Fix; use Polygon3d
-    if ( this.viewerLOS.config.largeTarget ) this._gridPolys.forEach(poly =>
+    if ( this.config.largeTarget ) this._gridPolys.forEach(poly =>
       draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
 
     // Draw the detected obstacles.
@@ -394,6 +447,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 }
 
 export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
+  static viewpointClass = GeometricViewpoint;
+
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC;
 }
-

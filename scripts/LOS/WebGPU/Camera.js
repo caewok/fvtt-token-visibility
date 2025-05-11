@@ -140,9 +140,10 @@ export class Camera {
 
     const targetWidth = targetToken.document.width * canvas.dimensions.size;
     const targetHeight = targetToken.document.height * canvas.dimensions.size;
+    const targetZHeight = targetToken.topZ - targetToken.bottomZ;
 
     const distToTarget = Point3d.distanceBetween(this.cameraPosition, this.targetPosition)
-    const halfAngle = Math.atan(Math.max(targetWidth, targetHeight) / distToTarget)
+    const halfAngle = Math.atan(Math.max(targetWidth, targetHeight, targetZHeight) / distToTarget)
 
     // zFar is the straight-line distance to the target.
     // Buffer by adding in half the target diagonal.

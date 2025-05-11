@@ -20,28 +20,17 @@ import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewe
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class WebGL2Viewpoint extends AbstractViewpoint {
-  // TODO: Handle config and filtering obstacles.
-
-  constructor(...args) {
-    super(...args);
-    this.calc = CONFIG[MODULE_ID].sightCalculators.webGL2;
-  }
-
-  /** @type {boolean} */
-  useCache = true;
-
-  _percentVisible() {
-    // TODO: Handle configuration options.
-    const viewer =  this.viewerLOS.viewer;
-    const target = this.viewerLOS.target;
-    const viewerLocation = this.viewpoint;
-    const targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    if ( this.useCache ) return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
-    return this.calc._percentVisible(viewer, target, viewerLocation, targetLocation);
-  }
+  static get calcClass() { return PercentVisibleCalculatorWebGL2; }
 }
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculatorAbstract {
+  static get viewpointClass() { return WebGL2Viewpoint; }
+
+  static defaultConfiguration = {
+    ...PercentVisibleRenderCalculatorAbstract.defaultConfiguration,
+    alphaThreshold: 0.75,
+  }
+
   /** @type {Uint8Array} */
   bufferData;
 
@@ -56,7 +45,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { WIDTH, HEIGHT } = this.constructor;
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
     const gl = this.gl = this.constructor.glCanvas.getContext("webgl2");
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.senseType });
+    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 
@@ -71,7 +60,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const gl = this.gl;
     this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
-    const terrainThreshold = this.constructor.TERRAIN_THRESHOLD;
+    const terrainThreshold = this.config.alphaThreshold * 255;
     let countRed = 0;
     let countRedBlocked = 0;
     for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
@@ -88,6 +77,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
 }
 
 export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {
+  static viewpointClass = WebGL2Viewpoint;
+
   static CONTEXT_TYPE = "webgl2";
 
   /** @type {boolean} */
@@ -96,36 +87,119 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   constructor(opts = {}) {
     super(opts);
     this.debugView = opts.debugView ?? true;
-    this.calc = new PercentVisibleCalculatorWebGL2({ senseType: this.senseType });
-  }
-
-  async initialize() {
-    await super.initialize();
-    await this.calc.initialize();
   }
 
   async openPopout() {
     await super.openPopout();
     if ( this.renderer ) this.renderer.destroy();
     this.renderer = new RenderObstaclesWebGL2({
-      senseType: this.senseType,
+      senseType: this.viewerLOS.config.senseType,
       debugViewNormals: this.debugView,
       gl: this.gl,
     });
     await this.renderer.initialize();
   }
 
-  _render(viewer, target, viewerLocation, targetLocation) {
+  updateDebugForPercentVisible(percentVisible) {
+    super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
-    this.renderer.render(viewerLocation, target, { viewer, targetLocation });
+    // TODO: Handle multiple viewpoints.
+
+    const frames = this._canvasDimensionsForViewpoints();
+    for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
+      const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
+      const frame = frames[i];
+      const clear = i === 0;
+      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+    }
   }
 
-  percentVisible(viewer, target, viewerLocation, targetLocation) {
-    return this.calc.percentVisible(viewer, target, { viewerLocation, targetLocation });
+  _canvasDimensionsForViewpoints() {
+    let { width, height } = this.popout.canvas;
+     // const dpr = window.devicePixelRatio; // Does not work as expected.
+
+    // gl.viewport is from bottom 0, 0.
+    const w_1_2 = width * 0.5;
+    const h_1_2 = height * 0.5;
+    const w_1_3 = width * 1/3;
+    const h_1_3 = height * 1/3;
+    const w_2_3 = width * 2/3;
+    const h_2_3 = height * 2/3;
+
+    switch ( this.viewerLOS.viewpoints.length ) {
+      case 1: return [new PIXI.Rectangle(0, 0, width, height)];
+
+      // ----- | -----
+      case 2: return [
+        new PIXI.Rectangle(0,     0, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0, w_1_2, h_1_2),
+      ];
+
+      //     -----
+      // ----- | -----
+      case 3: return [
+        new PIXI.Rectangle(w_1_3, h_1_2, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_2_3, 0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
+      ];
+
+      // ----- | -----
+      // ----- | -----
+      case 4: return [
+        new PIXI.Rectangle(0,     0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(0,     h_1_2, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, h_1_2, w_1_2, h_1_2),
+      ];
+
+      //  ----- | -----
+      // --- | --- | ---
+      case 5: return [
+        new PIXI.Rectangle(w_1_3 * 0.5,           h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3 - (w_1_3 * 0.5), h_2_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+      ];
+
+      // --- | --- | ---
+      // --- |     | ---
+      // --- | --- | ---
+      case 8: return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+
+      ];
+
+      // --- | --- | ---
+      // --- | --- | ---
+      // --- | --- | ---
+      case 9: return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+      ];
+    }
   }
 
   destroy() {
-    if ( this.calc ) this.calc.destroy();
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }

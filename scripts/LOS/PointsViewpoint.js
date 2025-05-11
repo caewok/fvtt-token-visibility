@@ -1,22 +1,15 @@
 /* globals
-CONFIG,
 canvas,
+CONFIG,
 game,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
-import { Settings } from "../settings.js";
-import { MODULE_ID } from "../const.js";
-import { buildCustomLOSCalculator } from "../LOSCalculator.js";
-
 // LOS folder
-import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
-import { VisionTriangle } from "./VisionTriangle.js";
 
 
 /**
@@ -25,35 +18,46 @@ import { VisionTriangle } from "./VisionTriangle.js";
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
 export class PointsViewpoint extends AbstractViewpoint {
-  calc = CONFIG[MODULE_ID].sightCalculators.points;
+  static get calcClass() { return PercentVisibleCalculatorPoints; }
+
+
+  _drawDebugPoints(debugDraw, { width = 1 } = {}) {
+    const Draw = CONFIG.GeometryLib.Draw;
+    for ( const debugPoints of this.calculator.debugPoints ) {
+      for ( const debugPoint of debugPoints) {
+        const { A, B, hasCollision } = debugPoint;
+        const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
+        debugDraw.segment({ A, B }, { alpha: 0.5, width, color });
+      }
+    }
+  }
 }
 
 /**
  * Handle points algorithm.
  */
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
-  /** @type {ViewpointConfig} */
-  config = {};
 
-  visionTriangle;
+  static get viewpointClass() { return PointsViewpoint; }
+
+  static defaultConfiguration = {
+    ...PercentVisibleCalculatorAbstract.defaultConfiguration,
+    pointAlgorithm: "points-center",
+    targetInset: 0.75,
+    points3d: false,
+  }
 
   /** @type {Points3d[][]} */
   targetPoints = [];
 
-  async initialize() {
-    this.config = this.initializeConfig();
-  }
-
   _calculatePercentVisible(viewer, target, viewerLocation, _targetLocation) {
     this.viewpoint = viewerLocation;
-    this.visibleTargetShape = this._calculateVisibleTargetShape(target);
-    this.visionTriangle = VisionTriangle.build(viewerLocation, target);
     this.filterPotentiallyBlockingPolygons(viewer, viewerLocation, target);
-    this.targetPoints = this.constructTargetPoints(target);
   }
 
-  _percentRedPixels() {
-    return (1 - this._testTargetPoints(this.targetPoints, this.viewpoint, this.visibleTargetShape));
+  _percentRedPixels(viewer, target, viewerLocation, targetLocation) {
+    const targetPoints = this.constructTargetPoints(target);
+    return (1 - this._testTargetPoints(targetPoints, viewerLocation, this.getVisibleTargetShape(target)));
   }
 
   /* ----- NOTE: Target points ----- */
@@ -63,28 +67,28 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @param {ViewpointConfig} [cfg]
    * @returns {ViewpointConfig}
    */
-  initializeConfig(cfg = {}) {
-    // Configs specific to the Points algorithm.
-    const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
-    cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
-    cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
-    cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
-    cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
-    cfg.useLitTargetShape ??= true;
-
-    // Blocking canvas objects.
-    cfg.blocking ??= {};
-    cfg.blocking.walls ??= true;
-    cfg.blocking.tiles ??= true;
-
-    // Blocking tokens.
-    cfg.blocking.tokens ??= {};
-    cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
-    cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
-    cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
-
-    return cfg;
-  }
+//   initializeConfig(cfg = {}) {
+//     // Configs specific to the Points algorithm.
+//     const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
+//     cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
+//     cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
+//     cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
+//     cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
+//     cfg.useLitTargetShape ??= true;
+//
+//     // Blocking canvas objects.
+//     cfg.blocking ??= {};
+//     cfg.blocking.walls ??= true;
+//     cfg.blocking.tiles ??= true;
+//
+//     // Blocking tokens.
+//     cfg.blocking.tokens ??= {};
+//     cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
+//     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
+//     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
+//
+//     return cfg;
+//   }
 
   /*
    * Similar to _constructViewerPoints but with a complication:
@@ -113,7 +117,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
 
     // Construct points under this constrained token border.
-    cfg.tokenShape = target.constrainedTokenBorder;
+    cfg.tokenShape = this.getVisibleTargetShape(target);
     const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
     if ( points3d ) return [PointsViewpoint.elevatePoints(target, targetPoints)];
     return [targetPoints];
@@ -134,7 +138,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     this.polygons.length = 0;
     this.terrainPolygons.length = 0;
     const blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.senseType, blockingOpts: this.config.blocking });
+      { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
     const { terrainWalls, tiles, tokens, walls } = blockingObjects;
     for ( const terrainWall of terrainWalls ) {
@@ -150,11 +154,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   /* ----- NOTE: Visibility testing ----- */
 
 
-  _calculateVisibleTargetShape(target) {
-    return this.config.useLitTargetShape
-      ? AbstractViewerLOS.constructLitTargetShape(target) : target.constrainedTokenBorder;
-  }
-
   /**
    * Test an array of token points against an array of target points.
    * Each tokenPoint will be tested against every array of targetPoints.
@@ -162,8 +161,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @returns {number} Minimum percent blocked for the token points
    */
   _testTargetPoints(targetPointsArray, viewpoint, visibleTargetShape) {
-    targetPointsArray ??= this.targetPoints;
-    visibleTargetShape ??= this.visibleTargetShape;
     let minBlocked = 1;
     if ( this.config.debug ) this.debugPoints.length = 0;
     for ( const targetPoints of targetPointsArray ) {
@@ -209,7 +206,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
       numPointsBlocked += hasCollision;
 
       if ( this.config.debug ) {
-        debugPoints = { A: viewpoint, B: targetPoint, hasCollision };
+        debugPoints.push({ A: viewpoint, B: targetPoint, hasCollision });
 //         const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
 //         debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.5, width: 1, color });
 //         console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
@@ -220,8 +217,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 }
 
 export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
-  /** @type {class} */
-  // static popoutClass = Area3dPopout; // PIXI version
+  static viewpointClass = PointsViewpoint;
 
   /** @type {Token[]} */
   get viewers() { return canvas.tokens.controlled; }
@@ -229,49 +225,25 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
   /** @type {Token[]} */
   get targets() { return game.user.targets.values(); }
 
-  /** @type {object} */
-  config = {
-    useLitTargetShape: false,
-  };
-
-  constructor(opts) {
-    super(opts);
-  }
-
-  render() {
-    const { targets, viewers } = this;
-
-    if ( !(targets.length || viewers.length) ) return this.clearDebug();
-    this.clearDebug();
-
+  updateDebugForPercentVisible(_percentVisible) {
     // Calculate points and pull the debug data.
-    for ( const viewer of viewers) {
-      this.calc.viewer = viewer;
+    for ( const viewer of this.viewers) {
+      this.viewerLOS.viewer = viewer;
 
-      for ( const target of targets) {
+      for ( const target of this.targets) {
         if ( viewer === target ) continue;
-        this.calc.target = target;
-        this.calc._drawCanvasDebug();
-        this.calc.percentVisible(target);
+        this.viewerLOS.target = target;
+
+        if ( this.viewerLOS._simpleVisibilityTest(target) ) continue;
+
+        // Draw each set of points separately.
+        this.viewerLOS.viewpoints.forEach(vp => {
+          const percentVisible = vp.percentVisible();
+          const width = percentVisible >= this.viewerLOS.config.threshold ? 2 : 1;
+          vp._drawDebugPoints(this.debugDraw, { width });
+        });
       }
     }
-  }
-
-  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
-    this.calc.viewer = viewer;
-    return this.calc.percentVisible(target);
-  }
-
-  /** @type {AbstractViewer} */
-  #calc;
-
-  get calc() {
-    if ( this.#calc ) return this.#calc;
-    this.#calc = buildCustomLOSCalculator(this.viewers[0], Settings.KEYS.LOS.TARGET.TYPES.POINTS);
-    this.#calc.config.viewpointClass = PointsViewpoint;
-    this.#calc.config.debug = true;
-    this.#calc.config.debugDraw = this.debugDraw;
-    return this.#calc;
   }
 
   /**

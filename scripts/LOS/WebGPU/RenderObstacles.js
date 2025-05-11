@@ -1,12 +1,13 @@
 /* globals
+canvas,
 CONFIG,
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { Settings } from "../../settings.js";
 import { VisionTriangle } from "../VisionTriangle.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
@@ -17,6 +18,7 @@ import {
   DrawableConstrainedTokens,
   DrawableNonTerrainWallInstances,
   DrawableTerrainWallInstances,
+  DrawableLitTokens,
   } from "./DrawableObjects.js";
 
 /*
@@ -156,20 +158,26 @@ class RenderAbstract {
   }
 
   /** @type {ViewerLOSConfig} */
-  config = {
-    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE),
-    useLitTargetShape: true,
-    visibleTargetShape: null,
+  _config = {
     blocking: {
       walls: true,
       tiles: true,
       tokens: {
-        dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
-        live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
-        prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
+        dead: true,
+        live: true,
+        prone: true,
       }
-    }
-  };
+    },
+    debug: false,
+    useLitTargetShape: false,
+    largeTarget: false,
+  }
+
+  get config() { return this._config; }
+
+  set config(cfg = {}) {
+    foundry.utils.mergeObject(this._config, cfg);
+  }
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -184,8 +192,8 @@ class RenderAbstract {
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  render(viewerLocation, target, { viewer, targetLocation } = {}) {
-    const opts = { viewer, target, blocking: this.config.blocking };
+  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true } = {}) {
+    const opts = { viewer, target, blocking: this.config.blocking, useLitTargetShape: this.config.useLitTargetShape };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
@@ -200,9 +208,20 @@ class RenderAbstract {
       this.colorAttachment.resolveTarget = undefined;
     }
 
+    // When using viewport, may want to prevent clearing of the texture between renders.
+    // FYI, cannot set clearValue of the attachment to null.
+    const renderPassDesc = this.renderPassDescriptor;
+    let loadOp;
+    if ( !clear ) {
+      loadOp = renderPassDesc.colorAttachments[0].loadOp;
+      renderPassDesc.colorAttachments[0].loadOp = "load";
+    }
+
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
     const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
+
+    if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
 
     // Render the target.
     // Render first so full red of target is recorded.
@@ -217,6 +236,9 @@ class RenderAbstract {
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
+
+    if ( !clear ) renderPassDesc.colorAttachments[0].loadOp = loadOp; // Reset to default value.
+
   }
 
   /**
@@ -467,6 +489,7 @@ export class RenderObstacles extends RenderAbstract {
     DrawableTileInstances,
     DrawableTokenInstances,
     DrawableConstrainedTokens,
-    DrawableHexTokenInstances
+    DrawableHexTokenInstances,
+    DrawableLitTokens,
   ];
 }

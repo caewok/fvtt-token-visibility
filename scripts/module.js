@@ -22,6 +22,10 @@ import { getObjectProperty } from "./LOS/util.js";
 // For API
 import * as bench from "./benchmark.js";
 
+import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
+
+import { buildLOSCalculator, buildCustomLOSCalculator, buildDebugViewer } from "./LOSCalculator.js";
+
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
 import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
@@ -188,6 +192,19 @@ Hooks.once("init", function() {
     },
 
     /**
+     * Classes used to view the debugger for different algorithms.
+     */
+    debugViewers: {
+      points: DebugVisibilityViewerPoints,
+      geometric: DebugVisibilityViewerGeometric,
+      PIXI: DebugVisibilityViewerPIXI,
+      webGL2: DebugVisibilityViewerWebGL2,
+      webGPU: DebugVisibilityViewerWebGPU,
+      webGPUAsync: DebugVisibilityViewerWebGPUAsync,
+      hybrid: DebugVisibilityViewerHybrid,
+    },
+
+    /**
      * Calculator for percent visible tokens using sight.
      * @type {PercentVisibleCalculatorAbstract}
      */
@@ -241,6 +258,10 @@ Hooks.once("init", function() {
       hybrid: PercentVisibleCalculatorHybrid,
     },
 
+    buildLOSCalculator,
+    buildCustomLOSCalculator,
+    buildDebugViewer,
+
     debugViewers: {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
@@ -292,6 +313,8 @@ Hooks.once("init", function() {
       PlaceableInstanceHandler,
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
     },
+
+    AbstractViewpoint,
 
     glmatrix: {
       mat2, mat2d, mat3, mat4,

@@ -1,20 +1,18 @@
 /* globals
+canvas,
 CONFIG,
-Wall
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 
-import { MODULE_ID, MODULES_ACTIVE } from "../../const.js";
-import { tokensOverlap } from "../util.js";
+import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { WebGL2 } from "./WebGL2.js";
 import { GeometryDesc } from "../WebGPU/GeometryDesc.js";
 import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "../WebGPU/GeometryTile.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryHexTokenShapesDesc } from "../WebGPU/GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/GeometryToken.js";
 import {
-  WallInstanceHandler,
   NonDirectionalWallInstanceHandler,
   DirectionalWallInstanceHandler,
   NonDirectionalTerrainWallInstanceHandler,
@@ -448,10 +446,9 @@ export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
 
     // Limit to walls within the vision triangle
     // Drop open doors.
+    const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( edge.object instanceof Wall && edge.object.isOpen ) continue;
-      if ( !WallInstanceHandler.isBlocking(edge, this.senseType) ) continue;
-      if ( visionTriangle.containsEdge(edge) ) instanceSet.add(idx);
+      if ( edges.has(edge) ) instanceSet.add(idx);
     }
   }
 }
@@ -597,8 +594,9 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( !blocking.tiles ) return;
 
     // Limit to tiles within the vision triangle
+    const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( visionTriangle.containsTile(tile) ) instanceSet.add(idx);
+      if ( tiles.has(tile) ) instanceSet.add(idx);
     }
   }
 }
@@ -713,26 +711,11 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
     // Limit to tokens within the vision triangle.
     // Drop excluded token categories.
-    const api = MODULES_ACTIVE.API.RIDEABLE;
+    const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+      { viewer, target, blockingTokensOpts: blocking.tokens });
     for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( token === viewer || token === target ) continue;
-      if ( !this.constructor.includeToken(token, blocking.tokens) ) continue;
-
-      // Filter tokens that directly overlaps the viewer.
-      if ( tokensOverlap(token, viewer) ) continue;
-
-      // Filter all mounts and riders of both viewer and target. Possibly covered by overlap test.
-      if ( api && (api.RidingConnection(token, viewer) || api.RidingConnection(token, target)) ) continue;
-
-      if ( visionTriangle.containsToken(token) ) instanceSet.add(idx);
+      if ( tokens.has(token )) instanceSet.add(idx);
     }
-  }
-
-  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
-    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
-    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
-    if ( !prone && token.isProne ) return false;
-    return true;
   }
 }
 
@@ -785,7 +768,7 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
       const token = placeableHandler.placeableFromInstanceIndex.get(idx);
-      if ( token.isConstrainedTokenBorder ) return this._updateAllInstances();
+      if ( token?.isConstrainedTokenBorder ) return this._updateAllInstances();
     }
     super._updateInstances();
   }
@@ -869,7 +852,7 @@ export class ConstrainedDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenW
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
       const token = placeableHandler.placeableFromInstanceIndex.get(idx);
-      return this._updateAllInstances();
+      if ( token?.isConstrainedTokenBorder ) this._updateAllInstances();
     }
     DrawableTokenWebGL2.prototype._updateInstances.call(this);
   }

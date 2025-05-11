@@ -4,7 +4,7 @@ CONST,
 canvas,
 foundry,
 PIXI,
-Tile,
+Wall,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -15,13 +15,12 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { VisionTriangle } from "./VisionTriangle.js";
-import { AbstractPolygonTriangles } from "./PlaceableTriangles.js";
+import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { NULL_SET } from "./util.js";
 
 import {
   insetPoints,
-  tokensOverlap,
-  getObjectProperty } from "./util.js";
+  tokensOverlap } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -31,6 +30,10 @@ import { Draw } from "../geometry/Draw.js";
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  */
 export class AbstractViewpoint {
+  static calcClass;
+
+  /** @type {VisionTriangle} */
+  static visionTriangle = new VisionTriangle();
 
   /** @type {ViewerLOS} */
   viewerLOS;
@@ -38,34 +41,17 @@ export class AbstractViewpoint {
   /** @type {Point3d} */
   viewpointDiff;
 
-  /** @type {object} */
-  config;
-
-  /** @type {PercentVisibileCalculatorAbstract} */
-  calc;
-
-  /** @type {VisionTriangle} */
-  static visionTriangle = new VisionTriangle();
-
   /**
-   * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"
-   * @param {Point3d} viewpointDiff     The location of the eye relative to the viewer
+   * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"; handles most of the config
+   * @param {Point3d} viewpoint        The location of the eye; this will be translated to be relative to the viewer
    */
   constructor(viewerLOS, viewpoint) {
+    if ( viewerLOS.calculator && !(viewerLOS.calculator instanceof this.constructor.calcClass) ) {
+      console.error(`{this.constructor.name}|Calculator must be ${this.constructor.calcClass.name}.`, this.viewerLOS.calculator);
+    }
     this.viewerLOS = viewerLOS;
     this.viewpointDiff = viewpoint.subtract(viewerLOS.center);
-    this.config = this.initializeConfig();
-
-    // Hide initialized property so we can iterate the object.
-    Object.defineProperty(this.#blockingObjects, "initialized", { enumerable: false});
   }
-
-  /**
-   * Sets configuration to the current settings.
-   * @param {ViewpointConfig} [cfg]
-   * @returns {ViewpointConfig}
-   */
-  initializeConfig(cfg = {}) { return cfg; }
 
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
@@ -79,6 +65,16 @@ export class AbstractViewpoint {
   /** @type {Token} */
   get target() { return this.viewerLOS.target; }
 
+  /** @type {WALL_RESTRICTION_TYPES} */
+  get senseType() { return this.viewerLOS.config.senseType; }
+
+  // set senseType(value) { this.calculator.senseType = senseType; }
+
+  /** @type {PercentVisibileCalculatorAbstract} */
+  get calculator() { return this.viewerLOS.calculator; }
+
+  get config() { return this.viewerLOS.config; }
+
   /**
    * Determine percentage of the token visible using the class methodology.
    * @param {Token} target
@@ -86,33 +82,25 @@ export class AbstractViewpoint {
    */
   percentVisible(callback) {
     const percent = this._simpleVisibilityTest() ?? this._percentVisible(callback);
-    if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
+    // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
 
   async percentVisibleAsync() {
     const percent = this._simpleVisibilityTest() ?? (await this._percentVisible());
-    if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
+    // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
 
   /** @override */
-  _percentVisible(viewer, target, viewerLocation, targetLocation) {
+  _percentVisible() {
     // TODO: Handle configuration options.
-    return this.calc.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+    return this.calculator.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
   }
 
-  async _percentVisibleAsync() { return this._percentVisible();
+  async _percentVisibleAsync() {
     // TODO: Handle configuration options.
-    return this.calc.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
-  }
-
-  /**
-   * Clear any cached values related to the target or target location.
-   */
-  clearCache() {
-    this.#blockingObjects.initialized = false;
-    Object.values(this.#blockingObjects).forEach(objs => objs.clear());
+    return this.calculator.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
   }
 
   /**
@@ -121,7 +109,7 @@ export class AbstractViewpoint {
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
   _simpleVisibilityTest() {
-    const target = this.viewerLOS.target;
+    const target = this.target;
 
     // If directly overlapping.
     if ( target.bounds.contains(this.viewpoint) ) return 1;
@@ -137,7 +125,6 @@ export class AbstractViewpoint {
   }
 
   // ----- NOTE: Collision tests ----- //
-
   /**
    * Test if we have one or more potentially blocking objects. Does not check for whether
    * the objects in fact block but does require two terrain walls to count.
@@ -145,38 +132,20 @@ export class AbstractViewpoint {
    *
    */
   hasPotentialObstacles() {
-    const { terrainWalls, ...otherObjects } = this.blockingObjects;
-    if ( terrainWalls.size > 1 ) return true;
-    return Object.values(otherObjects).some(objSet => objSet.size);
+    // TODO: Cache blocking objects and pass through to calc? Cache visionTriangle?
+    const visionTri = this.constructor.visionTriangle.rebuild(this.viewpoint, this.target);
+    const opts = {
+      senseType: this.config.senseType,
+      viewer: this.viewer,
+      target: this.target,
+      blockingOpts: this.config.blocking,
+    };
+    const blockingObjs = this.constructor.findBlockingWalls(visionTri, opts);
+    if ( blockingObjs.walls.size || blockingObjs.terrainWalls.size > 1 ) return true;
+    if ( this.constructor.findBlockingTiles(visionTri, opts).size
+      || this.constructor.findBlockingTokens(visionTri, opts).size ) return true;
+    return false;
   }
-
-  /**
-   * Holds Foundry objects that are within the vision triangle.
-   * @typedef BlockingObjects
-   * @type {object}
-   * @property {Set<Wall>}    terrainWalls
-   * @property {Set<Tile>}    tiles
-   * @property {Set<Token>}   tokens
-   * @property {Set<Wall>}    walls
-   */
-  #blockingObjects = {
-    terrainWalls: new Set(),
-    tiles: new Set(),
-    tokens: new Set(),
-    walls: new Set(),
-    initialized: false
-  };
-
-  get blockingObjects() {
-    if ( !this.#blockingObjects.initialized ) this.findBlockingObjects();
-    // console.debug(`Blocking: \n\twalls: ${this.#blockingObjects.walls.size}\n\ttiles: ${this.#blockingObjects.tiles.size}\n\ttokens: ${this.#blockingObjects.tokens.size}`);
-    // console.debug(`Blocking walls: ${[...this.#blockingObjects.walls].map(w => w.id).join(", ")}`);
-
-    return this.#blockingObjects;
-  }
-
-
-
 
   /**
    * Filter relevant objects in the scene using the vision triangle.
@@ -187,34 +156,47 @@ export class AbstractViewpoint {
    *   - @property {Set<Tile>} tiles
    *   - @property {Set<Token>} tokens
    */
-  static findBlockingObjects(viewpoint, target, { viewer, senseType = "sight", blockingOpts = {} } = {}) {
+  static findBlockingObjects(viewpoint, target, opts = {}) {
     const visionTri = this.visionTriangle.rebuild(viewpoint, target);
+
+    opts.blockingOpts ??= {};
+    opts.senseType ??= "sight";
+    opts.target ??= target;
+
+    const blockingObjs = this.findBlockingWalls(visionTri, opts);
+    blockingObjs.tiles = this.findBlockingTiles(visionTri, opts);
+    blockingObjs.tokens = this.findBlockingTokens(visionTri, opts);
+    return blockingObjs;
+  }
+
+  static findBlockingWalls(visionTri, { senseType = "sight", blockingOpts = {} } = {}) {
     blockingOpts.walls ??= true;
+    if ( !blockingOpts.walls ) return { walls: NULL_SET, terrainWalls: NULL_SET };
+    const walls = this.filterWallsByVisionTriangle(visionTri, { senseType });
+    const terrainWalls = new Set();
+
+    // Separate walls into terrain and normal.
+    walls.forEach(w => {
+      if ( w.document[senseType] === CONST.WALL_SENSE_TYPES.LIMITED ) {
+        walls.delete(w);
+        terrainWalls.add(w);
+      }
+    });
+    return { walls, terrainWalls };
+  }
+
+  static findBlockingTiles(visionTri, { senseType = "sight", blockingOpts = {} } = {}) {
     blockingOpts.tiles ??= true;
+    return blockingOpts.tiles ?  this.filterTilesByVisionTriangle(visionTri, { senseType }) : NULL_SET;
+  }
+
+  static findBlockingTokens(visionTri, { viewer, target, blockingOpts = {} } = {}) {
     blockingOpts.tokens ??= {};
     blockingOpts.tokens.live ??= true;
     blockingOpts.tokens.dead ??= true;
-
-    const blockingObjs = {
-      walls: NULL_SET,
-      tiles: NULL_SET,
-      terrainWalls: new Set(),
-      tokens: NULL_SET,
-    };
-    if ( blockingOpts.walls ) blockingObjs.walls = this.filterWallsByVisionTriangle(visionTri, { senseType });
-    if ( blockingOpts.tiles ) blockingObjs.tiles = this.filterTilesByVisionTriangle(visionTri, { senseType });
-    if ( blockingOpts.tokens.live
-      || blockingObjs.tokens.dead ) blockingObjs.tokens = this.filterTokensByVisionTriangle(visionTri,
-        { senseType, viewer, blockingTokensOpts: blockingOpts.tokens });
-
-    // Separate walls into terrain and normal.
-    blockingObjs.walls.forEach(w => {
-      if ( w.document[senseType] === CONST.WALL_SENSE_TYPES.LIMITED ) {
-        blockingObjs.walls.delete(w);
-        blockingObjs.terrainWalls.add(w);
-      }
-    });
-    return blockingObjs;
+    return ( blockingOpts.tokens.live || blockingOpts.tokens.dead )
+      ? this.filterTokensByVisionTriangle(visionTri, { viewer, target, blockingTokensOpts: blockingOpts.tokens })
+      : NULL_SET;
   }
 
   /**
@@ -226,6 +208,12 @@ export class AbstractViewpoint {
     // Ignore walls that are not blocking for the type.
     // Ignore walls with open doors.
     return visionTri.findWalls().filter(w => w.document[senseType] && !w.isOpen);
+  }
+
+  static filterEdgesByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+    // Ignore edges that are not blocking for the type.
+    // Ignore edges that are walls with open doors.
+    return visionTri.findEdges().filter(e => e[senseType] && !(e.object instanceof Wall && e.object.isOpen));
   }
 
   /**
@@ -253,7 +241,7 @@ export class AbstractViewpoint {
   static filterTokensByVisionTriangle(visionTri, {
     viewer,
     target,
-    blockingTokensOpts = { live: true, dead: true, prone: true } } = {}) {
+    blockingTokensOpts }) {
 
     let tokens = visionTri.findTokens();
 
@@ -270,54 +258,19 @@ export class AbstractViewpoint {
       if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer))
     }
 
-    // Filter live or dead tokens.
-    const { live: liveTokensBlock, dead: deadTokensBlock, prone: proneTokensBlock } = blockingTokensOpts;
-    if ( liveTokensBlock ^ deadTokensBlock ) {
-      const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
-      tokens = tokens.filter(t => {
-        const hp = getObjectProperty(t.actor, tokenHPAttribute);
-        if ( typeof hp !== "number" ) return true;
-        if ( liveTokensBlock && hp > 0 ) return true;
-        if ( deadTokensBlock && hp <= 0 ) return true;
-        return false;
-      });
-    }
-
-    // Filter prone tokens.
-    if ( !proneTokensBlock ) tokens = tokens.filter(t => !t.isProne);
-
-    return tokens;
+    // Filter live, dead, prone tokens.
+    return tokens.filter(token => this.includeToken(token, blockingTokensOpts));
   }
 
-  /**
-   * Filter relevant objects in the scene using the vision triangle.
-   * For the z dimension, keeps objects that are between the lowest target point,
-   * highest target point, and the viewing point.
-   * @returns {object} Object with possible properties:
-   *   - @property {Set<Wall>} walls
-   *   - @property {Set<Tile>} tiles
-   *   - @property {Set<Token>} tokens
-   */
-  findBlockingObjects() {
-    const target = this.viewerLOS.target;
-    if ( !target ) throw Error(`${MODULE_ID}|AbstractViewpoint|findBlockingObjects target is undefined!`);
-
-    // Remove old blocking objects.
-    const blockingObjs = this.#blockingObjects;
-    Object.values(blockingObjs).forEach(objs => objs.clear());
-
-    const res = this.constructor.findBlockingObjects(this.viewpoint, target, {
-      viewer: this.viewerLOS.viewer,
-      senseType: this.viewerLOS.config.type,
-      blockingOpts: this.viewerLOS.config.blocking,
-    });
-    for ( const [key, objs] of Object.entries(res) ) blockingObjs[key] = objs;
-    this.#blockingObjects.initialized = true;
-    return blockingObjs;
+  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
+    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
+    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
+    if ( !prone && token.isProne ) return false;
+    return true;
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const polys = placeable[AbstractPolygonTriangles.ID].triangles;
+    const polys = placeable[AbstractPolygonTrianglesID].triangles;
     return polys.filter(poly => poly.isFacing(viewpoint));
   }
 
@@ -419,6 +372,8 @@ export class AbstractViewpoint {
     if ( tokenShape instanceof PIXI.Rectangle ) {
       // Token unconstrained by walls.
       // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
+      // PIXI.Rectangle.prototype.pad modifies in place.
+      tokenShape = tokenShape.clone();
       tokenShape.pad(-1);
       return [
         new Point3d(tokenShape.left, tokenShape.top, elevation),
@@ -437,12 +392,20 @@ export class AbstractViewpoint {
   /**
    * Clean up memory-intensive objects.
    */
-  destroy() {
-    this.clearCache();
-    Object.values(this.#blockingObjects).forEach(objs => objs.clear());
-  }
+  destroy() {}
 
   /* ----- NOTE: Debug ----- */
+
+  /**
+   * For debugging.
+   * Draw various debug guides on the canvas.
+   * @param {Draw} draw
+   */
+  _drawCanvasDebug(debugDraw) {
+    // this._drawLineOfSight(debugDraw);
+    this._drawDetectedObjects(debugDraw);
+    this._drawVisionTriangle(debugDraw);
+  }
 
   /**
    * For debugging.
@@ -450,8 +413,7 @@ export class AbstractViewpoint {
    */
   _drawLineOfSight(debugDraw) {
     debugDraw ??= this.viewerLOS.config.debugDraw;
-    debugDraw.segment({ A: this.viewpoint, B: this.viewerLOS.target.center });
-    console.log("Drawing line of sight.")
+    debugDraw.segment({ A: this.viewpoint, B: this.targetLocation });
   }
 
   /**
@@ -460,14 +422,16 @@ export class AbstractViewpoint {
    */
   _drawDetectedObjects(debugDraw) {
     // if ( !this.#blockingObjects.initialized ) return;
+    const blockingObjects = AbstractViewpoint.findBlockingObjects(this.viewpoint, this.target,
+      { viewer: this.viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
     debugDraw ??= this.viewerLOS.config.debugDraw;
     const colors = Draw.COLORS;
-    const { walls, tiles, terrainWalls, tokens } = this.blockingObjects;
-    walls.forEach(w => debugDraw.segment(w, { color: colors.red, fillAlpha: 0.3 }));
-    tiles.forEach(t => debugDraw.shape(t.bounds, { color: colors.yellow, fillAlpha: 0.3 }));
-    terrainWalls.forEach(w => debugDraw.segment(w, { color: colors.lightgreen }));
-    tokens.forEach(t => debugDraw.shape(t.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.3 }));
-    console.log("Drawing detected objects.")
+    const { walls, tiles, terrainWalls, tokens } = blockingObjects;
+    walls.forEach(wall => debugDraw.segment(wall, { color: colors.red }));
+    // tiles.forEach(tile => debugDraw.shape(tile.bounds, { color: colors.yellow }));
+    tiles.forEach(tile => tile.tokenvisibility.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));
+    terrainWalls.forEach(wall => debugDraw.segment(wall, { color: colors.lightgreen }));
+    tokens.forEach(token => debugDraw.shape(token.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.2 }));
   }
 
   /**
@@ -476,7 +440,7 @@ export class AbstractViewpoint {
    */
   _drawVisionTriangle(debugDraw) {
     debugDraw ??= this.viewerLOS.config.debugDraw;
-    //debugDraw.shape(this.constructor.visionTriangle, { width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
-    console.log("Drawing vision triangle.")
+    const visionTri = this.constructor.visionTriangle.rebuild(this.viewpoint, this.target);
+    visionTri.draw({ draw: debugDraw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 }

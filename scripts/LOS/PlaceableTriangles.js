@@ -10,7 +10,7 @@ PIXI,
 
 import { MODULE_ID } from "../const.js";
 import { GeometryDesc } from "./WebGPU/GeometryDesc.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./WebGPU/GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
@@ -36,12 +36,14 @@ Store triangles representing Foundry object shapes.
 const SENSE_TYPES = {};
 CONST.WALL_RESTRICTION_TYPES.forEach(type => SENSE_TYPES[type] = Symbol(type));
 
+export const AbstractPolygonTrianglesID = "tokenvisibility";
+
 /**
  * Stores 1+ prototype triangles and corresponding transformed triangles to represent
  * a basic shape in 3d space.
  */
 export class AbstractPolygonTriangles {
-  static ID = "tokenvisibility";
+  static ID = AbstractPolygonTrianglesID;
 
   static geom;
 
@@ -106,8 +108,12 @@ export class AbstractPolygonTriangles {
     placeables.forEach(placeable => this._onPlaceableCreation(placeable));
   }
 
+  static _onPlaceableDocumentCreation(placeableD) {
+    this._onPlaceableCreation(placeableD.object);
+  }
+
   /**
-   * On placeable creation hook, add getter to the placeable.
+   * On placeable creation, add getter to the placeable.
    */
   static _onPlaceableCreation(placeable) {
     const obj = placeable[this.ID] ??= {};
@@ -146,7 +152,7 @@ export class WallTriangles extends AbstractPolygonTriangles {
 
   /** @type {object[]} */
   static HOOKS = [
-    { createWall: "_onPlaceableCreation" },
+    { createWall: "_onPlaceableDocumentCreation" },
   ];
 
   /**
@@ -190,7 +196,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
 
   /** @type {object[]} */
   static HOOKS = [
-    { createTile: "_onPlaceableCreation" },
+    { createTile: "_onPlaceableDocumentCreation" },
   ];
 
   static registerExistingPlaceables() {
@@ -216,9 +222,6 @@ export class TileTriangles extends AbstractPolygonTriangles {
       obj.alphaThresholdTriangles = this.pathsToFaceTriangles(obj.alphaThresholdPaths);
     }
   }
-
-  /** @type {Triangle3d[]} */
-  _prototypeAlphaTriangles;
 
   /**
    * Convert clipper paths representing a tile shape to top and bottom faces.
@@ -314,14 +317,41 @@ export class TileTriangles extends AbstractPolygonTriangles {
     return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold);
   }
 
+  static triangles3dForAlphaBounds(tile) {
+    if ( !tile.evPixelCache ) return this.prototypeTriangles;
+    const bounds = tile.evPixelCache.getThresholdLocalBoundingBox(CONFIG[MODULE_ID].alphaThreshold);
+    const pts = [...bounds.iteratePoints({ close: false })];
+
+    const tri0 = Triangle3d.from2dPoints(pts.slice(0,3));
+    const tri1 = Triangle3d.from2dPoints([pts[0], pts[2], pts[3]]);
+    return [
+      tri0,
+      tri1,
+      tri0.clone().reverseOrientation(),
+      tri1.clone().reverseOrientation(),
+    ];
+
+    /* Or could use polygon3d.
+    const poly = Polygon3d.from2dPoints([...bounds.iteratePoints({ close: false })], 0);
+    return [
+      poly,
+      poly.clone().reverseOrientation().
+    ];
+    */
+  }
+
+
   static trianglesForPlaceable(tile) {
     if ( !this.instanceHandler.instanceIndexFromId.has(tile.id) ) return [];
+    if ( !tile.evPixelCache ) return AbstractPolygonTriangles.trianglesForPlaceable.call(this, tile);
+
 
     const triType = CONFIG[MODULE_ID].tileThresholdShape;
     const obj = tile[MODULE_ID] ?? {};
-    if ( triType === "triangles"
-      || !Object.hasOwn(obj, triType) // Don't pull triType directly, which could result in infinite loop if it is "triangle".
-      || !tile.evPixelCache ) return AbstractPolygonTriangles.trianglesForPlaceable.call(this, tile);
+
+    // Don't pull triType directly, which could result in infinite loop if it is "triangle".
+    const tris = (triType === "triangles"|| !Object.hasOwn(obj, triType))
+      ? this.triangles3dForAlphaBounds(tile) : obj[triType];
 
     // Expand the canvas conversion matrix to 4x4.
     // Last row of the 3x3 is the translation matrix, which should be moved to row 4.
@@ -336,7 +366,7 @@ export class TileTriangles extends AbstractPolygonTriangles {
     // Add elevation translation.
     const elevationT = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, tile.elevationZ);
     const M = toCanvasM.multiply4x4(elevationT);
-    return obj[triType].map(tri => tri.transform(M));
+    return tris.map(tri => tri.transform(M));
   }
 }
 
@@ -352,7 +382,8 @@ export class TokenTriangles extends AbstractPolygonTriangles {
 
   /** @type {object[]} */
   static HOOKS = [
-    { createToken: "_onPlaceableCreation" },
+    { createToken: "_onPlaceableDocumentCreation" },
+    { updateToken: "_onTokenDocumentUpdate" },
   ];
 
 
@@ -374,14 +405,14 @@ export class TokenTriangles extends AbstractPolygonTriangles {
   /**
    * On placeable creation hook, add an instance of this to the placeable.
    */
-  static _onPlaceableCreation(placeable) {
-    const obj = placeable[this.ID] ??= {};
+  static _onPlaceableCreation(token) {
+    const obj = token[this.ID] ??= {};
     Object.defineProperty(obj, "triangles", {
       configurable: true,
       get() {
-        const instance = placeable.isConstrainedTokenBorder
+        const instance = token.isConstrainedTokenBorder
           ? ConstrainedTokenTriangles : TokenTriangles;
-        return instance.trianglesForPlaceable(placeable);
+        return instance.trianglesForPlaceable(token);
       },
     });
   }
@@ -397,6 +428,15 @@ export class ConstrainedTokenTriangles extends TokenTriangles {
     return Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 }
+
+export class LitTokenTriangles extends TokenTriangles {
+  static trianglesForPlaceable(token) {
+    const geom = new GeometryLitTokenDesc({ token });
+    return Triangle3d.fromVertices(geom.vertices, geom.indices);
+  }
+}
+
+
 
 // TODO: Can we use entirely static methods for grid triangles?
 //       Can these be reset on scene load? Maybe a hook?

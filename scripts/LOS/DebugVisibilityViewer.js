@@ -9,9 +9,10 @@ PIXI,
 "use strict";
 
 import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
-import { buildCustomLOSCalculator } from "../LOSCalculator.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
+import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
+import { AbstractViewpoint } from "./AbstractViewpoint.js";
 
 /* Debug viewer
 
@@ -21,15 +22,21 @@ Calculates percentage visible for the viewer/target combo.
 
 export class DebugVisibilityViewerAbstract {
 
-  /** @type {string} */
-  senseType = "sight";
+  /** @type {class} */
+  static viewpointClass = AbstractViewpoint;
 
-  constructor({ senseType = "sight" } = {}) {
-    this.senseType = senseType;
+  /** @type {PercentVisibleCalculator} */
+  viewerLOS;
+
+  constructor(config = {}) {
+    config.debug = true;
+    config.viewpointKey = this.constructor.viewpointClass;
+    this.viewerLOS = new AbstractViewerLOS(undefined, config);
   }
 
   async initialize() {
     this.registerHooks();
+    return this.viewerLOS.initialize();
   }
 
   /** @type {Token} */
@@ -37,31 +44,43 @@ export class DebugVisibilityViewerAbstract {
 
   get viewer() { return (this.#viewer ??= canvas.tokens.controlled[0]); }
 
-  set viewer(value) { this.#viewer = value; }
+  set viewer(value) {
+    this.#viewer = value;
+    this.viewerLOS.viewer = value;
+  }
+
 
   /** @type {Token} */
   #target;
 
   get target() { return (this.#target ??= game.user.targets.first()); }
 
-  set target(value) { this.#target = value; }
-
-  render(viewerLocation, target, { viewer, targetLocation } = {}) {
-    viewer ??= this.viewer;
-    target ??= this.target;
-    if ( !(viewer && target) ) return;
-
-    viewerLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(viewer);
-    this._render(viewer, target, viewerLocation, targetLocation);
-    const percentVisible = this.percentVisible(viewer, target, viewerLocation, targetLocation);
-    this.updateDebugForPercentVisible(percentVisible, viewer, target, viewerLocation, targetLocation);
+  set target(value) {
+    this.#target = value;
+    this.viewerLOS.target = value;
   }
 
-  _render(_viewer, _target, _viewerLocation, _targetLocation) {}
+  render() {
+    this.clearDebug();
 
-  updateDebugForPercentVisible(_percentVisible, _viewer, _target, _viewerLocation, _targetLocation) {}
+    if ( !(this.viewer && this.target ) ) return;
+    this.viewerLOS.viewer = this.viewer;
+    this.viewerLOS.target = this.target;
 
-  percentVisible(_viewer, _target, _viewerLocation, _targetLocation) {}
+    // First draw the basic debugging graphics for the canvas.
+    this._drawCanvasDebug();
+
+    // Then determine the percent visible using the algorithm and
+    // update debug view specific to that algorithm.
+    const percentVisible = this.percentVisible();
+    this.updateDebugForPercentVisible(percentVisible);
+  }
+
+  updateDebugForPercentVisible(_percentVisible) {}
+
+  percentVisible() {
+    return this.viewerLOS.percentVisible(this.target);
+  }
 
   /** @type {number[]} */
   hooks = [];
@@ -142,6 +161,8 @@ export class DebugVisibilityViewerAbstract {
     this.deregisterHooks();
     canvas.tokens.removeChild(this.#debugGraphics);
     if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
+    this.viewerLOS.calculator.destroy();
+    this.viewerLOS.destroy();
   }
 
   /* ----- Canvas graphics ----- */
@@ -175,6 +196,10 @@ export class DebugVisibilityViewerAbstract {
   clearDebug() {
     if ( this.#debugGraphics ) this.#debugGraphics.clear();
   }
+
+  /* ----- NOTE: Debug ----- */
+
+  _drawCanvasDebug() { this.viewerLOS._drawCanvasDebug(this.debugDraw); }
 }
 
 
@@ -223,7 +248,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
    */
   _updatePopoutTitle(title) {
     if ( !this.popoutIsRendered ) return;
-    title ??= this.popoutTitle();
+    title ??= this.popoutTitle;
     const popout = this.popout;
     const elem = popout.element.find(".window-title");
     elem[0].textContent = title;
@@ -233,30 +258,25 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   /** @type {string} */
   get popoutTitle() {
     const moduleName = game.i18n.localize(`${MODULE_ID}.nameAbbr`);
-    return `${moduleName} 3D Debug`;
+    return `${moduleName}|${this.constructor.name}`;
   }
 
-  updatePopoutFooter({ percentVisible, viewer, target } = {}) {
-    viewer ??= this.viewer;
-    target ??= this.target;
+  updatePopoutFooter(percentVisible) {
+    const viewer = this.viewer;
+    const target = this.target;
     const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
     visibleTextElem.innerHTML = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible`;
-    console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
+    // console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
   }
 
-  render(viewerLocation, target, { viewer, targetLocation } = {}) {
-    viewer ??= this.viewer;
-    target ??= this.target;
-    if ( !(viewer && target) ) return;
-    if ( !this.popoutIsRendered ) {
-      return this.reinitialize().then(() =>
-        super.render(viewerLocation, target, { viewer, targetLocation }));
-    }
-    super.render(viewerLocation, target, { viewer, targetLocation });
+  render() {
+    if ( !(this.viewer && this.target) ) return;
+    if ( !this.popoutIsRendered ) return this.reinitialize().then(() => super.render());
+    super.render();
   }
 
-  updateDebugForPercentVisible(percentVisible, viewer, target, _viewerLocation, _targetLocation) {
-    this.updatePopoutFooter({ viewer, target, percentVisible });
+  updateDebugForPercentVisible(percentVisible) {
+    this.updatePopoutFooter(percentVisible);
   }
 
   destroy() {
@@ -269,26 +289,161 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   /** @type {class} */
   static popoutClass = Area3dPopout;
 
-  /** @type {PIXI.Graphics} */
-  #popoutGraphics;
+  /** @type {PIXI.Container} */
+  #popoutContainers = [];
 
-  get popoutGraphics() {
-    if ( !this.#popoutGraphics ) {
-      this.#popoutGraphics = new PIXI.Graphics();
-      this.popoutContainer.addChild(this.#popoutGraphics);
+  get popoutContainers() {
+    if ( !this.#popoutContainers.length ) {
+      const { WIDTH, HEIGHT } = this.constructor;
+
+      // Divide in the popout space.
+      const PT = this.viewerLOS.constructor.POINT_TYPES;
+      const positions = [];
+      let viewSize;
+      switch ( this.viewerLOS.config.numViewpoints ) {
+        case PT.CENTER: positions.push([0, 0]); viewSize = WIDTH; break;
+
+        // ----- | -----
+        case PT.TWO: positions.push(
+          [WIDTH * -0.25, 0],
+          [WIDTH * 0.25, 0],
+        ); viewSize = WIDTH / 2; break;
+
+        //     -----
+        // ----- | -----
+        case PT.THREE: positions.push(
+          [0, HEIGHT * -0.25],
+          [WIDTH * -0.25, HEIGHT * 0.25],
+          [WIDTH * 0.25, HEIGHT * 0.25],
+        ); viewSize = WIDTH / 3; break;
+
+        // ----- | -----
+        // ----- | -----
+        case PT.FOUR: positions.push(
+          [WIDTH * -0.25, HEIGHT * -0.25],
+          [WIDTH * 0.25, HEIGHT * -0.25],
+          [WIDTH * -0.25, HEIGHT * 0.25],
+          [WIDTH * 0.25, HEIGHT * 0.25],
+        ); viewSize = WIDTH / 2; break;
+
+        //  ----- | -----
+        // --- | --- | ---
+        case PT.FIVE: positions.push(
+          [WIDTH * -0.25, HEIGHT * -0.25],
+          [WIDTH * 0.25, HEIGHT * -0.25],
+          [WIDTH * -0.33, HEIGHT * 0.25],
+          [0, HEIGHT * 0.25],
+          [WIDTH * 0.33, HEIGHT * 0.25],
+        ); viewSize = WIDTH / 3; break;
+
+        // --- | --- | ---
+        // --- |     | ---
+        // --- | --- | ---
+        case PT.EIGHT: positions.push(
+          [WIDTH * -0.33, HEIGHT * -0.33],
+          [WIDTH * 0, HEIGHT * -0.33],
+          [WIDTH * 0.33, HEIGHT * -0.33],
+
+          [WIDTH * -0.33, HEIGHT * 0],
+          // [0, 0],
+          [WIDTH * 0.33, HEIGHT * 0],
+
+          [WIDTH * -0.33, HEIGHT * 0.33],
+          [0, HEIGHT * 0.33],
+          [WIDTH * 0.33, HEIGHT * 0.33],
+        ); viewSize = WIDTH / 3; break;
+
+        // --- | --- | ---
+        // --- | --- | ---
+        // --- | --- | ---
+        case PT.NINE: positions.push(
+          [WIDTH * -0.33, HEIGHT * -0.33],
+          [WIDTH * 0, HEIGHT * -0.33],
+          [WIDTH * 0.33, HEIGHT * -0.33],
+
+          [WIDTH * -0.33, HEIGHT * 0],
+          [WIDTH * 0, HEIGHT * 0],
+          [WIDTH * 0.33, HEIGHT * 0],
+
+          [WIDTH * -0.33, HEIGHT * 0.33],
+          [WIDTH * 0, HEIGHT * 0.33],
+          [WIDTH * 0.33, HEIGHT * 0.33],
+        ); viewSize = WIDTH / 3; break;
+      }
+
+      /* For 2, width = 400, height = 400
+      [-100, 0], [100, 0]
+      #1
+      viewSize = 400 / 2 = 200
+      scale = 200 / 400 = 0.5
+      size = 100
+
+      scale = 100 / 400 * 2 = 0.5
+      size = 100 * 1 / 0.5 = 200
+      */
+
+      positions.forEach(([x, y]) => {
+        const c = new PIXI.Container();
+        c.position.set(x, y);
+
+        // Shrink the scale if there are more items to display.
+        const scale = viewSize / Math.max(WIDTH, HEIGHT);
+        c.scale.set(scale, scale);
+        const size = viewSize / scale;
+
+        // Mask the container so it only displays over a portion of the canvas.
+        // See https://pixijs.com/7.x/guides/components/containers
+        const mask = new PIXI.Graphics();
+        mask.beginFill(0xffffff);
+        mask.drawRect(-size * 0.5, -size * 0.5, size, size);
+        mask.endFill();
+        c.mask = mask;
+        c.addChild(mask);
+
+        this.#popoutContainers.push(c);
+
+        // console.debug(`Container at ${x},${y} with scale ${scale}, viewSize ${viewSize}, size ${size}.`);
+
+      });
     }
-    return (this.#popoutGraphics ??= new PIXI.Graphics());
+    return this.#popoutContainers;
   }
 
-  /** @type {PIXI.Container} */
-  #popoutContainer;
+  getPopoutContainer(idx) {
+    return this.popoutContainers[idx];
+  }
 
-  get popoutContainer() { return (this.#popoutContainer ??= new PIXI.Container()); }
+  /** @type {PIXI.Graphics} */
+  #popoutGraphics = [];
+
+  get popoutGraphics() {
+    if ( !this.#popoutGraphics.length ) {
+      this.popoutContainers.forEach(c => {
+        const g = new PIXI.Graphics();
+        this.#popoutGraphics.push(g);
+        c.addChild(g);
+      });
+    }
+    return this.#popoutGraphics;
+  }
+
+  getPopoutGraphic(idx) { return this.popoutGraphics[idx]; }
+
 
   /** @type {Draw} */
-  #popoutDraw;
+  #popoutDraws = [];
 
-  get popoutDraw() { return (this.#popoutDraw ??= new CONFIG.GeometryLib.Draw(this.popoutGraphics)); }
+  get popoutDraws() {
+    if ( !this.#popoutDraws.length ) {
+      this.popoutGraphics.forEach(g => {
+        const d = new CONFIG.GeometryLib.Draw(g);
+        this.#popoutDraws.push(d);
+      });
+    }
+    return this.#popoutDraws;
+  }
+
+  getPopoutDraw(idx) { return this.popoutDraws[idx]; }
 
   /**
    * For debugging.
@@ -298,54 +453,55 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   _updatePercentVisibleLabel(number) {
     const label = this.percentVisibleLabel;
     label.text = `${(number * 100).toFixed(1)}%`;
-    console.log(`${this.calc.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
+    // console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
   algorithm = SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
 
   async openPopout(opts) {
     await super.openPopout(opts);
-    this.popout.pixiApp.stage.addChild(this.popoutContainer);
+    this.popoutContainers.forEach(c => this.popout.pixiApp.stage.addChild(c));
   }
 
-  _render(viewer, target, _viewerLocation, _targetLocation) {
-    this.clearDebug();
-    this.calc.viewer = this.viewer;
-    this.calc.target = target;
-    this.calc._drawCanvasDebug();
-    this.calc.viewpoints[0]._draw3dDebug(this.popoutDraw, this.popout.pixiApp.renderer, this.popoutContainer,
-      { width: this.constructor.WIDTH * .5, height: this.constructor.HEIGHT * .5 });
-  }
+  updateDebugForPercentVisible(percentVisible) {
+    const PT = this.viewerLOS.constructor.POINT_TYPES;
+    let width = this.constructor.WIDTH;
+    let height = this.constructor.HEIGHT;
 
-  percentVisible(viewer, target, _viewerLocation, _targetLocation) {
-    this.calc.viewer = this.viewer;
-    return this.calc.percentVisible(target);
-  }
+    // Keep width and height even.
+    switch ( this.viewerLOS.config.numViewpoints ) {
+      case PT.CENTER: width *= 0.5; height *= 0.5; break;
+      case PT.TWO:
+      case PT.FOUR: width *= .25; height *= .25; break;
+      case PT.THREE:
+      case PT.FIVE:
+      case PT.EIGHT:
+      case PT.NINE: width *= (0.5 / 3); height *= (0.5 / 3); break;
+    }
 
-  /** @type {AbstractViewer} */
-  #calc;
-
-  get calc() {
-    if ( this.#calc ) return this.#calc;
-    this.#calc = buildCustomLOSCalculator(this.viewer, this.algorithm);
-    this.#calc.config.debug = true;
-    this.#calc.config.debugDraw = this.debugDraw;
-    return this.#calc;
+    this.viewerLOS.viewpoints.forEach((vp, idx) => {
+      const draw = this.getPopoutDraw(idx);
+      const c = this.getPopoutContainer(idx);
+      vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
+    })
+    super.updateDebugForPercentVisible(percentVisible);
   }
 
   clearDebug() {
     super.clearDebug();
-    if ( this.#popoutDraw ) this.#popoutDraw.clearDrawings();
+    this.#popoutDraws.forEach(d => d.clearDrawings());
   }
 
   destroy() {
-    if ( this.#calc ) this.#calc.destroy();
-    this.#calc = undefined;
-    if ( this.#popoutGraphics && !this.#popoutGraphics.destroyed ) {
-      this.#popoutGraphics.destroy();
-      this.#popoutDraw = undefined;
-    }
-    if ( this.#popoutContainer && !this.#popoutContainer.destroyed ) this.#popoutContainer.destroy();
+    this.#popoutGraphics.forEach(g => {
+      if ( !g.destroyed ) g.destroy();
+    });
+    this.#popoutContainers.forEach(c => {
+      if ( !c.destroyed ) c.destroy();
+    });
+    this.#popoutGraphics.length = 0;
+    this.#popoutDraws.length = 0;
+    this.#popoutContainers.length = 0;
     super.destroy();
   }
 }
