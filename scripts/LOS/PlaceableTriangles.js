@@ -36,7 +36,7 @@ Store triangles representing Foundry object shapes.
 const SENSE_TYPES = {};
 CONST.WALL_RESTRICTION_TYPES.forEach(type => SENSE_TYPES[type] = Symbol(type));
 
-export AbstractPolygonTrianglesID = "tokenvisibility";
+export const AbstractPolygonTrianglesID = "tokenvisibility";
 
 /**
  * Stores 1+ prototype triangles and corresponding transformed triangles to represent

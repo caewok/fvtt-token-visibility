@@ -281,8 +281,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const viewpoint = this.viewpoint
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    const targetPolys = this._lookAtObjectWithPerspective(this._targetPolygons()
-      .filter(poly => poly.isFacing(viewpoint)));
+    const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
+    const targetPolys = this._applyPerspective(facingPolys, lookAtM, perspectiveM);
 
     const blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
@@ -311,7 +311,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
     const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint);
-    return this._applyPerspective(polys);
+    return this._applyPerspective(polys, lookAtM, perspectiveM);
   }
 
   _applyPerspective(polys, lookAtM, perspectiveM) {
