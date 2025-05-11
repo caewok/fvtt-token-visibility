@@ -18,6 +18,7 @@ import {
   DrawableConstrainedTokens,
   DrawableNonTerrainWallInstances,
   DrawableTerrainWallInstances,
+  DrawableLitTokens,
   } from "./DrawableObjects.js";
 
 /*
@@ -192,7 +193,7 @@ class RenderAbstract {
   }
 
   render(viewerLocation, target, { viewer, targetLocation, frame, clear = true } = {}) {
-    const opts = { viewer, target, blocking: this.config.blocking };
+    const opts = { viewer, target, blocking: this.config.blocking, useLitTargetShape: this.config.useLitTargetShape };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
@@ -488,6 +489,7 @@ export class RenderObstacles extends RenderAbstract {
     DrawableTileInstances,
     DrawableTokenInstances,
     DrawableConstrainedTokens,
-    DrawableHexTokenInstances
+    DrawableHexTokenInstances,
+    DrawableLitTokens,
   ];
 }
