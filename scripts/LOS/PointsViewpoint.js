@@ -57,7 +57,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   _percentRedPixels(viewer, target, viewerLocation, targetLocation) {
     const targetPoints = this.constructTargetPoints(target);
-    return (1 - this._testTargetPoints(targetPoints, viewerLocation, target.visibleTargetShape));
+    return (1 - this._testTargetPoints(targetPoints, viewerLocation, this.getVisibleTargetShape(target)));
   }
 
   /* ----- NOTE: Target points ----- */
@@ -161,8 +161,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @returns {number} Minimum percent blocked for the token points
    */
   _testTargetPoints(targetPointsArray, viewpoint, visibleTargetShape) {
-    targetPointsArray ??= this.targetPoints;
-    visibleTargetShape ??= this.visibleTargetShape;
     let minBlocked = 1;
     if ( this.config.debug ) this.debugPoints.length = 0;
     for ( const targetPoints of targetPointsArray ) {

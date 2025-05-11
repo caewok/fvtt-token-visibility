@@ -165,6 +165,7 @@ debugViewer = buildDebugViewer(api.debugViewers.PIXI, { width: 512, height: 512 
 debugViewer = buildDebugViewer(api.debugViewers.webGL2)
 debugViewer = buildDebugViewer(api.debugViewers.webGPU)
 debugViewer = buildDebugViewer(api.debugViewers.webGPUAsync)
+debugViewer = buildDebugViewer(api.debugViewers.hybrid)
 
 await debugViewer.initialize();
 debugViewer.render();
@@ -261,9 +262,11 @@ CONFIG.tokenvisibility.clipperVersion = 2
 
 N = 20
 for ( const clipperVersion of [1, 2] ) {
+  CONFIG.tokenvisibility.clipperVersion = clipperVersion;
   for ( const shape of Object.values(CONFIG.tokenvisibility.tileThresholdShapeOptions) ) {
-    console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`);
+    CONFIG.tokenvisibility.tileThresholdShape = shape;
 
+    console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`);
     await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
     await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
     await QBenchmarkLoop(N, calcHybrid, "percentVisible", viewer, target)
@@ -279,9 +282,9 @@ for ( const clipperVersion of [1, 2] ) {
 
 N = 20
 for ( const clipperVersion of [1, 2] ) {
+  CONFIG.tokenvisibility.clipperVersion = clipperVersion;
   for ( const shape of Object.values(CONFIG.tokenvisibility.tileThresholdShapeOptions) ) {
     CONFIG.tokenvisibility.tileThresholdShape = shape;
-    CONFIG.tokenvisibility.clipperVersion = clipperVersion;
 
     console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
     await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints)

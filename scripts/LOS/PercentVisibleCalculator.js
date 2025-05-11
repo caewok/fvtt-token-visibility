@@ -13,10 +13,6 @@ Calculate percent visibility for a token viewer looking at a target token.
 
 export class PercentVisibleCalculatorAbstract {
 
-  getVisibleTargetShape(target) {
-    return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
-  }
-
   static defaultConfiguration = {
     blocking: {
       walls: true,
@@ -54,6 +50,10 @@ export class PercentVisibleCalculatorAbstract {
   }
 
   async initialize() { return; }
+
+  getVisibleTargetShape(target) {
+    return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
+  }
 
   // ----- NOTE: Visibility testing ----- //
 

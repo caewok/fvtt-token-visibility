@@ -494,6 +494,35 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
 }
 
 /**
+ * Construct vertices for a lit token shape
+ * Unlike GeometryCubeDesc, this constructs a token in world space.
+ * Constructor options must include token.
+ */
+export class GeometryLitTokenDesc extends GeometryDesc {
+  /** @type {string} */
+  label = "Lit Token";
+
+  /** @type {Token} */
+  token;
+
+  static defineVertices({ token } = {}) {
+    // Set the token border to center at 0,0,0 to match handling of other geometries.
+    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const border = token.litTokenBorder.translate(-ctr.x, -ctr.y, -ctr.z);
+    const { topZ, bottomZ } = token;
+    if ( border instanceof PIXI.Rectangle ) {
+      this.label += " Cube"
+      const w = token.document.width * canvas.dimensions.size;
+      const d = token.document.height * canvas.dimensions.size;
+      const h = topZ - bottomZ;
+      return GeometryCubeDesc.defineVertices({ w, d, h });
+    }
+    return this.define3dPolygonVertices(border, { topZ, bottomZ });
+  }
+}
+
+
+/**
  * Describe a row hexagon by its vertices, normals, and uvs.
  * By default, hex centered at origin 0,0,0.
  * See https://en.wikipedia.org/wiki/Hexagon

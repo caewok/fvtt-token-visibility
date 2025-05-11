@@ -11,12 +11,15 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { Grid3dTriangles  } from "./PlaceableTriangles.js";
+import { AbstractPolygonTrianglesID, Grid3dTriangles  } from "./PlaceableTriangles.js";
 import { Camera } from "./WebGPU/Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { NULL_SET } from "./util.js";
+
+// GPU Folder
+import { GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -275,9 +278,11 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
 
     // Construct polygons representing the perspective view of the target and blocking objects.
+    const viewpoint = this.viewpoint
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    const targetPolys = this._lookAtObjectWithPerspective(this.target, lookAtM, perspectiveM);
+    const targetPolys = this._lookAtObjectWithPerspective(this._targetPolygons()
+      .filter(poly => poly.isFacing(viewpoint)));
 
     const blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
@@ -288,9 +293,29 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     return { targetPolys, blockingPolys, blockingTerrainPolys };
   }
 
+  /**
+   * Construct target polygons.
+   */
+  _targetPolygons() {
+    const target = this.target;
+
+    // Prefer the constrained token triangles whenever possible.
+    if ( !this.config.useLitTargetShape ) return target[AbstractPolygonTrianglesID].triangles;
+
+    const shape = target.litTokenBorder;
+    if ( shape.equals(target.constrainedTokenBorder)
+      || shape.equals(target.tokenBorder) ) return target[AbstractPolygonTrianglesID].triangles;
+
+    return LitTokenTriangles.trianglesForPlaceable(target);
+  }
+
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
-    return AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint)
-      .map(poly => poly
+    const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint);
+    return this._applyPerspective(polys);
+  }
+
+  _applyPerspective(polys, lookAtM, perspectiveM) {
+    return polys.map(poly => poly
         .transform(lookAtM)
         .clipZ()
         .transform(perspectiveM)
@@ -426,4 +451,3 @@ export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dP
 
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC;
 }
-
