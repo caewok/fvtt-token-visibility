@@ -392,7 +392,7 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
   prerender() {
-    if ( this.placeableHandler.bufferId < this.#placeableHandlerBufferId ) {
+    if ( this.placeableHandler.bufferId > this.#placeableHandlerBufferId ) {
       // One or more placeables were added/removed. Re-do the buffers.
       this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
       this.initializePlaceableBuffers();
