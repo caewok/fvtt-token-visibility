@@ -447,8 +447,8 @@ export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
     // Limit to walls within the vision triangle
     // Drop open doors.
     const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
-    for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( edges.has(edge) ) instanceSet.add(idx);
+    for ( const [idx, wall] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      if ( edges.has(wall.edge) ) instanceSet.add(idx);
     }
   }
 }

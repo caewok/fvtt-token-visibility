@@ -3,7 +3,6 @@ canvas,
 CONFIG,
 CONST,
 foundry,
-Hooks,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -91,9 +90,6 @@ class DrawableObjectsAbstract {
     CAMERA: 0,
     MATERIALS: 1
   };
-
-
-  placeableHandler;
 
   /** @type {GPUDevice} */
   device;
@@ -185,7 +181,6 @@ class DrawableObjectsAbstract {
     this.materials = materials;
     this.camera = camera;
     this.#debugViewNormals = debugViewNormals;
-    this.placeableHandler = new this.constructor.handlerClass();
   }
 
   /** @type {boolean} */
@@ -198,8 +193,6 @@ class DrawableObjectsAbstract {
    */
   async initialize() {
     const device = this.device;
-    this.placeableHandler.registerPlaceableHooks();
-
     for ( const [key, opts] of Object.entries(this.constructor.BINDGROUP_LAYOUT_OPTS) ) {
       this.bindGroupLayouts[key] = device.createBindGroupLayout(opts);
     }
@@ -214,9 +207,6 @@ class DrawableObjectsAbstract {
     this._createStaticGeometries();
     this._createStaticDrawables();
     this._setStaticGeometriesBuffers();
-
-    // Initialize the changeable buffers.
-    this.initializePlaceableBuffers();
   }
 
   _createPipeline() {
@@ -225,26 +215,11 @@ class DrawableObjectsAbstract {
   }
 
   /**
-   * Set up part of the render chain dependent on the number of placeables.
-   * Called whenever a placeable is added or deleted (but not necessarily just updated).
-   * E.g., wall is added.
-   */
-  initializePlaceableBuffers() {
-    this.placeableHandler.initializePlaceables();
-  }
-
-  /**
    * Set up parts of the render chain that change often but not necessarily every render.
    * Called whenever a placeable is added, deleted, or updated.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  prerender() {
-    if ( this.placeableHandler.bufferId < this.#placeableHandlerBufferId ) {
-      // One or more placeables were added/removed. Re-do the buffers.
-      this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
-      this.initializePlaceableBuffers();
-    }
-  }
+  prerender() {}
 
   /**
    * Render this drawable.
@@ -363,6 +338,42 @@ class DrawableObjectsAbstract {
     this.RENDER_PIPELINE_OPTS.depthStencil.format = this.depthFormat ?? "depth24plus";
   }
 
+  destroy() {
+    Object.values(this.buffers).forEach(buffer => {
+      if ( Array.isArray(buffer) ) buffer.forEach(elem => elem.destroy());
+      else buffer.destroy();
+    });
+  }
+}
+
+class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
+  /** @type {PlaceableInstanceHandler} */
+  placeableHandler;
+
+  constructor(...args) {
+    super(...args);
+    this.placeableHandler = new this.constructor.handlerClass();
+  }
+
+  /**
+   * Set up all parts of the render pipeline that will not change often.
+   */
+  async initialize() {
+    await super.initialize();
+
+    // Initialize the changeable buffers.
+    this.initializePlaceableBuffers();
+  }
+
+  /**
+   * Set up part of the render chain dependent on the number of placeables.
+   * Called whenever a placeable is added or deleted (but not necessarily just updated).
+   * E.g., wall is added.
+   */
+  initializePlaceableBuffers() {
+    this.placeableHandler.initializePlaceables();
+  }
+
   // ----- NOTE: Placeable updating ----- //
 
   #placeableHandlerUpdateId = 0;
@@ -375,22 +386,21 @@ class DrawableObjectsAbstract {
 
   set placeableHandlerUpdateId(value) { this.#placeableHandlerUpdateId = value; }
 
-  _hooks = [];
-
-  registerPlaceableHooks() {}
-
-  deregisterPlaceableHooks() { this._hooks.forEach(hook => Hooks.off(hook.name, hook.id)); }
-
-  destroy() {
-    this.deregisterPlaceableHooks();
-    Object.values(this.buffers).forEach(buffer => {
-      if ( Array.isArray(buffer) ) buffer.forEach(elem => elem.destroy());
-      else buffer.destroy();
-    });
+  /**
+   * Set up parts of the render chain that change often but not necessarily every render.
+   * Called whenever a placeable is added, deleted, or updated.
+   * E.g., tokens that move a lot vs a camera view that changes every render.
+   */
+  prerender() {
+    if ( this.placeableHandler.bufferId < this.#placeableHandlerBufferId ) {
+      // One or more placeables were added/removed. Re-do the buffers.
+      this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
+      this.initializePlaceableBuffers();
+    }
   }
 }
 
-export class DrawableObjectInstancesAbstract extends DrawableObjectsAbstract {
+export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbstract {
   static BINDGROUP_LAYOUT_OPTS = {
     ...DrawableObjectsAbstract.BINDGROUP_LAYOUT_OPTS,
 
@@ -746,7 +756,8 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
-    for ( const [idx, edge] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [idx, wall] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      const edge = wall.edge;
       // If the edge is an open door or non-blocking wall, ignore.
       if ( !edges.has(edge) ) continue;
       if ( !this.includeEdge(edge) ) continue;
@@ -759,39 +770,6 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   }
 
   includeEdge(_edge) { return true; }
-
-  registerPlaceableHooks() {
-    this._hooks.push({ name: "createWall", id: Hooks.on("createWall", this._onPlaceableCreation.bind(this)) });
-    this._hooks.push({ name: "updateWall", id: Hooks.on("updateWall", this._onPlaceableUpdate.bind(this)) });
-    this._hooks.push({ name: "deleteWall", id: Hooks.on("deleteWall", this._onPlaceableDeletion.bind(this)) });
-//     this._hooks.push({ name: "drawWall", id: Hooks.on("drawWall", this._onPlaceableDraw.bind(this)) });
-//     this._hooks.push({ name: "refreshWall", id: Hooks.on("refreshWall", this._onPlaceableRefresh.bind(this)) });
-//     this._hooks.push({ name: "destroyWall", id: Hooks.on("destroyWall", this._onPlaceableDestroy.bind(this)) });
-  }
-
-  /**
-   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
-   * @param {Document} document                       The new Document instance which has been created
-   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
-   * @param {string} userId                           The ID of the User who triggered the creation workflow
-   */
-  _onPlaceableCreation(document, _options, _userId) {
-    this.addPlaceable(document.object.edge);
-    // TODO: How to detect non-wall edge creation?
-  }
-
-  /**
-   * A hook event that fires for every Document type after conclusion of an update workflow.
-   * @param {Document} document                       The existing Document which was updated
-   * @param {object} changed                          Differential data that was used to update the document
-   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
-   * @param {string} userId                           The ID of the User who triggered the update workflow
-   */
-  _onPlaceableUpdate(document, changed, _options, _userId) {
-    const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
-    const updateNeeded = this.placeableHandler.constructor.docUpdateKeys.some(key => changeKeys.has(key));
-    this.updatePlaceable(document.object.edge, updateNeeded);
-  }
 }
 
 // Instances of walls. Could include tokens but prefer to keep separate both for simplicity
@@ -1031,16 +1009,6 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     super._initializeRenderPass(renderPass, pipelineName);
     super._renderDrawable(renderPass, drawable);
   }
-
-  registerPlaceableHooks() {
-//     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
-//     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
-//     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
-    this._hooks.push({ name: "drawToken", id: Hooks.on("drawToken", this._onPlaceableDraw.bind(this)) });
-    this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
-    this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
-  }
-
 }
 
 export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
@@ -1193,15 +1161,6 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
     const pipelineName = drawable.label === "Token target" ? "target" : "default";
     super._initializeRenderPass(renderPass, pipelineName);
     super._renderDrawable(renderPass, drawable);
-  }
-
-  registerPlaceableHooks() {
-//     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
-//     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
-//     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
-    this._hooks.push({ name: "drawToken", id: Hooks.on("drawToken", this._onPlaceableDraw.bind(this)) });
-    this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
-    this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
   }
 }
 
@@ -1392,19 +1351,10 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     drawable.geom.setIndexBuffer(renderPass);
     drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
   }
-
-  registerPlaceableHooks() {
-    this._hooks.push({ name: "createTile", id: Hooks.on("createTile", this._onPlaceableCreation.bind(this)) });
-    this._hooks.push({ name: "updateTile", id: Hooks.on("updateTile", this._onPlaceableUpdate.bind(this)) });
-    this._hooks.push({ name: "deleteTile", id: Hooks.on("deleteTile", this._onPlaceableDeletion.bind(this)) });
-//     this._hooks.push({ name: "drawTile", id: Hooks.on("drawTile", this._onPlaceableDraw.bind(this)) });
-//     this._hooks.push({ name: "refreshTile", id: Hooks.on("refreshTile", this._onPlaceableRefresh.bind(this)) });
-//     this._hooks.push({ name: "destroyTile", id: Hooks.on("destroyTile", this._onPlaceableDestroy.bind(this)) });
-  }
 }
 
 // Handle constrained tokens and the target token in red.
-export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
+export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
   /** @type {WallInstanceHandler} */
   static handlerClass = TokenInstanceHandler;
 
@@ -1505,16 +1455,6 @@ export class DrawableConstrainedTokens extends DrawableObjectsAbstract {
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);
     drawable.geom.draw(renderPass, { instanceCount: drawable.numInstances });
-  }
-
-
-  registerPlaceableHooks() {
-//     this._hooks.push({ name: "createToken", id: Hooks.on("createToken", this._onPlaceableCreation.bind(this)) });
-//     this._hooks.push({ name: "updateToken", id: Hooks.on("updateToken", this._onPlaceableUpdate.bind(this)) });
-//     this._hooks.push({ name: "deleteToken", id: Hooks.on("deleteToken", this._onPlaceableDeletion.bind(this)) });
-    this._hooks.push({ name: "drawToken", id: Hooks.on("drawToken", this._onPlaceableDraw.bind(this)) });
-    this._hooks.push({ name: "refreshToken", id: Hooks.on("refreshToken", this._onPlaceableRefresh.bind(this)) });
-    this._hooks.push({ name: "destroyToken", id: Hooks.on("destroyToken", this._onPlaceableDestroy.bind(this)) });
   }
 }
 

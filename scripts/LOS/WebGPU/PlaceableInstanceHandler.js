@@ -371,42 +371,12 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
     "dir",
   ]);
 
-  /**
-   * A hook event that fires for every embedded Document type after conclusion of a creation workflow.
-   * @param {Document} document                       The new Document instance which has been created
-   * @param {Partial<DatabaseCreateOperation>} options Additional options which modified the creation request
-   * @param {string} userId                           The ID of the User who triggered the creation workflow
-   */
-  _onPlaceableCreation(document, _options, _userId) { this.addPlaceable(document.object.edge); }
 
   /**
-   * A hook event that fires for every Document type after conclusion of an update workflow.
-   * @param {Document} document                       The existing Document which was updated
-   * @param {object} changed                          Differential data that was used to update the document
-   * @param {Partial<DatabaseUpdateOperation>} options Additional options which modified the update request
-   * @param {string} userId                           The ID of the User who triggered the update workflow
-   */
-  _onPlaceableUpdate(document, changed, _options, _userId) {
-    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
-    this.updatePlaceable(document.object.edge, changeKeys);
-  }
-
-  /**
-   * Get edges in the scene.
+   * Get walls in the scene.
    */
   getPlaceables() {
-    return [...canvas.edges.values()].filter(edge => this.includePlaceable(edge));
-  }
-
-  edgeTypes = new Set(["wall"]);
-
-  /**
-   * Should this edge be included in the scene render?
-   * Certain edges, like scene borders, are excluded.
-   */
-  includePlaceable(edge) {
-    if ( !this.edgeTypes.has(edge.type) ) return false;
-    return true;
+    return canvas.walls.placeables.filter(wall => this.includePlaceable(wall));
   }
 
   /**
@@ -416,8 +386,9 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updateInstanceBuffer(idx) {
-    const edge = this.placeableFromInstanceIndex.get(idx);
+    const edge = this.placeableFromInstanceIndex.get(idx)?.edge;
     if ( !edge ) return;
+
     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
 
     const pos = this.constructor.edgeCenter(edge);
@@ -448,7 +419,7 @@ export class WallInstanceHandler extends PlaceableInstanceHandler {
   }
 
   rotationMatrixForInstance(idx) {
-    const edge = this.placeableFromInstanceIndex.get(idx);
+    const edge = this.placeableFromInstanceIndex.get(idx)?.edge;
     if ( !edge ) return super.rotationMatrixForInstance(idx);
     const rot = this.constructor.edgeAngle(edge);
     MatrixFloat32.rotationZ(rot, true, rotationM);
@@ -530,9 +501,9 @@ export class NonTerrainWallInstanceHandler extends WallInstanceHandler {
     this.initializePlaceables();
   }
 
-  includePlaceable(edge) {
-    if ( !super.includePlaceable(edge) ) return false;
-    return !this.constructor.isTerrain(edge, { senseType: this.senseType });
+  includePlaceable(wall) {
+    if ( !super.includePlaceable(wall) ) return false;
+    return !this.constructor.isTerrain(wall.edge, { senseType: this.senseType });
   }
 }
 
@@ -551,37 +522,37 @@ export class TerrainWallInstanceHandler extends WallInstanceHandler {
     this.initializePlaceables();
   }
 
-  includePlaceable(edge) {
-    if ( !super.includePlaceable(edge) ) return false;
-    return this.constructor.isTerrain(edge, { senseType: this.senseType });
+  includePlaceable(wall) {
+    if ( !super.includePlaceable(wall) ) return false;
+    return this.constructor.isTerrain(wall.edge, { senseType: this.senseType });
   }
 }
 
 export class NonDirectionalWallInstanceHandler extends NonTerrainWallInstanceHandler {
-  includePlaceable(edge) {
-    if ( !super.includePlaceable(edge) ) return false;
-    return !this.constructor.isDirectional(edge);
+  includePlaceable(wall) {
+    if ( !super.includePlaceable(wall) ) return false;
+    return !this.constructor.isDirectional(wall.edge);
   }
 }
 
 export class DirectionalWallInstanceHandler extends NonTerrainWallInstanceHandler {
-  includePlaceable(edge) {
-    if ( !super.includePlaceable(edge) ) return false;
-    return this.constructor.isDirectional(edge);
+  includePlaceable(wall) {
+    if ( !super.includePlaceable(wall) ) return false;
+    return this.constructor.isDirectional(wall.edge);
   }
 }
 
 export class NonDirectionalTerrainWallInstanceHandler extends TerrainWallInstanceHandler {
-  includePlaceable(edge) {
-    if ( !super.includePlaceable(edge) ) return false;
-    return !this.constructor.isDirectional(edge);
+  includePlaceable(wall) {
+    if ( !super.includePlaceable(wall) ) return false;
+    return !this.constructor.isDirectional(wall.edge);
   }
 }
 
 export class DirectionalTerrainWallInstanceHandler extends TerrainWallInstanceHandler {
-  includePlaceable(edge) {
-    if ( !super.includePlaceable(edge) ) return false;
-    return this.constructor.isDirectional(edge);
+  includePlaceable(wall) {
+    if ( !super.includePlaceable(wall) ) return false;
+    return this.constructor.isDirectional(wall.edge);
   }
 }
 
