@@ -1,5 +1,5 @@
 /* globals
-CONFIG,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -7,7 +7,6 @@ CONFIG,
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 
 // Base folder
-import { MODULE_ID } from "../../const.js";
 
 // LOS folder
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
@@ -31,6 +30,12 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     alphaThreshold: 0.75,
   }
 
+  /** @type {number} */
+  static WIDTH = 128;
+
+  /** @type {number} */
+  static HEIGHT = 128;
+
   /** @type {Uint8Array} */
   bufferData;
 
@@ -49,14 +54,55 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 
+  /** @type {RenderObstaclesWebGL2} */
+  renderObstacles;
+
+  async initialize() { await this.renderObstacles.initialize(); }
+
+
+  _redPixels = 0;
+
+  _redBlockedPixels = 0;
+
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.prerender();
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     super._calculatePercentVisible(viewer, target, viewerLocation, targetLocation)
+    const res = this._countRedBlockedPixels();
+    this._redPixels = res.countRed;
+    this._redBlockedPixels = res.countRedBlocked;
   }
 
-  _percentRedPixels() {
+  _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+    return this._countRedPixels();
+  }
+
+  _viewableTargetArea(_viewer, _target, _viewerLocation, _targetLocation) {
+    return this._redPixels - this._redBlockedPixels;
+  }
+
+  _totalTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return this._redPixels; }
+
+  _countRedPixels() {
+    const gl = this.gl;
+    this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
+    const pixels = this.bufferData;
+    let countRed = 0;
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      const r = pixels[i];
+      const hasR = Boolean(r === 255);
+      countRed += hasR;
+    }
+    return countRed;
+  }
+
+  _countRedBlockedPixels() {
     const gl = this.gl;
     this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
@@ -72,8 +118,10 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
       countRed += hasR;
       countRedBlocked += hasR * (Boolean(b === 255) || Boolean(g > terrainThreshold))
     }
-    return (countRed - countRedBlocked) / countRed;
+    return { countRed, countRedBlocked };
   }
+
+  destroy() { this.renderObstacles.destroy(); }
 }
 
 export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {

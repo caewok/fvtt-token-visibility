@@ -19,6 +19,7 @@ import {
   DrawableNonTerrainWallInstances,
   DrawableTerrainWallInstances,
   DrawableLitTokens,
+  DrawableGridInstances,
   } from "./DrawableObjects.js";
 
 /*
@@ -84,6 +85,9 @@ class RenderAbstract {
   /** @type {DrawObjectsAbstract[]} */
   drawableObstacles = [];
 
+  /** @type {DrawableObjectsAbstract} */
+  drawableGridShape;
+
   /** @type {Camera} */
   camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" });
 
@@ -119,6 +123,9 @@ class RenderAbstract {
         ? this.drawableTokens : this.drawableObstacles;
       categoryArr.push(drawableObj);
     }
+    this.drawableGridShape = new DrawableGridInstances(this.device, this.materials, this.camera, { senseType, debugViewNormals });
+    this.drawableObjects.push(this.drawableGridShape);
+
     this.#renderSize.width = width;
     this.#renderSize.height = height;
   }
@@ -192,6 +199,45 @@ class RenderAbstract {
     return this.device.queue.onSubmittedWorkDone();
   }
 
+  renderGridShape(viewerLocation, target, { viewer, targetLocation, frame } = {}) {
+    const blocking = {
+      walls: false,
+      tiles: false,
+      tokens: {
+        dead: false,
+        live: false,
+        prone: false,
+      }
+    };
+    const opts = { viewer, target, blocking, useLitTargetShape: false };
+    const device = this.device;
+    this._setCamera(viewerLocation, target, { viewer, targetLocation });
+    const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
+    this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
+
+    // Must set the canvas context immediately prior to render.
+    const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
+    if ( this.sampleCount > 1 ) this.colorAttachment.resolveTarget = view;
+    else {
+      this.colorAttachment.view = view;
+      this.colorAttachment.resolveTarget = undefined;
+    }
+
+    // When using viewport, may want to prevent clearing of the texture between renders.
+    // FYI, cannot set clearValue of the attachment to null.
+    const renderPassDesc = this.renderPassDescriptor;
+
+    // Render each drawable object.
+    const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
+    const renderPass = commandEncoder.beginRenderPass(renderPassDesc);
+
+    if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
+
+    this.drawableGridShape.renderTarget(renderPass, target);
+    renderPass.end();
+    this.device.queue.submit([commandEncoder.finish()]);
+  }
+
   render(viewerLocation, target, { viewer, targetLocation, frame, clear = true } = {}) {
     const opts = { viewer, target, blocking: this.config.blocking, useLitTargetShape: this.config.useLitTargetShape };
     const device = this.device;
@@ -219,7 +265,7 @@ class RenderAbstract {
 
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
-    const renderPass = commandEncoder.beginRenderPass(this.renderPassDescriptor);
+    const renderPass = commandEncoder.beginRenderPass(renderPassDesc);
 
     if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
 

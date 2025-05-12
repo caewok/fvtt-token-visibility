@@ -40,9 +40,9 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
     }
   }
 
-  _percentRedPixels() {
-    if ( this.#blockingTiles.size ) return this.tileCalc._percentRedPixels();
-    else return super._percentRedPixels();
+  _percentUnobscured() {
+    if ( this.#blockingTiles.size ) return this.tileCalc._percentUnobscured();
+    else return super._percentUnobscured();
   }
 }
 

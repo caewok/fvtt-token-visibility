@@ -15,7 +15,7 @@ import { Settings } from "../settings.js";
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { sumRedPixels, sumRedObstaclesPixels } from "./util.js";
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { NULL_SET } from "./util.js";
 
@@ -57,7 +57,7 @@ export class PIXIViewpoint extends AbstractViewpoint {
   }
 }
 
-export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstract {
+export class PercentVisibleCalculatorPIXI extends PercentVisibleRenderCalculatorAbstract {
   static get viewpointClass() { return PIXIViewpoint; }
 
   /** @type {Camera} */
@@ -321,7 +321,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
     const { renderTexture, shaders } = this;
-    if ( this.useLargeTarget ) {
+    if ( this.config.largeTarget ) {
       const gridCubeGeometry = new Grid3dGeometry(target);
       gridCubeGeometry.updateObjectPoints(); // Necessary if just created?
       gridCubeGeometry.updateVertices();     // Necessary if just created?
@@ -353,19 +353,14 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleCalculatorAbstra
     return mesh;
   }
 
-  /**
-   * Determine the percentage red pixels for the current view.
-   * @returns {number}
-   * @override
-   */
-  _percentRedPixels() {
-    const sumGridCube = (this.useLargeTarget ? sumRedPixels(this.gridCubeCache) : 0) || Number.POSITIVE_INFINITY;
-    const sumTarget = sumRedPixels(this.targetCache);
+  _gridShapeArea() { return sumRedPixels(this.gridCubeCache); }
+
+  _viewableTargetArea() {
     const obstacleSum = this.blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;
-    const sumWithObstacles = obstacleSum(this.obstacleCache);
-    const denom = Math.min(sumGridCube, sumTarget);
-    return sumWithObstacles / denom;
+    return obstacleSum(this.obstacleCache);
   }
+
+  _totalTargetArea() { return sumRedPixels(this.targetCache); }
 
   destroy() {
     if ( this.#renderTexture ) this.#renderTexture = this.#renderTexture.destroy();

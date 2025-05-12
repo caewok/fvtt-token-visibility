@@ -1,13 +1,14 @@
 /* globals
 canvas,
 CONFIG,
+foundry,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
-import { Settings } from "../../settings.js";
 import {
   DrawableNonDirectionalWallWebGL2,
   DrawableDirectionalWallWebGL2,
@@ -19,6 +20,7 @@ import {
   ConstrainedDrawableTokenWebGL2,
   DrawableSceneBackgroundWebGL2,
   ConstrainedDrawableHexTokenWebGL2,
+  DrawableGridShape,
 } from "./DrawableObjectsWebGL2.js";
 
 export class RenderObstaclesAbstractWebGL2 {
@@ -41,8 +43,11 @@ export class RenderObstaclesAbstractWebGL2 {
   /** @type {DrawableObjectsAbstract[]} */
   drawableTerrain = [];
 
-  /** @type {DrawableObjectsAbstract[]} */
+  /** @type {DrawableObjectsAbstract} */
   drawableFloor;
+
+  /** @type {DrawableObjectsAbstract} */
+  drawableGridShape;
 
   /** @type {VisionTriangle} */
   visionTriangle = new VisionTriangle();
@@ -79,6 +84,8 @@ export class RenderObstaclesAbstractWebGL2 {
         default: this.drawableObstacles.push(drawableObj);
       }
     }
+    this.drawableGridShape = new DrawableGridShape(gl, this.camera, clOpts);
+    this.drawableObjects.push(this.drawableGridShape);
   }
 
   /**
@@ -103,7 +110,6 @@ export class RenderObstaclesAbstractWebGL2 {
     },
     debug: false,
     useLitTargetShape: false,
-    largeTarget: false,
   }
 
   get config() { return this._config; }
@@ -118,6 +124,30 @@ export class RenderObstaclesAbstractWebGL2 {
    */
   prerender() {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
+  }
+
+  renderGridShape(viewerLocation, target, { targetLocation, frame } = {}) {
+    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+    this._setCamera(viewerLocation, target, { targetLocation });
+    frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+
+    const gl = this.gl;
+    // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
+    gl.viewport(frame.x, frame.y, frame.width, frame.height);
+    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+    // gl.cullFace(gl.FRONT);
+
+    gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+    this.drawableGridShape.renderTarget(target);
+
+    // Reset
+    gl.colorMask(true, true, true, true);
+    gl.disable(gl.BLEND);
   }
 
   render(viewerLocation, target, { viewer, targetLocation, frame, clear = true } = {}) {
