@@ -645,6 +645,13 @@ export class Polygons3d extends Polygon3d {
 
   get plane() { return this.polygons[0].plane; }
 
+  static from3dPolygons(polys) {
+    const n = polys.length;
+    const polys3d = new this(n);
+    for ( let i = 0; i < n; i += 1 ) polys3d.polygons[i] = polys[i];
+    return polys3d;
+  }
+
   static fromPoints(pts) { return this.#createSingleUsingMethod("fromPoints", pts); }
 
   static from2dPoints(pts, elevation) { return this.#createSingleUsingMethod("from2dPoints", pts, elevation); }

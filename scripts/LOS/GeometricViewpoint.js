@@ -157,8 +157,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
 
     // Once perspective-transformed, the token array of polygons are on the same plane, with z ~ 1.
     // Can combine to Polygons3d.
-    const targetPolys3d = new Polygons3d();
-    targetPolys3d.polygons = targetPolys;
+    const targetPolys3d = Polygons3d.from3dPolygons(targetPolys);
 
     // Use Clipper to calculate area of the polygon shapes.
     const scalingFactor = this.constructor.SCALING_FACTOR;
@@ -316,26 +315,34 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
-  _gridShapeArea(lookAtM, perspectiveM) {
-     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
-     const gridPaths = CONFIG[MODULE_ID].ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
-     gridPaths.combine().clean();
-     return gridPaths.area;
+  _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
+    this.viewer = viewer;
+    this.target = target;
+    this.viewpoint = viewerLocation;
+    this.targetLocation = targetLocation;
+
+    this.camera.cameraPosition = viewerLocation;
+    this.camera.targetPosition = targetLocation;
+    this.camera.setTargetTokenFrustrum(target);
+
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
+    const gridPolys3d = Polygons3d.from3dPolygons(gridPolys);
+    const gridPaths = gridPolys3d.toClipperPaths({ scalingFactor: this.constructor.SCALING_FACTOR });
+    gridPaths.combine().clean();
+    return gridPaths.area;
   }
 
   _gridPolygons(lookAtM, perspectiveM) {
-     const target = this.target;
-     const { x, y } = target.center;
-     const z = target.bottomZ + (target.topZ - target.bottomZ);
-     const gridTris = Grid3dTriangles.trianglesForGridShape();
-     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(x, y, z);
-     return gridTris
-       .filter(tri => tri.isFacing(this.viewpoint))
-       .map(tri => tri
-         .transform(translateM)
-         .transform(lookAtM)
-         .transform(perspectiveM)
-         .toPolygon());
+    const target = this.target;
+    const { x, y } = target.center;
+    const z = target.bottomZ + (target.topZ - target.bottomZ);
+    const translateM = CONFIG.GeometryLib.MatrixFlat.translation(x, y, z);
+    const gridTris = Grid3dTriangles.trianglesForGridShape()
+      .filter(tri => tri.isFacing(this.viewpoint))
+      .map(tri => tri.transform(translateM));
+    return this._applyPerspective(gridTris, lookAtM, perspectiveM);
   }
 
   /* ----- NOTE: Debugging methods ----- */
