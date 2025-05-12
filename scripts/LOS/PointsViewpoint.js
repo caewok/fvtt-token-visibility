@@ -55,7 +55,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     this.filterPotentiallyBlockingPolygons(viewer, viewerLocation, target);
   }
 
-  _percentRedPixels(viewer, target, viewerLocation, targetLocation) {
+  _percentUnobscured(viewer, target, viewerLocation, targetLocation) {
     const targetPoints = this.constructTargetPoints(target);
     return (1 - this._testTargetPoints(targetPoints, viewerLocation, this.getVisibleTargetShape(target)));
   }

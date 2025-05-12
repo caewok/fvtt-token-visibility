@@ -11,15 +11,13 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { AbstractPolygonTrianglesID, Grid3dTriangles  } from "./PlaceableTriangles.js";
+import { AbstractPolygonTrianglesID, Grid3dTriangles, LitTokenTriangles  } from "./PlaceableTriangles.js";
 import { Camera } from "./WebGPU/Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { NULL_SET } from "./util.js";
 
-// GPU Folder
-import { GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -42,7 +40,7 @@ export class GeometricViewpoint extends AbstractViewpoint {
   }
 }
 
-export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
+export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalculatorAbstract {
   static get viewpointClass() { return GeometricViewpoint; }
 
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
@@ -134,23 +132,11 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.targetArea = res.targetArea;
     this.obscuredArea = res.obscuredArea;
 
-    if ( this.config.largeTarget ) this.gridSquareArea = this._gridSquareArea();
   }
 
-  /**
-   * Determine the percentage red pixels for the current view.
-   * @returns {number}
-   * @override
-   */
-  _percentRedPixels() {
-    if ( this.config.largeTarget ) this.targetArea = Math.min(this.gridSquareArea || 100_000, this.targetArea);
+  _totalTargetArea() { return this.targetArea; }
 
-    // Round the percent seen so that near-zero areas are 0.
-    // Because of trimming walls near the vision triangle, a small amount of token area can poke through
-    const percentSeen = this.targetArea ? this.obscuredArea / this.targetArea : 0;
-    if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
-    return percentSeen;
-  }
+  _viewableTargetArea() { return this.obscuredArea; }
 
   /**
    * Construct 2d perspective projection of each blocking points object.
@@ -330,7 +316,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
-  _gridSquareArea(lookAtM, perspectiveM) {
+  _gridShapeArea(lookAtM, perspectiveM) {
      const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
      const gridPaths = CONFIG[MODULE_ID].ClipperPaths.fromPolygons(gridPolys, {scalingFactor: this.constructor.SCALING_FACTOR});
      gridPaths.combine().clean();

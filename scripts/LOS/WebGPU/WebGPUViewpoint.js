@@ -32,6 +32,7 @@ export class WebGPUViewpointAsync extends AbstractViewpoint {
 }
 
 export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebGL2 {
+
   static viewpointClass = WebGPUViewpoint;
 
   /** @type {OffScreenCanvas} */
@@ -79,28 +80,56 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
   }
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    // Same as PercentVisibleCalculatorAbstract.prototype._calculatePercentVisible
-    // Skip the PercentVisibleCalculatorWebGL2 parent class.
+    this.renderObstacles.prerender();
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+    const res = this._countRedBlockedPixels();
+    this._redPixels = res.countRed;
+    this._redBlockedPixels = res.countRedBlocked;
   }
 
-  /**
-   * Must first render to the gpuCanvas.
-   * Then call this to retrieve the pixel data.
-   */
-  _percentRedPixels() {
+  _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.renderGridShape(viewer, target, viewerLocation, targetLocation);
+    return this._countRedPixels();
+  }
+
+  _countRedPixels() {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
 
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
-    return super._percentRedPixels();
+    return super._countRedPixels();
   }
+
+  /**
+   * Must first render to the gpuCanvas.
+   * Then call this to retrieve the pixel data.
+   */
+  _countRedBlockedPixels() {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
+
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
+    return super._countRedBlockedPixels();
+  }
+
+  destroy() { this.renderObstacles.destroy(); }
 }
 
 export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCalculatorAbstract {
   static viewpointClass = WebGPUViewpointAsync;
+
+  /** @type {number} */
+  static WIDTH = 128;
+
+  /** @type {number} */
+  static HEIGHT = 128;
+
+  /** @type {RenderObstaclesWebGL2|RenderObstacles} */
+  renderObstacles;
 
   /** @type {WebGPUSumRedPixels} */
   sumPixels;
@@ -126,19 +155,58 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
   }
 
   async initialize() {
-    await super.initialize();
+    await this.renderObstacles.initialize();
     await this.sumPixels.initialize();
     this.renderObstacles.setRenderTextureToInternalTexture()
   }
 
-  async _percentRedPixelsAsync() {
-    const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
-    return (res.red - res.redBlocked) / res.red;
+  _redPixels = 0;
+
+  _redBlockedPixels = 0;
+
+  _gridArea = 0;
+
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.prerender();
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+    const res = this.sumPixels.computeSync(this.renderObstacles.renderTexture);
+    this._redPixels = res.red;
+    this._redBlockedPixels = res.redBlocked;
+
+    if ( this.config.largeTarget ) {
+      this._gridArea = this._calculateGridShapeArea(viewer, target, viewerLocation, targetLocation);
+    }
   }
 
-  _percentRedPixels() {
+  _gridShapeArea() { return this._gridArea; }
+
+  _viewableTargetArea(viewer, target, viewerLocation, targetLocation) { return this._redPixels; }
+
+  _totalTargetArea(viewer, target, viewerLocation, targetLocation) { return this._redBlockedPixels; }
+
+
+  async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.prerender();
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+    const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
+    this._redPixels = res.red;
+    this._redBlockedPixels = res.redBlocked;
+
+    if ( this.config.largeTarget ) {
+      this._gridArea = await this._calculateGridShapeAreaAsync(viewer, target, viewerLocation, targetLocation);
+    }
+  }
+
+  _calculateGridShapeArea(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
     const res = this.sumPixels.computeSync(this.renderObstacles.renderTexture);
-    return (res.red - res.redBlocked) / res.red;
+    return res.red;
+  }
+
+  async _calculateGridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+    const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
+    return res.red;
   }
 }
 

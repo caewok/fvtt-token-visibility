@@ -211,6 +211,7 @@ console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
   calcGeometric: calcGeometric.percentVisible(viewer, target),
   calcPIXI: calcPIXI.percentVisible(viewer, target),
+  calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
   calcHybrid: calcHybrid.percentVisible(viewer, target),

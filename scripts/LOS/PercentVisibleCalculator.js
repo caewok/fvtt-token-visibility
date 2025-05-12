@@ -74,7 +74,7 @@ export class PercentVisibleCalculatorAbstract {
     targetLocation ??= Point3d.fromTokenCenter(target);
 
     this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
-    return this._percentRedPixels(viewer, target, viewerLocation, targetLocation);
+    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
   }
 
   async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
@@ -82,8 +82,8 @@ export class PercentVisibleCalculatorAbstract {
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
-    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
-    return this._percentRedPixelsAsync(viewer, target, viewerLocation, targetLocation);
+    await this._calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation);
+    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
   }
 
   /**
@@ -96,14 +96,16 @@ export class PercentVisibleCalculatorAbstract {
    */
   _calculatePercentVisible(_viewer, _target, _viewerLocation, _targetLocation) { return; }
 
+  async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+  }
+
   /**
-   * Determine the percentage red pixels for the current view.
+   * Determine the percent unobscured view.
    * @returns {number}
    * @override
    */
-  _percentRedPixels(_viewer, _target, _viewerLocation, _targetLocation) { console.error("PercentVisibleCalculator|Must be overriden by child class.") }
-
-  async _percentRedPixelsAsync(viewer, target, viewerLocation, targetLocation) { return this._percentRedPixels(viewer, target, viewerLocation, targetLocation); }
+  _percentUnobscured(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 
   destroy() { return; }
 
@@ -113,29 +115,46 @@ export class PercentVisibleCalculatorAbstract {
  * Handles classes that use RenderObstacles to draw a 3d view of the scene from the viewer perspective.
  */
 export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalculatorAbstract {
-  /** @type {number} */
-  static WIDTH = 128;
+  /**
+   * Determine the percent unobscured view.
+   * @returns {number}
+   * @override
+   */
+  _percentUnobscured(viewer, target, viewerLocation, targetLocation) {
+    let totalArea = this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
+    if ( this.config.largeTarget ) {
+      totalArea = Math.min(totalArea, this._gridShapeArea(viewer, target, viewerLocation, targetLocation));
+    }
+    if ( !totalArea ) {
+      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0.`);
+      return 0;
+    }
+    const viewableArea = this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
+    const percentSeen = viewableArea / totalArea;
 
-  /** @type {number} */
-  static HEIGHT = 128;
-
-  /** @type {RenderObstaclesWebGL2|RenderObstacles} */
-  renderObstacles;
-
-  async initialize() {
-    await this.renderObstacles.initialize();
+    // Round the percent seen so that near-zero areas are 0.
+    // Because of trimming walls near the vision triangle, a small amount of token area can poke through
+    if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
+    return Math.clamp(percentSeen, 0, 1);
   }
 
-  percentVisible(...args) {
-    this.renderObstacles.prerender();
-    return super.percentVisible(...args);
-  }
 
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-  }
+  /**
+   * Grid shape area centered on the target as seen from the viewer location.
+   * Used to determine the minimum area needed for the largeTarget option.
+   * @returns {number}
+   */
+  _gridShapeArea(viewer, target, viewerLocation, targetLocation) { return 0; }
 
-  destroy() {
-    if ( this.renderObstacles ) this.renderObstacles.destroy();
-  }
+  /**
+   * How much of the target area is viewable, considering obstacles.
+   * @returns {number}
+   */
+  _viewableTargetArea(viewer, target, viewerLocation, targetLocation) { return 0; }
+
+  /**
+   * The target area as seen from the viewer location, ignoring all obstacles.
+   * @returns {number}
+   */
+  _totalTargetArea(viewer, target, viewerLocation, targetLocation) { return 0; }
 }

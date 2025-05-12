@@ -11,7 +11,7 @@ import { WebGL2 } from "./WebGL2.js";
 import { GeometryDesc } from "../WebGPU/GeometryDesc.js";
 import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "../WebGPU/GeometryTile.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "../WebGPU/GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryGridDesc } from "../WebGPU/GeometryToken.js";
 import {
   NonDirectionalWallInstanceHandler,
   DirectionalWallInstanceHandler,
@@ -637,7 +637,6 @@ export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
 
   _sourceForTile() { return this.backgroundImage; }
 }
-
 export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
   static handlerClass = TokenInstanceHandler;
@@ -718,6 +717,27 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     }
   }
 }
+
+export class DrawableGridShape extends DrawableTokenWebGL2 {
+  /** @type {class} */
+  static geomClass = GeometryGridDesc;
+
+  filterObjects(visionTriangle, { target } = {}) {
+    const instanceSet = this.instanceSet;
+    instanceSet.clear();
+    if ( !this.placeableHandler.instanceIndexFromId.has(target.id) ) return;
+    instanceSet.add(this.placeableHandler.instanceIndexFromId.get(target.id));
+  }
+
+  async initialize() {
+    const promises = [this._createProgram()];
+    this.instanceSet.add(0);
+    this._initializeGeoms();
+    await Promise.allSettled(promises); // Prior to updating buffers, etc.
+    this._updateAllInstances();
+  }
+}
+
 
 export class UnconstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
   static includeToken(token, opts) {
