@@ -508,7 +508,8 @@ export class GeometryLitTokenDesc extends GeometryDesc {
   static defineVertices({ token } = {}) {
     // Set the token border to center at 0,0,0 to match handling of other geometries.
     const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const border = token.litTokenBorder.translate(-ctr.x, -ctr.y, -ctr.z);
+    const baseBorder = token.litTokenBorder || token.constrainedTokenBorder || token.tokenBorder;
+    const border = baseBorder.translate(-ctr.x, -ctr.y, -ctr.z);
     const { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
       this.label += " Cube"
