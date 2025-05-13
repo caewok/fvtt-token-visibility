@@ -306,8 +306,6 @@ class DrawableObjectsWebGL2Abstract {
     }
   }
 
-  vertexBuffer;
-
   vertexProps = {};
 
   bufferInfo = {};
@@ -325,7 +323,7 @@ class DrawableObjectsWebGL2Abstract {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
     const gl = this.webGL2.gl;
-    const vBuffer = this.vertexBuffer = gl.createBuffer();
+    const vBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.bufferDrawType]);
 
@@ -333,7 +331,7 @@ class DrawableObjectsWebGL2Abstract {
     const vertexProps = {
       aPos: {
         numComponents: 3,
-        buffer: this.vertexBuffer,
+        buffer: vBuffer,
         stride: this.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
         offset: 0,
       },
@@ -342,7 +340,7 @@ class DrawableObjectsWebGL2Abstract {
 
     if ( debugViewNormals ) vertexProps.aNorm = {
       numComponents: 3,
-      buffer: this.vertexBuffer,
+      buffer: vBuffer,
       stride: this.verticesArray.BYTES_PER_ELEMENT * 6,
       offset: 3 * this.verticesArray.BYTES_PER_ELEMENT,
     };
@@ -352,7 +350,7 @@ class DrawableObjectsWebGL2Abstract {
 
   _updateBuffersForInstance(idx) {
     const gl = this.webGL2.gl;
-    const vBuffer = this.vertexBuffer;
+    const vBuffer = this.bufferInfo.attribs.aPos.buffer;
     const iBuffer = this.bufferInfo.indices;
     const vOffsets = this.offsetData.vertex.offsets;
     const iOffsets = this.offsetData.index.offsets;
@@ -385,7 +383,7 @@ class DrawableObjectsWebGL2Abstract {
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
@@ -572,7 +570,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
 
     const uniforms = { uTileTexture: -1 };
@@ -665,7 +663,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
@@ -689,7 +687,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
@@ -948,7 +946,7 @@ export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
 //     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-//     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+//     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
 //     gl.bindBuffer(gl.ARRAY_BUFFER, this.modelBuffer);
 //    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
@@ -957,7 +955,7 @@ export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
 
 
 
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.modelBuffer);
 
     gl.bindVertexArray(this.vao);
