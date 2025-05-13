@@ -308,25 +308,27 @@ class DrawableObjectsWebGL2Abstract {
 
   vertexBuffer;
 
-  vertexProps;
+  vertexProps = {};
 
   bufferInfo = {};
 
   _initializeBuffers() {
     const gl = this.webGL2.gl;
 
-    // Set vertex buffer
-    const vBuffer = this.vertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.bufferDrawType]);
-
     // Set vertex attributes
-    const vertexProps = this.vertexProps = this._defineVertexAttributeProperties();
-    this.bufferInfo = twgl.createBufferInfoFromArrays(gl, vertexProps);
+    this.vertexProps = this._defineVertexAttributeProperties();
+    this.bufferInfo = twgl.createBufferInfoFromArrays(gl, this.vertexProps);
     this.vertexArrayInfo = twgl.createVertexArrayInfo(gl, this.programInfo, this.bufferInfo);
   }
 
   _defineVertexAttributeProperties() {
+    // Define a vertex buffer to be shared.
+    // https://github.com/greggman/twgl.js/issues/132.
+    const gl = this.webGL2.gl;
+    const vBuffer = this.vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.bufferDrawType]);
+
     const debugViewNormals = this.debugViewNormals;
     const vertexProps = {
       aPos: {
@@ -383,8 +385,8 @@ class DrawableObjectsWebGL2Abstract {
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
@@ -570,8 +572,8 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
 
     const uniforms = { uTileTexture: -1 };
     for ( const idx of this.instanceSet ) {
@@ -581,7 +583,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
       twgl.setUniforms(this.programInfo, uniforms);
       WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
     }
-    gl.bindVertexArray(null);
+    // gl.bindVertexArray(null);
   }
 
   /**
@@ -663,8 +665,8 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
     this.#tmpSet.clear();
@@ -675,7 +677,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
     this.#tmpSet.add(idx);
     WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
-    gl.bindVertexArray(null);
+    // gl.bindVertexArray(null);
   }
 
   /** @type {Set<number>} */
@@ -687,14 +689,14 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
     for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
     twgl.setUniforms(this.programInfo, this.materialUniforms);
     WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
-    gl.bindVertexArray(null);
+    // gl.bindVertexArray(null);
   }
 
   /**
@@ -914,93 +916,19 @@ export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
 
   _updateIndices() { return; }
 
-  _updateVerticesForInstance(idx) { return; }
-
-  vao;
-
-  _initializeBuffers() {
-    const gl = this.webGL2.gl;
-
-    // See https://webgl2fundamentals.org/webgl/lessons/webgl-instanced-drawing.html
-    const debugViewNormals = this.debugViewNormals;
-
-    this.vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-
-    // Set position buffer
-    const vBuffer = this.vertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.geom.vertices, gl.STATIC_DRAW);
-
-    // Setup the position attribute
-    const posLoc = gl.getAttribLocation(this.programInfo.program, "aPos");
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(
-      posLoc,     // location
-      3,          // size (num values to pull from buffer per iteration)
-      gl.FLOAT,   // type of data in buffer
-      false,      // normalize
-      this.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),          // stride
-      0,          // offset within buffer
-    )
-
-    if ( debugViewNormals ) {
-      // Set normal attribute
-      const normLoc = gl.getAttribLocation(this.programInfo.program, "aNorm");
-      gl.enableVertexAttribArray(normLoc);
-      gl.vertexAttribPointer(
-        normLoc,      // location
-        3,            // size (num values to pull from buffer per iteration)
-        gl.FLOAT,     // type of data in buffer
-        false,        // normalize
-        this.verticesArray.BYTES_PER_ELEMENT * 6,   // stride
-        3 * this.verticesArray.BYTES_PER_ELEMENT,   // offset within buffer
-      );
-    }
-
-    // Set model buffer
-    const mBuffer = this.modelBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, this.placeableHandler.instanceArrayValues, gl.DYNAMIC_DRAW);
-
-    // Set model (matrices) attribute
-    // Set all 4 attributes per matrix.
-    const modelLoc = gl.getAttribLocation(this.programInfo.program, "aModel");
-    const bytesPerMatrix = 4 * 16;
-    for ( let i = 0; i < 4; i += 1 ) {
-      const loc = modelLoc + i;
-      gl.enableVertexAttribArray(loc);
-
-      // Note the stride and offset.
-      const offset = i * 16;    // 4 floats per row, 4 bytes per float
-      gl.vertexAttribPointer(
-        loc,              // location
-        4,                // size
-        gl.FLOAT,         // type of data
-        false,            // normalize
-        bytesPerMatrix,   // stride
-        offset,           // offset in buffer
-      );
-      gl.vertexAttribDivisor(loc, 1); // Attribute changes for each 1 instance.
-    }
-
-    // Set index buffer
-    const indexBuffer = this.indexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.geom.indices, gl.STATIC_DRAW);
-  }
+  _updateVerticesForInstance(_idx) { return; }
 
   _defineVertexAttributeProperties() {
+    const gl = this.webGL2.gl;
     const vertexProps = super._defineVertexAttributeProperties();
-    const modelBuffer = this.placeableHandler.instanceArrayValues;
+
     vertexProps.aModel = {
-      numComponents: 4,
-      buffer: this.modelBuffer,
-      stride: 4 * 16,
-      offset: 0,
+      numComponents: 16,
+      data: this.placeableHandler.instanceArrayValues,
+      drawType: gl.DYNAMIC_DRAW,
       divisor: 1,
     };
-    vertexProps.aPos.indices = this.geom.indices;
+    vertexProps.indices = this.geom.indices;
     return vertexProps;
   }
 
