@@ -910,7 +910,10 @@ export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
 
   _initializeOffsets() { return; }
 
-  _initializeVerticesAndArrays() { return; }
+  _initializeVerticesAndArrays() {
+    this.verticesArray = this.geom.vertices;
+    this.indicesArray = this.geom.indices;
+  }
 
   _updateIndices() { return; }
 
@@ -920,19 +923,19 @@ export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
     const gl = this.webGL2.gl;
     const vertexProps = super._defineVertexAttributeProperties();
 
+    // Define the model matrix, which changes 1 per instance.
     vertexProps.aModel = {
       numComponents: 16,
       data: this.placeableHandler.instanceArrayValues,
       drawType: gl.DYNAMIC_DRAW,
       divisor: 1,
     };
-    vertexProps.indices = this.geom.indices;
     return vertexProps;
   }
 
   _updateBuffersForInstance(idx) {
     const gl = this.webGL2.gl;
-    const mBuffer = this.modelBuffer;
+    const mBuffer = this.bufferInfo.attribs.aModel.buffer;
 
     // See twgl.setAttribInfoBufferFromArray.
     const mOffset = 4 * 16 * idx;
@@ -945,21 +948,9 @@ export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
 
     const gl = this.webGL2.gl;
     gl.useProgram(this.programInfo.program);
-//     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
-//     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
-//     gl.bindBuffer(gl.ARRAY_BUFFER, this.modelBuffer);
-//    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
-
-
-
-
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.modelBuffer);
-
-    gl.bindVertexArray(this.vao);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
 
     // TODO: Swap between canvas and renderTexture.
 

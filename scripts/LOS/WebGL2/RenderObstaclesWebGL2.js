@@ -310,11 +310,11 @@ export class RenderTileObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
 export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
   /** @type {class} */
   static drawableClasses = [
-    // DrawableObjectsWallInstance,
-    DrawableNonDirectionalWallWebGL2,
-    DrawableDirectionalWallWebGL2,
-    DrawableNonDirectionalTerrainWallWebGL2,
-    DrawableDirectionalTerrainWallWebGL2,
+    DrawableObjectsWallInstance,
+//     DrawableNonDirectionalWallWebGL2,
+//     DrawableDirectionalWallWebGL2,
+//     DrawableNonDirectionalTerrainWallWebGL2,
+//     DrawableDirectionalTerrainWallWebGL2,
     DrawableTileWebGL2,
     UnconstrainedDrawableTokenWebGL2,
     ConstrainedDrawableTokenWebGL2,
