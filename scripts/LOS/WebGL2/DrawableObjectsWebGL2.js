@@ -674,12 +674,11 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
-    this.#tmpSet.clear();
-
     // Render the target red.
     for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
+    this.#tmpSet.clear();
     this.#tmpSet.add(idx);
     WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
     // gl.bindVertexArray(null);
@@ -1024,7 +1023,7 @@ export class DrawableDirectionalTerrainWallInstance extends DrawableWallInstance
   static obstacleColor = [0, 0.5, 1, 0.5];
 }
 
-export class DrawableObjectTokenInstance extends DrawableTokenWebGL2 {
+export class DrawableTokenInstance extends DrawableTokenWebGL2 {
   /** @type {string} */
   static vertexFile = "instance_vertex";
 
@@ -1076,7 +1075,6 @@ export class DrawableObjectTokenInstance extends DrawableTokenWebGL2 {
     gl.useProgram(this.programInfo.program);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
-    twgl.setUniforms(this.programInfo, this.materialUniforms);
 
    // Render the target red.
     for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
@@ -1123,7 +1121,7 @@ export class DrawableObjectTokenInstance extends DrawableTokenWebGL2 {
   }
 }
 
-export class UnconstrainedDrawableTokenInstance extends DrawableObjectTokenInstance {
+export class UnconstrainedDrawableTokenInstance extends DrawableTokenInstance {
   static includeToken(token, opts) {
     if ( token.isConstrainedTokenBorder ) return false;
     return DrawableTokenWebGL2.includeToken(token, opts);

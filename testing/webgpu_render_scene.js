@@ -64,7 +64,8 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("tokenvisibility").api
 Plane = CONFIG.GeometryLib.threeD.Plane
 AbstractViewpoint = api.AbstractViewpoint
-// ClipperPaths = CONFIG.GeometryLib.ClipperPaths
+ClipperPaths = CONFIG.GeometryLib.ClipperPaths
+Clipper2Paths = CONFIG.GeometryLib.Clipper2Paths
 
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn
 QBenchmarkLoopFnWithSleep = CONFIG.GeometryLib.bench.QBenchmarkLoopFnWithSleep

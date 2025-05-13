@@ -363,14 +363,10 @@ Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
   CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
-
-
-
 });
 
-Hooks.on("canvasReady", function() {
-  console.debug(`${MODULE_ID}|canvasReady`);
-
+Hooks.once("ready", function() {
+  console.debug(`${MODULE_ID}|ready hook`);
   const basicCalcs = [
     "points",
     "geometric",
@@ -404,6 +400,11 @@ Hooks.on("canvasReady", function() {
       calc.initialize(); // Async.
     }
   });
+
+});
+
+Hooks.on("canvasReady", function() {
+  console.debug(`${MODULE_ID}|canvasReady`);
 
   Settings.initializeDebugGraphics();
 

@@ -152,21 +152,21 @@ export class Polygon3d {
 
     let points;
     if ( ClipperPaths === CONFIG.GeometryLib.Clipper2Paths ) {
+      const Point64 = CONFIG.GeometryLib.Clipper2Paths.Clipper2.Point64;
       switch ( omitAxis ) {
-        case "x": points = this.points.flatMap(pt => [pt.y, pt.z]); break;
-        case "y": points = this.points.flatMap(pt => [pt.x, pt.z]); break;
-        case "z": points = this.points.flatMap(pt => [pt.x, pt.y]); break;
+        case "x": points = this.points.map(pt => new Point64(pt.to2d({x: "y", y: "z"}), scalingFactor)); break;
+        case "y": points = this.points.map(pt => new Point64(pt.to2d({x: "x", y: "z"}), scalingFactor)); break;
+        case "z": points = this.points.map(pt => new Point64(pt.to2d({x: "x", y: "y"}), scalingFactor)); break;
       }
     } else {
+      const IntPoint = ClipperLib.IntPoint;
       switch ( omitAxis ) {
-        case "x": points = this.points.map(pt => { return { X: pt.y, Y: pt.z } }); break;
-        case "y": points = this.points.map(pt => { return { X: pt.x, Y: pt.z } }); break;
-        case "z": points = this.points.map(pt => { return { X: pt.x, Y: pt.y } }); break;
+        case "x": points = this.points.map(pt => new IntPoint(pt.y * scalingFactor, pt.z * scalingFactor)); break;
+        case "y": points = this.points.map(pt => new IntPoint(pt.x * scalingFactor, pt.z * scalingFactor)); break;
+        case "z": points = this.points.map(pt => new IntPoint(pt.x * scalingFactor, pt.y * scalingFactor)); break;
       }
     }
-
-    const out = new CONFIG[MODULE_ID].ClipperPaths([points]);
-    out.scalingFactor = scalingFactor;
+    const out = new CONFIG[MODULE_ID].ClipperPaths([points], { scalingFactor });
     return out;
   }
 
