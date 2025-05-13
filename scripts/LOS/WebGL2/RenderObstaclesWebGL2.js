@@ -21,7 +21,12 @@ import {
   DrawableSceneBackgroundWebGL2,
   ConstrainedDrawableHexTokenWebGL2,
   DrawableGridShape,
-  DrawableObjectsWallInstance,
+  DrawableWallInstance,
+  DrawableNonDirectionalWallInstance,
+  DrawableDirectionalWallInstance,
+  DrawableNonDirectionalTerrainWallInstance,
+  DrawableDirectionalTerrainWallInstance,
+  UnconstrainedDrawableTokenInstance,
 } from "./DrawableObjectsWebGL2.js";
 
 export class RenderObstaclesAbstractWebGL2 {
@@ -310,11 +315,10 @@ export class RenderTileObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
 export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
   /** @type {class} */
   static drawableClasses = [
-    DrawableObjectsWallInstance,
-//     DrawableNonDirectionalWallWebGL2,
-//     DrawableDirectionalWallWebGL2,
-//     DrawableNonDirectionalTerrainWallWebGL2,
-//     DrawableDirectionalTerrainWallWebGL2,
+    DrawableNonDirectionalWallWebGL2,
+    DrawableDirectionalWallWebGL2,
+    DrawableNonDirectionalTerrainWallWebGL2,
+    DrawableDirectionalTerrainWallWebGL2,
     DrawableTileWebGL2,
     UnconstrainedDrawableTokenWebGL2,
     ConstrainedDrawableTokenWebGL2,
@@ -322,11 +326,26 @@ export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
   ];
 }
 
+export class RenderObstaclesInstancesWebGL2 extends RenderObstaclesAbstractWebGL2 {
+  /** @type {class} */
+  static drawableClasses = [
+    DrawableNonDirectionalWallInstance,
+    DrawableDirectionalWallInstance,
+    DrawableNonDirectionalTerrainWallInstance,
+    DrawableDirectionalTerrainWallInstance,
+    DrawableTileWebGL2,
+    UnconstrainedDrawableTokenInstance,
+    ConstrainedDrawableTokenWebGL2,
+    ConstrainedDrawableHexTokenWebGL2,
+  ];
+}
+
+
 export class RenderObstaclesWithBackgroundWebGL2 extends RenderObstaclesWebGL2 {
   static drawableClasses = [
     //DrawableNonDirectionalWallWebGL2,
     //DrawableDirectionalWallWebGL2,
-    DrawableObjectsWallInstance,
+    DrawableWallInstance,
     //DrawableNonDirectionalTerrainWallWebGL2,
     //DrawableDirectionalTerrainWallWebGL2,
     DrawableTileWebGL2,

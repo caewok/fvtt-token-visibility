@@ -4,7 +4,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
+import { RenderObstaclesWebGL2, RenderObstaclesInstancesWebGL2 } from "./RenderObstaclesWebGL2.js";
 
 // Base folder
 
@@ -28,7 +28,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   static defaultConfiguration = {
     ...PercentVisibleRenderCalculatorAbstract.defaultConfiguration,
     alphaThreshold: 0.75,
-  }
+    useInstancing: false,
+  };
 
   /** @type {number} */
   static WIDTH = 128;
@@ -50,7 +51,9 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { WIDTH, HEIGHT } = this.constructor;
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
     const gl = this.gl = this.constructor.glCanvas.getContext("webgl2");
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
+
+    const renderCl = this.config.useInstancing ? RenderObstaclesInstancesWebGL2 : RenderObstaclesWebGL2;
+    this.renderObstacles = new renderCl({ gl, senseType: this.config.senseType });
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 

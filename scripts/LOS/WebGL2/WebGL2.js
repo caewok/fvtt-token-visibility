@@ -487,24 +487,6 @@ export class WebGL2 {
     const indexType = gl.UNSIGNED_SHORT;
     gl.drawElementsInstanced(primitiveType, elementCount, indexType, offset, instanceCount);
   }
-
-//   static drawInstanceSet(gl, instanceSet, elementCount, instanceOffset) {
-//     if ( !(instanceSet.size || instanceSet.length) ) return;
-//
-//     // Handle either instances all same number of vertices or different number.
-//     const instanceLength = Number.isNumeric(offsetData.index.lengths)
-//       ? offsetData.index.lengths : 0;
-//
-//     // For a consecutive group, draw all at once.
-//     // So if 0–5, 7–9, 12, should result in 3 draw calls.
-//     applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
-//       // Pull the offset and count from the offsetData.
-//       const offset = offsetData.index.offsets[firstInstance];
-//       const count = (instanceLength * instanceCount)
-//         || sumArray(offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount));
-//       this.drawInstanced(gl, elementCount, offset, instanceCount);
-//     });
-//   }
 }
 
 function sumArray(arr) { return arr.reduce((acc, curr) => acc + curr, 0); }

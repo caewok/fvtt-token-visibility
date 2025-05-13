@@ -142,6 +142,12 @@ Hooks.once("init", function() {
     alphaAreaThreshold: 25, // Area in pixels, e.g. 5x5 or ~ 8 x 3
 
     /**
+     * Filter the various placeable instances in Javascript, as opposed to
+     * drawing all of them and letting the GPU filter them out.
+     */
+    filterInstances: true,
+
+    /**
      * What to use when testing tiles for visibility.
      * "triangles": Basic two flat triangles that form a rectangle
      * "alphaThresholdTriangles": triangles representing opaque parts of the tile texture (using earcut and marching squares)

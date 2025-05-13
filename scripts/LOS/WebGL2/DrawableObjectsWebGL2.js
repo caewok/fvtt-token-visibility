@@ -390,8 +390,15 @@ class DrawableObjectsWebGL2Abstract {
 
     // TODO: Swap between canvas and renderTexture.
 
-    WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
-    gl.bindVertexArray(null);
+    if ( CONFIG[MODULE_ID].filterInstances ) {
+      WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
+    } else {
+      const instanceLength = Number.isNumeric(this.offsetData.index.lengths)
+        ? this.offsetData.index.lengths : 0;
+      WebGL2.draw(gl, instanceLength * this.placeableHandler.numInstances);
+    }
+
+    // gl.bindVertexArray(null);
   }
 
   /** @type {Set<number>} */
@@ -693,8 +700,15 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
     for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
     twgl.setUniforms(this.programInfo, this.materialUniforms);
-    WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
-    // gl.bindVertexArray(null);
+
+    if ( CONFIG[MODULE_ID].filterInstances ) {
+      WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
+    } else {
+      const instanceLength = Number.isNumeric(this.offsetData.index.lengths)
+        ? this.offsetData.index.lengths : 0;
+      WebGL2.draw(gl, instanceLength * this.placeableHandler.numInstances);
+    }
+    // gl.bindVertexArray(null)
   }
 
   /**
@@ -901,10 +915,9 @@ async function loadImageBitmap(url, opts = {}) {
 }
 
 
-
-export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
+export class DrawableWallInstance extends DrawableWallWebGL2 {
   /** @type {string} */
-  static vertexFile = "wall_vertex";
+  static vertexFile = "instance_vertex";
 
   modelBuffer;
 
@@ -954,30 +967,196 @@ export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
 
     // TODO: Swap between canvas and renderTexture.
 
-    // Draw every instance.
-    const nVertices = this.geom.numVertices;
-    WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
 
-
-    // To draw select instances, modify the buffer offset.
-    /*
-    const instanceSet = [...this.instanceSet.values()];
-    instanceSet.sort((a, b) => a - b);
-    const modelBuffer = this.modelBuffer;
-    const instanceSize = 16 * 4;
-    const positionLoc = gl.getAttribLocation(this.programInfo.program, 'aPos');
-    const { numComponents: size, type, stride, normalize } = this.bufferInfo.attribs.aModel;
-    const nVertices = this.geom.numVertices;
-    const tmp = this.placeableHandler.instanceArrayValues;
-    console.debug(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
-    applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
-      const offset = (firstInstance * instanceSize);
-      gl.bindBuffer(gl.ARRAY_BUFFER, modelBuffer);
-      gl.vertexAttribPointer(positionLoc, size, type, normalize, stride, offset);
-      console.debug({ size, stride, offset, instanceCount });
-
-      WebGL2.drawInstanced(gl, nVertices, 0, instanceCount);
-    });
-    */
+    if ( CONFIG[MODULE_ID].filterInstances ) {
+      // To draw select instances, modify the buffer offset.
+      // const tmp = this.placeableHandler.instanceArrayValues;
+      // console.debug(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
+      drawInstancedMatrixSet(
+        gl,
+        this.instanceSet,
+        this.geom.numVertices,
+        this.bufferInfo.attribs.aModel,
+        gl.getAttribLocation(this.programInfo.program, 'aModel'),
+      );
+    } else {
+      // Draw every instance
+      const nVertices = this.geom.numVertices;
+      WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
+    }
   }
+}
+
+
+export class DrawableNonDirectionalWallInstance extends DrawableWallInstance {
+  /** @type {class} */
+  static handlerClass = NonDirectionalWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = false;
+}
+
+export class DrawableDirectionalWallInstance extends DrawableWallInstance {
+  /** @type {class} */
+  static handlerClass = DirectionalWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = true;
+}
+
+export class DrawableNonDirectionalTerrainWallInstance extends DrawableWallInstance {
+  /** @type {class} */
+  static handlerClass = NonDirectionalTerrainWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = false;
+
+  static obstacleColor = [0, 0.5, 1, 0.5];
+}
+
+export class DrawableDirectionalTerrainWallInstance extends DrawableWallInstance {
+  /** @type {class} */
+  static handlerClass = DirectionalTerrainWallInstanceHandler;
+
+  /** @type {boolean} */
+  static directional = true;
+
+  static obstacleColor = [0, 0.5, 1, 0.5];
+}
+
+export class DrawableObjectTokenInstance extends DrawableTokenWebGL2 {
+  /** @type {string} */
+  static vertexFile = "instance_vertex";
+
+  modelBuffer;
+
+  _initializeOffsets() { return; }
+
+  _initializeVerticesAndArrays() {
+    this.verticesArray = this.geom.vertices;
+    this.indicesArray = this.geom.indices;
+  }
+
+  _updateIndices() { return; }
+
+  _updateVerticesForInstance(_idx) { return; }
+
+  _defineVertexAttributeProperties() {
+    const gl = this.webGL2.gl;
+    const vertexProps = super._defineVertexAttributeProperties();
+
+    // Define the model matrix, which changes 1 per instance.
+    vertexProps.aModel = {
+      numComponents: 16,
+      data: this.placeableHandler.instanceArrayValues,
+      drawType: gl.DYNAMIC_DRAW,
+      divisor: 1,
+    };
+    return vertexProps;
+  }
+
+  _updateBuffersForInstance(idx) {
+    const gl = this.webGL2.gl;
+    const mBuffer = this.bufferInfo.attribs.aModel.buffer;
+
+    // See twgl.setAttribInfoBufferFromArray.
+    const mOffset = 4 * 16 * idx;
+    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, this.placeableHandler.matrices[idx].arr);
+  }
+
+  /** @type {Set<number>} */
+  #tmpSet = new Set();
+
+  renderTarget(target) {
+    const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
+    if ( typeof idx === "undefined" ) return;
+
+    const gl = this.webGL2.gl;
+    gl.useProgram(this.programInfo.program);
+    twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
+    twgl.setUniforms(this.programInfo, this.uniforms);
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
+
+   // Render the target red.
+    for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
+
+    this.#tmpSet.clear();
+    this.#tmpSet.add(idx);
+
+    drawInstancedMatrixSet(
+      gl,
+      this.#tmpSet,
+      this.geom.numVertices,
+      this.bufferInfo.attribs.aModel,
+      gl.getAttribLocation(this.programInfo.program, 'aModel'),
+    );
+
+  }
+
+  render(_target, _viewer) {
+    if ( !this.instanceSet.size ) return;
+
+    const gl = this.webGL2.gl;
+    gl.useProgram(this.programInfo.program);
+    twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
+    twgl.setUniforms(this.programInfo, this.uniforms);
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
+
+    if ( CONFIG[MODULE_ID].filterInstances ) {
+      // To draw select instances, modify the buffer offset.
+      // const tmp = this.placeableHandler.instanceArrayValues;
+      // console.debug(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
+      drawInstancedMatrixSet(
+        gl,
+        this.instanceSet,
+        this.geom.numVertices,
+        this.bufferInfo.attribs.aModel,
+        gl.getAttribLocation(this.programInfo.program, 'aModel'),
+      );
+    } else {
+      // Draw every instance
+      const nVertices = this.geom.numVertices;
+      WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
+    }
+  }
+}
+
+export class UnconstrainedDrawableTokenInstance extends DrawableObjectTokenInstance {
+  static includeToken(token, opts) {
+    if ( token.isConstrainedTokenBorder ) return false;
+    return DrawableTokenWebGL2.includeToken(token, opts);
+  }
+
+  renderTarget(target) {
+    if ( target.isConstrainedTokenBorder ) return;
+    super.renderTarget(target);
+  }
+}
+
+/**
+ * Draw instanced for only the specified instances.
+ * Cannot simply specify the instance start in webGL2, b/c that extension is barely supported.
+ * Instead, move the pointer in the buffer accordingly.
+ * This function assumes a single matrix that must be instanced.
+ * @param {WebGL2Context} gl
+ * @param {Set<number>} instanceSet     Instances to draw
+ * @param {number} elementCount         Number of vertices to draw
+ * @param {twgl.AttribInfo} instanceBufferInfo    Info for the instance buffer
+ * @param {number} positionLoc                    Position of the matrix attribute
+ */
+function drawInstancedMatrixSet(gl, instanceSet, elementCount, instanceBufferInfo, positionLoc) {
+  const instanceSize = 16 * 4;
+  const { numComponents: size, type, stride, normalize, buffer: mBuffer } = instanceBufferInfo;
+  applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
+    const offset = (firstInstance * instanceSize);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
+    gl.vertexAttribPointer(positionLoc, 4, type, normalize, stride, offset);
+    gl.vertexAttribPointer(positionLoc+1, 4, type, normalize, stride, offset + 4*4);
+    gl.vertexAttribPointer(positionLoc+2, 4, type, normalize, stride, offset + 4*8);
+    gl.vertexAttribPointer(positionLoc+3, 4, type, normalize, stride, offset + 4*12);
+    // console.debug({ size, stride, offset, instanceCount });
+    WebGL2.drawInstanced(gl, elementCount, 0, instanceCount);
+  });
 }
