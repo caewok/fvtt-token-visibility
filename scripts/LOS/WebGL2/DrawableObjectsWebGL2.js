@@ -788,9 +788,9 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
     const addUVs = this.constructor.addUVs;
     const addNormals = this.debugViewNormals;
     ph.placeableFromInstanceIndex.entries().forEach(([idx, token]) => {
-      // Translate so that instance matrix does not need to be applied.
-      const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-      this.geoms[idx] = new GeometryConstrainedTokenDesc({ token, addUVs, addNormals, x, y, z });
+      // GeometryConstrainedTokenDesc already returns world space so the instance matrix need not be applied
+      // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      this.geoms[idx] = new GeometryConstrainedTokenDesc({ token, addUVs, addNormals });
     });
   }
 

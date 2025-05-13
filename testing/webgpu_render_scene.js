@@ -122,6 +122,51 @@ target = game.user.targets.first()
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
 
+
+// Giant Ape, Sprite
+// Test Camera lookat
+viewerLoc = Point3d.fromTokenCenter(viewer)
+targetLoc = Point3d.fromTokenCenter(target)
+
+camera = new Camera({
+ glType: "webGL2",
+  perspectiveType: "perspective",
+  up: new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1),
+  mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
+});
+
+out = mat4.create()
+eye = [...viewerLoc]
+center = [...targetLoc]
+up = [0, 0, -1]
+mat4.lookAt(out, eye, center, up)
+
+glLookAt = new MatrixFlat(out, 4, 4)
+
+
+camera.cameraPosition = viewerLoc;
+camera.targetPosition = targetLoc;
+cameraLookAt = camera.lookAtMatrix
+
+glLookAt.print()
+cameraLookAt.print()
+
+
+targetPolys = target.tokenvisibility.triangles
+facingPolys = targetPolys.filter(poly => poly.isFacing(viewerLoc));
+facingPolys.map(poly => poly
+  .transform(camera.lookAtMatrix)
+)
+
+res = facingPolys.map(poly => [...poly.iteratePoints({close: false})].map(pt =>
+  vec4.transformMat4(vec4.create(), [...pt, 1], out)
+));
+
+
+vec4.transformMat4(vec4.create(), [...pts[0], 1], out)
+
+
+
 // Draw borders around tiles and borders for walls
 canvas.walls.placeables.forEach(wall => Draw.segment(wall));
 canvas.tiles.placeables.forEach(tile => Draw.shape(tile.bounds, { color: Draw.COLORS.red }))
@@ -310,6 +355,11 @@ for ( const clipperVersion of [1, 2] ) {
   }
 }
 await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
+
+// Beiro --> Zanna
+
+
+
 
 
 

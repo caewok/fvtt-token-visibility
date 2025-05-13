@@ -477,19 +477,21 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
   /** @type {Token} */
   token;
 
-  static defineVertices({ token } = {}) {
+  static defineVertices({ token, border } = {}) {
     // Set the token border to center at 0,0,0 to match handling of other geometries.
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const border = token.constrainedTokenBorder.translate(-ctr.x, -ctr.y, -ctr.z);
+    // Then pass through the token position to translate it back.
+    border ??= token.constrainedTokenBorder || token.tokenBorder;
+    const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const txBorder = border.translate(-x, -y, -z);
     const { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
       this.label += " Cube"
       const w = token.document.width * canvas.dimensions.size;
       const d = token.document.height * canvas.dimensions.size;
       const h = topZ - bottomZ;
-      return GeometryCubeDesc.defineVertices({ w, d, h });
+      return GeometryCubeDesc.defineVertices({ w, d, h, x, y, z });
     }
-    return this.define3dPolygonVertices(border, { topZ, bottomZ });
+    return this.define3dPolygonVertices(border, { topZ, bottomZ, x, y, z });
   }
 }
 
@@ -498,27 +500,13 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
  * Unlike GeometryCubeDesc, this constructs a token in world space.
  * Constructor options must include token.
  */
-export class GeometryLitTokenDesc extends GeometryDesc {
+export class GeometryLitTokenDesc extends GeometryConstrainedTokenDesc {
   /** @type {string} */
   label = "Lit Token";
 
-  /** @type {Token} */
-  token;
-
-  static defineVertices({ token } = {}) {
-    // Set the token border to center at 0,0,0 to match handling of other geometries.
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const baseBorder = token.litTokenBorder || token.constrainedTokenBorder || token.tokenBorder;
-    const border = baseBorder.translate(-ctr.x, -ctr.y, -ctr.z);
-    const { topZ, bottomZ } = token;
-    if ( border instanceof PIXI.Rectangle ) {
-      this.label += " Cube"
-      const w = token.document.width * canvas.dimensions.size;
-      const d = token.document.height * canvas.dimensions.size;
-      const h = topZ - bottomZ;
-      return GeometryCubeDesc.defineVertices({ w, d, h });
-    }
-    return this.define3dPolygonVertices(border, { topZ, bottomZ });
+  static defineVertices(opts = {}) {
+    opts.border ??= opts.token.litTokenBorder || opts.token.constrainedTokenBorder || opts.token.tokenBorder;
+    return super.defineVertices(opts);
   }
 }
 
