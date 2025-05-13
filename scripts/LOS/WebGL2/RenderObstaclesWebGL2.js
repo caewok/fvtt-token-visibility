@@ -21,6 +21,7 @@ import {
   DrawableSceneBackgroundWebGL2,
   ConstrainedDrawableHexTokenWebGL2,
   DrawableGridShape,
+  DrawableObjectsWallInstance,
 } from "./DrawableObjectsWebGL2.js";
 
 export class RenderObstaclesAbstractWebGL2 {
@@ -309,11 +310,12 @@ export class RenderTileObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
 export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
   /** @type {class} */
   static drawableClasses = [
-    DrawableNonDirectionalWallWebGL2,
-    DrawableDirectionalWallWebGL2,
+    DrawableObjectsWallInstance,
+//     DrawableNonDirectionalWallWebGL2,
+//     DrawableDirectionalWallWebGL2,
+//     DrawableNonDirectionalTerrainWallWebGL2,
+//     DrawableDirectionalTerrainWallWebGL2,
     DrawableTileWebGL2,
-    DrawableNonDirectionalTerrainWallWebGL2,
-    DrawableDirectionalTerrainWallWebGL2,
     UnconstrainedDrawableTokenWebGL2,
     ConstrainedDrawableTokenWebGL2,
     ConstrainedDrawableHexTokenWebGL2,
@@ -322,11 +324,12 @@ export class RenderObstaclesWebGL2 extends RenderObstaclesAbstractWebGL2 {
 
 export class RenderObstaclesWithBackgroundWebGL2 extends RenderObstaclesWebGL2 {
   static drawableClasses = [
-    DrawableNonDirectionalWallWebGL2,
-    DrawableDirectionalWallWebGL2,
+    //DrawableNonDirectionalWallWebGL2,
+    //DrawableDirectionalWallWebGL2,
+    DrawableObjectsWallInstance,
+    //DrawableNonDirectionalTerrainWallWebGL2,
+    //DrawableDirectionalTerrainWallWebGL2,
     DrawableTileWebGL2,
-    DrawableNonDirectionalTerrainWallWebGL2,
-    DrawableDirectionalTerrainWallWebGL2,
     DrawableSceneBackgroundWebGL2,
     UnconstrainedDrawableTokenWebGL2,
     ConstrainedDrawableTokenWebGL2,

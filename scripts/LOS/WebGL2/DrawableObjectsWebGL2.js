@@ -23,6 +23,7 @@ import {
 } from "../WebGPU/PlaceableInstanceHandler.js";
 
 import * as twgl from "./twgl.js";
+import { applyConsecutively } from "../util.js";
 
 class DrawableObjectsWebGL2Abstract {
   /** @type {class} */
@@ -305,13 +306,19 @@ class DrawableObjectsWebGL2Abstract {
     }
   }
 
+  vertexBuffer;
+
+  vertexProps;
+
+  bufferInfo = {};
+
   _initializeBuffers() {
     const gl = this.webGL2.gl;
 
     // Set vertex buffer
-    const vBuffer = this.vertexBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.bufferDrawType])
+    const vBuffer = this.vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.bufferDrawType]);
 
     // Set vertex attributes
     const vertexProps = this.vertexProps = this._defineVertexAttributeProperties();
@@ -891,4 +898,169 @@ async function loadImageBitmap(url, opts = {}) {
   const res = await fetch(url);
   const blob = await res.blob();
   return await createImageBitmap(blob, opts);
+}
+
+
+
+export class DrawableObjectsWallInstance extends DrawableWallWebGL2 {
+  /** @type {string} */
+  static vertexFile = "wall_vertex";
+
+  modelBuffer;
+
+  _initializeOffsets() { return; }
+
+  _initializeVerticesAndArrays() { return; }
+
+  _updateIndices() { return; }
+
+  _updateVerticesForInstance(idx) { return; }
+
+  vao;
+
+  _initializeBuffers() {
+    const gl = this.webGL2.gl;
+
+    // See https://webgl2fundamentals.org/webgl/lessons/webgl-instanced-drawing.html
+    const debugViewNormals = this.debugViewNormals;
+
+    this.vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    // Set position buffer
+    const vBuffer = this.vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.geom.vertices, gl.STATIC_DRAW);
+
+    // Setup the position attribute
+    const posLoc = gl.getAttribLocation(this.programInfo.program, "aPos");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(
+      posLoc,     // location
+      3,          // size (num values to pull from buffer per iteration)
+      gl.FLOAT,   // type of data in buffer
+      false,      // normalize
+      this.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),          // stride
+      0,          // offset within buffer
+    )
+
+    if ( debugViewNormals ) {
+      // Set normal attribute
+      const normLoc = gl.getAttribLocation(this.programInfo.program, "aNorm");
+      gl.enableVertexAttribArray(normLoc);
+      gl.vertexAttribPointer(
+        normLoc,      // location
+        3,            // size (num values to pull from buffer per iteration)
+        gl.FLOAT,     // type of data in buffer
+        false,        // normalize
+        this.verticesArray.BYTES_PER_ELEMENT * 6,   // stride
+        3 * this.verticesArray.BYTES_PER_ELEMENT,   // offset within buffer
+      );
+    }
+
+    // Set model buffer
+    const mBuffer = this.modelBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, this.placeableHandler.instanceArrayValues, gl.DYNAMIC_DRAW);
+
+    // Set model (matrices) attribute
+    // Set all 4 attributes per matrix.
+    const modelLoc = gl.getAttribLocation(this.programInfo.program, "aModel");
+    const bytesPerMatrix = 4 * 16;
+    for ( let i = 0; i < 4; i += 1 ) {
+      const loc = modelLoc + i;
+      gl.enableVertexAttribArray(loc);
+
+      // Note the stride and offset.
+      const offset = i * 16;    // 4 floats per row, 4 bytes per float
+      gl.vertexAttribPointer(
+        loc,              // location
+        4,                // size
+        gl.FLOAT,         // type of data
+        false,            // normalize
+        bytesPerMatrix,   // stride
+        offset,           // offset in buffer
+      );
+      gl.vertexAttribDivisor(loc, 1); // Attribute changes for each 1 instance.
+    }
+
+    // Set index buffer
+    const indexBuffer = this.indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.geom.indices, gl.STATIC_DRAW);
+  }
+
+  _defineVertexAttributeProperties() {
+    const vertexProps = super._defineVertexAttributeProperties();
+    const modelBuffer = this.placeableHandler.instanceArrayValues;
+    vertexProps.aModel = {
+      numComponents: 4,
+      buffer: this.modelBuffer,
+      stride: 4 * 16,
+      offset: 0,
+      divisor: 1,
+    };
+    vertexProps.aPos.indices = this.geom.indices;
+    return vertexProps;
+  }
+
+  _updateBuffersForInstance(idx) {
+    const gl = this.webGL2.gl;
+    const mBuffer = this.modelBuffer;
+
+    // See twgl.setAttribInfoBufferFromArray.
+    const mOffset = 4 * 16 * idx;
+    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, this.placeableHandler.matrices[idx].arr);
+  }
+
+  render(_target, _viewer) {
+    if ( !this.instanceSet.size ) return;
+
+    const gl = this.webGL2.gl;
+    gl.useProgram(this.programInfo.program);
+//     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
+//     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+//     gl.bindBuffer(gl.ARRAY_BUFFER, this.modelBuffer);
+//    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+    twgl.setUniforms(this.programInfo, this.uniforms);
+    twgl.setUniforms(this.programInfo, this.materialUniforms);
+
+
+
+
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    // gl.bindBuffer(gl.ARRAY_BUFFER, this.modelBuffer);
+
+    gl.bindVertexArray(this.vao);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+
+    // TODO: Swap between canvas and renderTexture.
+
+    // Draw every instance.
+    const nVertices = this.geom.numVertices;
+    WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
+
+
+    // To draw select instances, modify the buffer offset.
+    /*
+    const instanceSet = [...this.instanceSet.values()];
+    instanceSet.sort((a, b) => a - b);
+    const modelBuffer = this.modelBuffer;
+    const instanceSize = 16 * 4;
+    const positionLoc = gl.getAttribLocation(this.programInfo.program, 'aPos');
+    const { numComponents: size, type, stride, normalize } = this.bufferInfo.attribs.aModel;
+    const nVertices = this.geom.numVertices;
+    const tmp = this.placeableHandler.instanceArrayValues;
+    console.debug(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
+    applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
+      const offset = (firstInstance * instanceSize);
+      gl.bindBuffer(gl.ARRAY_BUFFER, modelBuffer);
+      gl.vertexAttribPointer(positionLoc, size, type, normalize, stride, offset);
+      console.debug({ size, stride, offset, instanceCount });
+
+      WebGL2.drawInstanced(gl, nVertices, 0, instanceCount);
+    });
+    */
+  }
 }
