@@ -26,6 +26,7 @@ import {
   DrawableDirectionalWallInstance,
   DrawableNonDirectionalTerrainWallInstance,
   DrawableDirectionalTerrainWallInstance,
+  DrawableTokenInstance,
   UnconstrainedDrawableTokenInstance,
 } from "./DrawableObjectsWebGL2.js";
 
@@ -81,12 +82,22 @@ export class RenderObstaclesAbstractWebGL2 {
       this.drawableObjects.push(drawableObj);
       switch ( cl ) {
         case DrawableTokenWebGL2:
+        case DrawableTokenInstance:
+        case UnconstrainedDrawableTokenInstance:
         case UnconstrainedDrawableTokenWebGL2:
         case ConstrainedDrawableHexTokenWebGL2:
-        case ConstrainedDrawableTokenWebGL2: this.drawableTargets.push(drawableObj); this.drawableObstacles.push(drawableObj); break;
-        case DrawableSceneBackgroundWebGL2: this.drawableFloor = drawableObj; break;
+        case ConstrainedDrawableTokenWebGL2:
+          this.drawableTargets.push(drawableObj); this.drawableObstacles.push(drawableObj); break;
+
+        case DrawableSceneBackgroundWebGL2:
+          this.drawableFloor = drawableObj; break;
+
         case DrawableNonDirectionalTerrainWallWebGL2:
-        case DrawableDirectionalTerrainWallWebGL2: this.drawableTerrain.push(drawableObj); break;
+        case DrawableNonDirectionalTerrainWallInstance:
+        case DrawableDirectionalTerrainWallInstance:
+        case DrawableDirectionalTerrainWallWebGL2:
+          this.drawableTerrain.push(drawableObj); break;
+
         default: this.drawableObstacles.push(drawableObj);
       }
     }

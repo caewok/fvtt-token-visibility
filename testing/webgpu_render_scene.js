@@ -164,6 +164,7 @@ debugViewer = buildDebugViewer(api.debugViewers.points)
 debugViewer = buildDebugViewer(api.debugViewers.geometric)
 debugViewer = buildDebugViewer(api.debugViewers.PIXI, { width: 512, height: 512 })
 debugViewer = buildDebugViewer(api.debugViewers.webGL2)
+debugViewer = buildDebugViewer(api.debugViewers.webGL2, { useInstancing: true, debugView: false })
 debugViewer = buildDebugViewer(api.debugViewers.webGPU)
 debugViewer = buildDebugViewer(api.debugViewers.webGPUAsync)
 debugViewer = buildDebugViewer(api.debugViewers.hybrid)
@@ -219,13 +220,13 @@ console.table({
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
   calcHybrid: calcHybrid.percentVisible(viewer, target),
-  async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
-  asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),
-  async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
-  async_calcWebGL2Instancing: await calcWebGL2Instancing.percentVisibleAsync(viewer, target),
-  async_calcWebGPU: await calcWebGPU.percentVisibleAsync(viewer, target),
-  async_calcWebGPUAsync: await calcWebGPUAsync.percentVisibleAsync(viewer, target),
-  async_calcHybrid: await calcHybrid.percentVisibleAsync(viewer, target),
+//   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
+//   asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),
+//   async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
+//   async_calcWebGL2Instancing: await calcWebGL2Instancing.percentVisibleAsync(viewer, target),
+//   async_calcWebGPU: await calcWebGPU.percentVisibleAsync(viewer, target),
+//   async_calcWebGPUAsync: await calcWebGPUAsync.percentVisibleAsync(viewer, target),
+//   async_calcHybrid: await calcHybrid.percentVisibleAsync(viewer, target),
 })
 
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop
@@ -263,6 +264,9 @@ CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
 
 CONFIG.tokenvisibility.clipperVersion = 1
 CONFIG.tokenvisibility.clipperVersion = 2
+
+CONFIG.tokenvisibility.filterInstances = true
+CONFIG.tokenvisibility.filterInstances = false
 
 
 calcs = [calcPoints, calcGeometric, calcHybrid, calcPIXI, calcWebGL2, calcWebGL2Instancing, calcWebGPU, calcWebGPUAsync];
