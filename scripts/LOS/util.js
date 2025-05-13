@@ -447,3 +447,24 @@ export function orient3dFast(a, b, c, d) {
         bd.x * (cd.y * ad.z - cd.z * ad.y) +
         cd.x * (ad.y * bd.z - ad.z * bd.y);
 }
+
+/**
+ * For a given numeric array or numeric set, apply a method to each consecutive group.
+ * So if 0–5, 7–9, 12, should result in 3 callbacks:
+ *  { start: 0, length: 5 }, { start: 7, length: 3 }, { start: 12, length: 1 }
+ * @param {Set<number>|number[]} arr
+ * @param {function} callback
+ *   - @param {number} start        The starting number
+ *   - @param {number} length       The length of consecutive numbers.
+ */
+export function applyConsecutively(arr, callback) {
+  if ( arr instanceof Set ) arr = [...arr.values()];
+  arr.sort((a, b) => a - b);
+
+  for ( let i = 0, iMax = arr.length; i < iMax; i += 1 ) {
+    const start = arr[i];
+    let length = 1;
+    while ( arr[i + 1] === arr[i] + 1 ) { length += 1; i += 1; }
+    callback(start, length);
+  }
+}
