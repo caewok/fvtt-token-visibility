@@ -398,7 +398,7 @@ class DrawableObjectsWebGL2Abstract {
       WebGL2.draw(gl, instanceLength * this.placeableHandler.numInstances);
     }
 
-    // gl.bindVertexArray(null);
+    gl.bindVertexArray(null);
   }
 
   /** @type {Set<number>} */
@@ -588,7 +588,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
       twgl.setUniforms(this.programInfo, uniforms);
       WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
     }
-    // gl.bindVertexArray(null);
+    gl.bindVertexArray(null);
   }
 
   /**
@@ -681,7 +681,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     this.#tmpSet.clear();
     this.#tmpSet.add(idx);
     WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
-    // gl.bindVertexArray(null);
+    gl.bindVertexArray(null);
   }
 
   /** @type {Set<number>} */
@@ -707,7 +707,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
         ? this.offsetData.index.lengths : 0;
       WebGL2.draw(gl, instanceLength * this.placeableHandler.numInstances);
     }
-    // gl.bindVertexArray(null)
+    gl.bindVertexArray(null)
   }
 
   /**
@@ -983,6 +983,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
       const nVertices = this.geom.numVertices;
       WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
     }
+    gl.bindVertexArray(null);
   }
 }
 
@@ -1090,7 +1091,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
       this.bufferInfo.attribs.aModel,
       gl.getAttribLocation(this.programInfo.program, 'aModel'),
     );
-
+    gl.bindVertexArray(null);
   }
 
   render(_target, _viewer) {
@@ -1118,6 +1119,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
       const nVertices = this.geom.numVertices;
       WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
     }
+    gl.bindVertexArray(null);
   }
 }
 
