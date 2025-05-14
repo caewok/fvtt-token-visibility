@@ -1472,9 +1472,9 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       if ( token.constrainedTokenBorder.equals(token.litTokenBorder) ) continue;
 
-      // Translate so that instance matrix does not need to be applied.
-      const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-      const geom = new GeometryLitTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false, x, y, z })
+      // GeometryLitTokenDesc uses world coordinates; instance matrix does not need to be applied.
+      // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      const geom = new GeometryLitTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
       this.geometries.set(token.id, geom);
       this.drawables.set(token.id, {
         label: `Token drawable ${token.id}`,
