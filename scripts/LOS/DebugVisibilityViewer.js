@@ -62,10 +62,7 @@ export class DebugVisibilityViewerAbstract {
 
   render() {
     this.clearDebug();
-
     if ( !(this.viewer && this.target ) ) return;
-    this.viewerLOS.viewer = this.viewer;
-    this.viewerLOS.target = this.target;
 
     // First draw the basic debugging graphics for the canvas.
     this._drawCanvasDebug();
