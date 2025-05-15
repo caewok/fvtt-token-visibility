@@ -84,22 +84,22 @@ export class RenderObstacles {
   device;
 
   /** @type {DrawObjectsAbstract[]} */
-  drawableObjects = [];
+  drawableObjects = []; // Instantiations of all drawableClasses.
 
   /** @type {DrawObjectsAbstract[]} */
-  drawableObstacles = [];
+  drawableObstacles = []; // All drawable objects that should be filtered by vision triangle.
 
   /** @type {DrawableObjectsAbstract} */
-  drawableGridShape;
+  drawableGridShape; // The unit grid shape as a drawable object.
 
   /** @type {object<DrawableObjectsAbstract>} */
-  drawableToken;
+  drawableToken; // Unconstrained token drawable object.
 
   /** @type {DrawableObjectsAbstract} */
-  drawableConstrainedToken;
+  drawableConstrainedToken; // Constrained token drawable object.
 
   /** @type {DrawableObjectsAbstract} */
-  drawableLitToken;
+  drawableLitToken; // Lit token drawable object.
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" });
@@ -137,6 +137,7 @@ export class RenderObstacles {
     const opts = { senseType: this.senseType, debugViewNormals: this.debugViewNormals };
 
     for ( const cl of this.constructor.drawableClasses ) {
+      // Use hex-specific classes for non-constrained token drawing as necessary.
       if ( !canvas.grid.isHexagonal && cl === DrawableHexTokenInstances ) continue;
       if ( canvas.grid.isHexagonal && cl === DrawableTokenInstances ) continue;
 
@@ -147,18 +148,20 @@ export class RenderObstacles {
         case DrawableLitTokens:
           this.drawableLitToken = drawableObj; break;
 
+        // Same for the unit grid shape; not a filtered obstacle.
+        case DrawableGridInstances:
+          this.drawableGridShape = drawableObj; break;
+
         case DrawableTokenInstances:
         case DrawableHexTokenInstances:
           this.drawableToken = drawableObj;
+          this.drawableObstacles.push(drawableObj);
           break;
 
         case DrawableConstrainedTokens:
           this.drawableConstrainedToken = drawableObj;
           this.drawableObstacles.push(drawableObj);
           break;
-
-        case DrawableGridInstances:
-          this.drawableGridShape = drawableObj;
 
         default:
           this.drawableObstacles.push(drawableObj);
@@ -297,9 +300,7 @@ export class RenderObstacles {
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
-
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
-    this.drawableToken.filterObjects(visionTriangle, opts);
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -332,7 +333,6 @@ export class RenderObstacles {
     else this.drawableToken.renderTarget(renderPass, target);
 
     // Render the obstacles
-    this.drawableToken.render(renderPass, target);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?
