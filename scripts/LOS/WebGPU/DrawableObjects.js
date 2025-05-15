@@ -1,8 +1,6 @@
 /* globals
 canvas,
-CONFIG,
 CONST,
-foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -899,7 +897,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     this.materials.create({ b: 1.0, label: "obstacle" });
     this.materials.create({ r: 1.0, label: "target" });
     const geom = this.geometries.get("token");
-    this.drawables.set("token", {
+    this.drawables.set("obstacle", {
       label: "Token obstacle",
       geom,
       materialBG: this.materials.bindGroups.get("obstacle"),
@@ -946,7 +944,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     blocking.tokens.prone ??= true;
 
     // Limit tokens as obstacles.
-    const drawable = this.drawables.get("token");
+    const drawable = this.drawables.get("obstacle");
     drawable.instanceSet.clear();
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
@@ -958,16 +956,6 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       }
     }
 
-    // Add target as a distinct drawable.
-    const targetDrawable = this.drawables.get("target");
-    targetDrawable.instanceSet.clear();
-    if ( target ) {
-      const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
-      drawable.instanceSet.delete(targetIdx);
-
-      // If the target is not constrained, set it here.
-      if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
-    }
     super.filterObjects(visionTriangle);
   }
 
@@ -986,16 +974,20 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
   /**
    * Render only the target token.
    */
-  renderTarget(renderPass, _target) {
+  renderTarget(renderPass, target) {
     const drawable = this.drawables.get("target");
-    if ( !drawable ) return;
+    drawable.instanceSet.clear();
+
+    const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
+    if ( !idx ) return;
+    drawable.instanceSet.add(idx);
     this._renderDrawable(renderPass, drawable);
   }
 
   /**
    * Render all but the target
    */
-  renderObstacles(renderPass, _target) {
+  render(renderPass, _target) {
     const drawable = this.drawables.get("obstacle");
     if ( !drawable ) return;
     this._renderDrawable(renderPass, drawable);
@@ -1147,7 +1139,7 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
   /**
    * Render all but the target
    */
-  renderObstacles(renderPass, _target) {
+  render(renderPass, _target) {
     for ( const drawable of this.drawables.values ) {
       if ( drawable.label === "Token target" ) continue;
       this._renderDrawable(renderPass, drawable);
@@ -1429,15 +1421,17 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
    * Render only the target token.
    */
   renderTarget(renderPass, target) {
-    const drawable = this.drawables.get(target.id);
-    if ( !drawable ) return;
+    const targetDrawable = this.drawables.get("target");
+    targetDrawable.instanceSet.clear();
+    const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
+    drawable.instanceSet.add(targetIdx);
     this._renderDrawable(renderPass, drawable);
   }
 
   /**
    * Render all but the target
    */
-  renderObstacles(renderPass, target) {
+  render(renderPass, target) {
     for ( const [key, drawable] of this.drawables.entries() ) {
       if ( key === target.id ) continue;
       this._renderDrawable(renderPass, drawable);
@@ -1519,16 +1513,16 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
         drawable.numInstances = Number(tokens.has(token));
       }
     } else this.drawables.forEach(drawable => drawable.numInstances = 0);
+  }
 
-    // Set material for target and set it to be drawn.
-    if ( useLitTargetShape
-      && target
-      && this.drawables.has(target.id)
-      && !target.constrainedTokenBorder.equals(target.litTokenBorder) ) {
-
-      const drawable = this.drawables.get(target.id);
-      drawable.numInstances = 1;
-      drawable.materialBG = this.materials.bindGroups.get("target");
-    }
+  /**
+   * Render only the target token.
+   */
+  renderTarget(renderPass, _target) {
+    const drawable = this.drawables.get(target.id);
+    if ( !drawable ) return;
+    drawable.numInstances = 1;
+    drawable.materialBG = this.materials.bindGroups.get("target");
+    this._renderDrawable(renderPass, drawable);
   }
 }

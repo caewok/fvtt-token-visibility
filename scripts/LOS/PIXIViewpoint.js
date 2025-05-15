@@ -194,6 +194,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleRenderCalculator
   }
 
   #buildTargetMesh(shaders) {
+    // TODO: Option to draw lit target instead of constrained.
     const targetShader = shaders.target;
     return this.constructor.buildMesh(this.target[GEOMETRY_ID].geometry, targetShader);
   }
@@ -304,8 +305,9 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleRenderCalculator
    * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
    * @override
    */
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation, renderer) {
-    renderer ??= canvas.app.renderer;
+  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+    // TODO: Do we ever need another renderer?
+    const renderer = canvas.app.renderer;
     this.viewer = viewer;
     this.target = target;
     this.viewpoint = viewerLocation;
@@ -321,15 +323,6 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleRenderCalculator
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
     const { renderTexture, shaders } = this;
-    if ( this.config.largeTarget ) {
-      const gridCubeGeometry = new Grid3dGeometry(target);
-      gridCubeGeometry.updateObjectPoints(); // Necessary if just created?
-      gridCubeGeometry.updateVertices();     // Necessary if just created?
-
-      const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
-      renderer.render(gridCubeMesh, { renderTexture, clear: true });
-      this.gridCubeCache = renderer.extract._rawPixels(renderTexture);
-    }
 
     // Build target mesh to measure the target viewable area.
     // TODO: This will always calculate the full area, even if a wall intersects the target.
@@ -353,7 +346,34 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleRenderCalculator
     return mesh;
   }
 
-  _gridShapeArea() { return sumRedPixels(this.gridCubeCache); }
+  /**
+   * Constrained target area, counting both lit and unlit portions of the target.
+   * Used to determine the total area (denominator) when useLitTarget config is set.
+   * @returns {number}
+   */
+  _constrainedTargetArea() {
+    const renderer = canvas.app.renderer;
+    const { renderTexture, shaders } = this;
+
+    this.#renderTarget(renderer, renderTexture, shaders);
+    const cache = canvas.app.renderer.extract._rawPixels(renderTexture);
+    return sumRedPixels(cache);
+  }
+
+  _gridShapeArea() {
+    // TODO: Do we ever need another renderer?
+    const renderer = canvas.app.renderer;
+    const { renderTexture, shaders } = this;
+
+    const gridCubeGeometry = new Grid3dGeometry(this.target);
+    gridCubeGeometry.updateObjectPoints(); // Necessary if just created?
+    gridCubeGeometry.updateVertices();     // Necessary if just created?
+
+    const gridCubeMesh = this.constructor.buildMesh(this.gridCubeGeometry, shaders.target);
+    renderer.render(gridCubeMesh, { renderTexture, clear: true });
+    const gridCubeCache = renderer.extract._rawPixels(renderTexture);
+    return sumRedPixels(gridCubeCache);
+  }
 
   _viewableTargetArea() {
     const obstacleSum = this.blockingObjects.terrainWalls.size ? sumRedObstaclesPixels : sumRedPixels;

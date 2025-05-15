@@ -35,7 +35,7 @@ function buildConfig() {
     },
     debug: false,
     threshold: Settings.get(TARGET.PERCENT) ?? 0.75,
-    useLitTargetShape: true,
+    useLitTargetShape: false,
     largeTarget: Settings.get(TARGET.LARGE) ?? false,
 
     // For points algorithm

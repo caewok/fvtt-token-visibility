@@ -4,7 +4,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { RenderObstaclesWebGL2, RenderObstaclesInstancesWebGL2 } from "./RenderObstaclesWebGL2.js";
+import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 
 // Base folder
 
@@ -52,8 +52,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
     const gl = this.gl = this.constructor.glCanvas.getContext("webgl2");
 
-    const renderCl = this.config.useInstancing ? RenderObstaclesInstancesWebGL2 : RenderObstaclesWebGL2;
-    this.renderObstacles = new renderCl({ gl, senseType: this.config.senseType });
+    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 
@@ -79,10 +78,29 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     this._redBlockedPixels = res.countRedBlocked;
   }
 
+  /**
+   * Grid shape area centered on the target as seen from the viewer location.
+   * Used to determine the minimum area needed (denominator) for the largeTarget option.
+   * Called after _calculatePercentVisible.
+   * @returns {number}
+   */
   _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+    return this._countRedPixels();
+  }
+
+  /**
+   * Constrained target area, counting both lit and unlit portions of the target.
+   * Used to determine the total area (denominator) when useLitTarget config is set.
+   * Called after _calculatePercentVisible.
+   * @returns {number}
+   */
+  _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
     return this._countRedPixels();
   }
 

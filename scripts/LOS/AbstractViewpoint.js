@@ -17,6 +17,7 @@ import { Settings } from "../settings.js";
 import { VisionTriangle } from "./VisionTriangle.js";
 import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { NULL_SET } from "./util.js";
+import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 
 import {
   insetPoints,
@@ -387,6 +388,46 @@ export class AbstractViewpoint {
     // Scale down polygon to avoid adjacent walls.
     const padShape = tokenShape.pad(-2, { scalingFactor: 100 });
     return [...padShape.iteratePoints({close: false})].map(pt => new Point3d(pt.x, pt.y, elevation));
+  }
+
+  /**
+   * Get polygons representing all grids under a token.
+   * If token is constrained, overlap the constrained polygon on the grid shapes.
+   * @param {Token} token
+   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   */
+  static constrainedGridShapesUnderToken(token) {
+    const gridShapes = this.gridShapesUnderToken(token);
+    const constrained = token.constrainedTokenBorder;
+
+    // Token unconstrained by walls.
+    if ( constrained instanceof PIXI.Rectangle ) return gridShapes;
+
+    // For each gridShape, intersect against the constrained shape
+    const constrainedGridShapes = [];
+    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([constrained]);
+    for ( let gridShape of gridShapes ) {
+      if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
+
+      const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
+      if ( !constrainedGridShape || constrainedGridShape.points.length < 6 ) continue;
+      constrainedGridShapes.push(constrainedGridShape);
+    }
+
+    return constrainedGridShapes;
+  }
+
+  /**
+   * Get polygons representing all grids under a token.
+   * @param {Token} token
+   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   */
+  static gridShapesUnderToken(token) {
+    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) {
+      // console.error("gridShapesUnderTarget called on gridless scene!");
+      return [token.bounds];
+    }
+    return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
 
   /**
