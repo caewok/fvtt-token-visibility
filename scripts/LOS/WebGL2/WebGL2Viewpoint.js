@@ -51,15 +51,17 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { WIDTH, HEIGHT } = this.constructor;
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
     const gl = this.gl = this.constructor.glCanvas.getContext("webgl2");
-
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
   }
 
   /** @type {RenderObstaclesWebGL2} */
   renderObstacles;
 
-  async initialize() { await this.renderObstacles.initialize(); }
+  async initialize() {
+    const gl = this.gl;
+    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
+    await this.renderObstacles.initialize();
+  }
 
 
   _redPixels = 0;
@@ -69,11 +71,9 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
     this.renderObstacles.prerender();
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-
+    const res = this._countRedBlockedPixels();
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    super._calculatePercentVisible(viewer, target, viewerLocation, targetLocation)
-    const res = this._countRedBlockedPixels();
     this._redPixels = res.countRed;
     this._redBlockedPixels = res.countRedBlocked;
   }

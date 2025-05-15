@@ -41,33 +41,13 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
   /** @type {GPUCanvasContext} */
   gpuCtx;
 
+  device;
+
   constructor({ device, ...opts } = {}) {
     super(opts);
-    device ??= CONFIG[MODULE_ID].webGPUDevice;
-    this.renderObstacles = new RenderObstacles(device,
-      { senseType: this.config.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT });
-
+    this.device = device;
     this.constructor.gpuCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
-
-    if ( !device ) {
-      const self = this;
-      WebGPUDevice.getDevice().then(device => {
-        self.device = device
-        self.gpuCtx.configure({
-          device,
-          format: WebGPUDevice.presentationFormat,
-          alphamode: "premultiplied", // Instead of "opaque"
-        });
-      });
-    } else {
-      this.device = device
-      this.gpuCtx.configure({
-        device,
-        format: WebGPUDevice.presentationFormat,
-        alphamode: "premultiplied", // Instead of "opaque"
-      });
-    }
 
     const gl = this.gl;
     this.texture = gl.createTexture();
@@ -75,7 +55,16 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
   }
 
   async initialize() {
-    await super.initialize();
+    this.device ??= await WebGPUDevice.getDevice();
+    this.gpuCtx.configure({
+      device: this.device,
+      format: WebGPUDevice.presentationFormat,
+      alphamode: "premultiplied", // Instead of "opaque"
+    });
+
+    this.renderObstacles = new RenderObstacles(this.device,
+      { senseType: this.config.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT });
+    await this.renderObstacles.initialize();
     this.renderObstacles.setRenderTextureToCanvas(this.constructor.gpuCanvas);
   }
 

@@ -93,7 +93,7 @@ export class RenderObstacles {
   drawableGridShape;
 
   /** @type {object<DrawableObjectsAbstract>} */
-  drawableToken = { hex: null, grid: null };
+  drawableToken;
 
   /** @type {DrawableObjectsAbstract} */
   drawableConstrainedToken;
@@ -137,6 +137,9 @@ export class RenderObstacles {
     const opts = { senseType: this.senseType, debugViewNormals: this.debugViewNormals };
 
     for ( const cl of this.constructor.drawableClasses ) {
+      if ( !canvas.grid.isHexagonal && cl === DrawableHexTokenInstances ) continue;
+      if ( canvas.grid.isHexagonal && cl === DrawableTokenInstances ) continue;
+
       const drawableObj = new cl(this.device, this.materials, this.camera, opts);
       this.drawableObjects.push(drawableObj);
       switch ( cl ) {
@@ -145,11 +148,8 @@ export class RenderObstacles {
           this.drawableLitToken = drawableObj; break;
 
         case DrawableTokenInstances:
-          this.drawableToken.grid = drawableObj;
-          break;
-
         case DrawableHexTokenInstances:
-          this.drawableToken.hex = drawableObj;
+          this.drawableToken = drawableObj;
           break;
 
         case DrawableConstrainedTokens:
@@ -184,7 +184,6 @@ export class RenderObstacles {
   async initialize() {
     await this._initializeDrawObjects();
     this._allocateRenderTargets();
-    this.prerender();
   }
 
   /**
@@ -192,9 +191,15 @@ export class RenderObstacles {
    */
   async _initializeDrawObjects() {
     this._createCameraBindGroup();
+    /*
     const promises = [];
     for ( const drawableObj of this.drawableObjects ) promises.push(drawableObj.initialize());
     return Promise.allSettled(promises);
+    */
+
+    for ( const drawableObj of this.drawableObjects ) {
+      await drawableObj.initialize();
+    }
   }
 
   /** @type {ViewerLOSConfig} */
@@ -281,10 +286,7 @@ export class RenderObstacles {
 
     if ( useLitTargetShape && target.litTokenBorder ) this.drawableLitToken.renderTarget(renderPass, target);
     else if ( target.isConstrainedTokenBorder ) this.drawableConstrainedToken.renderTarget(renderPass, target);
-    else {
-      const type = canvas.grid.isHexagonal ? "hex" : "grid";
-      this.drawableToken[type].renderTarget(renderPass, target);
-    }
+    else this.drawableToken.renderTarget(renderPass, target);
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
@@ -295,10 +297,9 @@ export class RenderObstacles {
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
-    const type = canvas.grid.isHexagonal ? "hex" : "grid";
 
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
-    this.drawableToken[type].filterObjects(visionTriangle, opts);
+    this.drawableToken.filterObjects(visionTriangle, opts);
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -328,10 +329,10 @@ export class RenderObstacles {
     // (Could be either constrained or not constrained.)
     if ( useLitTargetShape && target.litTokenBorder ) this.drawableLitToken.renderTarget(renderPass, target);
     else if ( target.isConstrainedTokenBorder ) this.drawableConstrainedToken.renderTarget(renderPass, target);
-    else this.drawableToken[type].renderTarget(renderPass, target);
+    else this.drawableToken.renderTarget(renderPass, target);
 
     // Render the obstacles
-    this.drawableToken[type].render(renderPass, target);
+    this.drawableToken.render(renderPass, target);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?

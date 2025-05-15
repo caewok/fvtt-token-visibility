@@ -50,10 +50,10 @@ export class RenderObstaclesWebGL2 {
   drawableUnconstrainedToken;
 
   /** @type {DrawableTokenWebGL2} */
-  drawableConstrainedToken = { hex: null, grid: null };
+  drawableConstrainedToken;
 
   /** @type {DrawableTokenWebGL2} */
-  drawableLitToken = { hex: null, grid: null };
+  drawableLitToken;
 
   /** @type {DrawableObjectsAbstract} */
   drawableFloor;
@@ -90,6 +90,15 @@ export class RenderObstaclesWebGL2 {
       LitDrawableTokenWebGL2,
       LitDrawableHexTokenWebGL2,
     ];
+    if ( canvas.grid.isHexagonal  ) drawableClasses.push(
+      ConstrainedDrawableHexTokenWebGL2,
+      LitDrawableHexTokenWebGL2,
+    );
+    else drawableClasses.push(
+      ConstrainedDrawableTokenWebGL2,
+      LitDrawableTokenWebGL2,
+    );
+
     if ( useInstancing ) {
       drawableClasses.push(
         DrawableTokenInstance,
@@ -117,15 +126,13 @@ export class RenderObstaclesWebGL2 {
       switch ( cl ) {
         // Lit tokens not used as obstacles; only targets.
         case LitDrawableTokenWebGL2:
-          this.drawableLitToken.grid = drawableObj; break;
         case LitDrawableHexTokenWebGL2:
-          this.drawableLitToken.hex = drawableObj; break;
+          this.drawableLitToken = drawableObj; break;
 
         // Constrained tokens used as obstacles but handled separately.
         case ConstrainedDrawableTokenWebGL2:
-          this.drawableConstrainedToken.grid = drawableObj; break;
         case ConstrainedDrawableHexTokenWebGL2:
-          this.drawableConstrainedToken.hex = drawableObj; break;
+          this.drawableConstrainedToken = drawableObj; break;
 
         case DrawableTokenWebGL2:
         case DrawableTokenInstance:
@@ -194,9 +201,8 @@ export class RenderObstaclesWebGL2 {
   prerender() {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
 
-    const type = canvas.grid.isHexagonal ? "hex" : "grid";
-    if ( this.config.useLitTargetShape ) this.drawableLitToken[type].prerender();
-    this.drawableConstrainedToken[type].prerender();
+    if ( this.config.useLitTargetShape ) this.drawableLitToken.prerender();
+    this.drawableConstrainedToken.prerender();
   }
 
   renderGridShape(viewerLocation, target, { targetLocation, frame } = {}) {
@@ -261,10 +267,9 @@ export class RenderObstaclesWebGL2 {
     const border = (useLitTargetShape ? target.litTokenBorder : undefined)
       ?? target.constrainedTokenBorder ?? target.tokenBorder;
 
-    const type = canvas.grid.isHexagonal ? "hex" : "grid";
     if ( border.equals(target.tokenBorder) ) this.drawableUnconstrainedToken.renderTarget(target);
-    else if ( useLitTargetShape ) this.drawableLitToken[type].renderTarget(target);
-    else this.drawableConstrainedToken[type].renderTarget(target);
+    else if ( useLitTargetShape ) this.drawableLitToken.renderTarget(target);
+    else this.drawableConstrainedToken.renderTarget(target);
   }
 
   render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, useLitTargetShape = false } = {}) {
@@ -274,7 +279,7 @@ export class RenderObstaclesWebGL2 {
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     const type = canvas.grid.isHexagonal ? "hex" : "grid";
-    this.drawableConstrainedToken[type].filterObjects(visionTriangle, opts);
+    this.drawableConstrainedToken.filterObjects(visionTriangle, opts);
 
     const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
 
