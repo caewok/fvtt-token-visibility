@@ -42,7 +42,12 @@ export class DebugVisibilityViewerAbstract {
   /** @type {Token} */
   #viewer;
 
-  get viewer() { return (this.#viewer ??= canvas.tokens.controlled[0]); }
+  get viewer() {
+    // Try to set viewer to the first controlled token if undefined.
+    // Use setter so the viewerLOS is properly set.
+    if ( !this.#viewer ) this.viewer = canvas.tokens.controlled[0];
+    return this.#viewer;
+  }
 
   set viewer(value) {
     this.#viewer = value;
@@ -53,7 +58,12 @@ export class DebugVisibilityViewerAbstract {
   /** @type {Token} */
   #target;
 
-  get target() { return (this.#target ??= game.user.targets.first()); }
+  get target() {
+    // Try to set target to the first targeted token if undefined.
+    // Use setter so the viewerLOS is properly set.
+    if ( !this.#target ) this.target = game.user.targets.first();
+    return this.#target;
+  }
 
   set target(value) {
     this.#target = value;
@@ -122,6 +132,7 @@ export class DebugVisibilityViewerAbstract {
   onControlToken(token, controlled) {
     // if ( !controlled ) return;
     if ( controlled ) this.viewer = token;
+    else if ( this.#viewer === token ) this.#viewer = undefined;
     this.render();
   }
 
@@ -134,6 +145,7 @@ export class DebugVisibilityViewerAbstract {
   onTargetToken(user, targetToken, targeted) {
     if ( game.user !== user ) return;
     if ( targeted ) this.target = targetToken;
+    else if ( this.#target === targetToken ) this.#target = undefined;
     this.render();
   }
 

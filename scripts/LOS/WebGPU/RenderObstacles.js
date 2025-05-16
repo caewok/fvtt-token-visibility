@@ -68,6 +68,7 @@ export class RenderObstacles {
     DrawableConstrainedTokens,
     DrawableHexTokenInstances,
     DrawableLitTokens,
+    DrawableGridInstances,
   ];
 
   /** @type {object} */
@@ -91,9 +92,6 @@ export class RenderObstacles {
 
   /** @type {DrawableObjectsAbstract} */
   drawableGridShape; // The unit grid shape as a drawable object.
-
-  /** @type {object<DrawableObjectsAbstract>} */
-  drawableToken; // Unconstrained token drawable object.
 
   /** @type {DrawableObjectsAbstract} */
   drawableConstrainedToken; // Constrained token drawable object.
@@ -151,12 +149,6 @@ export class RenderObstacles {
         // Same for the unit grid shape; not a filtered obstacle.
         case DrawableGridInstances:
           this.drawableGridShape = drawableObj; break;
-
-        case DrawableTokenInstances:
-        case DrawableHexTokenInstances:
-          this.drawableToken = drawableObj;
-          this.drawableObstacles.push(drawableObj);
-          break;
 
         case DrawableConstrainedTokens:
           this.drawableConstrainedToken = drawableObj;
@@ -231,8 +223,10 @@ export class RenderObstacles {
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  prerender() {
-    for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
+  prerender({ useLitTargetShape = false } = {}) {
+    for ( const drawableObj of this.drawableObstacles ) drawableObj.prerender();
+    if ( useLitTargetShape ) this.drawableLitToken.prerender({ useLitTargetShape });
+    this.drawableGridShape.prerender(); // Not an obstacle but requires prerender.
   }
 
   async renderAsync(viewerLocation, target, opts) {
@@ -267,6 +261,7 @@ export class RenderObstacles {
   }
 
   renderTarget(viewerLocation, target, { frame, useLitTargetShape = false } = {}) {
+    console.debug(`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
     const device = this.device;
 
     // Must set the canvas context immediately prior to render.
@@ -287,15 +282,18 @@ export class RenderObstacles {
 
     if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
 
-    if ( useLitTargetShape && target.litTokenBorder ) this.drawableLitToken.renderTarget(renderPass, target);
-    else if ( target.isConstrainedTokenBorder ) this.drawableConstrainedToken.renderTarget(renderPass, target);
-    else this.drawableToken.renderTarget(renderPass, target);
+    if ( useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) this.drawableLitToken.renderTarget(renderPass, target);
+    else this.drawableConstrainedToken.renderTarget(renderPass, target);
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
+    console.debug(`${this.constructor.name}|renderTarget|Finished rendering ${target.name}, ${target.id}`);
   }
 
   render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, useLitTargetShape = false } = {}) {
+    console.debug(`${this.constructor.name}|render|Begin rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
     const opts = { viewer, target, blocking: this.config.blocking, useLitTargetShape: this.config.useLitTargetShape };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
@@ -328,11 +326,15 @@ export class RenderObstacles {
     // Render the target.
     // Render first so full red of target is recorded.
     // (Could be either constrained or not constrained.)
-    if ( useLitTargetShape && target.litTokenBorder ) this.drawableLitToken.renderTarget(renderPass, target);
-    else if ( target.isConstrainedTokenBorder ) this.drawableConstrainedToken.renderTarget(renderPass, target);
-    else this.drawableToken.renderTarget(renderPass, target);
+    // Don't use instancing to render b/c that gets too complicated with the possible lit or constrained targets.
+    console.debug(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    if ( useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) this.drawableLitToken.renderTarget(renderPass, target);
+    else this.drawableConstrainedToken.renderTarget(renderPass, target);
 
     // Render the obstacles
+    console.debug(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?
@@ -340,6 +342,7 @@ export class RenderObstacles {
     this.device.queue.submit([commandEncoder.finish()]);
 
     if ( !clear ) renderPassDesc.colorAttachments[0].loadOp = loadOp; // Reset to default value.
+    console.debug(`${this.constructor.name}|render|Finished rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
 
   }
 

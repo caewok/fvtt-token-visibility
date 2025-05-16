@@ -81,27 +81,27 @@ export class AbstractViewpoint {
    * @param {Token} target
    * @returns {number}
    */
-  percentVisible(callback) {
-    const percent = this._simpleVisibilityTest() ?? this._percentVisible(callback);
+  percentVisible() {
+    const percent = this.simpleVisibilityTest() ?? this._percentVisible();
     // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
 
   async percentVisibleAsync() {
-    const percent = this._simpleVisibilityTest() ?? (await this._percentVisible());
+    const percent = this.simpleVisibilityTest() ?? (await this._percentVisible());
     // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
 
   /** @override */
   _percentVisible() {
-    // TODO: Handle configuration options.
-    return this.calculator.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+    const { calculator, viewer, target, viewpoint: viewerLocation, targetLocation } = this;
+    return calculator.percentVisible(viewer, target, { viewerLocation, targetLocation });
   }
 
   async _percentVisibleAsync() {
-    // TODO: Handle configuration options.
-    return this.calculator.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+    const { calculator, viewer, target, viewpoint: viewerLocation, targetLocation } = this;
+    return calculator.percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
   }
 
   /**
@@ -109,7 +109,7 @@ export class AbstractViewpoint {
    * @param {Token} target
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
-  _simpleVisibilityTest() {
+  simpleVisibilityTest() {
     const target = this.target;
 
     // If directly overlapping.
@@ -255,7 +255,7 @@ export class AbstractViewpoint {
     }
     if ( viewer ) {
       tokens.delete(viewer);
-      tokens = tokens.filter(t => tokensOverlap(  viewer, t));
+      tokens = tokens.filter(t => !tokensOverlap(viewer, t));
       if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer))
     }
 
