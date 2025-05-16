@@ -141,6 +141,8 @@ Hooks.once("init", function() {
      */
     filterInstances: true,
 
+    useStencil: false,
+
     /**
      * What to use when testing tiles for visibility.
      * "triangles": Basic two flat triangles that form a rectangle
