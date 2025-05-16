@@ -261,7 +261,7 @@ export class RenderObstacles {
   }
 
   renderTarget(viewerLocation, target, { frame, useLitTargetShape = false } = {}) {
-    console.debug(`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
+    // console.debug(`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
     const device = this.device;
 
     // Must set the canvas context immediately prior to render.
@@ -289,11 +289,11 @@ export class RenderObstacles {
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
-    console.debug(`${this.constructor.name}|renderTarget|Finished rendering ${target.name}, ${target.id}`);
+    // console.debug(`${this.constructor.name}|renderTarget|Finished rendering ${target.name}, ${target.id}`);
   }
 
   render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, useLitTargetShape = false } = {}) {
-    console.debug(`${this.constructor.name}|render|Begin rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    // console.debug(`${this.constructor.name}|render|Begin rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
     const opts = { viewer, target, blocking: this.config.blocking, useLitTargetShape: this.config.useLitTargetShape };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
@@ -327,14 +327,14 @@ export class RenderObstacles {
     // Render first so full red of target is recorded.
     // (Could be either constrained or not constrained.)
     // Don't use instancing to render b/c that gets too complicated with the possible lit or constrained targets.
-    console.debug(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    // console.debug(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
     if ( useLitTargetShape
       && target.litTokenBorder
       && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) this.drawableLitToken.renderTarget(renderPass, target);
     else this.drawableConstrainedToken.renderTarget(renderPass, target);
 
     // Render the obstacles
-    console.debug(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    // console.debug(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?
@@ -342,7 +342,7 @@ export class RenderObstacles {
     this.device.queue.submit([commandEncoder.finish()]);
 
     if ( !clear ) renderPassDesc.colorAttachments[0].loadOp = loadOp; // Reset to default value.
-    console.debug(`${this.constructor.name}|render|Finished rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    // console.debug(`${this.constructor.name}|render|Finished rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
 
   }
 

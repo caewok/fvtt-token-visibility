@@ -297,7 +297,7 @@ class DrawableObjectsAbstract {
    * @param {CommandEncoder} renderPass
    */
   _initializeRenderPass(renderPass, pipelineName = "default") {
-    console.debug(`${this.constructor.name}|_initializeRenderPass|pipeline ${pipelineName}`)
+    // console.debug (`${this.constructor.name}|_initializeRenderPass|pipeline ${pipelineName}`)
     renderPass.setPipeline(this.pipeline[pipelineName]);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CAMERA, this.camera.bindGroup);
   }
@@ -308,15 +308,15 @@ class DrawableObjectsAbstract {
    * @param {Drawable} drawable
    */
   _renderDrawable(renderPass, drawable) {
-    console.debug(`${this.constructor.name}|_renderDrawable|${drawable.label}`)
+    // console.debug (`${this.constructor.name}|_renderDrawable|${drawable.label}`)
     if ( !drawable.instanceSet.size ) return;
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
-    console.debug(`${this.constructor.name}|_renderDrawable|${drawable.label}`)
+    // console.debug (`${this.constructor.name}|_renderDrawable|${drawable.label}`)
 
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);
     drawable.geom.drawSet(renderPass, drawable.instanceSet);
-    console.debug(`${this.constructor.name}|_renderDrawable|Finished ${drawable.label}`)
+    // console.debug (`${this.constructor.name}|_renderDrawable|Finished ${drawable.label}`)
   }
 
   /**
@@ -397,7 +397,7 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
    */
   prerender() {
     if ( this.placeableHandler.bufferId > this.#placeableHandlerBufferId ) {
-      console.debug(`${this.constructor.name}|prerender|This buffer id ${this.#placeableHandlerBufferId} ≤ placeable bid ${this.placeableHandler.bufferId}`);
+      // console.debug (`${this.constructor.name}|prerender|This buffer id ${this.#placeableHandlerBufferId} ≤ placeable bid ${this.placeableHandler.bufferId}`);
       // One or more placeables were added/removed. Re-do the buffers.
       this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
       this.initializePlaceableBuffers();
@@ -447,7 +447,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
       size: this.placeableHandler.instanceArrayBuffer.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    console.debug(`${this.constructor.name}|_createInstanceBuffer`);
+    // console.debug (`${this.constructor.name}|_createInstanceBuffer`);
     device.queue.writeBuffer(this.buffers.instance, 0, this.placeableHandler.instanceArrayBuffer)
     this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer)
   }
@@ -475,7 +475,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return; // No changes since last update.
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-      console.debug(`${this.constructor.name}|prerender (instances)|This update ${lastUpdate} ≤ placeable bid ${this.placeableHandlerUpdateId}`);
+      // console.debug (`${this.constructor.name}|prerender (instances)|This update ${lastUpdate} ≤ placeable bid ${this.placeableHandlerUpdateId}`);
       this.partialUpdateInstanceBuffer(idx);
     }
     this.placeableHandlerUpdateId = placeableHandler.updateId;
@@ -489,7 +489,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   partialUpdateInstanceBuffer(idx) {
     const h = this.placeableHandler
     const M = h.matrices[idx];
-    console.debug(`${this.constructor.name}|partialUpdateInstanceBuffer|Updating ${idx}`);
+    // console.debug (`${this.constructor.name}|partialUpdateInstanceBuffer|Updating ${idx}`);
     // M.print();
     this.device.queue.writeBuffer(this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M.arr);
   }
@@ -621,7 +621,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // Set the culled instance buffer and indirect buffer for each drawable.
     // The indirect buffer determines how many elements in the culled instance buffer are drawn.
     for ( const drawable of this.drawables.values() ) {
-      console.debug(`${this.constructor.name}|_updateCulledValues|Updating drawable ${drawable.label}`, [...drawable.instanceSet.values()]);
+      // console.debug (`${this.constructor.name}|_updateCulledValues|Updating drawable ${drawable.label}`, [...drawable.instanceSet.values()]);
       if ( !drawable.instanceSet.size ) continue;
       let i = 0;
       drawable.instanceSet.forEach(idx => drawable.culledBufferRaw[i++] = idx);
@@ -641,14 +641,14 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    * @param {Drawable} drawable
    */
   _renderDrawable(renderPass, drawable) {
-    console.debug(`${this.constructor.name}|_renderDrawable (culled)|${drawable.label}`)
+    // console.debug (`${this.constructor.name}|_renderDrawable (culled)|${drawable.label}`)
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CULLED, drawable.culledBG);
 
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);
     renderPass.drawIndexedIndirect(this.buffers.indirect, drawable.indirectOffset);
-    console.debug(`${this.constructor.name}|_renderDrawable|Finished ${drawable.label}`)
+    // console.debug (`${this.constructor.name}|_renderDrawable|Finished ${drawable.label}`)
   }
 }
 
@@ -942,8 +942,8 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       if ( !token.isConstrainedTokenBorder ) this._unconstrainedTokenIndices.set(idx, token);
     }
-    console.debug(`${this.constructor.name}|prerender|Identified unconstrained token indices`,
-      [...this._unconstrainedTokenIndices.entries()].map(([idx, token]) => `${idx}: ${token.name}, ${token.id}`));
+    // console.debug (`${this.constructor.name}|prerender|Identified unconstrained token indices`,
+    //  [...this._unconstrainedTokenIndices.entries()].map(([idx, token]) => `${idx}: ${token.name}, ${token.id}`));
   }
 
   /**
@@ -971,7 +971,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
         { viewer, target, blockingTokensOpts: blocking.tokens });
       for ( const [idx, token] of this._unconstrainedTokenIndices.entries() ) {
         if ( tokens.has(token) ) {
-          console.debug(`${this.constructor.name}|filterObjects|Adding ${token.name}, ${token.id} to instance set at index ${idx}`);
+          // console.debug (`${this.constructor.name}|filterObjects|Adding ${token.name}, ${token.id} to instance set at index ${idx}`);
           drawable.instanceSet.add(idx);
         }
       }
@@ -1266,7 +1266,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
     const materialBG = this.materials.bindGroups.get("obstacle");
     const targetBG = this.materials.bindGroups.get("target");
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      console.debug(`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
+      // console.debug (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
       // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
       // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
@@ -1311,7 +1311,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
         const drawable = this.drawables.get(token.id);
         if ( !drawable ) continue;
         drawable.numInstances = Number(tokens.has(token));
-        console.debug(`${this.constructor.name}|filterObjects|Adding constrained ${token.name}, ${token.id} as numInstances = ${drawable.numInstances}`);
+        // console.debug (`${this.constructor.name}|filterObjects|Adding constrained ${token.name}, ${token.id} as numInstances = ${drawable.numInstances}`);
       }
     }
   }
@@ -1332,10 +1332,10 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
    * Render only the target token.
    */
   renderTarget(renderPass, target) {
-    console.debug(`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
+    // console.debug (`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
     const drawable = this.targetDrawables.get(target.id);
     if ( !drawable ) return;
-    console.debug(`${this.constructor.name}|renderTarget|Rendering target drawable for ${target.name}, ${target.id}`);
+    // console.debug (`${this.constructor.name}|renderTarget|Rendering target drawable for ${target.name}, ${target.id}`);
     this._renderDrawable(renderPass, drawable, true);
   }
 
@@ -1385,7 +1385,7 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
     const materialBG = this.materials.bindGroups.get("target");
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       if ( token.constrainedTokenBorder.equals(token.litTokenBorder) ) continue;
-      console.debug(`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
+      // console.debug (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
       // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
       // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
