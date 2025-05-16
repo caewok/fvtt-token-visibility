@@ -12,12 +12,6 @@ import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { registerArea3d } from "./patching.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
-import { DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
-import { DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
-import { DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
-import { DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
-import { DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
-import { DebugVisibilityViewerArea3dPIXI } from "./LOS/DebugVisibilityViewer.js";
 import { buildDebugViewer, currentDebugViewerClass } from "./LOSCalculator.js";
 
 // Patches for the Setting class
@@ -150,7 +144,7 @@ export class Settings extends ModuleSettingsAbstract {
   static async initializeDebugViewer(type) {
     type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
     const sym = ALG_SYMBOLS[type];
-    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type))
+    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type));
     await debugViewer.initialize();
     debugViewer.render();
     this.#debugViewers.set(sym, debugViewer);
@@ -266,7 +260,7 @@ export class Settings extends ModuleSettingsAbstract {
       choices: ptChoices,
       default: PT_TYPES.CENTER,
       tab: "losViewer",
-      onChange: value => this.losViewpointChange(VIEWER.NUM_POINTS, value)
+      onChange: value => this.losSettingChange(VIEWER.NUM_POINTS, value)
     });
 
     register(VIEWER.INSET, {
@@ -282,7 +276,7 @@ export class Settings extends ModuleSettingsAbstract {
       default: 0.75,
       type: Number,
       tab: "losViewer",
-      onChange: value => this.losViewpointChange(VIEWER.INSET, value)
+      onChange: value => this.losSettingChange(VIEWER.INSET, value)
     });
 
     // ----- NOTE: Line-of-sight target tab ----- //
@@ -307,7 +301,7 @@ export class Settings extends ModuleSettingsAbstract {
       choices: losChoices,
       default: LTYPES.NINE,
       tab: "losTarget",
-      onChange: value => this.losViewpointChange(TARGET.ALGORITHM, value)
+      onChange: value => this.losSettingChange(TARGET.ALGORITHM, value)
     });
 
     register(TARGET.PERCENT, {
@@ -521,20 +515,6 @@ export class Settings extends ModuleSettingsAbstract {
     SETTINGS.LOS.TARGET.TYPES.WEBGPU_ASYNC,
   ]);
 
-  static losViewpointChange(key, value) {
-    this.cache.delete(key);
-    const config = { [configKeyForSetting[key]]: value };
-    canvas.tokens.placeables.forEach(token => {
-      const obj = token.vision?.[MODULE_ID];
-      if ( !obj ) return;
-      obj.losCalc.setViewpointClass(config);
-    });
-
-    // Start up a new debug viewer.
-    if ( this.get(this.KEYS.DEBUG.LOS)
-      && key === SETTINGS.LOS.TARGET.ALGORITHM ) this.initializeDebugViewer(value);
-  }
-
   static losSettingChange(key, value) {
     this.cache.delete(key);
     const config = { [configKeyForSetting[key]]: value };
@@ -543,6 +523,10 @@ export class Settings extends ModuleSettingsAbstract {
       if ( !calc ) return;
       calc.config = config;
     });
+
+    // Start up a new debug viewer.
+    if ( key === SETTINGS.LOS.TARGET.ALGORITHM
+      && this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
   }
 }
 
