@@ -315,7 +315,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleRenderCalculator
 
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustrum(target);
+    this.camera.setTargetTokenFrustum(target);
 
     Object.values(this.shaders).forEach(shader => shader.update());
 

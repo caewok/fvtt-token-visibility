@@ -114,7 +114,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
 
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustrum(target);
+    this.camera.setTargetTokenFrustum(target);
     /*
     this.camera.perspectiveParameters = {
       fov: Math.toRadians(90),

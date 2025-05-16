@@ -133,7 +133,7 @@ export class Camera {
    * takes up in the frame.
    * @param {Token} targetToken
    */
-  setTargetTokenFrustrum(targetToken) {
+  setTargetTokenFrustum(targetToken) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const ctr = Point3d.fromTokenCenter(targetToken);
     this.targetPosition = ctr;
@@ -182,7 +182,7 @@ export class Camera {
   }
 
   /**
-   * @typedef {object} frustrumParameters
+   * @typedef {object} frustumParameters
    * @prop {number} left   Coordinate for left vertical clipping plane
    * @prop {number} right  Coordinate for right vertical clipping plane
    * @prop {number} bottom Coordinate for the bottom horizontal clipping plane

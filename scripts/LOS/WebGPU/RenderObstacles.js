@@ -353,7 +353,7 @@ export class RenderObstacles {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustrum(target);
+    this.camera.setTargetTokenFrustum(target);
     this._updateCameraBuffer();
   }
 

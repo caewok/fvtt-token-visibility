@@ -393,7 +393,7 @@ export class RenderObstaclesWebGL2 {
     */
 
 
-    camera.setTargetTokenFrustrum(target);
+    camera.setTargetTokenFrustum(target);
 
     /*
     camera.perspectiveParameters = {
