@@ -15,13 +15,13 @@ api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEB
 api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC)
 */
 
-const KEYS = Settings.KEYS;
-const { TARGET, VIEWER } = KEYS.LOS;
-const POINT_OPTIONS = TARGET.POINT_OPTIONS;
-
-function currentCalculator() {
+export function currentCalculator(type) {
+  const KEYS = Settings.KEYS;
+  const { TARGET, VIEWER } = KEYS.LOS;
+  const POINT_OPTIONS = TARGET.POINT_OPTIONS;
   const calcs = CONFIG[MODULE_ID].sightCalculators;
-  switch (Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS) {
+  type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
+  switch (type) {
     case "los-points": return calcs.points;
     case "los-area-3d": return calcs.hybrid;
     case "los-area-3d-geometric": return calcs.geometric;
@@ -33,9 +33,13 @@ function currentCalculator() {
   }
 }
 
-function currentDebugViewerClass() {
+export function currentDebugViewerClass(type) {
+  const KEYS = Settings.KEYS;
+  const { TARGET, VIEWER } = KEYS.LOS;
+  const POINT_OPTIONS = TARGET.POINT_OPTIONS;
   const debugViewers = CONFIG[MODULE_ID].debugViewers;
-  switch (Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS) {
+  type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
+  switch (type) {
     case "los-points": return debugViewers.points;
     case "los-area-3d": return debugViewers.hybrid;
     case "los-area-3d-geometric": return debugViewers.geometric;
@@ -69,15 +73,15 @@ const TokenBlockingConfig = {}
 Object.defineProperties(TokenBlockingConfig, {
   dead: {
     enumerable: true,
-    get() { return Settings.get(KEYS.DEAD_TOKENS_BLOCK) ?? true; }
+    get() { return Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true; }
   },
   live: {
     enumerable: true,
-    get() { return Settings.get(KEYS.LIVE_TOKENS_BLOCK) ?? true; }
+    get() { return Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true; }
   },
   prone: {
     enumerable: true,
-    get() { return Settings.get(KEYS.PRONE_TOKENS_BLOCK) ?? true; }
+    get() { return Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true; }
   },
   clone: {
    value: function() { return { ...this }; }
@@ -112,25 +116,25 @@ const ViewerLOSConfig = {
 Object.defineProperties(ViewerLOSConfig, {
   threshold: {
     enumerable: true,
-    get() { return Settings.get(TARGET.PERCENT) ?? 0.75; }
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.PERCENT) ?? 0.75; }
   },
   largeTarget: {
     enumerable: true,
-    get() { return Settings.get(TARGET.LARGE) ?? false; }
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false; }
   },
 
   // Points algorithm
   pointAlgorithm: {
     enumerable: true,
-    get() { return Settings.get(TARGET.POINT_OPTIONS.NUM_POINTS) ?? KEYS.POINT_TYPES.CENTER ?? false; }
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER ?? false; }
   },
   targetInset: {
     enumerable: true,
-    get() { return Settings.get(POINT_OPTIONS.INSET) ?? 0.75; }
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75; }
   },
   points3d: {
     enumerable: true,
-    get() { return Settings.get(POINT_OPTIONS.POINTS3D) ?? false; }
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS3D) ?? false; }
   },
 
   // Viewpoint
@@ -143,11 +147,11 @@ Object.defineProperties(ViewerLOSConfig, {
   },
   numViewpoints: {
     enumerable: true,
-    get() { return Settings.get(VIEWER.NUM_POINTS) ?? KEYS.POINT_TYPES.CENTER; }
+    get() { return Settings.get(Settings.KEYS.LOS.VIEWER.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER; }
   },
   viewpointOffset: {
     enumerable: true,
-    get() { return Settings.get(VIEWER.INSET); }
+    get() { return Settings.get(Settings.KEYS.LOS.VIEWER.INSET); }
   },
 
   // Cloning method.

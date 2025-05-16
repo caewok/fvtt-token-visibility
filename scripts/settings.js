@@ -18,7 +18,7 @@ import { DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
 import { DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { DebugVisibilityViewerWebGPU, DebugVisibilityViewerWebGPUAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./LOS/DebugVisibilityViewer.js";
-
+import { buildDebugViewer, currentDebugViewerClass } from "./LOSCalculator.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -150,35 +150,7 @@ export class Settings extends ModuleSettingsAbstract {
   static async initializeDebugViewer(type) {
     type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
     const sym = ALG_SYMBOLS[type];
-    let debugViewer;
-    if ( this.#debugViewers.has(sym) ) debugViewer = this.#debugViewers.get(sym);
-    else {
-      const TYPES = this.KEYS.LOS.TARGET.TYPES;
-      switch ( type ) {
-        case TYPES.POINTS: debugViewer = new DebugVisibilityViewerPoints(); break;
-        case TYPES.AREA3D:
-        case TYPES.AREA3D_GEOMETRIC: debugViewer = new DebugVisibilityViewerGeometric(); break;
-        case TYPES.AREA3D_HYBRID: {
-          debugViewer = new DebugVisibilityViewerArea3dPIXI();
-          debugViewer.algorithm = DebugVisibilityViewerArea3dPIXI.ALGORITHMS.AREA3D_HYBRID;
-          break;
-        }
-        case TYPES.AREA3D_WEBGL2: debugViewer = new DebugVisibilityViewerPIXI(); break;
-        case TYPES.WEBGL2: debugViewer = new DebugVisibilityViewerWebGL2(); break;
-        case TYPES.WEBGPU: {
-          const device = CONFIG[MODULE_ID].webGPUDevice;
-          debugViewer = device ? new DebugVisibilityViewerWebGPU({ device })
-            : new DebugVisibilityViewerWebGL2();
-          break;
-        }
-        case TYPES.WEBGPU_ASYNC: {
-          const device = CONFIG[MODULE_ID].webGPUDevice;
-          debugViewer = device ? new DebugVisibilityViewerWebGPUAsync({ device })
-            : new DebugVisibilityViewerWebGL2();
-          break;
-        }
-      }
-    }
+    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type))
     await debugViewer.initialize();
     debugViewer.render();
     this.#debugViewers.set(sym, debugViewer);
