@@ -354,7 +354,7 @@ export class RenderObstacles {
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
     this.camera.setTargetTokenFrustum(target);
-    this.camera.perspectiveParameters = { fov: this.camera.perspectiveParameters.fov * 1.7 }; // For reasons, the FOV is too narrow when using WebGPU.
+    // this.camera.perspectiveParameters = { fov: this.camera.perspectiveParameters.fov * 1.7 }; // For reasons, the FOV is too narrow when using WebGPU.
     this.camera.refresh();
     this._updateCameraBuffer();
   }
