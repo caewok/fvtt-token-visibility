@@ -385,6 +385,7 @@ Hooks.on("canvasReady", function() {
   ];
   const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
   const calcClasses = CONFIG[MODULE_ID].sightCalculatorClasses;
+  Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
 
   // Must create after settings are registered.
   for ( const calcName of basicCalcs ) {

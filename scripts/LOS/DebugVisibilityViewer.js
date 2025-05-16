@@ -203,7 +203,7 @@ export class DebugVisibilityViewerAbstract {
   }
 
   clearDebug() {
-    if ( this.#debugGraphics ) this.#debugGraphics.clear();
+    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.clear();
   }
 
   /* ----- NOTE: Debug ----- */
