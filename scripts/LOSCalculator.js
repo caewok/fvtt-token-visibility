@@ -15,46 +15,13 @@ api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_WEB
 api.losCalculator._updateAlgorithm(api.Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC)
 */
 
-/**
- * Default AbstractViewerLOS config given token visibility settings.
- * @returns {ViewerLOSConfig}
- */
-function buildConfig() {
+export function currentCalculator(type) {
   const KEYS = Settings.KEYS;
   const { TARGET, VIEWER } = KEYS.LOS;
   const POINT_OPTIONS = TARGET.POINT_OPTIONS;
-  return {
-    blocking: {
-      walls: true,
-      tiles: true,
-      tokens: {
-        dead: Settings.get(KEYS.DEAD_TOKENS_BLOCK) ?? true,
-        live: Settings.get(KEYS.LIVE_TOKENS_BLOCK) ?? true,
-        prone: Settings.get(KEYS.PRONE_TOKENS_BLOCK) ?? true,
-      }
-    },
-    debug: false,
-    threshold: Settings.get(TARGET.PERCENT) ?? 0.75,
-    useLitTargetShape: false,
-    largeTarget: Settings.get(TARGET.LARGE) ?? false,
-
-    // For points algorithm
-    pointAlgorithm: Settings.get(POINT_OPTIONS.NUM_POINTS) ?? KEYS.POINT_TYPES.CENTER,
-    targetInset: Settings.get(POINT_OPTIONS.INSET) ?? 0.75,
-    points3d: Settings.get(POINT_OPTIONS.POINTS3D) ?? false,
-
-    // Viewpoint
-    viewpointKey: Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS,
-    numViewpoints: Settings.get(VIEWER.NUM_POINTS) ?? KEYS.POINT_TYPES.CENTER,
-    viewpointOffset: Settings.get(VIEWER.INSET),
-    senseType: "sight",
-  };
-}
-
-function currentCalculator() {
   const calcs = CONFIG[MODULE_ID].sightCalculators;
-  const TARGET = Settings.KEYS.LOS.TARGET;
-  switch (Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS) {
+  type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
+  switch (type) {
     case "los-points": return calcs.points;
     case "los-area-3d": return calcs.hybrid;
     case "los-area-3d-geometric": return calcs.geometric;
@@ -66,10 +33,13 @@ function currentCalculator() {
   }
 }
 
-function currentDebugViewerClass() {
-  const TARGET = Settings.KEYS.LOS.TARGET;
-  const debugViewers = CONFIG[MODULE_ID].debugViewers;
-  switch (Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS) {
+export function currentDebugViewerClass(type) {
+  const KEYS = Settings.KEYS;
+  const { TARGET, VIEWER } = KEYS.LOS;
+  const POINT_OPTIONS = TARGET.POINT_OPTIONS;
+  const debugViewers = CONFIG[MODULE_ID].debugViewerClasses;
+  type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
+  switch (type) {
     case "los-points": return debugViewers.points;
     case "los-area-3d": return debugViewers.hybrid;
     case "los-area-3d-geometric": return debugViewers.geometric;
@@ -82,14 +52,127 @@ function currentDebugViewerClass() {
 }
 
 /**
+ * Automatic config object for token blocking settings.
+ * Used to automatically update settings across los calculators.
+ * @type {TokenBlockingConfig}
+ */
+/*
+class TokenBlockingConfig {
+  static get dead() { return Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true; }
+
+  static get live() { return Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true; }
+
+  static get prone() { return Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true; }
+}
+Object.defineProperty(TokenBlockingConfig, "dead", { enumerable: true })
+Object.defineProperty(TokenBlockingConfig, "live", { enumerable: true })
+Object.defineProperty(TokenBlockingConfig, "prone", { enumerable: true })
+*/
+
+const TokenBlockingConfig = {}
+Object.defineProperties(TokenBlockingConfig, {
+  dead: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true; }
+  },
+  live: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true; }
+  },
+  prone: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true; }
+  },
+  clone: {
+   value: function() { return { ...this }; }
+  },
+});
+
+/**
+ * Automatic config object for blocking settings.
+ * Used to automatically update settings across los calculators.
+ * @type {BlockingConfig}
+ */
+const BlockingConfig = { walls: true, tiles: true, tokens: TokenBlockingConfig };
+Object.defineProperty(BlockingConfig, "clone", {
+  value: function() {
+    const obj = { ...this };
+    obj.tokens = obj.tokens.clone();
+    return obj;
+  }
+})
+
+/**
+ * Automatic config object object for LOS, returning the current settings
+ * Used to automatically update settings across los calculators.
+ * @type {ViewerLOSConfig}
+ */
+const ViewerLOSConfig = {
+  blocking: BlockingConfig,
+  debug: false,
+  useLitTargetShape: false,
+  senseType: "sight",
+}
+Object.defineProperties(ViewerLOSConfig, {
+  threshold: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.PERCENT) ?? 0.75; }
+  },
+  largeTarget: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false; }
+  },
+
+  // Points algorithm
+  pointAlgorithm: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER ?? false; }
+  },
+  targetInset: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75; }
+  },
+  points3d: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS3D) ?? false; }
+  },
+
+  // Viewpoint
+  viewpointKey: {
+    enumerable: true,
+    get() {
+      // Shared calculator.
+      return currentCalculator();
+    }
+  },
+  numViewpoints: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LOS.VIEWER.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER; }
+  },
+  viewpointOffset: {
+    enumerable: true,
+    get() { return Settings.get(Settings.KEYS.LOS.VIEWER.INSET); }
+  },
+
+  // Cloning method.
+  clone: {
+   value: function() {
+     const obj = { ...this };
+     obj.blocking = this.blocking.clone();
+     return obj;
+    }
+  },
+});
+
+
+
+/**
  * Build an LOS calculator for this viewer that uses the current settings.
  * @param {Token} viewer
  * @returns {AbstractViewerLOS}
  */
 export function buildLOSCalculator(viewer) {
-  const config = buildConfig;
-  config.viewpointKey = currentCalculator(); // Share calculator for all current settings.
-  return new AbstractViewerLOS(viewer, config);
+  return new AbstractViewerLOS(viewer, ViewerLOSConfig.clone());
 }
 
 /**
@@ -100,8 +183,9 @@ export function buildLOSCalculator(viewer) {
  * @returns {AbstractViewerLOS}
  */
 export function buildCustomLOSCalculator(viewer, config = {}) {
-  const mergedConfig = foundry.utils.mergeObject(buildConfig(), config, { inplace: false });
-  return new AbstractViewerLOS(viewer, mergedConfig);
+  const defaultConfig = ViewerLOSConfig.clone();
+  foundry.utils.mergeObject(defaultConfig, config, { inplace: true });
+  return new AbstractViewerLOS(viewer, defaultConfig);
 }
 
 /**
@@ -111,9 +195,9 @@ export function buildCustomLOSCalculator(viewer, config = {}) {
  */
 export function buildDebugViewer(cl, config = {}) {
   cl ??= currentDebugViewerClass();
-  const defaultConfig = buildConfig();
-  delete defaultConfig.viewpointKey;
-  const mergedConfig = foundry.utils.mergeObject(defaultConfig, config, { inplace: false });
-  return new cl(mergedConfig);
+  const defaultConfig = ViewerLOSConfig.clone();
+  delete defaultConfig.viewpointKey; // Remove the shared calculator.
+  foundry.utils.mergeObject(defaultConfig, config, { inplace: true });
+  return new cl(defaultConfig);
 }
 

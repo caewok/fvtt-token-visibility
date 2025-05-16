@@ -177,11 +177,11 @@ Hooks.once("init", function() {
     useDebugShaders: true,
 
     /**
-     * Calculators that can determine percent visibility.
+     * Classes and associated calculators that can determine percent visibility.
      * Created and initialized at canvasReady hook
      * Each calculator can calculate visibility based on viewer, target, and optional viewer/target locations.
      */
-    sightCalculators: {
+    sightCalculatorClasses: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       PIXI: PercentVisibleCalculatorPIXI,
@@ -191,10 +191,20 @@ Hooks.once("init", function() {
       hybrid: PercentVisibleCalculatorHybrid,
     },
 
+    sightCalculators: {
+      points: null,
+      geometric: null,
+      PIXI: null,
+      webGL2: null,
+      webGPU: null,
+      webGPUAsync: null,
+      hybrid: null,
+    },
+
     /**
      * Classes used to view the debugger for different algorithms.
      */
-    debugViewers: {
+    debugViewerClasses: {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
       PIXI: DebugVisibilityViewerPIXI,
@@ -354,6 +364,14 @@ Hooks.once("setup", function() {
 
 Hooks.once("ready", function() {
   console.debug(`${MODULE_ID}|ready hook`);
+
+
+});
+
+Hooks.on("canvasReady", function() {
+  console.debug(`${MODULE_ID}|canvasReady`);
+
+  // Create default calculators used by all the tokens.
   const basicCalcs = [
     "points",
     "geometric",
@@ -365,35 +383,31 @@ Hooks.once("ready", function() {
     "webGPU",
     "webGPUAsync",
   ];
+  const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
+  const calcClasses = CONFIG[MODULE_ID].sightCalculatorClasses;
+  Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
 
   // Must create after settings are registered.
   for ( const calcName of basicCalcs ) {
-    const cl = CONFIG[MODULE_ID].sightCalculators[calcName];
-    const calc = CONFIG[MODULE_ID].sightCalculators[calcName] = new cl({ senseType: "sight" });
+    const cl = calcClasses[calcName];
+    const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
     calc.initialize(); // Async.
   }
 
   WebGPUDevice.getDevice().then(device => {
     if ( !device ) {
+      console.warn("No WebGPU device located. Falling back to WebGL2.");
+      for ( const calcName of webGPUCalcs ) sightCalcs[calcName] = sightCalcs.webGL2;
+    } else {
+      CONFIG[MODULE_ID].webGPUDevice = device;
       for ( const calcName of webGPUCalcs ) {
-        CONFIG[MODULE_ID].sightCalculators[calcName] = CONFIG[MODULE_ID].sightCalculators.webGL2;
-        return console.warn("No WebGPU device located. Falling back to WebGL2.");
+        const cl = calcClasses[calcName];
+        const calc = sightCalcs[calcName] = new cl({ senseType: "sight", device });
+        calc.initialize(); // Async.
       }
     }
-    CONFIG[MODULE_ID].webGPUDevice = device;
-    for ( const calcName of webGPUCalcs ) {
-      const cl = CONFIG[MODULE_ID].sightCalculators[calcName];
-      const calc = CONFIG[MODULE_ID].sightCalculators[calcName] = new cl({ senseType: "sight", device });
-      calc.initialize(); // Async.
-    }
+    if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
   });
-
-});
-
-Hooks.on("canvasReady", function() {
-  console.debug(`${MODULE_ID}|canvasReady`);
-
-  Settings.initializeDebugGraphics();
 
   WallGeometryHandler.registerPlaceables();
   TileGeometryHandler.registerPlaceables();
