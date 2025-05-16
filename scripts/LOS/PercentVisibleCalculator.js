@@ -122,22 +122,21 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    * @returns {number}
    * @override
    */
-  _percentUnobscured(...args) {
+  _percentUnobscured(viewer, target, viewerLocation, targetLocation) {
     // Calculate the denominator for percent seen: the target area without obstacles.
     // - Large target: 100% viewable if area equal to one grid square is viewable.
     // - Lit target: Unlit portions of the target are treated as obscured.
     let totalArea;
-    const target = args.target;
     if ( this.config.useLitTargetShape
       && target.litTokenBorder
-      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) totalArea = this._constrainedTargetArea(...args);
-    else totalArea = this._totalTargetArea(...args);
-    if ( this.config.largeTarget ) totalArea = Math.min(totalArea, this._gridShapeArea(...args))
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) totalArea = this._constrainedTargetArea(viewer, target, viewerLocation, targetLocation);
+    else totalArea = this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
+    if ( this.config.largeTarget ) totalArea = Math.min(totalArea, this._gridShapeArea(viewer, target, viewerLocation, targetLocation))
     if ( !totalArea ) {
       console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0.`);
       return 0;
     }
-    const viewableArea = this._viewableTargetArea(...args);
+    const viewableArea = this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
     const percentSeen = viewableArea / totalArea;
 
     // Round the percent seen so that near-zero areas are 0.
