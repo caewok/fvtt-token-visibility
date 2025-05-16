@@ -385,7 +385,7 @@ export class AbstractViewerLOS {
   async percentVisibleAsync(target, opts) {
     if ( !this.viewer ) return 0;
     if ( target ) this.target = target;
-    const percent = this._simpleVisibilityTest() ?? (await this._percentVisibleAsync(opts));
+    const percent = this.simpleVisibilityTest() ?? (await this._percentVisibleAsync(opts));
     // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
