@@ -37,7 +37,7 @@ export function currentDebugViewerClass(type) {
   const KEYS = Settings.KEYS;
   const { TARGET, VIEWER } = KEYS.LOS;
   const POINT_OPTIONS = TARGET.POINT_OPTIONS;
-  const debugViewers = CONFIG[MODULE_ID].debugViewers;
+  const debugViewers = CONFIG[MODULE_ID].debugViewerClasses;
   type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
   switch (type) {
     case "los-points": return debugViewers.points;

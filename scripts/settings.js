@@ -491,13 +491,7 @@ export class Settings extends ModuleSettingsAbstract {
       type: Boolean
     });
 
-    // ----- NOTE: Triggers based on starting settings ---- //
-    // Start debug
-    if ( this.get(this.KEYS.DEBUG.LOS) ) this.toggleLOSDebugGraphics(true);
-
-    // Register the Area3D methods on initial load.
-    // if ( this.typesWebGL2.has(this.get(TARGET.ALGORITHM)) ) registerArea3d();
-    registerArea3d();
+    this.initializeDebugGraphics();
   }
 
   static typesWebGL2 = new Set([
