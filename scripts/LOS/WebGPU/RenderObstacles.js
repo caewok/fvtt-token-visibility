@@ -438,8 +438,17 @@ export class RenderObstacles {
 
   #context;
 
+  static CONTEXT_OPTS = {
+    powerPreference: "high-performance",
+    antialias: false,
+    depth: true,
+    stencil: true,
+    alpha: true,  // Equivalent to alpha: "premultiplied" in WebGPU.
+    premultiplied: true,
+  };
+
   setRenderTextureToCanvas(canvas) {
-    const context = canvas.getContext("webgpu");
+    const context = canvas.getContext("webgpu", this.constructor.CONTEXT_OPTS);
     if ( !context ) throw new Error("setRenderTextureToCanvas|Canvas does not have a valid webgpu context!");
     this.#context = context;
     this.#context.configure({

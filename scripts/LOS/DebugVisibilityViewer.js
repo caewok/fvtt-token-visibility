@@ -225,12 +225,26 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
 
   static CONTEXT_TYPE = "webgl2";
 
+  // See https://toji.dev/webgpu-best-practices/webgl-performance-comparison.html
+  static CONTEXT_OPTS = {
+    powerPreference: "high-performance",
+    antialias: false,
+    depth: true,
+    stencil: true,
+    alpha: true,  // Equivalent to alpha: "premultiplied" in WebGPU.
+    premultiplied: true,
+  };
+
   /** @type {Area3dPopoutCanvas} */
   popout;
 
   constructor(opts) {
     super(opts);
-    this.popout = new this.constructor.popoutClass({ width: this.constructor.WIDTH, height: this.constructor.HEIGHT + 75, resizable: false });
+    this.popout = new this.constructor.popoutClass({
+      width: this.constructor.WIDTH,
+      height: this.constructor.HEIGHT + 75,
+      resizable: false
+    });
   }
 
   get gl() { return this.popout.context; }
@@ -245,7 +259,10 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   }
 
   async openPopout() {
-    await this.popout._render(true, { contextType: this.constructor.CONTEXT_TYPE });
+    await this.popout._render(true, {
+      contextType: this.constructor.CONTEXT_TYPE,
+      contextConfiguration: this.constructor.CONTEXT_OPTS,
+    });
     this._updatePopoutTitle(this.popoutTitle);
   } // Async.
 
