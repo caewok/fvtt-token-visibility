@@ -181,9 +181,9 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
 
   _gridShapeArea() { return this.#gridArea; }
 
-  _viewableTargetArea() { return this.#redPixels; }
+  _viewableTargetArea() { return this.#redBlockedPixels; }
 
-  _totalTargetArea() { return this.#redBlockedPixels; }
+  _totalTargetArea() { return this.#redPixels; }
 
   _constrainedTargetArea() { return this.#constrainedTargetArea; }
 
