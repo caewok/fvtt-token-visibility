@@ -484,9 +484,10 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
     const { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
       this.label += " Cube"
-      const w = token.document.width * canvas.dimensions.size;
-      const d = token.document.height * canvas.dimensions.size;
-      const h = topZ - bottomZ;
+      // Divide in half to center at 0,0, with half on +, half on -
+      const w = border.width * 0.5;
+      const d = border.height * 0.5;
+      const h = (topZ - bottomZ) * 0.5
       return GeometryCubeDesc.defineVertices({ w, d, h });
     }
     const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
