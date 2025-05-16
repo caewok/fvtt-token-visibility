@@ -290,11 +290,12 @@ export class AbstractViewerLOS {
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
-   * @param {Token} target
+   * @param {Token} [target]
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
-  _simpleVisibilityTest(target) {
-    this.target = target; // Important so the viewpoints know the target.
+  simpleVisibilityTest(target) {
+    if ( target ) this.target = target; // Important so the viewpoints know the target.
+    target = this.target;
     const viewer = this.viewer;
 
     // To avoid obvious errors.
@@ -316,33 +317,44 @@ export class AbstractViewerLOS {
     // If all viewpoints are blocked, return 0; if any unblocked, return 1.
     let blocked = true;
     for ( const vp of this.viewpoints ) {
-      const thisVP = vp._simpleVisibilityTest(target);
+      const thisVP = vp.simpleVisibilityTest();
       if ( thisVP === 1 ) return 1;
       blocked &&= (thisVP === 0);
     }
     return blocked ? 0 : undefined;
   }
 
+  // NOTE: Only top-level methods should use (and set) target.
   /**
    * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * @param {Token} target
-   * @param {object} [opts]
+   * @param {Token} [target]             Token to look at
+   * @param {object} [opts]              Options passed to percentVisible
    * @param {number} [opts.threshold]    Percentage to be met to be considered visible
    * @param {}
    * @returns {boolean}
    */
-  hasLOS(target, { threshold, callback } = {}) {
+  hasLOS(target, { threshold, ...opts } = {}) {
+    // NOTE: target set using percentVisible; just pass through here.
     threshold ??= this.config.threshold;
-    const percent = this.percentVisible(target, callback); // Percent visible will reset the cache.
+    const percent = this.percentVisible(target, opts); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
     // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
 
-  async hasLOSAsync(target, threshold) {
+  /**
+   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
+   * Asynchronous version.
+   * @param {Token} [target]             Token to look at
+   * @param {object} [opts]              Options passed to percentVisible
+   * @param {number} [opts.threshold]    Percentage to be met to be considered visible
+   * @param {}
+   * @returns {boolean}
+   */
+  async hasLOSAsync(target, { threshold, ...opts } = {}) {
     threshold ??= this.config.threshold;
-    const percent = await this.percentVisibleAsync(target); // Percent visible will reset the cache.
+    const percent = await this.percentVisibleAsync(target, opts); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
       && (percent > threshold || percent.almostEqual(threshold));
     // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
@@ -351,25 +363,40 @@ export class AbstractViewerLOS {
 
   /**
    * Determine percentage of the token visible using the class methodology.
+   * @param {Token} [target]            Token to look at
+   * @param {object} [opts]             Options passed to _percentVisible
    * @returns {number}
    */
-  percentVisible(target, { stopAtThreshold = true } = {}) {
+  percentVisible(target, opts) {
     if ( !this.viewer ) return 0;
-    this.target = target;
-    const percent = this._simpleVisibilityTest(target) ?? this._percentVisible(target, { stopAtThreshold });
+    if ( target ) this.target = target;
+    const percent = this.simpleVisibilityTest() ?? this._percentVisible(opts);
     // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
-  async percentVisibleAsync(target, { stopAtThreshold = true } = {}) {
+  /**
+   * Determine percentage of the token visible using the class methodology.
+   * Asynchronous version.
+   * @param {Token} [target]            Token to look at
+   * @param {object} [opts]             Options passed to _percentVisible
+   * @returns {number}
+   */
+  async percentVisibleAsync(target, opts) {
     if ( !this.viewer ) return 0;
-    this.target = target;
-    const percent = this._simpleVisibilityTest(target) ?? (await this._percentVisibleAsync(target, { stopAtThreshold }));
+    if ( target ) this.target = target;
+    const percent = this.simpleVisibilityTest() ?? (await this._percentVisibleAsync(opts));
     // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
-  _percentVisible(_target, { stopAtThreshold = true } = {}) {
+  /**
+   * Requests the percent visible from each viewpoint and returns the maximum percent visible.
+   * @param {object} [opts]
+   * @param {boolean} [opts.stopAtThreshold=true]     If true, stops checking viewpoints once config.threshold is met
+   * @returns {number}
+   */
+  _percentVisible({ stopAtThreshold = true } = {}) {
     let max = 0;
     const threshold = stopAtThreshold ? this.config.threshold : 1;
     for ( const vp of this.viewpoints ) {
@@ -379,7 +406,14 @@ export class AbstractViewerLOS {
     return max;
   }
 
-  async _percentVisibleAsync(_target, { stopAtThreshold = true } = {}) {
+  /**
+   * Requests the percent visible from each viewpoint and returns the maximum percent visible.
+   * Asynchronous version.
+   * @param {object} [opts]
+   * @param {boolean} [opts.stopAtThreshold=true]     If true, stops checking viewpoints once config.threshold is met
+   * @returns {number}
+   */
+  async _percentVisibleAsync({ stopAtThreshold = true } = {}) {
     let max = 0;
     const threshold = stopAtThreshold ? this.config.threshold : 1;
     for ( const vp of this.viewpoints ) {

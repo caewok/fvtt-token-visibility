@@ -366,7 +366,7 @@ await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
 N = 20
 for ( const clipperVersion of [1, 2] ) {
   CONFIG.tokenvisibility.clipperVersion = clipperVersion;
-  for ( const shape of Object.values(CONFIG.tokenvisibility.tileThresholdShapeOptions) ) {
+  for ( const shape of ['triangles', 'alphaThresholdPolygons'] ) { // Object.values(CONFIG.tokenvisibility.tileThresholdShapeOptions) ) {
     CONFIG.tokenvisibility.tileThresholdShape = shape;
 
     console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`)
@@ -376,15 +376,19 @@ for ( const clipperVersion of [1, 2] ) {
     await QBenchmarkLoopFn(N, percentFn, "PIXI", calcPIXI)
 
     CONFIG.tokenvisibility.filterInstances = true;
-    console.log(`\n Filter instances`)
+    console.log(`\n\tFilter instances`)
     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2)
     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing)
 
     CONFIG.tokenvisibility.filterInstances = false;
-    console.log(`\n No filtering`)
+    console.log(`\n\tNo filtering`)
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2)
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing)
+
+    console.log(`\n\tWebGPU`)
     await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU)
     await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync)
-//     await QBenchmarkLoopFn(N, percentFnAsync, "async Points", calcPoints)
+// //     await QBenchmarkLoopFn(N, percentFnAsync, "async Points", calcPoints)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async Geometric", calcGeometric)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async Hybrid", calcHybrid)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async PIXI", calcPIXI)

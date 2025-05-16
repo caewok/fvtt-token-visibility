@@ -1,8 +1,5 @@
 /* globals
-canvas,
-CONFIG,
 CONST,
-foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -245,6 +242,9 @@ class DrawableObjectsAbstract {
     if ( !this.geometries.size ) return;
     const geoms = [...this.geometries.values()];
 
+    if ( this.buffers.staticVertex ) this.buffers.staticVertex = this.buffers.staticVertex.destroy();
+    if ( this.buffers.staticIndex ) this.buffers.staticIndex = this.buffers.staticIndex.destroy();
+
     const offsetData = GeometryDesc.computeBufferOffsets(geoms);
     const vertexArray = combineTypedArrays(...geoms.map(g => g.vertices));
     this.buffers.staticVertex = this.device.createBuffer({
@@ -297,6 +297,7 @@ class DrawableObjectsAbstract {
    * @param {CommandEncoder} renderPass
    */
   _initializeRenderPass(renderPass, pipelineName = "default") {
+    // console.debug (`${this.constructor.name}|_initializeRenderPass|pipeline ${pipelineName}`)
     renderPass.setPipeline(this.pipeline[pipelineName]);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CAMERA, this.camera.bindGroup);
   }
@@ -307,12 +308,15 @@ class DrawableObjectsAbstract {
    * @param {Drawable} drawable
    */
   _renderDrawable(renderPass, drawable) {
+    // console.debug (`${this.constructor.name}|_renderDrawable|${drawable.label}`)
     if ( !drawable.instanceSet.size ) return;
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIAL, drawable.materialBG);
+    // console.debug (`${this.constructor.name}|_renderDrawable|${drawable.label}`)
 
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);
     drawable.geom.drawSet(renderPass, drawable.instanceSet);
+    // console.debug (`${this.constructor.name}|_renderDrawable|Finished ${drawable.label}`)
   }
 
   /**
@@ -393,6 +397,7 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
    */
   prerender() {
     if ( this.placeableHandler.bufferId > this.#placeableHandlerBufferId ) {
+      // console.debug (`${this.constructor.name}|prerender|This buffer id ${this.#placeableHandlerBufferId} ≤ placeable bid ${this.placeableHandler.bufferId}`);
       // One or more placeables were added/removed. Re-do the buffers.
       this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
       this.initializePlaceableBuffers();
@@ -436,12 +441,13 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     if ( !this.placeableHandler.numInstances ) return;
     const device = this.device;
 
-    if ( this.buffers.instance ) this.buffers.instance.destroy();
+    if ( this.buffers.instance ) this.buffers.instance = this.buffers.instance.destroy();
     this.buffers.instance = this.device.createBuffer({
       label: `${this.constructor.name}`,
       size: this.placeableHandler.instanceArrayBuffer.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    // console.debug (`${this.constructor.name}|_createInstanceBuffer`);
     device.queue.writeBuffer(this.buffers.instance, 0, this.placeableHandler.instanceArrayBuffer)
     this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer)
   }
@@ -469,6 +475,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return; // No changes since last update.
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
+      // console.debug (`${this.constructor.name}|prerender (instances)|This update ${lastUpdate} ≤ placeable bid ${this.placeableHandlerUpdateId}`);
       this.partialUpdateInstanceBuffer(idx);
     }
     this.placeableHandlerUpdateId = placeableHandler.updateId;
@@ -482,6 +489,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   partialUpdateInstanceBuffer(idx) {
     const h = this.placeableHandler
     const M = h.matrices[idx];
+    // console.debug (`${this.constructor.name}|partialUpdateInstanceBuffer|Updating ${idx}`);
+    // M.print();
     this.device.queue.writeBuffer(this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M.arr);
   }
 }
@@ -524,7 +533,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
     if ( !this.placeableHandler.numInstances ) return;
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
-    if ( this.buffers.indirect ) this.buffers.indirect.destroy();
+    if ( this.buffers.indirect ) this.buffers.indirect = this.buffers.indirect.destroy();
     this.buffers.indirect = this.device.createBuffer({
       label: "Indirect Buffer",
       size: size * this.drawables.size,
@@ -558,7 +567,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     const minSize = 256;
     const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
 
-    if ( this.buffers.culled ) this.buffers.culled.destroy();
+    if ( this.buffers.culled ) this.buffers.culled = this.buffers.culled.destroy();
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
       size: size * this.drawables.size,
@@ -612,6 +621,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // Set the culled instance buffer and indirect buffer for each drawable.
     // The indirect buffer determines how many elements in the culled instance buffer are drawn.
     for ( const drawable of this.drawables.values() ) {
+      // console.debug (`${this.constructor.name}|_updateCulledValues|Updating drawable ${drawable.label}`, [...drawable.instanceSet.values()]);
       if ( !drawable.instanceSet.size ) continue;
       let i = 0;
       drawable.instanceSet.forEach(idx => drawable.culledBufferRaw[i++] = idx);
@@ -631,12 +641,14 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    * @param {Drawable} drawable
    */
   _renderDrawable(renderPass, drawable) {
+    // console.debug (`${this.constructor.name}|_renderDrawable (culled)|${drawable.label}`)
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.CULLED, drawable.culledBG);
 
     drawable.geom.setVertexBuffer(renderPass);
     drawable.geom.setIndexBuffer(renderPass);
     renderPass.drawIndexedIndirect(this.buffers.indirect, drawable.indirectOffset);
+    // console.debug (`${this.constructor.name}|_renderDrawable|Finished ${drawable.label}`)
   }
 }
 
@@ -897,23 +909,25 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    */
   _createStaticDrawables() {
     this.materials.create({ b: 1.0, label: "obstacle" });
-    this.materials.create({ r: 1.0, label: "target" });
+    this.materials.create({ r: 1.0, label: "target"});
     const geom = this.geometries.get("token");
-    this.drawables.set("token", {
+    this.drawables.set("obstacle", {
       label: "Token obstacle",
       geom,
       materialBG: this.materials.bindGroups.get("obstacle"),
       instanceSet: new Set(),
     });
+
+    // TODO: Can we delete this unused drawable set?
     this.drawables.set("target", {
       label: "Token target",
       geom,
       materialBG: this.materials.bindGroups.get("target"),
       instanceSet: new Set(),
-    });
+    })
   }
 
-  #unconstrainedTokenIndices = new Map();
+  _unconstrainedTokenIndices = new Map();
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -924,10 +938,12 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
 
     // Determine the number of constrained tokens and separate from instance set.
     // Essentially subset the instance set.
-    this.#unconstrainedTokenIndices.clear();
+    this._unconstrainedTokenIndices.clear();
     for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( !token.isConstrainedTokenBorder ) this.#unconstrainedTokenIndices.set(idx, token);
+      if ( !token.isConstrainedTokenBorder ) this._unconstrainedTokenIndices.set(idx, token);
     }
+    // console.debug (`${this.constructor.name}|prerender|Identified unconstrained token indices`,
+    //  [...this._unconstrainedTokenIndices.entries()].map(([idx, token]) => `${idx}: ${token.name}, ${token.id}`));
   }
 
   /**
@@ -946,77 +962,25 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     blocking.tokens.prone ??= true;
 
     // Limit tokens as obstacles.
-    const drawable = this.drawables.get("token");
+    const drawable = this.drawables.get("obstacle");
     drawable.instanceSet.clear();
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
       const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
-      for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
-        if ( tokens.has(token) ) drawable.instanceSet.add(idx);
+      for ( const [idx, token] of this._unconstrainedTokenIndices.entries() ) {
+        if ( tokens.has(token) ) {
+          // console.debug (`${this.constructor.name}|filterObjects|Adding ${token.name}, ${token.id} to instance set at index ${idx}`);
+          drawable.instanceSet.add(idx);
+        }
       }
-    }
-
-    // Add target as a distinct drawable.
-    const targetDrawable = this.drawables.get("target");
-    targetDrawable.instanceSet.clear();
-    if ( target ) {
-      const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
-      drawable.instanceSet.delete(targetIdx);
-
-      // If the target is not constrained, set it here.
-      if ( !target.isConstrainedTokenBorder ) targetDrawable.instanceSet.add(targetIdx);
     }
     super.filterObjects(visionTriangle);
   }
-
-  _createPipeline() {
-    super._createPipeline();
-    if ( !this.debugViewNormals ) {
-      const target = this.RENDER_PIPELINE_OPTS.fragment.targets[0];
-      target.writeMask = GPUColorWrite.RED | GPUColorWrite.ALPHA;
-    }
-    this.pipeline.target = this.device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
-  }
-
-  // Skipped until render.
-  _initializeRenderPass(_renderPass) { return; }
-
-  /**
-   * Render only the target token.
-   */
-  renderTarget(renderPass, _target) {
-    const drawable = this.drawables.get("target");
-    if ( !drawable ) return;
-    this._renderDrawable(renderPass, drawable);
-  }
-
-  /**
-   * Render all but the target
-   */
-  renderObstacles(renderPass, _target) {
-    const drawable = this.drawables.get("obstacle");
-    if ( !drawable ) return;
-    this._renderDrawable(renderPass, drawable);
-  }
-
-  _renderDrawable(renderPass, drawable) {
-    if ( !drawable.instanceSet.size ) return;
-
-    // Skipped initialize, so do here. Change if drawing the target.
-    const pipelineName = drawable.label === "Token target" ? "target" : "default";
-    super._initializeRenderPass(renderPass, pipelineName);
-    super._renderDrawable(renderPass, drawable);
-  }
 }
 
-export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
-  /** @type {TokenInstanceHandler} */
-  static handlerClass = TokenInstanceHandler;
-
-  /** @type {string} */
-  static shaderFile = "token";
+export class DrawableHexTokenInstances extends DrawableTokenInstances {
 
   static HEX_SIZES = new Set([0.5, 1, 2, 3]);
 
@@ -1036,41 +1000,16 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
    */
   _createStaticDrawables() {
     this.materials.create({ b: 1.0, label: "obstacle" });
-    this.materials.create({ r: 1.0, label: "target" });
     for ( const key of this.geometries.keys() ) {
       const geom = this.geometries.get(key);
-      this.drawables.set(`token_${key}`, {
+      this.drawables.set(`obstacle_${key}`, {
         label: "Token obstacle",
         geom,
         materialBG: this.materials.bindGroups.get("obstacle"),
         instanceSet: new Set(),
       });
-      this.drawables.set(`target_${key}`, {
-        label: "Token target",
-        geom,
-        materialBG: this.materials.bindGroups.get("target"),
-        instanceSet: new Set(),
-      });
     }
   }
-
-  #unconstrainedTokenIndices = new Map();
-
-  /**
-   * Set up parts of the render chain that change often but not necessarily every render.
-   * E.g., tokens that move a lot vs a camera view that changes every render.
-   */
-  prerender() {
-    super.prerender();
-
-    // Determine the number of constrained tokens and separate from instance set.
-    // Essentially subset the instance set.
-    this.#unconstrainedTokenIndices.clear();
-    for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( !token.isConstrainedTokenBorder ) this.#unconstrainedTokenIndices.set(idx, token);
-    }
-  }
-
 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
@@ -1094,74 +1033,22 @@ export class DrawableHexTokenInstances extends DrawableObjectRBCulledInstancesAb
       // Add in all viewable tokens.
       const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens })
-      for ( const [idx, token] of this.#unconstrainedTokenIndices.entries() ) {
+      for ( const [idx, token] of this._unconstrainedTokenIndices.entries() ) {
         // Only tokens within the viewable area.
         if ( !tokens.has(token) ) continue;
 
         // Determine which hex geometry this token uses.
-        const key = `${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`;
+        const key = this.#hexKeyForToken("obstacle");
         const drawable = this.drawables.get(key);
         if ( !drawable ) continue; // Uneven tokens or unknown handled by constrained token shape.
 
         drawable.instanceSet.add(idx);
       }
     }
-
-    // Add target as a distinct drawable.
-    const targetDrawable = this.drawables.get("target");
-    targetDrawable.instanceSet.clear();
-    if ( target && !target.isConstrainedTokenBorder ) {
-      // Determine which hex geometry this token uses.
-      const key = `${target.document.width}x${target.document.height}_${target.document.hexagonalShape}`;
-      const drawable = this.drawables.get(key);
-      if ( drawable ) {
-        const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
-        drawable.instanceSet.add(targetIdx);
-      }
-    }
     super.filterObjects(visionTriangle);
   }
 
-  _createPipeline() {
-    super._createPipeline();
-    if ( !this.debugViewNormals ) {
-      const target = this.RENDER_PIPELINE_OPTS.fragment.targets[0];
-      target.writeMask = GPUColorWrite.RED | GPUColorWrite.ALPHA;
-    }
-    this.pipeline.target = this.device.createRenderPipeline(this.RENDER_PIPELINE_OPTS);
-  }
-
-  // Skipped until render.
-  _initializeRenderPass(_renderPass) { return; }
-
-  /**
-   * Render only the target token.
-   */
-  renderTarget(renderPass, _target) {
-    for ( const drawable of this.drawables.values ) {
-      if ( drawable.label !== "Token target" ) continue;
-      this._renderDrawable(renderPass, drawable);
-    }
-  }
-
-  /**
-   * Render all but the target
-   */
-  renderObstacles(renderPass, _target) {
-    for ( const drawable of this.drawables.values ) {
-      if ( drawable.label === "Token target" ) continue;
-      this._renderDrawable(renderPass, drawable);
-    }
-  }
-
-  _renderDrawable(renderPass, drawable) {
-    if ( !drawable.instanceSet.size ) return;
-
-    // Skipped initialize, so do here. Change if drawing the target.
-    const pipelineName = drawable.label === "Token target" ? "target" : "default";
-    super._initializeRenderPass(renderPass, pipelineName);
-    super._renderDrawable(renderPass, drawable);
-  }
+  #hexKeyForToken(token) { return `obstacle_${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`; }
 }
 
 export class DrawableGridInstances extends DrawableTokenInstances {
@@ -1366,26 +1253,36 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
     this.materials.create({ r: 1.0, label: "target" });
   }
 
+  targetDrawables = new Map();
+
   prerender() {
     super.prerender();
 
     // Create a geometry for each constrained token.
+    // Get every token so we don't have to redo the buffer every time we change targets.
     this.geometries.clear();
     this.drawables.clear();
+    this.targetDrawables.clear();
     const materialBG = this.materials.bindGroups.get("obstacle");
-    const numInstances = 1;
+    const targetBG = this.materials.bindGroups.get("target");
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      if ( !token.isConstrainedTokenBorder ) continue;
+      // console.debug (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
       // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
       // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
       const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
       this.geometries.set(token.id, geom);
-      this.drawables.set(token.id, {
-        label: `Token drawable ${token.id}`,
+      this.targetDrawables.set(token.id, {
+        label: `Target drawable ${token.id}`,
+        geom,
+        materialBG: targetBG,
+        numInstances: 1,
+      });
+      if ( token.isConstrainedTokenBorder ) this.drawables.set(token.id, {
+        label: `Constrained token drawable ${token.id}`,
         geom,
         materialBG,
-        numInstances,
+        numInstances: 0,
       });
     }
     this._setStaticGeometriesBuffers();
@@ -1400,16 +1297,22 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { target, useLitTargetShape = false } = {}) {
-    // Only draw target as lit.
-    this.drawables.forEach(drawable => drawable.numInstances = 0);
+  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
 
-    // Set material for target and set it to be drawn.
-    if ( target && this.drawables.has(target.id)
-      && (!useLitTargetShape || target.constrainedTokenBorder.equals(target.litTokenBorder)) ) {
-      const drawable = this.drawables.get(target.id);
-      drawable.numInstances = 1;
-      drawable.materialBG = this.materials.bindGroups.get("target");
+    if ( blocking.tokens.dead || blocking.tokens.live ) {
+      // Add in all viewable tokens.
+      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+        { viewer, target, blockingTokensOpts: blocking.tokens });
+      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+        const drawable = this.drawables.get(token.id);
+        if ( !drawable ) continue;
+        drawable.numInstances = Number(tokens.has(token));
+        // console.debug (`${this.constructor.name}|filterObjects|Adding constrained ${token.name}, ${token.id} as numInstances = ${drawable.numInstances}`);
+      }
     }
   }
 
@@ -1429,26 +1332,28 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
    * Render only the target token.
    */
   renderTarget(renderPass, target) {
-    const drawable = this.drawables.get(target.id);
+    // console.debug (`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
+    const drawable = this.targetDrawables.get(target.id);
     if ( !drawable ) return;
-    this._renderDrawable(renderPass, drawable);
+    // console.debug (`${this.constructor.name}|renderTarget|Rendering target drawable for ${target.name}, ${target.id}`);
+    this._renderDrawable(renderPass, drawable, true);
   }
 
   /**
    * Render all but the target
    */
-  renderObstacles(renderPass, target) {
+  render(renderPass, target) {
     for ( const [key, drawable] of this.drawables.entries() ) {
       if ( key === target.id ) continue;
       this._renderDrawable(renderPass, drawable);
     }
   }
 
-  _renderDrawable(renderPass, drawable) {
+  _renderDrawable(renderPass, drawable, isTarget = false) {
     if ( !drawable.numInstances ) return;
 
     // Skipped initialize, so do here. Change if drawing the target.
-    const pipelineName = drawable.label === "Token target" ? "target" : "default";
+    const pipelineName = isTarget ? "target" : "default";
     super._initializeRenderPass(renderPass, pipelineName);
     renderPass.setBindGroup(this.constructor.GROUP_NUM.MATERIALS, drawable.materialBG);
 
@@ -1461,74 +1366,42 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
 // Handle lit tokens and the target token in red.
 export class DrawableLitTokens extends DrawableConstrainedTokens {
 
+  static _includeToken(token) { return !token.constrainedTokenBorder.equals(token.litTokenBorder); }
+
+
+  // Lit tokens are not filtered; only used to draw targets.
+  filterObjects() { return; }
+
+  // Construct the lit token border geometries for all tokens; used to render targets.
+  // Skips any lit borders equivalent to the constrained border b/c constrained handles all of these.
   prerender() {
-    DrawableObjectsAbstract.prototype.prerender.call(this);
+    super.prerender();
 
     // Create a geometry for each constrained token.
+    // Get every token so we don't have to redo the buffer every time we change targets.
     this.geometries.clear();
     this.drawables.clear();
-    const materialBG = this.materials.bindGroups.get("obstacle");
-    const numInstances = 1;
+    this.targetDrawables.clear();
+    const materialBG = this.materials.bindGroups.get("target");
     for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
       if ( token.constrainedTokenBorder.equals(token.litTokenBorder) ) continue;
+      // console.debug (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
-      // Translate so that instance matrix does not need to be applied.
-      const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-      const geom = new GeometryLitTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false, x, y, z })
+      // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
+      // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+      const geom = new GeometryLitTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
       this.geometries.set(token.id, geom);
-      this.drawables.set(token.id, {
-        label: `Token drawable ${token.id}`,
+      this.targetDrawables.set(token.id, {
+        label: `Target drawable ${token.id}`,
         geom,
         materialBG,
-        numInstances,
+        numInstances: 1,
       });
     }
     this._setStaticGeometriesBuffers();
   }
 
-  /**
-   * Filter the objects to be rendered by those that may be viewable between target and token.
-   * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
-   * @param {object} [opts]
-   * @param {Token} [opts.viewer]
-   * @param {Token} [opts.target]
-   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
-   */
-  filterObjects(visionTriangle, { viewer, target, blocking = {}, useLitTargetShape = true } = {}) {
-    blocking.tokens ??= {};
-    blocking.tokens.dead ??= true;
-    blocking.tokens.live ??= true;
-    blocking.tokens.prone ??= true;
+  // Lit tokens not rendered as obstacles, so skip.
+  render() { return; }
 
-    if ( useLitTargetShape && (blocking.tokens.live || blocking.tokens.dead) ) {
-      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
-        { viewer, target, blockingTokenOpts: blocking.tokens });
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-        const drawable = this.drawables.get(token.id);
-        if ( !drawable ) continue;
-        drawable.numInstances = 0; // Default to not drawing this token.
-
-        if ( target.constrainedTokenBorder.equals(target.litTokenBorder) ) continue;
-
-        // Filter out basic hex shapes; rendered using instancing.
-        if ( canvas.grid.isHexagonal
-          && token.document.width === token.document.height
-          && DrawableHexTokenInstances.HEX_SIZES.has(token.document.width) ) continue;
-
-        drawable.numInstances = Number(tokens.has(token));
-      }
-    } else this.drawables.forEach(drawable => drawable.numInstances = 0);
-
-    // Set material for target and set it to be drawn.
-    if ( useLitTargetShape
-      && target
-      && this.drawables.has(target.id)
-      && !target.constrainedTokenBorder.equals(target.litTokenBorder) ) {
-
-      const drawable = this.drawables.get(target.id);
-      drawable.numInstances = 1;
-      drawable.materialBG = this.materials.bindGroups.get("target");
-    }
-  }
 }

@@ -415,6 +415,13 @@ export class TokenTriangles extends AbstractPolygonTriangles {
         return instance.trianglesForPlaceable(token);
       },
     });
+    Object.defineProperty(obj, "litTriangles", {
+      configurable: true,
+      get() {
+        if ( !token.litTokenBorder ) return null;
+        return LitTokenTriangles.trianglesForPlaceable(token);
+      }
+    });
   }
 
   static registerExistingPlaceables() {

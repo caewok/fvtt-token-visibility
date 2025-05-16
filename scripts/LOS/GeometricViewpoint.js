@@ -11,7 +11,7 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { AbstractPolygonTrianglesID, Grid3dTriangles, LitTokenTriangles  } from "./PlaceableTriangles.js";
+import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
 import { Camera } from "./WebGPU/Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
 import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
@@ -98,7 +98,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
 
   obscuredArea = 0;
 
-  gridSquareArea = 0;
 
   blockingObjects = {
     tiles: NULL_SET,
@@ -115,7 +114,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
 
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustrum(target);
+    this.camera.setTargetTokenFrustum(target);
     /*
     this.camera.perspectiveParameters = {
       fov: Math.toRadians(90),
@@ -281,17 +280,17 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
   /**
    * Construct target polygons.
    */
-  _targetPolygons() {
+  _targetPolygons(useLitTargetShape = this.config.useLitTargetShape) {
     const target = this.target;
 
     // Prefer the constrained token triangles whenever possible.
-    if ( !this.config.useLitTargetShape ) return target[AbstractPolygonTrianglesID].triangles;
+    if ( !useLitTargetShape ) return target[AbstractPolygonTrianglesID].triangles;
 
-    const shape = target.litTokenBorder;
-    if ( shape.equals(target.constrainedTokenBorder)
+    const shape = target.litTokenBorder; // Don't trigger until needed.
+    if ( !shape || shape.equals(target.constrainedTokenBorder)
       || shape.equals(target.tokenBorder) ) return target[AbstractPolygonTrianglesID].triangles;
 
-    return LitTokenTriangles.trianglesForPlaceable(target);
+    return target[AbstractPolygonTrianglesID].litTriangles;
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
@@ -315,16 +314,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    * Area of a basic grid square to use for the area estimate when dealing with large tokens.
    * @returns {number}
    */
-  _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
-    this.viewer = viewer;
-    this.target = target;
-    this.viewpoint = viewerLocation;
-    this.targetLocation = targetLocation;
-
-    this.camera.cameraPosition = viewerLocation;
-    this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustrum(target);
-
+  _gridShapeArea() {
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
     const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
@@ -332,6 +322,24 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const gridPaths = gridPolys3d.toClipperPaths({ scalingFactor: this.constructor.SCALING_FACTOR });
     gridPaths.combine().clean();
     return gridPaths.area;
+  }
+
+  /**
+   * Constrained target area, counting both lit and unlit portions of the target.
+   * Used to determine the total area (denominator) when useLitTarget config is set.
+   * @returns {number}
+   */
+  _constrainedTargetArea() {
+    const viewpoint = this.viewpoint
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+
+    // Set useLitTargetShape false so constrained border is used.
+    const facingPolys = this._targetPolygons(false).filter(poly => poly.isFacing(viewpoint));
+    const targetPolys = this._applyPerspective(facingPolys, lookAtM, perspectiveM);
+    const targetPaths = targetPolys.toClipperPaths({ scalingFactor: this.constructor.SCALING_FACTOR });
+    targetPaths.combine().clean();
+    return targetPaths.area;
   }
 
   _gridPolygons(lookAtM, perspectiveM) {

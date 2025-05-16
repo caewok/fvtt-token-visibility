@@ -17,6 +17,7 @@ import { Settings } from "../settings.js";
 import { VisionTriangle } from "./VisionTriangle.js";
 import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { NULL_SET } from "./util.js";
+import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 
 import {
   insetPoints,
@@ -80,27 +81,27 @@ export class AbstractViewpoint {
    * @param {Token} target
    * @returns {number}
    */
-  percentVisible(callback) {
-    const percent = this._simpleVisibilityTest() ?? this._percentVisible(callback);
+  percentVisible() {
+    const percent = this.simpleVisibilityTest() ?? this._percentVisible();
     // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
 
   async percentVisibleAsync() {
-    const percent = this._simpleVisibilityTest() ?? (await this._percentVisible());
+    const percent = this.simpleVisibilityTest() ?? (await this._percentVisible());
     // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
     return percent;
   }
 
   /** @override */
   _percentVisible() {
-    // TODO: Handle configuration options.
-    return this.calculator.percentVisible(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+    const { calculator, viewer, target, viewpoint: viewerLocation, targetLocation } = this;
+    return calculator.percentVisible(viewer, target, { viewerLocation, targetLocation });
   }
 
   async _percentVisibleAsync() {
-    // TODO: Handle configuration options.
-    return this.calculator.percentVisibleAsync(this.viewer, this.target, { viewerLocation: this.viewpoint, targetLocation: this.targetLocation });
+    const { calculator, viewer, target, viewpoint: viewerLocation, targetLocation } = this;
+    return calculator.percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
   }
 
   /**
@@ -108,7 +109,7 @@ export class AbstractViewpoint {
    * @param {Token} target
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
-  _simpleVisibilityTest() {
+  simpleVisibilityTest() {
     const target = this.target;
 
     // If directly overlapping.
@@ -254,7 +255,7 @@ export class AbstractViewpoint {
     }
     if ( viewer ) {
       tokens.delete(viewer);
-      tokens = tokens.filter(t => tokensOverlap(  viewer, t));
+      tokens = tokens.filter(t => !tokensOverlap(viewer, t));
       if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer))
     }
 
@@ -387,6 +388,46 @@ export class AbstractViewpoint {
     // Scale down polygon to avoid adjacent walls.
     const padShape = tokenShape.pad(-2, { scalingFactor: 100 });
     return [...padShape.iteratePoints({close: false})].map(pt => new Point3d(pt.x, pt.y, elevation));
+  }
+
+  /**
+   * Get polygons representing all grids under a token.
+   * If token is constrained, overlap the constrained polygon on the grid shapes.
+   * @param {Token} token
+   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   */
+  static constrainedGridShapesUnderToken(token) {
+    const gridShapes = this.gridShapesUnderToken(token);
+    const constrained = token.constrainedTokenBorder;
+
+    // Token unconstrained by walls.
+    if ( constrained instanceof PIXI.Rectangle ) return gridShapes;
+
+    // For each gridShape, intersect against the constrained shape
+    const constrainedGridShapes = [];
+    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([constrained]);
+    for ( let gridShape of gridShapes ) {
+      if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
+
+      const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
+      if ( !constrainedGridShape || constrainedGridShape.points.length < 6 ) continue;
+      constrainedGridShapes.push(constrainedGridShape);
+    }
+
+    return constrainedGridShapes;
+  }
+
+  /**
+   * Get polygons representing all grids under a token.
+   * @param {Token} token
+   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   */
+  static gridShapesUnderToken(token) {
+    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) {
+      // console.error("gridShapesUnderTarget called on gridless scene!");
+      return [token.bounds];
+    }
+    return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
 
   /**

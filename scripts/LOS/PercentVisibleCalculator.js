@@ -67,7 +67,7 @@ export class PercentVisibleCalculatorAbstract {
    * @returns {number}
    */
   percentVisible(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
-    if ( !this.getVisibleTargetShape(target) ) return 0;
+    if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
 
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
@@ -78,6 +78,8 @@ export class PercentVisibleCalculatorAbstract {
   }
 
   async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
+    if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
+
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
@@ -121,10 +123,15 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    * @override
    */
   _percentUnobscured(viewer, target, viewerLocation, targetLocation) {
-    let totalArea = this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
-    if ( this.config.largeTarget ) {
-      totalArea = Math.min(totalArea, this._gridShapeArea(viewer, target, viewerLocation, targetLocation));
-    }
+    // Calculate the denominator for percent seen: the target area without obstacles.
+    // - Large target: 100% viewable if area equal to one grid square is viewable.
+    // - Lit target: Unlit portions of the target are treated as obscured.
+    let totalArea;
+    if ( this.config.useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) totalArea = this._constrainedTargetArea(viewer, target, viewerLocation, targetLocation);
+    else totalArea = this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
+    if ( this.config.largeTarget ) totalArea = Math.min(totalArea, this._gridShapeArea(viewer, target, viewerLocation, targetLocation))
     if ( !totalArea ) {
       console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0.`);
       return 0;
@@ -138,23 +145,34 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
     return Math.clamp(percentSeen, 0, 1);
   }
 
-
   /**
    * Grid shape area centered on the target as seen from the viewer location.
-   * Used to determine the minimum area needed for the largeTarget option.
+   * Used to determine the minimum area needed (denominator) for the largeTarget option.
+   * Called after _calculatePercentVisible.
    * @returns {number}
    */
-  _gridShapeArea(viewer, target, viewerLocation, targetLocation) { return 0; }
+  _gridShapeArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+
+  /**
+   * Constrained target area, counting both lit and unlit portions of the target.
+   * Used to determine the total area (denominator) when useLitTarget config is set.
+   * Called after _calculatePercentVisible.
+   * @returns {number}
+   */
+  _constrainedTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 
   /**
    * How much of the target area is viewable, considering obstacles.
+   * Called after _calculatePercentVisible.
    * @returns {number}
    */
-  _viewableTargetArea(viewer, target, viewerLocation, targetLocation) { return 0; }
+  _viewableTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 
   /**
    * The target area as seen from the viewer location, ignoring all obstacles.
+   * Called after _calculatePercentVisible.
+   * @param {Token} target    For convenience, the target token
    * @returns {number}
    */
-  _totalTargetArea(viewer, target, viewerLocation, targetLocation) { return 0; }
+  _totalTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 }

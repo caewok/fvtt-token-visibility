@@ -55,7 +55,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     this.filterPotentiallyBlockingPolygons(viewer, viewerLocation, target);
   }
 
-  _percentUnobscured(viewer, target, viewerLocation, targetLocation) {
+  _percentUnobscured(viewer, target, viewerLocation, _targetLocation) {
     const targetPoints = this.constructTargetPoints(target);
     return (1 - this._testTargetPoints(targetPoints, viewerLocation, this.getVisibleTargetShape(target)));
   }
@@ -92,7 +92,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   /*
    * Similar to _constructViewerPoints but with a complication:
-   * - Grid. When set, points are constructed per grid space covered by the token.
+   * - Large target. When set, points are constructed per grid space covered by the token.
    * @param {Token} target
    * @returns {Points3d[][]}
    */
@@ -117,7 +117,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
 
     // Construct points under this constrained token border.
-    cfg.tokenShape = this.getVisibleTargetShape(target);
+    cfg.tokenShape = target.constrainedTokenBorder; // Note: not the lit border.
     const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
     if ( points3d ) return [PointsViewpoint.elevatePoints(target, targetPoints)];
     return [targetPoints];
@@ -189,9 +189,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     if ( this.config.debug ) this.debugPoints.push(debugPoints);
     for ( let i = 0; i < ln; i += 1 ) {
       const targetPoint = targetPoints[i];
-      const outsideVisibleShape = visibleTargetShape
-        && !visibleTargetShape.contains(targetPoint.x, targetPoint.y);
-      if ( outsideVisibleShape ) continue;
+      if ( visibleTargetShape && !visibleTargetShape.contains(targetPoint.x, targetPoint.y) ) continue;
 
       // For the intersection test, 0 can be treated as no intersection b/c we don't need
       // intersections at the origin.

@@ -55,7 +55,7 @@ import { GeometryDesc } from "./LOS/WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
 import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
-import { RenderTokens, RenderWalls, RenderTiles, RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
+import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
@@ -77,13 +77,7 @@ import {
   DrawableSceneBackgroundWebGL2,
 } from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
 
-import {
-  RenderObstaclesAbstractWebGL2,
-  RenderWallObstaclesWebGL2,
-  RenderTileObstaclesWebGL2,
-  RenderObstaclesWebGL2,
-  RenderObstaclesWithBackgroundWebGL2,
-} from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
+import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
@@ -290,11 +284,7 @@ Hooks.once("init", function() {
       DrawableTileWebGL2,
       DrawableTokenWebGL2,
       DrawableSceneBackgroundWebGL2,
-      RenderObstaclesAbstractWebGL2,
-      RenderWallObstaclesWebGL2,
-      RenderTileObstaclesWebGL2,
       RenderObstaclesWebGL2,
-      RenderObstaclesWithBackgroundWebGL2,
       twgl,
     },
 
@@ -309,9 +299,6 @@ Hooks.once("init", function() {
       GeometryCubeDesc,
       GeometryHorizontalPlaneDesc,
       GeometryConstrainedTokenDesc,
-      RenderTokens,
-      RenderTiles,
-      RenderWalls,
       RenderObstacles,
       WebGPUSumRedPixels,
       wgsl,

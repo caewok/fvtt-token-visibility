@@ -11,7 +11,6 @@ import { Camera } from "./Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
-  DrawableWallInstances,
   DrawableTokenInstances,
   DrawableHexTokenInstances,
   DrawableTileInstances,
@@ -59,9 +58,18 @@ Drawable.
 */
 
 
-class RenderAbstract {
+export class RenderObstacles {
   /** @type {class} */
-  static drawableClasses = [];
+  static drawableClasses = [
+    DrawableTerrainWallInstances,
+    DrawableNonTerrainWallInstances,
+    DrawableTileInstances,
+    DrawableTokenInstances,
+    DrawableConstrainedTokens,
+    DrawableHexTokenInstances,
+    DrawableLitTokens,
+    DrawableGridInstances,
+  ];
 
   /** @type {object} */
   static CAMERA_LAYOUT = {
@@ -77,16 +85,19 @@ class RenderAbstract {
   device;
 
   /** @type {DrawObjectsAbstract[]} */
-  drawableObjects = [];
-
-  /** @type {DrawableTokenInstances|DrawableConstrainedTokens[]} */
-  drawableTokens = [];
+  drawableObjects = []; // Instantiations of all drawableClasses.
 
   /** @type {DrawObjectsAbstract[]} */
-  drawableObstacles = [];
+  drawableObstacles = []; // All drawable objects that should be filtered by vision triangle.
 
   /** @type {DrawableObjectsAbstract} */
-  drawableGridShape;
+  drawableGridShape; // The unit grid shape as a drawable object.
+
+  /** @type {DrawableObjectsAbstract} */
+  drawableConstrainedToken; // Constrained token drawable object.
+
+  /** @type {DrawableObjectsAbstract} */
+  drawableLitToken; // Lit token drawable object.
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGPU", perspectiveType: "perspective" });
@@ -112,22 +123,42 @@ class RenderAbstract {
     this.#debugViewNormals = debugViewNormals;
     this.device = device;
     this.materials = new MaterialsTracker(this.device);
-
-    for ( const cl of this.constructor.drawableClasses ) {
-      if ( cl === DrawableHexTokenInstances && !canvas.grid.isHexagonal ) continue;
-      if ( cl === DrawableTokenInstances && canvas.grid.isHexagonal ) continue;
-
-      const drawableObj = new cl(this.device, this.materials, this.camera, { senseType, debugViewNormals });
-      this.drawableObjects.push(drawableObj);
-      const categoryArr = cl === DrawableTokenInstances || cl === DrawableConstrainedTokens || cl === DrawableHexTokenInstances
-        ? this.drawableTokens : this.drawableObstacles;
-      categoryArr.push(drawableObj);
-    }
-    this.drawableGridShape = new DrawableGridInstances(this.device, this.materials, this.camera, { senseType, debugViewNormals });
-    this.drawableObjects.push(this.drawableGridShape);
+    this._buildDrawableObjects();
 
     this.#renderSize.width = width;
     this.#renderSize.height = height;
+  }
+
+  _buildDrawableObjects() {
+    this.drawableObjects.forEach(obj => obj.destroy());
+    this.drawableObjects.length = 0;
+    const opts = { senseType: this.senseType, debugViewNormals: this.debugViewNormals };
+
+    for ( const cl of this.constructor.drawableClasses ) {
+      // Use hex-specific classes for non-constrained token drawing as necessary.
+      if ( !canvas.grid.isHexagonal && cl === DrawableHexTokenInstances ) continue;
+      if ( canvas.grid.isHexagonal && cl === DrawableTokenInstances ) continue;
+
+      const drawableObj = new cl(this.device, this.materials, this.camera, opts);
+      this.drawableObjects.push(drawableObj);
+      switch ( cl ) {
+        // Lit tokens not used as obstacles; only targets
+        case DrawableLitTokens:
+          this.drawableLitToken = drawableObj; break;
+
+        // Same for the unit grid shape; not a filtered obstacle.
+        case DrawableGridInstances:
+          this.drawableGridShape = drawableObj; break;
+
+        case DrawableConstrainedTokens:
+          this.drawableConstrainedToken = drawableObj;
+          this.drawableObstacles.push(drawableObj);
+          break;
+
+        default:
+          this.drawableObstacles.push(drawableObj);
+      }
+    }
   }
 
   /** @type {WebGPUDevice} */
@@ -148,7 +179,6 @@ class RenderAbstract {
   async initialize() {
     await this._initializeDrawObjects();
     this._allocateRenderTargets();
-    this.prerender();
   }
 
   /**
@@ -156,12 +186,15 @@ class RenderAbstract {
    */
   async _initializeDrawObjects() {
     this._createCameraBindGroup();
+    /*
     const promises = [];
-    for ( const drawableObj of this.drawableObjects ) {
-      // await drawableObj.initialize();
-      promises.push(drawableObj.initialize());
-    }
+    for ( const drawableObj of this.drawableObjects ) promises.push(drawableObj.initialize());
     return Promise.allSettled(promises);
+    */
+
+    for ( const drawableObj of this.drawableObjects ) {
+      await drawableObj.initialize();
+    }
   }
 
   /** @type {ViewerLOSConfig} */
@@ -190,8 +223,10 @@ class RenderAbstract {
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  prerender() {
-    for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
+  prerender({ useLitTargetShape = false } = {}) {
+    for ( const drawableObj of this.drawableObstacles ) drawableObj.prerender();
+    if ( useLitTargetShape ) this.drawableLitToken.prerender({ useLitTargetShape });
+    this.drawableGridShape.prerender(); // Not an obstacle but requires prerender.
   }
 
   async renderAsync(viewerLocation, target, opts) {
@@ -199,21 +234,8 @@ class RenderAbstract {
     return this.device.queue.onSubmittedWorkDone();
   }
 
-  renderGridShape(viewerLocation, target, { viewer, targetLocation, frame } = {}) {
-    const blocking = {
-      walls: false,
-      tiles: false,
-      tokens: {
-        dead: false,
-        live: false,
-        prone: false,
-      }
-    };
-    const opts = { viewer, target, blocking, useLitTargetShape: false };
+  renderGridShape(viewerLocation, target, { frame } = {}) {
     const device = this.device;
-    this._setCamera(viewerLocation, target, { viewer, targetLocation });
-    const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
-    this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -238,13 +260,45 @@ class RenderAbstract {
     this.device.queue.submit([commandEncoder.finish()]);
   }
 
-  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true } = {}) {
+  renderTarget(viewerLocation, target, { frame, useLitTargetShape = false } = {}) {
+    // console.debug(`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
+    const device = this.device;
+
+    // Must set the canvas context immediately prior to render.
+    const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
+    if ( this.sampleCount > 1 ) this.colorAttachment.resolveTarget = view;
+    else {
+      this.colorAttachment.view = view;
+      this.colorAttachment.resolveTarget = undefined;
+    }
+
+    // When using viewport, may want to prevent clearing of the texture between renders.
+    // FYI, cannot set clearValue of the attachment to null.
+    const renderPassDesc = this.renderPassDescriptor;
+
+    // Render each drawable object.
+    const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
+    const renderPass = commandEncoder.beginRenderPass(renderPassDesc);
+
+    if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
+
+    if ( useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) this.drawableLitToken.renderTarget(renderPass, target);
+    else this.drawableConstrainedToken.renderTarget(renderPass, target);
+
+    renderPass.end();
+    this.device.queue.submit([commandEncoder.finish()]);
+    // console.debug(`${this.constructor.name}|renderTarget|Finished rendering ${target.name}, ${target.id}`);
+  }
+
+  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, useLitTargetShape = false } = {}) {
+    // console.debug(`${this.constructor.name}|render|Begin rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
     const opts = { viewer, target, blocking: this.config.blocking, useLitTargetShape: this.config.useLitTargetShape };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
-
-    this.drawableObjects.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
+    this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -272,18 +326,23 @@ class RenderAbstract {
     // Render the target.
     // Render first so full red of target is recorded.
     // (Could be either constrained or not constrained.)
-    this.drawableTokens.forEach(drawableObj => drawableObj.renderTarget(renderPass, target));
+    // Don't use instancing to render b/c that gets too complicated with the possible lit or constrained targets.
+    // console.debug(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    if ( useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) this.drawableLitToken.renderTarget(renderPass, target);
+    else this.drawableConstrainedToken.renderTarget(renderPass, target);
 
     // Render the obstacles
-    this.drawableTokens.forEach(drawableObj => drawableObj.renderObstacles(renderPass, target));
+    // console.debug(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?
-
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
 
     if ( !clear ) renderPassDesc.colorAttachments[0].loadOp = loadOp; // Reset to default value.
+    // console.debug(`${this.constructor.name}|render|Finished rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
 
   }
 
@@ -294,7 +353,9 @@ class RenderAbstract {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
     this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustrum(target);
+    this.camera.setTargetTokenFrustum(target);
+    // this.camera.perspectiveParameters = { fov: this.camera.perspectiveParameters.fov * 1.7 }; // For reasons, the FOV is too narrow when using WebGPU.
+    this.camera.refresh();
     this._updateCameraBuffer();
   }
 
@@ -514,28 +575,4 @@ class RenderAbstract {
     if ( this.msaaColorTexture ) this.msaaColorTexture = this.msaaColorTexture.destroy();
     if ( this.depthTexture ) this.depthTexture = this.depthTexture.destroy();
   }
-}
-
-export class RenderWalls extends RenderAbstract {
-  static drawableClasses = [DrawableWallInstances];
-}
-
-export class RenderTiles extends RenderAbstract {
-  static drawableClasses = [DrawableTileInstances];
-}
-
-export class RenderTokens extends RenderAbstract {
-  static drawableClasses = [DrawableTokenInstances, DrawableConstrainedTokens, DrawableHexTokenInstances];
-}
-
-export class RenderObstacles extends RenderAbstract {
-  static drawableClasses = [
-    DrawableTerrainWallInstances,
-    DrawableNonTerrainWallInstances,
-    DrawableTileInstances,
-    DrawableTokenInstances,
-    DrawableConstrainedTokens,
-    DrawableHexTokenInstances,
-    DrawableLitTokens,
-  ];
 }

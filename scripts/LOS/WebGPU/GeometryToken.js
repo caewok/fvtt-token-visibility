@@ -481,17 +481,29 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
     // Set the token border to center at 0,0,0 to match handling of other geometries.
     // Then pass through the token position to translate it back.
     border ??= token.constrainedTokenBorder || token.tokenBorder;
-    const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const txBorder = border.translate(-x, -y, -z);
     const { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
       this.label += " Cube"
-      const w = token.document.width * canvas.dimensions.size;
-      const d = token.document.height * canvas.dimensions.size;
-      const h = topZ - bottomZ;
-      return GeometryCubeDesc.defineVertices({ w, d, h, x, y, z });
+      // Divide in half to center at 0,0, with half on +, half on -
+      const w = border.width * 0.5;
+      const d = border.height * 0.5;
+      const h = (topZ - bottomZ) * 0.5
+      return GeometryCubeDesc.defineVertices({ w, d, h });
     }
-    return this.define3dPolygonVertices(border, { topZ, bottomZ, x, y, z });
+    const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const txBorder = border.translate(-x, -y, -z);
+    return this.define3dPolygonVertices(border, { topZ, bottomZ });
+  }
+
+  // Override x,y,z to translate the token object to world space.
+  // Can be overriden by passing specific x,y,z opts that are not 0.
+  _defineVerticesAndIndices(opts) {
+    const token = opts.token;
+    const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    opts.x ||= x;
+    opts.y ||= y;
+    opts.z ||= z;
+    return super._defineVerticesAndIndices(opts);
   }
 }
 
