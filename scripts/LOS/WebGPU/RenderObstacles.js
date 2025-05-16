@@ -169,7 +169,7 @@ export class RenderObstacles {
    */
   static async getDevice() {
     if ( this.device ) return this.device;
-    this.device = await WebGPUDevice.getDevice();
+    this.device = CONFIG[MODULE_ID].webGPUDevice ?? (await WebGPUDevice.getDevice());
     return this.device;
   }
 

@@ -55,7 +55,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
   }
 
   async initialize() {
-    this.device ??= await WebGPUDevice.getDevice();
+    this.device ??= CONFIG[MODULE_ID].webGPUDevice ?? (await WebGPUDevice.getDevice());
     this.gpuCtx.configure({
       device: this.device,
       format: WebGPUDevice.presentationFormat,
