@@ -260,7 +260,7 @@ class DrawableObjectsAbstract {
     const dst = new vertexArray.constructor(this.buffers.staticVertex.getMappedRange());
     dst.set(vertexArray);
     this.buffers.staticVertex.unmap();
-    this.rawBuffers.staticVertex = vertexArray;
+    // this.rawBuffers.staticVertex = vertexArray;
 
     if ( offsetData.index.totalSize ) {
       const indexArray = combineTypedArrays(...geoms.filter(g => Boolean(g.indices)).map(g => g.indices));
@@ -275,7 +275,7 @@ class DrawableObjectsAbstract {
       const dst = new indexArray.constructor(this.buffers.staticIndex.getMappedRange());
       dst.set(indexArray);
       this.buffers.staticIndex.unmap();
-      this.rawBuffers.staticIndex = indexArray;
+      // this.rawBuffers.staticIndex = indexArray;
     }
 
     for ( let i = 0, n = geoms.length; i < n; i += 1 ) {
@@ -450,19 +450,33 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     this._createInstanceBindGroup();
   }
 
+//   _mappedInstanceTransferBuffers = [];
+//
+//   get mappedInstanceTransferBuffer() {
+//     return this._mappedInstanceTransferBuffers.pop() || this.device.createBuffer({
+//
+//     })
+//   }
+
   _createInstanceBuffer() {
     if ( !this.placeableHandler.numInstances ) return;
     const device = this.device;
+    const size = this.placeableHandler.instanceArrayBuffer.byteLength;
+    if ( this.buffers.instance && this.buffers.instance.size !== size ) {
+      this.buffers.instance.destroy();
+      this.buffers.instance = undefined;
+    }
 
-    if ( this.buffers.instance ) this.buffers.instance = this.buffers.instance.destroy();
-    this.buffers.instance = this.device.createBuffer({
-      label: `${this.constructor.name}`,
-      size: this.placeableHandler.instanceArrayBuffer.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    log (`${this.constructor.name}|_createInstanceBuffer`);
+    if ( !this.buffers.instance ) {
+      this.buffers.instance = this.device.createBuffer({
+        label: `${this.constructor.name}`,
+        size,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      log (`${this.constructor.name}|_createInstanceBuffer`);
+    }
     device.queue.writeBuffer(this.buffers.instance, 0, this.placeableHandler.instanceArrayBuffer)
-    this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer)
+    // this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer)
   }
 
   _createInstanceBindGroup() {
@@ -556,7 +570,12 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
     if ( !this.placeableHandler.numInstances ) return;
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
-    if ( this.buffers.indirect ) this.buffers.indirect = this.buffers.indirect.destroy();
+    if ( this.buffers.indirect ) {
+      if ( this.buffers.indirect.size === size * this.drawables.size ) return;
+      this.buffers.indirect.destroy();
+      this.buffers.indirect = undefined;
+    }
+
     this.buffers.indirect = this.device.createBuffer({
       label: "Indirect Buffer",
       size: size * this.drawables.size,
@@ -589,8 +608,12 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     // Ensure size is divisible by 256.
     const minSize = 256;
     const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
+    if ( this.buffers.culled ) {
+      if ( this.buffers.culled.size === size * this.drawables.size ) return;
+      this.buffers.culled.destroy();
+      this.buffers.culled = undefined;
+    }
 
-    if ( this.buffers.culled ) this.buffers.culled = this.buffers.culled.destroy();
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
       size: size * this.drawables.size,
