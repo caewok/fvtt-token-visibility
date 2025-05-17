@@ -210,6 +210,8 @@ debugViewer = buildDebugViewer(api.debugViewers.geometric)
 debugViewer = buildDebugViewer(api.debugViewers.PIXI, { width: 512, height: 512 })
 debugViewer = buildDebugViewer(api.debugViewers.webGL2)
 debugViewer = buildDebugViewer(api.debugViewers.webGL2, { useInstancing: true, debugView: false })
+debugViewer = buildDebugViewer(api.debugViewers.webGL2, { debugView: false })
+
 debugViewer = buildDebugViewer(api.debugViewers.webGPU)
 debugViewer = buildDebugViewer(api.debugViewers.webGPUAsync)
 debugViewer = buildDebugViewer(api.debugViewers.hybrid)
@@ -361,8 +363,6 @@ await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
 
 
 
-
-
 N = 20;
 for ( const clipperVersion of [1, 2] ) {
   CONFIG.tokenvisibility.clipperVersion = clipperVersion;
@@ -380,8 +380,29 @@ for ( const clipperVersion of [1, 2] ) {
     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
 
+    console.log(`\n\tStencil instances`);
+    CONFIG.tokenvisibility.useStencil = true;
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+
+    console.log(`\n\tNo Stencil instances`);
+    CONFIG.tokenvisibility.useStencil = false;
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+
+
     CONFIG.tokenvisibility.filterInstances = false;
     console.log(`\n\tNo filtering`);
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+
+    console.log(`\n\tStencil instances`);
+    CONFIG.tokenvisibility.useStencil = true;
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+
+    console.log(`\n\tNo Stencil instances`);
+    CONFIG.tokenvisibility.useStencil = false;
     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
 
@@ -394,7 +415,7 @@ for ( const clipperVersion of [1, 2] ) {
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async PIXI", calcPIXI)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
-    await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
+   await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
   }
 }
 

@@ -178,7 +178,7 @@ export class Area3dPopoutCanvas extends Application {
   async _render(force=false, options={}) {
     await super._render(force, options);
     this.contextType = options.contextType ?? ((await this.constructor.supportsWebGPU()) ? "webgpu" : "webgl");
-    this.context = this.canvas.getContext(this.contextType);
+    this.context = this.canvas.getContext(this.contextType, options.contextConfiguration);
     OPEN_POPOUTS.add(this);
     return this;
   }

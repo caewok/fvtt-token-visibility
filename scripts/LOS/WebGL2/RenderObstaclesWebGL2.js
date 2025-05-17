@@ -7,6 +7,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../../const.js";
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
 import {
@@ -278,9 +279,7 @@ export class RenderObstaclesWebGL2 {
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
-    const type = canvas.grid.isHexagonal ? "hex" : "grid";
     this.drawableConstrainedToken.filterObjects(visionTriangle, opts);
-
     const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
 
     // See https://webgl2fundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
@@ -298,18 +297,34 @@ export class RenderObstaclesWebGL2 {
   _renderColorCoded(target, viewer, visionTriangle, frame, clear = true, useLitTargetShape = false) {
     const gl = this.gl;
     // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
+
+    const useStencil = CONFIG[MODULE_ID].useStencil;
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
+
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
-    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     // gl.cullFace(gl.FRONT);
 
+    // Use the stencil buffer to identify target pixels.
+    if ( useStencil ) {
+      gl.enable(gl.STENCIL_TEST);
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+      gl.stencilFunc(gl.ALWAYS, 1, 0xFF); // All fragments should pass stencil test.
+      gl.stencilMask(0xFF); // Enable writing to the stencil buffer.
+    }
+
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
     this._drawTarget(target, useLitTargetShape);
 
+    // Performance: Use the stencil buffer to discard pixels outside the target shape.
+    if ( useStencil ) {
+      gl.stencilFunc(gl.EQUAL, 1, 0xFF); // Draw only where the target shape is present.
+      gl.stencilMask(0x00); // Disable writing to the stencil buffer.
+    }
     gl.colorMask(false, false, true, true); // Blue, alpha channels for obstacles.
     this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
@@ -330,6 +345,11 @@ export class RenderObstaclesWebGL2 {
     this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Reset
+    if ( useStencil ) {
+      gl.stencilMask(0x00); // Disable writing to stencil buffer.
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+      gl.disable(gl.STENCIL_TEST);
+    }
     gl.colorMask(true, true, true, true);
     gl.disable(gl.BLEND);
   }
