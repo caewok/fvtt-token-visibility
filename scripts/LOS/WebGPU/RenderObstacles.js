@@ -353,7 +353,7 @@ export class RenderObstacles {
   _setCamera(viewerLocation, target, { targetLocation } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
-    this.camera.targetPosition = targetLocation;
+    // this.camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
     this.camera.setTargetTokenFrustum(target);
     // this.camera.perspectiveParameters = { fov: this.camera.perspectiveParameters.fov * 1.7 }; // For reasons, the FOV is too narrow when using WebGPU.
     this.camera.refresh();

@@ -401,7 +401,7 @@ export class RenderObstaclesWebGL2 {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     const camera = this.camera;
     camera.cameraPosition = viewerLocation;
-    camera.targetPosition = targetLocation;
+    // camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
 
     /*
     camera.perspectiveParameters = {
