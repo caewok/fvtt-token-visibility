@@ -252,9 +252,14 @@ class DrawableObjectsAbstract {
     this.buffers.staticVertex = this.device.createBuffer({
         label: "Static Vertex Buffer",
         size: offsetData.vertex.totalSize,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        usage: GPUBufferUsage.VERTEX,
+        mappedAtCreation: true,
       });
-    this.device.queue.writeBuffer(this.buffers.staticVertex, 0, vertexArray);
+    // Only copying once, so use mappedAtCreation instead of writeBuffer.
+    // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
+    const dst = new vertexArray.constructor(this.buffers.staticVertex.getMappedRange());
+    dst.set(vertexArray);
+    this.buffers.staticVertex.unmap();
     this.rawBuffers.staticVertex = vertexArray;
 
     if ( offsetData.index.totalSize ) {
@@ -262,9 +267,14 @@ class DrawableObjectsAbstract {
       this.buffers.staticIndex = this.device.createBuffer({
         label: "Static Index Buffer",
         size: offsetData.index.totalSize,
-        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+        usage: GPUBufferUsage.INDEX,
+        mappedAtCreation: true,
       });
-      this.device.queue.writeBuffer(this.buffers.staticIndex, 0, indexArray);
+      // Only copying once, so use mappedAtCreation instead of writeBuffer.
+      // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
+      const dst = new indexArray.constructor(this.buffers.staticIndex.getMappedRange());
+      dst.set(indexArray);
+      this.buffers.staticIndex.unmap();
       this.rawBuffers.staticIndex = indexArray;
     }
 
