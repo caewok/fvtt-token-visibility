@@ -22,7 +22,7 @@ import {
 } from "../WebGPU/PlaceableInstanceHandler.js";
 
 import * as twgl from "./twgl.js";
-import { applyConsecutively } from "../util.js";
+import { applyConsecutively, log } from "../util.js";
 
 class DrawableObjectsWebGL2Abstract {
   /** @type {class} */
@@ -321,7 +321,7 @@ class DrawableObjectsWebGL2Abstract {
   _defineVertexAttributeProperties() {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
-    console.debug (`${this.constructor.name}|_defineVertexAttributeProperties`);
+    log (`${this.constructor.name}|_defineVertexAttributeProperties`);
     const gl = this.webGL2.gl;
     const vBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
@@ -356,7 +356,7 @@ class DrawableObjectsWebGL2Abstract {
     const iOffsets = this.offsetData.index.offsets;
 
     // See twgl.setAttribInfoBufferFromArray.
-    console.debug (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
+    log (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
     const vOffset = vOffsets[idx];
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, this.vertices[idx]);
@@ -390,7 +390,7 @@ class DrawableObjectsWebGL2Abstract {
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
     // TODO: Swap between canvas and renderTexture.
-    console.debug (`${this.constructor.name}|render`);
+    log (`${this.constructor.name}|render`);
 
     if ( CONFIG[MODULE_ID].filterInstances ) {
       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
@@ -582,7 +582,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
 
-    console.debug (`${this.constructor.name}|render ${this.instanceSet.size} tiles`);
+    log (`${this.constructor.name}|render ${this.instanceSet.size} tiles`);
     const uniforms = { uTileTexture: -1 };
     for ( const idx of this.instanceSet ) {
       this.#tmpSet.clear();
@@ -683,7 +683,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
-    console.debug (`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
+    log (`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
     this.#tmpSet.clear();
     this.#tmpSet.add(idx);
     WebGL2.drawSet(gl, this.#tmpSet, this.offsetData);
@@ -706,7 +706,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
-    console.debug (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
+    log (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
     if ( CONFIG[MODULE_ID].filterInstances ) {
       WebGL2.drawSet(gl, this.instanceSet, this.offsetData);
     } else {
@@ -985,7 +985,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
     const mBuffer = this.bufferInfo.attribs.aModel.buffer;
 
     // See twgl.setAttribInfoBufferFromArray.
-    console.debug (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
+    log (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
     const mOffset = 4 * 16 * idx;
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, this.placeableHandler.matrices[idx].arr);
@@ -1002,11 +1002,11 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
 
     // TODO: Swap between canvas and renderTexture.
 
-    console.debug (`${this.constructor.name}|render ${this.instanceSet.size} walls`);
+    log (`${this.constructor.name}|render ${this.instanceSet.size} walls`);
     if ( CONFIG[MODULE_ID].filterInstances ) {
       // To draw select instances, modify the buffer offset.
       // const tmp = this.placeableHandler.instanceArrayValues;
-      // console.debug(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
+      // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
       drawInstancedMatrixSet(
         gl,
         this.instanceSet,
@@ -1096,7 +1096,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     const mBuffer = this.bufferInfo.attribs.aModel.buffer;
 
     // See twgl.setAttribInfoBufferFromArray.
-    console.debug (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
+    log (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
     const mOffset = 4 * 16 * idx;
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, this.placeableHandler.matrices[idx].arr);
@@ -1121,7 +1121,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     this.#tmpSet.clear();
     this.#tmpSet.add(idx);
 
-    console.debug(`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
+    log(`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
     drawInstancedMatrixSet(
       gl,
       this.#tmpSet,
@@ -1141,11 +1141,11 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
-    console.debug (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
+    log (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
     if ( CONFIG[MODULE_ID].filterInstances ) {
       // To draw select instances, modify the buffer offset.
       // const tmp = this.placeableHandler.instanceArrayValues;
-      // console.debug(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
+      // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
       drawInstancedMatrixSet(
         gl,
         this.instanceSet,
@@ -1183,7 +1183,7 @@ function drawInstancedMatrixSet(gl, instanceSet, elementCount, instanceBufferInf
     gl.vertexAttribPointer(positionLoc+1, 4, type, normalize, stride, offset + 4*4);
     gl.vertexAttribPointer(positionLoc+2, 4, type, normalize, stride, offset + 4*8);
     gl.vertexAttribPointer(positionLoc+3, 4, type, normalize, stride, offset + 4*12);
-    // console.debug({ size, stride, offset, instanceCount });
+    // log({ size, stride, offset, instanceCount });
     WebGL2.drawInstanced(gl, elementCount, 0, instanceCount);
   });
 }

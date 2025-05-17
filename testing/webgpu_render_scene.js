@@ -371,9 +371,9 @@ for ( const clipperVersion of [1, 2] ) {
 
     console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`);
     await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints);
-//     await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric);
-//     await QBenchmarkLoopFn(N, percentFn, "Hybrid", calcHybrid);
-//     await QBenchmarkLoopFn(N, percentFn, "PIXI", calcPIXI);
+    await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric);
+    await QBenchmarkLoopFn(N, percentFn, "Hybrid", calcHybrid);
+    await QBenchmarkLoopFn(N, percentFn, "PIXI", calcPIXI);
 
     CONFIG.tokenvisibility.filterInstances = true;
     console.log(`\n\tFilter instances`);
@@ -408,14 +408,14 @@ for ( const clipperVersion of [1, 2] ) {
 
     console.log(`\n\tWebGPU`);
     await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU);
-//     await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync);
+    await QBenchmarkLoopFn(N, percentFn, "WebGPUAsync", calcWebGPUAsync);
 // //     await QBenchmarkLoopFn(N, percentFnAsync, "async Points", calcPoints)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async Geometric", calcGeometric)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async Hybrid", calcHybrid)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async PIXI", calcPIXI)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
-//    await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
+   await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
   }
 }
 

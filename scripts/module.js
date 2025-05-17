@@ -233,6 +233,8 @@ Hooks.once("init", function() {
      * @type {function}
      */
     tokenIsDead,
+
+    debug: false,
   };
 
   Object.defineProperty(CONFIG[MODULE_ID], "ClipperPaths", {
