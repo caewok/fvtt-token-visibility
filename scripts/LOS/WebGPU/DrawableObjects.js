@@ -501,6 +501,13 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     if ( this.buffers.instanceTransfer ) return;
     this.buffers.instanceTransfer = this.mappedInstanceTransferBuffer;
     this.rawBuffers.instanceTransfer = new Float32Array(this.buffers.instanceTransfer.getMappedRange());
+
+    // Copy the entire instance data array.
+    this.rawBuffers.instanceTransfer.set(this.placeableHandler.instanceArrayBuffer);
+
+    // By definition, copying the entire instance array makes everything up-to-date.
+    this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
+    // Buffer id updated in parent class.
   }
 
   /**
@@ -510,9 +517,6 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     // Create a new transfer buffer.
     if ( this.buffers.instanceTransfer ) console.error(`${this.constructor.name}|_createInstanceBuffer|Instance transfer buffer should not yet be defined.`);
     this._createInstanceTransferBuffer();
-
-    // Copy the entire instance data array.
-    this.rawBuffers.instanceTransfer.set(this.placeableHandler.instanceArrayBuffer);
   }
 
   _createInstanceBindGroup() {
@@ -535,15 +539,17 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   prerender(commandEncoder, opts) {
     super.prerender(commandEncoder, opts);
 
-    // Check for placeable handler updates.
+    // Check for placeable handler updates for specific placeables.
     const placeableHandler = this.placeableHandler;
-    if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return; // No changes since last update.
-    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
-      if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-      // log (`${this.constructor.name}|prerender (instances)|This update ${lastUpdate} ≤ placeable bid ${this.placeableHandlerUpdateId}`);
-      this.partialUpdateInstanceBuffer(idx);
+    if ( placeableHandler.updateId > this.placeableHandlerUpdateId ) {
+      // Changes since last update.
+      for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
+        if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
+        // log (`${this.constructor.name}|prerender (instances)|This update ${lastUpdate} ≤ placeable bid ${this.placeableHandlerUpdateId}`);
+        this.partialUpdateInstanceBuffer(idx);
+      }
+      this.#placeableHandlerUpdateId = placeableHandler.updateId;
     }
-    this.placeableHandlerUpdateId = placeableHandler.updateId;
 
     // Possible for it to be undefined if no placeables.
     // Copy the entire buffer, b/c doing multiple piecemeal copies is too complicated.
@@ -569,8 +575,6 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   #placeableHandlerUpdateId = -1;
 
   get placeableHandlerUpdateId() { return this.#placeableHandlerUpdateId; }
-
-  set placeableHandlerUpdateId(value) { this.#placeableHandlerUpdateId = value; }
 
 
 
@@ -1060,21 +1064,18 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
 
   _unconstrainedTokenIndices = new Map();
 
-  #prerendered = false;
-
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
   prerender(commandEncoder, opts) {
-    if ( this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
+    if ( this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
       // Determine the number of constrained tokens and separate from instance set.
       // Essentially subset the instance set.
       this._unconstrainedTokenIndices.clear();
       for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
         if ( !token.isConstrainedTokenBorder ) this._unconstrainedTokenIndices.set(idx, token);
       }
-      this.#prerendered = true;
     }
     super.prerender(commandEncoder, opts);
 

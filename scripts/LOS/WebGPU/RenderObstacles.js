@@ -335,7 +335,7 @@ export class RenderObstacles {
 
     // Render the obstacles
     // log(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
-    for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, commandEncoder, opts);
+    for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?
     renderPass.end();
