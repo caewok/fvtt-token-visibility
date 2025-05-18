@@ -789,7 +789,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     });
   }
 
-  static EDGE_KEYS = ["wall", "wall-terrain", "wall-dir", "wall-dir-terrain"];
+  static EDGE_KEYS = ["wall-dir", "wall-dir-terrain", "wall", "wall-terrain"];
 
   edgeDrawableKey(edge) {
     const key = ((edge.direction === CONST.WALL_DIRECTIONS.BOTH) * 2) + (edge[this.senseType] === CONST.WALL_SENSE_TYPES.LIMITED);
