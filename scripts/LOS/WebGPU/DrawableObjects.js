@@ -405,7 +405,7 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
    * E.g., tokens that move a lot vs a camera view that changes every render.
    * @returns {boolean} True if something changed.
    */
-  prerender(commandEncoder, opts) {
+  prerender(_commandEncoder, _opts) {
     if ( this.placeableHandler.bufferId > this.#placeableHandlerBufferId ) {
       // log (`${this.constructor.name}|prerender|This buffer id ${this.#placeableHandlerBufferId} ≤ placeable bid ${this.placeableHandler.bufferId}`);
       // One or more placeables were added/removed. Re-do the buffers.
@@ -630,16 +630,26 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   updatePlaceableBuffers() {
     super.updatePlaceableBuffers();
     this._createCulledBuffer(); // Depends on the number of instances, so it can vary.
+    this._updateIndirectBuffer();
   }
+
+//   _mappedIndirectTransferBuffers = [];
+//
+//   get mappedIndirectTransferBuffer() {
+//     // There is only one size, as this.drawables.size is fixed for a given drawable.
+//   }
 
   _createIndirectBuffer() {
     // Track the indirect draw commands for each drawable.
     // Used in conjunction with the culling buffer.
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
     if ( !this.placeableHandler.numInstances ) return;
+
+    // There is only one size, as this.drawables.size is fixed.
+    // If _createIndirectBuffer is called again, it is assumed a new buffer is desired.
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
     if ( this.buffers.indirect ) {
-      if ( this.buffers.indirect.size === size * this.drawables.size ) return;
+      // There is only one size, as this.drawables.size is fixed.
       this.buffers.indirect.destroy();
       this.buffers.indirect = undefined;
     }
@@ -650,7 +660,13 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     this.rawBuffers.indirect = new ArrayBuffer(size * this.drawables.size);
+  }
 
+  /**
+   * Update the instance buffer with all placeable data.
+   */
+  _updateIndirectBuffer() {
+    const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
     let indirectOffset = 0;
     for ( const drawable of this.drawables.values() ) {
       drawable.indirectOffset = indirectOffset;
