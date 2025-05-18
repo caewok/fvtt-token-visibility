@@ -6,6 +6,7 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../../const.js";
 import { log } from "../util.js";
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
@@ -220,16 +221,6 @@ export class RenderObstacles {
     foundry.utils.mergeObject(this._config, cfg);
   }
 
-  /**
-   * Set up parts of the render chain that change often but not necessarily every render.
-   * E.g., tokens that move a lot vs a camera view that changes every render.
-   */
-  prerender({ useLitTargetShape = false } = {}) {
-    for ( const drawableObj of this.drawableObstacles ) drawableObj.prerender();
-    if ( useLitTargetShape ) this.drawableLitToken.prerender({ useLitTargetShape });
-    this.drawableGridShape.prerender(); // Not an obstacle but requires prerender.
-  }
-
   async renderAsync(viewerLocation, target, opts) {
     this.render(viewerLocation, target, opts);
     return this.device.queue.onSubmittedWorkDone();
@@ -252,6 +243,7 @@ export class RenderObstacles {
 
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
+    this.drawableGridShape.prerender(commandEncoder);
     const renderPass = commandEncoder.beginRenderPass(renderPassDesc);
 
     if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
@@ -259,6 +251,7 @@ export class RenderObstacles {
     this.drawableGridShape.renderTarget(renderPass, target);
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
+    this.drawableGridShape.postrender();
   }
 
   renderTarget(viewerLocation, target, { frame, useLitTargetShape = false } = {}) {
@@ -277,19 +270,21 @@ export class RenderObstacles {
     // FYI, cannot set clearValue of the attachment to null.
     const renderPassDesc = this.renderPassDescriptor;
 
+    const targetDrawable = useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ? this.drawableLitToken : this.drawableConstrainedToken;
+
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
+    targetDrawable.prerender(commandEncoder);
+
     const renderPass = commandEncoder.beginRenderPass(renderPassDesc);
-
     if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
-
-    if ( useLitTargetShape
-      && target.litTokenBorder
-      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) this.drawableLitToken.renderTarget(renderPass, target);
-    else this.drawableConstrainedToken.renderTarget(renderPass, target);
+    targetDrawable.renderTarget(renderPass, target);
 
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
+    targetDrawable.postrender();
     // log(`${this.constructor.name}|renderTarget|Finished rendering ${target.name}, ${target.id}`);
   }
 
@@ -318,10 +313,17 @@ export class RenderObstacles {
       renderPassDesc.colorAttachments[0].loadOp = "load";
     }
 
+    const useLit = useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder);
+    const targetDrawable = useLit ? this.drawableLitToken : this.drawableConstrainedToken;
+
     // Render each drawable object.
     const commandEncoder = device.createCommandEncoder({ label: "Renderer" });
-    const renderPass = commandEncoder.beginRenderPass(renderPassDesc);
+    for ( const drawableObj of this.drawableObstacles ) drawableObj.prerender(commandEncoder, opts);
+    if ( useLit ) targetDrawable.prerender(commandEncoder, opts); // drawableConstrainedToken is a drawableObstacle.
 
+    const renderPass = commandEncoder.beginRenderPass(renderPassDesc);
     if ( frame ) renderPass.setViewport(frame.x, frame.y, frame.width, frame.height, 0, 1);
 
     // Render the target.
@@ -329,18 +331,17 @@ export class RenderObstacles {
     // (Could be either constrained or not constrained.)
     // Don't use instancing to render b/c that gets too complicated with the possible lit or constrained targets.
     // log(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
-    if ( useLitTargetShape
-      && target.litTokenBorder
-      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) this.drawableLitToken.renderTarget(renderPass, target);
-    else this.drawableConstrainedToken.renderTarget(renderPass, target);
+    targetDrawable.renderTarget(renderPass, target);
 
     // Render the obstacles
     // log(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
-    for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
+    for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, commandEncoder, opts);
 
     // TODO: Do we need to render terrains last?
     renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
+    for ( const drawableObj of this.drawableObstacles ) drawableObj.postrender();
+    if ( useLit ) targetDrawable.postrender();
 
     if ( !clear ) renderPassDesc.colorAttachments[0].loadOp = loadOp; // Reset to default value.
     // log(`${this.constructor.name}|render|Finished rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);

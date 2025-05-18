@@ -212,11 +212,11 @@ class DrawableObjectsAbstract {
   }
 
   /**
-   * Set up parts of the render chain that change often but not necessarily every render.
-   * Called whenever a placeable is added, deleted, or updated.
-   * E.g., tokens that move a lot vs a camera view that changes every render.
+   * Called immediately prior to creation of the render pass and rendering.
+   * @param {GPUCommandEncoder} commandEncoder    The encoder that will be used for the render
+   * @param {object} opts                         Render options
    */
-  prerender() {}
+  prerender(_commandEncoder, _opts) {}
 
   /**
    * Render this drawable.
@@ -228,6 +228,11 @@ class DrawableObjectsAbstract {
       this._renderDrawable(renderPass, drawable);
     });
   }
+
+  /**
+   * Called after the renderPass is submitted.
+   */
+  postrender() { this.drawables.forEach(drawable => drawable.postrender()); }
 
   /**
    * Define static geometries for the shapes handled in this class.
@@ -379,7 +384,6 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
 
     // Initialize the changeable buffers.
     this.placeableHandler.initializePlaceables();
-    this.updatePlaceableBuffers();
   }
 
   /**
@@ -391,7 +395,7 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
 
   // ----- NOTE: Placeable updating ----- //
 
-  #placeableHandlerBufferId = 0;
+  #placeableHandlerBufferId = -1;
 
   get placeableHandlerBufferId() { return this.#placeableHandlerBufferId; }
 
@@ -401,7 +405,7 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
    * E.g., tokens that move a lot vs a camera view that changes every render.
    * @returns {boolean} True if something changed.
    */
-  prerender() {
+  prerender(commandEncoder, opts) {
     if ( this.placeableHandler.bufferId > this.#placeableHandlerBufferId ) {
       // log (`${this.constructor.name}|prerender|This buffer id ${this.#placeableHandlerBufferId} ≤ placeable bid ${this.placeableHandler.bufferId}`);
       // One or more placeables were added/removed. Re-do the buffers.
@@ -441,28 +445,44 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   async initialize() {
     await super.initialize();
-    this._createInstanceBuffer();
-    this._createInstanceBindGroup();
+//     this._createInstanceBuffer();
+//     this._createInstanceBindGroup();
   }
 
   updatePlaceableBuffers() {
     this._createInstanceBuffer();
     this._createInstanceBindGroup();
+    this._updateInstanceBuffer();
   }
 
-//   _mappedInstanceTransferBuffers = [];
-//
-//   get mappedInstanceTransferBuffer() {
-//     return this._mappedInstanceTransferBuffers.pop() || this.device.createBuffer({
-//
-//     })
-//   }
+  _mappedInstanceTransferBuffers = [];
+
+  get mappedInstanceTransferBuffer() {
+    // Make sure we get a buffer that is the correct size.
+    const size = this.placeableHandler.instanceArrayBuffer.byteLength;
+    let buffer;
+    while ( (buffer = this._mappedInstanceTransferBuffers.pop()) ) {
+      if ( buffer.size ) return buffer;
+      buffer.destroy();
+    }
+
+    // No buffer found; create anew.
+    return this._mappedInstanceTransferBuffers.pop() || this.device.createBuffer({
+      label: `${this.constructor.name} Instance Transfer Buffer`,
+      size,
+      usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+      mappedAtCreation: true,
+    })
+  }
+
+  // Could only destroy instance buffers that are smaller than necessary size.
+  // But in general the instance buffer is not resized often (only when placeables added/removed).
 
   _createInstanceBuffer() {
     if ( !this.placeableHandler.numInstances ) return;
-    const device = this.device;
     const size = this.placeableHandler.instanceArrayBuffer.byteLength;
     if ( this.buffers.instance && this.buffers.instance.size !== size ) {
+      log(`${this.constructor.name}|_createInstanceBuffer|Destroying existing size ${this.buffers.instance.size} to replace with ${size}.`);
       this.buffers.instance.destroy();
       this.buffers.instance = undefined;
     }
@@ -475,8 +495,24 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
       });
       log (`${this.constructor.name}|_createInstanceBuffer`);
     }
-    device.queue.writeBuffer(this.buffers.instance, 0, this.placeableHandler.instanceArrayBuffer)
-    // this.rawBuffers.instance = new Float32Array(this.placeableHandler.instanceArrayBuffer)
+  }
+
+  _createInstanceTransferBuffer() {
+    if ( this.buffers.instanceTransfer ) return;
+    this.buffers.instanceTransfer = this.mappedInstanceTransferBuffer;
+    this.rawBuffers.instanceTransfer = new Float32Array(this.buffers.instanceTransfer.getMappedRange());
+  }
+
+  /**
+   * Update the instance buffer with all placeable data.
+   */
+  _updateInstanceBuffer() {
+    // Create a new transfer buffer.
+    if ( this.buffers.instanceTransfer ) console.error(`${this.constructor.name}|_createInstanceBuffer|Instance transfer buffer should not yet be defined.`);
+    this._createInstanceTransferBuffer();
+
+    // Copy the entire instance data array.
+    this.rawBuffers.instanceTransfer.set(this.placeableHandler.instanceArrayBuffer);
   }
 
   _createInstanceBindGroup() {
@@ -496,14 +532,10 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     renderPass.setBindGroup(this.constructor.GROUP_NUM.INSTANCE, this.bindGroups.instance);
   }
 
-  #placeableHandlerUpdateId = 0;
+  prerender(commandEncoder, opts) {
+    super.prerender(commandEncoder, opts);
 
-  get placeableHandlerUpdateId() { return this.#placeableHandlerUpdateId; }
-
-  set placeableHandlerUpdateId(value) { this.#placeableHandlerUpdateId = value; }
-
-  prerender() {
-    super.prerender();
+    // Check for placeable handler updates.
     const placeableHandler = this.placeableHandler;
     if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return; // No changes since last update.
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
@@ -512,7 +544,35 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
       this.partialUpdateInstanceBuffer(idx);
     }
     this.placeableHandlerUpdateId = placeableHandler.updateId;
+
+    // Possible for it to be undefined if no placeables.
+    // Copy the entire buffer, b/c doing multiple piecemeal copies is too complicated.
+    // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
+    if ( this.buffers.instanceTransfer ) {
+      commandEncoder.copyBufferToBuffer(this.buffers.instanceTransfer, 0, this.buffers.instance, 0, this.buffers.instanceTransfer.size);
+      this.buffers.instanceTransfer.unmap();
+    }
   }
+
+  postrender() {
+    if ( this.buffers.instanceTransfer ) {
+      const self = this;
+      const transferBuffer = this.buffers.instanceTransfer;
+      transferBuffer.mapAsync(GPUMapMode.WRITE).then(() => {
+        self._mappedInstanceTransferBuffers.push(transferBuffer);
+      })
+      this.buffers.instanceTransfer = null;
+      this.rawBuffers.instanceTransfer = null;
+    }
+  }
+
+  #placeableHandlerUpdateId = -1;
+
+  get placeableHandlerUpdateId() { return this.#placeableHandlerUpdateId; }
+
+  set placeableHandlerUpdateId(value) { this.#placeableHandlerUpdateId = value; }
+
+
 
   /**
    * Update the instance buffer on the GPU for a specific placeable.
@@ -520,11 +580,18 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
    * @param {number} [idx]          Optional placeable index; will be looked up using placeableId otherwise
    */
   partialUpdateInstanceBuffer(idx) {
+    // In general, we can expect one index updated per render.
+    // Because if, e.g., a token moves or wall is changed, that triggers visibility tests on each change.
+    // Due to caching or other reasons, some calcs might not be needed right away, causing multiple (delayed) updates.
+    this._createInstanceTransferBuffer();
+
     const h = this.placeableHandler
     const M = h.matrices[idx];
     log (`${this.constructor.name}|partialUpdateInstanceBuffer|Updating ${idx}`);
     // M.print();
-    this.device.queue.writeBuffer(this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M.arr);
+    this.rawBuffers.instanceTransfer.set(M.arr, idx * h.constructor.INSTANCE_ELEMENT_LENGTH);
+
+    // this.device.queue.writeBuffer(this.buffers.instance, idx * h.constructor.INSTANCE_ELEMENT_SIZE, M.arr);
   }
 }
 
@@ -557,6 +624,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   async initialize() {
     await super.initialize();
     this._createIndirectBuffer(); // Depends only on number of drawables; can create once.
+    this._createCulledBuffer();
   }
 
   updatePlaceableBuffers() {
@@ -982,7 +1050,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
    * Set up parts of the render chain that change often but not necessarily every render.
    * E.g., tokens that move a lot vs a camera view that changes every render.
    */
-  prerender() {
+  prerender(commandEncoder, opts) {
     if ( this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
       // Determine the number of constrained tokens and separate from instance set.
       // Essentially subset the instance set.
@@ -992,7 +1060,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       }
       this.#prerendered = true;
     }
-    super.prerender();
+    super.prerender(commandEncoder, opts);
 
 
     // log (`${this.constructor.name}|prerender|Identified unconstrained token indices`,
@@ -1121,19 +1189,11 @@ export class DrawableGridInstances extends DrawableTokenInstances {
     });
   }
 
-  prerender() {
-    DrawableObjectRBCulledInstancesAbstract.prototype.prerender.call(this);
+  prerender(commandEncoder, opts) {
+    DrawableObjectRBCulledInstancesAbstract.prototype.prerender.call(this, commandEncoder, opts);
   }
 
-  filterObjects(visionTriangle, { target } = {}) {
-    // Add target as a distinct drawable.
-    const targetDrawable = this.drawables.get("target");
-    targetDrawable.instanceSet.clear();
-    if ( target ) {
-      const targetIdx = this.placeableHandler.instanceIndexFromId.get(target.id);
-      targetDrawable.instanceSet.add(targetIdx);
-    }
-  }
+  filterObjects() { return; }
 }
 
 // Tile instances.
@@ -1310,7 +1370,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
 
   #prerendered = false;
 
-  prerender() {
+  prerender(commandEncoder, opts) {
     if ( !this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
       // Create a geometry for each constrained token.
       // Get every token so we don't have to redo the buffer every time we change targets.
@@ -1342,7 +1402,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
       this._setStaticGeometriesBuffers();
       this.#prerendered = true;
     }
-    super.prerender();
+    super.prerender(commandEncoder, opts);
   }
 
   /**
@@ -1383,7 +1443,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
   }
 
   // Skipped until render.
-  _initializeRenderPass(_renderPass) { return; }
+  _initializeRenderPass() { return; }
 
   /**
    * Render only the target token.
@@ -1399,7 +1459,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
   /**
    * Render all but the target
    */
-  render(renderPass, target) {
+  render(renderPass, { target } = {}) {
     for ( const [key, drawable] of this.drawables.entries() ) {
       if ( key === target.id ) continue;
       this._renderDrawable(renderPass, drawable);
@@ -1435,7 +1495,7 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
 
   // Construct the lit token border geometries for all tokens; used to render targets.
   // Skips any lit borders equivalent to the constrained border b/c constrained handles all of these.
-  prerender() {
+  prerender(commandEncoder, opts) {
     if ( !this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
       // Create a geometry for each constrained token.
       // Get every token so we don't have to redo the buffer every time we change targets.
@@ -1461,7 +1521,7 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
       this._setStaticGeometriesBuffers();
       this.#prerendered = true;
     }
-    super.prerender();
+    super.prerender(commandEncoder, opts);
   }
 
   // Lit tokens not rendered as obstacles, so skip.
