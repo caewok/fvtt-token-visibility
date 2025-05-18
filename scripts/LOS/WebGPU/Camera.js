@@ -126,20 +126,35 @@ export class Camera {
     const ctr = Point3d.fromTokenCenter(targetToken);
     this.targetPosition = ctr;
 
+    // Assum axis-aligned cube.
     const targetWidth = targetToken.document.width * canvas.dimensions.size;
     const targetHeight = targetToken.document.height * canvas.dimensions.size;
     const targetZHeight = targetToken.topZ - targetToken.bottomZ;
     const halfSize = Math.max(targetWidth, targetHeight, targetZHeight) * 0.5; // From cube center to furthest face.
+    // const diagSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(halfSize, 2)); // From center to corner in 2d.
+    // const diag3dSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(diagSize, 2)); // From center to corner in 3d.
+
+    /* Simplify
+    diagSize = Math.sqrt(h**2 + h**2)
+             = Math.sqrt(2 * (h**2))
+             = Math.sqrt(2) * h
+             = Math.SQRT2 * h
+    diag3dSize = Math.sqrt(h**2 + Math.sqrt(h**2 + h**2)**2)
+                = Math.sqrt(h**2 + h**2 + h**2)
+                = Math.sqrt(3*(h**2))
+                = Math.sqrt(3) * h
+                = Math.SQRT3 * h
+    */
+
+
 
     // Furthest corner of the cube from the camera.
-    // Translate the camera to 0,0,0 and then determine the distance.
-    const cameraPosition = this.cameraPosition;
-    ctr.subtract(cameraPosition, ctr)
-    const maxCornerDistance = Math.sqrt(
-      Math.pow(Math.abs(ctr.x) + halfSize, 2) +
-      Math.pow(Math.abs(ctr.y) + halfSize, 2) +
-      Math.pow(Math.abs(ctr.z) + halfSize, 2)
-    );
+    // Worst case is the camera is aligned along a cube diagonal, so must add on the full
+    // diagonal distance to reach a back corner. In 3d, could be (rarely) the full 3d diagonal.
+    // E.g., looking directly down at a corner so the camera viewline runs through two opposite corners.
+    const distToTarget = Point3d.distanceBetween(this.cameraPosition, this.targetPosition)
+    const diag3dSize = Math.SQRT3 * halfSize;
+    const maxCornerDistance = distToTarget + diag3dSize;
 
     // zFar needs to be at least the distance to the farthest corner.
     // const zFar = Infinity;
@@ -147,10 +162,10 @@ export class Camera {
 
     if ( this.perspectiveType === "perspective" ) {
       // Calculate field-of-view.
-      // The cube's half-size projected at the distance forms the opposite side of the triangle
+      // Worst case: In 2d top-down, the cube diagonals form the furthest point.
       // tan(fov/2) = opposite/adjacent = (cube.size/2) / distance
-      const distToTarget = Point3d.distanceBetween(this.cameraPosition, this.targetPosition)
-      const fov = 2 * Math.atan(halfSize / distToTarget); // 2 * halfAngle.
+      const diagSize = Math.SQRT2 * halfSize;
+      const fov = 2 * Math.atan(diagSize / (distToTarget - diagSize)); // Measure from front of token to ensure sufficiently large viewing angle.
       this.perspectiveParameters = { fov, zFar };
       return;
     }
