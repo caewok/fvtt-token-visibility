@@ -129,9 +129,12 @@ export class Camera {
     const targetWidth = targetToken.document.width * canvas.dimensions.size;
     const targetHeight = targetToken.document.height * canvas.dimensions.size;
     const targetZHeight = targetToken.topZ - targetToken.bottomZ;
-    const halfSize = Math.max(targetWidth, targetHeight, targetZHeight); // From cube center to furthest face.
+    const halfSize = Math.max(targetWidth, targetHeight, targetZHeight) * 0.5; // From cube center to furthest face.
 
     // Furthest corner of the cube from the camera.
+    // Translate the camera to 0,0,0 and then determine the distance.
+    const cameraPosition = this.cameraPosition;
+    ctr.subtract(cameraPosition, ctr)
     const maxCornerDistance = Math.sqrt(
       Math.pow(Math.abs(ctr.x) + halfSize, 2) +
       Math.pow(Math.abs(ctr.y) + halfSize, 2) +
@@ -159,13 +162,13 @@ export class Camera {
     const minWorld = new Point3d(
       targetToken.document.x,
       targetToken.document.y,
-      targetToken.elevationZ,
+      targetToken.bottomZ,
     );
     minWorld.multiplyScalar(0.99, minWorld);
     const maxWorld = new Point3d(
       (targetToken.document.x + targetWidth),
       (targetToken.document.y + targetHeight),
-      targetToken.topZ * 1.01,
+      targetToken.topZ,
     );
     maxWorld.multiplyScalar(1.01, maxWorld);
     const minCamera = this.lookAtMatrix.multiplyPoint3d(minWorld);
