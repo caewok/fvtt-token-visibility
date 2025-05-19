@@ -76,10 +76,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
 //       targetLocation: `${targetLocation}`,
 //     });
 
-    // TODO: Move prerender outside so we can trigger it only when things move.
     const useLitTargetShape = this.config.useLitTargetShape;
-    this.renderObstacles.prerender({ useLitTargetShape });
-
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
     const res = this._countRedBlockedPixels();
     // console.debug('Pixel computation result:', res);
@@ -195,13 +192,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
 //       targetLocation
 //     });
 
-    // TODO: Move prerender outside the loop so it can be updated only when things move.
     const useLitTargetShape = this.config.useLitTargetShape;
-    this.renderObstacles.prerender({ useLitTargetShape });
-//     console.debug('After prerender - drawable objects state:',
-//       this.renderObstacles.drawableObjects.map(obj => obj.constructor.name)
-//     );
-
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
 //     console.debug('Render completed');
 
@@ -229,7 +220,6 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
 
   async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
     const useLitTargetShape = this.config.useLitTargetShape;
-    this.renderObstacles.prerender({ useLitTargetShape });
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
     const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
     this.#redPixels = res.red;
@@ -300,7 +290,6 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
 
   updateDebugForPercentVisible(percentVisible) {
     super.updateDebugForPercentVisible(percentVisible);
-    this.renderer.prerender();
 
     // Render once for each viewpoint.
     const frames = DebugVisibilityViewerWebGL2.prototype._canvasDimensionsForViewpoints.call(this);
@@ -357,7 +346,6 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
 
   updateDebugForPercentVisible(percentVisible) {
     percentVisible.then(value => super.updateDebugForPercentVisible(value));
-    this.renderer.prerender();
 
     // Render once for each viewpoint.
     const frames = DebugVisibilityViewerWebGL2.prototype._canvasDimensionsForViewpoints.call(this);

@@ -68,11 +68,26 @@ export class Camera {
   /** @type {function} */
   #perspectiveFn = CONFIG.GeometryLib.MatrixFloat32.perspectiveZO;
 
-  #internalParams = {};
-
   UP = new Point3d();
 
+  #perspectiveType = "perspective";
 
+  #glType = "webGPU";
+
+  get perspectiveType() { return this.#perspectiveType; }
+
+  set perspectiveType(value) {
+    if ( value !== "perspective"
+      && value !== "orthogonal" ) console.error(`${this.constructor.name}|Perspective type ${value} not recognized.`);
+    if ( this.#perspectiveType === value ) return;
+    this.#perspectiveType = value;
+
+    // Update the relevant internal parameters.
+    const fnName = `${this.#perspectiveType}${this.#glType === "webGPU" ? "ZO" : ""}`;
+    this.#perspectiveFn = CONFIG.GeometryLib.MatrixFloat32[fnName];
+    this.#internalParams = value === "orthogonal" ? this.#orthogonalParameters : this.#perspectiveParameters;
+    this.#dirty.perspective = true;
+  }
 
   /**
    * @type {object} [opts]
@@ -97,36 +112,9 @@ export class Camera {
     this.mirrorM.setIndex(1, 1, mirrorMDiag.y);
     this.mirrorM.setIndex(2, 2, mirrorMDiag.z);
 
-    const fnName = `${perspectiveType}${glType === "webGPU" ? "ZO" : ""}`;
-    this.#perspectiveFn = CONFIG.GeometryLib.MatrixFloat32[fnName];
-    this.#internalParams = perspectiveType === "orthogonal"
-      ? this.#orthogonalParameters : this.#perspectiveParameters;
-
-//     this.bindGroupLayout = device.createBindGroupLayout(this.constructor.CAMERA_LAYOUT);
-//     this._createBindGroup();
+    this.#glType = glType;
+    this.perspectiveType = perspectiveType;
   }
-
-//   _createBindGroup() {
-//     const buffer = this.deviceBuffer = this.device.createBuffer({
-//       label: "Camera",
-//       size: Camera.CAMERA_BUFFER_SIZE,
-//       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-//     });
-//     // Buffer will be written to GPU prior to render, because the camera view will change.
-//     this.bindGroup = this.device.createBindGroup({
-//       label: "Camera",
-//       layout: this.bindGroupLayout,
-//       entries: [{
-//         binding: 0,
-//         resource: { buffer }
-//       }],
-//     });
-//   }
-
-//   updateDeviceBuffer() {
-//     this.device.queue.writeBuffer(this.deviceBuffer, 0, this.arrayBuffer);
-//     this.debugBuffer = new Float32Array(this.arrayBuffer)
-//   }
 
   /**
    * Set the field of view and zFar for a target token, to maximize the space the token
@@ -138,36 +126,66 @@ export class Camera {
     const ctr = Point3d.fromTokenCenter(targetToken);
     this.targetPosition = ctr;
 
+    // Assum axis-aligned cube.
     const targetWidth = targetToken.document.width * canvas.dimensions.size;
     const targetHeight = targetToken.document.height * canvas.dimensions.size;
     const targetZHeight = targetToken.topZ - targetToken.bottomZ;
+    const halfSize = Math.max(targetWidth, targetHeight, targetZHeight) * 0.5; // From cube center to furthest face.
+    // const diagSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(halfSize, 2)); // From center to corner in 2d.
+    // const diag3dSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(diagSize, 2)); // From center to corner in 3d.
 
+    /* Simplify
+    diagSize = Math.sqrt(h**2 + h**2)
+             = Math.sqrt(2 * (h**2))
+             = Math.sqrt(2) * h
+             = Math.SQRT2 * h
+    diag3dSize = Math.sqrt(h**2 + Math.sqrt(h**2 + h**2)**2)
+                = Math.sqrt(h**2 + h**2 + h**2)
+                = Math.sqrt(3*(h**2))
+                = Math.sqrt(3) * h
+                = Math.SQRT3 * h
+    */
+
+
+
+    // Furthest corner of the cube from the camera.
+    // Worst case is the camera is aligned along a cube diagonal, so must add on the full
+    // diagonal distance to reach a back corner. In 3d, could be (rarely) the full 3d diagonal.
+    // E.g., looking directly down at a corner so the camera viewline runs through two opposite corners.
     const distToTarget = Point3d.distanceBetween(this.cameraPosition, this.targetPosition)
-    const halfAngle = Math.atan(Math.max(targetWidth, targetHeight, targetZHeight) / distToTarget)
+    const diag3dSize = Math.SQRT3 * halfSize;
+    const maxCornerDistance = distToTarget + diag3dSize;
 
-    // zFar is the straight-line distance to the target.
-    // Buffer by adding in half the target diagonal.
-    // const targetDiag = Math.sqrt(Math.pow(targetWidth, 2) + Math.pow(targetHeight, 2))
-    // const zFar = Point3d.distanceBetween(this.cameraPosition, this.targetPosition) + (targetDiag * 0.5);
-    const zFar = Infinity;
-    this.perspectiveParameters = { fov: halfAngle * 2, zFar };
+    // zFar needs to be at least the distance to the farthest corner.
+    // const zFar = Infinity;
+    const zFar = maxCornerDistance;
 
-    // Just for kicks, calculate orthogonal parameters.
+    if ( this.perspectiveType === "perspective" ) {
+      // Calculate field-of-view.
+      // Worst case: In 2d top-down, the cube diagonals form the furthest point.
+      // tan(fov/2) = opposite/adjacent = (cube.size/2) / distance
+      const diagSize = Math.SQRT2 * halfSize;
+      const fov = 2 * Math.atan(diagSize / (distToTarget - diagSize)); // Measure from front of token to ensure sufficiently large viewing angle.
+      this.perspectiveParameters = { fov, zFar };
+      return;
+    }
+
+    // Calculate orthogonal parameters.
     // Take the bounding box of the target token.
     // Convert to camera space and set max.
     // See https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
     const minWorld = new Point3d(
       targetToken.document.x,
       targetToken.document.y,
-      targetToken.elevationZ,
+      targetToken.bottomZ,
     );
     minWorld.multiplyScalar(0.99, minWorld);
     const maxWorld = new Point3d(
       (targetToken.document.x + targetWidth),
       (targetToken.document.y + targetHeight),
-      targetToken.topZ * 1.01,
+      targetToken.topZ,
     );
-    maxWorld.multiplyScalar(1.1, maxWorld);
+    maxWorld.multiplyScalar(1.01, maxWorld);
     const minCamera = this.lookAtMatrix.multiplyPoint3d(minWorld);
     const maxCamera = this.lookAtMatrix.multiplyPoint3d(maxWorld);
     const max = Math.max(minCamera.x, minCamera.y, maxCamera.x, maxCamera.y)
@@ -176,10 +194,10 @@ export class Camera {
       right: max,
       top: max,
       bottom: -max,
-      near: 1,
       far: zFar,
     }
   }
+
 
   /**
    * @typedef {object} frustumParameters
@@ -196,6 +214,8 @@ export class Camera {
     zNear: 1,
     zFar: Infinity,
   }
+
+  #internalParams = this.#perspectiveParameters;
 
   /** @type {MatrixFloat32<4x4>} */
   get perspectiveMatrix() {
