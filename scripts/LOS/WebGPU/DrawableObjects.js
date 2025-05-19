@@ -232,7 +232,7 @@ class DrawableObjectsAbstract {
   /**
    * Called after the renderPass is submitted.
    */
-  postrender() { this.drawables.forEach(drawable => drawable.postrender()); }
+  postrender() { }
 
   /**
    * Define static geometries for the shapes handled in this class.
