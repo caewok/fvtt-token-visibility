@@ -448,6 +448,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   }
 
   updatePlaceableBuffers() {
+    log(`${this.constructor.name}|updatePlaceableBuffers (DrawableObjectInstancesAbstract))`);
     this._createInstanceBuffer();
     this._createInstanceBindGroup();
     this._updateInstanceBuffer();
@@ -465,6 +466,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     }
 
     // No buffer found; create anew.
+    log(`${this.constructor.name}|mappedInstanceTransferBuffer| Creating new.)`);
     return this.device.createBuffer({
       label: `${this.constructor.name} Instance Transfer Buffer`,
       size,
@@ -478,6 +480,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   _createInstanceBuffer() {
     if ( !this.placeableHandler.numInstances ) return;
+
+
     const size = this.placeableHandler.instanceArrayBuffer.byteLength;
     if ( this.buffers.instance && this.buffers.instance.size !== size ) {
       log(`${this.constructor.name}|_createInstanceBuffer|Destroying existing size ${this.buffers.instance.size} to replace with ${size}.`);
@@ -497,6 +501,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   _createInstanceTransferBuffer() {
     if ( this.buffers.instanceTransfer ) return;
+
+    log(`${this.constructor.name}|_createInstanceTransferBuffer`);
     this.buffers.instanceTransfer = this.mappedInstanceTransferBuffer;
     this.rawBuffers.instanceTransfer = new Float32Array(this.buffers.instanceTransfer.getMappedRange());
 
@@ -512,6 +518,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
    * Update the instance buffer with all placeable data.
    */
   _updateInstanceBuffer() {
+    log(`${this.constructor.name}|_updateInstanceBuffer`);
     // Create a new transfer buffer.
     if ( this.buffers.instanceTransfer ) console.error(`${this.constructor.name}|_updateInstanceBuffer|Instance transfer buffer should not yet be defined.`);
     this._createInstanceTransferBuffer();
@@ -535,6 +542,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   }
 
   prerender(commandEncoder, opts) {
+    log(`${this.constructor.name}|prerender (DrawableObjectInstancesAbstract)`);
     super.prerender(commandEncoder, opts);
 
     // Check for placeable handler updates for specific placeables.
@@ -557,14 +565,17 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     // Copy the entire buffer, b/c doing multiple piecemeal copies is too complicated.
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
     if ( this.buffers.instanceTransfer ) {
+      log(`${this.constructor.name}|_copyTransferBuffers|instanceTransfer`);
       commandEncoder.copyBufferToBuffer(this.buffers.instanceTransfer, 0, this.buffers.instance, 0, this.buffers.instanceTransfer.size);
       this.buffers.instanceTransfer.unmap();
     }
     if ( this.buffers.indirectTransfer ) {
+      log(`${this.constructor.name}|_copyTransferBuffers|indirectTransfer`);
       commandEncoder.copyBufferToBuffer(this.buffers.indirectTransfer, 0, this.buffers.indirect, 0, this.buffers.indirectTransfer.size);
       this.buffers.indirectTransfer.unmap();
     }
     if ( this.buffers.culledTransfer ) {
+      log(`${this.constructor.name}|_copyTransferBuffers|culledTransfer`);
       commandEncoder.copyBufferToBuffer(this.buffers.culledTransfer, 0, this.buffers.culled, 0, this.buffers.culledTransfer.size);
       this.buffers.culledTransfer.unmap();
     }
@@ -572,6 +583,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   postrender() {
     if ( this.buffers.instanceTransfer ) {
+      log(`${this.constructor.name}|postrender|instanceTransfer`);
       const self = this;
       const transferBuffer = this.buffers.instanceTransfer;
       transferBuffer.mapAsync(GPUMapMode.WRITE).then(() => {
@@ -581,6 +593,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
       this.rawBuffers.instanceTransfer = null;
     }
     if ( this.buffers.indirectTransfer ) {
+      log(`${this.constructor.name}|postrender|indirectTransfer`);
       const self = this;
       const transferBuffer = this.buffers.indirectTransfer;
       transferBuffer.mapAsync(GPUMapMode.WRITE).then(() => {
@@ -590,6 +603,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
       this.rawBuffers.indirectTransfer = null;
     }
     if ( this.buffers.culledTransfer ) {
+      log(`${this.constructor.name}|postrender|culledTransfer`);
       const self = this;
       const transferBuffer = this.buffers.culledTransfer;
       transferBuffer.mapAsync(GPUMapMode.WRITE).then(() => {
@@ -675,6 +689,8 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   _mappedIndirectTransferBuffers = [];
 
   get mappedIndirectTransferBuffer() {
+    log(`${this.constructor.name}|mappedIndirectTransferBuffer|${this._mappedIndirectTransferBuffers.length} buffers available.`);
+
     // There is only one size, as this.drawables.size is fixed for a given drawable.
     return this._mappedIndirectTransferBuffers.pop() || this.device.createBuffer({
       label: `${this.constructor.name} Indirect Transfer Buffer`,
@@ -685,10 +701,13 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   }
 
   _createIndirectBuffer() {
+    log(`${this.constructor.name}|_createIndirectBuffer with ${this.placeableHandler.numInstances} placeables`);
+
     // Track the indirect draw commands for each drawable.
     // Used in conjunction with the culling buffer.
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
     if ( !this.placeableHandler.numInstances ) return;
+
 
     // There is only one size, as this.drawables.size is fixed.
     // If _createIndirectBuffer is called again, it is assumed a new buffer is desired.
@@ -708,15 +727,10 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
 
   _createIndirectTransferBuffer() {
     if ( this.buffers.indirectTransfer ) return;
+
+    log(`${this.constructor.name}|_createIndirectTransferBuffer`);
     this.buffers.indirectTransfer = this.mappedIndirectTransferBuffer;
     this.rawBuffers.indirectTransfer = this.buffers.indirectTransfer.getMappedRange(); // Mapped per drawable later.
-  }
-
-  /**
-   * Update the instance buffer with all placeable data.
-   */
-  _updateIndirectBuffer() {
-    this._createIndirectTransferBuffer();
 
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
     let indirectOffset = 0;
@@ -725,6 +739,14 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       drawable.indirectBuffer = new Uint32Array(this.rawBuffers.indirectTransfer, indirectOffset, 5);
       indirectOffset += size;
     }
+  }
+
+  /**
+   * Update the instance buffer with all placeable data.
+   */
+  _updateIndirectBuffer() {
+    log(`${this.constructor.name}|_updateIndirectBuffer`);
+    this._createIndirectTransferBuffer();
   }
 
   // To create a single buffer the offset must be a multiple of 256.
@@ -751,6 +773,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
     }
 
     // No buffer found; create anew.
+    log(`${this.constructor.name}|mappedCulledTransferBuffer|Creating anew.`);
     return this.device.createBuffer({
       label: `${this.constructor.name} Culled Transfer Buffer`,
       size,
@@ -776,42 +799,51 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       this.buffers.culled = undefined;
     }
 
+    log(`${this.constructor.name}|_createCulledBuffer|Creating anew.`);
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
       size,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-  }
 
-  _updateCulledBuffer() {
-    this._createCulledTransferBuffer();
-
-    const size = this.culledBufferSize / this.drawables.size;
+    const offsetSize = this.culledBufferSize / this.drawables.size;
     let culledBufferOffset = 0;
     for ( const drawable of this.drawables.values() ) {
+      drawable.culledBufferOffset = culledBufferOffset;
+      drawable.culledBG = this.device.createBindGroup({
+        label: `${this.constructor.name} ${drawable.label}`,
+        layout: this.bindGroupLayouts.culled,
+        entries: [{
+          binding: 0,
+          resource: { buffer: this.buffers.culled, offset: culledBufferOffset, size: offsetSize }
+        }]
+      });
+      culledBufferOffset += offsetSize;
+    }
+  }
+
+  _createCulledTransferBuffer() {
+    if ( this.buffers.culledTransfer ) return;
+
+    log(`${this.constructor.name}|_createCulledTransferBuffer`);
+    this.buffers.culledTransfer = this.mappedCulledTransferBuffer;
+    this.rawBuffers.culledTransfer = this.buffers.culledTransfer.getMappedRange();
+
+    log(`${this.constructor.name}|_createCulledTransferBuffer|updating drawables.`);
+    for ( const drawable of this.drawables.values() ) {
+      const culledBufferOffset = drawable.culledBufferOffset;
       drawable.culledBufferOffset = culledBufferOffset;
       drawable.culledBufferRaw = new Uint32Array(
         this.rawBuffers.culledTransfer,
         culledBufferOffset,
         this.placeableHandler.numInstances, // Alt: Math.floor(size / Uint32Array.BYTES_PER_ELEMENT),
       );
-      drawable.culledBG = this.device.createBindGroup({
-        label: `${this.constructor.name} ${drawable.label}`,
-        layout: this.bindGroupLayouts.culled,
-        entries: [{
-          binding: 0,
-          resource: { buffer: this.buffers.culled, offset: culledBufferOffset, size }
-        }]
-      });
-      culledBufferOffset += size;
     }
-
   }
 
-  _createCulledTransferBuffer() {
-    if ( this.buffers.culledTransfer ) return;
-    this.buffers.culledTransfer = this.mappedCulledTransferBuffer;
-    this.rawBuffers.culledTransfer = this.buffers.culledTransfer.getMappedRange();
+  _updateCulledBuffer() {
+    log(`${this.constructor.name}|_updateCulledBuffer`);
+    this._createCulledTransferBuffer();
   }
 
   /**
@@ -820,6 +852,12 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    * Prior to this, the drawable instanceSet should be updated.
    */
   _updateCulledValues() {
+    log(`${this.constructor.name}|_updateCulledValues (indirect and culled buffers)`);
+
+    if ( !this.drawables.values().some(drawable => drawable.instanceSet.size) ) return;
+    this._createIndirectTransferBuffer();
+    this._createCulledTransferBuffer();
+
     // Set the culled instance buffer and indirect buffer for each drawable.
     // The indirect buffer determines how many elements in the culled instance buffer are drawn.
     for ( const drawable of this.drawables.values() ) {
@@ -833,7 +871,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       drawable.indirectBuffer[0] = drawable.geom.indices.length;
       drawable.indirectBuffer[1] = drawable.instanceSet.size;
     }
-    log(`${this.constructor.name}|_updateCulledValues (indirect and culled buffers)`);
+
 //     this.device.queue.writeBuffer(this.buffers.indirect, 0, this.rawBuffers.indirect);
 //     this.device.queue.writeBuffer(this.buffers.culled, 0, this.rawBuffers.culled);
   }
@@ -1130,28 +1168,6 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
     })
   }
 
-  _unconstrainedTokenIndices = new Map();
-
-  /**
-   * Set up parts of the render chain that change often but not necessarily every render.
-   * E.g., tokens that move a lot vs a camera view that changes every render.
-   */
-  prerender(commandEncoder, opts) {
-    if ( this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
-      // Determine the number of constrained tokens and separate from instance set.
-      // Essentially subset the instance set.
-      this._unconstrainedTokenIndices.clear();
-      for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-        if ( !token.isConstrainedTokenBorder ) this._unconstrainedTokenIndices.set(idx, token);
-      }
-    }
-    super.prerender(commandEncoder, opts);
-
-
-    // log (`${this.constructor.name}|prerender|Identified unconstrained token indices`,
-    //  [...this._unconstrainedTokenIndices.entries()].map(([idx, token]) => `${idx}: ${token.name}, ${token.id}`));
-  }
-
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
@@ -1175,7 +1191,8 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       // Add in all viewable tokens.
       const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
-      for ( const [idx, token] of this._unconstrainedTokenIndices.entries() ) {
+      for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries()) {
+        if ( token.isConstrainedTokenBorder ) continue;
         if ( tokens.has(token) ) {
           // log (`${this.constructor.name}|filterObjects|Adding ${token.name}, ${token.id} to instance set at index ${idx}`);
           drawable.instanceSet.add(idx);
