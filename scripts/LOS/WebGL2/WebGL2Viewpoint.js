@@ -5,6 +5,7 @@ PIXI,
 "use strict";
 
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
+import { readPixelsAsync } from "./read_pixels_async.js";
 
 // Base folder
 
@@ -76,6 +77,35 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this._redPixels = res.countRed;
     this._redBlockedPixels = res.countRedBlocked;
+
+    this.#gridArea = null;
+    this.#constrainedTargetArea = null;
+  }
+
+  #gridArea;
+
+  #constrainedTargetArea;
+
+  async _calculatePercentVisibleAsync (viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.prerender();
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
+    const res = await this._countRedBlockedPixelsAsync();
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this._redPixels = res.countRed;
+    this._redBlockedPixels = res.countRedBlocked;
+
+    if ( this.config.largeTarget ) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+      this.#gridArea = await this._countRedPixelsAsync();
+    }
+
+    if ( this.config.useLitTargetShape ) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
+      this.#constrainedTargetArea = await this._countRedPixelsAsync();
+    }
   }
 
   /**
@@ -85,6 +115,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
+    if ( this.#gridArea ) return this.#gridArea;
+
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
@@ -98,6 +130,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
+    if ( this.#constrainedTargetArea ) return this.#constrainedTargetArea;
+
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
@@ -126,6 +160,38 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   _countRedBlockedPixels() {
     const gl = this.gl;
     this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
+    const pixels = this.bufferData;
+    const terrainThreshold = this.config.alphaThreshold * 255;
+    let countRed = 0;
+    let countRedBlocked = 0;
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const hasR = Boolean(r === 255);
+
+      countRed += hasR;
+      countRedBlocked += hasR * (Boolean(b === 255) || Boolean(g > terrainThreshold))
+    }
+    return { countRed, countRedBlocked };
+  }
+
+  async _countRedPixelsAsync() {
+    const gl = this.gl;
+    await readPixelsAsync(gl, 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
+    const pixels = this.bufferData;
+    let countRed = 0;
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      const r = pixels[i];
+      const hasR = Boolean(r === 255);
+      countRed += hasR;
+    }
+    return countRed;
+  }
+
+ async _countRedBlockedPixelsAsync() {
+    const gl = this.gl;
+    await readPixelsAsync(gl, 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
     const terrainThreshold = this.config.alphaThreshold * 255;
     let countRed = 0;

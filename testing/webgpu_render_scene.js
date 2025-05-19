@@ -245,18 +245,21 @@ calcGeometric = new api.calcs.geometric();
 calcPIXI = new api.calcs.PIXI();
 calcWebGL2 = new api.calcs.webGL2()
 calcWebGL2Instancing = new api.calcs.webGL2({ useInstancing: true });
+calcHybrid = new api.calcs.hybrid();
 calcWebGPU = new api.calcs.webGPU({ device });
 calcWebGPUAsync = new api.calcs.webGPUAsync({ device });
-calcHybrid = new api.calcs.hybrid();
+
+
 
 await calcPoints.initialize();
 await calcGeometric.initialize();
 await calcPIXI.initialize();
 await calcWebGL2.initialize();
 await calcWebGL2Instancing.initialize();
+await calcHybrid.initialize();
 await calcWebGPU.initialize();
 await calcWebGPUAsync.initialize();
-await calcHybrid.initialize();
+
 
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
@@ -264,9 +267,10 @@ console.table({
   calcPIXI: calcPIXI.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGL2Instancing: calcWebGL2Instancing.percentVisible(viewer, target),
+  calcHybrid: calcHybrid.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
-  calcHybrid: calcHybrid.percentVisible(viewer, target),
+
 //   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
 //   asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),
 //   async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
@@ -379,32 +383,38 @@ for ( const clipperVersion of [1, 2] ) {
     console.log(`\n\tFilter instances`);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+    // await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
 
-    console.log(`\n\tStencil instances`);
-    CONFIG.tokenvisibility.useStencil = true;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-    console.log(`\n\tNo Stencil instances`);
-    CONFIG.tokenvisibility.useStencil = false;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-
-    CONFIG.tokenvisibility.filterInstances = false;
-    console.log(`\n\tNo filtering`);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-    console.log(`\n\tStencil instances`);
-    CONFIG.tokenvisibility.useStencil = true;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-    console.log(`\n\tNo Stencil instances`);
-    CONFIG.tokenvisibility.useStencil = false;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     console.log(`\n\tStencil instances`);
+//     CONFIG.tokenvisibility.useStencil = true;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//     console.log(`\n\tNo Stencil instances`);
+//     CONFIG.tokenvisibility.useStencil = false;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//
+//     CONFIG.tokenvisibility.filterInstances = false;
+//     console.log(`\n\tNo filtering`);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//     console.log(`\n\tStencil instances`);
+//     CONFIG.tokenvisibility.useStencil = true;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//     console.log(`\n\tNo Stencil instances`);
+//     CONFIG.tokenvisibility.useStencil = false;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
 
     console.log(`\n\tWebGPU`);
     await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU);
@@ -415,9 +425,33 @@ for ( const clipperVersion of [1, 2] ) {
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async PIXI", calcPIXI)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
-   await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
+   // await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
   }
 }
+
+
+// Firefox and Safari
+N = 20;
+(async() => {
+  for ( const clipperVersion of [1, 2] ) {
+    CONFIG.tokenvisibility.clipperVersion = clipperVersion;
+    for ( const shape of ['triangles', 'alphaThresholdPolygons'] ) { // Object.values(CONFIG.tokenvisibility.tileThresholdShapeOptions) ) {
+      CONFIG.tokenvisibility.tileThresholdShape = shape;
+
+      console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`);
+      await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints);
+      await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric);
+      await QBenchmarkLoopFn(N, percentFn, "Hybrid", calcHybrid);
+      await QBenchmarkLoopFn(N, percentFn, "PIXI", calcPIXI);
+
+      CONFIG.tokenvisibility.filterInstances = true;
+      console.log(`\n\tFilter instances`);
+      await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+      await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+
+    }
+  }
+})()
 
 
 

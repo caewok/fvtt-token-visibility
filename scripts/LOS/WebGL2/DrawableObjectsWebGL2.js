@@ -955,6 +955,13 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
 
   modelBuffer;
 
+  #aModelAttribLoc = -1;
+
+  async initialize() {
+    await super.initialize();
+    this.#aModelAttribLoc = this.gl.getAttribLocation(this.programInfo.program, 'aModel');
+  }
+
   _initializeOffsets() { return; }
 
   _initializeVerticesAndArrays() {
@@ -1012,7 +1019,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
         this.instanceSet,
         this.geom.numVertices,
         this.bufferInfo.attribs.aModel,
-        gl.getAttribLocation(this.programInfo.program, 'aModel'),
+        this.#aModelAttribLoc,
       );
     } else {
       // Draw every instance
@@ -1065,6 +1072,13 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
   static vertexFile = "instance_vertex";
 
   modelBuffer;
+
+  #aModelAttribLoc = -1;
+
+  async initialize() {
+    await super.initialize();
+    this.#aModelAttribLoc = this.gl.getAttribLocation(this.programInfo.program, 'aModel');
+  }
 
   _initializeOffsets() { return; }
 
@@ -1127,7 +1141,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
       this.#tmpSet,
       this.geom.numVertices,
       this.bufferInfo.attribs.aModel,
-      gl.getAttribLocation(this.programInfo.program, 'aModel'),
+      this.#aModelAttribLoc,
     );
     gl.bindVertexArray(null);
   }
@@ -1151,7 +1165,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
         this.instanceSet,
         this.geom.numVertices,
         this.bufferInfo.attribs.aModel,
-        gl.getAttribLocation(this.programInfo.program, 'aModel'),
+        this.#aModelAttribLoc,
       );
     } else {
       // Draw every instance
