@@ -245,18 +245,21 @@ calcGeometric = new api.calcs.geometric();
 calcPIXI = new api.calcs.PIXI();
 calcWebGL2 = new api.calcs.webGL2()
 calcWebGL2Instancing = new api.calcs.webGL2({ useInstancing: true });
+calcHybrid = new api.calcs.hybrid();
 calcWebGPU = new api.calcs.webGPU({ device });
 calcWebGPUAsync = new api.calcs.webGPUAsync({ device });
-calcHybrid = new api.calcs.hybrid();
+
+
 
 await calcPoints.initialize();
 await calcGeometric.initialize();
 await calcPIXI.initialize();
 await calcWebGL2.initialize();
 await calcWebGL2Instancing.initialize();
+await calcHybrid.initialize();
 await calcWebGPU.initialize();
 await calcWebGPUAsync.initialize();
-await calcHybrid.initialize();
+
 
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
@@ -264,9 +267,10 @@ console.table({
   calcPIXI: calcPIXI.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGL2Instancing: calcWebGL2Instancing.percentVisible(viewer, target),
+  calcHybrid: calcHybrid.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
-  calcHybrid: calcHybrid.percentVisible(viewer, target),
+
 //   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
 //   asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),
 //   async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
