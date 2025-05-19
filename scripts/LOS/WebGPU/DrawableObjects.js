@@ -413,8 +413,6 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
       this.updatePlaceableBuffers();
     }
   }
-
-
 }
 
 export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbstract {
@@ -445,8 +443,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   async initialize() {
     await super.initialize();
-//     this._createInstanceBuffer();
-//     this._createInstanceBindGroup();
+    this._createInstanceBuffer();
+    this._createInstanceBindGroup();
   }
 
   updatePlaceableBuffers() {
@@ -467,12 +465,12 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     }
 
     // No buffer found; create anew.
-    return this._mappedInstanceTransferBuffers.pop() || this.device.createBuffer({
+    return this.device.createBuffer({
       label: `${this.constructor.name} Instance Transfer Buffer`,
       size,
       usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
       mappedAtCreation: true,
-    })
+    });
   }
 
   // Could only destroy instance buffers that are smaller than necessary size.
@@ -503,7 +501,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     this.rawBuffers.instanceTransfer = new Float32Array(this.buffers.instanceTransfer.getMappedRange());
 
     // Copy the entire instance data array.
-    this.rawBuffers.instanceTransfer.set(this.placeableHandler.instanceArrayBuffer);
+    this.rawBuffers.instanceTransfer.set(this.placeableHandler.instanceArrayValues);
 
     // By definition, copying the entire instance array makes everything up-to-date.
     this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
@@ -515,7 +513,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
    */
   _updateInstanceBuffer() {
     // Create a new transfer buffer.
-    if ( this.buffers.instanceTransfer ) console.error(`${this.constructor.name}|_createInstanceBuffer|Instance transfer buffer should not yet be defined.`);
+    if ( this.buffers.instanceTransfer ) console.error(`${this.constructor.name}|_updateInstanceBuffer|Instance transfer buffer should not yet be defined.`);
     this._createInstanceTransferBuffer();
   }
 
@@ -550,13 +548,25 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
       }
       this.#placeableHandlerUpdateId = placeableHandler.updateId;
     }
+    this._copyTransferBuffers(commandEncoder);
 
+  }
+
+  _copyTransferBuffers(commandEncoder) {
     // Possible for it to be undefined if no placeables.
     // Copy the entire buffer, b/c doing multiple piecemeal copies is too complicated.
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
     if ( this.buffers.instanceTransfer ) {
       commandEncoder.copyBufferToBuffer(this.buffers.instanceTransfer, 0, this.buffers.instance, 0, this.buffers.instanceTransfer.size);
       this.buffers.instanceTransfer.unmap();
+    }
+    if ( this.buffers.indirectTransfer ) {
+      commandEncoder.copyBufferToBuffer(this.buffers.indirectTransfer, 0, this.buffers.indirect, 0, this.buffers.indirectTransfer.size);
+      this.buffers.indirectTransfer.unmap();
+    }
+    if ( this.buffers.culledTransfer ) {
+      commandEncoder.copyBufferToBuffer(this.buffers.culledTransfer, 0, this.buffers.culled, 0, this.buffers.culledTransfer.size);
+      this.buffers.culledTransfer.unmap();
     }
   }
 
@@ -569,6 +579,24 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
       })
       this.buffers.instanceTransfer = null;
       this.rawBuffers.instanceTransfer = null;
+    }
+    if ( this.buffers.indirectTransfer ) {
+      const self = this;
+      const transferBuffer = this.buffers.indirectTransfer;
+      transferBuffer.mapAsync(GPUMapMode.WRITE).then(() => {
+        self._mappedIndirectTransferBuffers.push(transferBuffer);
+      })
+      this.buffers.indirectTransfer = null;
+      this.rawBuffers.indirectTransfer = null;
+    }
+    if ( this.buffers.culledTransfer ) {
+      const self = this;
+      const transferBuffer = this.buffers.culledTransfer;
+      transferBuffer.mapAsync(GPUMapMode.WRITE).then(() => {
+        self._mappedCulledTransferBuffers.push(transferBuffer);
+      })
+      this.buffers.culledTransfer = null;
+      this.rawBuffers.culledTransfer = null;
     }
   }
 
@@ -628,20 +656,33 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   async initialize() {
     await super.initialize();
     this._createIndirectBuffer(); // Depends only on number of drawables; can create once.
-    this._createCulledBuffer();
+    this._createCulledBuffer(); // Depends on the number of instances, so it can vary.
+  }
+
+  _copyTransferBuffers(commandEncoder) {
+    this._updateCulledValues(); // Ensure culled values are copied prior to the transfer.
+    super._copyTransferBuffers(commandEncoder);
   }
 
   updatePlaceableBuffers() {
     super.updatePlaceableBuffers();
-    this._createCulledBuffer(); // Depends on the number of instances, so it can vary.
     this._updateIndirectBuffer();
+
+    this._createCulledBuffer(); // In case the number of instances changed.
+    this._updateCulledBuffer();
   }
 
-//   _mappedIndirectTransferBuffers = [];
-//
-//   get mappedIndirectTransferBuffer() {
-//     // There is only one size, as this.drawables.size is fixed for a given drawable.
-//   }
+  _mappedIndirectTransferBuffers = [];
+
+  get mappedIndirectTransferBuffer() {
+    // There is only one size, as this.drawables.size is fixed for a given drawable.
+    return this._mappedIndirectTransferBuffers.pop() || this.device.createBuffer({
+      label: `${this.constructor.name} Indirect Transfer Buffer`,
+      size: 5 * Uint32Array.BYTES_PER_ELEMENT * this.drawables.size,
+      usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+      mappedAtCreation: true,
+    });
+  }
 
   _createIndirectBuffer() {
     // Track the indirect draw commands for each drawable.
@@ -663,20 +704,59 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       size: size * this.drawables.size,
       usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    this.rawBuffers.indirect = new ArrayBuffer(size * this.drawables.size);
+  }
+
+  _createIndirectTransferBuffer() {
+    if ( this.buffers.indirectTransfer ) return;
+    this.buffers.indirectTransfer = this.mappedIndirectTransferBuffer;
+    this.rawBuffers.indirectTransfer = this.buffers.indirectTransfer.getMappedRange(); // Mapped per drawable later.
   }
 
   /**
    * Update the instance buffer with all placeable data.
    */
   _updateIndirectBuffer() {
+    this._createIndirectTransferBuffer();
+
     const size = 5 * Uint32Array.BYTES_PER_ELEMENT;
     let indirectOffset = 0;
     for ( const drawable of this.drawables.values() ) {
       drawable.indirectOffset = indirectOffset;
-      drawable.indirectBuffer = new Uint32Array(this.rawBuffers.indirect, indirectOffset, 5);
+      drawable.indirectBuffer = new Uint32Array(this.rawBuffers.indirectTransfer, indirectOffset, 5);
       indirectOffset += size;
     }
+  }
+
+  // To create a single buffer the offset must be a multiple of 256.
+  // As each element is only u32 (or u16), that means 64 (u32) or 128 (u16) entries per drawable.
+  // So 64 or 128 walls minimum.
+  // For 4 wall drawables, need 1 culling buffer of min size 256 * 4 = 1024.
+  // Ensure size is divisible by 256.
+  get culledBufferSize() {
+    const minSize = 256;
+    const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
+    return size * this.drawables.size;
+  }
+
+  _mappedCulledTransferBuffers = [];
+
+  get mappedCulledTransferBuffer() {
+    // Make sure we get a buffer that is the correct size.
+    const size = this.culledBufferSize;
+    let buffer;
+
+    while ( (buffer = this._mappedCulledTransferBuffers.pop()) ) {
+      if ( buffer.size ) return buffer;
+      buffer.destroy();
+    }
+
+    // No buffer found; create anew.
+    return this.device.createBuffer({
+      label: `${this.constructor.name} Culled Transfer Buffer`,
+      size,
+      usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
+      mappedAtCreation: true,
+    });
   }
 
   /**
@@ -689,31 +769,29 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   _createCulledBuffer() {
     if ( !this.placeableHandler.numInstances ) return;
 
-    // To create a single buffer the offset must be a multiple of 256.
-    // As each element is only u32 (or u16), that means 64 (u32) or 128 (u16) entries per drawable.
-    // So 64 or 128 walls minimum.
-    // For 4 wall drawables, need 1 culling buffer of min size 256 * 4 = 1024.
-    // Ensure size is divisible by 256.
-    const minSize = 256;
-    const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
+    const size = this.culledBufferSize;
     if ( this.buffers.culled ) {
-      if ( this.buffers.culled.size === size * this.drawables.size ) return;
+      if ( this.buffers.culled.size === size ) return;
       this.buffers.culled.destroy();
       this.buffers.culled = undefined;
     }
 
     this.buffers.culled = this.device.createBuffer({
       label: "Culled Buffer",
-      size: size * this.drawables.size,
+      size,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    this.rawBuffers.culled = new ArrayBuffer(size * this.drawables.size);
+  }
 
+  _updateCulledBuffer() {
+    this._createCulledTransferBuffer();
+
+    const size = this.culledBufferSize / this.drawables.size;
     let culledBufferOffset = 0;
     for ( const drawable of this.drawables.values() ) {
       drawable.culledBufferOffset = culledBufferOffset;
       drawable.culledBufferRaw = new Uint32Array(
-        this.rawBuffers.culled,
+        this.rawBuffers.culledTransfer,
         culledBufferOffset,
         this.placeableHandler.numInstances, // Alt: Math.floor(size / Uint32Array.BYTES_PER_ELEMENT),
       );
@@ -727,24 +805,14 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       });
       culledBufferOffset += size;
     }
+
   }
 
-//   _createCulledBindGroup() {
-//     this.bindGroups.culled = this.device.createBindGroup({
-//       label: `${this.constructor.name} Culled`,
-//       layout: this.bindGroupLayouts.culled,
-//       entries: [{
-//         binding: 0,
-//         resource: { buffer: this.buffers.culled }
-//       }],
-//     });
-//   }
-
-  filterObjects(visionTriangle, opts) {
-    super.filterObjects(visionTriangle, opts);
-    this._updateCulledValues();
+  _createCulledTransferBuffer() {
+    if ( this.buffers.culledTransfer ) return;
+    this.buffers.culledTransfer = this.mappedCulledTransferBuffer;
+    this.rawBuffers.culledTransfer = this.buffers.culledTransfer.getMappedRange();
   }
-
 
   /**
    * Set the culled instance buffer and indirect buffer for each drawable.
@@ -766,8 +834,8 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       drawable.indirectBuffer[1] = drawable.instanceSet.size;
     }
     log(`${this.constructor.name}|_updateCulledValues (indirect and culled buffers)`);
-    this.device.queue.writeBuffer(this.buffers.indirect, 0, this.rawBuffers.indirect);
-    this.device.queue.writeBuffer(this.buffers.culled, 0, this.rawBuffers.culled);
+//     this.device.queue.writeBuffer(this.buffers.indirect, 0, this.rawBuffers.indirect);
+//     this.device.queue.writeBuffer(this.buffers.culled, 0, this.rawBuffers.culled);
   }
 
   /**
