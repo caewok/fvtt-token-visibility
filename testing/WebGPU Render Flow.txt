@@ -63,11 +63,11 @@ DrawableTokenInstances.prerender
 --> super
 DrawableObjectInstancesAbstract.prerender
 --> super (D.1)
---> placeableHandler.updateId > this.placeableHandlerUpdateId: partialUpdateInstanceBuffer
+--> placeableHandler.updateId > this.placeableHandlerUpdateId: partialUpdateInstanceBuffer (F)
 --> commandEncoder.copyBufferToBuffer for the instanceTransfer
 (D.1)
 DrawableObjectPlaceableAbstract.prerender
---> this.placeableHandler.bufferId > this.#placeableHandlerBufferId: updatePlaceableBuffers
+--> this.placeableHandler.bufferId > this.#placeableHandlerBufferId: updatePlaceableBuffers (G)
 
 (E)
 DrawableObjectsAbstract#render
@@ -98,5 +98,22 @@ DrawableObjectsAbstract#_initializeRenderPass
   --> setPipeline
   --> setBindGroup
 
+
+DrawableObjectRBCulledInstancesAbstract#updatePlaceableBuffers
+--> super
+--> undefine the render bundle
+
+DrawableObjectCulledInstancesAbstract#updatePlaceableBuffers
+--> super
+--> _createCulledBuffer
+--> _updateIndirectBuffer
+
+DrawableObjectInstancesAbstract#updatePlaceableBuffers
+--> _createInstanceBuffer
+--> _createInstanceBindGroup
+--> _updateInstanceBuffer
+
+DrawableObjectPlaceableAbstract#updatePlaceableBuffers (n/a)
+partialUpdateInstanceBuffer
 
 
