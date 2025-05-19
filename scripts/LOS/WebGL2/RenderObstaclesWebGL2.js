@@ -228,6 +228,7 @@ export class RenderObstaclesWebGL2 {
     // Reset
     gl.colorMask(true, true, true, true);
     gl.disable(gl.BLEND);
+    this.gl.flush();
   }
 
   /**
@@ -257,6 +258,7 @@ export class RenderObstaclesWebGL2 {
     // Reset
     gl.colorMask(true, true, true, true);
     gl.disable(gl.BLEND);
+    this.gl.flush();
   }
 
   _drawTarget(target, useLitTargetShape = false) {
@@ -286,6 +288,7 @@ export class RenderObstaclesWebGL2 {
     // Ignore dpr.
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
     renderFn.call(this, target, viewer, visionTriangle, frame, clear, useLitTargetShape);
+    this.gl.flush();
   }
 
   /**

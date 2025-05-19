@@ -379,7 +379,7 @@ for ( const clipperVersion of [1, 2] ) {
     console.log(`\n\tFilter instances`);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-    await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+    // await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
 
 //     console.log(`\n\tStencil instances`);
 //     CONFIG.tokenvisibility.useStencil = true;
@@ -421,7 +421,7 @@ for ( const clipperVersion of [1, 2] ) {
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async PIXI", calcPIXI)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGL", calcWebGL2)
 //     await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPU", calcWebGPU)
-   await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
+   // await QBenchmarkLoopFn(N, percentFnAsync, "async WebGPUAsync", calcWebGPUAsync);
   }
 }
 
