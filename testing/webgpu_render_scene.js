@@ -379,32 +379,38 @@ for ( const clipperVersion of [1, 2] ) {
     console.log(`\n\tFilter instances`);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+    await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
 
-    console.log(`\n\tStencil instances`);
-    CONFIG.tokenvisibility.useStencil = true;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-    console.log(`\n\tNo Stencil instances`);
-    CONFIG.tokenvisibility.useStencil = false;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-
-    CONFIG.tokenvisibility.filterInstances = false;
-    console.log(`\n\tNo filtering`);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-    console.log(`\n\tStencil instances`);
-    CONFIG.tokenvisibility.useStencil = true;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
-
-    console.log(`\n\tNo Stencil instances`);
-    CONFIG.tokenvisibility.useStencil = false;
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
-    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     console.log(`\n\tStencil instances`);
+//     CONFIG.tokenvisibility.useStencil = true;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//     console.log(`\n\tNo Stencil instances`);
+//     CONFIG.tokenvisibility.useStencil = false;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//
+//     CONFIG.tokenvisibility.filterInstances = false;
+//     console.log(`\n\tNo filtering`);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//     console.log(`\n\tStencil instances`);
+//     CONFIG.tokenvisibility.useStencil = true;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+//
+//     console.log(`\n\tNo Stencil instances`);
+//     CONFIG.tokenvisibility.useStencil = false;
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+//     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+//     await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
 
     console.log(`\n\tWebGPU`);
     await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU);
