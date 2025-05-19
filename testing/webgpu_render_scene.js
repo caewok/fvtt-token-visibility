@@ -426,6 +426,30 @@ for ( const clipperVersion of [1, 2] ) {
 }
 
 
+// Firefox and Safari
+N = 20;
+(async() => {
+  for ( const clipperVersion of [1, 2] ) {
+    CONFIG.tokenvisibility.clipperVersion = clipperVersion;
+    for ( const shape of ['triangles', 'alphaThresholdPolygons'] ) { // Object.values(CONFIG.tokenvisibility.tileThresholdShapeOptions) ) {
+      CONFIG.tokenvisibility.tileThresholdShape = shape;
+
+      console.log(`\n${CONFIG.tokenvisibility.tileThresholdShape} ${CONFIG.tokenvisibility.ClipperPaths.name}`);
+      await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints);
+      await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric);
+      await QBenchmarkLoopFn(N, percentFn, "Hybrid", calcHybrid);
+      await QBenchmarkLoopFn(N, percentFn, "PIXI", calcPIXI);
+
+      CONFIG.tokenvisibility.filterInstances = true;
+      console.log(`\n\tFilter instances`);
+      await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+      await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
+
+    }
+  }
+})()
+
+
 
 tri = VisionTriangle.build(Point3d.fromTokenCenter(viewer), target)
 tri.draw()

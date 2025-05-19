@@ -226,8 +226,8 @@ export class RenderObstaclesWebGL2 {
     this.drawableGridShape.renderTarget(target);
 
     // Reset
-    gl.colorMask(true, true, true, true);
-    gl.disable(gl.BLEND);
+//     gl.colorMask(true, true, true, true);
+//     gl.disable(gl.BLEND);
     this.gl.flush();
   }
 
@@ -256,8 +256,8 @@ export class RenderObstaclesWebGL2 {
     this._drawTarget(target, useLitTargetShape);
 
     // Reset
-    gl.colorMask(true, true, true, true);
-    gl.disable(gl.BLEND);
+//     gl.colorMask(true, true, true, true);
+//     gl.disable(gl.BLEND);
     this.gl.flush();
   }
 
@@ -349,12 +349,12 @@ export class RenderObstaclesWebGL2 {
 
     // Reset
     if ( useStencil ) {
-      gl.stencilMask(0x00); // Disable writing to stencil buffer.
-      gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+//       gl.stencilMask(0x00); // Disable writing to stencil buffer.
+//       gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
       gl.disable(gl.STENCIL_TEST);
     }
-    gl.colorMask(true, true, true, true);
-    gl.disable(gl.BLEND);
+//     gl.colorMask(true, true, true, true);
+//     gl.disable(gl.BLEND);
   }
 
   /**
@@ -394,7 +394,7 @@ export class RenderObstaclesWebGL2 {
     this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Reset
-     gl.disable(gl.BLEND);
+//     gl.disable(gl.BLEND);
   }
 
   /**
