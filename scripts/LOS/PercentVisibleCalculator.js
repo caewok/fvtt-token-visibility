@@ -104,10 +104,18 @@ export class PercentVisibleCalculatorAbstract {
 
   /**
    * Determine the percent unobscured view.
+   * @param {Token} viewer                  Token representing the camera/sight
+   * @param {Token} target                  What the viewer is looking at
+   * @param {Point3d} viewerLocation        Where the camera is located
+   * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
    * @returns {number}
    * @override
    */
   _percentUnobscured(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+
+  async _percentUnobscuredAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+  }
 
   destroy() { return; }
 
@@ -145,6 +153,34 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
     return Math.clamp(percentSeen, 0, 1);
   }
 
+  async _percentUnobscuredAsync(viewer, target, viewerLocation, targetLocation) {
+    // Calculate the denominator for percent seen: the target area without obstacles.
+    // - Large target: 100% viewable if area equal to one grid square is viewable.
+    // - Lit target: Unlit portions of the target are treated as obscured.
+    // TODO: Use promises for each and Promise.allSettled?
+    let totalArea;
+    if ( this.config.useLitTargetShape
+      && target.litTokenBorder
+      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) {
+
+      totalArea = await this._constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation);
+    }
+    else totalArea = await this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
+    if ( this.config.largeTarget ) totalArea = Math.min(totalArea, (await this._gridShapeArea(viewer, target, viewerLocation, targetLocation)))
+    if ( !totalArea ) {
+      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0.`);
+      return 0;
+    }
+    const viewableArea = await this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
+    const percentSeen = viewableArea / totalArea;
+
+    // Round the percent seen so that near-zero areas are 0.
+    // Because of trimming walls near the vision triangle, a small amount of token area can poke through
+    if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
+    return Math.clamp(percentSeen, 0, 1);
+  }
+
+
   /**
    * Grid shape area centered on the target as seen from the viewer location.
    * Used to determine the minimum area needed (denominator) for the largeTarget option.
@@ -152,6 +188,10 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    * @returns {number}
    */
   _gridShapeArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+
+  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._gridShapeArea(viewer, target, viewerLocation, targetLocation);
+  }
 
   /**
    * Constrained target area, counting both lit and unlit portions of the target.
@@ -161,12 +201,20 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    */
   _constrainedTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 
+  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._constrainedTargetArea(viewer, target, viewerLocation, targetLocation);
+  }
+
   /**
    * How much of the target area is viewable, considering obstacles.
    * Called after _calculatePercentVisible.
    * @returns {number}
    */
   _viewableTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+
+  async _viewableTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
+  }
 
   /**
    * The target area as seen from the viewer location, ignoring all obstacles.
@@ -175,4 +223,8 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    * @returns {number}
    */
   _totalTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+
+  async _totalTargetAreaAsync (viewer, target, viewerLocation, targetLocation) {
+    return this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
+  }
 }

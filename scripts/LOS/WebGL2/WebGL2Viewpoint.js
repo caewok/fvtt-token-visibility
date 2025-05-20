@@ -64,7 +64,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     await this.renderObstacles.initialize();
   }
 
-
   _redPixels = 0;
 
   _redBlockedPixels = 0;
@@ -77,14 +76,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this._redPixels = res.countRed;
     this._redBlockedPixels = res.countRedBlocked;
-
-    this.#gridArea = null;
-    this.#constrainedTargetArea = null;
   }
-
-  #gridArea;
-
-  #constrainedTargetArea;
 
   async _calculatePercentVisibleAsync (viewer, target, viewerLocation, targetLocation) {
     this.renderObstacles.prerender();
@@ -94,18 +86,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this._redPixels = res.countRed;
     this._redBlockedPixels = res.countRedBlocked;
-
-    if ( this.config.largeTarget ) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
-      this.#gridArea = await this._countRedPixelsAsync();
-    }
-
-    if ( this.config.useLitTargetShape ) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
-      this.#constrainedTargetArea = await this._countRedPixelsAsync();
-    }
   }
 
   /**
@@ -115,12 +95,17 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
-    if ( this.#gridArea ) return this.#gridArea;
-
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
     return this._countRedPixels();
+  }
+
+  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+    return this._countRedPixelsAsync();
   }
 
   /**
@@ -130,12 +115,18 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
-    if ( this.#constrainedTargetArea ) return this.#constrainedTargetArea;
-
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
     return this._countRedPixels();
+  }
+
+  async constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
+    return this._countRedPixelsAsync();
+
   }
 
   _viewableTargetArea(_viewer, _target, _viewerLocation, _targetLocation) {
