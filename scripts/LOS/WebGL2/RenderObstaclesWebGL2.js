@@ -30,6 +30,8 @@ import {
   LitDrawableHexTokenWebGL2,
 } from "./DrawableObjectsWebGL2.js";
 
+import { FragmentCounter } from "./FragmentCounter.js";
+
 export class RenderObstaclesWebGL2 {
 
   /** @type {WebGL2RenderingContext} */
@@ -70,6 +72,9 @@ export class RenderObstaclesWebGL2 {
 
   /** @type {object} */
   debugViewNormals = false;
+
+  /** @type {FragmentCounter} */
+  counter;
 
   constructor({ gl, senseType = "sight", debugViewNormals = false, useInstancing = false, useSceneBackground = false } = {}) {
     this.debugViewNormals = debugViewNormals;
@@ -171,6 +176,7 @@ export class RenderObstaclesWebGL2 {
   async initialize() {
     const promises = [];
     this.drawableObjects.forEach(drawableObj => promises.push(drawableObj.initialize()));
+    this.counter = new FragmentCounter(this.gl);
     return Promise.allSettled(promises);
   }
 
@@ -221,18 +227,6 @@ export class RenderObstaclesWebGL2 {
     gridShape: null,
   };
 
-  #startQuery(name) {
-    const gl = this.gl;
-    gl.deleteQuery(this.queries[name]); // Does nothing if not a query.
-    this.queries[name] = gl.createQuery();
-    gl.beginQuery(gl.ANY_SAMPLES_PASSED, this.queries[name]);
-  }
-
-  #endQuery() {
-    const gl = this.gl;
-    gl.endQuery(gl.ANY_SAMPLES_PASSED);
-  }
-
   renderGridShape(viewerLocation, target, { targetLocation, frame } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this._setCamera(viewerLocation, target, { targetLocation });
@@ -252,9 +246,9 @@ export class RenderObstaclesWebGL2 {
 
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
 
-    if ( useQuery ) this.#startQuery("gridShape");
+    if ( useQuery ) this.counter.begin();
     this.drawableGridShape.renderTarget(target);
-    if ( useQuery ) this.#endQuery();
+    if ( useQuery ) this.queries.gridShape = this.counter.end();
 
     // Reset
 //     gl.colorMask(true, true, true, true);
@@ -286,9 +280,9 @@ export class RenderObstaclesWebGL2 {
 
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
 
-    if ( useQuery ) this.#startQuery("targetShape");
+    if ( useQuery ) this.counter.begin();
     this._drawTarget(target, useLitTargetShape);
-    if ( useQuery ) this.#endQuery();
+    if ( useQuery ) this.queries.targetShape = this.counter.end();
 
     // Reset
 //     gl.colorMask(true, true, true, true);
@@ -360,10 +354,10 @@ export class RenderObstaclesWebGL2 {
     // TODO: Does color masking screw up the queries?
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
 
-    if ( useQuery ) this.#startQuery("targetUnblocked");
+    if ( useQuery ) this.counter.begin();
     this._drawTarget(target, useLitTargetShape);
     if ( useQuery ) {
-      this.#endQuery();
+      this.queries.targetUnblocked = this.counter.end();
 
       // Clear the target b/c we need to draw it *after* the obstacles in order to query occlusion.
       // TODO: This will fail if multiple viewpoints due to clearing. How better to handle?
@@ -401,9 +395,9 @@ export class RenderObstaclesWebGL2 {
       gl.enable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
       gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
-      this.#startQuery("targetBlocked");
+      this.counter.begin();
       this._drawTarget(target, useLitTargetShape);
-      this.#endQuery();
+      this.queries.targetBlocked = this.counter.end();
     }
 
     // Reset
@@ -488,6 +482,13 @@ export class RenderObstaclesWebGL2 {
   }
 
   destroy() {
+    // const gl = this.gl;
+    this.counter.destroy();
 
+
+    // TODO: Implement storing framebuffer and writing to texture instead of canvas.
+    // gl.deleteFramebuffer(this.fbo);
+    // gl.deleteTexture(this.texture);
+    // this.drawableObjects.forEach(drawable => drawable.destroy()); // gl.deleteProgram
   }
 }

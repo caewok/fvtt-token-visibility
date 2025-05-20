@@ -7,7 +7,6 @@ CONFIG,
 
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { readPixelsAsync } from "./read_pixels_async.js";
-import { retrieveQueryResult } from "./webgl-query-helpers.js";
 
 // Base folder
 import { MODULE_ID } from "../../const.js";
@@ -75,48 +74,34 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
     this.renderObstacles.prerender();
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-    const res = this._countRedBlockedPixels();
-    const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this._redPixels = res.countRed;
-    this._redBlockedPixels = res.countRedBlocked;
-  }
 
-  async _calculatePercentVisibleAsync (viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.prerender();
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-
-    const gl = this.gl;
-
-    // Technically, could put this in separate _viewableTargetAreaAsync and _totalTargetAreaAsync methods.
-    // But for now keep here for simplicity.
     if ( CONFIG[MODULE_ID].useQuery ) {
-      this._redPixels = await retrieveQueryResult(gl, this.renderObstacles.queries.targetUnblocked);
-      this._redBlockedPixels = await retrieveQueryResult(gl, this.renderObstacles.queries.targetBlocked);
+      this._redPixels = this.renderObstacles.queries.targetUnblocked;
+      this._redBlockedPixels = this.renderObstacles.queries.targetBlocked;
     } else {
-      const res = await this._countRedBlockedPixelsAsync();
+      const res = this._countRedBlockedPixels();
+      const gl = this.gl;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this._redPixels = res.countRed;
       this._redBlockedPixels = res.countRedBlocked;
     }
   }
 
-  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+  async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.prerender();
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
 
-    if ( CONFIG[MODULE_ID].useQuery ) return retrieveQueryResult(gl, this.renderObstacles.queries.gridShape);
-    else return this._countRedPixelsAsync();
-  }
-
-  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
-
-    if ( CONFIG[MODULE_ID].useQuery ) return retrieveQueryResult(gl, this.renderObstacles.queries.targetShape);
-    else return this._countRedPixelsAsync();
+    if ( CONFIG[MODULE_ID].useQuery ) {
+       // TODO: If counter works, develop async version with async readPixels.
+      this._redPixels = this.renderObstacles.queries.targetUnblocked;
+      this._redBlockedPixels = this.renderObstacles.queries.targetBlocked;
+    } else {
+      const res = await this._countRedBlockedPixelsAsync();
+      const gl = this.gl;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this._redPixels = res.countRed;
+      this._redBlockedPixels = res.countRedBlocked;
+    }
   }
 
   /**
@@ -129,6 +114,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+
+    if ( CONFIG[MODULE_ID].useQuery ) return this.renderObstacles.queries.gridShape;
     return this._countRedPixels();
   }
 
@@ -142,6 +129,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
+    if ( CONFIG[MODULE_ID].useQuery ) return this.renderObstacles.queries.targetShape;
     return this._countRedPixels();
   }
 

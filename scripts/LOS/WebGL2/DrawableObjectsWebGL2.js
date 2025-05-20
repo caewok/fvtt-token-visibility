@@ -80,6 +80,9 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {Uint16Array[]} */
   indices = [];
 
+  /** @type {Camera} */
+  camera;
+
   constructor(gl, camera, { debugViewNormals = false } = {}) {
     this.webGL2 = new WebGL2(gl);
     this.camera = camera;
