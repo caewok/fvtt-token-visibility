@@ -340,11 +340,10 @@ export class RenderObstaclesWebGL2 {
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
 
-    // Blend by adding the r, g, and b channels, Alpha basically ignored.
     const srcRGB = gl.ONE;
     const dstRGB = gl.ONE;
-    const srcAlpha = gl.ZERO;
-    const dstAlpha = gl.ONE;
+    const srcAlpha = gl.ONE;
+    const dstAlpha = gl.ZERO;
     gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 
     this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));

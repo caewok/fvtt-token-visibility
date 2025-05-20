@@ -492,7 +492,7 @@ export class DrawableNonDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 
   /** @type {boolean} */
   static directional = false;
 
-  static obstacleColor = [0, 0.5, 1, 0.5];
+  static obstacleColor = [0, 0.5, 0.0, 0.5];
 }
 
 export class DrawableDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
@@ -502,7 +502,7 @@ export class DrawableDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
   /** @type {boolean} */
   static directional = true;
 
-  static obstacleColor = [0, 0.5, 1, 0.5];
+  static obstacleColor = [0, 0.5, 0.0, 0.5];
 }
 
 export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
