@@ -1,13 +1,16 @@
 /* globals
 PIXI,
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { readPixelsAsync } from "./read_pixels_async.js";
+import { retrieveQueryResult } from "./webgl-query-helpers.js";
 
 // Base folder
+import { MODULE_ID } from "../../const.js";
 
 // LOS folder
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
@@ -77,35 +80,43 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this._redPixels = res.countRed;
     this._redBlockedPixels = res.countRedBlocked;
-
-    this.#gridArea = null;
-    this.#constrainedTargetArea = null;
   }
-
-  #gridArea;
-
-  #constrainedTargetArea;
 
   async _calculatePercentVisibleAsync (viewer, target, viewerLocation, targetLocation) {
     this.renderObstacles.prerender();
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-    const res = await this._countRedBlockedPixelsAsync();
+
+    const gl = this.gl;
+
+    // Technically, could put this in separate _viewableTargetAreaAsync and _totalTargetAreaAsync methods.
+    // But for now keep here for simplicity.
+    if ( CONFIG[MODULE_ID].useQuery ) {
+      this._redPixels = await retrieveQueryResult(gl, this.renderObstacles.queries.targetUnblocked);
+      this._redBlockedPixels = await retrieveQueryResult(gl, this.renderObstacles.queries.targetBlocked);
+    } else {
+      const res = await this._countRedBlockedPixelsAsync();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this._redPixels = res.countRed;
+      this._redBlockedPixels = res.countRedBlocked;
+    }
+  }
+
+  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this._redPixels = res.countRed;
-    this._redBlockedPixels = res.countRedBlocked;
+    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
 
-    if ( this.config.largeTarget ) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
-      this.#gridArea = await this._countRedPixelsAsync();
-    }
+    if ( CONFIG[MODULE_ID].useQuery ) return retrieveQueryResult(gl, this.renderObstacles.queries.gridShape);
+    else return this._countRedPixelsAsync();
+  }
 
-    if ( this.config.useLitTargetShape ) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
-      this.#constrainedTargetArea = await this._countRedPixelsAsync();
-    }
+  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
+
+    if ( CONFIG[MODULE_ID].useQuery ) return retrieveQueryResult(gl, this.renderObstacles.queries.targetShape);
+    else return this._countRedPixelsAsync();
   }
 
   /**
@@ -115,8 +126,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
-    if ( this.#gridArea ) return this.#gridArea;
-
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
@@ -130,8 +139,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
-    if ( this.#constrainedTargetArea ) return this.#constrainedTargetArea;
-
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
@@ -237,9 +244,8 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
   updateDebugForPercentVisible(percentVisible) {
     super.updateDebugForPercentVisible(percentVisible);
-    this.renderer.prerender();
-    // TODO: Handle multiple viewpoints.
 
+    // TODO: Handle multiple viewpoints.
     const frames = this._canvasDimensionsForViewpoints();
     for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
       const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
@@ -338,4 +344,26 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
+}
+
+export class DebugVisibilityViewerWebGL2Async extends DebugVisibilityViewerWebGL2 {
+
+  percentVisible() {
+    return this.viewerLOS.percentVisibleAsync(this.target);
+  }
+
+  updateDebugForPercentVisible(percentVisible) {
+    percentVisible.then(value => DebugVisibilityViewerWithPopoutAbstract.prototype.updateDebugForPercentVisible.call(value));
+
+    // TODO: Handle multiple viewpoints.
+    const frames = this._canvasDimensionsForViewpoints();
+    for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
+      const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
+      const frame = frames[i];
+      const clear = i === 0;
+      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+    }
+  }
+
+
 }

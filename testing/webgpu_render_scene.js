@@ -267,9 +267,12 @@ console.table({
   calcPIXI: calcPIXI.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGL2Instancing: calcWebGL2Instancing.percentVisible(viewer, target),
+
   calcHybrid: calcHybrid.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
+
+  async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target)
 
 //   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
 //   asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),

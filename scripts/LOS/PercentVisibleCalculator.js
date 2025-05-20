@@ -85,7 +85,7 @@ export class PercentVisibleCalculatorAbstract {
     targetLocation ??= Point3d.fromTokenCenter(target);
 
     await this._calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation);
-    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+    return this._percentUnobscuredAsync(viewer, target, viewerLocation, targetLocation);
   }
 
   /**
@@ -109,8 +109,11 @@ export class PercentVisibleCalculatorAbstract {
    */
   _percentUnobscured(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 
-  destroy() { return; }
+  async _percentUnobscuredAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+  }
 
+  destroy() { return; }
 }
 
 /**
@@ -153,6 +156,10 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    */
   _gridShapeArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 
+  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._gridShapeArea(viewer, target, viewerLocation, targetLocation);
+  }
+
   /**
    * Constrained target area, counting both lit and unlit portions of the target.
    * Used to determine the total area (denominator) when useLitTarget config is set.
@@ -161,12 +168,20 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    */
   _constrainedTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
 
+  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._constrainedTargetArea(viewer, target, viewerLocation, targetLocation);
+  }
+
   /**
    * How much of the target area is viewable, considering obstacles.
    * Called after _calculatePercentVisible.
    * @returns {number}
    */
   _viewableTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+
+  async _viewableTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
+  }
 
   /**
    * The target area as seen from the viewer location, ignoring all obstacles.
@@ -175,4 +190,8 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
    * @returns {number}
    */
   _totalTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+
+  async _totalTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    return this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
+  }
 }

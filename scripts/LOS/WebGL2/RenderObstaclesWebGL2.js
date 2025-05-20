@@ -206,10 +206,38 @@ export class RenderObstaclesWebGL2 {
     this.drawableConstrainedToken.prerender();
   }
 
+  /**
+   * If using the query config option, this object stores the gl.createQuery objects
+   * - targetUnblocked: The target in _renderColorCoded.
+   * - targetBlocked: The target after obstacles are applied in _renderColorCoded
+   * - gridShape: The grid shape in renderGridShape
+   * - targetShape: The target shape in renderTarget
+    @type {object}
+  */
+  queries = {
+    targetUnblocked: null,
+    targetBlocked: null,
+    targetShape: null,
+    gridShape: null,
+  };
+
+  #startQuery(name) {
+    const gl = this.gl;
+    gl.deleteQuery(this.queries[name]); // Does nothing if not a query.
+    this.queries[name] = gl.createQuery();
+    gl.beginQuery(gl.ANY_SAMPLES_PASSED, this.queries[name]);
+  }
+
+  #endQuery() {
+    const gl = this.gl;
+    gl.endQuery(gl.ANY_SAMPLES_PASSED);
+  }
+
   renderGridShape(viewerLocation, target, { targetLocation, frame } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this._setCamera(viewerLocation, target, { targetLocation });
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+    const useQuery = CONFIG[MODULE_ID].useQuery;
 
     const gl = this.gl;
     // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
@@ -223,7 +251,10 @@ export class RenderObstaclesWebGL2 {
     // gl.cullFace(gl.FRONT);
 
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+
+    if ( useQuery ) this.#startQuery("gridShape");
     this.drawableGridShape.renderTarget(target);
+    if ( useQuery ) this.#endQuery();
 
     // Reset
 //     gl.colorMask(true, true, true, true);
@@ -240,6 +271,7 @@ export class RenderObstaclesWebGL2 {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this._setCamera(viewerLocation, target, { targetLocation });
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+    const useQuery = CONFIG[MODULE_ID].useQuery;
 
     const gl = this.gl;
     // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
@@ -253,7 +285,10 @@ export class RenderObstaclesWebGL2 {
     // gl.cullFace(gl.FRONT);
 
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+
+    if ( useQuery ) this.#startQuery("targetShape");
     this._drawTarget(target, useLitTargetShape);
+    if ( useQuery ) this.#endQuery();
 
     // Reset
 //     gl.colorMask(true, true, true, true);
@@ -302,6 +337,8 @@ export class RenderObstaclesWebGL2 {
     // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
 
     const useStencil = CONFIG[MODULE_ID].useStencil;
+    const useQuery = CONFIG[MODULE_ID].useQuery;
+
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
 
     gl.enable(gl.DEPTH_TEST);
@@ -320,8 +357,19 @@ export class RenderObstaclesWebGL2 {
       gl.stencilMask(0xFF); // Enable writing to the stencil buffer.
     }
 
+    // TODO: Does color masking screw up the queries?
     gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+
+    if ( useQuery ) this.#startQuery("targetUnblocked");
     this._drawTarget(target, useLitTargetShape);
+    if ( useQuery ) {
+      this.#endQuery();
+
+      // Clear the target b/c we need to draw it *after* the obstacles in order to query occlusion.
+      // TODO: This will fail if multiple viewpoints due to clearing. How better to handle?
+      if ( !clear ) console.warn(`${this.constructor.name}|_renderColorCoded must clear when using queries`);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); // Do not clear the stencil!
+    }
 
     // Performance: Use the stencil buffer to discard pixels outside the target shape.
     if ( useStencil ) {
@@ -346,6 +394,17 @@ export class RenderObstaclesWebGL2 {
     gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 
     this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
+
+    if ( useQuery ) {
+      // Redraw the target. Should only pass depth test where it is in front of obstacles.
+      // Use query to determine which pixels pass.
+      gl.enable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
+      gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+      this.#startQuery("targetBlocked");
+      this._drawTarget(target, useLitTargetShape);
+      this.#endQuery();
+    }
 
     // Reset
     if ( useStencil ) {

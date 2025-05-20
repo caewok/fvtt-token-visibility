@@ -82,7 +82,7 @@ import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
 import { PercentVisibleCalculatorPIXI, DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
-import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
+import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2, DebugVisibilityViewerWebGL2Async } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 import {
   PercentVisibleCalculatorWebGPU,
@@ -142,6 +142,8 @@ Hooks.once("init", function() {
     filterInstances: true,
 
     useStencil: false,
+
+    useQuery: false,
 
     /**
      * What to use when testing tiles for visibility.
@@ -281,6 +283,7 @@ Hooks.once("init", function() {
       geometric: DebugVisibilityViewerGeometric,
       PIXI: DebugVisibilityViewerPIXI,
       webGL2: DebugVisibilityViewerWebGL2,
+      webGL2Async: DebugVisibilityViewerWebGL2Async,
       webGPU: DebugVisibilityViewerWebGPU,
       webGPUAsync: DebugVisibilityViewerWebGPUAsync,
       hybrid: DebugVisibilityViewerHybrid,
