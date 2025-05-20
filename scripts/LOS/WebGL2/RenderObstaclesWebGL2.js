@@ -133,7 +133,9 @@ export class RenderObstaclesWebGL2 {
         // Constrained tokens used as obstacles but handled separately.
         case ConstrainedDrawableTokenWebGL2:
         case ConstrainedDrawableHexTokenWebGL2:
-          this.drawableConstrainedToken = drawableObj; break;
+          this.drawableConstrainedToken = drawableObj;
+          this.drawableObstacles.push(drawableObj);
+          break;
 
         case DrawableTokenWebGL2:
         case DrawableTokenInstance:
@@ -281,7 +283,7 @@ export class RenderObstaclesWebGL2 {
     this._setCamera(viewerLocation, target, { targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
-    this.drawableConstrainedToken.filterObjects(visionTriangle, opts);
+    this.drawableTerrain.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
 
     // See https://webgl2fundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
