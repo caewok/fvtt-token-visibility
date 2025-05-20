@@ -176,6 +176,10 @@ export class RenderObstaclesWebGL2 {
     return Promise.allSettled(promises);
   }
 
+
+
+
+
   /** @type {ViewerLOSConfig} */
   _config = {
     blocking: {
@@ -235,15 +239,33 @@ export class RenderObstaclesWebGL2 {
 
   /**
    * Renders a specific target alone, without any obstacles. Similar to renderGridShape.
-   * @param {Token} token
-   * @param {boolean} [useLitTargetShape=false]
+   * @param {Point3d} viewerLocation                  Where to center the camera
+   * @param {Token} target                            Token that is being viewed
+   * @param {object} [opts]
+   * @param {PIXI.Rectangle} [opts.frame]             If defined, will render to this portion of the canvas instead of render texture
+   * @param {Point3d} [opts.targetLocation]           The point to look at, if not the target token center
+   * @param {boolean} [opts.useLitTargetShape=false]  If true, use only the lit portion of the token border
    */
   renderTarget(viewerLocation, target, { targetLocation, frame, useLitTargetShape = false } = {}) {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this._setCamera(viewerLocation, target, { targetLocation });
+
+    // Initialize view or the frame.
+    const gl = this.gl;
+    if ( frame ) {
+      gl.viewport(frame.x, frame.y, frame.width, frame.height);
+    } else {
+      // Use render texture.
+      const renderTextureSize = this.renderTextureSize;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.targetShape.frame);
+      gl.viewport(0, 0, renderTextureSize, renderTextureSize);
+
+    }
+
+
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-    const gl = this.gl;
+
     // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
     gl.enable(gl.DEPTH_TEST);
@@ -258,6 +280,7 @@ export class RenderObstaclesWebGL2 {
     this._drawTarget(target, useLitTargetShape);
 
     // Reset
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 //     gl.colorMask(true, true, true, true);
 //     gl.disable(gl.BLEND);
     this.gl.flush();

@@ -62,6 +62,98 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const gl = this.gl;
     this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
     await this.renderObstacles.initialize();
+    this._initializeFramebuffers();
+  }
+
+  /** @type {object} */
+  // TODO: Stencil buffer options?
+  framebuffers = {
+    render: {
+      frame = null, /** @type {WebGLFramebuffer} */
+      depth = null, /** @type {WebGLRenderbuffer} */
+      texture = null, /** @type {WebGLTexture} */
+    },
+    targetShape: {
+      frame = null, /** @type {WebGLFramebuffer} */
+      depth = null, /** @type {WebGLRenderbuffer} */
+      texture = null, /** @type {WebGLTexture} */
+    },
+    gridShape: {
+      frame = null, /** @type {WebGLFramebuffer} */
+      depth = null, /** @type {WebGLRenderbuffer} */
+      texture = null, /** @type {WebGLTexture} */
+    }
+  };
+
+  // TODO: It might be beneficial to use differing width/heights for wide or tall targets.
+  //       But, to avoid a lot of work at render, would need to construct multiple FBs at different aspect ratios.
+  //       E.g., 2x1, 1x2, 3x1, 1x3, 3x2, 2x3.
+  //       Upside would be a better fit to the camera. But would be complex and require fixing the camera target frustum function.
+  // Width and height of the render texture.
+  #renderTextureSize = 0;
+
+  get renderTextureSize() {
+    if ( !this.#renderTextureSize ) this.#renderTextureSize = CONFIG[MODULE_ID].renderTextureSize;
+    return this.#renderTextureSize;
+  }
+
+  set renderTextureSize(value) {
+    if ( this.#renderTextureSize === value ) return;
+    this.#renderTextureSize = value;
+    if ( this.buffers.frame ) this._initializeFramebuffers();
+  }
+
+  /**
+   * Initialize all required framebuffers.
+   */
+  _initializeFramebuffers() {
+    this._initializeFramebuffer("render");
+    this._initializeFramebuffer("targetShape");
+    this._initializeFramebuffer("gridShape");
+  }
+
+  /**
+   * Initialize the framebuffer and associated depth and stencil buffers.
+   */
+  _initializeFramebuffer(type = "render") {
+    const gl = this.gl;
+    const width = height = this.renderTextureSize;
+    const fbo = this.framebuffers[type];
+
+    if ( fbo.frame ) fbo.frame.destroy();
+    if ( fbo.depth ) fbo.depth.destroy();
+    if ( fbo.texture ) fbo.texture.destroy();
+
+    // Create and bind the framebuffer.
+    fbo.frame = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.frame);
+
+    // Create and bind the texture.
+    fbo.texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    // Create and bind the depth buffer.
+    fbo.depth = gl.createRenderBuffer();
+    gl.bindRenderBuffer(gl.RENDERBUFFER, fbo.depth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENTS, width, height);
+
+    // TODO: Add second framebuffer to handle depth + stencil.
+
+    // Attach the texture and depth buffer to the framebuffer.
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbo.texture, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, fbo.depth);
+
+    // Check if framebuffer is complete.
+    if ( gl.checkFramebufferStatus(gl.FRAMEBUFFER !== gl.FRAMEBUFFER_COMPLETE) ) console.error("Framebuffer incomplete!");
+
+    // Unbind the framebuffer.
+     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+     gl.bindTexture(gl.TEXTURE_2D, null);
+     gl.bindRenderbuffer(gl.RENDERBUFFER, null);
   }
 
   _redPixels = 0;
@@ -69,7 +161,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   _redBlockedPixels = 0;
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.prerender();
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
     const res = this._countRedBlockedPixels();
     const gl = this.gl;
