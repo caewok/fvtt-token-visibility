@@ -1,4 +1,5 @@
 /* globals
+CONFIG,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -8,6 +9,7 @@ import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { readPixelsAsync } from "./read_pixels_async.js";
 
 // Base folder
+import { MODULE_ID } from "../../const.js";
 
 // LOS folder
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
@@ -69,19 +71,19 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   // TODO: Stencil buffer options?
   framebuffers = {
     render: {
-      frame = null, /** @type {WebGLFramebuffer} */
-      depth = null, /** @type {WebGLRenderbuffer} */
-      texture = null, /** @type {WebGLTexture} */
+      frame: null, /** @type {WebGLFramebuffer} */
+      depth: null, /** @type {WebGLRenderbuffer} */
+      texture: null, /** @type {WebGLTexture} */
     },
     targetShape: {
-      frame = null, /** @type {WebGLFramebuffer} */
-      depth = null, /** @type {WebGLRenderbuffer} */
-      texture = null, /** @type {WebGLTexture} */
+      frame: null, /** @type {WebGLFramebuffer} */
+      depth: null, /** @type {WebGLRenderbuffer} */
+      texture: null, /** @type {WebGLTexture} */
     },
     gridShape: {
-      frame = null, /** @type {WebGLFramebuffer} */
-      depth = null, /** @type {WebGLRenderbuffer} */
-      texture = null, /** @type {WebGLTexture} */
+      frame: null, /** @type {WebGLFramebuffer} */
+      depth: null, /** @type {WebGLRenderbuffer} */
+      texture: null, /** @type {WebGLTexture} */
     }
   };
 
@@ -117,7 +119,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    */
   _initializeFramebuffer(type = "render") {
     const gl = this.gl;
-    const width = height = this.renderTextureSize;
+    const width = this.renderTextureSize;
+    const height = width;
     const fbo = this.framebuffers[type];
 
     if ( fbo.frame ) fbo.frame.destroy();
@@ -137,9 +140,9 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
     // Create and bind the depth buffer.
-    fbo.depth = gl.createRenderBuffer();
-    gl.bindRenderBuffer(gl.RENDERBUFFER, fbo.depth);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENTS, width, height);
+    fbo.depth = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, fbo.depth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
 
     // TODO: Add second framebuffer to handle depth + stencil.
 
@@ -148,12 +151,12 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, fbo.depth);
 
     // Check if framebuffer is complete.
-    if ( gl.checkFramebufferStatus(gl.FRAMEBUFFER !== gl.FRAMEBUFFER_COMPLETE) ) console.error("Framebuffer incomplete!");
+    if ( gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE ) console.error(`Framebuffer ${type} incomplete!`);
 
     // Unbind the framebuffer.
-     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-     gl.bindTexture(gl.TEXTURE_2D, null);
-     gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
   }
 
   _redPixels = 0;
@@ -161,22 +164,63 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   _redBlockedPixels = 0;
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-    const res = this._countRedBlockedPixels();
+    // TODO: Fix using a stencil with renderTexture
+    const { useStencil, useRenderTexture } = CONFIG[MODULE_ID];
     const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this._redPixels = res.countRed;
-    this._redBlockedPixels = res.countRedBlocked;
+    this.renderObstacles.prerender();
+
+    if ( useRenderTexture ) {
+      const fbo = this.framebuffers.render;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.frame);
+      const frame = new PIXI.Rectangle(0, 0, fbo.texture.width, fbo.texture.height);
+      this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, useStencil, clear: true, frame})
+      this.renderObstacles.renderObstacles(viewerLocation, target, { viewer, targetLocation, useStencil, clear: false, frame });
+
+      // For now, just do the count for both here.
+      // TODO: If needed, could split this out and could count pixels in the area methods.
+      const res = this._countRedBlockedPixels(frame);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this._redPixels = res.countRed;
+      this._redBlockedPixels = res.countRedBlocked;
+
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, useStencil, clear: true })
+      this.renderObstacles.renderObstacles(viewerLocation, target, { viewer, targetLocation, useStencil, clear: false });
+      const res = this._countRedBlockedPixels();
+      this._redPixels = res.countRed;
+      this._redBlockedPixels = res.countRedBlocked;
+    }
   }
 
   async _calculatePercentVisibleAsync (viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.prerender();
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation });
-    const res = await this._countRedBlockedPixelsAsync();
+    // TODO: Fix using a stencil with renderTexture
+    const { useStencil, useRenderTexture } = CONFIG[MODULE_ID];
     const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this._redPixels = res.countRed;
-    this._redBlockedPixels = res.countRedBlocked;
+    this.renderObstacles.prerender();
+
+    if ( useRenderTexture ) {
+      const fbo = this.framebuffers.render;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.frame);
+      const frame = new PIXI.Rectangle(0, 0, fbo.texture.width, fbo.texture.height);
+      this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, useStencil, clear: true, frame })
+      this.renderObstacles.renderObstacles(viewerLocation, target, { viewer, targetLocation, useStencil, clear: false, frame });
+
+      // For now, just do the count for both here.
+      // TODO: If needed, could split this out and could count pixels in the area methods.
+      const res = await this._countRedBlockedPixelsAsync(frame);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this._redPixels = res.countRed;
+      this._redBlockedPixels = res.countRedBlocked;
+
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation, useStencil, clear: true })
+      this.renderObstacles.renderObstacles(viewerLocation, target, { viewer, targetLocation, useStencil, clear: false });
+      const res = await this._countRedBlockedPixelsAsync();
+      this._redPixels = res.countRed;
+      this._redBlockedPixels = res.countRedBlocked;
+    }
   }
 
   /**
@@ -186,17 +230,41 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
+    const { useRenderTexture } = CONFIG[MODULE_ID];
     const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
-    return this._countRedPixels();
+
+    if ( useRenderTexture ) {
+      const fbo = this.framebuffers.render;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.frame);
+      const frame = new PIXI.Rectangle(0, 0, fbo.texture.width, fbo.texture.height);
+      this.renderObstacles.renderGridShape(viewerLocation, target, { targetLocation, frame });
+      const out = this._countRedPixels(frame);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return out;
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+      return this._countRedPixels();
+    }
   }
 
   async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    const { useRenderTexture } = CONFIG[MODULE_ID];
     const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
-    return this._countRedPixelsAsync();
+
+    if ( useRenderTexture ) {
+      const fbo = this.framebuffers.render;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.frame);
+      const frame = new PIXI.Rectangle(0, 0, fbo.texture.width, fbo.texture.height);
+      this.renderObstacles.renderGridShape(viewerLocation, target, { targetLocation, frame });
+      const out = await this._countRedPixelsAsync(frame);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return out;
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+      return this._countRedPixelsAsync();
+    }
   }
 
   /**
@@ -206,18 +274,41 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
    * @returns {number}
    */
   _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
+    const useRenderTexture = CONFIG[MODULE_ID].useRenderTexture;
     const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
-    return this._countRedPixels();
+
+    if ( useRenderTexture ) {
+      const fbo = this.framebuffers.render;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.frame);
+      const frame = new PIXI.Rectangle(0, 0, fbo.texture.width, fbo.texture.height);
+      this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, frame });
+      const out = this._countRedPixels(frame);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return out;
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderGridShape(viewerLocation, target, { targetLocation});
+      return this._countRedPixels();
+    }
   }
 
   async constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
+    const useRenderTexture = CONFIG[MODULE_ID].useRenderTexture;
     const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
-    return this._countRedPixelsAsync();
 
+    if ( useRenderTexture ) {
+      const fbo = this.framebuffers.render;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.frame);
+      const frame = new PIXI.Rectangle(0, 0, fbo.texture.width, fbo.texture.height);
+      this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, frame });
+      const out = await this._countRedPixelsAsync(frame);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return out;
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.renderObstacles.renderGridShape(viewerLocation, target, { targetLocation});
+      return this._countRedPixelsAsync();
+    }
   }
 
   _viewableTargetArea(_viewer, _target, _viewerLocation, _targetLocation) {
@@ -226,9 +317,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
 
   _totalTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return this._redPixels; }
 
-  _countRedPixels() {
+  _countRedPixels(frame) {
     const gl = this.gl;
-    this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
+    frame ??= new PIXI.Rectangle(0, 0, gl.canvas.width, gl.canvas.height);
+
+    this.gl.readPixels(frame.x, frame.y, frame.width, frame.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
     let countRed = 0;
     for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
@@ -239,9 +332,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     return countRed;
   }
 
-  _countRedBlockedPixels() {
+  _countRedBlockedPixels(frame) {
     const gl = this.gl;
-    this.gl.readPixels(0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
+    frame ??= new PIXI.Rectangle(0, 0, gl.canvas.width, gl.canvas.height);
+
+    this.gl.readPixels(frame.x, frame.y, frame.width, frame.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
     const terrainThreshold = this.config.alphaThreshold * 255;
     let countRed = 0;
@@ -258,9 +353,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     return { countRed, countRedBlocked };
   }
 
-  async _countRedPixelsAsync() {
+  async _countRedPixelsAsync(frame) {
     const gl = this.gl;
-    await readPixelsAsync(gl, 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
+    frame ??= new PIXI.Rectangle(0, 0, gl.canvas.width, gl.canvas.height);
+
+    await readPixelsAsync(gl, frame.x, frame.y, frame.width, frame.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
     let countRed = 0;
     for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
@@ -271,9 +368,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     return countRed;
   }
 
- async _countRedBlockedPixelsAsync() {
+  async _countRedBlockedPixelsAsync(frame) {
     const gl = this.gl;
-    await readPixelsAsync(gl, 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
+    frame ??= new PIXI.Rectangle(0, 0, gl.canvas.width, gl.canvas.height);
+
+    await readPixelsAsync(gl, frame.x, frame.y, frame.width, frame.height, gl.RGBA, gl.UNSIGNED_BYTE, this.bufferData);
     const pixels = this.bufferData;
     const terrainThreshold = this.config.alphaThreshold * 255;
     let countRed = 0;
@@ -290,7 +389,13 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     return { countRed, countRedBlocked };
   }
 
-  destroy() { this.renderObstacles.destroy(); }
+  destroy() {
+    super.destroy();
+    this.renderObstacles.destroy();
+    for ( const fbo of Object.values(this.framebuffers) ) {
+      Object.values(fbo).forEach(obj => obj?.destroy());
+    }
+  }
 }
 
 export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {

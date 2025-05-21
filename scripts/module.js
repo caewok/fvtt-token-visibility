@@ -164,6 +164,8 @@ Hooks.once("init", function() {
      */
     renderTextureSize: 128,
 
+    useRenderTexture: false,
+
     /**
      * Resolution of the render texture used in the webZGL LOS algorithm.
      * Should be between (0, 1).
