@@ -175,6 +175,10 @@ export class RenderObstaclesWebGL2 {
     return Promise.allSettled(promises);
   }
 
+
+
+
+
   /** @type {ViewerLOSConfig} */
   _config = {
     blocking: {
