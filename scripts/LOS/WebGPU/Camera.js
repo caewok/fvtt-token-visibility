@@ -300,11 +300,13 @@ export class Camera {
   get targetPosition() { return this.#positions.target; }
 
   set cameraPosition(value) {
+    if ( this.#positions.camera.equals(value) ) return;
     this.#positions.camera.copyPartial(value);
     this.#dirty.lookAt ||= true;
   }
 
   set targetPosition(value) {
+    if ( this.#positions.target.equals(value) ) return;
     this.#positions.target.copyPartial(value);
     this.#dirty.lookAt ||= true;
   }
