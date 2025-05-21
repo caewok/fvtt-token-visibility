@@ -379,11 +379,17 @@ for ( const clipperVersion of [1, 2] ) {
     await QBenchmarkLoopFn(N, percentFn, "Hybrid", calcHybrid);
     await QBenchmarkLoopFn(N, percentFn, "PIXI", calcPIXI);
 
+    CONFIG.tokenvisibility.useRenderTexture = false;
     CONFIG.tokenvisibility.filterInstances = true;
     console.log(`\n\tFilter instances`);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
     await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
     // await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2 Async", calcWebGL2);
+
+    CONFIG.tokenvisibility.useRenderTexture = true;
+    console.log(`\n\RenderTexture instances`);
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+    await QBenchmarkLoopFn(N, percentFn, "WebGL2 Instancing", calcWebGL2Instancing);
 
 //     console.log(`\n\tStencil instances`);
 //     CONFIG.tokenvisibility.useStencil = true;

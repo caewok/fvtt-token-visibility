@@ -239,6 +239,7 @@ export class RenderObstaclesWebGL2 {
     this._setCamera(viewerLocation, target, { targetLocation });
 
     const gl = this.gl;
+    const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
@@ -260,8 +261,10 @@ export class RenderObstaclesWebGL2 {
       gl.stencilMask(0xFF); // Enable writing to the stencil buffer.
     }
 
-    gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+    if ( colorCoded ) gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
     this._drawTarget(target, useLitTargetShape);
+
+    if ( colorCoded ) gl.colorMask(true, true, true, true);
     this.gl.flush();
   }
 
@@ -324,6 +327,7 @@ export class RenderObstaclesWebGL2 {
     this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Reset
+    if ( colorCoded ) gl.colorMask(true, true, true, true);
     if ( useStencil && colorCoded ) {
 //       gl.stencilMask(0x00); // Disable writing to stencil buffer.
 //       gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);

@@ -432,7 +432,8 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
       const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
       const frame = frames[i];
       const clear = i === 0;
-      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+      this.renderer.renderTarget(viewerLocation, target, { targetLocation, frame, clear });
+      this.renderer.renderObstacles(viewerLocation, target, { viewer, targetLocation, frame });
     }
   }
 
