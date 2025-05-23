@@ -91,7 +91,7 @@ import {
   DebugVisibilityViewerWebGPUAsync,
 } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
-import * as twgl from "./LOS/WebGL2/twgl.js";
+import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
 
 // Other self-executing hooks

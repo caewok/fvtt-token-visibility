@@ -4,14 +4,12 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// With substantial help from Windsurf SWE-1
+import * as twgl from "./LOS/WebGL2/twgl-full.js";
 
 /**
- * Using a reduction approach, count the number of red pixels in the
- * texture.
- * Has separate method to count both red and obscured red pixels.
- * First pass: Red detection
- * Subsequent passes: Sum results of 2x2 block.
+ * Different approaches count the number of red pixels in the
+ * texture or framebuffer used to draw the view to a target.
+ * Counts both red pixels and obscured red pixels (red and blue or green pixels present)
  */
 export class RedPixelCounter {
   /** @type {WebGL2Context} */
@@ -33,7 +31,7 @@ export class RedPixelCounter {
   };
 
   /** @type {Uint32Array(4)} */
-  readBuffer = new Uint16Array(4); // RGBA
+  readBuffer = new Uint8Array(4); // RGBA
 
   constructor(gl, width, height) {
     if ( width && height && !(isPowerOfTwo(width) && isPowerOfTwo(height)) ) {
@@ -65,18 +63,29 @@ export class RedPixelCounter {
     this.programs.reduction = this._createProgram(reductionShader);
   }
 
+  _initializeLoopSum() {
+
+  }
+
   _createFramebuffer() {
     const gl = this.gl;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
 
-    // TODO: Use Uint8? Float32?
+    // TODO: Use Uint8? Float32? Uint16?
     // TODO: Compile both programs together. See https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices
     // See https://webgl2fundamentals.org/webgl/lessons/webgl-readpixels.html for types.
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16UI, this.#width, this.#height, 0,
-      gl.RGBA_INTEGER, gl.UNSIGNED_SHORT, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    {
+      const level = 0;
+      const internalFormat = gl.RGBA;
+      const border = 0;
+      const format = gl.RGBA;
+      const type = gl.UNSIGNED_BYTE;
+      const data = null;
+      gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, this.#width, this.#height, border, format, type, data);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    }
 
     const fbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
@@ -110,20 +119,25 @@ export class RedPixelCounter {
 
   countRedPixels(inputTexture) {
     const gl = this.gl;
+    let currentWidth = this.#width;
+    let currentHeight = this.#height;
 
     // First pass: Detect red pixels.
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[0].fbo);
-    gl.viewport(0, 0, this.#width, this.#height);
+    gl.viewport(0, 0, currentWidth, currentHeight);
     gl.useProgram(this.programs.detection);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, inputTexture);
+
+    // TODO: Cache uniform location in initialization.
+    const uTextureSize = gl.getUniformLocation(this.programs.detection, "uTextureSize");
+    gl.uniform2i(uTextureSize, currentWidth, currentHeight);
+
     this._drawFullscreenQuad();
 
     // Perform reduction passes until we get to a 1x1 texture.
     // TODO: Logic to handle uneven width and height and logic to handle
     //       non-power-of-two.
-    let currentWidth = this.#width;
-    let currentHeight = this.#height;
     let readFBO = 0;
     let writeFBO = 1;
     while ( currentWidth > 1 || currentHeight > 1 ) {
@@ -155,7 +169,7 @@ export class RedPixelCounter {
     // TODO: Async version.
     // Read back the final result.
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[readFBO].fbo);
-    gl.readPixels(0, 0, 1, 1, gl.RGBA_INTEGER, gl.UNSIGNED_SHORT, this.readBuffer);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuffer);
     return this.readBuffer[0]; // Red channel contains the count.
   }
 
@@ -195,7 +209,7 @@ void main() {
   gl_Position = vec4(position, 0.0, 1.0);
 }
 `;
-
+  // TODO: Move the texture coord calc to the vertex shader.
   // TODO: Replace the logical test with a step function.
   // TODO: Add shader to detect obscured red pixels?
   // TODO: Use an RGBA 8-bit texture and add using all 4 channels.
@@ -206,43 +220,41 @@ void main() {
 precision highp float;
 
 uniform sampler2D uTexture;
-out uvec4 fragColor;
+out vec4 fragColor;
 
 void main() {
-  vec4 color = texelFetch(uTexture, ivec2(gl_FragCoord.xy), 0);
+  ivec2 uTextureSize = textureSize(uTexture, 0);
+  ivec2 texCoord = ivec2((gl_FragCoord.xy + 1.0) * 0.5) * uTextureSize; // Convert -1 to 1 to 0 to 1 uv coordinates; multiply by texture size.
+  vec4 color = texelFetch(uTexture, texCoord, 0);
 
   // Check if pixel is red.
   bool isRed = color.r > 0.0;
-  fragColor = uvec4(isRed ? 1u : 0u, 0u, 0u, 0u);
+  fragColor = vec4(isRed ? 1.0 : 0.0, 0.0, 0.0, 0.0);
 }`;
 
   static reductionShader =
 `#version 300 es
 precision highp float;
-precision highp usampler2D;
+precision highp sampler2D;
 
-uniform usampler2D uTexture;
+uniform sampler2D uTexture;
 uniform ivec2 uTextureSize;
-out uvec4 fragColor;
+out vec4 fragColor;
 
 void main() {
- ivec2 texCoord = ivec2(gl_FragCoord.xy) * 2;
- uint sum = 0u;
+ ivec2 texCoord = ivec2((gl_FragCoord.xy + 1.0) * 0.5) * uTextureSize; // Convert -1 to 1 to 0 to 1 uv coordinates; multiply by texture size.
+ float sum = 0.0;
 
  // Sum 2x2 block (or less at texture edges).
  for ( int y = 0; y < 2 && texCoord.y + y < uTextureSize.y; y += 1 ) {
    for ( int x = 0; x < 2 && texCoord.x + x < uTextureSize.x; x += 1 ) {
-     sum += texelFetch(uTexture, texCoord + ivec2(x, y), 0).r;
+     sum += (texelFetch(uTexture, texCoord + ivec2(x, y), 0).r * 255.0);
    }
  }
- fragColor = uvec4(sum, 0u, 0u, 0u);
+ fragColor = vec4(sum / 255.0, 0.0, 0.0, 0.0);
 }
 
 `
-
-
-
-
 }
 
 function isPowerOfTwo(n) {
