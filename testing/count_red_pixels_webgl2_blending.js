@@ -1,6 +1,11 @@
 // Test summing a 128x128 RGBA8 texture
 api = game.modules.get("tokenvisibility").api
 twgl = api.webgl.twgl
+MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32
+QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;
+QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn;
+QBenchmarkLoopWithSetupFn = CONFIG.GeometryLib.bench.QBenchmarkLoopWithSetupFn;
+QBenchmarkLoopFnWithSleep = CONFIG.GeometryLib.bench.QBenchmarkLoopFnWithSleep
 
 
 // Don't use reserved word "canvas"
@@ -35,6 +40,20 @@ tex = twgl.createTexture(gl, {
   minMag: gl.NEAREST,
   wrap: gl.CLAMP_TO_EDGE,
 });
+
+width = 128
+height = 128
+nPixels = width * height;
+data = new Uint8Array(nPixels * 4);
+numRed = 0;
+for (let i = 0; i < nPixels; ++i) {
+  const isRed = true // For debugging, set each pixel to red.
+  numRed += isRed;
+  data[i * 4 + 0] = isRed ? 255 : 0; // red
+  data[i * 4 + 1] = 0;
+  data[i * 4 + 2] = 0;
+  data[i * 4 + 3] = 255;
+}
 
 async function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -78,9 +97,9 @@ tex = twgl.createTexture(gl, {
 countVS =
 `#version 300 es
 
-in vec4 position;
+in vec2 position;
 void main() {
-  gl_Position = position;
+  gl_Position = vec4(position, 0.0, 1.0);
 }
 `;
 
@@ -90,7 +109,7 @@ precision mediump float;
 
 
 uniform sampler2D uTexture;
-out vec4 outColor;
+out vec4 fragColor;
 
 const int mipLevel = 0;
 
@@ -107,7 +126,7 @@ void main() {
       sumColor += vec4(isSaturated);
     }
   }
-  outColor = sumColor;
+  fragColor = sumColor;
 }
 `;
 
@@ -467,3 +486,310 @@ bufferData
 
 
 
+redDetectionVS =
+`#version 300 es
+precision highp float;
+in vec2 position;
+in vec2 texcoord;
+
+out vec2 uv;
+
+void main() {
+  uv = texcoord;
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
+
+redDetectionFS =
+`#version 300 es
+precision highp float;
+precision highp sampler2D;
+
+uniform sampler2D uTexture;
+in vec2 uv;
+out vec4 fragColor;
+
+const int mipLevel = 0;
+
+void main() {
+  ivec2 size = textureSize(uTexture, mipLevel);
+  ivec2 uvI = ivec2(uv * vec2(size));
+  vec4 color = texelFetch(uTexture, uvI, mipLevel);
+
+  // Check if pixel is red.
+  bool isRed = color.r > 0.5;
+  fragColor = vec4(isRed ? 1.0 : 0.0, 0.0, 0.0, 0.0);
+}
+`;
+
+reductionVS =
+`#version 300 es
+precision highp float;
+in vec2 position;
+in vec2 texcoord;
+
+out vec2 uv;
+
+void main() {
+  uv = texcoord;
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
+
+reductionFS =
+`#version 300 es
+precision highp float;
+precision highp sampler2D;
+
+uniform sampler2D uTexture;
+uniform vec2 uTextureSize;
+in vec2 uv;
+out vec4 fragColor;
+
+const int mipLevel = 0;
+
+void main() {
+  // Using viewport, only half will be drawn
+  // Subtract -0.5 to ensure we are in the middle of the pixel.
+  // Otherwise, some of the values will be missed.
+  ivec2 uvI = ivec2(uv * (uTextureSize - 0.5));
+  float sum = 0.0;
+
+  // Sum 2x2 blocks, up to texture size.
+  ivec2 size = ivec2(uTextureSize);
+  for ( int y = 0; y < 2; y += 1 ) {
+    for ( int x = 0; x < 2; x += 1 ) {
+      ivec2 texLoc = uvI + ivec2(x, y);
+      if ( any(greaterThanEqual(texLoc, size)) ) continue;
+      vec4 color = texelFetch(uTexture, texLoc, mipLevel);
+      sum += color.r;
+    }
+  }
+  fragColor = vec4(sum, 0.0, 0.0, 0.0);
+}
+`;
+
+texSize = 128;
+quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl)
+fb0 = twgl.createFramebufferInfo(gl, [
+  {
+    internalFormat: gl.RGBA32F,
+    minMag: gl.NEAREST,
+    wrap: gl.CLAMP_TO_EDGE
+  },
+], 128, 128);
+fb1 = twgl.createFramebufferInfo(gl, [
+  {
+    internalFormat: gl.RGBA32F,
+    minMag: gl.NEAREST,
+    wrap: gl.CLAMP_TO_EDGE
+  },
+], 128, 128);
+
+/*
+tex0 = twgl.createTexture(gl, {
+  width: texSize,
+  height: texSize,
+  internalFormat: gl.RGBA32F,
+  minMag: gl.NEAREST,
+  wrap: gl.CLAMP_TO_EDGE,
+});
+tex1 = twgl.createTexture(gl, {
+  width: texSize,
+  height: texSize,
+  internalFormat: gl.RGBA32F,
+  minMag: gl.NEAREST,
+  wrap: gl.CLAMP_TO_EDGE,
+});
+
+fb0 = twgl.createFramebufferInfo(gl, [tex0], texSize, texSize);
+fb1 = twgl.createFramebufferInfo(gl, [tex1], texSize, texSize);
+framebuffers = [fb0, fb1];
+*/
+
+redDetectionProgramInfo = twgl.createProgramInfo(gl, [redDetectionVS, redDetectionFS]);
+twgl.bindFramebufferInfo(gl, fb0);
+gl.useProgram(redDetectionProgramInfo.program);
+twgl.setBuffersAndAttributes(gl, redDetectionProgramInfo, quadBufferInfo);
+twgl.setUniforms(redDetectionProgramInfo, { uTexture: tex });
+twgl.drawBufferInfo(gl, quadBufferInfo);
+gl.flush()
+
+/* Debug
+bufferData = new Float32Array(texSize * texSize * 4);
+gl.readPixels(0, 0, texSize, texSize, gl.RGBA, gl.FLOAT, bufferData);
+bufferData
+bufferData.reduce((acc, curr) => acc + curr, 0)
+
+bufferDataRed = new Float32Array(texSize * texSize)
+for ( let i = 0, j = 0; i < bufferData.length; i += 4, j += 1 ) bufferDataRed[j] = bufferData[i]
+
+m = new MatrixFloat32(bufferDataRed, 128, 128)
+printMat(m, { startC: 63 })
+printMat(m, { startC: 120 })
+*/
+
+reductionProgramInfo = twgl.createProgramInfo(gl, [reductionVS, reductionFS]);
+framebuffers = [fb0, fb1];
+let readFBO = 0;
+let writeFBO = 1;
+currentWidth = 128
+currentHeight = 128
+gl.useProgram(reductionProgramInfo.program);
+twgl.setBuffersAndAttributes(gl, reductionProgramInfo, quadBufferInfo);
+while ( currentWidth > 1 || currentHeight > 1 ) {
+  const nextWidth = Math.max(1, Math.ceil(currentWidth * 0.5));
+  const nextHeight = Math.max(1, Math.ceil(currentHeight * 0.5));
+
+  twgl.bindFramebufferInfo(gl, framebuffers[writeFBO]);
+  gl.viewport(0, 0, nextWidth, nextHeight);
+  twgl.setUniforms(reductionProgramInfo, {
+    uTexture: framebuffers[readFBO].attachments[0],
+    uTextureSize: [currentWidth, currentHeight]
+  });
+  twgl.drawBufferInfo(gl, quadBufferInfo);
+  [readFBO, writeFBO] = [writeFBO, readFBO];
+  currentWidth = nextWidth;
+  currentHeight = nextHeight;
+
+  /* Debug
+  bufferData = new Float32Array(128 * 128 * 4);
+  gl.readPixels(0, 0, 128, 128, gl.RGBA, gl.FLOAT, bufferData);
+  bufferData
+  bufferData.reduce((acc, curr) => acc + curr, 0)
+
+  bufferData = new Float32Array(currentWidth * currentHeight * 4);
+  gl.readPixels(0, 0, currentWidth, currentHeight, gl.RGBA, gl.FLOAT, bufferData);
+  bufferData
+  bufferData.reduce((acc, curr) => acc + curr, 0)
+  m = new MatrixFloat32(bufferData, currentWidth, currentHeight)
+  printMat(m, { startC: 50 })
+  */
+}
+gl.flush();
+
+0, 64
+1, 65
+63, 127
+
+
+function printMat(mat, { startR, startC, endR, endC } = {}) {
+  startR ??= 0;
+  startC ??= 0;
+  endR ??= mat.nrow;
+  endC ??= mat.ncol;
+
+  // console.table prints arrays of arrays nicely.
+  const out = new Array(endR - startR);
+  for ( let r = startR; r < endR; r += 1 ) out[r] = new Array(endC - startC);
+  for ( let r = startR; r < endR; r += 1 ) {
+    const arrR = out[r];
+    for ( let c = startC; c < endC; c += 1 ) arrR[c] = mat.getIndex(r, c);
+  }
+  console.table(out);
+}
+
+
+// Testing
+counter = new RedPixelCounter(gl, 128, 128);
+counter.initialize()
+
+width = 128
+height = 128
+nPixels = width * height;
+data = new Uint8Array(nPixels * 4);
+numRed = 0;
+for (let i = 0; i < nPixels; ++i) {
+  const isRed = (Math.random() > 0.5);
+  numRed += isRed;
+  data[i * 4 + 0] = isRed ? 255 : 0; // red
+  data[i * 4 + 1] = 0;
+  data[i * 4 + 2] = 0;
+  data[i * 4 + 3] = 255;
+}
+numRed
+
+
+tex = twgl.createTexture(gl, {
+  src: data,
+  width,
+  height,
+  internalFormat: gl.RGBA,
+  format: gl.RGBA,
+  type: gl.UNSIGNED_BYTE,
+  minMag: gl.NEAREST,
+  wrap: gl.CLAMP_TO_EDGE,
+});
+
+counter.loopCount(tex)
+counter.blendCount(tex)
+counter.reductionCount(tex)
+counter.readPixelsCount(tex)
+counter.loopCount2(tex)
+counter.blendCount2(tex)
+counter.reductionCount2(tex)
+
+
+// Randomize the texture to avoid caching.
+function setupFn() {
+  width = 128
+  height = 128
+  nPixels = width * height;
+  data = new Uint8Array(nPixels * 4);
+  numRed = 0;
+  for (let i = 0; i < nPixels; ++i) {
+    const isRed = (Math.random() > 0.5);
+    numRed += isRed;
+    data[i * 4 + 0] = isRed ? 255 : 0; // red
+    data[i * 4 + 1] = 0;
+    data[i * 4 + 2] = 0;
+    data[i * 4 + 3] = 255;
+  }
+
+  // Setup function must return an array
+  return [twgl.createTexture(gl, {
+    src: data,
+    width,
+    height,
+    internalFormat: gl.RGBA,
+    format: gl.RGBA,
+    type: gl.UNSIGNED_BYTE,
+    minMag: gl.NEAREST,
+    wrap: gl.CLAMP_TO_EDGE,
+  })];
+}
+
+loopCount = tex => counter.loopCount(tex)
+blendCount = tex => counter.blendCount(tex);
+reductionCount = tex => counter.reductionCount(tex);
+loopCount2 = tex => counter.loopCount2(tex)
+blendCount2 = tex => counter.blendCount2(tex);
+reductionCount2 = tex => counter.reductionCount2(tex);
+readPixelsCount = tex => counter.readPixelsCount(tex);
+
+N = 100
+await QBenchmarkLoop(N, setupFn, counter, "loopCount", tex)
+await QBenchmarkLoop(N, setupFn, counter, "blendCount", tex)
+await QBenchmarkLoop(N, setupFn, counter, "reductionCount", tex)
+await QBenchmarkLoop(N, setupFn, counter, "readPixelsCount", tex)
+await QBenchmarkLoop(N, setupFn, counter, "loopCount2", tex)
+await QBenchmarkLoop(N, setupFn, counter, "blendCount2", tex)
+await QBenchmarkLoop(N, setupFn, counter, "reductionCount2", tex)
+
+N = 100
+await QBenchmarkLoopWithSetupFn(N, setupFn, loopCount, "loop")
+await QBenchmarkLoopWithSetupFn(N, setupFn, blendCount, "blend")
+await QBenchmarkLoopWithSetupFn(N, setupFn, reductionCount, "reduction")
+await QBenchmarkLoopWithSetupFn(N, setupFn, readPixelsCount, "readPixelsCount")
+await QBenchmarkLoopWithSetupFn(N, setupFn, loopCount2, "loop2")
+await QBenchmarkLoopWithSetupFn(N, setupFn, blendCount2, "blend2")
+await QBenchmarkLoopWithSetupFn(N, setupFn, reductionCount2, "reduction2")
+
+N = 10
+await QBenchmarkLoopFnWithSleep(N, loopCount, "loop", tex)
+await QBenchmarkLoopFnWithSleep(N, blendCount, "blend", tex)
+await QBenchmarkLoopFnWithSleep(N, reductionCount, "reduction", tex)
+await QBenchmarkLoopFnWithSleep(N, readPixelsCount, "readPixelsCount", tex)
+await QBenchmarkLoopFnWithSleep(N, setupFn, loopCount2, "loop2")
+await QBenchmarkLoopFnWithSleep(N, setupFn, blendCount2, "blend2")
+await QBenchmarkLoopFnWithSleep(N, setupFn, reductionCount2, "reduction2")

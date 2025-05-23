@@ -21,26 +21,19 @@ export class RedPixelCounter {
   /** @type {number} */
   #height = 0;
 
-  /** @type {WebGLFramebuffer} */
-  framebuffers = Array(2);
+  /** @type {twgl.BufferInfo} */
+  quadBufferInfo;
 
-  /** @type {object} */
-  programs = {
-    detection: null, /** @type {WebGLProgram} */
-    reduction: null, /** @type {WebGLProgram} */
-  };
+  /** @type {object<twgl.ProgramInfo>} */
+  programInfos = {};
 
-  /** @type {Uint32Array(4)} */
-  readBuffer = new Uint8Array(4); // RGBA
+  /** @type {object<twgl.FramebufferInfo} */
+  fbInfos = {};
+
+  /** @type {object<Uint8Array|Float32Array} */
+  pixelBuffers = {};
 
   constructor(gl, width, height) {
-    if ( width && height && !(isPowerOfTwo(width) && isPowerOfTwo(height)) ) {
-      console.warn(`RedPixelCounter currently only handles width and height power of two.`, { width, height });
-    }
-    if ( width && height && width !== height ) {
-      console.warn(`RedPixelCounter currently only handles equal width and height.`, { width, height });
-    }
-
     this.gl = gl;
     gl.getExtension("EXT_float_blend");
     gl.getExtension("EXT_color_buffer_float");
@@ -53,209 +46,490 @@ export class RedPixelCounter {
     if ( width ) this.#width = width;
     if ( height ) this.#height = height;
 
-    // Create framebuffers and textures for ping-pong rendering.
-    this.framebuffers[0] = this._createFramebuffer();
-    this.framebuffers[1] = this._createFramebuffer();
+    // Used by both loop count and reduction count.
+    this.quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(this.gl);
 
-    // Create shader programs.
-    const { redDetectionShader, reductionShader } = this.constructor;
-    this.programs.detection = this._createProgram(redDetectionShader);
-    this.programs.reduction = this._createProgram(reductionShader);
+    this._initializeReadPixelsCount();
+    this._initializeLoopCount();
+    this._initializeBlendCount();
+    this._initializeReductionCount();
+
+    this._initializeLoopCount2();
+    this._initializeBlendCount2();
+    this._initializeReductionCount2();
   }
 
-  _initializeLoopSum() {
-
-  }
-
-  _createFramebuffer() {
+  _initializeLoopCount() {
     const gl = this.gl;
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-
-    // TODO: Use Uint8? Float32? Uint16?
-    // TODO: Compile both programs together. See https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices
-    // See https://webgl2fundamentals.org/webgl/lessons/webgl-readpixels.html for types.
-    {
-      const level = 0;
-      const internalFormat = gl.RGBA;
-      const border = 0;
-      const format = gl.RGBA;
-      const type = gl.UNSIGNED_BYTE;
-      const data = null;
-      gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, this.#width, this.#height, border, format, type, data);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    }
-
-    const fbo = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-    return { fbo, tex };
+    const { vertex, fragment } = this.constructor.shaderSource.loopCount;
+    this.programInfos.loopCount = twgl.createProgramInfo(gl, [vertex, fragment]);
+    this.fbInfos.loopCount = twgl.createFramebufferInfo(gl, [{
+      internalFormat: gl.RGBA32F,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE
+    }], 1, 1);
+    const NUM_CHANNELS = 4;
+    this.pixelBuffers.loopCount = new Float32Array(NUM_CHANNELS); // Width, height of 1.
   }
 
-  _createProgram(shaderSource) {
+  _initializeLoopCount2() {
     const gl = this.gl;
-    const vs = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vs, this.constructor.vertexShader);
-    gl.compileShader(vs);
-
-    const fs = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fs, shaderSource);
-    gl.compileShader(fs);
-
-    const program = gl.createProgram();
-    gl.attachShader(program, vs);
-    gl.attachShader(program, fs);
-    gl.linkProgram(program);
-
-    if ( !gl.getProgramParameter(program, gl.LINK_STATUS) ) {
-      console.error(`Link failed: ${gl.getProgramInfoLog(program)}`);
-      console.error(`vs info-log: ${gl.getShaderInfoLog(vs)}`);
-      console.error(`fs info-log: ${gl.getShaderInfoLog(fs)}`, shaderSource);
-    }
-
-    return program;
+    // const { vertex, fragment } = this.constructor.shaderSource.loopCount;
+    // this.programInfos.loopCount = twgl.createProgramInfo(gl, [vertex, fragment]);
+    this.fbInfos.loopCount2 = twgl.createFramebufferInfo(gl, [{
+      internalFormat: gl.RG32F,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE
+    }], 1, 1);
+    const NUM_CHANNELS = 2;
+    this.pixelBuffers.loopCount2 = new Float32Array(NUM_CHANNELS); // Width, height of 1.
   }
 
-  countRedPixels(inputTexture) {
+  _initializeBlendCount() {
     const gl = this.gl;
-    let currentWidth = this.#width;
-    let currentHeight = this.#height;
+    const { vertex, fragment } = this.constructor.shaderSource.blendCount;
+    this.programInfos.blendCount = twgl.createProgramInfo(gl, [vertex, fragment]);
+    this.fbInfos.blendCount = twgl.createFramebufferInfo(gl, [{
+      internalFormat: gl.RGBA32F,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE,
+    }], 1, 1);
+    const NUM_CHANNELS = 4;
+    this.pixelBuffers.blendCount = new Float32Array(NUM_CHANNELS); // Width, height of 1.
+  }
 
-    // First pass: Detect red pixels.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[0].fbo);
-    gl.viewport(0, 0, currentWidth, currentHeight);
-    gl.useProgram(this.programs.detection);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, inputTexture);
+  _initializeBlendCount2() {
+    const gl = this.gl;
+    // const { vertex, fragment } = this.constructor.shaderSource.blendCount;
+    // this.programInfos.blendCount2 = twgl.createProgramInfo(gl, [vertex, fragment]);
+    this.fbInfos.blendCount2 = twgl.createFramebufferInfo(gl, [{
+      internalFormat: gl.RG32F,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE,
+    }], 1, 1);
+    const NUM_CHANNELS = 2;
+    this.pixelBuffers.blendCount2 = new Float32Array(NUM_CHANNELS); // Width, height of 1.
+  }
 
-    // TODO: Cache uniform location in initialization.
-    const uTextureSize = gl.getUniformLocation(this.programs.detection, "uTextureSize");
-    gl.uniform2i(uTextureSize, currentWidth, currentHeight);
+  _initializeReductionCount() {
+    const gl = this.gl;
+    const {
+      detectionVertex,
+      detectionFragment,
+      reductionVertex,
+      reductionFragment } = this.constructor.shaderSource.reductionCount;
+    this.programInfos.reductionCount = {};
+    this.programInfos.reductionCount.detector = twgl.createProgramInfo(gl, [detectionVertex, detectionFragment]);
+    this.programInfos.reductionCount.reducer = twgl.createProgramInfo(gl, [reductionVertex, reductionFragment]);
 
-    this._drawFullscreenQuad();
+    const fb0 = twgl.createFramebufferInfo(gl, [{
+      internalFormat: gl.RGBA32F,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE
+    }], 128, 128);
+    const fb1 = twgl.createFramebufferInfo(gl, [{
+        internalFormat: gl.RGBA32F,
+        minMag: gl.NEAREST,
+        wrap: gl.CLAMP_TO_EDGE
+      }], 128, 128);
+    this.fbInfos.reductionCount = [fb0, fb1];
+    const NUM_CHANNELS = 4;
+    this.pixelBuffers.reductionCount = new Float32Array(NUM_CHANNELS); // Width, height of 1.
+  }
 
-    // Perform reduction passes until we get to a 1x1 texture.
-    // TODO: Logic to handle uneven width and height and logic to handle
-    //       non-power-of-two.
+  _initializeReductionCount2() {
+    const gl = this.gl;
+//     const {
+//       detectionVertex,
+//       detectionFragment,
+//       reductionVertex,
+//       reductionFragment } = this.constructor.shaderSource.reductionCount;
+//     this.programInfos.reductionCount = {};
+//     this.programInfos.reductionCount.detector = twgl.createProgramInfo(gl, [detectionVertex, detectionFragment]);
+//     this.programInfos.reductionCount.reducer = twgl.createProgramInfo(gl, [reductionVertex, reductionFragment]);
+
+    const fb0 = twgl.createFramebufferInfo(gl, [{
+      internalFormat: gl.RG32F,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE
+    }], 128, 128);
+    const fb1 = twgl.createFramebufferInfo(gl, [{
+        internalFormat: gl.RG32F,
+        minMag: gl.NEAREST,
+        wrap: gl.CLAMP_TO_EDGE
+      }], 128, 128);
+    this.fbInfos.reductionCount2 = [fb0, fb1];
+    const NUM_CHANNELS = 2;
+    this.pixelBuffers.reductionCount2 = new Float32Array(NUM_CHANNELS); // Width, height of 1.
+  }
+
+
+  _initializeReadPixelsCount() {
+    const gl = this.gl;
+    const NUM_CHANNELS = 4;
+    this.fbInfos.readPixelsCount = twgl.createFramebufferInfo(gl, [{
+      internalFormat: gl.RGBA,
+      type: gl.UNSIGNED_BYTE,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE
+    }], this.#width, this.#height);
+    this.pixelBuffers.readPixelsCount = new Uint8Array(this.#width * this.#height * NUM_CHANNELS);
+  }
+
+  loopCount(tex) {
+    const { gl, fbInfos, programInfos, quadBufferInfo, pixelBuffers } = this;
+
+    twgl.bindFramebufferInfo(gl, fbInfos.loopCount);
+    gl.useProgram(programInfos.loopCount.program);
+    twgl.setBuffersAndAttributes(gl, programInfos.loopCount, quadBufferInfo);
+    twgl.setUniforms(programInfos.loopCount, { uTexture: tex });
+    twgl.drawBufferInfo(gl, quadBufferInfo);
+    gl.flush();
+
+    const pixels = pixelBuffers.loopCount;
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, pixels);
+    return pixels[0];
+  }
+
+  loopCount2(tex) {
+    const { gl, fbInfos, programInfos, quadBufferInfo, pixelBuffers } = this;
+
+    twgl.bindFramebufferInfo(gl, fbInfos.loopCount2);
+    gl.useProgram(programInfos.loopCount.program);
+    twgl.setBuffersAndAttributes(gl, programInfos.loopCount, quadBufferInfo);
+    twgl.setUniforms(programInfos.loopCount, { uTexture: tex });
+    twgl.drawBufferInfo(gl, quadBufferInfo);
+    gl.flush();
+
+    const pixels = pixelBuffers.loopCount2;
+    gl.readPixels(0, 0, 1, 1, gl.RG, gl.FLOAT, pixels);
+    return pixels[0];
+  }
+
+  blendCount(tex) {
+    const { gl, fbInfos, programInfos, pixelBuffers } = this;
+
+    // We're going to render a gl.POINT for each pixel in the source image
+    // That point will be positioned based on the color of the source image
+    // we're just going to render vec4(1,1,1,1). This blend function will
+    // mean each time we render to a specific point that point will get
+    // incremented by 1.
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.enable(gl.BLEND);
+    twgl.bindFramebufferInfo(gl, fbInfos.blendCount);
+    gl.useProgram(programInfos.blendCount.program);
+    twgl.setUniforms(programInfos.blendCount, { uTexture: tex });
+
+    // No buffer data needed in WebGL2 as we can use gl_VertexID.
+    gl.drawArrays(gl.POINTS, 0, this.#width * this.#height);
+
+    // Reset
+    gl.colorMask(true, true, true, true);
+    gl.blendFunc(gl.ONE, gl.ZERO);
+    gl.disable(gl.BLEND);
+    gl.flush();
+
+    const pixels = pixelBuffers.blendCount;
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, pixels);
+    return pixels[0];
+  }
+
+  blendCount2(tex) {
+    const { gl, fbInfos, programInfos, pixelBuffers } = this;
+
+    // We're going to render a gl.POINT for each pixel in the source image
+    // That point will be positioned based on the color of the source image
+    // we're just going to render vec4(1,1,1,1). This blend function will
+    // mean each time we render to a specific point that point will get
+    // incremented by 1.
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.enable(gl.BLEND);
+    twgl.bindFramebufferInfo(gl, fbInfos.blendCount2);
+    gl.useProgram(programInfos.blendCount.program);
+    twgl.setUniforms(programInfos.blendCount, { uTexture: tex });
+
+    // No buffer data needed in WebGL2 as we can use gl_VertexID.
+    gl.drawArrays(gl.POINTS, 0, this.#width * this.#height);
+
+    // Reset
+    gl.colorMask(true, true, true, true);
+    gl.blendFunc(gl.ONE, gl.ZERO);
+    gl.disable(gl.BLEND);
+    gl.flush();
+
+    const pixels = pixelBuffers.blendCount2;
+    gl.readPixels(0, 0, 1, 1, gl.RG, gl.FLOAT, pixels);
+    return pixels[0];
+  }
+
+  reductionCount(tex) {
+    const { gl, fbInfos, programInfos, quadBufferInfo, pixelBuffers } = this;
+    const { detector, reducer } = programInfos.reductionCount;
+    const framebuffers = fbInfos.reductionCount;
+
+    // First render 1,0 to a texture to indicate whether red pixel is present.
+    // Then ping-pong textures to sum, going from 128 -> 64 -> 32 -> ... 1.
+    twgl.bindFramebufferInfo(gl, framebuffers[0]);
+    gl.useProgram(detector.program);
+    twgl.setBuffersAndAttributes(gl, detector, quadBufferInfo);
+    twgl.setUniforms(detector, { uTexture: tex });
+    twgl.drawBufferInfo(gl, quadBufferInfo);
+
+    // Ping-pong, reducing by x2 each time.
     let readFBO = 0;
     let writeFBO = 1;
+    let currentWidth = this.#width;
+    let currentHeight = this.#height;
+    gl.useProgram(reducer.program);
+    twgl.setBuffersAndAttributes(gl, reducer, quadBufferInfo);
     while ( currentWidth > 1 || currentHeight > 1 ) {
       const nextWidth = Math.max(1, Math.ceil(currentWidth * 0.5));
       const nextHeight = Math.max(1, Math.ceil(currentHeight * 0.5));
 
-      // TODO: Can we move gl.useProgram outside the loop?
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[writeFBO].fbo);
+      twgl.bindFramebufferInfo(gl, framebuffers[writeFBO]);
       gl.viewport(0, 0, nextWidth, nextHeight);
-      gl.useProgram(this.programs.reduction);
-
-      // Set uniforms, swapping in the new width and height.
-      // TODO: Cache uniform location in initialization.
-      const uTextureSize = gl.getUniformLocation(this.programs.reduction, "uTextureSize");
-      gl.uniform2i(uTextureSize, currentWidth, currentHeight);
-
-      // Swap texture.
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this.framebuffers[readFBO].tex);
-
-      this._drawFullscreenQuad();
-
-      // Swap FBOs for next pass.
+      twgl.setUniforms(reducer, {
+        uTexture: framebuffers[readFBO].attachments[0],
+        uTextureSize: [currentWidth, currentHeight]
+      });
+      twgl.drawBufferInfo(gl, quadBufferInfo);
       [readFBO, writeFBO] = [writeFBO, readFBO];
       currentWidth = nextWidth;
       currentHeight = nextHeight;
     }
+    gl.flush();
 
-    // TODO: Async version.
-    // Read back the final result.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[readFBO].fbo);
-    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuffer);
-    return this.readBuffer[0]; // Red channel contains the count.
+    const pixels = pixelBuffers.reductionCount;
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, pixels);
+    return pixels[0];
   }
 
-  _drawFullscreenQuad() {
+  reductionCount2(tex) {
+    const { gl, fbInfos, programInfos, quadBufferInfo, pixelBuffers } = this;
+    const { detector, reducer } = programInfos.reductionCount;
+    const framebuffers = fbInfos.reductionCount2;
+
+    // First render 1,0 to a texture to indicate whether red pixel is present.
+    // Then ping-pong textures to sum, going from 128 -> 64 -> 32 -> ... 1.
+    twgl.bindFramebufferInfo(gl, framebuffers[0]);
+    gl.useProgram(detector.program);
+    twgl.setBuffersAndAttributes(gl, detector, quadBufferInfo);
+    twgl.setUniforms(detector, { uTexture: tex });
+    twgl.drawBufferInfo(gl, quadBufferInfo);
+
+    // Ping-pong, reducing by x2 each time.
+    let readFBO = 0;
+    let writeFBO = 1;
+    let currentWidth = this.#width;
+    let currentHeight = this.#height;
+    gl.useProgram(reducer.program);
+    twgl.setBuffersAndAttributes(gl, reducer, quadBufferInfo);
+    while ( currentWidth > 1 || currentHeight > 1 ) {
+      const nextWidth = Math.max(1, Math.ceil(currentWidth * 0.5));
+      const nextHeight = Math.max(1, Math.ceil(currentHeight * 0.5));
+
+      twgl.bindFramebufferInfo(gl, framebuffers[writeFBO]);
+      gl.viewport(0, 0, nextWidth, nextHeight);
+      twgl.setUniforms(reducer, {
+        uTexture: framebuffers[readFBO].attachments[0],
+        uTextureSize: [currentWidth, currentHeight]
+      });
+      twgl.drawBufferInfo(gl, quadBufferInfo);
+      [readFBO, writeFBO] = [writeFBO, readFBO];
+      currentWidth = nextWidth;
+      currentHeight = nextHeight;
+    }
+    gl.flush();
+
+    const pixels = pixelBuffers.reductionCount2;
+    gl.readPixels(0, 0, 1, 1, gl.RG, gl.FLOAT, pixels);
+    return pixels[0];
+  }
+
+  readPixelsCount(tex) {
     const gl = this.gl;
-
-    // TODO: Move buffer creation to initialization and reuse buffer.
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1,
-       1, -1,
-      -1, 1,
-       1, -1,
-       1, 1,
-      -1, 1,
-    ]), gl.STATIC_DRAW);
-
-    // TODO: Determine position location at initialization.
-    const positionLoc = gl.getAttribLocation(gl.getParameter(gl.CURRENT_PROGRAM), "position");
-    gl.enableVertexAttribArray(positionLoc);
-    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-
-    // TODO: Faster to just hard code the vertex positions in the shader?
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-    gl.deleteBuffer(positionBuffer);
+    if ( tex ) {
+      twgl.bindFramebufferInfo(gl, this.fbInfos.readPixelsCount);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    }
+    const pixels = this.pixelBuffers.readPixelsCount;
+    gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let countRed = 0;
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) countRed += Boolean(pixels[i] === 255);
+    return countRed;
   }
 
-
-
-  static vertexShader =
+  static shaderSource = {
+    loopCount: {
+      vertex:
 `#version 300 es
-precision highp float;
-in vec2 position;
 
+in vec2 position;
 void main() {
   gl_Position = vec4(position, 0.0, 1.0);
 }
-`;
-  // TODO: Move the texture coord calc to the vertex shader.
-  // TODO: Replace the logical test with a step function.
-  // TODO: Add shader to detect obscured red pixels?
-  // TODO: Use an RGBA 8-bit texture and add using all 4 channels.
-  //       8 bits per channel, so that gets (2^8)^4 available values.
-  //       Can accomodate 65536 x 65536 pixel texture if each pixel is red.
-  static redDetectionShader =
+`,
+      fragment:
 `#version 300 es
-precision highp float;
+precision mediump float;
+
 
 uniform sampler2D uTexture;
 out vec4 fragColor;
 
+const int mipLevel = 0;
+
 void main() {
-  ivec2 uTextureSize = textureSize(uTexture, 0);
-  ivec2 texCoord = ivec2((gl_FragCoord.xy + 1.0) * 0.5) * uTextureSize; // Convert -1 to 1 to 0 to 1 uv coordinates; multiply by texture size.
-  vec4 color = texelFetch(uTexture, texCoord, 0);
+  vec4 sumColor = vec4(0.0);
 
-  // Check if pixel is red.
-  bool isRed = color.r > 0.0;
-  fragColor = vec4(isRed ? 1.0 : 0.0, 0.0, 0.0, 0.0);
-}`;
-
-  static reductionShader =
+  // Determine texture size.
+  ivec2 size = textureSize(uTexture, mipLevel);
+  for ( int y = 0; y < size.y; y += 1 ) {
+    for ( int x = 0; x < size.x; x += 1 ) {
+      ivec2 uv = ivec2(x, y);
+      vec4 texColor = texelFetch(uTexture, uv, mipLevel);
+      bvec4 isSaturated = greaterThan(texColor, vec4(0.5));
+      sumColor += vec4(isSaturated);
+    }
+  }
+  fragColor = sumColor;
+}
+`
+    },
+    blendCount: {
+      vertex:
 `#version 300 es
 precision highp float;
 precision highp sampler2D;
 
 uniform sampler2D uTexture;
-uniform ivec2 uTextureSize;
-out vec4 fragColor;
+
+out vec4 color;
 
 void main() {
- ivec2 texCoord = ivec2((gl_FragCoord.xy + 1.0) * 0.5) * uTextureSize; // Convert -1 to 1 to 0 to 1 uv coordinates; multiply by texture size.
- float sum = 0.0;
+  const int mipLevel = 0;
+  ivec2 size = textureSize(uTexture, mipLevel);
 
- // Sum 2x2 block (or less at texture edges).
- for ( int y = 0; y < 2 && texCoord.y + y < uTextureSize.y; y += 1 ) {
-   for ( int x = 0; x < 2 && texCoord.x + x < uTextureSize.x; x += 1 ) {
-     sum += (texelFetch(uTexture, texCoord + ivec2(x, y), 0).r * 255.0);
-   }
- }
- fragColor = vec4(sum / 255.0, 0.0, 0.0, 0.0);
+  // based on an id (0, 1, 2, 3 ...) compute the pixel x, y for the source image
+  ivec2 pixel = ivec2(
+      gl_VertexID % size.x,
+      gl_VertexID / size.x);
+
+  // get the pixels but 0 out channels we don't want
+  // Modify 0-1 to 0-255 to indicate distinct colors.
+  color = texelFetch(uTexture, pixel, mipLevel);
+
+  // set the position to be over a single pixel in the 256x256 destination texture
+  gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+  gl_PointSize = 1.0;
 }
+`,
 
+
+      fragment:
+`#version 300 es
+precision highp float;
+
+in vec4 color;
+
+out vec4 fragColor;
+void main() {
+  fragColor = vec4(color.r > 0.5 ? 1.0 : 0.0, 0.0, 0.0, 0.0);
+}
+`,
+
+    },
+
+    reductionCount: {
+      detectionVertex:
+`#version 300 es
+precision highp float;
+in vec2 position;
+in vec2 texcoord;
+
+out vec2 uv;
+
+void main() {
+  uv = texcoord;
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`,
+
+
+      detectionFragment:
+`#version 300 es
+precision highp float;
+precision highp sampler2D;
+
+uniform sampler2D uTexture;
+in vec2 uv;
+out vec4 fragColor;
+
+const int mipLevel = 0;
+
+void main() {
+  ivec2 size = textureSize(uTexture, mipLevel);
+  ivec2 uvI = ivec2(uv * vec2(size));
+  vec4 color = texelFetch(uTexture, uvI, mipLevel);
+
+  // Check if pixel is red.
+  bool isRed = color.r > 0.5;
+  fragColor = vec4(isRed ? 1.0 : 0.0, 0.0, 0.0, 0.0);
+}
+`,
+
+      reductionVertex:
+`#version 300 es
+precision highp float;
+in vec2 position;
+in vec2 texcoord;
+
+out vec2 uv;
+
+void main() {
+  uv = texcoord;
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`,
+
+      reductionFragment:
+`#version 300 es
+precision highp float;
+precision highp sampler2D;
+
+uniform sampler2D uTexture;
+uniform vec2 uTextureSize;
+in vec2 uv;
+out vec4 fragColor;
+
+const int mipLevel = 0;
+
+void main() {
+  // Using viewport, only half will be drawn
+  // Subtract -0.5 to ensure we are in the middle of the pixel.
+  // Otherwise, some of the values will be missed.
+  ivec2 uvI = ivec2(uv * (uTextureSize - 0.5));
+  float sum = 0.0;
+
+  // Sum 2x2 blocks, up to texture size.
+  ivec2 size = ivec2(uTextureSize);
+  for ( int y = 0; y < 2; y += 1 ) {
+    for ( int x = 0; x < 2; x += 1 ) {
+      ivec2 texLoc = uvI + ivec2(x, y);
+      if ( any(greaterThanEqual(texLoc, size)) ) continue;
+      vec4 color = texelFetch(uTexture, texLoc, mipLevel);
+      sum += color.r;
+    }
+  }
+  fragColor = vec4(sum, 0.0, 0.0, 0.0);
+}
 `
+    },
+  };
+
 }
+
 
 function isPowerOfTwo(n) {
   return (n > 0) && ((n & (n - 1)) === 0);
