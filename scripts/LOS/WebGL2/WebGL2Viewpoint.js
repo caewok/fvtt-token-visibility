@@ -111,12 +111,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     this.frame.width = width;
     this.frame.height = height;
 
-    if ( this.fbInfo ) {
-      this.fbInfo.attachments.forEach(tex => tex.destroy());
-      this.fbInfo.framebuffer.destroy();
-      this.fbInfo = undefined;
-    }
-
     this.fbInfo = twgl.createFramebufferInfo(gl, [
       {
         internalFormat: gl.RGBA,
