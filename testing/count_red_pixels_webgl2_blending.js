@@ -1,5 +1,6 @@
 // Test summing a 128x128 RGBA8 texture
-api = game.modules.get("tokenvisibility").api
+MODULE_ID = "tokenvisibility"
+api = game.modules.get(MODULE_ID).api
 twgl = api.webgl.twgl
 MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;
@@ -707,8 +708,28 @@ for (let i = 0; i < nPixels; ++i) {
   data[i * 4 + 2] = 0;
   data[i * 4 + 3] = 255;
 }
-numRed
+console.log({ numRed })
 
+numRed = 0;
+numBlockedRed = 0;
+terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
+for (let i = 0; i < nPixels; ++i) {
+  const r = (i * 4) + 0;
+  const g = (i * 4) + 1;
+  const b = (i * 4) + 2;
+  const a = (i * 4) + 3;
+  data[r] = (Math.random() > 0.5) ? 255 : 0;
+  data[g] = (Math.random() > 0.2) ? Math.round(Math.random() * 255) : 0;
+  data[b] = (Math.random() > 0.2) ? 255 : 0;
+  data[a] = 255;
+
+
+  const isRed = data[r] === 255;
+  const isRedBlocked = isRed * (data[b] === 255 || data[g] > terrainThreshold);
+  numRed += isRed;
+  numBlockedRed += isRedBlocked;
+}
+console.log({ numRed, numBlockedRed })
 
 tex = twgl.createTexture(gl, {
   src: data,
@@ -790,6 +811,6 @@ await QBenchmarkLoopFnWithSleep(N, loopCount, "loop", tex)
 await QBenchmarkLoopFnWithSleep(N, blendCount, "blend", tex)
 await QBenchmarkLoopFnWithSleep(N, reductionCount, "reduction", tex)
 await QBenchmarkLoopFnWithSleep(N, readPixelsCount, "readPixelsCount", tex)
-await QBenchmarkLoopFnWithSleep(N, setupFn, loopCount2, "loop2")
-await QBenchmarkLoopFnWithSleep(N, setupFn, blendCount2, "blend2")
-await QBenchmarkLoopFnWithSleep(N, setupFn, reductionCount2, "reduction2")
+await QBenchmarkLoopFnWithSleep(N, setupFn, loopCount2, "loop2", tex)
+await QBenchmarkLoopFnWithSleep(N, setupFn, blendCount2, "blend2", tex)
+await QBenchmarkLoopFnWithSleep(N, setupFn, reductionCount2, "reduction2", tex)

@@ -1,15 +1,16 @@
 /* globals
-
+CONFIG
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
+import { MODULE_ID } from "../../const.js";
 
 /**
  * Different approaches count the number of red pixels in the
  * texture or framebuffer used to draw the view to a target.
- * Counts both red pixels and obscured red pixels (red and blue or green pixels present)
+ * Counts both red pixels and obscured red pixels (red and blue or green pixels present).
  */
 export class RedPixelCounter {
   /** @type {WebGL2Context} */
@@ -188,7 +189,7 @@ export class RedPixelCounter {
 
     const pixels = pixelBuffers.loopCount;
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, pixels);
-    return pixels[0];
+    return { red: pixels[0], redBlocked: pixels[1] };
   }
 
   loopCount2(tex) {
@@ -203,7 +204,7 @@ export class RedPixelCounter {
 
     const pixels = pixelBuffers.loopCount2;
     gl.readPixels(0, 0, 1, 1, gl.RG, gl.FLOAT, pixels);
-    return pixels[0];
+    return { red: pixels[0], redBlocked: pixels[1] };
   }
 
   blendCount(tex) {
@@ -231,7 +232,7 @@ export class RedPixelCounter {
 
     const pixels = pixelBuffers.blendCount;
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, pixels);
-    return pixels[0];
+    return { red: pixels[0], redBlocked: pixels[1] };
   }
 
   blendCount2(tex) {
@@ -259,7 +260,7 @@ export class RedPixelCounter {
 
     const pixels = pixelBuffers.blendCount2;
     gl.readPixels(0, 0, 1, 1, gl.RG, gl.FLOAT, pixels);
-    return pixels[0];
+    return { red: pixels[0], redBlocked: pixels[1] };
   }
 
   reductionCount(tex) {
@@ -301,7 +302,7 @@ export class RedPixelCounter {
 
     const pixels = pixelBuffers.reductionCount;
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, pixels);
-    return pixels[0];
+    return { red: pixels[0], redBlocked: pixels[1] };
   }
 
   reductionCount2(tex) {
@@ -343,7 +344,7 @@ export class RedPixelCounter {
 
     const pixels = pixelBuffers.reductionCount2;
     gl.readPixels(0, 0, 1, 1, gl.RG, gl.FLOAT, pixels);
-    return pixels[0];
+    return { red: pixels[0], redBlocked: pixels[1] };
   }
 
   readPixelsCount(tex) {
@@ -355,9 +356,18 @@ export class RedPixelCounter {
     }
     const pixels = this.pixelBuffers.readPixelsCount;
     gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    let countRed = 0;
-    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) countRed += Boolean(pixels[i] === 255);
-    return countRed;
+    let red = 0;
+    let redBlocked = 0;
+    const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const hasR = r === 255;
+      red += hasR;
+      redBlocked += hasR * (b === 255 || g > terrainThreshold);
+    }
+    return { red, redBlocked };
   }
 
   static shaderSource = {
@@ -379,6 +389,8 @@ uniform sampler2D uTexture;
 out vec4 fragColor;
 
 const int mipLevel = 0;
+const float colorThreshold = 0.95;
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
 void main() {
   vec4 sumColor = vec4(0.0);
@@ -389,8 +401,9 @@ void main() {
     for ( int x = 0; x < size.x; x += 1 ) {
       ivec2 uv = ivec2(x, y);
       vec4 texColor = texelFetch(uTexture, uv, mipLevel);
-      bvec4 isSaturated = greaterThan(texColor, vec4(0.5));
-      sumColor += vec4(isSaturated);
+      float hasR = step(colorThreshold, texColor.r);
+      sumColor.r += hasR;
+      sumColor.g += hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
     }
   }
   fragColor = sumColor;
@@ -405,7 +418,7 @@ precision highp sampler2D;
 
 uniform sampler2D uTexture;
 
-out vec4 color;
+out vec4 texColor;
 
 void main() {
   const int mipLevel = 0;
@@ -418,7 +431,7 @@ void main() {
 
   // get the pixels but 0 out channels we don't want
   // Modify 0-1 to 0-255 to indicate distinct colors.
-  color = texelFetch(uTexture, pixel, mipLevel);
+  texColor = texelFetch(uTexture, pixel, mipLevel);
 
   // set the position to be over a single pixel in the 256x256 destination texture
   gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
@@ -431,11 +444,17 @@ void main() {
 `#version 300 es
 precision highp float;
 
-in vec4 color;
-
+in vec4 texColor;
 out vec4 fragColor;
+
+const float colorThreshold = 0.95;
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+
 void main() {
-  fragColor = vec4(color.r > 0.5 ? 1.0 : 0.0, 0.0, 0.0, 0.0);
+  float hasR = step(colorThreshold, texColor.r);
+  fragColor = vec4(0.0);
+  fragColor.r += hasR;
+  fragColor.g += hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
 }
 `,
 
@@ -467,15 +486,19 @@ in vec2 uv;
 out vec4 fragColor;
 
 const int mipLevel = 0;
+const float colorThreshold = 0.95;
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
 void main() {
   ivec2 size = textureSize(uTexture, mipLevel);
   ivec2 uvI = ivec2(uv * vec2(size));
-  vec4 color = texelFetch(uTexture, uvI, mipLevel);
+  vec4 texColor = texelFetch(uTexture, uvI, mipLevel);
 
   // Check if pixel is red.
-  bool isRed = color.r > 0.5;
-  fragColor = vec4(isRed ? 1.0 : 0.0, 0.0, 0.0, 0.0);
+  fragColor = vec4(0.0);
+  float hasR = step(colorThreshold, texColor.r);
+  fragColor.r = hasR;
+  fragColor.g = hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
 }
 `,
 
@@ -510,7 +533,7 @@ void main() {
   // Subtract -0.5 to ensure we are in the middle of the pixel.
   // Otherwise, some of the values will be missed.
   ivec2 uvI = ivec2(uv * (uTextureSize - 0.5));
-  float sum = 0.0;
+  vec4 sum = vec4(0.0);
 
   // Sum 2x2 blocks, up to texture size.
   ivec2 size = ivec2(uTextureSize);
@@ -519,10 +542,10 @@ void main() {
       ivec2 texLoc = uvI + ivec2(x, y);
       if ( any(greaterThanEqual(texLoc, size)) ) continue;
       vec4 color = texelFetch(uTexture, texLoc, mipLevel);
-      sum += color.r;
+      sum += color;
     }
   }
-  fragColor = vec4(sum, 0.0, 0.0, 0.0);
+  fragColor = sum;
 }
 `
     },
