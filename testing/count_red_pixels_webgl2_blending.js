@@ -692,11 +692,13 @@ function printMat(mat, { startR, startC, endR, endC } = {}) {
 
 
 // Testing
-counter = new RedPixelCounter(gl, 128, 128);
-counter.initialize()
-
 width = 128
 height = 128
+
+counter = new RedPixelCounter(gl, width, height);
+counter.initialize()
+
+
 nPixels = width * height;
 data = new Uint8Array(nPixels * 4);
 numRed = 0;
@@ -722,7 +724,6 @@ for (let i = 0; i < nPixels; ++i) {
   data[g] = (Math.random() > 0.2) ? Math.round(Math.random() * 255) : 0;
   data[b] = (Math.random() > 0.2) ? 255 : 0;
   data[a] = 255;
-
 
   const isRed = data[r] === 255;
   const isRedBlocked = isRed * (data[b] === 255 || data[g] > terrainThreshold);
@@ -750,21 +751,29 @@ counter.loopCount2(tex)
 counter.blendCount2(tex)
 counter.reductionCount2(tex)
 
+await counter.loopCountAsync(tex)
+await counter.blendCountAsync(tex)
+await counter.reductionCountAsync(tex)
+await counter.readPixelsCountAsync(tex)
+await counter.loopCount2Async(tex)
+await counter.blendCount2Async(tex)
+await counter.reductionCount2Async(tex)
+
 
 // Randomize the texture to avoid caching.
 function setupFn() {
-  width = 128
-  height = 128
   nPixels = width * height;
   data = new Uint8Array(nPixels * 4);
-  numRed = 0;
+  terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
   for (let i = 0; i < nPixels; ++i) {
-    const isRed = (Math.random() > 0.5);
-    numRed += isRed;
-    data[i * 4 + 0] = isRed ? 255 : 0; // red
-    data[i * 4 + 1] = 0;
-    data[i * 4 + 2] = 0;
-    data[i * 4 + 3] = 255;
+    const r = (i * 4) + 0;
+    const g = (i * 4) + 1;
+    const b = (i * 4) + 2;
+    const a = (i * 4) + 3;
+    data[r] = (Math.random() > 0.5) ? 255 : 0;
+    data[g] = (Math.random() > 0.2) ? Math.round(Math.random() * 255) : 0;
+    data[b] = (Math.random() > 0.2) ? 255 : 0;
+    data[a] = 255;
   }
 
   // Setup function must return an array
@@ -788,15 +797,33 @@ blendCount2 = tex => counter.blendCount2(tex);
 reductionCount2 = tex => counter.reductionCount2(tex);
 readPixelsCount = tex => counter.readPixelsCount(tex);
 
-N = 100
-await QBenchmarkLoop(N, setupFn, counter, "loopCount", tex)
-await QBenchmarkLoop(N, setupFn, counter, "blendCount", tex)
-await QBenchmarkLoop(N, setupFn, counter, "reductionCount", tex)
-await QBenchmarkLoop(N, setupFn, counter, "readPixelsCount", tex)
-await QBenchmarkLoop(N, setupFn, counter, "loopCount2", tex)
-await QBenchmarkLoop(N, setupFn, counter, "blendCount2", tex)
-await QBenchmarkLoop(N, setupFn, counter, "reductionCount2", tex)
+loopCountAsync = async tex => counter.loopCountAsync(tex)
+blendCountAsync = async tex => counter.blendCountAsync(tex);
+reductionCountAsync = async tex => counter.reductionCountAsync(tex);
+loopCount2Async = async tex => counter.loopCount2Async(tex)
+blendCount2Async = async tex => counter.blendCount2Async(tex);
+reductionCount2Async = async tex => counter.reductionCount2Async(tex);
+readPixelsCountAsync = async tex => counter.readPixelsCountAsync(tex);
 
+console.log("Bench")
+N = 100
+await QBenchmarkLoop(N, counter, "loopCount", tex)
+await QBenchmarkLoop(N, counter, "blendCount", tex)
+await QBenchmarkLoop(N, counter, "reductionCount", tex)
+await QBenchmarkLoop(N, counter, "readPixelsCount", tex)
+await QBenchmarkLoop(N, counter, "loopCount2", tex)
+await QBenchmarkLoop(N, counter, "blendCount2", tex)
+await QBenchmarkLoop(N, counter, "reductionCount2", tex)
+
+await QBenchmarkLoop(N, counter, "loopCountAsync", tex)
+await QBenchmarkLoop(N, counter, "blendCountAsync", tex)
+await QBenchmarkLoop(N, counter, "reductionCountAsync", tex)
+await QBenchmarkLoop(N, counter, "readPixelsCountAsync", tex)
+await QBenchmarkLoop(N, counter, "loopCount2Async", tex)
+await QBenchmarkLoop(N, counter, "blendCount2Async", tex)
+await QBenchmarkLoop(N, counter, "reductionCount2Async", tex)
+
+console.log("\nSetup")
 N = 100
 await QBenchmarkLoopWithSetupFn(N, setupFn, loopCount, "loop")
 await QBenchmarkLoopWithSetupFn(N, setupFn, blendCount, "blend")
@@ -806,6 +833,7 @@ await QBenchmarkLoopWithSetupFn(N, setupFn, loopCount2, "loop2")
 await QBenchmarkLoopWithSetupFn(N, setupFn, blendCount2, "blend2")
 await QBenchmarkLoopWithSetupFn(N, setupFn, reductionCount2, "reduction2")
 
+console.log("\nSleep")
 N = 10
 await QBenchmarkLoopFnWithSleep(N, loopCount, "loop", tex)
 await QBenchmarkLoopFnWithSleep(N, blendCount, "blend", tex)
@@ -814,3 +842,11 @@ await QBenchmarkLoopFnWithSleep(N, readPixelsCount, "readPixelsCount", tex)
 await QBenchmarkLoopFnWithSleep(N, setupFn, loopCount2, "loop2", tex)
 await QBenchmarkLoopFnWithSleep(N, setupFn, blendCount2, "blend2", tex)
 await QBenchmarkLoopFnWithSleep(N, setupFn, reductionCount2, "reduction2", tex)
+
+await QBenchmarkLoopFnWithSleep(N, loopCountAsync, "loopAsync", tex)
+await QBenchmarkLoopFnWithSleep(N, blendCountAsync, "blendAsync", tex)
+await QBenchmarkLoopFnWithSleep(N, reductionCountAsync, "reductionAsync", tex)
+await QBenchmarkLoopFnWithSleep(N, readPixelsCountAsync, "readPixelsCountAsync", tex)
+await QBenchmarkLoopFnWithSleep(N, setupFn, loopCount2Async, "loop2Async", tex)
+await QBenchmarkLoopFnWithSleep(N, setupFn, blendCount2Async, "blend2Async", tex)
+await QBenchmarkLoopFnWithSleep(N, setupFn, reductionCount2Async, "reduction2Async", tex)

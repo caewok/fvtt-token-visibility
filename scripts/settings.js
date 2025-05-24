@@ -490,8 +490,6 @@ export class Settings extends ModuleSettingsAbstract {
       default: false,
       type: Boolean
     });
-
-    this.initializeDebugGraphics();
   }
 
   static typesWebGL2 = new Set([

@@ -145,6 +145,8 @@ Hooks.once("init", function() {
 
     usePixelReducer: false,
 
+    pixelCounterType: "reductionCount2",
+
     /**
      * What to use when testing tiles for visibility.
      * "triangles": Basic two flat triangles that form a rectangle
@@ -372,6 +374,7 @@ Hooks.once("setup", function() {
 
 Hooks.once("ready", function() {
   console.debug(`${MODULE_ID}|ready hook`);
+  Settings.initializeDebugGraphics();
 
 
 });
