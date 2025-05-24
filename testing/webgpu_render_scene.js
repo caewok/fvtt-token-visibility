@@ -435,6 +435,31 @@ for ( const clipperVersion of [1, 2] ) {
   }
 }
 
+// Test different read pixel options.
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons";
+CONFIG.tokenvisibility.clipperVersion = 2;
+CONFIG.tokenvisibility.useRenderTexture = false
+CONFIG.tokenvisibility.filterInstances = false;
+
+N = 20;
+await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints);
+await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric);
+await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU);
+
+for ( const counterType of ["loopCount", "blendCount", "reductionCount", "readPixelsCount", "loopCount2", "blendCount2", "reductionCount2", "readPixelsCount"]) {
+  CONFIG.tokenvisibility.pixelCounterType = counterType;
+  console.log(`\n${counterType}`);
+  await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
+  await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU);
+}
+
+
+
+
+
+
+
 
 // Firefox and Safari
 N = 20;

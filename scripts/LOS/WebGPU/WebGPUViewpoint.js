@@ -149,7 +149,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
       res = this.redPixelCounter.readPixelsCount();
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
-    console.log(`${this.constructor.name}|_calculatePercentVisible`, res);
+    // console.log(`${this.constructor.name}|_calculatePercentVisible`, res);
     return res;
   }
 
@@ -167,7 +167,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
       res = await this.redPixelCounter.readPixelsCountAsync();
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
-    console.log(`${this.constructor.name}|_calculatePercentVisibleAsync`, res);
+    // console.log(`${this.constructor.name}|_calculatePercentVisibleAsync`, res);
     return res;
   }
 
