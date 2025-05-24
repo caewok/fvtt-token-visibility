@@ -44,12 +44,6 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
 
   device;
 
-  /** @type {WebGLTexture} */
-  texture;
-
-  /** @type {WebGLFramebuffer} */
-  framebuffer;
-
   constructor({ device, ...opts } = {}) {
     super(opts);
     this.device = device;
@@ -57,10 +51,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
 
     const gl = this.gl;
-
-
-    this.texture = gl.createTexture();
-    this.framebuffer = gl.createFramebuffer();
+    this._initializeFramebuffer();
   }
 
   async initialize() {
@@ -128,28 +119,33 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
   }
 
   _countRedPixels() {
-    const { gl, texture, framebuffer } = this;
+    const { gl, fbInfo } = this;
     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
+    const texture = fbInfo.attachments[0];
     let res;
     if ( useRenderTexture ) {
-      const texture = twgl.createTexture(gl, {
-        src: this.constructor.gpuCanvas,
-        width: this.renderTextureSize,
-        height: this.renderTextureSize,
-        internalFormat: gl.RGBA,
-        format: gl.RGBA,
-        type: gl.UNSIGNED_BYTE,
-        minMag: gl.NEAREST,
-        wrap: gl.CLAMP_TO_EDGE,
-      });
-//       gl.bindTexture(gl.TEXTURE_2D, texture);
-//       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
-      res = this.redPixelCounter[pixelCounterType](texture);
-    } else {
+//       const texture = twgl.createTexture(gl, {
+//         src: this.constructor.gpuCanvas,
+//         width: this.renderTextureSize,
+//         height: this.renderTextureSize,
+//         internalFormat: gl.RGBA,
+//         format: gl.RGBA,
+//         type: gl.UNSIGNED_BYTE,
+//         minMag: gl.NEAREST,
+//         wrap: gl.CLAMP_TO_EDGE,
+//       });
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      res = this.redPixelCounter[pixelCounterType](texture);
+    } else {
+      twgl.bindFramebufferInfo(gl, fbInfo);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
+
+//       gl.bindTexture(gl.TEXTURE_2D, texture);
+//       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
+//       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+//       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
       res = this.redPixelCounter.readPixelsCount();
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
