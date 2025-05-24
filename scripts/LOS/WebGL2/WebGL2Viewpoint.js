@@ -111,12 +111,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     this.frame.width = width;
     this.frame.height = height;
 
-    if ( this.fbInfo ) {
-      this.fbInfo.attachments.forEach(tex => tex.destroy());
-      this.fbInfo.framebuffer.destroy();
-      this.fbInfo = undefined;
-    }
-
     this.fbInfo = twgl.createFramebufferInfo(gl, [
       {
         internalFormat: gl.RGBA,
@@ -158,7 +152,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     }
     this._redPixels = res.red;
     this._redBlockedPixels = res.redBlocked;
-    console.log(`${this.constructor.name}|_calculatePercentVisible`, res);
+    // console.log(`${this.constructor.name}|_calculatePercentVisible`, res);
   }
 
   async _calculatePercentVisibleAsync (viewer, target, viewerLocation, targetLocation) {
@@ -183,7 +177,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     }
     this._redPixels = res.red;
     this._redBlockedPixels = res.redBlocked;
-    console.log(`${this.constructor.name}|_calculatePercentVisibleAsync`, res);
+    // console.log(`${this.constructor.name}|_calculatePercentVisibleAsync`, res);
   }
 
   /**

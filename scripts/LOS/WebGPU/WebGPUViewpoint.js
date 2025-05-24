@@ -8,6 +8,7 @@ import { RenderObstacles } from "./RenderObstacles.js";
 import { WebGPUDevice } from "./WebGPU.js";
 import { WebGPUSumRedPixels } from "./SumPixels.js";
 import { AsyncQueue } from "./AsyncQueue.js";
+import * as twgl from "../WebGL2/twgl.js";
 
 // Base folder
 import { MODULE_ID } from "../../const.js";
@@ -50,8 +51,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
 
     const gl = this.gl;
-    this.texture = gl.createTexture();
-    this.framebuffer = gl.createFramebuffer();
+    this._initializeFramebuffer();
   }
 
   async initialize() {
@@ -66,27 +66,37 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
       { senseType: this.config.senseType, width: this.constructor.WIDTH, height: this.constructor.HEIGHT });
     await this.renderObstacles.initialize();
     this.renderObstacles.setRenderTextureToCanvas(this.constructor.gpuCanvas);
+    const size = this.renderTextureSize
+    this.redPixelCounter.initialize(size, size);
+    this._initializeFramebuffer();
   }
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-//     console.debug('First render - initial state:', {
-//       viewer: `${viewer?.name}, ${viewer?.id}`,
-//       target: `${target?.name}, ${target?.id}`,
-//       viewerLocation: `${viewerLocation}`,
-//       targetLocation: `${targetLocation}`,
-//     });
-
     const useLitTargetShape = this.config.useLitTargetShape;
     this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
-    const res = this._countRedBlockedPixels();
-    // console.debug('Pixel computation result:', res);
-    this._redPixels = res.countRed;
-    this._redBlockedPixels = res.countRedBlocked;
+    const res = this._countRedPixels();
+    this._redPixels = res.red;
+    this._redBlockedPixels = res.redBlocked;
+  }
+
+  async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
+    const useLitTargetShape = this.config.useLitTargetShape;
+    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
+    const res = await this._countRedPixelsAsync();
+    this._redPixels = res.red;
+    this._redBlockedPixels = res.redBlocked;
   }
 
   _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
     this.renderObstacles.renderGridShape(viewer, target, viewerLocation, targetLocation);
-    return this._countRedPixels();
+    const res = this._countRedPixels();
+    return res.red;
+  }
+
+  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.renderGridShape(viewer, target, viewerLocation, targetLocation);
+    const res = await this._countRedPixelsAsync();
+    return res.red;
   }
 
   /**
@@ -97,31 +107,68 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
    */
   _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
     this.renderObstacles.renderTarget(viewer, target, viewerLocation, targetLocation);
-    return this._countRedPixels();
+    const res = this._countRedPixels();
+    return res.red;
+  }
+
+
+  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
+    this.renderObstacles.renderTarget(viewer, target, viewerLocation, targetLocation);
+    const res = await this._countRedPixelsAsync();
+    return res.red;
   }
 
   _countRedPixels() {
-    const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
+    const { gl, fbInfo } = this;
+    const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
+    const texture = fbInfo.attachments[0];
+    let res;
+    if ( useRenderTexture ) {
+//       const texture = twgl.createTexture(gl, {
+//         src: this.constructor.gpuCanvas,
+//         width: this.renderTextureSize,
+//         height: this.renderTextureSize,
+//         internalFormat: gl.RGBA,
+//         format: gl.RGBA,
+//         type: gl.UNSIGNED_BYTE,
+//         minMag: gl.NEAREST,
+//         wrap: gl.CLAMP_TO_EDGE,
+//       });
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
+      res = this.redPixelCounter[pixelCounterType](texture);
+    } else {
+      twgl.bindFramebufferInfo(gl, fbInfo);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
 
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
-    return super._countRedPixels();
+//       gl.bindTexture(gl.TEXTURE_2D, texture);
+//       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
+//       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+//       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      res = this.redPixelCounter.readPixelsCount();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+    // console.log(`${this.constructor.name}|_calculatePercentVisible`, res);
+    return res;
   }
 
-  /**
-   * Must first render to the gpuCanvas.
-   * Then call this to retrieve the pixel data.
-   */
-  _countRedBlockedPixels() {
-    const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
-
+  async _countRedPixelsAsync() {
+    const { gl, texture, framebuffer } = this;
+    const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
+    gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
-    return super._countRedBlockedPixels();
+    let res;
+    if ( useRenderTexture ) {
+      res = await this.redPixelCounter[`${pixelCounterType}Async`](texture);
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      res = await this.redPixelCounter.readPixelsCountAsync();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+    // console.log(`${this.constructor.name}|_calculatePercentVisibleAsync`, res);
+    return res;
   }
 
   destroy() { this.renderObstacles.destroy(); }
@@ -171,11 +218,6 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
   #redPixels = 0;
 
   #redBlockedPixels = 0;
-
-  #gridArea = 0;
-
-  #constrainedTargetArea = 0;
-
 
   _viewableTargetArea() { return this.#redBlockedPixels; }
 
