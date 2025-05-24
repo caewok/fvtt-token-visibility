@@ -91,7 +91,7 @@ import {
   DebugVisibilityViewerWebGPUAsync,
 } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
-import * as twgl from "./LOS/WebGL2/twgl.js";
+import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
 
 // Other self-executing hooks
@@ -143,6 +143,10 @@ Hooks.once("init", function() {
 
     useStencil: false,
 
+    usePixelReducer: false,
+
+    pixelCounterType: "reductionCount2",
+
     /**
      * What to use when testing tiles for visibility.
      * "triangles": Basic two flat triangles that form a rectangle
@@ -163,6 +167,8 @@ Hooks.once("init", function() {
      * @type {number}
      */
     renderTextureSize: 128,
+
+    useRenderTexture: false,
 
     /**
      * Resolution of the render texture used in the webZGL LOS algorithm.
@@ -368,6 +374,7 @@ Hooks.once("setup", function() {
 
 Hooks.once("ready", function() {
   console.debug(`${MODULE_ID}|ready hook`);
+  Settings.initializeDebugGraphics();
 
 
 });

@@ -7,7 +7,6 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
 import {
@@ -213,7 +212,6 @@ export class RenderObstaclesWebGL2 {
   }
 
   renderGridShape(viewerLocation, target, { targetLocation, frame } = {}) {
-    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     this._setCamera(viewerLocation, target, { targetLocation });
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
@@ -237,52 +235,36 @@ export class RenderObstaclesWebGL2 {
     this.gl.flush();
   }
 
-  /**
-   * Renders a specific target alone, without any obstacles. Similar to renderGridShape.
-   * @param {Point3d} viewerLocation                  Where to center the camera
-   * @param {Token} target                            Token that is being viewed
-   * @param {object} [opts]
-   * @param {PIXI.Rectangle} [opts.frame]             If defined, will render to this portion of the canvas instead of render texture
-   * @param {Point3d} [opts.targetLocation]           The point to look at, if not the target token center
-   * @param {boolean} [opts.useLitTargetShape=false]  If true, use only the lit portion of the token border
-   */
-  renderTarget(viewerLocation, target, { targetLocation, frame, useLitTargetShape = false } = {}) {
-    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+  renderTarget(viewerLocation, target, { targetLocation, frame, useLitTargetShape = false, clear = true, useStencil = false } = {}) {
     this._setCamera(viewerLocation, target, { targetLocation });
 
-    // Initialize view or the frame.
     const gl = this.gl;
-    if ( frame ) {
-      gl.viewport(frame.x, frame.y, frame.width, frame.height);
-    } else {
-      // Use render texture.
-      const renderTextureSize = this.renderTextureSize;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.targetShape.frame);
-      gl.viewport(0, 0, renderTextureSize, renderTextureSize);
-
-    }
-
-
+    const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-
-    // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
-    // gl.cullFace(gl.FRONT);
 
-    gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+    // Draw the scene floor to orient the viewer.
+    if (this.debugViewNormals && this.drawableFloor ) this.drawableFloor.render();
+
+    // Use the stencil buffer to identify target pixels.
+    if ( useStencil ) {
+      gl.enable(gl.STENCIL_TEST);
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
+      gl.stencilFunc(gl.ALWAYS, 1, 0xFF); // All fragments should pass stencil test.
+      gl.stencilMask(0xFF); // Enable writing to the stencil buffer.
+    }
+
+    if ( colorCoded ) gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
     this._drawTarget(target, useLitTargetShape);
 
-    // Reset
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     gl.colorMask(true, true, true, true);
-//     gl.disable(gl.BLEND);
+    if ( colorCoded ) gl.colorMask(true, true, true, true);
     this.gl.flush();
   }
 
@@ -300,125 +282,58 @@ export class RenderObstaclesWebGL2 {
     else this.drawableConstrainedToken.renderTarget(target);
   }
 
-  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, useLitTargetShape = false } = {}) {
-    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    const opts = { viewer, target, blocking: this.config.blocking };
+  renderObstacles(viewerLocation, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
     this._setCamera(viewerLocation, target, { targetLocation });
+
+    // Filter the obstacles to only those within view.
+    const opts = { viewer, target, blocking: this.config.blocking };
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     this.drawableTerrain.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
-    const renderFn = this.debugViewNormals ? this._renderDebug : this._renderColorCoded;
 
-    // See https://webgl2fundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
-    // Ignore dpr.
-    frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
-    renderFn.call(this, target, viewer, visionTriangle, frame, clear, useLitTargetShape);
-    this.gl.flush();
-  }
-
-  /**
-   * Render the scene using select color channels to encode vision information.
-   * Target is rendered red first and nothing else touches the red channel.
-   * Obstacles are rendered into the blue channel.
-   * Terrain is rendered into the green channel at 50%, such that 2+ terrain === full green.
-   */
-  _renderColorCoded(target, viewer, visionTriangle, frame, clear = true, useLitTargetShape = false) {
     const gl = this.gl;
-    // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
+    const colorCoded = !this.debugViewNormals;
+    frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-    const useStencil = CONFIG[MODULE_ID].useStencil;
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
-
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
     if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
-    // gl.cullFace(gl.FRONT);
-
-    // Use the stencil buffer to identify target pixels.
-    if ( useStencil ) {
-      gl.enable(gl.STENCIL_TEST);
-      gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
-      gl.stencilFunc(gl.ALWAYS, 1, 0xFF); // All fragments should pass stencil test.
-      gl.stencilMask(0xFF); // Enable writing to the stencil buffer.
-    }
-
-    gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
-    this._drawTarget(target, useLitTargetShape);
 
     // Performance: Use the stencil buffer to discard pixels outside the target shape.
-    if ( useStencil ) {
+    if ( useStencil && colorCoded ) {
+      gl.enable(gl.STENCIL_TEST);
       gl.stencilFunc(gl.EQUAL, 1, 0xFF); // Draw only where the target shape is present.
       gl.stencilMask(0x00); // Disable writing to the stencil buffer.
     }
-    gl.colorMask(false, false, true, true); // Blue, alpha channels for obstacles.
+    if ( colorCoded ) gl.colorMask(false, false, true, true); // Blue, alpha channels for obstacles.
     this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Draw terrain walls.
     // Blend so that 2+ walls exceed a value in the green channel
     // Preserve R and B for the destination.
-    gl.colorMask(false, true, false, true); // Green, alpha channels for terrains.
+    if ( !colorCoded )  gl.colorMask(false, true, false, true); // Green, alpha channels for terrains.
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
 
-    const srcRGB = gl.ONE;
-    const dstRGB = gl.ONE;
-    const srcAlpha = gl.ONE;
-    const dstAlpha = gl.ZERO;
+    const srcRGB = colorCoded ? gl.ONE : gl.SRC_ALPHA;
+    const dstRGB = colorCoded ? gl.ONE : gl.SRC_ALPHA;
+    const srcAlpha = colorCoded ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA;
+    const dstAlpha = colorCoded ? gl.ZERO : gl.ONE_MINUS_SRC_ALPHA;
     gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
-
     this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Reset
-    if ( useStencil ) {
+    if ( colorCoded ) gl.colorMask(true, true, true, true);
+    if ( useStencil && colorCoded ) {
 //       gl.stencilMask(0x00); // Disable writing to stencil buffer.
 //       gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
       gl.disable(gl.STENCIL_TEST);
     }
-//     gl.colorMask(true, true, true, true);
-//     gl.disable(gl.BLEND);
-  }
-
-  /**
-   * Render the scene in a manner that makes sense for a human viewer.
-   */
-  _renderDebug(target, viewer, visionTriangle, frame, clear = true, useLitTargetShape = false) {
-    const gl = this.gl;
-    // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
-    gl.viewport(frame.x, frame.y, frame.width, frame.height)
-    gl.enable(gl.DEPTH_TEST);
-    gl.disable(gl.BLEND);
-    gl.clearColor(0, 0, 0, 0);
-    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.enable(gl.CULL_FACE);
-    gl.cullFace(gl.BACK);
-    // gl.cullFace(gl.FRONT);
-
-    // Draw the scene floor to orient the viewer.
-    if ( this.drawableFloor ) this.drawableFloor.render();
-
-    this._drawTarget(target, useLitTargetShape);
-    this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
-
-    // Draw terrain walls.
-    // Blend so that 2+ walls exceed a value in the green channel
-    // Preserve R and B for the destination.
-    gl.disable(gl.DEPTH_TEST);
-    gl.enable(gl.BLEND);
-
-    // Blend the terrain walls.
-    const srcRGB = gl.SRC_ALPHA;
-    const dstRGB = gl.SRC_ALPHA;
-    const srcAlpha = gl.ONE_MINUS_SRC_ALPHA;
-    const dstAlpha = gl.ONE_MINUS_SRC_ALPHA;
-    gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
-
-    this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
-
-    // Reset
-//     gl.disable(gl.BLEND);
+    this.gl.flush();
   }
 
   /**
