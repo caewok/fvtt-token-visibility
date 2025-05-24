@@ -194,6 +194,7 @@ export class RedPixelCounter {
     gl.useProgram(programInfos.loopCount.program);
     twgl.setBuffersAndAttributes(gl, programInfos.loopCount, quadBufferInfo);
     twgl.setUniforms(programInfos.loopCount, { uTexture: tex });
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     twgl.drawBufferInfo(gl, quadBufferInfo);
     gl.flush();
   }
@@ -235,7 +236,7 @@ export class RedPixelCounter {
     twgl.bindFramebufferInfo(gl, fbInfos[type]);
     gl.useProgram(programInfos.blendCount.program);
     twgl.setUniforms(programInfos.blendCount, { uTexture: tex });
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
     // No buffer data needed in WebGL2 as we can use gl_VertexID.
     gl.drawArrays(gl.POINTS, 0, this.#width * this.#height);
@@ -277,12 +278,17 @@ export class RedPixelCounter {
     const { detector, reducer } = programInfos.reductionCount;
     const framebuffers = fbInfos[type];
 
+    // Clear the other framebuffer.
+    twgl.bindFramebufferInfo(gl, framebuffers[1]);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+
     // First render 1,0 to a texture to indicate whether red pixel is present.
     // Then ping-pong textures to sum, going from 128 -> 64 -> 32 -> ... 1.
     twgl.bindFramebufferInfo(gl, framebuffers[0]);
     gl.useProgram(detector.program);
     twgl.setBuffersAndAttributes(gl, detector, quadBufferInfo);
     twgl.setUniforms(detector, { uTexture: tex });
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     twgl.drawBufferInfo(gl, quadBufferInfo);
 
     // Ping-pong, reducing by x2 each time.
