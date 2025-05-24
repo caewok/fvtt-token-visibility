@@ -468,3 +468,32 @@ export function applyConsecutively(arr, callback) {
     callback(start, length);
   }
 }
+
+export function checkFramebufferStatus(gl, framebuffer) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    let errorMessage = `Framebuffer error: ${status}`;
+    switch (status) {
+      case gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
+        errorMessage = "Framebuffer incomplete: Attachment is missing or invalid";
+        break;
+      case gl.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+        errorMessage = "Framebuffer incomplete: Missing attachment";
+        break;
+      case gl.FRAMEBUFFER_INCOMPLETE_DIMENSIONS:
+        errorMessage = "Framebuffer incomplete: Dimensions are mismatched";
+        break;
+      case gl.FRAMEBUFFER_UNSUPPORTED:
+        errorMessage = "Framebuffer incomplete: Unsupported format";
+        break;
+      case gl.FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
+        errorMessage = "Framebuffer incomplete: Multisample settings are inconsistent";
+        break;
+      default:
+        errorMessage = `Framebuffer error: ${status}`;
+    }
+    console.error(errorMessage);
+  }
+  return status === gl.FRAMEBUFFER_COMPLETE;
+}
