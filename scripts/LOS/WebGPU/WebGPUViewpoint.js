@@ -57,6 +57,8 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
 
     const gl = this.gl;
+
+
     this.texture = gl.createTexture();
     this.framebuffer = gl.createFramebuffer();
   }
@@ -75,6 +77,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.renderObstacles.setRenderTextureToCanvas(this.constructor.gpuCanvas);
     const size = this.renderTextureSize
     this.redPixelCounter.initialize(size, size);
+    this._initializeFramebuffer();
   }
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
@@ -129,19 +132,19 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     let res;
     if ( useRenderTexture ) {
-//       const tex = twgl.createTexture(gl, {
-//         src: this.constructor.gpuCanvas,
-//         width: this.renderTextureSize,
-//         height: this.renderTextureSize,
-//         internalFormat: gl.RGBA,
-//         format: gl.RGBA,
-//         type: gl.UNSIGNED_BYTE,
-//         minMag: gl.NEAREST,
-//         wrap: gl.CLAMP_TO_EDGE,
-//       });
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
-      res = this.redPixelCounter[pixelCounterType](tex);
+      const texture = twgl.createTexture(gl, {
+        src: this.constructor.gpuCanvas,
+        width: this.renderTextureSize,
+        height: this.renderTextureSize,
+        internalFormat: gl.RGBA,
+        format: gl.RGBA,
+        type: gl.UNSIGNED_BYTE,
+        minMag: gl.NEAREST,
+        wrap: gl.CLAMP_TO_EDGE,
+      });
+//       gl.bindTexture(gl.TEXTURE_2D, texture);
+//       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
+      res = this.redPixelCounter[pixelCounterType](texture);
     } else {
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.constructor.gpuCanvas);
