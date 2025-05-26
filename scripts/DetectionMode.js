@@ -66,9 +66,9 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   //     visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
   //   }
 
-  const viewer = visionSource.object;
-  console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
-    { useLitTargetShape, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
+//   const viewer = visionSource.object;
+//   console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
+//     { useLitTargetShape, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
 
   // Configure the line-of-sight calculator.
   const losCalc = visionSource[MODULE_ID].losCalc;

@@ -6,7 +6,6 @@ canvas
 
 import { Patcher } from "./Patcher.js";
 import { MODULES_ACTIVE, MODULE_ID } from "./const.js";
-import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
 
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
@@ -17,10 +16,7 @@ import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 
 // LOS
-import { PATCHES as PATCHES_TokenLOS } from "./LOS/Token.js";
-import { PATCHES as PATCHES_WallLOS } from "./LOS/Wall.js";
 import { PATCHES as PATCHES_Wall } from "./Wall.js";
-import { PATCHES as PATCHES_Tile } from "./LOS/Tile.js";
 
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
@@ -32,9 +28,8 @@ const PATCHES = {
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
-  Tile: PATCHES_Tile,
-  Token: foundry.utils.mergeObject(PATCHES_Token, PATCHES_TokenLOS),
-  Wall: foundry.utils.mergeObject(PATCHES_Wall, PATCHES_WallLOS),
+  Token: PATCHES_Token,
+  Wall: PATCHES_Wall,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,
 };
 
@@ -55,11 +50,6 @@ export function initializePatching() {
 
 export function registerArea3d() {
   PATCHER.registerGroup("AREA3D");
-
-  // Create placeable geometry handlers for placeables already in the scene.
-  WallGeometryHandler.registerPlaceables();
-  TileGeometryHandler.registerPlaceables();
-  TokenGeometryHandler.registerPlaceables();
 }
 
 export function registerDebug() { }//PATCHER.registerGroup("DEBUG"); }

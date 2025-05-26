@@ -9,9 +9,6 @@ PIXI,
 
 import { MODULE_ID } from "./const.js";
 
-import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
-import { WallPIXIHandler, TilePIXIHandler, TokenPIXIHandler } from "./LOS/PIXI/PlaceablePIXIHandler.js";
-
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
@@ -27,9 +24,6 @@ import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
 import { buildLOSCalculator, buildCustomLOSCalculator, buildDebugViewer } from "./LOSCalculator.js";
 
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
-
-import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
-import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
 import * as range from "./visibility_range.js";
 
@@ -81,7 +75,6 @@ import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
-import { PercentVisibleCalculatorPIXI, DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 import {
@@ -196,7 +189,6 @@ Hooks.once("init", function() {
     sightCalculatorClasses: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
-      PIXI: PercentVisibleCalculatorPIXI,
       webGL2: PercentVisibleCalculatorWebGL2,
       webGPU: PercentVisibleCalculatorWebGPU,
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
@@ -206,7 +198,6 @@ Hooks.once("init", function() {
     sightCalculators: {
       points: null,
       geometric: null,
-      PIXI: null,
       webGL2: null,
       webGPU: null,
       webGPUAsync: null,
@@ -219,7 +210,6 @@ Hooks.once("init", function() {
     debugViewerClasses: {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
-      PIXI: DebugVisibilityViewerPIXI,
       webGL2: DebugVisibilityViewerWebGL2,
       webGPU: DebugVisibilityViewerWebGPU,
       webGPUAsync: DebugVisibilityViewerWebGPUAsync,
@@ -277,7 +267,6 @@ Hooks.once("init", function() {
     calcs: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
-      PIXI: PercentVisibleCalculatorPIXI,
       webGL2: PercentVisibleCalculatorWebGL2,
       webGPU: PercentVisibleCalculatorWebGPU,
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
@@ -291,7 +280,6 @@ Hooks.once("init", function() {
     debugViewers: {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
-      PIXI: DebugVisibilityViewerPIXI,
       webGL2: DebugVisibilityViewerWebGL2,
       webGPU: DebugVisibilityViewerWebGPU,
       webGPUAsync: DebugVisibilityViewerWebGPUAsync,
@@ -299,9 +287,6 @@ Hooks.once("init", function() {
     },
 
     webgl: {
-      Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
-      Placeable3dShader, Tile3dShader,
-      Placeable3dDebugShader, Tile3dDebugShader,
       WebGL2,
       DrawableNonDirectionalWallWebGL2,
       DrawableDirectionalWallWebGL2,
@@ -393,7 +378,6 @@ Hooks.on("canvasReady", function() {
     "points",
     "geometric",
     "webGL2",
-    "PIXI",
     "hybrid",
   ];
   const webGPUCalcs = [
@@ -425,29 +409,6 @@ Hooks.on("canvasReady", function() {
     }
     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
   });
-
-  WallGeometryHandler.registerPlaceables();
-  TileGeometryHandler.registerPlaceables();
-  TokenGeometryHandler.registerPlaceables();
-
-  canvas.tiles.placeables.forEach(tile => new TilePIXIHandler(tile));
-  canvas.tokens.placeables.forEach(token => new TokenPIXIHandler(token));
-  canvas.walls.placeables.forEach(wall => new WallPIXIHandler(wall));
-
-
-//   WallTriangles.registerPlaceableHooks();
-//   TileTriangles.registerPlaceableHooks();
-//   TokenTriangles.registerPlaceableHooks();
-//
-//   // Update triangles for all placeables.
-//   canvas.tiles.placeables.forEach(tile => TileTriangles._onPlaceableCreation(tile));
-//   canvas.walls.placeables.forEach(wall => WallTriangles._onPlaceableCreation(wall));
-//   canvas.tokens.placeables.forEach(token => TokenTriangles._onPlaceableCreation(token));
-
-
-  // Once canvas is loaded, process the placeables.
-  // PlaceableInstanceHandler.handlers.values().forEach(handler => handler.initializePlaceables());
-
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
