@@ -81,7 +81,6 @@ import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
 
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
-import { PercentVisibleCalculatorPIXI, DebugVisibilityViewerPIXI } from "./LOS/PIXIViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 import {
@@ -196,7 +195,6 @@ Hooks.once("init", function() {
     sightCalculatorClasses: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
-      PIXI: PercentVisibleCalculatorPIXI,
       webGL2: PercentVisibleCalculatorWebGL2,
       webGPU: PercentVisibleCalculatorWebGPU,
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
@@ -206,7 +204,6 @@ Hooks.once("init", function() {
     sightCalculators: {
       points: null,
       geometric: null,
-      PIXI: null,
       webGL2: null,
       webGPU: null,
       webGPUAsync: null,
@@ -219,7 +216,6 @@ Hooks.once("init", function() {
     debugViewerClasses: {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
-      PIXI: DebugVisibilityViewerPIXI,
       webGL2: DebugVisibilityViewerWebGL2,
       webGPU: DebugVisibilityViewerWebGPU,
       webGPUAsync: DebugVisibilityViewerWebGPUAsync,
@@ -277,7 +273,6 @@ Hooks.once("init", function() {
     calcs: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
-      PIXI: PercentVisibleCalculatorPIXI,
       webGL2: PercentVisibleCalculatorWebGL2,
       webGPU: PercentVisibleCalculatorWebGPU,
       webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
@@ -291,7 +286,6 @@ Hooks.once("init", function() {
     debugViewers: {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
-      PIXI: DebugVisibilityViewerPIXI,
       webGL2: DebugVisibilityViewerWebGL2,
       webGPU: DebugVisibilityViewerWebGPU,
       webGPUAsync: DebugVisibilityViewerWebGPUAsync,

@@ -63,7 +63,6 @@ export const SETTINGS = {
         POINTS: "los-points",
         AREA3D: "los-area-3d",
         AREA3D_GEOMETRIC: "los-area-3d-geometric",
-        AREA3D_WEBGL2: "los-area-3d-webgl2",
         AREA3D_HYBRID: "los-area-3d-hybrid",
         WEBGL2: "los-webgl2",
         WEBGPU: "los-webgpu",

@@ -25,7 +25,6 @@ export function currentCalculator(type) {
     case "los-points": return calcs.points;
     case "los-area-3d": return calcs.hybrid;
     case "los-area-3d-geometric": return calcs.geometric;
-    case "los-area-3d-webgl2": return calcs.PIXI;
     case "los-area-3d-hybrid": return calcs.hybrid;
     case "los-webgl2": return calcs.webGL2;
     case "los-webgpu": return calcs.webGPU;
@@ -43,7 +42,6 @@ export function currentDebugViewerClass(type) {
     case "los-points": return debugViewers.points;
     case "los-area-3d": return debugViewers.hybrid;
     case "los-area-3d-geometric": return debugViewers.geometric;
-    case "los-area-3d-webgl2": return debugViewers.PIXI;
     case "los-area-3d-hybrid": return debugViewers.hybrid;
     case "los-webgl2": return debugViewers.webGL2;
     case "los-webgpu": return debugViewers.webGPU;
