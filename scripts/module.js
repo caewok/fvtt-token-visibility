@@ -9,9 +9,6 @@ PIXI,
 
 import { MODULE_ID } from "./const.js";
 
-import { WallGeometryHandler, TileGeometryHandler, TokenGeometryHandler } from "./LOS/Placeable3dGeometry.js";
-import { WallPIXIHandler, TilePIXIHandler, TokenPIXIHandler } from "./LOS/PIXI/PlaceablePIXIHandler.js";
-
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
@@ -27,9 +24,6 @@ import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
 import { buildLOSCalculator, buildCustomLOSCalculator, buildDebugViewer } from "./LOSCalculator.js";
 
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
-
-import { Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry } from "./LOS/Placeable3dGeometry.js";
-import { Placeable3dShader, Tile3dShader, Placeable3dDebugShader, Tile3dDebugShader } from "./LOS/Placeable3dShader.js";
 
 import * as range from "./visibility_range.js";
 
@@ -293,9 +287,6 @@ Hooks.once("init", function() {
     },
 
     webgl: {
-      Token3dGeometry, Wall3dGeometry, DirectionalWall3dGeometry, ConstrainedToken3dGeometry,
-      Placeable3dShader, Tile3dShader,
-      Placeable3dDebugShader, Tile3dDebugShader,
       WebGL2,
       DrawableNonDirectionalWallWebGL2,
       DrawableDirectionalWallWebGL2,
@@ -418,29 +409,6 @@ Hooks.on("canvasReady", function() {
     }
     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
   });
-
-  WallGeometryHandler.registerPlaceables();
-  TileGeometryHandler.registerPlaceables();
-  TokenGeometryHandler.registerPlaceables();
-
-  canvas.tiles.placeables.forEach(tile => new TilePIXIHandler(tile));
-  canvas.tokens.placeables.forEach(token => new TokenPIXIHandler(token));
-  canvas.walls.placeables.forEach(wall => new WallPIXIHandler(wall));
-
-
-//   WallTriangles.registerPlaceableHooks();
-//   TileTriangles.registerPlaceableHooks();
-//   TokenTriangles.registerPlaceableHooks();
-//
-//   // Update triangles for all placeables.
-//   canvas.tiles.placeables.forEach(tile => TileTriangles._onPlaceableCreation(tile));
-//   canvas.walls.placeables.forEach(wall => WallTriangles._onPlaceableCreation(wall));
-//   canvas.tokens.placeables.forEach(token => TokenTriangles._onPlaceableCreation(token));
-
-
-  // Once canvas is loaded, process the placeables.
-  // PlaceableInstanceHandler.handlers.values().forEach(handler => handler.initializePlaceables());
-
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
