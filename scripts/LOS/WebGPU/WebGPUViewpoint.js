@@ -55,6 +55,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
   }
 
   async initialize() {
+    PercentVisibleRenderCalculatorAbstract.prototype.initialize.call(this);
     this.device ??= CONFIG[MODULE_ID].webGPUDevice ?? (await WebGPUDevice.getDevice());
     this.gpuCtx.configure({
       device: this.device,
@@ -210,6 +211,7 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
   }
 
   async initialize() {
+    super.initialize();
     await this.renderObstacles.initialize();
     await this.sumPixels.initialize();
     this.renderObstacles.setRenderTextureToInternalTexture()
@@ -354,7 +356,7 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
   }
 
   async initialize() {
-    await super.initialize();
+    await PercentVisibleRenderCalculatorAbstract.prototype.initialize();
     await this.renderer.initialize();
   }
 

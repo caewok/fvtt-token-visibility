@@ -5,6 +5,9 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../const.js";
+import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
+
 /* Percent visible calculator
 
 Calculate percent visibility for a token viewer looking at a target token.
@@ -49,11 +52,23 @@ export class PercentVisibleCalculatorAbstract {
     foundry.utils.mergeObject(this._config, cfg, { inplace: true})
   }
 
-  async initialize() { return; }
+  wallTracker;
+
+  tileTracker;
+
+  tokenTracker;
+
+  async initialize() {
+    this.wallTracker = new DocumentUpdateTracker("Wall", DocumentUpdateTracker.LOS_ATTRIBUTES.Wall);
+    this.tileTracker = new DocumentUpdateTracker("Tile", DocumentUpdateTracker.LOS_ATTRIBUTES.Tile);
+    this.tokenTracker = new TokenUpdateTracker(TokenUpdateTracker.LOS_ATTRIBUTES, TokenUpdateTracker.LOS_FLAGS);
+  }
 
   getVisibleTargetShape(target) {
     return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
   }
+
+  static cachedPercentVisible = new WeakMap();
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -69,23 +84,76 @@ export class PercentVisibleCalculatorAbstract {
   percentVisible(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
     if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
 
+    if ( CONFIG[MODULE_ID].useCaching ) {
+      // NOTE: WeakMap has no clear method.
+      // Make sure to call all 4: wallTracker, tileTracker, tokenTracker x2.
+      let clearAll = false;
+      let clearViewer = false;
+      let clearTarget = false;
+      if ( this.wallTracker.logUpdate() ) clearAll = true;
+      if ( this.tileTracker.logUpdate() ) clearAll = true;
+      if ( this.tokenTracker.logUpdate(viewer) ) clearViewer = true;
+      if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
+
+      if ( clearAll ) this.cachedPercentVisible = new WeakMap();
+      else if ( clearViewer ) this.cachedPercentVisible.set(viewer, new WeakMap());
+      else if ( clearTarget ) this.cachedPercentVisible.get(viewer)?.delete(target);
+      else if ( this.cachedPercentVisible.has(viewer) ) {
+        const viewerMap = this.cachedPercentVisible.get(viewer);
+        if ( viewerMap.has(target) ) return viewerMap.get(target);
+      }
+    }
+
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
     this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
-    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+    const out = this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+
+    if ( CONFIG[MODULE_ID].useCaching ) {
+      if ( !this.cachedPercentVisible.has(viewer) ) this.cachedPercentVisible.set(viewer, new WeakMap());
+      const viewerMap = this.cachedPercentVisible.get(viewer);
+      viewerMap.set(target, out);
+    }
+    return out;
   }
 
   async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
     if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
+
+    if ( CONFIG[MODULE_ID].useCaching ) {
+      // NOTE: WeakMap has no clear method.
+      // Make sure to call all 4: wallTracker, tileTracker, tokenTracker x2.
+      let clearAll = false;
+      let clearViewer = false;
+      let clearTarget = false;
+      if ( this.wallTracker.logUpdate() ) clearAll = true;
+      if ( this.tileTracker.logUpdate() ) clearAll = true;
+      if ( this.tokenTracker.logUpdate(viewer) ) clearViewer = true;
+      if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
+
+      if ( clearAll ) this.cachedPercentVisible = new WeakMap();
+      else if ( clearViewer ) this.cachedPercentVisible.set(viewer, new WeakMap());
+      else if ( clearTarget ) this.cachedPercentVisible.get(viewer)?.delete(target);
+      else if ( this.cachedPercentVisible.has(viewer) ) {
+        const viewerMap = this.cachedPercentVisible.get(viewer);
+        if ( viewerMap.has(target) ) return viewerMap.get(target);
+      }
+    }
 
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
     await this._calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation);
-    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+    const out = this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+    if ( CONFIG[MODULE_ID].useCaching ) {
+      if ( !this.cachedPercentVisible.has(viewer) ) this.cachedPercentVisible.set(viewer, new WeakMap());
+      const viewerMap = this.cachedPercentVisible.get(viewer);
+      viewerMap.set(target, out);
+    }
+    return out;
   }
 
   /**

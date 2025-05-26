@@ -100,6 +100,25 @@ Track x, y, elevation. Each needs to be handled separately.
  * Create an instance to track specific qualities.
  */
 export class DocumentUpdateTracker {
+  static LOS_ATTRIBUTES = {
+    Wall: [
+      "c",
+      "flags.elevatedvision.elevation.top",
+      "flags.elevatedvision.elevation.bottom",
+      "flags.wall-height.top",
+      "flags.wall-height.top",
+      "dir",
+    ],
+    Tile: [
+      "x",
+      "y",
+      "elevation",
+      "width",
+      "height",
+      "rotation",
+    ],
+    // TODO: Region
+  };
 
   /**
    * @typedef {Map<string, number>} AttributeMap
@@ -127,7 +146,7 @@ export class DocumentUpdateTracker {
   static trackedDocumentUpdateAttributes = {
     Token: new Map(),
     Wall: new Map(),
-    Tile: new Set(),
+    Tile: new Map(),
     AmbientLight: new Map(),
     AmbientSound: new Map(),
     Region: new Map(),
