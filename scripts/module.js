@@ -91,6 +91,8 @@ import {
   DebugVisibilityViewerWebGPUAsync,
 } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
+import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
+
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
 
@@ -169,6 +171,8 @@ Hooks.once("init", function() {
     renderTextureSize: 128,
 
     useRenderTexture: false,
+
+    useCaching: true,
 
     /**
      * Resolution of the render texture used in the webZGL LOS algorithm.
@@ -251,6 +255,8 @@ Hooks.once("init", function() {
   game.modules.get(MODULE_ID).api = {
     bench,
     range,
+
+    DocumentUpdateTracker, TokenUpdateTracker,
 
     triangles: {
       Polygon3d,

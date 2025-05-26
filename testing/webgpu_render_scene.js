@@ -76,6 +76,7 @@ MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32
 Area3dPopout = api.Area3dPopout
 Area3dPopoutCanvas = api.Area3dPopoutCanvas
 Settings = api.Settings
+let { DocumentUpdateTracker, TokenUpdateTracker } = api;
 
 
 buildDebugViewer = api.buildDebugViewer
