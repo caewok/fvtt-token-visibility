@@ -278,14 +278,10 @@ async function runLOSTest(n, viewers, targets, { algorithm, nPoints, large = fal
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
   nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
 
-  const calcs = viewers.map(viewer => {
-    const losCalc = buildCustomLOSCalculator(viewer, algorithm);
-    losCalc.config.largeTarget = large;
-    if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) losCalc.viewpoints
-      .forEach(viewpoint => viewpoint.config.pointAlgorithm = nPoints);
-    return losCalc;
-  });
-
+  const calcs = viewers.map(viewer => buildCustomLOSCalculator(viewer, { viewpointKey: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
+  const promises = [];
+  calcs.forEach(calc => promises.push(calc.initialize()));
+  await Promise.allSettled(promises);
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
   const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
@@ -320,13 +316,10 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints,
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
   nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
 
-  const calcs = viewers.map(viewer => {
-    const losCalc = buildCustomLOSCalculator(viewer, algorithm);
-    losCalc.config.largeTarget = large;
-    if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) losCalc.viewpoints
-      .forEach(viewpoint => viewpoint.config.pointAlgorithm = nPoints);
-    return losCalc;
-  });
+  const calcs = viewers.map(viewer => buildCustomLOSCalculator(viewer, { viewpointKey: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
+  const promises = [];
+  calcs.forEach(calc => promises.push(calc.initialize()));
+  await Promise.allSettled(promises);
 
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
@@ -359,14 +352,14 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints,
   const sum = timings.reduce((prev, curr) => prev + curr);
   const q = quantile(timings, [.1, .5, .9]);
 
-  const promises = [];
+  const promises2 = [];
   for ( const token of tokens ) {
     const loc = locMap.get(token);
-    promises.push(token.document.update({ x: loc.x, y: loc.y }));
+    promises2.push(token.document.update({ x: loc.x, y: loc.y }));
   }
 
   console.log(`${label} | ${n} iterations | ${precision(sum, 4)}ms | ${precision(sum / n, 4)}ms per | 10/50/90: ${precision(q[.1], 6)} / ${precision(q[.5], 6)} / ${precision(q[.9], 6)}`);
-  await Promise.allSettled(promises);
+  await Promise.allSettled(promises2);
 }
 
 /**

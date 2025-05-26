@@ -287,6 +287,7 @@ export class PercentVisibleCalculatorPIXI extends PercentVisibleRenderCalculator
   }
 
   async initialize() {
+    await super.initialize();
     this._initializeShaders();
   }
 
