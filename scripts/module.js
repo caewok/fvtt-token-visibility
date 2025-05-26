@@ -387,7 +387,6 @@ Hooks.on("canvasReady", function() {
     "points",
     "geometric",
     "webGL2",
-    "PIXI",
     "hybrid",
   ];
   const webGPUCalcs = [
