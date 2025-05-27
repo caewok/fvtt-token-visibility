@@ -274,9 +274,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   destroy() {
     super.destroy();
     this.renderObstacles.destroy();
-    for ( const fbo of Object.values(this.framebuffers) ) {
-      Object.values(fbo).forEach(obj => obj?.destroy());
-    }
   }
 }
 

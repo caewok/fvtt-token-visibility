@@ -212,6 +212,7 @@ debugViewer = buildDebugViewer(api.debugViewers.PIXI, { width: 512, height: 512 
 debugViewer = buildDebugViewer(api.debugViewers.webGL2)
 debugViewer = buildDebugViewer(api.debugViewers.webGL2, { useInstancing: true, debugView: false })
 debugViewer = buildDebugViewer(api.debugViewers.webGL2, { debugView: false })
+debugViewer = buildDebugViewer(api.debugViewers.webGL2, { largeTarget: true })
 
 debugViewer = buildDebugViewer(api.debugViewers.webGPU)
 debugViewer = buildDebugViewer(api.debugViewers.webGPUAsync)
