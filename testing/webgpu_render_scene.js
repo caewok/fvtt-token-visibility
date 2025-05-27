@@ -278,6 +278,8 @@ console.table({
 //   async_calcHybrid: await calcHybrid.percentVisibleAsync(viewer, target),
 });
 
+calcWebGPU.config = { largeTarget: true }
+
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn;
 

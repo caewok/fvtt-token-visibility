@@ -1,4 +1,5 @@
 /* globals
+canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -10,7 +11,7 @@ import { WebGL2 } from "./WebGL2.js";
 import { GeometryDesc } from "../WebGPU/GeometryDesc.js";
 import { GeometryWallDesc } from "../WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "../WebGPU/GeometryTile.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryGridDesc } from "../WebGPU/GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryGridDesc, GeometryLitTokenDesc } from "../WebGPU/GeometryToken.js";
 import {
   NonDirectionalWallInstanceHandler,
   DirectionalWallInstanceHandler,
@@ -747,25 +748,55 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 }
 
+
 export class DrawableGridShape extends DrawableTokenWebGL2 {
   /** @type {class} */
   static geomClass = GeometryGridDesc;
 
-  filterObjects(visionTriangle, { target } = {}) {
-    const instanceSet = this.instanceSet;
-    instanceSet.clear();
-    if ( !this.placeableHandler.instanceIndexFromId.has(target.id) ) return;
-    instanceSet.add(this.placeableHandler.instanceIndexFromId.get(target.id));
+  static bufferDrawType = "STATIC_DRAW";
+
+  filterObjects() { return; }
+
+  render() { return; }
+
+  constructor(gl, camera, opts = {}) {
+    opts.debugViewNormals = false; // No normals; no UVs.
+    super(gl, camera, opts);
   }
 
-  async initialize() {
-    const promises = [this._createProgram()];
-    this.instanceSet.add(0);
-    this._initializeGeoms();
-    await Promise.allSettled(promises); // Prior to updating buffers, etc.
-    this._updateAllInstances();
+  _updateVerticesForInstance(idx) {
+    // No normals; no UVs.
+    const ph = this.placeableHandler;
+    let M = ph.matrices[idx];
+    const geom = this.geoms[idx] ?? this.geom;
+    const geomVertices = geom.vertices;
+    const vertices = this.vertices[idx];
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const stride = 3;
+
+    // Change the size to a single grid unit (as opposed to token size)
+//     M = M.clone();
+//     M.setIndex(0, 0, canvas.grid.size);
+//     M.setIndex(1, 1, canvas.grid.size);
+//     M.setIndex(2, 2, canvas.grid.size);
+//
+    // 2400, 2600, 399.5, 2400, 2700, 399.5, 2500, 2700, 399.5, 2500, 2600, 399.5, 2400, 2700, 299.5, 2500, 2700, 299.5, 2500, 2600, 299.5, 2400, 2600, 299.5
+
+
+    for ( let i = 0, iMax = geomVertices.length; i < iMax; i += stride ) {
+      const xIdx = i;
+      const yIdx = i + 1;
+      const zIdx = i + 2;
+      const pt = Point3d._tmp.set(geomVertices[xIdx], geomVertices[yIdx], geomVertices[zIdx]);
+      const txPt = M.multiplyPoint3d(pt, Point3d._tmp1);
+
+      vertices[xIdx] = txPt.x;
+      vertices[yIdx] = txPt.y;
+      vertices[zIdx] = txPt.z;
+    }
   }
 }
+
 
 export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
   static constrained = true;
@@ -861,6 +892,8 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
     }
   }
 }
+
+
 
 export class LitDrawableTokenWebGL2 extends DrawableTokenWebGL2 {
   static constrained = null;
@@ -1189,7 +1222,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
  */
 function drawInstancedMatrixSet(gl, instanceSet, elementCount, instanceBufferInfo, positionLoc) {
   const instanceSize = 16 * 4;
-  const { numComponents: size, type, stride, normalize, buffer: mBuffer } = instanceBufferInfo;
+  const { type, stride, normalize, buffer: mBuffer } = instanceBufferInfo;
   applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
     const offset = (firstInstance * instanceSize);
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);

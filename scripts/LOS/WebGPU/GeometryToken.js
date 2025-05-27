@@ -699,8 +699,13 @@ export class GeometryGridDesc extends GeometryDesc {
    */
   static defineVertices() {
     const poly = new PIXI.Polygon(...canvas.grid.getShape());
-    const topZ = canvas.grid.size * 0.5;
-    const bottomZ = canvas.grid.size * -0.5;
+
+    // Convert the polygon to be 1 unit in size.
+    // So for a square grid, would be -0.5, 0.5...
+    const invSize = 1 / canvas.grid.size;
+    poly.points = poly.points.map(pt => pt * invSize)
+    const topZ = 0.5;
+    const bottomZ = -0.5;
     return this.define3dPolygonVertices(poly, { topZ, bottomZ });
   }
 }
