@@ -243,7 +243,6 @@ Object.values(debugViewers).forEach(debugViewer => debugViewer.destroy())
 // All at once
 calcPoints = new api.calcs.points();
 calcGeometric = new api.calcs.geometric();
-calcPIXI = new api.calcs.PIXI();
 calcWebGL2 = new api.calcs.webGL2()
 calcWebGL2Instancing = new api.calcs.webGL2({ useInstancing: true });
 calcHybrid = new api.calcs.hybrid();
@@ -254,7 +253,6 @@ calcWebGPUAsync = new api.calcs.webGPUAsync({ device });
 
 await calcPoints.initialize();
 await calcGeometric.initialize();
-await calcPIXI.initialize();
 await calcWebGL2.initialize();
 await calcWebGL2Instancing.initialize();
 await calcHybrid.initialize();
@@ -265,7 +263,6 @@ await calcWebGPUAsync.initialize();
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
   calcGeometric: calcGeometric.percentVisible(viewer, target),
-  calcPIXI: calcPIXI.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGL2Instancing: calcWebGL2Instancing.percentVisible(viewer, target),
   calcHybrid: calcHybrid.percentVisible(viewer, target),
@@ -310,6 +307,9 @@ async function percentFnAsync(calc) {
 
 
 
+
+
+CONFIG.tokenvisibility.useCaching = false
 CONFIG.tokenvisibility.tileThresholdShape = "triangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
@@ -319,6 +319,15 @@ CONFIG.tokenvisibility.clipperVersion = 2
 
 CONFIG.tokenvisibility.filterInstances = true
 CONFIG.tokenvisibility.filterInstances = false
+
+
+await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcHybrid, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGPU, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGPUAsync, "percentVisibleAsync", viewer, target)
 
 
 calcs = [calcPoints, calcGeometric, calcHybrid, calcPIXI, calcWebGL2, calcWebGL2Instancing, calcWebGPU, calcWebGPUAsync];
