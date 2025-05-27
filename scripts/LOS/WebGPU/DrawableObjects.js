@@ -9,7 +9,7 @@ import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc, GeometryHexTokenShapesDesc, GeometryGridDesc } from "./GeometryToken.js";
+import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc, GeometryHexTokenShapesDesc, GeometryGridFromTokenDesc } from "./GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
 import {
   WallInstanceHandler,
@@ -1274,30 +1274,6 @@ export class DrawableHexTokenInstances extends DrawableTokenInstances {
   #hexKeyForToken(token) { return `obstacle_${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`; }
 }
 
-export class DrawableGridInstances extends DrawableTokenInstances {
-
-  _createStaticGeometries() {
-    this.geometries.set("token", new GeometryGridDesc({ addNormals: this.debugViewNormals, addUVs: false }));
-  }
-
-  _createStaticDrawables() {
-    this.materials.create({ r: 1.0, label: "target" });
-    const geom = this.geometries.get("token");
-    this.drawables.set("target", {
-      label: "Token target",
-      geom,
-      materialBG: this.materials.bindGroups.get("target"),
-      instanceSet: new Set(),
-    });
-  }
-
-  prerender(commandEncoder, opts) {
-    DrawableObjectRBCulledInstancesAbstract.prototype.prerender.call(this, commandEncoder, opts);
-  }
-
-  filterObjects() { return; }
-}
-
 // Tile instances.
 export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
   /** @type {TokenInstanceHandler} */
@@ -1628,5 +1604,45 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
 
   // Lit tokens not rendered as obstacles, so skip.
   render() { return; }
+}
 
+export class DrawableGridShape extends DrawableConstrainedTokens {
+
+ static _includeToken(token) { return true; }
+
+  #prerendered = false;
+
+  prerender(commandEncoder, opts) {
+    if ( !this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
+      // Create a geometry for each constrained token.
+      // Get every token so we don't have to redo the buffer every time we change targets.
+      this.geometries.clear();
+      this.drawables.clear();
+      this.targetDrawables.clear();
+      const targetBG = this.materials.bindGroups.get("target");
+      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+        // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
+
+        // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
+        // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+        const geom = new GeometryGridFromTokenDesc({ token, addNormals: false, addUVs: false })
+        this.geometries.set(token.id, geom);
+        this.targetDrawables.set(token.id, {
+          label: `Target drawable ${token.id}`,
+          geom,
+          materialBG: targetBG,
+          numInstances: 1,
+        });
+      }
+      this._setStaticGeometriesBuffers();
+      this.#prerendered = true;
+    }
+    super.prerender(commandEncoder, opts);
+  }
+
+
+  // Grid shape not rendered as obstacles, so skip.
+  render() { return; }
+
+  filterObjects() { return; }
 }

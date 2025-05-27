@@ -705,6 +705,28 @@ export class GeometryGridDesc extends GeometryDesc {
   }
 }
 
+// Centered on token.
+export class GeometryGridFromTokenDesc extends GeometryConstrainedTokenDesc {
+  /** @type {string} */
+  label = "GridShape from Token"
+
+  /**
+   * Define the vertices and optional indices for this geometry.
+   * @param {object} [opts]
+   * @param {number} [opts.R]           Length of the circumradius
+   * @param {number} [opts.r]           Length of the inradius
+   * @param {number} [opts.h]           Height
+   */
+  static defineVertices({ token }) {
+    let poly = new PIXI.Polygon(...canvas.grid.getShape());
+    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    poly = poly.translate(...ctr)
+    const topZ = canvas.grid.size * 0.5 + ctr.z;
+    const bottomZ = canvas.grid.size * -0.5 + ctr.z;
+    return this.define3dPolygonVertices(poly, { topZ, bottomZ });
+  }
+}
+
 
 /* Test for normal
 Point3d = CONFIG.GeometryLib.threeD.Point3d

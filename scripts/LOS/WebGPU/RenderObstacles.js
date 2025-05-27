@@ -20,7 +20,7 @@ import {
   DrawableNonTerrainWallInstances,
   DrawableTerrainWallInstances,
   DrawableLitTokens,
-  DrawableGridInstances,
+  DrawableGridShape,
   } from "./DrawableObjects.js";
 
 /*
@@ -70,7 +70,7 @@ export class RenderObstacles {
     DrawableConstrainedTokens,
     DrawableHexTokenInstances,
     DrawableLitTokens,
-    DrawableGridInstances,
+    DrawableGridShape,
   ];
 
   /** @type {object} */
@@ -149,7 +149,7 @@ export class RenderObstacles {
           this.drawableLitToken = drawableObj; break;
 
         // Same for the unit grid shape; not a filtered obstacle.
-        case DrawableGridInstances:
+        case DrawableGridShape:
           this.drawableGridShape = drawableObj; break;
 
         case DrawableConstrainedTokens:
