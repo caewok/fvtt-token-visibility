@@ -7,7 +7,6 @@ foundry,
 "use strict";
 
 import { MODULE_ID } from "../../const.js";
-import { log } from "../util.js";
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
@@ -181,6 +180,30 @@ export class RenderObstacles {
   async initialize() {
     await this._initializeDrawObjects();
     this._allocateRenderTargets();
+    this.initializeOcclusionQueryBuffers();
+  }
+
+  /** @type {object} */
+  occlusion = {
+    querySet: null,           /** @type {WebGPUQuerySet} */
+    resolveBuffer: null,      /** @type {WebGPUBuffer} */
+    resultBuffer: null,       /** @type {WebGPUBuffer} */
+  };
+
+  initializeOcclusionQueryBuffers() {
+    const device = this.device;
+    this.occlusion.querySet = device.createQuerySet({
+      type: "occlusion",
+      count: 2,
+    });
+    this.occlusion.resolveBuffer = device.createBuffer({
+      size: 2 * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    this.occlusion.resultBuffer = device.createBuffer({
+      size: 2 * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
   }
 
   /**
@@ -312,6 +335,7 @@ export class RenderObstacles {
       loadOp = renderPassDesc.colorAttachments[0].loadOp;
       renderPassDesc.colorAttachments[0].loadOp = "load";
     }
+    renderPassDesc.occlusionQuerySet = this.occlusion.querySet;
 
     const useLit = useLitTargetShape
       && target.litTokenBorder
@@ -331,14 +355,25 @@ export class RenderObstacles {
     // (Could be either constrained or not constrained.)
     // Don't use instancing to render b/c that gets too complicated with the possible lit or constrained targets.
     // log(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    renderPass.beginOcclusionQuery(0);
     targetDrawable.renderTarget(renderPass, target);
+    renderPass.endOcclusionQuery();
 
     // Render the obstacles
     // log(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    renderPass.beginOcclusionQuery(1);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
+    renderPass.endOcclusionQuery(1);
 
     // TODO: Do we need to render terrains last?
     renderPass.end();
+
+    // Occlusion query.
+    // resultBuffer must be unmapped for this to work.
+    commandEncoder.resolveQuerySet(this.occlusion.querySet, 0, 2, this.occlusion.resolveBuffer, 0);
+    commandEncoder.copyBufferToBuffer(this.occlusion.resolveBuffer, 0, this.occlusion.resultBuffer, 0, this.occlusion.resultBuffer.size);
+
+
     this.device.queue.submit([commandEncoder.finish()]);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.postrender();
     if ( useLit ) targetDrawable.postrender();

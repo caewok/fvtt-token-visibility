@@ -243,7 +243,6 @@ Object.values(debugViewers).forEach(debugViewer => debugViewer.destroy())
 // All at once
 calcPoints = new api.calcs.points();
 calcGeometric = new api.calcs.geometric();
-calcPIXI = new api.calcs.PIXI();
 calcWebGL2 = new api.calcs.webGL2()
 calcWebGL2Instancing = new api.calcs.webGL2({ useInstancing: true });
 calcHybrid = new api.calcs.hybrid();
@@ -254,7 +253,6 @@ calcWebGPUAsync = new api.calcs.webGPUAsync({ device });
 
 await calcPoints.initialize();
 await calcGeometric.initialize();
-await calcPIXI.initialize();
 await calcWebGL2.initialize();
 await calcWebGL2Instancing.initialize();
 await calcHybrid.initialize();
@@ -265,7 +263,6 @@ await calcWebGPUAsync.initialize();
 console.table({
   calcPoints: calcPoints.percentVisible(viewer, target),
   calcGeometric: calcGeometric.percentVisible(viewer, target),
-  calcPIXI: calcPIXI.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGL2Instancing: calcWebGL2Instancing.percentVisible(viewer, target),
   calcHybrid: calcHybrid.percentVisible(viewer, target),
@@ -273,13 +270,25 @@ console.table({
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
 
 //   async_calcPoints: await calcPoints.percentVisibleAsync(viewer, target),
-//   asyc_calcPIXI: await calcPIXI.percentVisibleAsync(viewer, target),
 //   async_calcWebGL2: await calcWebGL2.percentVisibleAsync(viewer, target),
 //   async_calcWebGL2Instancing: await calcWebGL2Instancing.percentVisibleAsync(viewer, target),
 //   async_calcWebGPU: await calcWebGPU.percentVisibleAsync(viewer, target),
 //   async_calcWebGPUAsync: await calcWebGPUAsync.percentVisibleAsync(viewer, target),
 //   async_calcHybrid: await calcHybrid.percentVisibleAsync(viewer, target),
 });
+
+
+occlusion = calcWebGPU.renderObstacles.occlusion
+await occlusion.resultBuffer.mapAsync(GPUMapMode.READ);
+results = new BigUint64Array(occlusion.resultBuffer.getMappedRange())
+occlusion.resultBuffer.unmap();
+
+occlusion = calcWebGPU.renderObstacles.occlusion
+await occlusion.resultBuffer.mapAsync(GPUMapMode.READ);
+results = new Uint32Array(occlusion.resultBuffer.getMappedRange())
+occlusion.resultBuffer.unmap();
+
+
 
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn;

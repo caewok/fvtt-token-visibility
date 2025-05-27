@@ -29,7 +29,7 @@ Basic approach:
  */
 export class WebGPUDevice {
   /** @type {string[]} */
-  static FEATURES = [ "bgra8unorm-storage", "timestamp-query", "texture-compression-bc", "texture-compression-etc2"];
+  static FEATURES = [ "bgra8unorm-storage", "timestamp-query", "texture-compression-bc", "texture-compression-etc2", "occlusion-query"];
 
   /** @type {string} */
   static #presentationFormat = "rgba8unorm";
