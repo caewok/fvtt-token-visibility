@@ -136,7 +136,16 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const blockingTerrainPaths = this._combineTerrainPolys(blockingTerrainPolys);
     let blockingPaths = this._combineObstaclePolys(blockingPolys);
     if ( blockingTerrainPaths && !blockingTerrainPaths.area.almostEqual(0) ) {
-      blockingPaths = blockingPaths.add(blockingTerrainPaths).combine();
+      if ( !blockingPaths ) {
+        blockingPaths = blockingTerrainPaths.combine();
+        console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
+      }
+      else blockingPaths = blockingPaths.add(blockingTerrainPaths).combine();
+    }
+
+    if ( !targetPaths ) {
+      console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
+      return { targetArea: 1, obscuredArea: 1 };
     }
 
     // Construct the obscured shape by taking the difference between the target polygons and
@@ -144,6 +153,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const targetArea = Math.abs(targetPaths.area);
     if ( targetArea.almostEqual(0) ) return { targetArea, obscuredArea: 0 };
 
+    if ( !blockingPaths ) {
+      console.warn(`${this.constructor.name}|_obscuredArea|No blockingPaths for ${this.viewer.name} --> ${this.target.name}`);
+      return { targetArea, obscuredArea: 0 };
+    }
     const diff = blockingPaths.diffPaths(targetPaths); // TODO: Correct order?
     return { targetArea, obscuredArea: Math.abs(diff.area) };
   }
@@ -239,6 +252,12 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const perspectiveM = this.camera.perspectiveMatrix;
     const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
     const targetPolys = this._applyPerspective(facingPolys, lookAtM, perspectiveM);
+
+    // Test if the transformed polys are all getting clipped.
+    const txPolys = facingPolys.map(poly => poly.transform(lookAtM));
+    if ( txPolys.every(poly => poly.iteratePoints({close: false}).every(pt => pt.z > 0)) ) {
+      console.warn(`_applyPerspective|All target z values are positive for ${this.viewer.name} --> ${this.target.name}`);
+    }
 
     const blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));

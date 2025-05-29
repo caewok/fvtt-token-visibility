@@ -481,7 +481,7 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
     // Set the token border to center at 0,0,0 to match handling of other geometries.
     // Then pass through the token position to translate it back.
     border ??= token.constrainedTokenBorder || token.tokenBorder;
-    const { topZ, bottomZ } = token;
+    let { topZ, bottomZ } = token;
     if ( border instanceof PIXI.Rectangle ) {
       this.label += " Cube"
       // Divide in half to center at 0,0, with half on +, half on -
@@ -490,9 +490,13 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
       const h = (topZ - bottomZ) * 0.5
       return GeometryCubeDesc.defineVertices({ w, d, h });
     }
+
+    // Center at 0,0,0
     const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const txBorder = border.translate(-x, -y, -z);
-    return this.define3dPolygonVertices(border, { topZ, bottomZ });
+    const txBorder = border.translate(-x, -y);
+    topZ -= z;
+    bottomZ -= z;
+    return this.define3dPolygonVertices(txBorder, { topZ, bottomZ });
   }
 
   // Override x,y,z to translate the token object to world space.

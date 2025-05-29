@@ -11,7 +11,7 @@ PIXI
 import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
-import { buildCustomLOSCalculator } from "./LOSCalculator.js";
+import { buildCustomLOSViewer } from "./LOSCalculator.js";
 import { registerArea3d } from "./patching.js";
 
 /* Use
@@ -58,7 +58,7 @@ function summarizeTokenVisibility(viewers, targets) {
   const summary = {};
   for ( const calcType of calcs ) {
     for ( const viewer of viewers ) {
-      const losCalc = buildCustomLOSCalculator(viewer, calcType);
+      const losCalc = buildCustomLOSViewer(viewer, { viewpointClass: calcType });
       for ( const target of targets ) {
         if ( viewer === target ) continue;
         const label = `${viewer.name} --> ${target.name}`;
@@ -232,7 +232,7 @@ export async function benchTokenLOS(n = 100, opts = {}) {
   // Count viewpoints.
   const viewpointCases = { [CENTER]: 1, [TWO]: 2, [THREE]: 3, [FOUR]: 4, [FIVE]: 5, [EIGHT]: 8, [NINE]: 9 }
   const viewpoints = viewpointCases[Settings.get(Settings.KEYS.LOS.VIEWER.NUM_POINTS)]
-  console.log(`${viewers.length} viewers, ${viewpoints} viewpoints, ${targets.length} targets`)
+  console.log(`${viewers.length} viewers, ${viewpoints} viewpoints per viewer, ${targets.length} targets`)
 
   console.log("\n")
   const fn = opts.movement ? runLOSTestWithMovement : runLOSTest;
@@ -278,7 +278,7 @@ async function runLOSTest(n, viewers, targets, { algorithm, nPoints, large = fal
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
   nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
 
-  const calcs = viewers.map(viewer => buildCustomLOSCalculator(viewer, { viewpointKey: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
+  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, { viewpointClass: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
   const promises = [];
   calcs.forEach(calc => promises.push(calc.initialize()));
   await Promise.allSettled(promises);
@@ -316,7 +316,7 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints,
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
   nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
 
-  const calcs = viewers.map(viewer => buildCustomLOSCalculator(viewer, { viewpointKey: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
+  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, { viewpointClass: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
   const promises = [];
   calcs.forEach(calc => promises.push(calc.initialize()));
   await Promise.allSettled(promises);

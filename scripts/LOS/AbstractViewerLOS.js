@@ -581,7 +581,7 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
     const cacheKey = this.#calculateCacheKey();
     if ( this.#cacheKeys[cacheType] !== cacheKey ) {
-      console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name} cache key changed\n\t${this.#cacheKeys[cacheType]}\n\t${cacheKey}`);
+      // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name} cache key changed\n\t${this.#cacheKeys[cacheType]}\n\t${cacheKey}`);
       this.#cacheKeys[cacheType] = cacheKey;
       this.#cachedPercentVisible[cacheType] = new WeakMap();
       return;
@@ -631,12 +631,12 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     if ( !this.viewer ) return 0;
     this.validateCache(target);
     if ( this.hasCachedValue(target) ) {
-      console.debug(`${this.constructor.name}|Returning cached value ${this.getCachedValue(target)} for ${this.viewer.name} --> ${this.target.name}`);
+      // console.debug(`${this.constructor.name}|Returning cached value ${this.getCachedValue(target)} for ${this.viewer.name} --> ${this.target.name}`);
       return this.getCachedValue(target)
     }
     const out = super.percentVisible(target);
     this.setCacheValue(target, out);
-    console.debug(`${this.constructor.name}|Caching value ${out} for ${this.viewer.name} --> ${this.target.name}`);
+    // console.debug(`${this.constructor.name}|Caching value ${out} for ${this.viewer.name} --> ${this.target.name}`);
     return out;
   }
 

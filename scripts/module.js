@@ -171,7 +171,7 @@ Hooks.once("init", function() {
 
     useRenderTexture: false,
 
-    useCaching: true,
+    useCaching: false,
 
     /**
      * Resolution of the render texture used in the webZGL LOS algorithm.

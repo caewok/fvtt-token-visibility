@@ -119,6 +119,11 @@ viewer = _token
 target = game.user.targets.first()
 
 
+CONFIG[MODULE_ID].useCaching = false;
+N = 20
+await api.bench.benchTokenLOS(N, { sleep: false, movement: false })
+await api.bench.benchTokenLOS(N, { sleep: false, movement: true })
+await api.bench.benchTokenLOS(N, { sleep: true, movement: true })
 
 
 let { vec3, vec4, mat4, quat } = api.glmatrix
@@ -244,7 +249,7 @@ Object.values(debugViewers).forEach(debugViewer => debugViewer.destroy())
 // All at once
 calcPoints = new api.calcs.points();
 calcGeometric = new api.calcs.geometric();
-calcWebGL2 = new api.calcs.webGL2()
+calcWebGL2 = new api.calcs.webGL2();
 calcWebGL2Instancing = new api.calcs.webGL2({ useInstancing: true });
 calcHybrid = new api.calcs.hybrid();
 calcWebGPU = new api.calcs.webGPU({ device });
@@ -323,7 +328,7 @@ CONFIG.tokenvisibility.clipperVersion = 2
 CONFIG.tokenvisibility.filterInstances = true
 CONFIG.tokenvisibility.filterInstances = false
 
-
+N = 100
 await QBenchmarkLoop(N, calcPoints, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcGeometric, "percentVisible", viewer, target)
 await QBenchmarkLoop(N, calcHybrid, "percentVisible", viewer, target)
