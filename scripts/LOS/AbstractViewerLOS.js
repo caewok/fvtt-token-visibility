@@ -531,11 +531,16 @@ export class AbstractViewerLOS {
 
 export class CachedAbstractViewerLOS extends AbstractViewerLOS {
 
-  /** @type {WeakMap<Token, number>} */
-  cachedPercentVisible = new WeakMap();
+  #cachedPercentVisible = {
+    litTarget: new WeakMap(), /** @type {WeakMap<Token, number>} */
+    unlitTarget: new WeakMap(), /** @type {WeakMap<Token, number>} */
+  };
 
-  /** @type {string} */
-  #cacheKey = ""; // Keyed to the current settings to detect settings changes.
+  // Keyed to the current settings to detect settings changes.
+  #cacheKeys = {
+    litTarget: "", /** @type {string} */
+    unlitTarget: "", /** @type {string} */
+  };
 
   constructor(...args) {
     super(...args);
@@ -558,20 +563,27 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
   }
 
   #calculateCacheKey() {
+    // Drop useLitTargetShape b/c we are tracking that separately.
+    const calcConfig = { ...this.calculator.config };
+    delete calcConfig.useLitTargetShape;
+
+    // Combine all remaining settings into string.
     return JSON.stringify({
       ...this.config,
-      ...this.calculator.config,
+      ...calcConfig,
       viewpointClassName: this.viewpointClassName,
       numViewpoints: this.viewpoints.length
     });
   }
 
-  updateCache(target) {
+  validateCache(target) {
     // If the settings have changed, wipe the cache.
+    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
     const cacheKey = this.#calculateCacheKey();
-    if ( this.#cacheKey !== cacheKey ) {
-      this.#cacheKey = cacheKey;
-      this.cachedPercentVisible = new WeakMap();
+    if ( this.#cacheKeys[cacheType] !== cacheKey ) {
+      console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name} cache key changed\n\t${this.#cacheKeys[cacheType]}\n\t${cacheKey}`);
+      this.#cacheKeys[cacheType] = cacheKey;
+      this.#cachedPercentVisible[cacheType] = new WeakMap();
       return;
     }
 
@@ -587,19 +599,39 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
 
     // Clear all variations
-    if ( clearAll || clearViewer ) this.cachedPercentVisible = new WeakMap();
-    else if ( clearTarget ) this.cachedPercentVisible.delete(target);
+    // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name}`, { clearAll, clearViewer, clearTarget });
+
+    if ( clearAll || clearViewer ) this.#cachedPercentVisible[cacheType] = new WeakMap();
+    else if ( clearTarget ) this.#cachedPercentVisible[cacheType].delete(target);
   }
 
+  setCacheValue(target, value) {
+    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
+    this.#cachedPercentVisible[cacheType].set(target, value);
+  }
+
+  getCachedValue(target) {
+    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
+    return this.#cachedPercentVisible[cacheType].get(target);
+  }
+
+  hasCachedValue(target) {
+    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
+    return this.#cachedPercentVisible[cacheType].has(target);
+  }
 
   percentVisible(target) {
     if ( !CONFIG[MODULE_ID].useCaching ) return super.percentVisible(target);
 
     if ( !this.viewer ) return 0;
-    this.updateCache(target);
-    if ( this.cachedPercentVisible.has(target) ) return this.cachedPercentVisible.get(target);
+    this.validateCache(target);
+    if ( this.hasCachedValue(target) ) {
+      console.debug(`${this.constructor.name}|Returning cached value ${this.getCachedValue(target)} for ${this.viewer.name} --> ${this.target.name}`);
+      return this.getCachedValue(target)
+    }
     const out = super.percentVisible(target);
-    this.cachedPercentVisible.set(target, out);
+    this.setCacheValue(target, out);
+    console.debug(`${this.constructor.name}|Caching value ${out} for ${this.viewer.name} --> ${this.target.name}`);
     return out;
   }
 
@@ -607,10 +639,10 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     if ( !CONFIG[MODULE_ID].useCaching ) return super.percentVisibleAsync(target);
 
     if ( !this.viewer ) return 0;
-    this.updateCache(target);
-    if ( this.cachedPercentVisible.has(target) ) return this.cachedPercentVisible.get(target);
+    this.validateCache(target);
+    if ( this.hasCachedValue(target) ) return this.getCachedValue(target);
     const out = await super.percentVisibleAsync(target);
-    this.cachedPercentVisible.set(target, out);
+    this.setCacheValue(target, out);
     return out;
   }
 }

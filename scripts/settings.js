@@ -522,7 +522,7 @@ export class Settings extends ModuleSettingsAbstract {
       // Set a new shared calculator for all tokens.
       const calc = buildLOSCalculator();
       canvas.tokens.placeables.forEach(token => {
-        const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+        const losCalc = token[MODULE_ID]?.losCalc;
         if ( !losCalc ) return;
         losCalc.calculator = calc;
       });

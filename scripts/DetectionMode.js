@@ -49,6 +49,10 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
+  // Only apply this test to token viewers.
+  const viewer = visionSource.object;
+  if ( !viewer || !(viewer instanceof Token) ) return wrapped(visionSource, mode, target, test);
+
   // Check the cached value; return if there.
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
@@ -72,12 +76,23 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
 //   console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
 
   // Configure the line-of-sight calculator.
-  const losCalc = visionSource[MODULE_ID].losCalc;
+
+  const losCalc = viewer[MODULE_ID]?.losCalc;
+  if ( !losCalc ) return wrapped(visionSource, mode, target, test);
   losCalc.useLitTargetShape = useLitTargetShape;
+
+  const senseType = visionSource.constructor.sourceType;
+  if ( senseType !== "sight" ) {
+    console.debug(`${MODULE_ID}|_testLOS|visionSource type is ${senseType}`);
+    losCalc.calculator.config = { senseType };
+  }
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
   hasLOS = losCalc.hasLOS(target);
   test.los.set(visionSource, hasLOS);
+
+  if ( senseType !== "sight" ) losCalc.calculator.config = { senseType: "sight" }; // Reset.
+
   return hasLOS;
 }
 

@@ -15,9 +15,6 @@ import { PATCHES as PATCHES_Setting } from "./settings.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 
-// LOS
-import { PATCHES as PATCHES_Wall } from "./Wall.js";
-
 // Levels
 import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
 
@@ -29,7 +26,6 @@ const PATCHES = {
   Setting: PATCHES_Setting,
   SettingsConfig: PATCHES_SettingsConfig,
   Token: PATCHES_Token,
-  Wall: PATCHES_Wall,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,
 };
 

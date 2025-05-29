@@ -21,9 +21,10 @@ PATCHES.BASIC = {};
  */
 function canvasTearDown(canvas) {
   canvas.tokens.placeables.forEach(token => {
-    const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+    const losCalc = token[MODULE_ID]?.losCalc;
     if ( !losCalc ) return;
     losCalc.destroy();
+    token[MODULE_ID].losCalc = undefined;
   });
 }
 
