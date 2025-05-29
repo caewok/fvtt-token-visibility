@@ -21,7 +21,13 @@ import * as bench from "./benchmark.js";
 
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
 
-import { buildLOSCalculator, buildCustomLOSCalculator, buildDebugViewer } from "./LOSCalculator.js";
+import {
+  buildLOSCalculator,
+  buildCustomLOSCalculator,
+  buildLOSViewer,
+  buildCustomLOSViewer,
+  buildDebugViewer,
+} from "./LOSCalculator.js";
 
 import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
 
@@ -275,6 +281,8 @@ Hooks.once("init", function() {
 
     buildLOSCalculator,
     buildCustomLOSCalculator,
+    buildLOSViewer,
+    buildCustomLOSViewer,
     buildDebugViewer,
 
     debugViewers: {
@@ -365,9 +373,8 @@ Hooks.once("setup", function() {
 
 Hooks.once("ready", function() {
   console.debug(`${MODULE_ID}|ready hook`);
+  Settings.migrate(); // Cannot be set until world is ready.
   Settings.initializeDebugGraphics();
-
-
 });
 
 Hooks.on("canvasReady", function() {
@@ -398,15 +405,13 @@ Hooks.on("canvasReady", function() {
   WebGPUDevice.getDevice().then(device => {
     if ( !device ) {
       console.warn("No WebGPU device located. Falling back to WebGL2.");
-      for ( const calcName of webGPUCalcs ) sightCalcs[calcName] = sightCalcs.webGL2;
-    } else {
-      CONFIG[MODULE_ID].webGPUDevice = device;
-      for ( const calcName of webGPUCalcs ) {
-        const cl = calcClasses[calcName];
-        const calc = sightCalcs[calcName] = new cl({ senseType: "sight", device });
-        calc.initialize(); // Async.
+      const currAlg = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
+      if ( currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU
+        || currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU_ASYNC ) {
+        Settings.set(Settings.KEYS.LOS.TARGET.ALGORITHM, Settings.KEYS.LOS.TARGET.TYPES.WEBGL2);
       }
-    }
+    } else CONFIG[MODULE_ID].webGPUDevice = device;
+
     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
   });
 });

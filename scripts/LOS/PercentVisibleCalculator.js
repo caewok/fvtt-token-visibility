@@ -29,28 +29,20 @@ export class PercentVisibleCalculatorAbstract {
     useLitTargetShape: false,
     senseType: "sight",
     debug: false,
+    largeTarget: false,
   };
 
-  /**
-   * The configuration object, if provided, will be kept and can be updated externally.
-   * For example, it can be dynamically updated based on settings and shared among multiple
-   * calculators.
-   */
   constructor(cfg = {}) {
-    // First merge in the default configuration, overriding where appropriate.
-    const tmp = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false })
-    this._config = cfg; // Link the configuration object.
-    this.config = tmp; // Update in place with the merged configuration file.
+    // Set default configuration first and then override with passed-through values.
+    this.config = this.constructor.defaultConfiguration;
+    this.config = cfg;
   }
 
   _config = {};
 
-  get config() { return this._config; }
+  get config() { return { ...this._config }; }
 
-  set config(cfg = {}) {
-    // Copy the config in place so the linked configuration object is not broken.
-    foundry.utils.mergeObject(this._config, cfg, { inplace: true})
-  }
+  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true}) }
 
   wallTracker;
 
@@ -58,7 +50,11 @@ export class PercentVisibleCalculatorAbstract {
 
   tokenTracker;
 
+  #initialized = false;
+
   async initialize() {
+    if ( this.#initialized ) return;
+    this.#initialized = true; // Avoids async issues if saved right away.
     this.wallTracker = new DocumentUpdateTracker("Wall", DocumentUpdateTracker.LOS_ATTRIBUTES.Wall);
     this.tileTracker = new DocumentUpdateTracker("Tile", DocumentUpdateTracker.LOS_ATTRIBUTES.Tile);
     this.tokenTracker = new TokenUpdateTracker(TokenUpdateTracker.LOS_ATTRIBUTES, TokenUpdateTracker.LOS_FLAGS);

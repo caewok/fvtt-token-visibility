@@ -497,3 +497,9 @@ export function checkFramebufferStatus(gl, framebuffer) {
   }
   return status === gl.FRAMEBUFFER_COMPLETE;
 }
+
+export function flipObjectKeyValues(obj) {
+  const newObj = {};
+  Object.entries(obj).forEach(([key, value]) => newObj[value] = key);
+  return newObj;
+}

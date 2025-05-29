@@ -58,34 +58,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    */
   static SCALING_FACTOR = 100;
 
-  /**
-   * Sets configuration to the current settings.
-   * @param {ViewpointConfig} [cfg]
-   * @returns {ViewpointConfig}
-   */
-//   initializeConfig(cfg = {}) {
-//     // Configs specific to the Points algorithm.
-//     const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
-//     cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
-//     cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
-//     cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
-//     cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
-//     cfg.useLitTargetShape ??= true;
-//
-//     // Blocking canvas objects.
-//     cfg.blocking ??= {};
-//     cfg.blocking.walls ??= true;
-//     cfg.blocking.tiles ??= true;
-//
-//     // Blocking tokens.
-//     cfg.blocking.tokens ??= {};
-//     cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
-//     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
-//     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
-//
-//     return cfg;
-//   }
-
   viewer;
 
   target;
@@ -450,5 +422,5 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
 export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
   static viewpointClass = GeometricViewpoint;
 
-  algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC;
+  algorithm = Settings.KEYS.LOS.TARGET.TYPES.GEOMETRIC;
 }

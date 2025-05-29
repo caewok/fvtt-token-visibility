@@ -9,7 +9,7 @@ game
 // Patches for the Token class
 
 import { MODULE_ID } from "./const.js";
-import { buildLOSCalculator } from "./LOSCalculator.js";
+import { buildLOSViewer } from "./LOSCalculator.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -43,8 +43,7 @@ function initializeVisionSource(wrapped, options) {
   wrapped(options);
   if ( !this.vision ) return;
   const obj = this.vision[MODULE_ID] ??= {};
-  obj.losCalc ??= buildLOSCalculator(this);
-
+  obj.losCalc ??= buildLOSViewer(this);
 }
 
 PATCHES.BASIC.WRAPS = { initializeVisionSource };
@@ -80,7 +79,7 @@ function targetTokenDebugHook(user, target, targeted) {
 //   if ( !targeted || game.user !== user ) return;
 //   canvas.tokens.placeables.forEach(token => {
 //     if ( token === target || !token.controlled ) return;
-//     const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+//     const calc = token.vision?.[MODULE_ID]?.losCalc.calculator;
 //     if ( !calc ) return;
 //     calc._clearCache();
 //     calc.target = target;
@@ -177,7 +176,7 @@ function updateDebugForRelatedTokens(changedToken) {
   // For any other controlled token, update its LOS canvas display for this one.
   canvas.tokens.placeables.forEach(token => {
     if ( token === changedToken || !token.controlled ) return;
-    const calc = token.vision?.[MODULE_ID]?.losCalc.calc;
+    const calc = token.vision?.[MODULE_ID]?.losCalc;
     if ( !calc ) return;
     if ( calc.target === changedToken ) calc.clearDebug();
     calc._clearCache();

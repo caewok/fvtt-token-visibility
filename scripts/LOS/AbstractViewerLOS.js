@@ -1,7 +1,6 @@
 /* globals
 canvas,
 CONFIG,
-CONST,
 foundry,
 LimitedAnglePolygon,
 Ray
@@ -36,16 +35,34 @@ import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.
  */
 
 /**
- * @typedef {object} ViewpointConfig    Configuration settings passed to viewpoints
- *
+ * @typedef {object} CalculatorConfig    Configuration settings passed to viewpoints
+ * @property {BlockingConfig} blocking                    Do various canvas objects block?
+ * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
+ * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
+ * @property {boolean} useLitTargetShape            Should the illuminated target shape be used?
+ * @property {boolean} debug                              Trigger debug drawings and logging
+ */
 
 /**
- * @typedef {object} ViewerLOSConfig  Configuration settings for this class.
- * @property {CONST.WALL_RESTRICTION_TYPES} senseType    Type of source (light, sight, etc.)
- * @property {BlockingConfig} blocking              Do various canvas objects block?
- * @property {boolean} largeTarget                  Use special handling for targets larger than grid square
- * @property {number} threshold                     Numeric threshold for determining LOS from percent visible
- * @property {boolean} useLitTargetShape            Should the illuminated target shape be used?
+ * @typedef {object} PointsCalculatorConfig
+ * ...{CalculatorConfig}
+ * @property {AbstractViewerLOS.POINT_TYPES} pointAlgorithm     String code for the point algorithm (number of points) to use
+ * @property {number} targetInset                       How much to inset target points from target border
+ * @property {boolean} points3d                         Whether to use 3d points
+ */
+
+/**
+ * @typedef {object} WebGL2CalculatorConfig
+ * ...{CalculatorConfig}
+ * @property {number} alphaThreshold                    Threshold value for testing alpha of tiles
+ * @property {boolean} useInstancing                    Use instancing with webGL2
+ */
+
+/**
+ * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
+ * @property {AbstractViewerLOS.POINT_TYPES} numViewpoints    String code for number of viewpoints
+ * @property {number} viewpointOffset                         Offset each viewpoint from border
+ * @property {number} threshold                               Percent needed to be seen for LOS
  */
 export class AbstractViewerLOS {
   /** @type {enum<string>} */
@@ -59,22 +76,32 @@ export class AbstractViewerLOS {
     NINE: "points-nine" // Corners, midpoints, center
   };
 
+  // Simply trim "los-algorithm-" from the setting.
+  static VIEWPOINT_ALGORITHM_SETTINGS = {
+    "los-algorithm-points": "points",
+    "los-algorithm-geometric": "geometric",
+    "los-algorithm-hybrid": "hybrid",
+    "los-algorithm-webgl2": "webGL2",
+    "los-algorithm-webgpu": "webGPU",
+    "los-algorithm-webgpu-async": "webGPUAsync",
+  };
+
   /** @type {enum<class>} */
   static get VIEWPOINT_CLASSES() { // Cannot access PointsViewpoint, others, before initialization. So use a getter.
     return {
-      "los-points": PointsViewpoint,
-      "los-area-3d": GeometricViewpoint,
-      "los-area-3d-geometric": GeometricViewpoint,
-      "los-area-3d-hybrid": Hybrid3dViewpoint,
-      "los-webgl2": WebGL2Viewpoint,
-      "los-webgpu": WebGPUViewpoint,
-      "los-webgpu-async": WebGPUViewpointAsync,
-      points: PointsViewpoint,
-      geometric: GeometricViewpoint,
-      hybrid: Hybrid3dViewpoint,
-      webGL2: WebGL2Viewpoint,
-      webGPU: WebGPUViewpoint,
-      webGPUAsync: WebGPUViewpointAsync,
+      "points": PointsViewpoint,
+      "geometric": GeometricViewpoint,
+      "hybrid": Hybrid3dViewpoint,
+      "webgl2": WebGL2Viewpoint,
+      "webgpu": WebGPUViewpoint,
+      "webgpu-async": WebGPUViewpointAsync,
+
+      PointsViewpoint: "points",
+      GeometricViewpoint: "geometric",
+      Hybrid3dViewpoint: "hybrid",
+      WebGL2Viewpoint: "webgl2",
+      WebGPUViewpoint: "webgpu",
+      WebGPUViewpointAsync: "webgpu-async",
     }
   };
 
@@ -100,117 +127,70 @@ export class AbstractViewerLOS {
     ...this.POINT_TYPES,
   };
 
-  static defaultConfiguration = {
-    // Viewpoint configuration
-    viewpointClass: AbstractViewpoint,
-    numViewpoints: this.POINT_TYPES.CENTER,
-    viewpointOffset: 0,
-
-    // Other configs used in AbstractViewerLOS
-    useLitTargetShape: false,
-    threshold: 0.75, // Percent used for LOS
-  }
-
   /**
    * @param {Token} viewer      The token whose LOS should be tested
    * @param {object} [opts]
-   * @param {VIEWPOINT_CLASSES|class} [opts.viewpointClass]   Class of the viewpoint algorithm
-   * @param {number|string} [opts.numViewpoints]              Number of viewpoints or associated algorithm
+   *
+   * One of calcalator or viewpointClass must be provided:
+   * @param {PercentVisibleCalculatorAbstract} [opts.calculator]      Calculator to use to test the viewpoints
+   * @param {VIEWPOINT_CLASSES|class} [opts.viewpointClass]           Class of the viewpoint algorithm
+   *
+   * Other options:
+   * @param {number|string} [opts.numViewpoints]              Number of viewpoints or string identifying associated algorithm
    * @param {number} [opts.viewpointOffset]                   Used to adjust the viewpoint location
-   * @param {WALL_RESTRICTION_TYPES} [opts.senseType]         What type of walls block this viewer (e.g., sight, light)
-   * @param {object} [...cfg]                                 Other options
+   * @param {number} [opts.threshold]                         Percentage used to test for LOS (above this passes)
+   * @param {object} [...cfg]                                 Passed to a newly-constructed calculator if none provided.
    */
-  constructor(viewer, cfg = {}) {
-    // First merge in the default configuration, overriding where appropriate.
-    const tmp = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false })
-    this._config = cfg; // Link the configuration object.
-    this.config = tmp; // Update in place with the merged configuration file.
+  constructor(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...cfg } = {}) {
+    this.#viewer = viewer;
+    foundry.utils.mergeObject(this.#config, { viewpointOffset, threshold }, { inplace: true });
 
-    this.viewer = viewer; // Must happen after configuration is set.
-  }
-
-
-  /** @type {ViewerLOSConfig} */
-  get config() { return this._config; }
-
-  set config(cfg = {}) {
-    this.constructor.verifyConfiguration(cfg);
-
-    // If viewpointKey is included, set the calculator and viewpoint class.
-    const rebuildViewpoints = Object.hasOwn(cfg, "viewpointKey", "viewpointClass", "numViewpoints", "viewpointOffset");
-    let rebuildCalculator = false;
-    if ( cfg.viewpointKey ) {
-      if ( cfg.viewpointKey instanceof PercentVisibleCalculatorAbstract ) {
-        this.#calculator = cfg.viewpointKey;
-        cfg.viewpointClass = cfg.viewpointKey.constructor.viewpointClass;
-      } else {
-        cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[cfg.viewpointKey] || cfg.viewpointKey;
-        rebuildCalculator = true;
-        // NOTE: Calc must later be initialized.
-      }
-      delete cfg.viewpointKey;
+    // Confirm the calculator and viewpoint class are compatible and create the calculator
+    if ( !calculator && !viewpointClass ) return console.error(`${this.constructor.name}|One of calculator or viewpointClass must be provided.`);
+    viewpointClass ??= calculator.constructor.viewpointClass;
+    const viewpointClassName = this.constructor.convertViewpointClassToName(viewpointClass);
+    viewpointClass = this.constructor.VIEWPOINT_CLASSES[viewpointClassName];
+    if ( calculator && viewpointClass ) {
+      if ( calculator.constructor.viewpointClass !== viewpointClass ) return console.error(`${this.constructor.name}|Calculator and viewpoint class appear incompatible`, calculator, viewpointClass);
     }
+    calculator ??= new viewpointClass.calcClass(cfg);
+    this.#calculator = calculator;
 
-    foundry.utils.mergeObject(this._config, cfg, { inplace: true });
-    if ( rebuildCalculator ) this.#calculator = new cfg.viewpointClass.calcClass(this._config);
-    if ( rebuildViewpoints ) this.#initializeViewpoints();
-  }
-
-  static verifyConfiguration(cfg) {
-    if ( Object.hasOwn(cfg, "threshold") && !cfg.threshold.between(0, 1) ) {
-      console.error(`${this.constructor.name}|Threshold configuration ${cfg.threshold} not recognized.`);
-    }
-
-    if ( Object.hasOwn(cfg, "senseType") && !CONST.WALL_RESTRICTION_TYPES.some(elem => elem === cfg.senseType) ) {
-      console.error(`${this.constructor.name}|Sense type configuration ${cfg.senseType} not recognized.`);
-    }
-
-    if ( Object.hasOwn(cfg, "numViewpoints") ) {
-      cfg.numViewpoints = this.NUM_VIEWPOINTS[cfg.numViewpoints] || cfg.numViewpoints;
-      if ( !this.NUM_VIEWPOINTS_OPTIONS.has(cfg.numViewpoints) ) {
-        console.error(`${this.constructor.name}|Number of viewpoint configuration ${cfg.numViewpoints} not recognized.`);
-      }
-    }
-    if ( Object.hasOwn(cfg, "viewpointClass") ) cfg.viewpointClass = this.VIEWPOINT_CLASSES[cfg.viewpointClass] || cfg.viewpointClass;
+    // Create the viewpoints.
+    this.initializeViewpoints({ numViewpoints, viewpointOffset });
   }
 
   async initialize() { return this.calculator.initialize(); }
 
-  /**
-   * Sets configuration to the current settings.
-   * @param {ViewerLOSConfig} [cfg]
-   * @returns {ViewerLOSConfig}
-   */
-//   initializeConfig(cfg = {}) {
-//     const KEYS = Settings.KEYS;
-//
-//     // Basic configs.
-//     cfg.type ??= "sight";
-//     cfg.useLitTargetShape ??= true;
-//     cfg.threshold ??= Settings.get(KEYS.LOS.TARGET.PERCENT);
-//     cfg.largeTarget ??= Settings.get(KEYS.LOS.TARGET.LARGE);
-//     cfg.debug ??= Settings.get(KEYS.DEBUG.LOS);
-//     cfg.debugDraw ??= new CONFIG.GeometryLib.Draw();
-//
-//     // Blocking canvas objects.
-//     cfg.blocking ??= {};
-//     cfg.blocking.walls ??= true;
-//     cfg.blocking.tiles ??= true;
-//
-//     // Blocking tokens.
-//     cfg.blocking.tokens ??= {};
-//     cfg.blocking.tokens.dead ??= Settings.get(KEYS.DEAD_TOKENS_BLOCK);
-//     cfg.blocking.tokens.live ??= Settings.get(KEYS.LIVE_TOKENS_BLOCK);
-//     cfg.blocking.tokens.prone ??= Settings.get(KEYS.PRONE_TOKENS_BLOCK);
-//
-//     // Viewpoints.
-//     cfg.viewerPoints = Settings.get(KEYS.LOS.VIEWER.NUM_POINTS);
-//     cfg.viewpointClass = this.constructor.VIEWPOINT_CLASSES[Settings.get(KEYS.LOS.TARGET.ALGORITHM)]
-//       ?? AbstractViewpoint;
-//
-//     return cfg;
-//   }
+  // ----- NOTE: Configuration ---- //
 
+  static defaultConfiguration = {
+    // Viewpoint configuration
+    viewpointOffset: 0,
+    threshold: 0.75, // Percent used for LOS
+  }
+
+  /** @type {ViewerLOSConfig} */
+  #config = { ...this.constructor.defaultConfiguration };
+
+  get viewpointOffset() { return this.#config.viewpointOffset; }
+
+  get threshold() { return this.#config.threshold; }
+
+  set threshold(value) { this.#config.threshold = value; }
+
+  // ----- NOTE: Calculator ----- //
+
+  #calculator;
+
+  get calculator() { return this.#calculator; }
+
+  set calculator(value) {
+    if ( !(value instanceof PercentVisibleCalculatorAbstract) ) console.error("Calculator not recognized", { value });
+    const viewpointClass = this.viewpointClass;
+    this.#calculator = value;
+    if ( viewpointClass !== this.viewpointClass ) this.initializeViewpoints();
+  }
 
   // ----- NOTE: Viewer ----- //
 
@@ -231,29 +211,57 @@ export class AbstractViewerLOS {
   set viewer(value) {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
-    this.#initializeViewpoints();
+    this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewpoints ----- //
-
   /** @type {AbstractViewpoint} */
   viewpoints = [];
 
-  #calculator;
+  get viewpointClass() { return this.#calculator.constructor.viewpointClass; }
 
-  get calculator() { return this.#calculator; }
+  get viewpointClassName() {
+    return this.constructor.VIEWPOINT_CLASSES[this.#calculator.constructor.viewpointClass];
+  }
+
+  static convertViewpointClassToName(value) {
+    if ( value instanceof AbstractViewpoint ) value = this.VIEWPOINT_CLASSES[value];
+    value = value.replace("los-algorithm-", "");
+    if ( !this.VIEWPOINT_CLASSES[value]) return console.error(`Viewpoint class ${value} not recognized.`, { value });
+    return value;
+  }
 
   /**
-   * Determine the viewpoints for this viewer.
-   * @returns {Point3d[]}
+   * If the viewpoint class is changed, creates new viewpoints with new calculators.
+   * To build viewpoints with a shared calculator, set the calculator instead.
+   * @param {VIEWPOINT_ALGORITHM_SETTINGS|VIEWPOINT_CLASSES} value    The string key, settings string, or class
    */
-  #initializeViewpoints() {
-    if ( !this.viewer ) return;
-    const cl = this.config.viewpointClass;
+  set viewpointClass(value) {
+    // Clean up the value to be a in VIEWPOINT_CLASSES.
+    value = this.constructor.convertViewpointClassToName(value);
+
+    // Confirm if change is needed.
+    if ( this.viewpointClassName === value ) return;
+    const viewpointCl = this.constructor.VIEWPOINT_CLASSES[value];
+    const calcClass = viewpointCl.constructor.calcClass;
+    this.#calculator = new calcClass(this.#calculator.config);
+    this.initializeViewpoints();
+  }
+
+  /**
+   * Set up the viewpoints for this viewer.
+   */
+  initializeViewpoints({ numViewpoints, viewpointOffset } = {}) {
+    numViewpoints ||= this.viewpoints.length || 1;
+    viewpointOffset ??= this.viewpointOffset;
+    const cl = this.viewpointClass;
+    let pointAlgorithm = numViewpoints;
+    if ( !this.constructor.NUM_VIEWPOINTS_OPTIONS.has(pointAlgorithm) ) pointAlgorithm = this.constructor.NUM_VIEWPOINTS[numViewpoints]
     this.viewpoints = AbstractViewpoint.constructTokenPoints(this.viewer, {
-      pointAlgorithm: this.config.numViewpoints,
-      inset: this.config.viewpointOffset
+      pointAlgorithm,
+      inset: viewpointOffset
     }).map(pt => new cl(this, pt));
+    this.#config.viewpointOffset = viewpointOffset;
   }
 
   // ----- NOTE: Target ---- //
@@ -279,11 +287,16 @@ export class AbstractViewerLOS {
     return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target);
   }
 
+  get useLitTargetShape() { return this.calculator.config.useLitTargetShape; }
+
+  set useLitTargetShape(useLitTargetShape) { this.calculator.config = { useLitTargetShape }; }
+
   get visibleTargetShape() {
-    const target = this.target;
-    if ( !target ) return undefined;
-    return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
+    if ( !this.target ) return undefined;
+    return this.calculator.getVisibleTargetShape(this.target);
   }
+
+  // ----- NOTE: Visibility testing ----- //
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
@@ -305,9 +318,9 @@ export class AbstractViewerLOS {
     if ( viewer.vision && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return 0;
 
     // Target is not lit.
-    if ( this.config.useLitTargetShape ) {
-      // const shape = this.visibleTargetShape;
-      const shape = target.constrainedTokenBorder;
+    if ( this.useLitTargetShape ) {
+      const shape = this.visibleTargetShape;
+      // const shape = target.constrainedTokenBorder;
       if ( !shape ) return 0;
     };
 
@@ -330,12 +343,11 @@ export class AbstractViewerLOS {
    * @param {}
    * @returns {boolean}
    */
-  hasLOS(target, { threshold, ...opts } = {}) {
+  hasLOS(target) {
     // NOTE: target set using percentVisible; just pass through here.
-    threshold ??= this.config.threshold;
-    const percent = this.percentVisible(target, opts); // Percent visible will reset the cache.
+    const percent = this.percentVisible(target); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
-      && (percent > threshold || percent.almostEqual(threshold));
+      && (percent > this.threshold || percent.almostEqual(this.threshold));
     // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
@@ -349,11 +361,10 @@ export class AbstractViewerLOS {
    * @param {}
    * @returns {boolean}
    */
-  async hasLOSAsync(target, { threshold, ...opts } = {}) {
-    threshold ??= this.config.threshold;
-    const percent = await this.percentVisibleAsync(target, opts); // Percent visible will reset the cache.
+  async hasLOSAsync(target) {
+    const percent = await this.percentVisibleAsync(target); // Percent visible will reset the cache.
     const hasLOS = !percent.almostEqual(0)
-      && (percent > threshold || percent.almostEqual(threshold));
+      && (percent > this.threshold || percent.almostEqual(this.threshold));
     // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
     return hasLOS;
   }
@@ -364,10 +375,11 @@ export class AbstractViewerLOS {
    * @param {object} [opts]             Options passed to _percentVisible
    * @returns {number}
    */
-  percentVisible(target, opts) {
+  percentVisible(target) {
     if ( !this.viewer ) return 0;
     if ( target ) this.target = target;
-    const percent = this.simpleVisibilityTest() ?? this._percentVisible(opts);
+
+    const percent = this.simpleVisibilityTest() ?? this._percentVisible();
     // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
@@ -376,29 +388,25 @@ export class AbstractViewerLOS {
    * Determine percentage of the token visible using the class methodology.
    * Asynchronous version.
    * @param {Token} [target]            Token to look at
-   * @param {object} [opts]             Options passed to _percentVisible
    * @returns {number}
    */
-  async percentVisibleAsync(target, opts) {
+  async percentVisibleAsync(target) {
     if ( !this.viewer ) return 0;
     if ( target ) this.target = target;
-    const percent = this.simpleVisibilityTest() ?? (await this._percentVisibleAsync(opts));
+    const percent = this.simpleVisibilityTest() ?? (await this._percentVisibleAsync());
     // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
     return percent;
   }
 
   /**
    * Requests the percent visible from each viewpoint and returns the maximum percent visible.
-   * @param {object} [opts]
-   * @param {boolean} [opts.stopAtThreshold=true]     If true, stops checking viewpoints once config.threshold is met
    * @returns {number}
    */
-  _percentVisible({ stopAtThreshold = true } = {}) {
+  _percentVisible() {
     let max = 0;
-    const threshold = stopAtThreshold ? this.config.threshold : 1;
     for ( const vp of this.viewpoints ) {
       max = Math.max(max, vp.percentVisible());
-      if ( max >= threshold ) return max;
+      if ( max >= this.threshold ) return max;
     }
     return max;
   }
@@ -407,15 +415,13 @@ export class AbstractViewerLOS {
    * Requests the percent visible from each viewpoint and returns the maximum percent visible.
    * Asynchronous version.
    * @param {object} [opts]
-   * @param {boolean} [opts.stopAtThreshold=true]     If true, stops checking viewpoints once config.threshold is met
    * @returns {number}
    */
-  async _percentVisibleAsync({ stopAtThreshold = true } = {}) {
+  async _percentVisibleAsync() {
     let max = 0;
-    const threshold = stopAtThreshold ? this.config.threshold : 1;
     for ( const vp of this.viewpoints ) {
       max = Math.max(max, (await vp.percentVisibleAsync()));
-      if ( max >= threshold ) return max;
+      if ( max >= this.threshold ) return max;
     }
     return max;
   }
@@ -516,4 +522,14 @@ export class AbstractViewerLOS {
     if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color: yellow });
     // console.log("Drawing visible token border.")
   }
+}
+
+export class CachedAbstractViewerLOS extends AbstractViewerLOS {
+
+  /** @type {WeakMap<Token, number>} */
+  cachedPercent = new WeakMap();
+
+
+
+
 }

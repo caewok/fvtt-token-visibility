@@ -223,7 +223,7 @@ export async function benchTokenLOS(n = 100, opts = {}) {
   console.log("\nBenchmarking token los");
   await storeDebugStatus();
 
-  const { POINTS, AREA3D_HYBRID } = Settings.KEYS.LOS.TARGET.TYPES;
+  const { POINTS, HYBRID } = Settings.KEYS.LOS.TARGET.TYPES;
   const { CENTER, TWO, THREE, FOUR, FIVE, EIGHT, NINE } = Settings.KEYS.POINT_TYPES;
   // const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
   opts.nPoints = CENTER;
@@ -239,7 +239,7 @@ export async function benchTokenLOS(n = 100, opts = {}) {
   for ( const large of [false, true] ) {
     opts.large = large;
     for ( const algorithm of Object.values(Settings.KEYS.LOS.TARGET.TYPES) ) {
-      if ( algorithm === AREA3D_HYBRID ) continue; // Skip for the moment b/c it is failing.
+      if ( algorithm === HYBRID ) continue; // Skip for the moment b/c it is failing.
       opts.algorithm = algorithm;
       await fn(n, viewers, targets, opts);
 

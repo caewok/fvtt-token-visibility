@@ -210,8 +210,12 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
     }
   }
 
+  #initialized = false;
+
   async initialize() {
-    super.initialize();
+    if ( this.#initialized ) return;
+    this.#initialized = true; // Avoids async issues if saved right away.
+    await super.initialize();
     await this.renderObstacles.initialize();
     await this.sumPixels.initialize();
     this.renderObstacles.setRenderTextureToInternalTexture()
@@ -303,7 +307,12 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
       height: this.constructor.HEIGHT
     });
   }
+
+  #initialized = false;
+
   async initialize() {
+    if ( this.#initialized ) return;
+    this.#initialized = true; // Avoids async issues if saved right away.
     await super.initialize();
     await this.renderer.initialize();
   }

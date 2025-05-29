@@ -66,24 +66,17 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   //     visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
   //   }
 
-//   const viewer = visionSource.object;
-//   console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
-//     { useLitTargetShape, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
+  const viewer = visionSource.object;
+  console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
+     { useLitTargetShape, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
+  console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
 
   // Configure the line-of-sight calculator.
   const losCalc = visionSource[MODULE_ID].losCalc;
-  losCalc.config.useLitTargetShape = useLitTargetShape;
+  losCalc.useLitTargetShape = useLitTargetShape;
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-//   let callback = undefined;
-//   if ( losCalc.config.viewpointClass === WebGPUViewpointAsync ) {
-//     losCalc.hasLOSAsync(target).then(value => {
-//       test.los.set(visionSource, hasLOS);
-//     }
-//     callback = () => visionSource.object._refreshVisibility();
-//   } else
   hasLOS = losCalc.hasLOS(target);
-
   test.los.set(visionSource, hasLOS);
   return hasLOS;
 }
