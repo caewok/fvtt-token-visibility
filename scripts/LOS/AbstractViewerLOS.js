@@ -8,8 +8,11 @@ Ray
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../const.js";
+
 // LOS folder
 import { tokensOverlap } from "./util.js";
+import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 
 // Viewpoint algorithms.
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
@@ -172,6 +175,8 @@ export class AbstractViewerLOS {
 
   /** @type {ViewerLOSConfig} */
   #config = { ...this.constructor.defaultConfiguration };
+
+  get config() { return { ...this.#config }; }
 
   get viewpointOffset() { return this.#config.viewpointOffset; }
 
@@ -527,9 +532,85 @@ export class AbstractViewerLOS {
 export class CachedAbstractViewerLOS extends AbstractViewerLOS {
 
   /** @type {WeakMap<Token, number>} */
-  cachedPercent = new WeakMap();
+  cachedPercentVisible = new WeakMap();
+
+  /** @type {string} */
+  #cacheKey = ""; // Keyed to the current settings to detect settings changes.
+
+  constructor(...args) {
+    super(...args);
+    this.initializeTrackers();
+  }
+
+  /** @type {DocumentUpdateTracker} */
+  wallTracker;
+
+  /** @type {DocumentUpdateTracker} */
+  tileTracker;
+
+  /** @type {TokenUpdateTracker} */
+  tokenTracker;
+
+  initializeTrackers() {
+    this.wallTracker = new DocumentUpdateTracker("Wall", DocumentUpdateTracker.LOS_ATTRIBUTES.Wall);
+    this.tileTracker = new DocumentUpdateTracker("Tile", DocumentUpdateTracker.LOS_ATTRIBUTES.Tile);
+    this.tokenTracker = new TokenUpdateTracker(TokenUpdateTracker.LOS_ATTRIBUTES, TokenUpdateTracker.LOS_FLAGS);
+  }
+
+  #calculateCacheKey() {
+    return JSON.stringify({
+      ...this.config,
+      ...this.calculator.config,
+      viewpointClassName: this.viewpointClassName,
+      numViewpoints: this.viewpoints.length
+    });
+  }
+
+  updateCache(target) {
+    // If the settings have changed, wipe the cache.
+    const cacheKey = this.#calculateCacheKey();
+    if ( this.#cacheKey !== cacheKey ) {
+      this.#cacheKey = cacheKey;
+      this.cachedPercentVisible = new WeakMap();
+      return;
+    }
+
+    // Determine if any updates to placeables might affect the cached value(s).
+    // NOTE: WeakMap has no clear method.
+    // Make sure to call all 4: wallTracker, tileTracker, tokenTracker x2.
+    let clearAll = false;
+    let clearViewer = false;
+    let clearTarget = false;
+    if ( this.wallTracker.logUpdate() ) clearAll = true;
+    if ( this.tileTracker.logUpdate() ) clearAll = true;
+    if ( this.tokenTracker.logUpdate(this.viewer) ) clearViewer = true;
+    if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
+
+    // Clear all variations
+    if ( clearAll || clearViewer ) this.cachedPercentVisible = new WeakMap();
+    else if ( clearTarget ) this.cachedPercentVisible.delete(target);
+  }
 
 
+  percentVisible(target) {
+    if ( !CONFIG[MODULE_ID].useCaching ) return super.percentVisible(target);
 
+    if ( !this.viewer ) return 0;
+    this.updateCache(target);
+    if ( this.cachedPercentVisible.has(target) ) return this.cachedPercentVisible.get(target);
+    const out = super.percentVisible(target);
+    this.cachedPercentVisible.set(target, out);
+    return out;
+  }
 
+  async percentVisibleAsync(target) {
+    if ( !CONFIG[MODULE_ID].useCaching ) return super.percentVisibleAsync(target);
+
+    if ( !this.viewer ) return 0;
+    this.updateCache(target);
+    if ( this.cachedPercentVisible.has(target) ) return this.cachedPercentVisible.get(target);
+    const out = await super.percentVisibleAsync(target);
+    this.cachedPercentVisible.set(target, out);
+    return out;
+  }
 }

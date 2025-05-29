@@ -6,7 +6,7 @@ foundry,
 
 import { MODULE_ID } from "./const.js";
 import { Settings } from "./settings.js";
-import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
+import { AbstractViewerLOS, CachedAbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
 
 export function currentCalculator() {
   let viewpointClassName = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
@@ -127,7 +127,7 @@ export function buildCustomLOSCalculator({ viewpointClass, ...calcCfg } = {}) {
  */
 export function buildLOSViewer(viewer) {
   const calculator = buildLOSCalculator();
-  return new AbstractViewerLOS(viewer, { calculator, ...LOSViewerConfig() });
+  return new CachedAbstractViewerLOS(viewer, { calculator, ...LOSViewerConfig() });
 }
 
 /**
@@ -140,7 +140,7 @@ export function buildLOSViewer(viewer) {
 export function buildCustomLOSViewer(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...calcCfg } = {}) {
   const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
   const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold }, { inplace: false });
-  return new AbstractViewerLOS(viewer, { ...losConfig, ...calcConfig});
+  return new CachedAbstractViewerLOS(viewer, { ...losConfig, ...calcConfig});
 }
 
 /**
