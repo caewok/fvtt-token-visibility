@@ -410,10 +410,15 @@ export class AbstractViewpoint {
       if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
 
       const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
-      if ( !constrainedGridShape
-        || ((constrainedGridShape instanceof PIXI.Polygon)
-          && constrainedGridShape.points.length < 6) ) continue;
-      constrainedGridShapes.push(constrainedGridShape);
+      if ( constrainedGridShape instanceof CONFIG[MODULE_ID].ClipperPaths ) {
+        // Ignore holes.
+        const polys = constrainedGridShape.toPolygons().filter(poly => !poly.isHole && poly.points.length >= 6);
+        if ( polys.length ) constrainedGridShapes.push(...polys);
+      } else if ( constrainedGridShape instanceof PIXI.Polygon && constrainedGridShape.points.length >= 6 ) {
+        constrainedGridShapes.push(constrainedGridShape);
+      } else if ( constrainedGridShape instanceof PIXI.Rectangle ) {
+        constrainedGridShapes.push(constrainedGridShape);
+      }
     }
 
     return constrainedGridShapes;
