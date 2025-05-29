@@ -598,11 +598,16 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     if ( this.tokenTracker.logUpdate(this.viewer) ) clearViewer = true;
     if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
 
-    // Clear all variations
+    // Clear all variations (Only one tracker to handle both lit and unlit, so clear both.)
     // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name}`, { clearAll, clearViewer, clearTarget });
-
-    if ( clearAll || clearViewer ) this.#cachedPercentVisible[cacheType] = new WeakMap();
-    else if ( clearTarget ) this.#cachedPercentVisible[cacheType].delete(target);
+    if ( clearAll || clearViewer ) {
+      this.#cachedPercentVisible.litTarget = new WeakMap();
+      this.#cachedPercentVisible.unlitTarget = new WeakMap();
+    }
+    else if ( clearTarget ) {
+      this.#cachedPercentVisible.litTarget.delete(target);
+      this.#cachedPercentVisible.unlitTarget.delete(target);
+    }
   }
 
   setCacheValue(target, value) {
