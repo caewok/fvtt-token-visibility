@@ -9,10 +9,9 @@ PIXI
 
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-import { registerArea3d } from "./patching.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
-import { buildDebugViewer, currentDebugViewerClass } from "./LOSCalculator.js";
+import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
 
 // Patches for the Setting class
 export const PATCHES = {};
@@ -60,13 +59,12 @@ export const SETTINGS = {
       PERCENT: "los-percent",
       LARGE: "los-large-target",
       TYPES: {
-        POINTS: "los-points",
-        AREA3D: "los-area-3d",
-        AREA3D_GEOMETRIC: "los-area-3d-geometric",
-        AREA3D_HYBRID: "los-area-3d-hybrid",
-        WEBGL2: "los-webgl2",
-        WEBGPU: "los-webgpu",
-        WEBGPU_ASYNC: "los-webgpu-async"
+        POINTS: "los-algorithm-points",
+        GEOMETRIC: "los-algorithm-geometric",
+        HYBRID: "los-algorithm-hybrid",
+        WEBGL2: "los-algorithm-webgl2",
+        WEBGPU: "los-algorithm-webgpu",
+        WEBGPU_ASYNC: "los-algorithm-webgpu-async"
       },
       POINT_OPTIONS: {
         NUM_POINTS: "los-points-target",
@@ -100,7 +98,8 @@ export const SETTINGS = {
   MIGRATION: {
     v032: "migration-v032",
     v054: "migration-v054",
-    v060: "migration-v060"
+    v060: "migration-v060",
+    v080: "migration-v080",
   }
 };
 
@@ -163,7 +162,7 @@ export class Settings extends ModuleSettingsAbstract {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    if ( enabled ) this.initializeDebugViewer();
+    if ( enabled ) this.buildDebugViewer();
     else this.destroyAllDebugViewers();
   }
 
@@ -176,7 +175,7 @@ export class Settings extends ModuleSettingsAbstract {
     const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
     const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
     const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES,
-      { POINTS: 0, AREA3D_GEOMETRIC: 0, AREA3D_WEBGL2: 0, AREA3D_HYBRID: 0, WEBGL2: 0, WEBGPU: 0, WEBGPU_ASYNC: 0 });
+      { POINTS: 0, GEOMETRIC: 0, WEBGL2: 0, HYBRID: 0, WEBGPU: 0, WEBGPU_ASYNC: 0 });
     const losChoices = {};
     const ptChoices = {};
     const rangeChoices = {};
@@ -489,34 +488,69 @@ export class Settings extends ModuleSettingsAbstract {
       default: false,
       type: Boolean
     });
+
+    register(KEYS.MIGRATION.v080, {
+      scope: "world",
+      config: false,
+      default: false,
+      type: Boolean
+    });
   }
 
-  static typesWebGL2 = new Set([
-    SETTINGS.LOS.TARGET.TYPES.AREA3D,
-    SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
-    SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID]);
-
-  static typesArea3d = new Set([
-    SETTINGS.LOS.TARGET.TYPES.AREA3D,
-    SETTINGS.LOS.TARGET.TYPES.AREA3D_GEOMETRIC,
-    SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2,
-    SETTINGS.LOS.TARGET.TYPES.AREA3D_HYBRID,
-    SETTINGS.LOS.TARGET.TYPES.WEBGL2,
-    SETTINGS.LOS.TARGET.TYPES.WEBGPU,
-    SETTINGS.LOS.TARGET.TYPES.WEBGPU_ASYNC,
-  ]);
+  static migrate() {
+    if ( !this.get(this.KEYS.MIGRATION.v080) ) {
+      let alg = this.get(this.KEYS.LOS.TARGET.ALGORITHM);
+      switch ( alg ) {
+        case "los-points": alg = "los-algorithm-points"; break;
+        case "los-area-3d":
+        case "los-area-3d-geometric": alg = "los-algorithm-geometric"; break;
+        case "los-area-3d-hybrid": alg = "los-algorithm-hybrid"; break;
+        case "los-webgl2": alg = "los-algorithm-webgl2"; break;
+        case "los-webgpu": alg = "los-algorithm-webgpu"; break;
+        case "los-webgpu-async": alg = "los-algorithm-webgpu-async"; break;
+      }
+      this.set(this.KEYS.LOS.TARGET.ALGORITHM, alg);
+      this.set(this.KEYS.MIGRATION.v080, true);
+    }
+  }
 
   static losSettingChange(key, value) {
     this.cache.delete(key);
-    const config = { [configKeyForSetting[key]]: value };
-    canvas.tokens.placeables.forEach(token => {
-      const calc = token.vision?.[MODULE_ID]?.losCalc;
-      if ( !calc ) return;
-      calc.config = config;
-    });
+    const { TARGET, VIEWER } = SETTINGS.LOS;
+
+    if ( key === TARGET.ALGORITHM ) {
+      // Set a new shared calculator for all tokens.
+      const calc = buildLOSCalculator();
+      canvas.tokens.placeables.forEach(token => {
+        const losCalc = token[MODULE_ID]?.losCalc;
+        if ( !losCalc ) return;
+        losCalc.calculator = calc;
+      });
+    } else if ( key === VIEWER.NUM_POINTS || key === VIEWER.INSET ) {
+      // Update the viewpoints for all tokens.
+      const config = { [configKeyForSetting[key]]: value };
+
+      canvas.tokens.placeables.forEach(token => {
+        const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+        if ( !losCalc ) return;
+        losCalc.initializeViewpoints(config);
+      });
+    } else if ( key === TARGET.PERCENT ) {
+      // Update the threshold percentage for all tokens.
+      canvas.tokens.placeables.forEach(token => {
+        const losCalc = token.vision?.[MODULE_ID]?.losCalc;
+        if ( !losCalc ) return;
+        losCalc.threshold = value;
+      });
+    } else {
+      // Change to the calculator config.
+      const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
+      const currCalc = currentCalculator();
+      currCalc.config = config;
+    }
 
     // Start up a new debug viewer.
-    if ( key === SETTINGS.LOS.TARGET.ALGORITHM
+    if ( key === TARGET.ALGORITHM
       && this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
   }
 }

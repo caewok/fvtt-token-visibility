@@ -5,8 +5,6 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
-import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 
 /* Percent visible calculator
 
@@ -29,40 +27,22 @@ export class PercentVisibleCalculatorAbstract {
     useLitTargetShape: false,
     senseType: "sight",
     debug: false,
+    largeTarget: false,
   };
 
-  /**
-   * The configuration object, if provided, will be kept and can be updated externally.
-   * For example, it can be dynamically updated based on settings and shared among multiple
-   * calculators.
-   */
   constructor(cfg = {}) {
-    // First merge in the default configuration, overriding where appropriate.
-    const tmp = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false })
-    this._config = cfg; // Link the configuration object.
-    this.config = tmp; // Update in place with the merged configuration file.
+    // Set default configuration first and then override with passed-through values.
+    this.config = this.constructor.defaultConfiguration;
+    this.config = cfg;
   }
 
   _config = {};
 
-  get config() { return this._config; }
+  get config() { return { ...this._config }; }
 
-  set config(cfg = {}) {
-    // Copy the config in place so the linked configuration object is not broken.
-    foundry.utils.mergeObject(this._config, cfg, { inplace: true})
-  }
+  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true}) }
 
-  wallTracker;
-
-  tileTracker;
-
-  tokenTracker;
-
-  async initialize() {
-    this.wallTracker = new DocumentUpdateTracker("Wall", DocumentUpdateTracker.LOS_ATTRIBUTES.Wall);
-    this.tileTracker = new DocumentUpdateTracker("Tile", DocumentUpdateTracker.LOS_ATTRIBUTES.Tile);
-    this.tokenTracker = new TokenUpdateTracker(TokenUpdateTracker.LOS_ATTRIBUTES, TokenUpdateTracker.LOS_FLAGS);
-  }
+  async initialize() { return; }
 
   getVisibleTargetShape(target) {
     return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
@@ -84,76 +64,23 @@ export class PercentVisibleCalculatorAbstract {
   percentVisible(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
     if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
 
-    if ( CONFIG[MODULE_ID].useCaching ) {
-      // NOTE: WeakMap has no clear method.
-      // Make sure to call all 4: wallTracker, tileTracker, tokenTracker x2.
-      let clearAll = false;
-      let clearViewer = false;
-      let clearTarget = false;
-      if ( this.wallTracker.logUpdate() ) clearAll = true;
-      if ( this.tileTracker.logUpdate() ) clearAll = true;
-      if ( this.tokenTracker.logUpdate(viewer) ) clearViewer = true;
-      if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
-
-      if ( clearAll ) this.cachedPercentVisible = new WeakMap();
-      else if ( clearViewer ) this.cachedPercentVisible.set(viewer, new WeakMap());
-      else if ( clearTarget ) this.cachedPercentVisible.get(viewer)?.delete(target);
-      else if ( this.cachedPercentVisible.has(viewer) ) {
-        const viewerMap = this.cachedPercentVisible.get(viewer);
-        if ( viewerMap.has(target) ) return viewerMap.get(target);
-      }
-    }
-
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
     this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
-    const out = this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
-
-    if ( CONFIG[MODULE_ID].useCaching ) {
-      if ( !this.cachedPercentVisible.has(viewer) ) this.cachedPercentVisible.set(viewer, new WeakMap());
-      const viewerMap = this.cachedPercentVisible.get(viewer);
-      viewerMap.set(target, out);
-    }
-    return out;
+    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
   }
 
   async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
     if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
-
-    if ( CONFIG[MODULE_ID].useCaching ) {
-      // NOTE: WeakMap has no clear method.
-      // Make sure to call all 4: wallTracker, tileTracker, tokenTracker x2.
-      let clearAll = false;
-      let clearViewer = false;
-      let clearTarget = false;
-      if ( this.wallTracker.logUpdate() ) clearAll = true;
-      if ( this.tileTracker.logUpdate() ) clearAll = true;
-      if ( this.tokenTracker.logUpdate(viewer) ) clearViewer = true;
-      if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
-
-      if ( clearAll ) this.cachedPercentVisible = new WeakMap();
-      else if ( clearViewer ) this.cachedPercentVisible.set(viewer, new WeakMap());
-      else if ( clearTarget ) this.cachedPercentVisible.get(viewer)?.delete(target);
-      else if ( this.cachedPercentVisible.has(viewer) ) {
-        const viewerMap = this.cachedPercentVisible.get(viewer);
-        if ( viewerMap.has(target) ) return viewerMap.get(target);
-      }
-    }
 
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     viewerLocation ??= Point3d.fromTokenCenter(viewer);
     targetLocation ??= Point3d.fromTokenCenter(target);
 
     await this._calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation);
-    const out = this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
-    if ( CONFIG[MODULE_ID].useCaching ) {
-      if ( !this.cachedPercentVisible.has(viewer) ) this.cachedPercentVisible.set(viewer, new WeakMap());
-      const viewerMap = this.cachedPercentVisible.get(viewer);
-      viewerMap.set(target, out);
-    }
-    return out;
+    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
   }
 
   /**

@@ -74,7 +74,7 @@ export class AbstractViewpoint {
   /** @type {PercentVisibileCalculatorAbstract} */
   get calculator() { return this.viewerLOS.calculator; }
 
-  get config() { return this.viewerLOS.config; }
+  get config() { return this.viewerLOS.calculator.config; }
 
   /**
    * Determine percentage of the token visible using the class methodology.

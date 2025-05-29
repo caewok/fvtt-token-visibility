@@ -65,7 +65,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   /** @type {RenderObstaclesWebGL2} */
   renderObstacles;
 
+  #initialized = false;
+
   async initialize() {
+    if ( this.#initialized ) return;
+    this.#initialized = true; // Avoids async issues if saved right away.
     await super.initialize();
     const gl = this.gl;
     const size = this.renderTextureSize;

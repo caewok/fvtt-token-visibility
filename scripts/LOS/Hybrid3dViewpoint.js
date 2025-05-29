@@ -49,7 +49,7 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
 export class DebugVisibilityViewerHybrid extends DebugVisibilityViewerArea3dPIXI {
   static viewpointClass = Hybrid3dViewpoint;
 
-  algorithm = Settings.KEYS.LOS.TARGET.TYPES.AREA3D_HYBRID;
+  algorithm = Settings.KEYS.LOS.TARGET.TYPES.HYBRID;
 
   /**
    * TODO: Fix. This is not a parent method.

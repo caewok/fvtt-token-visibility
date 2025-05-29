@@ -482,7 +482,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     // console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
-  algorithm = SETTINGS.LOS.TARGET.TYPES.AREA3D_WEBGL2;
+  algorithm = SETTINGS.LOS.TARGET.TYPES.WEBGL2;
 
   async openPopout(opts) {
     await super.openPopout(opts);
