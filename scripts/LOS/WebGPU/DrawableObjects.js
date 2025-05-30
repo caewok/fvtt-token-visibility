@@ -561,6 +561,12 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   }
 
   _copyTransferBuffers(commandEncoder) {
+    if ( !this.placeableHandler.numInstances ) {
+      if ( this.buffers.instanceTransfer?.mapState === "mapped" ) this.buffers.instanceTransfer.unmap();
+      if ( this.buffers.indirectTransfer?.mapState === "mapped" ) this.buffers.indirectTransfer.unmap();
+      if ( this.buffers.culledTransfer?.mapState === "mapped" ) this.buffers.culledTransfer.unmap();
+      return;
+    }
     // Possible for it to be undefined if no placeables.
     // Copy the entire buffer, b/c doing multiple piecemeal copies is too complicated.
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
