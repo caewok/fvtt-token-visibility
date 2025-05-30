@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONFIG,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -126,7 +127,7 @@ export class Camera {
     const ctr = Point3d.fromTokenCenter(targetToken);
     this.targetPosition = ctr;
 
-    // Assum axis-aligned cube.
+    // Assume axis-aligned cube.
     const targetWidth = targetToken.document.width * canvas.dimensions.size;
     const targetHeight = targetToken.document.height * canvas.dimensions.size;
     const targetZHeight = targetToken.topZ - targetToken.bottomZ;
@@ -161,11 +162,15 @@ export class Camera {
     const zFar = maxCornerDistance;
 
     if ( this.perspectiveType === "perspective" ) {
+      const maxAngle = maximumViewAngle(this.cameraPosition, targetToken);
+      const fov = Math.min(maxAngle, 2.5) + 0.02; // Math.toDegrees(2.5) ~ 143º. Keep well under 180º.
+      // console.debug(`Camera|${targetToken.name}`, { maxAngle, fov })
+
       // Calculate field-of-view.
       // Worst case: In 2d top-down, the cube diagonals form the furthest point.
       // tan(fov/2) = opposite/adjacent = (cube.size/2) / distance
-      const diagSize = Math.SQRT2 * halfSize;
-      const fov = 2 * Math.atan(diagSize / (distToTarget - diagSize)); // Measure from front of token to ensure sufficiently large viewing angle.
+      // const diagSize = Math.SQRT2 * halfSize;
+      // const fov = 2 * Math.atan(diagSize / (distToTarget - diagSize)); // Measure from front of token to ensure sufficiently large viewing angle.
       this.perspectiveParameters = { fov, zFar };
       return;
     }
@@ -310,4 +315,53 @@ export class Camera {
     this.#positions.target.copyPartial(value);
     this.#dirty.lookAt ||= true;
   }
+}
+
+/**
+ * Determine the maximum angle from a viewpoint to a token border.
+ * @param {Point3d} viewpoint
+ * @param {Token} targetToken
+ *
+ * @returns {number} Angle in radians.
+ */
+function maximumViewAngle(viewpoint, targetToken) {
+  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+  const ctr = Point3d.fromTokenCenter(targetToken);
+
+  // 2d x-y dimensions.
+  const tokenBorder = targetToken.tokenBorder;
+  const vps = tokenBorder.viewablePoints(viewpoint, { outermostOnly: true });
+  if ( !vps ) return Math.PI;
+
+  // Two angles, on either side of the center line.
+  const b = viewpoint.to2d();
+  const c = ctr.to2d()
+  const angle0 = PIXI.Point.angleBetween(vps[0], b, c);
+  const angle1 = PIXI.Point.angleBetween(vps[1], b, c);
+
+  // Height.
+  // Using cutaway.
+  /*
+  const cutawayPoly = CutawayPolygon.cutawayBasicShape(tokenBorder, b, c, {
+    topElevationFn: () => targetToken.topZ,
+     bottomElevationFn: () => targetToken.bottomZ
+  })[0];
+  const cutawayCameraPosition = cutawayPoly._to2d(viewpoint)
+  const cutawayVPs = cutawayPoly.viewablePoints(cutawayCameraPosition, { outermostOnly: true })
+  cutawayVPs[0].x = Math.sqrt(cutawayVPs[0].x);
+  cutawayVPs[1].x = Math.sqrt(cutawayVPs[1].x);
+  const cutawayC = cutawayPoly._to2d(ctr);
+  cutawayC.x = Math.sqrt(cutawayC.x)
+  const heightAngle0 = PIXI.Point.angleBetween(cutawayVPs[0], cutawayCameraPosition, cutawayC);
+  const heightAngle1 = PIXI.Point.angleBetween(cutawayVPs[1], cutawayCameraPosition, cutawayC);
+  */
+
+  // Using border intersection and 3d angle.
+  let ix = tokenBorder.segmentIntersections(viewpoint, ctr)[0]; // Only 1 b/c measuring from poly center.
+  if ( !ix ) return Math.PI;
+
+  const heightVPS = [new Point3d(ix.x, ix.y, targetToken.topZ), new Point3d(ix.x, ix.y, targetToken.bottomZ)];
+  const heightAngle0 = Point3d.angleBetween(heightVPS[0], viewpoint, ctr);
+  const heightAngle1 = Point3d.angleBetween(heightVPS[1], viewpoint, ctr);
+  return Math.max(angle0, angle1, heightAngle0, heightAngle1) * 2;
 }

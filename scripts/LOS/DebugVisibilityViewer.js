@@ -30,7 +30,7 @@ export class DebugVisibilityViewerAbstract {
 
   constructor(config = {}) {
     config.debug = true;
-    config.viewpointKey = this.constructor.viewpointClass;
+    config.viewpointClass = this.constructor.viewpointClass;
     this.viewerLOS = new AbstractViewerLOS(undefined, config);
   }
 

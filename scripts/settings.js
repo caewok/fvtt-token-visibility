@@ -162,7 +162,7 @@ export class Settings extends ModuleSettingsAbstract {
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    if ( enabled ) this.buildDebugViewer();
+    if ( enabled ) this.initializeDebugViewer();
     else this.destroyAllDebugViewers();
   }
 

@@ -5,7 +5,6 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-
 /* Percent visible calculator
 
 Calculate percent visibility for a token viewer looking at a target token.
@@ -136,7 +135,7 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
     else totalArea = this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
     if ( this.config.largeTarget ) totalArea = Math.min(totalArea, this._gridShapeArea(viewer, target, viewerLocation, targetLocation))
     if ( !totalArea ) {
-      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0.`);
+      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0 for ${viewer.name}, ${viewer.id} --> ${target.name}, ${target.id}.`);
       return 0;
     }
     const viewableArea = this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
@@ -163,7 +162,7 @@ export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalcul
     else totalArea = await this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
     if ( this.config.largeTarget ) totalArea = Math.min(totalArea, (await this._gridShapeArea(viewer, target, viewerLocation, targetLocation)))
     if ( !totalArea ) {
-      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0.`);
+      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0 for ${viewer.name}, ${viewer.id} --> ${target.name}, ${target.id}.`);
       return 0;
     }
     const viewableArea = await this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);

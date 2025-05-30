@@ -19,14 +19,8 @@ export function currentCalculatorClass(type) {
   const { TARGET } = KEYS.LOS;
   const calcs = CONFIG[MODULE_ID].sightCalculatorClasses;
   type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
-  switch (type) {
-    case "los-algorithm-points": return calcs.points;
-    case "los-algorithm-geometric": return calcs.geometric;
-    case "los-algorithm-hybrid": return calcs.hybrid;
-    case "los-algorithm-webgl2": return calcs.webGL2;
-    case "los-algorithm-webgpu": return calcs.webGPU;
-    case "los-algorithm-webgpu-async": return calcs.webGPUAsync;
-  }
+  type = type.replace("los-algorithm-", "");
+  return calcs[type];
 }
 
 export function currentDebugViewerClass(type) {
@@ -34,14 +28,8 @@ export function currentDebugViewerClass(type) {
   const { TARGET } = KEYS.LOS;
   const debugViewers = CONFIG[MODULE_ID].debugViewerClasses;
   type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
-  switch (type) {
-    case "los-algorithm-points": return debugViewers.points;
-    case "los-algorithm-geometric": return debugViewers.geometric;
-    case "los-algorithm-hybrid": return debugViewers.hybrid;
-    case "los-algorithm-webgl2": return debugViewers.webGL2;
-    case "los-algorithm-webgpu": return debugViewers.webGPU;
-    case "los-algorithm-webgpu-async": return debugViewers.webGPUAsync;
-  }
+  type = type.replace("los-algorithm-", "");
+  return debugViewers[type];
 }
 
 
@@ -148,7 +136,7 @@ export function buildCustomLOSViewer(viewer, { calculator, viewpointClass, numVi
  * @param {class} cl                Class of the viewer
  * @param {object} [config]         Custom parameters to override default settings.
  */
-export function buildDebugViewer(cl, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...calcCfg }) {
+export function buildDebugViewer(cl, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...calcCfg } = {}) {
   cl ??= currentDebugViewerClass();
   const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
   const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold }, { inplace: false });

@@ -195,18 +195,18 @@ Hooks.once("init", function() {
     sightCalculatorClasses: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
-      webGL2: PercentVisibleCalculatorWebGL2,
-      webGPU: PercentVisibleCalculatorWebGPU,
-      webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
+      webgl2: PercentVisibleCalculatorWebGL2,
+      webgpu: PercentVisibleCalculatorWebGPU,
+      "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
       hybrid: PercentVisibleCalculatorHybrid,
     },
 
     sightCalculators: {
       points: null,
       geometric: null,
-      webGL2: null,
-      webGPU: null,
-      webGPUAsync: null,
+      webgl2: null,
+      webgpu: null,
+      "webgpu-async": null,
       hybrid: null,
     },
 
@@ -216,9 +216,9 @@ Hooks.once("init", function() {
     debugViewerClasses: {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
-      webGL2: DebugVisibilityViewerWebGL2,
-      webGPU: DebugVisibilityViewerWebGPU,
-      webGPUAsync: DebugVisibilityViewerWebGPUAsync,
+      webgl2: DebugVisibilityViewerWebGL2,
+      webgpu: DebugVisibilityViewerWebGPU,
+      "webgpu-async": DebugVisibilityViewerWebGPUAsync,
       hybrid: DebugVisibilityViewerHybrid,
     },
 
@@ -384,12 +384,12 @@ Hooks.on("canvasReady", function() {
   const basicCalcs = [
     "points",
     "geometric",
-    "webGL2",
+    "webgl2",
     "hybrid",
   ];
   const webGPUCalcs = [
-    "webGPU",
-    "webGPUAsync",
+    "webgpu",
+    "webgpu-async",
   ];
   const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
   const calcClasses = CONFIG[MODULE_ID].sightCalculatorClasses;
@@ -410,7 +410,17 @@ Hooks.on("canvasReady", function() {
         || currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU_ASYNC ) {
         Settings.set(Settings.KEYS.LOS.TARGET.ALGORITHM, Settings.KEYS.LOS.TARGET.TYPES.WEBGL2);
       }
-    } else CONFIG[MODULE_ID].webGPUDevice = device;
+      sightCalcs.webGPU = sightCalcs.webGL2;
+      sightCalcs.webGPUAsync = sightCalcs.webGL2;
+
+    } else {
+      CONFIG[MODULE_ID].webGPUDevice = device;
+      for ( const calcName of webGPUCalcs ) {
+        const cl = calcClasses[calcName];
+        const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
+        calc.initialize(); // Async.
+      }
+    }
 
     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
   });

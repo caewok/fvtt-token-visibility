@@ -99,12 +99,13 @@ export class AbstractViewerLOS {
       "webgpu": WebGPUViewpoint,
       "webgpu-async": WebGPUViewpointAsync,
 
-      PointsViewpoint: "points",
-      GeometricViewpoint: "geometric",
-      Hybrid3dViewpoint: "hybrid",
-      WebGL2Viewpoint: "webgl2",
-      WebGPUViewpoint: "webgpu",
-      WebGPUViewpointAsync: "webgpu-async",
+      // Cannot reliably test for class, so test for class name instead.
+      "PointsViewpoint": "points",
+      "GeometricViewpoint": "geometric",
+      "Hybrid3dViewpoint": "hybrid",
+      "WebGL2Viewpoint": "webgl2",
+      "WebGPUViewpoint": "webgpu",
+      "WebGPUViewpointAsync": "webgpu-async",
     }
   };
 
@@ -160,7 +161,7 @@ export class AbstractViewerLOS {
     this.#calculator = calculator;
 
     // Create the viewpoints.
-    this.initializeViewpoints({ numViewpoints, viewpointOffset });
+    if ( this.#viewer ) this.initializeViewpoints({ numViewpoints, viewpointOffset });
   }
 
   async initialize() { return this.calculator.initialize(); }
@@ -226,11 +227,11 @@ export class AbstractViewerLOS {
   get viewpointClass() { return this.#calculator.constructor.viewpointClass; }
 
   get viewpointClassName() {
-    return this.constructor.VIEWPOINT_CLASSES[this.#calculator.constructor.viewpointClass];
+    return this.constructor.VIEWPOINT_CLASSES[this.#calculator.constructor.viewpointClass.name];
   }
 
   static convertViewpointClassToName(value) {
-    if ( value instanceof AbstractViewpoint ) value = this.VIEWPOINT_CLASSES[value];
+    if ( value.name ) value = this.VIEWPOINT_CLASSES[value.name]; // If class, check against class name. Ignored for strings.
     value = value.replace("los-algorithm-", "");
     if ( !this.VIEWPOINT_CLASSES[value]) return console.error(`Viewpoint class ${value} not recognized.`, { value });
     return value;
