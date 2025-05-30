@@ -52,8 +52,8 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {object} */
   offsetData = {};
 
-  /** @type WebGL2 */
-  webGL2;
+  /** @type {WebGL2RenderingContext} */
+  gl;
 
   /** @type {Camera} */
   camera;
@@ -90,7 +90,7 @@ class DrawableObjectsWebGL2Abstract {
   programInfo;
 
   constructor(gl, camera, { debugViewNormals = false } = {}) {
-    this.webGL2 = new WebGL2(gl);
+    this.gl = gl;
     this.camera = camera;
     this.#debugViewNormals = debugViewNormals;
     this.placeableHandler = new this.constructor.handlerClass();
@@ -130,7 +130,7 @@ class DrawableObjectsWebGL2Abstract {
     const debugViewNormals = this.debugViewNormals;
     const vertexShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.vertexFile, { debugViewNormals })
     const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.fragmentFile, { debugViewNormals })
-    return twgl.createProgramInfo(this.webGL2.gl, [vertexShaderSource, fragmentShaderSource]);
+    return twgl.createProgramInfo(this.gl, [vertexShaderSource, fragmentShaderSource]);
   }
 
   /*
@@ -317,7 +317,7 @@ class DrawableObjectsWebGL2Abstract {
   bufferInfo = {};
 
   _initializeBuffers() {
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
 
     // Set vertex attributes
     this.vertexProps = this._defineVertexAttributeProperties();
@@ -329,7 +329,7 @@ class DrawableObjectsWebGL2Abstract {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
     log (`${this.constructor.name}|_defineVertexAttributeProperties`);
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     const vBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.bufferDrawType]);
@@ -356,7 +356,7 @@ class DrawableObjectsWebGL2Abstract {
 
 
   _updateBuffersForInstance(idx) {
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     const vBuffer = this.bufferInfo.attribs.aPos.buffer;
     const iBuffer = this.bufferInfo.indices;
     const vOffsets = this.offsetData.vertex.offsets;
@@ -389,7 +389,7 @@ class DrawableObjectsWebGL2Abstract {
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
 
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     this.constructor.useProgram(gl, this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
@@ -598,7 +598,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     super._initializeBuffers();
 
     // Setup the texture buffers.
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     const textureOpts = {
       target: gl.TEXTURE_2D,
       level: 0,
@@ -624,7 +624,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
 
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     this.constructor.useProgram(gl, this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
@@ -721,7 +721,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
     if ( typeof idx === "undefined" ) return;
 
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     this.constructor.useProgram(gl, this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
@@ -745,7 +745,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
 
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     this.constructor.useProgram(gl, this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
@@ -1055,7 +1055,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
   _updateVerticesForInstance(_idx) { return; }
 
   _defineVertexAttributeProperties() {
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     const vertexProps = super._defineVertexAttributeProperties();
 
     // Define the model matrix, which changes 1 per instance.
@@ -1069,7 +1069,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
   }
 
   _updateBuffersForInstance(idx) {
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     const mBuffer = this.bufferInfo.attribs.aModel.buffer;
 
     // See twgl.setAttribInfoBufferFromArray.
@@ -1082,7 +1082,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
 
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     this.constructor.useProgram(gl, this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
@@ -1173,7 +1173,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
   _updateVerticesForInstance(_idx) { return; }
 
   _defineVertexAttributeProperties() {
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     const vertexProps = super._defineVertexAttributeProperties();
 
     // Define the model matrix, which changes 1 per instance.
@@ -1187,7 +1187,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
   }
 
   _updateBuffersForInstance(idx) {
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     const mBuffer = this.bufferInfo.attribs.aModel.buffer;
 
     // See twgl.setAttribInfoBufferFromArray.
@@ -1204,7 +1204,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
     if ( typeof idx === "undefined" ) return;
 
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     this.constructor.useProgram(gl, this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
@@ -1230,7 +1230,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
   render(_target, _viewer) {
     if ( !this.instanceSet.size ) return;
 
-    const gl = this.webGL2.gl;
+    const gl = this.gl;
     this.constructor.useProgram(gl, this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);

@@ -242,7 +242,6 @@ export class RenderObstaclesWebGL2 {
     const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-    gl.colorMask(true, true, true, true);
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
@@ -263,6 +262,7 @@ export class RenderObstaclesWebGL2 {
     }
 
     if ( colorCoded ) gl.colorMask(true, false, false, true); // Red, alpha channels for the target object.
+    else gl.colorMask(true, true, true, true);
     this._drawTarget(target, useLitTargetShape);
 
     gl.colorMask(true, true, true, true);
@@ -296,7 +296,6 @@ export class RenderObstaclesWebGL2 {
     const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-    gl.colorMask(true, true, true, true);
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
@@ -312,6 +311,7 @@ export class RenderObstaclesWebGL2 {
       gl.stencilMask(0x00); // Disable writing to the stencil buffer.
     }
     if ( colorCoded ) gl.colorMask(false, false, true, true); // Blue, alpha channels for obstacles.
+    else gl.colorMask(true, true, true, true);
     this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
 
     // Draw terrain walls.
