@@ -26,6 +26,8 @@ export class WebGL2 {
    */
   constructor(gl) {
     this.gl = gl;
+    this.glState.viewport.width = gl.canvas.width;
+    this.glState.viewport.height = gl.canvas.height;
     this.initializeGLState();
   }
 
@@ -80,8 +82,9 @@ export class WebGL2 {
     return twgl.createProgramInfo(this.gl, [vertexShaderSource, fragmentShaderSource]);
   }
 
-  // ----- Cache gl state ----- //
+  // ----- Cache WebGL2 state ----- //
 
+  /** @type {object} */
   glState = {
     viewport: new PIXI.Rectangle(),
     DEPTH_TEST: false,
@@ -101,10 +104,16 @@ export class WebGL2 {
     gl.cullFace(gl[glState.cullFace]);
     gl.colorMask(...glState.colorMask);
     for ( const name of ["DEPTH_TEST", "STENCIL_TEST", "BLEND", "CULL_FACE"] ) {
-      glState[name] ? gl.enable(gl[name]) : gl.disable(gl[name]);
+      if ( glState[name] ) gl.enable(gl[name]);
+      else gl.disable(gl[name]);
+      console.debug(`Setting ${name} to ${glState[name]}`);
     }
   }
 
+  /**
+   * Set the viewport to a given rectangle and cache the value.
+   * @param {PIXI.Rectangle} rect
+   */
   setViewport(rect) {
     if ( this.glState.viewport.equals(rect) ) return;
     const { gl, glState } = this;
@@ -112,15 +121,26 @@ export class WebGL2 {
     glState.viewport.copyFrom(rect);
   }
 
+  /**
+   * Set one of the boolean WebGL states and cache the value.
+   * @param {string} name         WebGL state name, e.g. "DEPTH_TEST"
+   * @param {boolean} [enabled=true]     Whether to enable or disable
+   */
   #setGLBooleanState(name, enabled = true) {
     const param = this.gl.getParameter(this.gl[name])
     if ( param !== this.glState[name] ) console.error(`State ${name} is incorrect. Should be ${param}`);
     if ( this.glState[name] === enabled ) return;
     const gl = this.gl;
-    enabled ? gl.enable(gl[name]) : gl.disable(gl[name]);
+    if ( enabled ) gl.enable(gl[name]);
+    else gl.disable(gl[name]);
     this.glState[name] = enabled;
+    // console.debug(`Setting ${name} to ${enabled}`);
   }
 
+  /**
+   * Set gl.DEPTH_TEST to enabled or disabled.
+   * @param {boolean} [enabled=true]    Whether to enable or disable
+   */
   setDepthTest(enabled) { this.#setGLBooleanState("DEPTH_TEST", enabled); }
 
   setStencilTest(enabled) { this.#setGLBooleanState("STENCIL_TEST", enabled); }

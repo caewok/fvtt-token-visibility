@@ -32,8 +32,6 @@ import {
 
 export class RenderObstaclesWebGL2 {
 
-  /** @type {WebGL2RenderingContext} */
-  gl;
 
   /** @type {WebGL2} */
   webGL2;
@@ -74,11 +72,13 @@ export class RenderObstaclesWebGL2 {
   /** @type {object} */
   debugViewNormals = false;
 
-  constructor({ gl, senseType = "sight", debugViewNormals = false, useInstancing = false, useSceneBackground = false } = {}) {
+  /** @type {WebGL2RenderingContext} */
+  get gl() { return this.webGL2.gl; };
+
+  constructor({ webGL2, senseType = "sight", debugViewNormals = false, useInstancing = false, useSceneBackground = false } = {}) {
     this.debugViewNormals = debugViewNormals;
     this.senseType = senseType;
-    this.gl = gl;
-    this.webGL2 = new WebGL2(gl);
+    this.webGL2 = webGL2;
     this._buildDrawableObjects(useInstancing, useSceneBackground);
   }
 
@@ -217,9 +217,10 @@ export class RenderObstaclesWebGL2 {
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
     const gl = this.gl;
+    const webGL2 = this.webGL2;
     // gl.viewport(0, 0, gl.canvas.clientWidth || gl.canvas.width, gl.canvas.clientHeight || gl.canvas.height)
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
-    gl.enable(gl.DEPTH_TEST);
+    webGL2.setDepthTest(true);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -240,11 +241,12 @@ export class RenderObstaclesWebGL2 {
     this._setCamera(viewerLocation, target, { targetLocation });
 
     const gl = this.gl;
+    const webGL2 = this.webGL2;
     const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
-    gl.enable(gl.DEPTH_TEST);
+    webGL2.setDepthTest(true);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
     if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -294,11 +296,13 @@ export class RenderObstaclesWebGL2 {
     this.drawableTerrain.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 
     const gl = this.gl;
+    const webGL2 = this.webGL2;
     const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
     gl.viewport(frame.x, frame.y, frame.width, frame.height);
-    gl.enable(gl.DEPTH_TEST);
+
+    webGL2.setDepthTest(true);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
     if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
@@ -319,7 +323,7 @@ export class RenderObstaclesWebGL2 {
     // Blend so that 2+ walls exceed a value in the green channel
     // Preserve R and B for the destination.
     if ( colorCoded )  gl.colorMask(false, true, false, true); // Green, alpha channels for terrains.
-    gl.disable(gl.DEPTH_TEST);
+    webGL2.setDepthTest(false);
     gl.enable(gl.BLEND);
 
     const srcRGB = colorCoded ? gl.ONE : gl.SRC_ALPHA;

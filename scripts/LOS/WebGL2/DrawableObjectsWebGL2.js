@@ -52,9 +52,6 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {object} */
   offsetData = {};
 
-  /** @type {WebGL2RenderingContext} */
-  gl;
-
   /** @type {Camera} */
   camera;
 
@@ -89,8 +86,10 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {twgl.ProgramInfo} */
   programInfo;
 
+  /** @type {WebGL2RenderingContext} */
+  get gl() { return this.webGL2.gl; };
+
   constructor(webGL2, camera, { debugViewNormals = false } = {}) {
-    this.gl = webGL2.gl;
     this.webGL2 = webGL2;
     this.camera = camera;
     this.#debugViewNormals = debugViewNormals;
