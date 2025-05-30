@@ -106,7 +106,7 @@ export class WebGL2 {
     for ( const name of ["DEPTH_TEST", "STENCIL_TEST", "BLEND", "CULL_FACE"] ) {
       if ( glState[name] ) gl.enable(gl[name]);
       else gl.disable(gl[name]);
-      console.debug(`Setting ${name} to ${glState[name]}`);
+      // console.debug(`Setting ${name} to ${glState[name]}`);
     }
   }
 
