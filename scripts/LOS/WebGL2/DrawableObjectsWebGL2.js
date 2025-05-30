@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -56,11 +55,17 @@ class DrawableObjectsWebGL2Abstract {
   /** @type WebGL2 */
   webGL2;
 
+  /** @type {Camera} */
+  camera;
+
   uniforms = {};
 
   materialUniforms = {};
 
-  /** @type {GeometryWallDesc} */
+  /** @type {GeometryDesc} */
+  geom;
+
+  /** @type {GeometryDesc[]} */
   geoms = [];
 
   /** @type {ArrayBuffer} */
@@ -80,6 +85,9 @@ class DrawableObjectsWebGL2Abstract {
 
   /** @type {Uint16Array[]} */
   indices = [];
+
+  /** @type {twgl.ProgramInfo} */
+  programInfo;
 
   constructor(gl, camera, { debugViewNormals = false } = {}) {
     this.webGL2 = new WebGL2(gl);
@@ -103,12 +111,10 @@ class DrawableObjectsWebGL2Abstract {
    * Set up all parts of the render pipeline that will not change often.
    */
   async initialize() {
-    const promises = [this._createProgram()];
+    this.programInfo = await this.constructor.cacheProgram(this);
     this.placeableHandler.registerPlaceableHooks();
     this._initializePlaceableHandler();
     this._initializeGeoms();
-
-    await Promise.allSettled(promises); // Prior to updating buffers, etc.
     this._updateAllInstances();
   }
 
@@ -124,7 +130,7 @@ class DrawableObjectsWebGL2Abstract {
     const debugViewNormals = this.debugViewNormals;
     const vertexShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.vertexFile, { debugViewNormals })
     const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.fragmentFile, { debugViewNormals })
-    this.programInfo = twgl.createProgramInfo(this.webGL2.gl, [vertexShaderSource, fragmentShaderSource]);
+    return twgl.createProgramInfo(this.webGL2.gl, [vertexShaderSource, fragmentShaderSource]);
   }
 
   /*
