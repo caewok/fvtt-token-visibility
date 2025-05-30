@@ -380,6 +380,7 @@ class DrawableObjectsWebGL2Abstract {
    */
   prerender() {
     this._updateInstances();
+    this.constructor.currentProgramInfo = null;
   }
 
   /**
@@ -434,11 +435,13 @@ class DrawableObjectsWebGL2Abstract {
   static programs = new Map();
 
   /** @type {twgl.ProgramInfo} */
-  static currentProgram;
+  static currentProgramInfo;
 
   static useProgram(gl, programInfo) {
-    if ( this.currentProgram !== programInfo ) gl.useProgram(programInfo.program);
-    this.currentProgram = programInfo;
+    if ( this.currentProgramInfo !== programInfo ) gl.useProgram(programInfo.program);
+    this.currentProgramInfo = programInfo;
+    if ( this.currentProgramInfo.program !== gl.getParameter(gl.CURRENT_PROGRAM) ) console.error("Current program is incorrect.");
+    else console.debug("Current program is correct.")
   }
 
   /**
