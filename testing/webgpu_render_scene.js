@@ -119,11 +119,34 @@ viewer = _token
 target = game.user.targets.first()
 
 
-CONFIG[MODULE_ID].useCaching = false;
+CONFIG.tokenvisibility.useCaching = false
+CONFIG.tokenvisibility.tileThresholdShape = "triangles"
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdTriangles"
+CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons"
+
+CONFIG.tokenvisibility.clipperVersion = 1
+CONFIG.tokenvisibility.clipperVersion = 2
+
+CONFIG.tokenvisibility.filterInstances = true
+CONFIG.tokenvisibility.filterInstances = false
+
+CONFIG.tokenvisibility.useRenderTexture = false;
+CONFIG.tokenvisibility.useRenderTexture = false;
+
+CONFIG.tokenvisibility.pixelCounterType = "loopCount2"
+CONFIG.tokenvisibility.pixelCounterType = "blendCount2"
+CONFIG.tokenvisibility.pixelCounterType = "reductionCount2"
+CONFIG.tokenvisibility.pixelCounterType = "readPixelsCount"
+
+CONFIG.tokenvisibility.filterInstances = true;
+CONFIG.tokenvisibility.filterInstances = false;
+
 N = 20
 await api.bench.benchTokenLOS(N, { sleep: false, movement: false })
 await api.bench.benchTokenLOS(N, { sleep: false, movement: true })
 await api.bench.benchTokenLOS(N, { sleep: true, movement: true })
+
+await api.bench.benchTokenLOSAlgorithm(N, { sleep: false, movement: true, algorithm: Settings.KEYS.LOS.TARGET.TYPES.WEBGL2 })
 
 
 let { vec3, vec4, mat4, quat } = api.glmatrix

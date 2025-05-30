@@ -146,7 +146,7 @@ Hooks.once("init", function() {
 
     usePixelReducer: false,
 
-    pixelCounterType: "reductionCount2",
+    pixelCounterType: "readPixelsCount",
 
     /**
      * What to use when testing tiles for visibility.
