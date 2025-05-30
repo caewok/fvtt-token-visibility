@@ -130,16 +130,13 @@ CONFIG.tokenvisibility.clipperVersion = 2
 CONFIG.tokenvisibility.filterInstances = true
 CONFIG.tokenvisibility.filterInstances = false
 
-CONFIG.tokenvisibility.useRenderTexture = false;
+CONFIG.tokenvisibility.useRenderTexture = true;
 CONFIG.tokenvisibility.useRenderTexture = false;
 
 CONFIG.tokenvisibility.pixelCounterType = "loopCount2"
 CONFIG.tokenvisibility.pixelCounterType = "blendCount2"
 CONFIG.tokenvisibility.pixelCounterType = "reductionCount2"
 CONFIG.tokenvisibility.pixelCounterType = "readPixelsCount"
-
-CONFIG.tokenvisibility.filterInstances = true;
-CONFIG.tokenvisibility.filterInstances = false;
 
 N = 20
 await api.bench.benchTokenLOS(N, { sleep: false, movement: false })
