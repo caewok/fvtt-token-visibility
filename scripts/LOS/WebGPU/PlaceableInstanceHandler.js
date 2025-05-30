@@ -229,8 +229,9 @@ export class PlaceableInstanceHandler {
 
     this.#updateId += 1;
     const idx = this.instanceIndexFromId.get(placeableId);
-    this.instanceIndexFromId.delete(idx);
+    this.instanceIndexFromId.delete(placeableId);
     this.placeableFromInstanceIndex.delete(idx);
+    this.instanceLastUpdated.delete(idx);
     this.#emptyIndices.add(idx);
     return true;
   }

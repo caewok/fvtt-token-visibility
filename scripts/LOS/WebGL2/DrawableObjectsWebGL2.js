@@ -212,7 +212,7 @@ class DrawableObjectsWebGL2Abstract {
    */
   _initializeVerticesAndArrays() {
     const offsetData = this.offsetData;
-    const numPlaceables = this.placeableHandler.numInstances;
+    const numPlaceableIndices = Math.max(...this.placeableHandler.placeableFromInstanceIndex.keys()) + 1;
     const vClass = this.verticesArray.constructor;
     const iClass = this.indicesArray.constructor;
 
@@ -222,9 +222,9 @@ class DrawableObjectsWebGL2Abstract {
     this.indicesArray = new iClass(this.indicesBuffer);
 
     // Create distinct views into the vertices and indices buffers
-    this.vertices = new Array(numPlaceables);
-    this.indices = new Array(numPlaceables);
-    for ( let i = 0; i < numPlaceables; i += 1 ) {
+    this.vertices = new Array(numPlaceableIndices);
+    this.indices = new Array(numPlaceableIndices);
+    for ( let i = 0; i < numPlaceableIndices; i += 1 ) {
       this.vertices[i] = new vClass(this.verticesBuffer, offsetData.vertex.offsets[i], offsetData.vertex.lengths[i]);
       this.indices[i] = new iClass(this.indicesBuffer, offsetData.index.offsets[i], offsetData.index.lengths[i]);
     }
