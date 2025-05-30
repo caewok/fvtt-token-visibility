@@ -92,7 +92,8 @@ export class WebGL2 {
     BLEND: false,
     CULL_FACE: false,
     cullFace: "BACK",
-    colorMask: [true, true, true, true],
+    colorMask: this.constructor.noColorMask,
+    clearColor: this.constructor.blackClearColor,
   }
 
   /**
@@ -103,22 +104,12 @@ export class WebGL2 {
     gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
     gl.cullFace(gl[glState.cullFace]);
     gl.colorMask(...glState.colorMask);
+    gl.clearColor(...glState.clearColor);
     for ( const name of ["DEPTH_TEST", "STENCIL_TEST", "BLEND", "CULL_FACE"] ) {
       if ( glState[name] ) gl.enable(gl[name]);
       else gl.disable(gl[name]);
       // console.debug(`Setting ${name} to ${glState[name]}`);
     }
-  }
-
-  /**
-   * Set the viewport to a given rectangle and cache the value.
-   * @param {PIXI.Rectangle} rect
-   */
-  setViewport(rect) {
-    if ( this.glState.viewport.equals(rect) ) return;
-    const { gl, glState } = this;
-    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
-    glState.viewport.copyFrom(rect);
   }
 
   /**
@@ -149,6 +140,22 @@ export class WebGL2 {
 
   setCulling(enabled) { this.#setGLBooleanState("CULL_FACE", enabled); }
 
+  /**
+   * Set the viewport to a given rectangle and cache the value.
+   * @param {PIXI.Rectangle} rect
+   */
+  setViewport(rect) {
+    const param = this.gl.getParameter(this.gl.VIEWPORT);
+    if ( this.glState.viewport.x !== param[0]
+      || this.glState.viewport.y !== param[1]
+      || this.glState.viewport.width !== param[2]
+      || this.glState.viewport.height !== param[3] ) console.error(`Viewport is incorrect. Should be`, param);
+    if ( this.glState.viewport.equals(rect) ) return;
+    const { gl, glState } = this;
+    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
+    glState.viewport.copyFrom(rect);
+  }
+
   setCullFace(face = "BACK") {
     const param = this.gl.getParameter(this.gl.CULL_FACE_MODE)
     if ( param !== this.gl[this.glState.cullFace] ) console.error(`Cull face mode is incorrect. Should be ${param}`);
@@ -157,13 +164,23 @@ export class WebGL2 {
     this.glState.cullFace = face;
   }
 
-  setColorMask(mask = [true, true, true, true]) {
+  setColorMask(mask = this.constructor.noColorMask) {
     const param = this.gl.getParameter(this.gl.COLOR_WRITEMASK);
     if ( !param.equals(this.glState.colorMask) ) console.error(`Color mask is incorrect. Should be`, param);
     if ( this.glState.colorMask.equals(mask) ) return;
     this.gl.colorMask(...mask);
     this.glState.colorMask = mask;
   }
+
+  setClearColor(color = this.constructor.blackClearColor) {
+    const param = this.gl.getParameter(this.gl.COLOR_CLEAR_VALUE);
+    if ( !this.glState.clearColor.every((elem, idx) => elem === param[idx]) ) console.error(`Clear color is incorrect. Should be`, param);
+    if ( this.glState.clearColor.equals(color) ) return;
+    this.gl.clearColor(...color);
+    this.glState.clearColor = color;
+  }
+
+  static blackClearColor = [0, 0, 0, 0];
 
   static redAlphaMask = [true, false, false, true];
 

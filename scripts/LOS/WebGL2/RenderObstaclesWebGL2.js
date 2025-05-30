@@ -228,7 +228,7 @@ export class RenderObstaclesWebGL2 {
     webGL2.setColorMask(WebGL2.redAlphaMask);
 
     // Clear.
-    gl.clearColor(0, 0, 0, 0);
+    webGL2.setClearColor(WebGL2.blackClearColor);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // Draw.
@@ -252,7 +252,7 @@ export class RenderObstaclesWebGL2 {
     webGL2.setCullFace("BACK");
 
     // Clear.
-    gl.clearColor(0, 0, 0, 0);
+    webGL2.setClearColor(WebGL2.blackClearColor);
     if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // If colorCoded, will not be drawing the floor b/c debugViewNormals is false.
@@ -316,7 +316,7 @@ export class RenderObstaclesWebGL2 {
     webGL2.setCullFace("BACK");
 
     // Clear.
-    gl.clearColor(0, 0, 0, 0);
+    webGL2.setClearColor(WebGL2.blackClearColor);
     if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
     // Performance: Use the stencil buffer to discard pixels outside the target shape.
