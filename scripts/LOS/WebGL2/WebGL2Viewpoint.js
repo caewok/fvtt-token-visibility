@@ -5,6 +5,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { WebGL2 } from "./WebGL2.js";
 import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
 import { RedPixelCounter } from "./RedPixelCounter.js";
 import * as twgl from "./twgl.js";
@@ -48,8 +49,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   /** @type {OffscreenCanvas} */
   static glCanvas;
 
+  /** @type {WebGL2} */
+  static webGL2;
+
   /** @type {WebGL2Context} */
-  gl;
+  get gl() { return this.constructor.webGL2.gl; };
 
   /** @type {RedPixelCounter} */
 
@@ -57,9 +61,10 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     super(opts);
     const { WIDTH, HEIGHT } = this.constructor;
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
-    const gl = this.gl = this.constructor.glCanvas.getContext("webgl2");
+    const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
+    const gl = this.gl;
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
-    this.redPixelCounter = new RedPixelCounter(this.gl); // Width and heigh tset later
+    this.redPixelCounter = new RedPixelCounter(gl); // Width and heigh tset later
   }
 
   /** @type {RenderObstaclesWebGL2} */
@@ -71,9 +76,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     if ( this.#initialized ) return;
     this.#initialized = true; // Avoids async issues if saved right away.
     await super.initialize();
-    const gl = this.gl;
     const size = this.renderTextureSize;
-    this.renderObstacles = new RenderObstaclesWebGL2({ gl, senseType: this.config.senseType });
+    this.renderObstacles = new RenderObstaclesWebGL2({ webGL2: this.constructor.webGL2, senseType: this.config.senseType });
     await this.renderObstacles.initialize();
     this._initializeFramebuffer();
     this.redPixelCounter.initialize(size, size);
@@ -297,10 +301,11 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   async openPopout() {
     await super.openPopout();
     if ( this.renderer ) this.renderer.destroy();
+    const webGL2 = new WebGL2(this.gl);
     this.renderer = new RenderObstaclesWebGL2({
       senseType: this.viewerLOS.config.senseType,
       debugViewNormals: this.debugView,
-      gl: this.gl,
+      webGL2,
     });
     await this.renderer.initialize();
   }

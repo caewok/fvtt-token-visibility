@@ -503,3 +503,7 @@ export function flipObjectKeyValues(obj) {
   Object.entries(obj).forEach(([key, value]) => newObj[value] = key);
   return newObj;
 }
+
+export function isTypedArray(obj) {
+  return ArrayBuffer.isView(obj) && !(obj instanceof DataView);
+}
