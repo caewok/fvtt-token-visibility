@@ -89,8 +89,9 @@ class DrawableObjectsWebGL2Abstract {
   /** @type {twgl.ProgramInfo} */
   programInfo;
 
-  constructor(gl, camera, { debugViewNormals = false } = {}) {
-    this.gl = gl;
+  constructor(webGL2, camera, { debugViewNormals = false } = {}) {
+    this.gl = webGL2.gl;
+    this.webGL2 = webGL2;
     this.camera = camera;
     this.#debugViewNormals = debugViewNormals;
     this.placeableHandler = new this.constructor.handlerClass();
@@ -111,7 +112,7 @@ class DrawableObjectsWebGL2Abstract {
    * Set up all parts of the render pipeline that will not change often.
    */
   async initialize() {
-    this.programInfo = await this.constructor.cacheProgram(this);
+    this.programInfo = await this._createProgram();
     this.placeableHandler.registerPlaceableHooks();
     this._initializePlaceableHandler();
     this._initializeGeoms();
@@ -127,10 +128,11 @@ class DrawableObjectsWebGL2Abstract {
   get placeableHandlerBufferId() { return this.#placeableHandlerBufferId; }
 
   async _createProgram() {
-    const debugViewNormals = this.debugViewNormals;
-    const vertexShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.vertexFile, { debugViewNormals })
-    const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(this.constructor.fragmentFile, { debugViewNormals })
-    return twgl.createProgramInfo(this.gl, [vertexShaderSource, fragmentShaderSource]);
+    return this.webGL2.cacheProgram(
+      this.constructor.vertexFile,
+      this.constructor.fragmentFile,
+      { debugViewNormals: this.debugViewNormals }
+    );
   }
 
   /*
@@ -380,7 +382,7 @@ class DrawableObjectsWebGL2Abstract {
    */
   prerender() {
     this._updateInstances();
-    this.constructor.currentProgramInfo = null;
+    // this.webGL2.currentProgramInfo = null;
   }
 
   /**
@@ -390,7 +392,7 @@ class DrawableObjectsWebGL2Abstract {
     if ( !this.instanceSet.size ) return;
 
     const gl = this.gl;
-    this.constructor.useProgram(gl, this.programInfo);
+    this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
@@ -428,48 +430,6 @@ class DrawableObjectsWebGL2Abstract {
     instanceSet.clear();
     this.placeableHandler.instanceIndexFromId.values().forEach(idx => instanceSet.add(idx));
   }
-
-  // ----- NOTE: Caching ----- //
-
-  /** @type {Map<string, twgl.ProgramInfo} */
-  static programs = new Map();
-
-  /** @type {twgl.ProgramInfo} */
-  static currentProgramInfo;
-
-  static useProgram(gl, programInfo) {
-    if ( this.currentProgramInfo !== programInfo ) gl.useProgram(programInfo.program);
-    this.currentProgramInfo = programInfo;
-    if ( this.currentProgramInfo.program !== gl.getParameter(gl.CURRENT_PROGRAM) ) console.error("Current program is incorrect.");
-    else console.debug("Current program is correct.")
-  }
-
-  /**
-   * Key to store the drawable's program, allowing it to be reused.
-   * @param {DrawableObjectsWebGL2Abstract} drawable
-   * @returns {string}
-   */
-  static programKey(drawable) {
-    return `${drawable.constructor.vertexFile}_${drawable.constructor.fragmentFile}_${drawable.debugViewNormals}`;
-  }
-
-  /**
-   * Create and cache the program info or build a new one
-   * @param {DrawableObjectsWebGL2Abstract} drawable
-   * @returns {twgl.ProgramInfo} the program info for the drawable
-   */
-  static async cacheProgram(drawable) {
-    const key = this.programKey(drawable);
-    if ( this.programs.has(key) ) return this.programs.get(key);
-    const programInfo = await drawable._createProgram();
-    this.programs.set(key, programInfo);
-    return programInfo;
-  }
-
-
-
-
-
 }
 
 export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
@@ -625,7 +585,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( !this.instanceSet.size ) return;
 
     const gl = this.gl;
-    this.constructor.useProgram(gl, this.programInfo);
+    this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
@@ -722,7 +682,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( typeof idx === "undefined" ) return;
 
     const gl = this.gl;
-    this.constructor.useProgram(gl, this.programInfo);
+    this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
@@ -746,7 +706,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( !this.instanceSet.size ) return;
 
     const gl = this.gl;
-    this.constructor.useProgram(gl, this.programInfo);
+    this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     // gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfo.attribs.aPos.buffer);
     // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
@@ -1083,7 +1043,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
     if ( !this.instanceSet.size ) return;
 
     const gl = this.gl;
-    this.constructor.useProgram(gl, this.programInfo);
+    this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);
@@ -1205,7 +1165,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     if ( typeof idx === "undefined" ) return;
 
     const gl = this.gl;
-    this.constructor.useProgram(gl, this.programInfo);
+    this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
 
@@ -1231,7 +1191,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     if ( !this.instanceSet.size ) return;
 
     const gl = this.gl;
-    this.constructor.useProgram(gl, this.programInfo);
+    this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.bufferInfo);
     twgl.setUniforms(this.programInfo, this.uniforms);
     twgl.setUniforms(this.programInfo, this.materialUniforms);

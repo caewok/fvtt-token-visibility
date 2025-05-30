@@ -7,6 +7,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { WebGL2 } from "./WebGL2.js";
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
 import {
@@ -33,6 +34,9 @@ export class RenderObstaclesWebGL2 {
 
   /** @type {WebGL2RenderingContext} */
   gl;
+
+  /** @type {WebGL2} */
+  webGL2;
 
   /** @type {DrawObjectsAbstract[]} */
   drawableObjects = [];
@@ -74,6 +78,7 @@ export class RenderObstaclesWebGL2 {
     this.debugViewNormals = debugViewNormals;
     this.senseType = senseType;
     this.gl = gl;
+    this.webGL2 = new WebGL2(gl);
     this._buildDrawableObjects(useInstancing, useSceneBackground);
   }
 
@@ -120,7 +125,7 @@ export class RenderObstaclesWebGL2 {
 
     const clOpts = { senseType: this.senseType, debugViewNormals: this.debugViewNormals };
     for ( const cl of drawableClasses) {
-      const drawableObj = new cl(this.gl, this.camera, clOpts);
+      const drawableObj = new cl(this.webGL2, this.camera, clOpts);
       this.drawableObjects.push(drawableObj);
 
       switch ( cl ) {
@@ -174,10 +179,6 @@ export class RenderObstaclesWebGL2 {
     this.drawableObjects.forEach(drawableObj => promises.push(drawableObj.initialize()));
     return Promise.allSettled(promises);
   }
-
-
-
-
 
   /** @type {ViewerLOSConfig} */
   _config = {
