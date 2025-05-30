@@ -427,6 +427,36 @@ class DrawableObjectsWebGL2Abstract {
     instanceSet.clear();
     this.placeableHandler.instanceIndexFromId.values().forEach(idx => instanceSet.add(idx));
   }
+
+  // ----- NOTE: Caching ----- //
+
+  /** @type {Map<string, twgl.ProgramInfo} */
+  static programs = new Map();
+
+  /**
+   * Key to store the drawable's program, allowing it to be reused.
+   * @param {DrawableObjectsWebGL2Abstract} drawable
+   * @returns {string}
+   */
+  static programKey(drawable) {
+    return `${drawable.constructor.vertexFile}_${drawable.constructor.fragmentFile}_${drawable.debugViewNormals}`;
+  }
+
+  /**
+   * Create and cache the program info or build a new one
+   * @param {DrawableObjectsWebGL2Abstract} drawable
+   * @returns {twgl.ProgramInfo} the program info for the drawable
+   */
+  static async cacheProgram(drawable) {
+    const key = this.programKey(drawable);
+    if ( this.programs.has(key) ) return this.programs.get(key);
+    const programInfo = await drawable._createProgram();
+    this.programs.set(key, programInfo);
+    return programInfo;
+  }
+
+
+
 }
 
 export class DrawableWallWebGL2 extends DrawableObjectsWebGL2Abstract {
