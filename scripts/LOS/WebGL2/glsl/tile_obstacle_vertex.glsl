@@ -2,17 +2,16 @@
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aPos;
-#if ${debugViewNormals}
-in vec3 aNorm;
-#endif
 in vec2 aUV;
 
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uLookAtMatrix;
 
 #if ${debugViewNormals}
-out vec3 vNorm;
+  in vec3 aNorm;
+  out vec3 vNorm;
 #endif
+
 out vec2 uv0;
 
 void main() {
@@ -24,7 +23,7 @@ void main() {
   // instance: gl_InstanceID
 
   #if ${debugViewNormals}
-  vNorm = normalize((uLookAtMatrix * vec4(aNorm, 0.0)).xyz);
+    vNorm = normalize((uLookAtMatrix * vec4(aNorm, 0.0)).xyz);
   #endif
 }
 

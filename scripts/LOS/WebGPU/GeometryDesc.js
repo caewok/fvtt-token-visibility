@@ -217,6 +217,7 @@ export class GeometryDesc {
         sizes: new Uint16Array(ln),   // Byte size of vertices.
         lengths: new Uint16Array(ln), // Length of vertices (number components * number of vertices).
         num: new Uint16Array(ln),     // Number of vertices.
+        cumulativeNum: new Uint16Array(ln), // Cumulative sum of number of vertices.
         totalLength: 0,
         totalSize: 0,
       },
@@ -236,11 +237,13 @@ export class GeometryDesc {
 
       out.index.totalSize += out.index.sizes[i] = geom.indices?.byteLength ?? 0;
       out.index.totalLength += out.index.lengths[i] = geom.indices?.length ?? 0;
+
     }
 
-    // Iterative sum of sizes for the offsets.
+    // Iterative sum of sizes for the offsets and cumulative number.
     for ( let i = 1; i < ln; i += 1 ) {
       out.vertex.offsets[i] += out.vertex.offsets[i - 1] + out.vertex.sizes[i - 1];
+      out.vertex.cumulativeNum[i] += out.vertex.cumulativeNum[i - 1] + out.vertex.num[i - 1];
       out.index.offsets[i] += out.index.offsets[i - 1] + out.index.sizes[i - 1];
     }
     return out;
