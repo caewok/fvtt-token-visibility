@@ -34,7 +34,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
   static defaultConfiguration = {
     ...PercentVisibleRenderCalculatorAbstract.defaultConfiguration,
     alphaThreshold: 0.75,
-    useInstancing: false,
   };
 
   /** @type {number} */
