@@ -217,7 +217,7 @@ export class AbstractViewerLOS {
   set viewer(value) {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
-    this.initializeViewpoints();
+    if ( value ) this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewpoints ----- //
@@ -522,7 +522,7 @@ export class AbstractViewerLOS {
     let color = blue;
 
     // Fill in the constrained border on canvas
-    draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
+    if ( this.target ) draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
 
     // Separately fill in the visible target shape
     if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color: yellow });
