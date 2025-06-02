@@ -22,7 +22,7 @@ import {
 } from "../WebGPU/PlaceableInstanceHandler.js";
 
 import * as twgl from "./twgl.js";
-import { applyConsecutively, log } from "../util.js";
+import { log } from "../util.js";
 
 // Set that is used for temporary values.
 // Not guaranteed to have any specific value.
@@ -479,7 +479,7 @@ class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebGL2Abstr
     // Handled by _initializeVertices.
   }
 
-  _updateInstanceVertex(idx) {
+  _updateInstanceVertex(_idx) {
     console.error("DrawableObjectsInstancingWebGL2Abstract does not update individual instance vertices.");
   }
 
@@ -641,7 +641,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   textures = [];
 
   _initializeGeoms(opts = {}) {
-    opts.isTile = true;
+    opts.addUVs = true;
     super._initializeGeoms(opts);
   }
 
@@ -696,30 +696,6 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     this._initializeTextures();
   }
 
-  render() {
-    if ( !this.instanceSet.size ) return;
-
-    const gl = this.gl;
-    this.webGL2.useProgram(this.programInfo);
-    twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
-    // twgl.setBuffersAndAttributes(gl, this.programInfo, this.vertexBufferInfo);
-    twgl.setUniforms(this.programInfo, this.uniforms);
-    twgl.setUniforms(this.programInfo, this.materialUniforms);
-    // gl.bindBuffer(gl.ARRAY_BUFFER, this.attributeBufferInfo.attribs.aPos.buffer);
-    // gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
-
-    log (`${this.constructor.name}|render ${this.instanceSet.size} tiles`);
-    const uniforms = { uTileTexture: -1 };
-    for ( const idx of this.instanceSet ) {
-      TMP_SET.clear();
-      TMP_SET.add(idx);
-      uniforms.uTileTexture = this.textures[idx];
-      twgl.setUniforms(this.programInfo, uniforms);
-      WebGL2.drawSet(gl, TMP_SET, this.offsetData);
-    }
-    gl.bindVertexArray(null);
-  }
-
   _drawFilteredInstances(instanceSet) {
     // TODO: Bind instead of setting textures.
 /*
@@ -764,21 +740,14 @@ for (let i = 0; i < numImages; ++i) {
       TMP_SET.add(idx);
       uniforms.uTileTexture = this.textures[idx];
       twgl.setUniforms(this.programInfo, uniforms);
-      WebGL2.drawSet(this.gl, TMP_SET, this.offsetData);
+      super._drawFilteredInstances(TMP_SET);
     }
   }
 
   _drawUnfilteredInstances() {
     // Still need to draw each one at a time so texture uniform can be changed.
-    const uniforms = { uTileTexture: -1 };
-    for ( const idx of this.placeableHandler.placeableFromInstanceIndex.keys() ) {
-      TMP_SET.clear();
-      TMP_SET.add(idx);
-      uniforms.uTileTexture = this.textures[idx];
-      twgl.setUniforms(this.programInfo, uniforms);
-      WebGL2.drawSet(this.gl, TMP_SET, this.offsetData);
-    }
-
+    const instanceSet = this.placeableHandler.placeableFromInstanceIndex.keys(); // Not a set but works in the for/of loop above.
+    super._drawFilteredInstances(instanceSet);
   }
 
   /**
