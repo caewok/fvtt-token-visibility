@@ -438,8 +438,8 @@ class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebGL2Abstr
   /** @type {number} */
   aModelAttribLoc;
 
-  async _createProgram() {
-    const programInfo = await super._createProgram();
+  async _createProgram(opts) {
+    const programInfo = await super._createProgram(opts);
     this.aModelAttribLoc = this.gl.getAttribLocation(programInfo.program, 'aModel');
     return programInfo;
   }
