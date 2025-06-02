@@ -142,6 +142,8 @@ Hooks.once("init", function() {
      */
     filterInstances: true,
 
+    useInstancingWebGL2: true,
+
     useStencil: false,
 
     usePixelReducer: false,

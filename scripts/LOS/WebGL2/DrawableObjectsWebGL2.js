@@ -1050,6 +1050,7 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
     // TODO: Swap between canvas and renderTexture.
 
     log (`${this.constructor.name}|render ${this.instanceSet.size} walls`);
+    const nVertices = this.indicesArray.length;
     if ( CONFIG[MODULE_ID].filterInstances ) {
       // To draw select instances, modify the buffer offset.
       // const tmp = this.placeableHandler.instanceArrayValues;
@@ -1057,13 +1058,12 @@ export class DrawableWallInstance extends DrawableWallWebGL2 {
       drawInstancedMatrixSet(
         gl,
         this.instanceSet,
-        this.geom.numVertices,
+        nVertices,
         this.bufferInfo.attribs.aModel,
         this.#aModelAttribLoc,
       );
     } else {
       // Draw every instance
-      const nVertices = this.geom.numVertices;
       WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
     }
     gl.bindVertexArray(null);
@@ -1176,10 +1176,11 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     this.#tmpSet.add(idx);
 
     log(`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
+    const nVertices = this.indicesArray.length;
     drawInstancedMatrixSet(
       gl,
       this.#tmpSet,
-      this.geom.numVertices,
+      nVertices,
       this.bufferInfo.attribs.aModel,
       this.#aModelAttribLoc,
     );
@@ -1196,6 +1197,7 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
     twgl.setUniforms(this.programInfo, this.materialUniforms);
 
     log (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
+    const nVertices = this.indicesArray.length;
     if ( CONFIG[MODULE_ID].filterInstances ) {
       // To draw select instances, modify the buffer offset.
       // const tmp = this.placeableHandler.instanceArrayValues;
@@ -1203,13 +1205,12 @@ export class DrawableTokenInstance extends DrawableTokenWebGL2 {
       drawInstancedMatrixSet(
         gl,
         this.instanceSet,
-        this.geom.numVertices,
+        nVertices,
         this.bufferInfo.attribs.aModel,
         this.#aModelAttribLoc,
       );
     } else {
       // Draw every instance
-      const nVertices = this.geom.numVertices;
       WebGL2.drawInstanced(gl, nVertices, 0, this.placeableHandler.numInstances);
     }
     gl.bindVertexArray(null);

@@ -75,10 +75,11 @@ export class RenderObstaclesWebGL2 {
   /** @type {WebGL2RenderingContext} */
   get gl() { return this.webGL2.gl; };
 
-  constructor({ webGL2, senseType = "sight", debugViewNormals = false, useInstancing = false, useSceneBackground = false } = {}) {
+  constructor({ webGL2, senseType = "sight", debugViewNormals = false, useSceneBackground = false } = {}) {
     this.debugViewNormals = debugViewNormals;
     this.senseType = senseType;
     this.webGL2 = webGL2;
+    const useInstancing = CONFIG[MODULE_ID].useInstancingWebGL2;
     this._buildDrawableObjects(useInstancing, useSceneBackground);
   }
 
