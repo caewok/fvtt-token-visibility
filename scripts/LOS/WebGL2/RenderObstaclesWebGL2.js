@@ -28,7 +28,6 @@ import {
 
 export class RenderObstaclesWebGL2 {
 
-
   /** @type {WebGL2} */
   webGL2;
 
@@ -66,14 +65,20 @@ export class RenderObstaclesWebGL2 {
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
 
   /** @type {object} */
-  debugViewNormals = false;
+  #debugViewNormals = false;
+
+  get debugViewNormals() { return this.#debugViewNormals; }
 
   /** @type {WebGL2RenderingContext} */
   get gl() { return this.webGL2.gl; };
 
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; }
+
   constructor({ webGL2, senseType = "sight", debugViewNormals = false, useSceneBackground = false } = {}) {
-    this.debugViewNormals = debugViewNormals;
-    this.senseType = senseType;
+    this.#debugViewNormals = debugViewNormals;
+    this.#senseType = senseType;
     this.webGL2 = webGL2;
     this._buildDrawableObjects(useSceneBackground);
   }
@@ -105,9 +110,8 @@ export class RenderObstaclesWebGL2 {
 
     if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
 
-    const clOpts = { senseType: this.senseType, debugViewNormals: this.debugViewNormals };
     for ( const cl of drawableClasses) {
-      const drawableObj = new cl(this.webGL2, this.camera, clOpts);
+      const drawableObj = new cl(this);
       this.drawableObjects.push(drawableObj);
 
       switch ( cl ) {
@@ -158,6 +162,7 @@ export class RenderObstaclesWebGL2 {
     // const promises = [];
     // this.drawableObjects.forEach(drawableObj => promises.push(drawableObj.initialize()));
     // return Promise.allSettled(promises);
+    this._initializeCameraBuffer();
     for ( const drawableObj of this.drawableObjects ) await drawableObj.initialize();
   }
 
@@ -181,6 +186,71 @@ export class RenderObstaclesWebGL2 {
   set config(cfg = {}) {
     foundry.utils.mergeObject(this._config, cfg);
   }
+
+  // ----- NOTE: Camera uniform buffer object ----- //
+
+  static CAMERA_BIND_POINT = 0;
+
+  /** @type {object<WebGLBuffer>} */
+  buffer = {
+    camera: null,
+  };
+
+  /** @type {object<TypedArray>} */
+  bufferData = {};
+
+  _initializeCameraBuffer() {
+    const gl = this.gl;
+
+    // Already have a shared buffer data from the camera object: camera.arrayBuffer.
+    this.buffer.camera = gl.createBuffer();
+
+    // Create and initialize it.
+    // See https://learnopengl.com/Advanced-OpenGL/Advanced-GLSL
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.camera);
+    gl.bufferData(gl.UNIFORM_BUFFER, this.camera.constructor.CAMERA_BUFFER_SIZE, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+
+    // Bind the UBO to the binding point
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, this.constructor.CAMERA_BIND_POINT, this.buffer.camera);
+  }
+
+
+  /**
+   * Set camera for a given render.
+   */
+  _setCamera(viewerLocation, target, { targetLocation } = {}) {
+    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+    const camera = this.camera;
+    camera.cameraPosition = viewerLocation;
+    // camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
+    camera.setTargetTokenFrustum(target);
+
+    /*
+    camera.perspectiveParameters = {
+      fov: Math.toRadians(90),
+      aspect: 1,
+      zNear: 1,
+      zFar: Infinity,
+    };
+    */
+
+    /*
+    camera.perspectiveParameters = {
+      fov: camera.perspectiveParameters.fov * 2,
+      zFar: Infinity, // camera.perspectiveParameters.zFar + 50
+    };
+    */
+    camera.refresh();
+    const gl = this.gl;
+    const cameraData = this.camera.arrayView;
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.camera);
+    gl.bufferSubData(gl.UNIFORM_BUFFER, 0, cameraData);
+    gl.bindBufferRange(gl.UNIFORM_BUFFER, this.constructor.CAMERA_BIND_POINT, this.buffer.camera, 0, cameraData.BYTES_PER_ELEMENT * cameraData.length);
+
+  }
+
+  // ----- NOTE: Render ----- //
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -335,38 +405,5 @@ export class RenderObstaclesWebGL2 {
     this.gl.flush();
   }
 
-  /**
-   * Set camera for a given render.
-   */
-  _setCamera(viewerLocation, target, { targetLocation } = {}) {
-    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    const camera = this.camera;
-    camera.cameraPosition = viewerLocation;
-    // camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
-
-    /*
-    camera.perspectiveParameters = {
-      fov: Math.toRadians(90),
-      aspect: 1,
-      zNear: 1,
-      zFar: Infinity,
-    };
-    */
-
-
-    camera.setTargetTokenFrustum(target);
-
-    /*
-    camera.perspectiveParameters = {
-      fov: camera.perspectiveParameters.fov * 2,
-      zFar: Infinity, // camera.perspectiveParameters.zFar + 50
-    };
-    */
-
-    camera.refresh();
-  }
-
-  destroy() {
-
-  }
+  destroy() {}
 }
