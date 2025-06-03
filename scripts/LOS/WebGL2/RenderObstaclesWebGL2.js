@@ -339,8 +339,10 @@ export class RenderObstaclesWebGL2 {
     // Constrained draws any constrained or lit targets.
     // Unconstrained only draws unconstrained.
     if ( useLitTargetShape && this.drawableLitToken.constructor.includeToken(target) ) this.drawableLitToken.renderTarget(target);
-    else this.drawableConstrainedToken.renderTarget(target);
-    this.drawableUnconstrainedToken.renderTarget(target); // Only runs if the target is unconstrained.
+    else {
+      this.drawableConstrainedToken.renderTarget(target);
+      this.drawableUnconstrainedToken.renderTarget(target); // Only runs if the target is unconstrained.
+    }
   }
 
   renderObstacles(viewerLocation, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {

@@ -825,7 +825,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
   static constrained = false;
 
-  static lit = false;
+  static lit = null; // Draw tokens
 
   static tokenHasCustomLitBorder(token) { return token.litTokenBorder && !token.litTokenBorder.equals(token.constrainedTokenBorder); }
 
