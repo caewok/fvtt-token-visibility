@@ -640,7 +640,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   // ----- NOTE: Attributes ----- //
 
   /** @type {WebGLTexture[]} */
-  textures = [];
+  textures = new Map();
 
   _initializeGeoms(opts = {}) {
     opts.addUVs = true;
@@ -685,11 +685,9 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
   _initializeTextures() {
     const textureOpts = this.constructor.textureOptions(this.gl);
-    const placeableHandler = this.placeableHandler;
-    this.textures.length = placeableHandler.numInstances;
-    for ( const [idx, tile] of placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
       textureOpts.src = this.constructor.tileSource(tile);
-      this.textures[idx] = twgl.createTexture(this.gl, textureOpts)
+      this.textures.set(idx, twgl.createTexture(this.gl, textureOpts))
     }
   }
 
@@ -740,8 +738,9 @@ for (let i = 0; i < numImages; ++i) {
     for ( const idx of instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      uniforms.uTileTexture = this.textures[idx];
-      twgl.setUniforms(this.programInfo, uniforms);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(idx));
+      // uniforms.uTileTexture = this.textures.get(idx);
+      // twgl.setUniforms(this.programInfo, uniforms);
       super._drawFilteredInstances(TMP_SET);
     }
   }
