@@ -42,7 +42,7 @@ class DrawableObjectsWebGL2Abstract {
   static vertexFile = "obstacle_vertex_ubo";
 
   /** @type {string} */
-  static fragmentFile = "obstacle_fragment";
+  static fragmentFile = "obstacle_fragment_ubo";
 
   /** @type {number[4]} */
   static obstacleColor = [0, 0, 1, 1];
@@ -83,7 +83,6 @@ class DrawableObjectsWebGL2Abstract {
     this._initializeGeoms();
     this._initializeOffsets();
     this._initializeAttributes();
-    this._initializeCameraBuffer();
     this._initializeUniforms();
 
     // Register that we are synced with the current placeable data.
@@ -111,13 +110,9 @@ class DrawableObjectsWebGL2Abstract {
 
   // ----- NOTE: Uniforms ----- //
 
-  materialUniforms = {};
-
-
   _initializeUniforms() {
-    this.materialUniforms = {
-      uColor: new Float32Array(this.constructor.obstacleColor),
-    };
+    this._initializeCameraBuffer();
+    this._initializeMaterialBuffer();
   }
 
   _initializeCameraBuffer() {
@@ -126,6 +121,13 @@ class DrawableObjectsWebGL2Abstract {
     const program = this.programInfo.program;
     const blockIndex = gl.getUniformBlockIndex(program, "Camera");
     gl.uniformBlockBinding(program, blockIndex, this.renderer.constructor.CAMERA_BIND_POINT);
+  }
+
+  _initializeMaterialBuffer() {
+    const gl = this.gl;
+    const program = this.programInfo.program;
+    const blockIndex = gl.getUniformBlockIndex(program, "Material");
+    gl.uniformBlockBinding(program, blockIndex, this.renderer.constructor.MATERIAL_BIND_POINT);
   }
 
   // ----- NOTE: Attributes ----- //
@@ -404,7 +406,7 @@ class DrawableObjectsWebGL2Abstract {
     this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
     // twgl.setBuffersAndAttributes(gl, this.programInfo, this.vertexArrayInfo);
-    twgl.setUniforms(this.programInfo, this.materialUniforms);
+    // twgl.setUniforms(this.programInfo, this.materialUniforms);
 
 
 
@@ -849,8 +851,8 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
 
     // Render the target red.
-    for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
-    twgl.setUniforms(this.programInfo, this.materialUniforms);
+    // for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
+    // twgl.setUniforms(this.programInfo, this.materialUniforms);
 
     log (`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
     TMP_SET.clear();
@@ -870,8 +872,8 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     // twgl.bindUniformBlock(gl, this.programInfo, this.renderer.uboInfo.camera);
 
 
-    for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
-    twgl.setUniforms(this.programInfo, this.materialUniforms);
+    // for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
+    // twgl.setUniforms(this.programInfo, this.materialUniforms);
 
     log (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);

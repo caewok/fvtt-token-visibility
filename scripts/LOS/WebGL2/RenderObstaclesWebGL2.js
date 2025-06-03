@@ -163,6 +163,7 @@ export class RenderObstaclesWebGL2 {
     // this.drawableObjects.forEach(drawableObj => promises.push(drawableObj.initialize()));
     // return Promise.allSettled(promises);
     this._initializeCameraBuffer();
+    this._initializeMaterialBuffer();
     for ( const drawableObj of this.drawableObjects ) await drawableObj.initialize();
   }
 
@@ -194,10 +195,8 @@ export class RenderObstaclesWebGL2 {
   /** @type {object<WebGLBuffer>} */
   buffer = {
     camera: null,
+    material: null,
   };
-
-  /** @type {object<TypedArray>} */
-  bufferData = {};
 
   _initializeCameraBuffer() {
     const gl = this.gl;
@@ -247,7 +246,55 @@ export class RenderObstaclesWebGL2 {
     gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.camera);
     gl.bufferSubData(gl.UNIFORM_BUFFER, 0, cameraData);
     gl.bindBufferRange(gl.UNIFORM_BUFFER, this.constructor.CAMERA_BIND_POINT, this.buffer.camera, 0, cameraData.BYTES_PER_ELEMENT * cameraData.length);
+  }
 
+  // ----- NOTE: Material uniform buffer object ----- //
+
+  static MATERIAL_BIND_POINT = 1;
+
+  static MATERIAL_BUFFER = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * 4 * 3);
+
+  static MATERIAL_COLORS = {
+    target: new Float32Array(this.MATERIAL_BUFFER, 0, 4),
+    obstacle: new Float32Array(this.MATERIAL_BUFFER, Float32Array.BYTES_PER_ELEMENT * 4, 4),
+    terrain: new Float32Array(this.MATERIAL_BUFFER, Float32Array.BYTES_PER_ELEMENT * 4 * 2, 4),
+  }
+
+  _initializeMaterialBuffer() {
+    const gl = this.gl;
+
+    // Buffer to hold every color variation.
+    this.buffer.material = gl.createBuffer();
+
+    // Create and initialize it.
+    // See https://learnopengl.com/Advanced-OpenGL/Advanced-GLSL
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.material);
+    gl.bufferData(gl.UNIFORM_BUFFER, new Float32Array(this.constructor.MATERIAL_BUFFER), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+
+    // Bind the UBO to the binding point
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, this.constructor.MATERIAL_BIND_POINT, this.buffer.material);
+  }
+
+  #currentMaterial = null;
+
+  /**
+   * Set material for a given render.
+   * @param {string} type             Key from MATERIAL_COLORS
+   */
+  _setMaterial(type = "obstacle") {
+    if ( this.#currentMaterial === type ) return;
+
+    let offset = 0;
+    switch ( type ) {
+      case "target": offset = 0; break;
+      case "obstacle": offset = Float32Array.BYTES_PER_ELEMENT * 4; break;
+      case "terrain": offset = Float32Array.BYTES_PER_ELEMENT * 4 * 2; break;
+      default: console.error("_setMaterial|Material type not recognized.");
+    }
+    // gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.material);
+    this.gl.bindBufferRange(this.gl.UNIFORM_BUFFER, this.constructor.MATERIAL_BIND_POINT, this.buffer.material, offset, Float32Array.BYTES_PER_ELEMENT * 4);
+    this.#currentMaterial = type;
   }
 
   // ----- NOTE: Render ----- //
@@ -277,6 +324,7 @@ export class RenderObstaclesWebGL2 {
     webGL2.setCullFace("BACK");
     webGL2.setStencilTest(false);
     webGL2.setColorMask(WebGL2.redAlphaMask);
+    this._setMaterial("target");
 
     // Clear.
     webGL2.setClearColor(WebGL2.blackClearColor);
@@ -338,6 +386,7 @@ export class RenderObstaclesWebGL2 {
     // Lit token class only draws lit targets.
     // Constrained draws any constrained or lit targets.
     // Unconstrained only draws unconstrained.
+    this._setMaterial("target");
     if ( useLitTargetShape && this.drawableLitToken.constructor.includeToken(target) ) this.drawableLitToken.renderTarget(target);
     else {
       this.drawableConstrainedToken.renderTarget(target);
@@ -381,6 +430,7 @@ export class RenderObstaclesWebGL2 {
 
     // Draw blue obstacles.
     if ( hasObstacles ) {
+      this._setMaterial("obstacle");
       webGL2.setDepthTest(true);
       webGL2.setBlending(false);
       if ( colorCoded ) webGL2.setColorMask(WebGL2.blueAlphaMask);
@@ -391,6 +441,7 @@ export class RenderObstaclesWebGL2 {
 
     // Draw green limited (terrain) walls.
     if ( hasTerrain ) {
+      this._setMaterial("terrain");
       webGL2.setDepthTest(false);
       webGL2.setBlending(true);
       if ( colorCoded ) webGL2.setColorMask(WebGL2.greenAlphaMask);
@@ -409,3 +460,8 @@ export class RenderObstaclesWebGL2 {
 
   destroy() {}
 }
+
+// Set up the material colors
+RenderObstaclesWebGL2.MATERIAL_COLORS.target.set([1, 0, 0, 1]);
+RenderObstaclesWebGL2.MATERIAL_COLORS.obstacle.set([0, 0, 1, 1]);
+RenderObstaclesWebGL2.MATERIAL_COLORS.terrain.set([0, 0.5, 0, 0.5]);
