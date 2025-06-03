@@ -414,7 +414,7 @@ class DrawableObjectsWebGL2Abstract {
     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
     else this._drawUnfilteredInstances();
     gl.bindVertexArray(null);
-    this.gl.flush(); // For debugging
+    // this.gl.flush(); // For debugging
   }
 
   _drawFilteredInstances(instanceSet) {
@@ -857,7 +857,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     TMP_SET.add(idx);
     this._drawFilteredInstances(TMP_SET)
     gl.bindVertexArray(null);
-    this.gl.flush(); // For debugging
+    // this.gl.flush(); // For debugging
   }
 
   // TODO: Handle material uniform using binding; avoid setUniforms here.
@@ -877,7 +877,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
     else this._drawUnfilteredInstances();
     gl.bindVertexArray(null)
-    this.gl.flush(); // For debugging
+    // this.gl.flush(); // For debugging
   }
 
   /**
