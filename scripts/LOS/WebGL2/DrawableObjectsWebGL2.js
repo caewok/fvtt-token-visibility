@@ -734,7 +734,7 @@ for (let i = 0; i < numImages; ++i) {
 
 */
 
-    const uniforms = { uTileTexture: -1 };
+    // const uniforms = { uTileTexture: -1 };
     for ( const idx of instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
