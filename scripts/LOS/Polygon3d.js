@@ -466,6 +466,9 @@ function pointFromVertices(i, vertices, indices, outPoint) {
  */
 export class Triangle3d extends Polygon3d {
 
+  /** @type {Point3d} */
+  points = Array(3);
+
   constructor() {
     super(3);
   }
