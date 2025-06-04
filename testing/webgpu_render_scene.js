@@ -138,6 +138,7 @@ CONFIG.tokenvisibility.pixelCounterType = "blendCount2"
 CONFIG.tokenvisibility.pixelCounterType = "reductionCount2"
 CONFIG.tokenvisibility.pixelCounterType = "readPixelsCount"
 CONFIG.tokenvisibility.pixelCounterType = "readPixelsCount2"
+CONFIG.tokenvisibility.pixelCounterType = "loopCountTransform"
 
 N = 20
 await api.bench.benchTokenLOS(N, { sleep: false, movement: false })

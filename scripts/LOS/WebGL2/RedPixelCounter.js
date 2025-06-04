@@ -27,17 +27,17 @@ export class RedPixelCounter {
   /** @type {number} */
   #height = 0;
 
-  /** @type {twgl.BufferInfo} */
-  quadBufferInfo;
-
   /** @type {object<twgl.ProgramInfo>} */
   programInfos = {};
 
-  /** @type {object<twgl.FramebufferInfo} */
+  /** @type {object<twgl.FramebufferInfo>} */
   fbInfos = {};
 
-  /** @type {object<Uint8Array|Float32Array} */
+  /** @type {object<Uint8Array|Float32Array>} */
   pixelBuffers = {};
+
+  /** @type {object<twgl.BufferInfo>} */
+  bufferInfos = {};
 
   constructor(webGL2, width, height) {
     this.webGL2 = webGL2;
@@ -55,7 +55,7 @@ export class RedPixelCounter {
     if ( height ) this.#height = height;
 
     // Used by both loop count and reduction count.
-    this.quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(this.gl);
+    this.bufferInfos.quad = twgl.primitives.createXYQuadBufferInfo(this.gl);
 
     this._initializeReadPixelsCount();
     this._initializeLoopCount();
@@ -67,6 +67,8 @@ export class RedPixelCounter {
     this._initializeReductionCount2();
 
     this._initializeReadPixelsCount2();
+
+    this._initializeLoopTransformCount();
   }
 
   _initializeLoopCount() {
@@ -190,6 +192,70 @@ export class RedPixelCounter {
     // Already have this.pixelBuffers.readPixelsCount from _initializeReadPixelsCount.
   }
 
+  _initializeLoopTransformCount() {
+    const gl = this.gl;
+    const { loopTransformSource, emptyFragmentSource } = this.constructor;
+
+
+
+    const vShader = gl.createShader(gl.VERTEX_SHADER);
+    const fShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(vShader, loopTransformSource);
+    gl.shaderSource(fShader, emptyFragmentSource);
+    gl.compileShader(vShader);
+    gl.compileShader(fShader);
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vShader);
+    gl.attachShader(program, fShader);
+    gl.transformFeedbackVaryings(
+      program,
+      ["red", "redBlocked"],
+      gl.INTERLEAVED_ATTRIBS
+    );
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramParameter(program));
+    }
+
+    this.programInfos.loopTransform = { program };
+
+    // Create and fill out a transform feedback.
+    const tf = gl.createTransformFeedback();
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);
+    this.fbInfos.loopTransform = tf;
+
+    // Make output buffer.
+    const size = 2 * Float32Array.BYTES_PER_ELEMENT;
+    const txOutputBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, txOutputBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, size, gl.DYNAMIC_DRAW);
+    this.bufferInfos.loopTransform = txOutputBuffer;
+
+    // Bind the buffer to the transform feedback.
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, txOutputBuffer);
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
+    // Ensure no other buffer is bound.
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+    // Set up the results array.
+    this.pixelBuffers.loopTransform = new Float32Array(2);
+
+//     this.bufferInfos.loopTransform = twgl.createBufferInfoFromArrays(gl, {
+//       red: { numComponents: 1 },
+//       redBlocked: { numComponents: 1 }
+//     });
+//     this.programInfos.loopTransform = twgl.createProgramInfo(gl,
+//       [loopTransformSource, emptyFragmentSource],
+//       { transformFeedbackVaryings: this.bufferInfos.loopTransform });
+//     this.fbInfos.loopTransform = twgl.createTransformFeedback(gl, this.programInfos.loopTransform, this.bufferInfos.loopTransform);
+//
+//     this.pixelBuffers.loopTransform = {};
+//     this.pixelBuffers.loopTransform.red = new Float32Array(1);
+//     this.pixelBuffers.loopTransform.redBlocked = new Float32Array(1);
+  }
+
   createPBO(numChannels = 4) {
     const gl = this.gl;
     const pbo = gl.createBuffer();
@@ -229,14 +295,14 @@ export class RedPixelCounter {
   }
 
   #loopCount(tex, type = "loopCount1") {
-    const { gl, fbInfos, programInfos, quadBufferInfo } = this;
+    const { gl, fbInfos, programInfos, bufferInfos } = this;
     this.setBasicGLState();
     twgl.bindFramebufferInfo(gl, fbInfos[type]);
     this.webGL2.useProgram(programInfos.loopCount);
-    twgl.setBuffersAndAttributes(gl, programInfos.loopCount, quadBufferInfo);
+    twgl.setBuffersAndAttributes(gl, programInfos.loopCount, bufferInfos.quad);
     twgl.setUniforms(programInfos.loopCount, { uTexture: tex });
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
-    twgl.drawBufferInfo(gl, quadBufferInfo);
+    twgl.drawBufferInfo(gl, bufferInfos.quad);
     // gl.flush();
   }
 
@@ -312,7 +378,7 @@ export class RedPixelCounter {
   }
 
   #reductionCount(tex, type) {
-    const { webGL2, gl, fbInfos, programInfos, quadBufferInfo } = this;
+    const { webGL2, gl, fbInfos, programInfos, bufferInfos } = this;
     const { detector, reducer } = programInfos.reductionCount;
     const framebuffers = fbInfos[type];
 
@@ -325,10 +391,10 @@ export class RedPixelCounter {
     // Then ping-pong textures to sum, going from 128 -> 64 -> 32 -> ... 1.
     twgl.bindFramebufferInfo(gl, framebuffers[0]);
     webGL2.useProgram(detector);
-    twgl.setBuffersAndAttributes(gl, detector, quadBufferInfo);
+    twgl.setBuffersAndAttributes(gl, detector, bufferInfos.quad);
     twgl.setUniforms(detector, { uTexture: tex });
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
-    twgl.drawBufferInfo(gl, quadBufferInfo);
+    twgl.drawBufferInfo(gl, bufferInfos.quad);
 
     // Ping-pong, reducing by x2 each time.
     let readFBO = 0;
@@ -336,7 +402,7 @@ export class RedPixelCounter {
     let currentWidth = this.#width;
     let currentHeight = this.#height;
     webGL2.useProgram(reducer);
-    twgl.setBuffersAndAttributes(gl, reducer, quadBufferInfo);
+    twgl.setBuffersAndAttributes(gl, reducer, bufferInfos.quad);
     while ( currentWidth > 1 || currentHeight > 1 ) {
       const nextWidth = Math.max(1, Math.ceil(currentWidth * 0.5));
       const nextHeight = Math.max(1, Math.ceil(currentHeight * 0.5));
@@ -347,7 +413,7 @@ export class RedPixelCounter {
         uTexture: framebuffers[readFBO].attachments[0],
         uTextureSize: [currentWidth, currentHeight]
       });
-      twgl.drawBufferInfo(gl, quadBufferInfo);
+      twgl.drawBufferInfo(gl, bufferInfos.quad);
       [readFBO, writeFBO] = [writeFBO, readFBO];
       currentWidth = nextWidth;
       currentHeight = nextHeight;
@@ -467,7 +533,53 @@ export class RedPixelCounter {
     return redOnly ? this.countRedPixels() : this.countPixels();
   }
 
+  loopCountTransform(tex) {
+    const { gl, fbInfos, programInfos } = this;
+    this.setBasicGLState();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.enable(gl.RASTERIZER_DISCARD);
+    this.webGL2.useProgram(programInfos.loopTransform);
+    // twgl.setUniforms(programInfos.loopTransform, { uTexture: tex });
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
 
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, fbInfos.loopTransform);
+    gl.beginTransformFeedback(gl.POINTS);
+    gl.drawArrays(gl.POINTS, 0, 1);
+    // twgl.drawBufferInfo(gl, bufferInfo);
+    gl.endTransformFeedback(); // TODO: Use twgl?
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+    gl.disable(gl.RASTERIZER_DISCARD);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfos.loopTransform);
+    gl.getBufferSubData(
+      gl.ARRAY_BUFFER,
+      0,    // byte offset into GPU buffer,
+      this.pixelBuffers.loopTransform,
+    );
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    return {
+      red: this.pixelBuffers.loopTransform[0],
+      redBlocked: this.pixelBuffers.loopTransform[1],
+    };
+
+   //  gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfos.loopTransform.attribs.red.buffer);
+//     gl.getBufferSubData(
+//       gl.ARRAY_BUFFER,
+//       0,    // byte offset into GPU buffer,
+//       this.pixelBuffers.loopTransform.red,
+//     );
+//     gl.bindBuffer(gl.ARRAY_BUFFER, this.bufferInfos.loopTransform.attribs.redBlocked.buffer);
+//     gl.getBufferSubData(
+//       gl.ARRAY_BUFFER,
+//       0,    // byte offset into GPU buffer,
+//       this.pixelBuffers.loopTransform.redBlocked,
+//     );
+//     return {
+//       red: this.pixelBuffers.loopTransform.red[0],
+//       redBlocked: this.pixelBuffers.loopTransform.redBlocked[0],
+//     };
+  }
 
   static get loopCountSource() {
     return {
@@ -648,6 +760,47 @@ void main() {
 `};
   }
 
+
+  static emptyFragmentSource =
+`#version 300 es
+precision highp float;
+void main() {
+}
+`;
+
+  static get loopTransformSource() {
+  return `#version 300 es
+precision highp float;
+
+uniform sampler2D uTexture;
+
+const int mipLevel = 0;
+const float colorThreshold = 0.95;
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+
+out float red;
+out float redBlocked;
+
+void main() {
+  red = 0.0;
+  redBlocked = 0.0;
+
+  vec4 sumColor = vec4(0.0);
+
+  // Determine texture size.
+  ivec2 size = textureSize(uTexture, mipLevel);
+  for ( int y = 0; y < size.y; y += 1 ) {
+    for ( int x = 0; x < size.x; x += 1 ) {
+      ivec2 uv = ivec2(x, y);
+      vec4 texColor = texelFetch(uTexture, uv, mipLevel);
+      float hasR = step(colorThreshold, texColor.r);
+      red += hasR;
+      redBlocked += hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
+    }
+  }
+}
+`;
+}
 }
 
 
