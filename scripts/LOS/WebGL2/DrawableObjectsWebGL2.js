@@ -997,7 +997,7 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
     // If a constrained geometry is already created, either remove from set or update.
     if ( this._includedPHIndices.has(idx) ) {
       if ( !shouldInclude ) {
-        this._includePHIndices.delete(idx);
+        this._includedPHIndices.delete(idx);
         return true;
       }
       const geom = new this.constructor.geomClass({ token });
