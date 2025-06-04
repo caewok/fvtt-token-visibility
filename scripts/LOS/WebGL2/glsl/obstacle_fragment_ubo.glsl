@@ -5,21 +5,28 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
   in vec3 vNorm;
 #endif
 
-#if ${isTile}
-  uniform sampler2D uTileTexture;
-  in vec2 uv0;
+layout (std140) uniform Material {
+  vec4 uColor;
+};
 
+#if ${isTile}
+  in vec2 uv0;
+/*
+  layout (std140) Tile {
+    uniform sampler2D uTileTexture;
+  };
+  uniform float alphaValue; // Mark tile pixels less than this alpha as clear.
+*/
+  uniform sampler2D uTileTexture;
   const float alphaValue = 0.75; // Mark tile pixels less than this alpha as clear.
 #endif
-
-uniform vec4 uColor;
 
 out vec4 fragColor;
 
 // Some hardcoded lighting
 const vec3 lightDir = normalize(vec3(0.25, 0.5, 1.0));
 const vec3 lightColor = vec3(1.0, 1.0, 1.0);
-const vec3 ambientColor = vec3(0.1, 0.1, 0.1);
+const vec3 ambientColor = vec3(0.2, 0.2, 0.2);
 
 void main() {
   vec4 color = uColor;

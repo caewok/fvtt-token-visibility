@@ -137,6 +137,7 @@ CONFIG.tokenvisibility.pixelCounterType = "loopCount2"
 CONFIG.tokenvisibility.pixelCounterType = "blendCount2"
 CONFIG.tokenvisibility.pixelCounterType = "reductionCount2"
 CONFIG.tokenvisibility.pixelCounterType = "readPixelsCount"
+CONFIG.tokenvisibility.pixelCounterType = "readPixelsCount2"
 
 N = 20
 await api.bench.benchTokenLOS(N, { sleep: false, movement: false })
@@ -235,7 +236,6 @@ debugViewer = buildDebugViewer(api.debugViewers.points)
 debugViewer = buildDebugViewer(api.debugViewers.geometric)
 debugViewer = buildDebugViewer(api.debugViewers.PIXI, { width: 512, height: 512 })
 debugViewer = buildDebugViewer(api.debugViewers.webGL2)
-debugViewer = buildDebugViewer(api.debugViewers.webGL2, { useInstancing: true, debugView: false })
 debugViewer = buildDebugViewer(api.debugViewers.webGL2, { debugView: false })
 debugViewer = buildDebugViewer(api.debugViewers.webGL2, { largeTarget: true })
 
@@ -291,7 +291,7 @@ console.table({
   calcGeometric: calcGeometric.percentVisible(viewer, target),
   calcWebGL2: calcWebGL2.percentVisible(viewer, target),
   calcWebGL2Instancing: calcWebGL2Instancing.percentVisible(viewer, target),
-  calcHybrid: calcHybrid.percentVisible(viewer, target),
+  // calcHybrid: calcHybrid.percentVisible(viewer, target),
   calcWebGPU: calcWebGPU.percentVisible(viewer, target),
   calcWebGPUAsync: calcWebGPUAsync.percentVisible(viewer, target),
 
@@ -473,29 +473,37 @@ for ( const clipperVersion of [1, 2] ) {
   }
 }
 
+calcWebGL2.percentVisible(viewer, target)
+await calcWebGL2.percentVisibleAsync(viewer, target)
+
 // Test different read pixel options.
 CONFIG.tokenvisibility.tileThresholdShape = "alphaThresholdPolygons";
 CONFIG.tokenvisibility.clipperVersion = 2;
-CONFIG.tokenvisibility.useRenderTexture = false
-CONFIG.tokenvisibility.filterInstances = false;
+CONFIG.tokenvisibility.useRenderTexture = true
+// CONFIG.tokenvisibility.filterInstances = false;
 
-N = 20;
+N = 10;
 await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints);
 await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric);
 await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
 await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU);
 
-for ( const counterType of ["loopCount", "blendCount", "reductionCount", "readPixelsCount", "loopCount2", "blendCount2", "reductionCount2", "readPixelsCount"]) {
+for ( const counterType of ["loopCount", "blendCount", "reductionCount", "readPixelsCount", "loopCount2", "blendCount2", "reductionCount2", "readPixelsCount", "readPixelsCount2"]) {
   CONFIG.tokenvisibility.pixelCounterType = counterType;
   console.log(`\n${counterType}`);
   await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);
   await QBenchmarkLoopFn(N, percentFn, "WebGPU", calcWebGPU);
+  await QBenchmarkLoopFn(N, percentFnAsync, "WebGL2", calcWebGL2);
 }
 
+await QBenchmarkLoop(N, calcWebGL2, "percentVisible", viewer, target)
+await QBenchmarkLoop(N, calcWebGL2, "percentVisibleAsync", viewer, target)
 
+fn = (viewer, target) => calcWebGL2.percentVisible(viewer, target)
+fnAsync = async (viewer, target) => calcWebGL2.percentVisibleAsync(viewer, target)
 
-
-
+await foundry.utils.benchmark(fn, 20, viewer, target)
+await foundry.utils.benchmark(fnAsync, 20, viewer, target)
 
 
 

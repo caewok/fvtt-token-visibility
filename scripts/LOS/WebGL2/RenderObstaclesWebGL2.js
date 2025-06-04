@@ -21,17 +21,12 @@ import {
   DrawableSceneBackgroundWebGL2,
   ConstrainedDrawableHexTokenWebGL2,
   DrawableGridShape,
-  DrawableNonDirectionalWallInstance,
-  DrawableDirectionalWallInstance,
-  DrawableNonDirectionalTerrainWallInstance,
-  DrawableDirectionalTerrainWallInstance,
-  DrawableTokenInstance,
   LitDrawableTokenWebGL2,
   LitDrawableHexTokenWebGL2,
+  DrawableHexTokenWebGL2,
 } from "./DrawableObjectsWebGL2.js";
 
 export class RenderObstaclesWebGL2 {
-
 
   /** @type {WebGL2} */
   webGL2;
@@ -70,62 +65,53 @@ export class RenderObstaclesWebGL2 {
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
 
   /** @type {object} */
-  debugViewNormals = false;
+  #debugViewNormals = false;
+
+  get debugViewNormals() { return this.#debugViewNormals; }
 
   /** @type {WebGL2RenderingContext} */
   get gl() { return this.webGL2.gl; };
 
-  constructor({ webGL2, senseType = "sight", debugViewNormals = false, useInstancing = false, useSceneBackground = false } = {}) {
-    this.debugViewNormals = debugViewNormals;
-    this.senseType = senseType;
+  #senseType = "sight";
+
+  get senseType() { return this.#senseType; }
+
+  constructor({ webGL2, senseType = "sight", debugViewNormals = false, useSceneBackground = false } = {}) {
+    this.#debugViewNormals = debugViewNormals;
+    this.#senseType = senseType;
     this.webGL2 = webGL2;
-    this._buildDrawableObjects(useInstancing, useSceneBackground);
+    this._buildDrawableObjects(useSceneBackground);
   }
 
-  _buildDrawableObjects(useInstancing = false, useSceneBackground = false) {
+  _buildDrawableObjects(useSceneBackground = false) {
     this.drawableObjects.length = 0;
     this.drawableFloor = undefined;
 
     // Construct the various drawable instances.
     const drawableClasses = [
       DrawableTileWebGL2,
-      ConstrainedDrawableTokenWebGL2,
-      ConstrainedDrawableHexTokenWebGL2,
       DrawableGridShape,
-      LitDrawableTokenWebGL2,
-      LitDrawableHexTokenWebGL2,
+      DrawableNonDirectionalWallWebGL2,
+      DrawableDirectionalWallWebGL2,
+      DrawableNonDirectionalTerrainWallWebGL2,
+      DrawableDirectionalTerrainWallWebGL2,
     ];
     if ( canvas.grid.isHexagonal  ) drawableClasses.push(
+      DrawableHexTokenWebGL2,
       ConstrainedDrawableHexTokenWebGL2,
       LitDrawableHexTokenWebGL2,
     );
     else drawableClasses.push(
+      DrawableTokenWebGL2,
       ConstrainedDrawableTokenWebGL2,
       LitDrawableTokenWebGL2,
     );
 
-    if ( useInstancing ) {
-      drawableClasses.push(
-        DrawableTokenInstance,
-        DrawableNonDirectionalWallInstance,
-        DrawableDirectionalWallInstance,
-        DrawableNonDirectionalTerrainWallInstance,
-        DrawableDirectionalTerrainWallInstance,
-      )
-    } else {
-      drawableClasses.push(
-        DrawableTokenWebGL2,
-        DrawableNonDirectionalWallWebGL2,
-        DrawableDirectionalWallWebGL2,
-        DrawableNonDirectionalTerrainWallWebGL2,
-        DrawableDirectionalTerrainWallWebGL2,
-      );
-    }
+
     if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
 
-    const clOpts = { senseType: this.senseType, debugViewNormals: this.debugViewNormals };
     for ( const cl of drawableClasses) {
-      const drawableObj = new cl(this.webGL2, this.camera, clOpts);
+      const drawableObj = new cl(this);
       this.drawableObjects.push(drawableObj);
 
       switch ( cl ) {
@@ -142,7 +128,7 @@ export class RenderObstaclesWebGL2 {
           break;
 
         case DrawableTokenWebGL2:
-        case DrawableTokenInstance:
+        case DrawableHexTokenWebGL2:
           this.drawableUnconstrainedToken = drawableObj;
           this.drawableObstacles.push(drawableObj);
           break;
@@ -159,8 +145,6 @@ export class RenderObstaclesWebGL2 {
 
         // Terrain walls have special rendering considerations.
         case DrawableNonDirectionalTerrainWallWebGL2:
-        case DrawableNonDirectionalTerrainWallInstance:
-        case DrawableDirectionalTerrainWallInstance:
         case DrawableDirectionalTerrainWallWebGL2:
           this.drawableTerrain.push(drawableObj);
           break;
@@ -175,9 +159,12 @@ export class RenderObstaclesWebGL2 {
    * Set up all parts of the render pipeline that will not change often.
    */
   async initialize() {
-    const promises = [];
-    this.drawableObjects.forEach(drawableObj => promises.push(drawableObj.initialize()));
-    return Promise.allSettled(promises);
+    // const promises = [];
+    // this.drawableObjects.forEach(drawableObj => promises.push(drawableObj.initialize()));
+    // return Promise.allSettled(promises);
+    this._initializeCameraBuffer();
+    this._initializeMaterialBuffer();
+    for ( const drawableObj of this.drawableObjects ) await drawableObj.initialize();
   }
 
   /** @type {ViewerLOSConfig} */
@@ -200,6 +187,117 @@ export class RenderObstaclesWebGL2 {
   set config(cfg = {}) {
     foundry.utils.mergeObject(this._config, cfg);
   }
+
+  // ----- NOTE: Camera uniform buffer object ----- //
+
+  static CAMERA_BIND_POINT = 0;
+
+  /** @type {object<WebGLBuffer>} */
+  buffer = {
+    camera: null,
+    material: null,
+  };
+
+  _initializeCameraBuffer() {
+    const gl = this.gl;
+
+    // Already have a shared buffer data from the camera object: camera.arrayBuffer.
+    this.buffer.camera = gl.createBuffer();
+
+    // Create and initialize it.
+    // See https://learnopengl.com/Advanced-OpenGL/Advanced-GLSL
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.camera);
+    gl.bufferData(gl.UNIFORM_BUFFER, this.camera.constructor.CAMERA_BUFFER_SIZE, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+
+    // Bind the UBO to the binding point
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, this.constructor.CAMERA_BIND_POINT, this.buffer.camera);
+  }
+
+
+  /**
+   * Set camera for a given render.
+   */
+  _setCamera(viewerLocation, target, { targetLocation } = {}) {
+    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+    const camera = this.camera;
+    camera.cameraPosition = viewerLocation;
+    // camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
+    camera.setTargetTokenFrustum(target);
+
+    /*
+    camera.perspectiveParameters = {
+      fov: Math.toRadians(90),
+      aspect: 1,
+      zNear: 1,
+      zFar: Infinity,
+    };
+    */
+
+    /*
+    camera.perspectiveParameters = {
+      fov: camera.perspectiveParameters.fov * 2,
+      zFar: Infinity, // camera.perspectiveParameters.zFar + 50
+    };
+    */
+    camera.refresh();
+    const gl = this.gl;
+    const cameraData = this.camera.arrayView;
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.camera);
+    gl.bufferSubData(gl.UNIFORM_BUFFER, 0, cameraData);
+    gl.bindBufferRange(gl.UNIFORM_BUFFER, this.constructor.CAMERA_BIND_POINT, this.buffer.camera, 0, cameraData.BYTES_PER_ELEMENT * cameraData.length);
+  }
+
+  // ----- NOTE: Material uniform buffer object ----- //
+
+  static MATERIAL_BIND_POINT = 1;
+
+  static MATERIAL_BUFFER = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * 4 * 3);
+
+  static MATERIAL_COLORS = {
+    target: new Float32Array(this.MATERIAL_BUFFER, 0, 4),
+    obstacle: new Float32Array(this.MATERIAL_BUFFER, Float32Array.BYTES_PER_ELEMENT * 4, 4),
+    terrain: new Float32Array(this.MATERIAL_BUFFER, Float32Array.BYTES_PER_ELEMENT * 4 * 2, 4),
+  }
+
+  _initializeMaterialBuffer() {
+    const gl = this.gl;
+
+    // Buffer to hold every color variation.
+    this.buffer.material = gl.createBuffer();
+
+    // Create and initialize it.
+    // See https://learnopengl.com/Advanced-OpenGL/Advanced-GLSL
+    gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.material);
+    gl.bufferData(gl.UNIFORM_BUFFER, new Float32Array(this.constructor.MATERIAL_BUFFER), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+
+    // Bind the UBO to the binding point
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, this.constructor.MATERIAL_BIND_POINT, this.buffer.material);
+  }
+
+  #currentMaterial = null;
+
+  /**
+   * Set material for a given render.
+   * @param {string} type             Key from MATERIAL_COLORS
+   */
+  _setMaterial(type = "obstacle") {
+    if ( this.#currentMaterial === type ) return;
+
+    let offset = 0;
+    switch ( type ) {
+      case "target": offset = 0; break;
+      case "obstacle": offset = Float32Array.BYTES_PER_ELEMENT * 4; break;
+      case "terrain": offset = Float32Array.BYTES_PER_ELEMENT * 4 * 2; break;
+      default: console.error("_setMaterial|Material type not recognized.");
+    }
+    // gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.material);
+    this.gl.bindBufferRange(this.gl.UNIFORM_BUFFER, this.constructor.MATERIAL_BIND_POINT, this.buffer.material, offset, Float32Array.BYTES_PER_ELEMENT * 4);
+    this.#currentMaterial = type;
+  }
+
+  // ----- NOTE: Render ----- //
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -226,6 +324,7 @@ export class RenderObstaclesWebGL2 {
     webGL2.setCullFace("BACK");
     webGL2.setStencilTest(false);
     webGL2.setColorMask(WebGL2.redAlphaMask);
+    this._setMaterial("target");
 
     // Clear.
     webGL2.setClearColor(WebGL2.blackClearColor);
@@ -233,7 +332,7 @@ export class RenderObstaclesWebGL2 {
 
     // Draw.
     this.drawableGridShape.renderTarget(target);
-    this.gl.flush();
+    // this.gl.flush();
   }
 
   renderTarget(viewerLocation, target, { targetLocation, frame, useLitTargetShape = false, clear = true, useStencil = false } = {}) {
@@ -274,7 +373,7 @@ export class RenderObstaclesWebGL2 {
     }
 
     this._drawTarget(target, useLitTargetShape);
-    this.gl.flush();
+    // this.gl.flush();
   }
 
   _drawTarget(target, useLitTargetShape = false) {
@@ -283,12 +382,16 @@ export class RenderObstaclesWebGL2 {
     // If token border is a rectangle, can use unconstrained.
     // If the target lit token border is undefined, use a different border to avoid throwing error.
     // Percent visible should have tested and rejected this possibility already.
-    const border = (useLitTargetShape ? target.litTokenBorder : undefined)
-      ?? target.constrainedTokenBorder ?? target.tokenBorder;
 
-    if ( border.equals(target.tokenBorder) ) this.drawableUnconstrainedToken.renderTarget(target);
-    else if ( useLitTargetShape ) this.drawableLitToken.renderTarget(target);
-    else this.drawableConstrainedToken.renderTarget(target);
+    // Lit token class only draws lit targets.
+    // Constrained draws any constrained or lit targets.
+    // Unconstrained only draws unconstrained.
+    this._setMaterial("target");
+    if ( useLitTargetShape && this.drawableLitToken.constructor.includeToken(target) ) this.drawableLitToken.renderTarget(target);
+    else {
+      this.drawableConstrainedToken.renderTarget(target);
+      this.drawableUnconstrainedToken.renderTarget(target); // Only runs if the target is unconstrained.
+    }
   }
 
   renderObstacles(viewerLocation, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
@@ -327,6 +430,7 @@ export class RenderObstaclesWebGL2 {
 
     // Draw blue obstacles.
     if ( hasObstacles ) {
+      this._setMaterial("obstacle");
       webGL2.setDepthTest(true);
       webGL2.setBlending(false);
       if ( colorCoded ) webGL2.setColorMask(WebGL2.blueAlphaMask);
@@ -337,6 +441,7 @@ export class RenderObstaclesWebGL2 {
 
     // Draw green limited (terrain) walls.
     if ( hasTerrain ) {
+      this._setMaterial("terrain");
       webGL2.setDepthTest(false);
       webGL2.setBlending(true);
       if ( colorCoded ) webGL2.setColorMask(WebGL2.greenAlphaMask);
@@ -350,41 +455,13 @@ export class RenderObstaclesWebGL2 {
 
       this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
     }
-    this.gl.flush();
+    // this.gl.flush();
   }
 
-  /**
-   * Set camera for a given render.
-   */
-  _setCamera(viewerLocation, target, { targetLocation } = {}) {
-    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
-    const camera = this.camera;
-    camera.cameraPosition = viewerLocation;
-    // camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
-
-    /*
-    camera.perspectiveParameters = {
-      fov: Math.toRadians(90),
-      aspect: 1,
-      zNear: 1,
-      zFar: Infinity,
-    };
-    */
-
-
-    camera.setTargetTokenFrustum(target);
-
-    /*
-    camera.perspectiveParameters = {
-      fov: camera.perspectiveParameters.fov * 2,
-      zFar: Infinity, // camera.perspectiveParameters.zFar + 50
-    };
-    */
-
-    camera.refresh();
-  }
-
-  destroy() {
-
-  }
+  destroy() {}
 }
+
+// Set up the material colors
+RenderObstaclesWebGL2.MATERIAL_COLORS.target.set([1, 0, 0, 1]);
+RenderObstaclesWebGL2.MATERIAL_COLORS.obstacle.set([0, 0, 1, 1]);
+RenderObstaclesWebGL2.MATERIAL_COLORS.terrain.set([0, 0.5, 0, 0.5]);

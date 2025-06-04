@@ -2,10 +2,13 @@
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aPos;
+
 in mat4 aModel;
 
-uniform mat4 uPerspectiveMatrix;
-uniform mat4 uLookAtMatrix;
+layout (std140) uniform Camera {
+  mat4 uPerspectiveMatrix;
+  mat4 uLookAtMatrix;
+};
 
 #if ${debugViewNormals}
   in vec3 aNorm;
@@ -30,5 +33,6 @@ void main() {
   #if ${isTile}
     uv0 = aUV;
   #endif
+
 }
 

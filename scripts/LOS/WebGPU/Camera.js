@@ -54,6 +54,9 @@ export class Camera {
     lookAt: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
   };
 
+  /** @type {Float32Array(32)} */
+  #arrayView = new Float32Array(this.#arrayBuffer, 0, 32);
+
   /** @type {MatrixFloat32<4,4>} */
   #cameraM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
 
@@ -285,6 +288,11 @@ export class Camera {
     // Ensure no updates required.
     this.refresh();
     return this.#arrayBuffer;
+  }
+
+  get arrayView() {
+    this.refresh();
+    return this.#arrayView;
   }
 
   refresh() {
