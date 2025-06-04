@@ -332,7 +332,7 @@ export class RenderObstaclesWebGL2 {
 
     // Draw.
     this.drawableGridShape.renderTarget(target);
-    this.gl.flush();
+    // this.gl.flush();
   }
 
   renderTarget(viewerLocation, target, { targetLocation, frame, useLitTargetShape = false, clear = true, useStencil = false } = {}) {
@@ -373,7 +373,7 @@ export class RenderObstaclesWebGL2 {
     }
 
     this._drawTarget(target, useLitTargetShape);
-    this.gl.flush();
+    // this.gl.flush();
   }
 
   _drawTarget(target, useLitTargetShape = false) {
@@ -455,7 +455,7 @@ export class RenderObstaclesWebGL2 {
 
       this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
     }
-    this.gl.flush();
+    // this.gl.flush();
   }
 
   destroy() {}

@@ -146,7 +146,18 @@ Hooks.once("init", function() {
 
     usePixelReducer: false,
 
+
+    /** @type {string} */
+    /*
+    loopCount, loopCount2             // With useRenderTexture: true,
+    blendCount, blendCount2           // With useRenderTexture: true,
+    reductionCount, reductionCount2   // With useRenderTexture: true,
+    readPixelsCount, readPixelsCount2 // With useRenderTexture: false or true
+    */
+
     pixelCounterType: "readPixelsCount",
+
+    useRenderTexture: false,
 
     /**
      * What to use when testing tiles for visibility.
@@ -169,7 +180,7 @@ Hooks.once("init", function() {
      */
     renderTextureSize: 128,
 
-    useRenderTexture: false,
+
 
     useCaching: false,
 

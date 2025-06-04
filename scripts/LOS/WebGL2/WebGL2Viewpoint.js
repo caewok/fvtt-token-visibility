@@ -63,7 +63,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
     const gl = this.gl;
     this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
-    this.redPixelCounter = new RedPixelCounter(gl); // Width and heigh tset later
+    this.redPixelCounter = new RedPixelCounter(webGL2); // Width and heigh tset later
   }
 
   /** @type {RenderObstaclesWebGL2} */
@@ -139,6 +139,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
 
   _redBlockedPixels = 0;
 
+  static nonRTCountTypes = new Set([])
+
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
     // TODO: Fix using a stencil with renderTexture
     const { useStencil, useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
@@ -153,10 +155,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
       res = this.redPixelCounter[pixelCounterType](this.renderTexture);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
+      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, useStencil, clear: true });
       this.renderObstacles.renderObstacles(viewerLocation, target, { viewer, targetLocation, useStencil, clear: false });
-      res = this.redPixelCounter.readPixelsCount();
+      res = this.redPixelCounter[type]();
     }
     this._redPixels = res.red;
     this._redBlockedPixels = res.redBlocked;
@@ -178,10 +181,11 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     } else {
+      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation, useStencil, clear: true });
       this.renderObstacles.renderObstacles(viewerLocation, target, { viewer, targetLocation, useStencil, clear: false });
-      res = await this.redPixelCounter.readPixelsCountAsync();
+      res = await this.redPixelCounter[`${type}Async`]();
     }
     this._redPixels = res.red;
     this._redBlockedPixels = res.redBlocked;
@@ -198,16 +202,18 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     const gl = this.gl;
     let res;
+    const redOnly = true;
     if ( useRenderTexture ) {
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
       this.renderObstacles.renderGridShape(viewerLocation, target, { targetLocation, frame });
-      res = this.redPixelCounter[pixelCounterType](this.renderTexture);
+      res = this.redPixelCounter[pixelCounterType](this.renderTexture, redOnly);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
+      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
-      res = this.redPixelCounter.readPixelsCount();
+      res = this.redPixelCounter[type](undefined, redOnly);
     }
     return res.red;
   }
@@ -216,16 +222,18 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     const gl = this.gl;
     let res;
+    const redOnly = true;
     if ( useRenderTexture ) {
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
       this.renderObstacles.renderGridShape(viewerLocation, target, { targetLocation, frame });
-      res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture);
+      res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture, redOnly);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
+      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
-      res = await this.redPixelCounter.readPixelsCountAsync();
+      res = await this.redPixelCounter[`${type}Async`](undefined, redOnly);
     }
     return res.red;
   }
@@ -240,16 +248,18 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     const gl = this.gl;
     let res;
+    const redOnly = true;
     if ( useRenderTexture ) {
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
       this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, frame });
-      res = this.redPixelCounter[pixelCounterType](this.renderTexture);
+      res = this.redPixelCounter[pixelCounterType](this.renderTexture, redOnly);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
+      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation });
-      res = this.redPixelCounter.readPixelsCount();
+      res = this.redPixelCounter[type](undefined, redOnly);
     }
     return res.red;
   }
@@ -258,16 +268,18 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleRenderCalculat
     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     const gl = this.gl;
     let res;
+    const redOnly = true;
     if ( useRenderTexture ) {
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
       this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation, frame });
-      res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture);
+      res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture, redOnly);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
+      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       this.renderObstacles.renderTarget(viewerLocation, target, { targetLocation });
-      res = await this.redPixelCounter.readPixelsCountAsync();
+      res = await this.redPixelCounter[`${type}Async`](undefined, redOnly);
     }
     return res.red;
   }
