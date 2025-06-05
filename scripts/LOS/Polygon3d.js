@@ -93,24 +93,27 @@ export class Polygon3d {
   /** @type {object<minMax>} */
   #bounds = {};
 
-  get bounds() {
-    if ( !this.#bounds.x ) {
-      const n = this.points.length;
-      const xs = Array(n);
-      const ys = Array(n);
-      const zs = Array(n);
-      for ( let i = 0; i < n; i += 1 ) {
-        const pt = this.points[i];
-        xs[i] = pt.x;
-        ys[i] = pt.y;
-        zs[i] = pt.z;
-      }
-      this.#bounds.x = Math.minMax(...xs);
-      this.#bounds.y = Math.minMax(...ys);
-      this.#bounds.z = Math.minMax(...zs);
+get bounds() {
+  if ( !this.#bounds.x ) {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    
+    for (const pt of this.points) {
+      minX = Math.min(minX, pt.x);
+      maxX = Math.max(maxX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxY = Math.max(maxY, pt.y);
+      minZ = Math.min(minZ, pt.z);
+      maxZ = Math.max(maxZ, pt.z);
     }
-    return this.#bounds;
+    
+    this.#bounds.x = { min: minX, max: maxX };
+    this.#bounds.y = { min: minY, max: maxY };
+    this.#bounds.z = { min: minZ, max: maxZ };
   }
+  return this.#bounds;
+}
 
   // ----- NOTE: Plane ----- //
 
