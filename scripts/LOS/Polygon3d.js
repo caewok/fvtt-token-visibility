@@ -350,9 +350,9 @@ export class Polygon3d {
     };
   }
 
-  forEach(callback) {
-    for ( let i = 0, iMax = this.points.length; i < iMax; i += 1 ) callback(this.points[i], i, this);
-  }
+//   forEach(callback) {
+//     for ( let i = 0, iMax = this.points.length; i < iMax; i += 1 ) callback(this.points[i], i, this);
+//   }
 
   // ----- NOTE: Property tests ----- //
 
@@ -377,7 +377,7 @@ export class Polygon3d {
    */
   transform(M, poly3d) {
     poly3d ??= this.clone();
-    poly3d.forEach((pt, idx) => M.multiplyPoint3d(this.points[idx], pt));
+    poly3d.points.forEach((pt, idx) => M.multiplyPoint3d(this.points[idx], pt));
     return poly3d;
   }
 
@@ -823,8 +823,8 @@ export class Polygons3d extends Polygon3d {
     };
   }
 
-  forEach(callback) {
-    for ( let i = 0, iMax = this.polygons.length; i < iMax; i += 1 ) callback(this.polygons[i], i, this);
+  forEach(callback, thisArg) {
+    this.polygons.forEach(callback, thisArg);
   }
 
   // ----- NOTE: Property tests ----- //
