@@ -1,7 +1,12 @@
 /* globals
+canvas,
 CONFIG,
-PIXI
+foundry,
+LimitedAnglePolygon,
+PIXI,
+Ray,
 */
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { EPSILON, MODULE_ID } from "../const.js";
@@ -438,26 +443,22 @@ export function targetWithinLimitedAngleVision(visionSource, targetShape) {
  * @param {Point3d} d
  * @returns {number}
  */
-// Cache the Point3d class to avoid repeated property lookups
-const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-const _tmp1 = Point3d._tmp1 || new Point3d();
-const _tmp2 = Point3d._tmp2 || new Point3d();
-const _tmp3 = Point3d._tmp3 || new Point3d();
+
 
 export function orient3dFast(a, b, c, d) {
   // Perform vector subtractions using pre-allocated temporary vectors
   const adx = a.x - d.x;
   const ady = a.y - d.y;
   const adz = a.z - d.z;
-  
+
   const bdx = b.x - d.x;
   const bdy = b.y - d.y;
   const bdz = b.z - d.z;
-  
+
   const cdx = c.x - d.x;
   const cdy = c.y - d.y;
   const cdz = c.z - d.z;
-  
+
   // Calculate the 3x3 determinant directly
   return adx * (bdy * cdz - bdz * cdy)
        + bdx * (cdy * adz - cdz * ady)

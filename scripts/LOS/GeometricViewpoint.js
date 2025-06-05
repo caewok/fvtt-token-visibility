@@ -396,7 +396,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
           const ix = poly.intersection(viewerLocation, dir);
           if ( ix ) ixs.push(ix);
         }
-        if ( !ixs.length ) ixs.push(poly.centroid());
+        if ( !ixs.length ) ixs.push(poly.centroid);
 
         const dist2 = ixs.reduce((acc, curr) => {
           if ( !curr ) return acc;
