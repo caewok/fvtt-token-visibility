@@ -298,7 +298,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
         poly.transform(perspectiveM, poly);
         return poly;
       })
-      .filter(poly => poly.points.length > 2);
+      .filter(poly => poly.isValid());
   }
 
   /** @type {AbstractPolygonTriangles[]} */

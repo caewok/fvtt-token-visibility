@@ -55,12 +55,15 @@ export class Polygon3d {
     this.#bounds.x = undefined;
     this.#plane = undefined;
     this.#centroid = undefined;
+    this.#cleaned = false;
   }
 
   /**
    * Test and remove collinear points. Modified in place; assumes no significant change to
    * cached properties from this.
    */
+  #cleaned = false;
+
   clean() {
     // Drop collinear points.
     const iter = this.iteratePoints({ close: true });
@@ -76,6 +79,7 @@ export class Polygon3d {
       this.points.length = newPoints.length;
       this.points.forEach((pt, idx) => pt.copyFrom(newPoints[idx]));
     }
+    this.#cleaned = true;
   }
 
   /**
@@ -98,7 +102,7 @@ get bounds() {
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
-    
+
     for (const pt of this.points) {
       minX = Math.min(minX, pt.x);
       maxX = Math.max(maxX, pt.x);
@@ -107,7 +111,7 @@ get bounds() {
       minZ = Math.min(minZ, pt.z);
       maxZ = Math.max(maxZ, pt.z);
     }
-    
+
     this.#bounds.x = { min: minX, max: maxX };
     this.#bounds.y = { min: minY, max: maxY };
     this.#bounds.z = { min: minZ, max: maxZ };
@@ -375,6 +379,12 @@ get bounds() {
   isFacing(p) { return orient3dFast(this.points[0], this.points[1], this.points[2], p) > 0; }
 
   // ----- NOTE: Transformations ----- //
+
+  // Valid if it forms a polygon, not a line or a point (or null).
+  isValid() {
+    this.clean();
+    return this.points.length > 2;
+  }
 
   /**
    * Transform the points using a transformation matrix.
@@ -661,6 +671,12 @@ export class Triangle3d extends Polygon3d {
     out.points.forEach((pt, idx) => pt.copyFrom(toKeep[idx]));
     return out;
   }
+
+  // ----- NOTE: Property tests ----- //
+  isValid() {
+    this.clean();
+    return this.points.length === 3;
+  }
 }
 
 /**
@@ -839,6 +855,13 @@ export class Polygons3d extends Polygon3d {
   isFacing(p) {
     const poly = this.polygons[0];
     return poly.isFacing(p) ^ poly.isHole; // Holes have reverse orientation.
+  }
+
+  // Valid if it forms at least one polygon.
+  isValid() {
+    return this.polygons.length
+      && this.polygons.every(poly => poly.isValid())
+      && this.polygons.some(poly => !poly.isHole);
   }
 
   // ----- NOTE: Transformations ----- //
