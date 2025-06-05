@@ -454,9 +454,10 @@ export class RedPixelCounter {
       const r = pixels[i];
       // const g = pixels[i + 1];
       const b = pixels[i + 2];
-      const hasR = r === 255;
+      const hasR = r >> 7; // Threshold of 128 given Uint8Array.
+      const hasB = b >> 7;
       red += hasR;
-      redBlocked += hasR * (b === 255 || pixels[i + 1] > terrainThreshold);
+      redBlocked += hasR * (hasB || pixels[i + 1] > terrainThreshold);
     }
     return { red, redBlocked };
   }
@@ -467,7 +468,7 @@ export class RedPixelCounter {
     let redBlocked = null;
     for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
       const r = pixels[i];
-      const hasR = r === 255;
+      const hasR = r >> 7; // Threshold of 128 given Uint8Array.
       red += hasR;
     }
     return { red, redBlocked };
