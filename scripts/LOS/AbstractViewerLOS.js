@@ -147,7 +147,9 @@ export class AbstractViewerLOS {
    */
   constructor(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...cfg } = {}) {
     this.#viewer = viewer;
-    foundry.utils.mergeObject(this.#config, { viewpointOffset, threshold }, { inplace: true });
+
+    if ( typeof numViewpoints !== "undefined" ) this.#config.numViewpoints = numViewpoints;
+    if ( viewpointOffset !== "undefined" ) this.#config.viewpointOffset = viewpointOffset;
 
     // Confirm the calculator and viewpoint class are compatible and create the calculator
     if ( !calculator && !viewpointClass ) return console.error(`${this.constructor.name}|One of calculator or viewpointClass must be provided.`);

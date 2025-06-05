@@ -127,7 +127,15 @@ export function buildLOSViewer(viewer) {
  */
 export function buildCustomLOSViewer(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...calcCfg } = {}) {
   const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold }, { inplace: false });
+
+  // Merge object won't work if the props are undefined as it will change the config to undefined.
+  const losConfig = { ...LOSViewerConfig() };
+  if ( typeof calculator !== "undefined" ) losConfig.calculator = calculator;
+  if ( typeof viewpointClass !== "undefined" ) losConfig.viewpointClass = viewpointClass;
+  if ( typeof numViewpoints !== "undefined" ) losConfig.numViewpoints = numViewpoints;
+  if ( typeof viewpointOffset !== "undefined" ) losConfig.viewpointOffset = viewpointOffset;
+  if ( typeof threshold !== "undefined" ) losConfig.threshold = threshold;
+
   return new CachedAbstractViewerLOS(viewer, { ...losConfig, ...calcConfig});
 }
 
@@ -139,7 +147,15 @@ export function buildCustomLOSViewer(viewer, { calculator, viewpointClass, numVi
 export function buildDebugViewer(cl, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...calcCfg } = {}) {
   cl ??= currentDebugViewerClass();
   const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold }, { inplace: false });
+
+  // Merge object won't work if the props are undefined as it will change the config to undefined.
+  const losConfig = { ...LOSViewerConfig() };
+  if ( typeof calculator !== "undefined" ) losConfig.calculator = calculator;
+  if ( typeof viewpointClass !== "undefined" ) losConfig.viewpointClass = viewpointClass;
+  if ( typeof numViewpoints !== "undefined" ) losConfig.numViewpoints = numViewpoints;
+  if ( typeof viewpointOffset !== "undefined" ) losConfig.viewpointOffset = viewpointOffset;
+  if ( typeof threshold !== "undefined" ) losConfig.threshold = threshold;
+
   return new cl({ ...losConfig, ...calcConfig});
 }
 
