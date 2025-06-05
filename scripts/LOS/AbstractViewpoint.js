@@ -154,6 +154,7 @@ export class AbstractViewpoint {
    * highest target point, and the viewing point.
    * @returns {object} Object with possible properties:
    *   - @property {Set<Wall>} walls
+   *   - @property {Set<Wall>} terrainWalls
    *   - @property {Set<Tile>} tiles
    *   - @property {Set<Token>} tokens
    */

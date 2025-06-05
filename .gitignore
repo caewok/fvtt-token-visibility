@@ -20,3 +20,5 @@ Cargo.lock
 
 
 v10_sync_to_module.sh
+
+.windsurf/

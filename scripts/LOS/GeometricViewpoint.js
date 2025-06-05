@@ -290,11 +290,14 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
   }
 
   _applyPerspective(polys, lookAtM, perspectiveM) {
-    return polys.map(poly => poly
-        .transform(lookAtM)
-        .clipZ()
-        .transform(perspectiveM)
-      )
+    // Save a bit of time by reusing the poly after the clipZ transform.
+    // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
+    return polys
+      .map(poly => {
+        poly = poly.transform(lookAtM).clipZ();
+        poly.transform(perspectiveM, poly);
+        return poly;
+      })
       .filter(poly => poly.points.length > 2);
   }
 

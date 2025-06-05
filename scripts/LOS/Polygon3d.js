@@ -1,5 +1,6 @@
 /* globals
 canvas,
+ClipperLib,
 CONFIG,
 foundry,
 PIXI,
@@ -25,6 +26,8 @@ function isNearCollinear3d(a, b, c) {
 3d Polygon representing a flat polygon plane.
 Can be transformed in 3d space.
 Can be clipped at a specific z value.
+
+Points in a Polygon3d are assumed to not be modified in place after creation.
 */
 export class Polygon3d {
 
@@ -37,31 +40,26 @@ export class Polygon3d {
   /** @type {Point3d} */
   points = [];
 
-  /** @type {boolean} */
-  isHole = false;
-
   constructor(n = 0) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     this.points.length = n;
     for ( let i = 0; i < n; i += 1 ) this.points[i] = new Point3d();
   }
 
+  // ----- NOTE: In-place modifiers ----- //
+
   /**
-   * @param {Points3d} points
-   * @returns {Points3d}
+   * Clear the getter caches.
    */
-  static convexHull(points) {
-    // Assuming flat points, determine plane and then convert to 2d
-    const Plane = CONFIG.GeometryLib.threeD.Plane;
-    const plane = Plane.fromPoints(points[0], points[1], points[2]);
-    const M2d = plane.conversion2dMatrix;
-    const points2d = points.map(pt3d => M2d.multiplyPoint3d(pt3d));
-    const convex2dPoints = convexHull(points2d);
-    return convex2dPoints.map(pt => plane.conversion2dMatrixInverse.multiplyPoint3d(pt))
+  clearCache() {
+    this.#bounds.x = undefined;
+    this.#plane = undefined;
+    this.#centroid = undefined;
   }
 
   /**
-   * Test and remove collinear points. Modified in place.
+   * Test and remove collinear points. Modified in place; assumes no significant change to
+   * cached properties from this.
    */
   clean() {
     // Drop collinear points.
@@ -80,31 +78,95 @@ export class Polygon3d {
     }
   }
 
-  setZ(z = 0) { this.points.forEach(pt => pt.z = z); }
+  /**
+   * Sets the z value in place. Clears the cached properties.
+   */
+  setZ(z = 0) { this.points.forEach(pt => pt.z = z); this.clearCache(); }
 
-  get bounds() {
-    const n = this.points.length;
-    const xs = Array(n);
-    const ys = Array(n);
-    const zs = Array(n);
-    for ( let i = 0; i < n; i += 1 ) {
-      const pt = this.points[i];
-      xs[i] = pt.x;
-      ys[i] = pt.y;
-      zs[i] = pt.z;
+  /**
+   * Reverse the orientation of this polygon. Done in place.
+   */
+  reverseOrientation() { this.points.reverse(); return this; }
+
+  // ----- NOTE: Bounds ----- //
+
+  /** @type {object<minMax>} */
+  #bounds = {};
+
+get bounds() {
+  if ( !this.#bounds.x ) {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    
+    for (const pt of this.points) {
+      minX = Math.min(minX, pt.x);
+      maxX = Math.max(maxX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxY = Math.max(maxY, pt.y);
+      minZ = Math.min(minZ, pt.z);
+      maxZ = Math.max(maxZ, pt.z);
     }
-    return {
-      x: Math.minMax(...xs),
-      y: Math.minMax(...ys),
-      z: Math.minMax(...zs),
-    };
+    
+    this.#bounds.x = { min: minX, max: maxX };
+    this.#bounds.y = { min: minY, max: maxY };
+    this.#bounds.z = { min: minZ, max: maxZ };
   }
+  return this.#bounds;
+}
+
+  // ----- NOTE: Plane ----- //
+
+  /** @type {Plane} */
+  #plane;
 
   get plane() {
-    // Assumes without testing that points are not collinear.
-    const Plane = CONFIG.GeometryLib.threeD.Plane;
-    return Plane.fromPoints(this.points[0], this.points[1], this.points[2]);
+    if ( !this.#plane ) {
+      // Assumes without testing that points are not collinear.
+      const Plane = CONFIG.GeometryLib.threeD.Plane;
+      this.#plane = Plane.fromPoints(this.points[0], this.points[1], this.points[2]);
+    }
+    return this.#plane;
   }
+
+  // ----- NOTE: Centroid ----- //
+
+  /** @type {Point3d} */
+  #centroid;
+
+  /**
+   * Centroid (center point) of this polygon.
+   * @type {Point3d}
+   */
+  get centroid() {
+    if ( !this.#centroid ) {
+      const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+      const plane = this.plane;
+
+      // Convert to 2d polygon and calculate centroid.
+      const M2d = plane.conversion2dMatrix;
+      const poly2d = new PIXI.Polygon(this.points.map(pt3d => M2d.multiplyPoint3d(pt3d).to2d()));
+      const ctr = poly2d.center;
+      this.#centroid = plane.conversion2dMatrixInverse.multiplyPoint3d(Point3d._tmp.set(ctr.x, ctr.y, 0));
+    }
+    return this.#centroid;
+  }
+
+  /**
+   * @param {Points3d} points
+   * @returns {Points3d}
+   */
+  static convexHull(points) {
+    // Assuming flat points, determine plane and then convert to 2d
+    const Plane = CONFIG.GeometryLib.threeD.Plane;
+    const plane = Plane.fromPoints(points[0], points[1], points[2]);
+    const M2d = plane.conversion2dMatrix;
+    const points2d = points.map(pt3d => M2d.multiplyPoint3d(pt3d));
+    const convex2dPoints = convexHull(points2d);
+    return convex2dPoints.map(pt => plane.conversion2dMatrixInverse.multiplyPoint3d(pt))
+  }
+
+  // ----- NOTE: Factory methods ----- //
 
   static fromPoints(pts) {
     const n = pts.length;
@@ -142,6 +204,44 @@ export class Polygon3d {
   }
 
   /**
+   * Create a polygon from given indices and vertices
+   * @param {Number[]} vertices     Array of vertices, 3 coordinates per vertex
+   * @param {Number[]} [indices]    Indices to determine order in which polygon points are created from vertices
+   * @returns {Triangle[]}
+   */
+  static fromVertices(vertices, indices) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const n = indices.length;
+    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
+    if ( n % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
+    const poly3d = new this(n);
+    for ( let i = 0, j = 0, jMax = n; j < jMax; j += 1 ) {
+      poly3d.points[j].copyFrom(pointFromVertices(i++, vertices, indices, Point3d._tmp1));
+    }
+    return poly3d;
+  }
+
+  /**
+   * Make a copy of this polygon.
+   * @returns {Polygon3d} A new polygon
+   */
+  clone() {
+    const out = new this.constructor(this.points.length);
+    out.isHole = this.isHole;
+    this.points.forEach((pt, idx) => out.points[idx].copyFrom(pt));
+    return out;
+  }
+
+  _cloneEmpty() {
+    const out = new this.constructor(0);
+    out.isHole = this.isHole;
+    return out;
+  }
+
+  // ----- NOTE: Conversions to ----- //
+
+  /**
    * @param {"x"|"y"|"z"} omitAxis    Which of the three axes to omit to drop this to 2d.
    * @param {object} [opts]
    * @param {number} [opts.scalingFactor]   How to scale the clipper points
@@ -169,6 +269,37 @@ export class Polygon3d {
     const out = new CONFIG[MODULE_ID].ClipperPaths([points], { scalingFactor });
     return out;
   }
+
+  /**
+   * Convert to 2d polygon, dropping z.
+   * @returns {PIXI.Polygon}
+   */
+  to2dPolygon(omitAxis = "z") {
+    if ( omitAxis === "z" ) return new PIXI.Polygon(this.points); // PIXI.Polygon ignores "z" attribute.
+
+    const n = this.points.length;
+    const points = Array(n * 2);
+    const [x, y] = omitAxis === "x" ? ["y", "z"] : ["x", "z"];
+    for ( let i = 0; i < n; i += 1 ) {
+      const pt = this.points[i];
+      points[i * 2] = pt[x];
+      points[i * 2 + 1] = pt[y];
+    }
+    return new PIXI.Polygon(points);
+  }
+
+  /**
+   * Convert to 2d polygon by perspective transform, dividing each point by z.
+   * @returns {PIXI.Polygon}
+   */
+  toPerspectivePolygon() {
+    return new PIXI.Polygon(this.points.flatMap(pt => {
+      const invZ = 1 / pt.z;
+      return [pt.x * invZ, pt.y * invZ];
+    }));
+  }
+
+  // ----- NOTE: Iterators ----- //
 
   /**
    * Iterate over the polygon's edges in order.
@@ -210,46 +341,6 @@ export class Polygon3d {
   }
 
   /**
-   * Convert to 2d polygon, dropping z.
-   * @returns {PIXI.Polygon}
-   */
-  to2dPolygon(omitAxis = "z") {
-    let points;
-    switch ( omitAxis ) {
-      case "x": points = this.points.flatMap(pt => [pt.y, pt.z]); break;
-      case "y": points = this.points.flatMap(pt => [pt.x, pt.z]); break;
-      case "z": points = this.points; break; // PIXI.Polygon ignores "z" attribute.
-    }
-    return new PIXI.Polygon(points);
-  }
-
-  /**
-   * Convert to 2d polygon by perspective transform, dividing each point by z.
-   * @returns {PIXI.Polygon}
-   */
-  toPerspectivePolygon() {
-    return new PIXI.Polygon(this.points.flatMap(pt => {
-      const invZ = 1 / pt.z;
-      return [pt.x * invZ, pt.y * invZ];
-    }));
-  }
-
-  /**
-   * Centroid (center point) of this polygon.
-   * @returns {Point3d}
-   */
-  centroid() {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const plane = this.plane;
-
-    // Convert to 2d polygon and calculate centroid.
-    const M2d = plane.conversion2dMatrix;
-    const poly2d = new PIXI.Polygon(this.points.map(pt3d => M2d.multiplyPoint3d(pt3d).to2d()));
-    const ctr = poly2d.center;
-    return plane.conversion2dMatrixInverse.multiplyPoint3d(Point3d._tmp.set(ctr.x, ctr.y, 0));
-  }
-
-  /**
    * Iterator: a, b, c.
    */
   [Symbol.iterator]() {
@@ -266,9 +357,14 @@ export class Polygon3d {
     };
   }
 
-  forEach(callback) {
-    for ( let i = 0, iMax = this.points.length; i < iMax; i += 1 ) callback(this.points[i], i, this);
-  }
+//   forEach(callback) {
+//     for ( let i = 0, iMax = this.points.length; i < iMax; i += 1 ) callback(this.points[i], i, this);
+//   }
+
+  // ----- NOTE: Property tests ----- //
+
+  /** @type {boolean} */
+  isHole = false;
 
   /**
    * Does this polygon face a given point?
@@ -278,27 +374,7 @@ export class Polygon3d {
    */
   isFacing(p) { return orient3dFast(this.points[0], this.points[1], this.points[2], p) > 0; }
 
-  /**
-   * Reverse the orientation of this polygon
-   */
-  reverseOrientation() { this.points.reverse(); return this; }
-
-  /**
-   * Make a copy of this polygon.
-   * @returns {Polygon3d} A new polygon
-   */
-  clone() {
-    const out = new this.constructor(this.points.length);
-    out.isHole = this.isHole;
-    this.points.forEach((pt, idx) => out.points[idx].copyFrom(pt));
-    return out;
-  }
-
-  _cloneEmpty() {
-    const out = new this.constructor(0);
-    out.isHole = this.isHole;
-    return out;
-  }
+  // ----- NOTE: Transformations ----- //
 
   /**
    * Transform the points using a transformation matrix.
@@ -308,7 +384,7 @@ export class Polygon3d {
    */
   transform(M, poly3d) {
     poly3d ??= this.clone();
-    poly3d.forEach((pt, idx) => M.multiplyPoint3d(this.points[idx], pt));
+    poly3d.points.forEach((pt, idx) => M.multiplyPoint3d(this.points[idx], pt));
     return poly3d;
   }
 
@@ -335,6 +411,8 @@ export class Polygon3d {
     });
     return poly3d;
   }
+
+  // ----- NOTE: Intersection ----- //
 
   /**
    * Test if a ray intersects the polygon. Does not consider whether this polygon is facing.
@@ -398,7 +476,7 @@ export class Polygon3d {
     const toKeep = [];
     for ( const edge of this.iterateEdges({ close: true }) ) {
       const { A, B } = edge;
-      if ( cmp(A) ) toKeep.push(A);
+      if ( cmp(A) ) toKeep.push(A.clone());
       if ( cmp(A) ^ cmp(B) ) {
         const newPt = new Point3d();
         const res = A.projectToAxisValue(B, cutoff, coordinate, newPt);
@@ -423,25 +501,6 @@ export class Polygon3d {
     const out = this._cloneEmpty();
     out.points = toKeep;
     return out;
-  }
-
-  /**
-   * Create a polygon from given indices and vertices
-   * @param {Number[]} vertices     Array of vertices, 3 coordinates per vertex
-   * @param {Number[]} [indices]    Indices to determine order in which polygon points are created from vertices
-   * @returns {Triangle[]}
-   */
-  static fromVertices(vertices, indices) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const n = indices.length;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
-    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
-    if ( n % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
-    const poly3d = new this(n);
-    for ( let i = 0, j = 0, jMax = n; j < jMax; j += 1 ) {
-      poly3d.points[j].copyFrom(pointFromVertices(i++, vertices, indices, Point3d._tmp1));
-    }
-    return poly3d;
   }
 
   /* ----- NOTE: Debug ----- */
@@ -479,6 +538,7 @@ export class Triangle3d extends Polygon3d {
   /** @type {Point3d} */
   get c() { return this.points[2]; }
 
+  // ----- NOTE: Factory methods ----- //
 
   static from3Points(a, b, c) {
     const tri = new this();
@@ -495,6 +555,45 @@ export class Triangle3d extends Polygon3d {
     tri.c.copyPartial(c);
     return tri;
   }
+
+  /**
+   * Create an array of triangles from given indices and vertices.
+   * @param {Number[]} vertices     Array of vertices, 3 coordinates per vertex, 3 vertices per triangle
+   * @param {Number[]} [indices]    Indices to determine order in which triangles are created from vertices
+   * @returns {Triangle[]}
+   */
+  static fromVertices(vertices, indices) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
+    if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
+    const tris = new Array(Math.floor(indices.length / 3));
+    for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
+      const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
+      const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
+      const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
+      tris[j] = this.from3Points(a, b, c);
+    }
+    return tris;
+  }
+
+  /**
+   * Create an array of triangles from given array of point 3ds and indices.
+   * @param {Number[]} points       Point3ds
+   * @param {Number[]} [indices]    Indices to determine order in which triangles are created from vertices
+   */
+  static fromPoint3d(points, indices) {
+    const vertices = new Array(points.length * 3);
+    for ( let i = 0, j = 0, iMax = points.length; i < iMax; i += 1 ) {
+      const pt = points[i];
+      vertices[j++] = pt.x;
+      vertices[j++] = pt.y;
+      vertices[j++] = pt.z;
+    }
+    return this.fromVertices(vertices, indices);
+  }
+
+  // ----- NOTE: Intersection ----- //
 
   /**
    * Test if a ray intersects the triangle. Does not consider whether this triangle is facing.
@@ -562,46 +661,7 @@ export class Triangle3d extends Polygon3d {
     out.points.forEach((pt, idx) => pt.copyFrom(toKeep[idx]));
     return out;
   }
-
-
-  /**
-   * Create an array of triangles from given indices and vertices.
-   * @param {Number[]} vertices     Array of vertices, 3 coordinates per vertex, 3 vertices per triangle
-   * @param {Number[]} [indices]    Indices to determine order in which triangles are created from vertices
-   * @returns {Triangle[]}
-   */
-  static fromVertices(vertices, indices) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
-    indices ??= Array.fromRange(Math.floor(vertices.length / 3));
-    if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
-    const tris = new Array(Math.floor(indices.length / 3));
-    for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
-      const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
-      const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
-      const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
-      tris[j] = this.from3Points(a, b, c);
-    }
-    return tris;
-  }
-
-  /**
-   * Create an array of triangles from given array of point 3ds and indices.
-   * @param {Number[]} points       Point3ds
-   * @param {Number[]} [indices]    Indices to determine order in which triangles are created from vertices
-   */
-  static fromPoint3d(points, indices) {
-    const vertices = new Array(points.length * 3);
-    for ( let i = 0, j = 0, iMax = points.length; i < iMax; i += 1 ) {
-      const pt = points[i];
-      vertices[j++] = pt.x;
-      vertices[j++] = pt.y;
-      vertices[j++] = pt.z;
-    }
-    return this.fromVertices(vertices, indices);
-  }
 }
-
 
 /**
  * Represent 1+ polygons that represent a shape.
@@ -622,28 +682,82 @@ export class Polygons3d extends Polygon3d {
 
   #applyMethodToAllWithReturn(method, ...args) { return this.polygons.map(poly => poly[method](...args)); }
 
+  #applyMethodToAllWithClone(method, poly3d, ...args) {
+    poly3d ??= this.clone();
+    poly3d.polygons.forEach(poly => poly[method](...args, poly));
+    return poly3d;
+  }
+
   static #createSingleUsingMethod(method, ...args) {
     const out = new this(1);
     out.polygons[0] = Polygon3d[method](...args);
     return out;
   }
 
+  // ----- NOTE: In-place modifiers ----- //
+
+  /**
+   * Clear the getter caches.
+   */
+  clearCache() {
+    this.#applyMethodToAll("clearCache");
+    this.#bounds.x = undefined;
+    this.#centroid = undefined;
+    // No #plane for Polygons3d.
+  }
+
   clean() { this.#applyMethodToAll("clean"); }
 
   setZ(z) { this.#applyMethodToAll("setZ", z); }
 
+  reverseOrientation() { this.#applyMethodToAll("reverseOrientation"); return this; }
+
+  // ----- NOTE: Bounds ----- //
+
+  /** @type {object<minMax>} */
+  #bounds = {};
+
   get bounds() {
-    const allBounds = this.applyMethodToAllWithReturn("bounds");
-    return allBounds.reduce((acc, curr) => {
-      return {
-        x: Math.minMax(acc.x.min, acc.x.max, curr.x.min, curr.x.max),
-        y: Math.minMax(acc.y.min, acc.y.max, curr.y.min, curr.x.max),
-        z: Math.minMax(acc.z.min, acc.z.max, curr.z.min, curr.x.max),
-      };
-    })
+    const b = this.#bounds;
+    if ( !b.x ) {
+      const allBounds = this.applyMethodToAllWithReturn("bounds");
+      allBounds.reduce((acc, curr) => {
+        b.x = Math.minMax(acc.x.min, acc.x.max, curr.x.min, curr.x.max);
+        b.y = Math.minMax(acc.y.min, acc.y.max, curr.y.min, curr.x.max);
+        b.z = Math.minMax(acc.z.min, acc.z.max, curr.z.min, curr.x.max);
+        return b;
+      });
+    }
+    return b;
   }
 
+  // ----- NOTE: Plane ----- //
+
+  /** @type {Plane} */
   get plane() { return this.polygons[0].plane; }
+
+  // ----- NOTE: Centroid ----- //
+
+  /** @type {Point3d} */
+  #centroid;
+
+  centroid() {
+    if ( !this.centroid ) {
+      // Assuming flat points, determine plane and then convert to 2d
+      const plane = this.plane;
+      const points = this.polygons.flatMap(poly => poly.points);
+      const M2d = plane.conversion2dMatrix;
+      const points2d = points.map(pt3d => M2d.multiplyPoint3d(pt3d));
+      const convex2dPoints = convexHull(points2d);
+
+      // Determine the centroid of the 2d convex polygon.
+      const convexPoly2d = new PIXI.Polygon(convex2dPoints);
+      this.#centroid = convexPoly2d.center;
+    }
+    return this.#centroid;
+  }
+
+  // ----- NOTE: Factory methods ----- //
 
   static from3dPolygons(polys) {
     const n = polys.length;
@@ -672,6 +786,15 @@ export class Polygons3d extends Polygon3d {
     return out;
   }
 
+  static fromVertices(vertices, indices) { this.#createSingleUsingMethod("fromVertices", vertices, indices); }
+
+  clone() {
+    const out = new this.constructor(0);
+    out.polygons = this.polygons.map(poly => poly.clone());
+    return out;
+  }
+
+  // ----- NOTE: Conversions to ----- //
 
   /**
    * @param {"x"|"y"|"z"} omitAxis    Which of the three axes to omit to drop this to 2d.
@@ -688,19 +811,7 @@ export class Polygons3d extends Polygon3d {
 
   toPerspectivePolygon() { return this.#applyMethodToAllWithReturn("toPerspectivePolygon"); }
 
-  centroid() {
-    // Assuming flat points, determine plane and then convert to 2d
-    // TODO: This should really be cached as well.
-    const plane = this.plane;
-    const points = this.polygons.flatMap(poly => poly.points);
-    const M2d = plane.conversion2dMatrix;
-    const points2d = points.map(pt3d => M2d.multiplyPoint3d(pt3d));
-    const convex2dPoints = convexHull(points2d);
-
-    // Determine the centroid of the 2d convex polygon.
-    const convexPoly2d = new PIXI.Polygon(convex2dPoints);
-    return convexPoly2d.center;
-  }
+  // ----- NOTE: Iterators ----- //
 
   /**
    * Iterator: a, b, c.
@@ -719,46 +830,28 @@ export class Polygons3d extends Polygon3d {
     };
   }
 
-  forEach(callback) {
-    for ( let i = 0, iMax = this.polygons.length; i < iMax; i += 1 ) callback(this.polygons[i], i, this);
+  forEach(callback, thisArg) {
+    this.polygons.forEach(callback, thisArg);
   }
+
+  // ----- NOTE: Property tests ----- //
 
   isFacing(p) {
     const poly = this.polygons[0];
     return poly.isFacing(p) ^ poly.isHole; // Holes have reverse orientation.
   }
 
-  reverseOrientation() { this.#applyMethodToAll("reverseOrientation"); return this; }
+  // ----- NOTE: Transformations ----- //
 
-  clone() {
-    const out = new this.constructor(0);
-    out.polygons = this.polygons.map(poly => poly.clone());
-    return out;
-  }
+  transform(M, poly3d) { return this.#applyMethodToAllWithClone("transform", poly3d, M); }
 
-  transform(M, poly3d) {
-    poly3d ??= this.clone();
-    poly3d.polygons.forEach(poly => poly.transform(M, poly));
-    return poly3d;
-  }
+  multiplyScalar(multiplier, poly3d) { return this.#applyMethodToAllWithClone("multiplyScalar", poly3d, multiplier); }
 
-  multiplyScalar(multiplier, poly3d) {
-    poly3d ??= this.clone();
-    poly3d.polygons.forEach(poly => poly.multiplyScalar(multiplier, poly));
-    return poly3d;
-  }
+  scale(opts, poly3d) { return this.#applyMethodToAllWithClone("scale", poly3d, opts); }
 
-  scale(opts, poly3d) {
-    poly3d ??= this.clone();
-    poly3d.polygons.forEach(poly => poly.scale(opts, poly));
-    return poly3d;
-  }
+  divideByZ(poly3d) { return this.#applyMethodToAllWithClone("divideByZ", poly3d); }
 
-  divideByZ(poly3d) {
-    poly3d ??= this.clone();
-    poly3d.polygons.forEach(poly => poly.divideByZ(poly));
-    return poly3d;
-  }
+  // ----- NOTE: Intersection ----- //
 
   /**
    * Test if a ray intersects the polygon. Does not consider whether this polygon is facing.
@@ -789,7 +882,7 @@ export class Polygons3d extends Polygon3d {
     return out;
   }
 
-  static fromVertices(vertices, indices) { this.#createSingleUsingMethod("fromVertices", vertices, indices); }
+  /* ----- NOTE: Debug ----- */
 
   draw2d(opts = {}) {
     const color = opts.color;
