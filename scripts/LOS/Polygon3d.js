@@ -275,11 +275,15 @@ get bounds() {
    * @returns {PIXI.Polygon}
    */
   to2dPolygon(omitAxis = "z") {
-    let points;
-    switch ( omitAxis ) {
-      case "x": points = this.points.flatMap(pt => [pt.y, pt.z]); break;
-      case "y": points = this.points.flatMap(pt => [pt.x, pt.z]); break;
-      case "z": points = this.points; break; // PIXI.Polygon ignores "z" attribute.
+    if ( omitAxis === "z" ) return new PIXI.Polygon(this.points); // PIXI.Polygon ignores "z" attribute.
+
+    const n = this.points.length;
+    const points = Array(n * 2);
+    const [x, y] = omitAxis === "x" ? ["y", "z"] : ["x", "z"];
+    for ( let i = 0; i < n; i += 1 ) {
+      const pt = this.points[i];
+      points[i * 2] = pt[x];
+      points[i * 2 + 1] = pt[y];
     }
     return new PIXI.Polygon(points);
   }
