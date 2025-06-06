@@ -765,8 +765,8 @@ export class SceneInstanceHandler extends TileInstanceHandler {
 export class RegionInstanceHandler extends PlaceableInstanceHandler {
   static HOOKS = [
     { createRegion: "_onPlaceableCreation" },
-    { updateTile: "_onPlaceableUpdate" },
-    { removeTile: "_onPlaceableDeletion" },
+    { updateRegion: "_onPlaceableUpdate" },
+    { removeRegion: "_onPlaceableDeletion" },
   ];
 
   /**

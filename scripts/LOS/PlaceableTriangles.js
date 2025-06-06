@@ -5,10 +5,11 @@ CONST,
 foundry,
 Hooks,
 PIXI,
+Region,
 */
 "use strict";
 
-import { MODULE_ID, MODULES_ACTIVE } from "../const.js";
+import { MODULE_ID } from "../const.js";
 import { GeometryDesc } from "./WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
@@ -47,6 +48,7 @@ export const AbstractPolygonTrianglesID = "tokenvisibility";
  * a basic shape in 3d space.
  */
 export class AbstractPolygonTriangles {
+
   static ID = AbstractPolygonTrianglesID;
 
   static geom;
@@ -80,24 +82,23 @@ export class AbstractPolygonTriangles {
 
   /* ----- Hooks ----- */
 
-  /** @type {number[]} */
-  static _hooks = [];
-
   /**
    * @typedef {object} PlaceableHookData
    * Description of a hook to use.
    * @prop {object} name: methodName        Name of the hook and method; e.g. updateWall: "_onPlaceableUpdate"
    */
   /** @type {object[]} */
-  static HOOKS = [];
+  static HOOKS = {};
+
+  /** @type {number[]} */
+  static _hooks = [];
 
   /**
-   * Register hooks for this placeable that record updates.
+   * Register hooks for this placeable type that record updates.
    */
   static registerPlaceableHooks() {
     if ( this._hooks.length ) return; // Only register once.
-    for ( const hookDatum of this.HOOKS ) {
-      const [name, methodName] = Object.entries(hookDatum)[0];
+    for ( const [name, methodName] of Object.entries(this.HOOKS) ) {
       const id = Hooks.on(name, this[methodName].bind(this));
       this._hooks.push({ name, methodName, id });
     }
@@ -148,16 +149,21 @@ export class WallTriangles extends AbstractPolygonTriangles {
   /** @type {GeometryDesc} */
   static geom = new GeometryWallDesc({ directional: false });
 
-  /** @type {Triangle[]} */
+  /** @type {Triangle3d[]} */
   static _prototypeTriangles;
 
   /** @type {class} */
   static instanceHandlerClass = WallInstanceHandler;
 
+  static _instanceHandler;
+
   /** @type {object[]} */
-  static HOOKS = [
-    { createWall: "_onPlaceableDocumentCreation" },
-  ];
+  static HOOKS = {
+    createWall: "_onPlaceableDocumentCreation",
+  };
+
+  /** @type {number[]} */
+  static _hooks = [];
 
   /**
    * On placeable creation hook, add an instance of this to the placeable.
@@ -198,10 +204,15 @@ export class TileTriangles extends AbstractPolygonTriangles {
   /** @type {class} */
   static instanceHandlerClass = TileInstanceHandler;
 
+  static _instanceHandler;
+
   /** @type {object[]} */
-  static HOOKS = [
-    { createTile: "_onPlaceableDocumentCreation" },
-  ];
+  static HOOKS = {
+    createTile: "_onPlaceableDocumentCreation",
+  };
+
+    /** @type {number[]} */
+  static _hooks = [];
 
   static registerExistingPlaceables() {
     canvas.tiles.placeables.forEach(tile => this._onPlaceableCreation(tile));
@@ -379,12 +390,15 @@ export class TokenTriangles extends AbstractPolygonTriangles {
   /** @type {class} */
   static instanceHandlerClass = TokenInstanceHandler;
 
-  /** @type {object[]} */
-  static HOOKS = [
-    { createToken: "_onPlaceableDocumentCreation" },
-    { updateToken: "_onTokenDocumentUpdate" },
-  ];
+  static _instanceHandler;
 
+  /** @type {object[]} */
+  static HOOKS = {
+    createToken: "_onPlaceableDocumentCreation",
+  };
+
+  /** @type {number[]} */
+  static _hooks = [];
 
   /* Debugging
   static get prototypeTriangles() {
@@ -471,6 +485,18 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
 }
 
 export class RegionTriangles extends AbstractPolygonTriangles {
+  /** @type {GeometryDesc} */
+  static geom = new GeometryWallDesc({ directional: false });
+
+  /** @type {Triangle3d[]} */
+  static _prototypeTriangles;
+
+  /** @type {class} */
+//   static instanceHandlerClass = RegionInstanceHandler;
+//
+//   static _instanceHandler;
+
+
   static CHANGE_KEYS = [
     "flags.terrainmapper.elevationAlgorithm",
     "flags.terrainmapper.plateauElevation",
@@ -485,15 +511,20 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     "shapes",
   ];
 
+  static HOOKS = {
+    createRegion: "_onPlaceableDocumentCreation",
+    updateRegion: "_onPlaceableDocumentUpdate",
+  };
 
-  static HOOKS = [
-    { createRegion: "_onPlaceableDocumentCreation",
-      updateRegion: "_onPlaceableDocumentUpdate",
-    }
-  ];
+  /** @type {number[]} */
+  static _hooks = [];
 
-  static trianglesForPlaceable(_placeable) {
-    return this._prototypeTriangles;
+  static regionTriangleMap = new WeakMap();
+
+  static trianglesForPlaceable(placeable) {
+    if ( !this.regionTriangleMap.has(placeable) ) return [];
+    const { tops, bottoms, sides } = this.regionTriangleMap.get(placeable);
+    return [...tops, ...bottoms, ...sides];
   }
 
   /**
@@ -507,20 +538,20 @@ export class RegionTriangles extends AbstractPolygonTriangles {
 //       get() { return self.trianglesForPlaceable(placeable); },
 //       configurable: true,
 //     });
-    const { tops, bottoms, sides } = this.regionPolygons3d(region);
-    this._prototypeTriangles = [...tops, ...bottoms, ...sides];
+    this.regionTriangleMap.set(region, this.regionPolygons3d(region));
   }
 
   /**
    * On region update hook, add/update polygons for any shapes
    */
   static _onPlaceableDocumentUpdate(placeableD, changed) {
+    const region = placeableD.object;
+    if ( !region ) return;
     // NOTE: Keep the polygons regardless of whether the region would block.
     // TODO: Only update shapes that require updating.
     const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
     if ( this.CHANGE_KEYS.some(key => changeKeys.has(key)) ) {
-      const { tops, bottoms, sides } = this.regionPolygons3d(region);
-      this._prototypeTriangles = [...tops, ...bottoms, ...sides];
+      this.regionTriangleMap.set(region, this.regionPolygons3d(region));
     }
   }
 
