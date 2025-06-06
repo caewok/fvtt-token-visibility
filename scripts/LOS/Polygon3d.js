@@ -724,7 +724,13 @@ export class Polygons3d extends Polygon3d {
 
   clean() { this.#applyMethodToAll("clean"); }
 
-  setZ(z) { this.#applyMethodToAll("setZ", z); }
+  setZ(z) {
+    this.#applyMethodToAll("setZ", z);
+
+    // No need to clear each polygon, as setZ will have already done that.
+    this.#bounds.x = undefined;
+    this.#centroid = undefined;
+  }
 
   reverseOrientation() { this.#applyMethodToAll("reverseOrientation"); return this; }
 

@@ -8,13 +8,13 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
+import { MODULE_ID, MODULES_ACTIVE } from "../const.js";
 import { GeometryDesc } from "./WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
-import { Polygons3d, Triangle3d } from "./Polygon3d.js";
+import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
@@ -23,9 +23,12 @@ Hooks.on("canvasReady", function() {
   WallTriangles.registerExistingPlaceables();
   TileTriangles.registerExistingPlaceables();
   TokenTriangles.registerExistingPlaceables();
+  RegionTriangles.registerExistingPlaceables();
+
   WallTriangles.registerPlaceableHooks();
   TileTriangles.registerPlaceableHooks();
   TokenTriangles.registerPlaceableHooks();
+  RegionTriangles.registerPlaceableHooks();
 });
 
 /**
@@ -471,36 +474,117 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
   }
 }
 
+export class RegionTriangles extends AbstractPolygonTriangles {
+  static CHANGE_KEYS = [
+    "flags.terrainmapper.elevationAlgorithm",
+    "flags.terrainmapper.plateauElevation",
+    "flags.terrainmapper.rampFloor",
+    "flags.terrainmapper.rampDirection",
+    // "flags.terrainmapper.rampStepSize",
+    "flags.terrainmapper.splitPolygons",
+
+    "elevation.bottom",
+    "elevation.top",
+
+    "shapes",
+  ];
 
 
-/* Orient3dFast license
-https://github.com/mourner/robust-predicates/tree/main
-This is free and unencumbered software released into the public domain.
+  static HOOKS = [
+    { createRegion: "_onPlaceableDocumentCreation",
+      updateRegion: "_onPlaceableDocumentUpdate",
+    }
+  ];
 
-Anyone is free to copy, modify, publish, use, compile, sell, or
-distribute this software, either in source code form or as a compiled
-binary, for any purpose, commercial or non-commercial, and by any
-means.
+  trianglesForPlaceable(_placeable) {
+    return this.prototypeTriangles;
+  }
 
-In jurisdictions that recognize copyright laws, the author or authors
-of this software dedicate any and all copyright interest in the
-software to the public domain. We make this dedication for the benefit
-of the public at large and to the detriment of our heirs and
-successors. We intend this dedication to be an overt act of
-relinquishment in perpetuity of all present and future rights to this
-software under copyright law.
+  /**
+   * On region creation hook, add polygons for any shapes.
+   */
+  static _onPlaceableCreation(region) {
+    const { tops, bottoms, sides } = this.regionPolygons3d(region);
+    this._prototypeTriangles = [...tops, ...bottoms, ...sides];
+  }
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
+  /**
+   * On region update hook, add/update polygons for any shapes
+   */
+  static _onPlaceableDocumentUpdate(placeableD, changed) {
+    // NOTE: Keep the polygons regardless of whether the region would block.
+    // TODO: Only update shapes that require updating.
+    const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
+    if ( this.CHANGE_KEYS.some(key => changeKeys.has(key)) ) {
+      const { tops, bottoms, sides } = this.regionPolygons3d(region);
+      this._prototypeTriangles = [...tops, ...bottoms, ...sides];
+    }
+  }
 
-For more information, please refer to <http://unlicense.org>
+  static regionPolygons3d(region) {
+    // TODO: Convert combined region shapes into a single polygon?
+    // TODO: Handle holes
 
-*/
+    const tops = [];
+    const bottoms = [];
+    const sides = [];
+    if ( !region.shapes.length ) return { tops, bottoms, sides }
+
+    // Determine region elevation.
+    const topZ = (( MODULES_ACTIVE.TERRAIN_MAPPER && region.terrainmapper.isElevated )
+      ? region.terrainmapper.plateauElevation : region.topZ) ?? 1e06;
+    const bottomZ = region.bottomZ ?? 1e-06;
+
+    // NOTE: Region polygons are in world space, not centered at 0,0.
+    for ( const shape of region.shapes ) {
+      const path = this.toClipperPaths(shape.clipperPaths);
+      const t = Polygon3d.fromClipperPaths(path)[0]; // Each shape should be representable by a single polygon.
+      tops.push(t);
+      const b = t.clone();
+      bottoms.push(b);
+
+      // Set elevation.
+      // TODO: Handle ramps
+      t.setZ(topZ);
+      b.setZ(bottomZ);
+
+      // Set side rectangles.
+      // NOTE: Cannot iterate the bottom edges once reversed.
+      const topIter = t.iterateEdges({ close: true });
+      const bottomIter = b.iterateEdges({ close: true });
+      while ( true ) {
+        const topEdge = topIter.next().value;
+        const bottomEdge = bottomIter.next().value;
+        if ( !(topEdge || bottomEdge ) ) break;
+
+        // Counter-clockwise.
+        sides.push(Polygon3d.from3dPoints([topEdge.B, topEdge.A, bottomEdge.A, bottomEdge.B]));
+      }
+
+      // Flip bottom to face the other direction.
+      b.reverseOrientation();
+    }
+
+    return { tops, bottoms, sides };
+  }
+
+  /**
+   * Convert a shape's clipper points to the clipper path class.
+   */
+  static toClipperPaths(clipperPoints) {
+    const scalingFactor = Region.CLIPPER_SCALING_FACTOR;
+    const ClipperPaths = CONFIG.tokenvisibility.ClipperPaths;
+    switch ( CONFIG.tokenvisibility.clipperVersion ) {
+      // For both, the points are already scaled, so just pass through the scaling factor to the constructor.
+      case 1: return new ClipperPaths(clipperPoints, { scalingFactor });
+      case 2: return new ClipperPaths(ClipperPaths.pathFromClipper1Points(clipperPoints), { scalingFactor });
+    }
+  }
+
+  static registerExistingPlaceables() {
+    canvas.regions.placeables.forEach(region => this._onPlaceableCreation(region));
+  }
+}
 
 /* Testing
 api = game.modules.get("tokenvisibility").api;

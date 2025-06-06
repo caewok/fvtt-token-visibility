@@ -251,6 +251,14 @@ Hooks.once("init", function() {
      */
     tokenIsDead,
 
+    /**
+     * Include Terrain Mapper regions.
+     * TODO: Change to setting in the region config that also specifies
+     * sense type for blocking. (Likely more than one type)
+     * @type {boolean}
+     */
+    regionsBlock: true,
+
     debug: false,
   };
 
