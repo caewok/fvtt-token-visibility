@@ -46,6 +46,7 @@ function BlockingConfig() {
     tokens: TokenBlockingConfig(),
     walls: true,
     tiles: true,
+    regions: true,
   };
 }
 

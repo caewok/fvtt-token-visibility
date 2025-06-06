@@ -15,6 +15,7 @@ import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
 import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
+import { regionElevation } from "./util.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
@@ -210,13 +211,8 @@ export class TileTriangles extends AbstractPolygonTriangles {
    * On placeable creation hook, also add isoband polygons representing solid areas of the tile.
    */
   static _onPlaceableCreation(tile) {
-    const obj = tile[this.ID] ??= {};
-    const self = this;
-    Object.defineProperty(obj, "triangles", {
-      get() { return self.trianglesForPlaceable(tile); },
-      configurable: true,
-    });
-
+    super._onPlaceableCreation(tile);
+    const obj = tile[this.ID];
     obj.alphaThresholdPolygons = null;
     obj.alphaThresholdTriangles = null;
     obj.alphaThresholdPaths = this.convertTileToIsoBands(tile);
@@ -496,14 +492,21 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     }
   ];
 
-  trianglesForPlaceable(_placeable) {
-    return this.prototypeTriangles;
+  static trianglesForPlaceable(_placeable) {
+    return this._prototypeTriangles;
   }
 
   /**
    * On region creation hook, add polygons for any shapes.
    */
   static _onPlaceableCreation(region) {
+    super._onPlaceableCreation(region);
+//     const obj = placeable[this.ID] ??= {};
+//     const self = this;
+//     Object.defineProperty(obj, "triangles", {
+//       get() { return self.trianglesForPlaceable(placeable); },
+//       configurable: true,
+//     });
     const { tops, bottoms, sides } = this.regionPolygons3d(region);
     this._prototypeTriangles = [...tops, ...bottoms, ...sides];
   }
@@ -524,18 +527,13 @@ export class RegionTriangles extends AbstractPolygonTriangles {
   static regionPolygons3d(region) {
     // TODO: Convert combined region shapes into a single polygon?
     // TODO: Handle holes
-
     const tops = [];
     const bottoms = [];
     const sides = [];
     if ( !region.shapes.length ) return { tops, bottoms, sides }
 
-    // Determine region elevation.
-    const topZ = (( MODULES_ACTIVE.TERRAIN_MAPPER && region.terrainmapper.isElevated )
-      ? region.terrainmapper.plateauElevation : region.topZ) ?? 1e06;
-    const bottomZ = region.bottomZ ?? 1e-06;
-
     // NOTE: Region polygons are in world space, not centered at 0,0.
+    const { topZ, bottomZ } = regionElevation(region);
     for ( const shape of region.shapes ) {
       const path = this.toClipperPaths(shape.clipperPaths);
       const t = Polygon3d.fromClipperPaths(path)[0]; // Each shape should be representable by a single polygon.

@@ -76,6 +76,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     tokens: NULL_SET,
     walls: NULL_SET,
     terrainWalls: NULL_SET,
+    regions: NULL_SET,
   };
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
@@ -120,8 +121,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    *   obscuredSides: The unobscured portions of the sidePolys
    */
   _obscuredArea() {
-    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
-    if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size) ) return { targetArea: 1, obscuredArea: 0 };
+    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
+    if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size || regions.size) ) return { targetArea: 1, obscuredArea: 0 };
 
     // Construct polygons representing the perspective view of the target and blocking objects.
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
@@ -244,7 +245,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    * Construct polygons that are used to form the 2d perspective.
    */
   _constructPerspectivePolygons() {
-    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
+    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
 
     // Construct polygons representing the perspective view of the target and blocking objects.
     const viewpoint = this.viewpoint
@@ -259,7 +260,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
       console.warn(`_applyPerspective|All target z values are positive for ${this.viewer.name} --> ${this.target.name}`);
     }
 
-    const blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
+    const blockingPolys = [...walls, ...tiles, ...tokens, ...regions].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
 
     const blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
@@ -416,7 +417,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     }
 
     backgroundTiles.forEach(tile => backgroundTestFn(tile, colors.orange, colors.orange));
-    backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
+    // backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
     backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
     backgroundPolys.forEach(obj => obj.poly.scale({ x: width, y: height }).draw2d({ draw, color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }));
 

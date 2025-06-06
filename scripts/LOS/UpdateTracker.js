@@ -117,7 +117,19 @@ export class DocumentUpdateTracker {
       "height",
       "rotation",
     ],
-    // TODO: Region
+    Region: [
+      "flags.terrainmapper.elevationAlgorithm",
+      "flags.terrainmapper.plateauElevation",
+      "flags.terrainmapper.rampFloor",
+      "flags.terrainmapper.rampDirection",
+      "flags.terrainmapper.rampStepSize",
+      "flags.terrainmapper.splitPolygons",
+
+      "elevation.bottom",
+      "elevation.top",
+
+      "shapes",
+    ],
   };
 
   /**

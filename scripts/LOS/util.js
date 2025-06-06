@@ -9,7 +9,7 @@ Ray,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { EPSILON, MODULE_ID } from "../const.js";
+import { EPSILON, MODULE_ID, MODULES_ACTIVE } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 /**
@@ -552,4 +552,20 @@ export function flipObjectKeyValues(obj) {
 
 export function isTypedArray(obj) {
   return ArrayBuffer.isView(obj) && !(obj instanceof DataView);
+}
+
+/**
+ * Determine elevation of a region, specific to LOS considerations.
+ * If terrain mapper is present, returns the top of the plateau or ramp.
+ * Ensures top and bottom have a defined MIN/MAX, not null or infinity.
+ * @param {Region} region
+ * @returns {object<topZ: {number}, bottomZ: {number}>}
+ */
+export function regionElevation(region) {
+  let topZ = (( MODULES_ACTIVE.TERRAIN_MAPPER && region.terrainmapper.isElevated )
+    ? region.terrainmapper.plateauElevation : region.topZ);
+  let bottomZ = region.bottomZ;
+  if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
+  if ( !(bottomZ && isFinite(bottomZ)) ) bottomZ = -1e06;
+  return { topZ, bottomZ };
 }

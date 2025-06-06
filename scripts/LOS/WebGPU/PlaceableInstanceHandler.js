@@ -3,6 +3,7 @@ canvas,
 CONFIG,
 CONST,
 foundry,
+game,
 Hooks,
 PIXI,
 */
@@ -10,7 +11,7 @@ PIXI,
 "use strict";
 
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
-import { MODULES_ACTIVE } from "../../const.js";
+import { MODULE_ID, MODULES_ACTIVE } from "../../const.js";
 
 // Base folder
 
@@ -577,7 +578,7 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
   ]);
 
   /**
-   * Get edges in the scene.
+   * Get tiles in the scene.
    */
   getPlaceables() {
     return canvas.tiles.placeables.filter(tile => this.includePlaceable(tile));
@@ -602,7 +603,6 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
    * Update the instance array of a specific placeable.
    * @param {string} placeableId          Id of the placeable
    * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
-   * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updateInstanceBuffer(idx) {
     const tile = this.placeableFromInstanceIndex.get(idx);
@@ -760,4 +760,78 @@ export class SceneInstanceHandler extends TileInstanceHandler {
     const ctr = canvas.dimensions.rect.center;
     return new CONFIG.GeometryLib.threeD.Point3d(ctr.x, ctr.y, 0);
   }
+}
+
+export class RegionInstanceHandler extends PlaceableInstanceHandler {
+  static HOOKS = [
+    { createRegion: "_onPlaceableCreation" },
+    { updateTile: "_onPlaceableUpdate" },
+    { removeTile: "_onPlaceableDeletion" },
+  ];
+
+  /**
+   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   */
+  static UPDATE_KEYS = new Set([
+    "flags.terrainmapper.elevationAlgorithm",
+    "flags.terrainmapper.plateauElevation",
+    "flags.terrainmapper.rampFloor",
+    "flags.terrainmapper.rampDirection",
+    "flags.terrainmapper.rampStepSize",
+    "flags.terrainmapper.splitPolygons",
+
+    "elevation.bottom",
+    "elevation.top",
+
+    "shapes",
+  ]);
+
+  /**
+   * Get relevant regions in the scene.
+   */
+  getPlaceables() {
+    return canvas.regions.placeables.filter(region => this.includePlaceable(region));
+  }
+
+  /**
+   * Should this regino be included in the scene render?
+   */
+  includePlaceable(region) {
+    if ( region.shapes.length === 0 ) return false;
+    if ( !game.modules.has("terrainmapper") ) return false;
+
+    // TODO: Change this to a setting in the region config, and specifies sense type(s) that block.
+    if ( !CONFIG[MODULE_ID].regionsBlock ) return false;
+
+    // TODO: Allow None to block using the elevation range. Use the sense type choice to filter.
+    const algo = region.document.getFlag("terrainmapper", "elevationAlgorithm");
+    return algo && (algo === "ramp" || algo === "plateau");
+  }
+
+  /**
+   * Update the instance array of a specific placeable.
+   * @param {string} placeableId          Id of the placeable
+   * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
+   */
+  updateInstanceBuffer(idx) {
+    const region = this.placeableFromInstanceIndex.get(idx);
+    if ( !region ) return;
+//     const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
+//
+//     const ctr = this.constructor.tileCenter(tile);
+//     const { width, height } = this.constructor.tileDimensions(tile);
+//
+//     // Move from center of tile.
+//     MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
+//
+//     // Scale based on width, height of tile.
+//     MatrixFloat32.scale(width, height, 1.0, scaleM);
+//
+//     // Rotate based on tile rotation.
+//     MatrixFloat32.rotationZ(this.constructor.tileRotation(tile), true, rotationM);
+//
+//     return super.updateInstanceBuffer(idx,
+//       { rotation: rotationM, translation: translationM, scale: scaleM });
+  }
+
 }

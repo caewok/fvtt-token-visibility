@@ -7,11 +7,15 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
 import { MODULE_ID } from "../const.js";
+import { regionElevation } from "./util.js";
+import { Ellipse } from "../geometry/Ellipse.js";
 
-import { Draw } from "../geometry/Draw.js";
-
+// For testing region shapes
+const tmpRectangle = new PIXI.Rectangle();
+const tmpCircle = new PIXI.Circle();
+const tmpPolygon = new PIXI.Polygon();
+const tmpEllipse = new Ellipse();
 
 /**
  * The viewable area between viewer and target.
@@ -244,6 +248,20 @@ export class VisionTriangle {
       || tBounds.lineSegmentIntersects(this.a, c, { inside: true });
   }
 
+  regionInBackground(region) {
+    // Either it is a foreground region or a background region.
+    if ( this.containsRegion(region) ) return false;
+
+    // Use an infinite triangle.
+    const { b, c } = this.infinitePoints();
+    for ( const shape of region.shapes ) {
+      const pixi = this._convertShapeToPIXI(shape);
+      if ( pixi.lineSegmentIntersects(this.a, b, { inside: true })
+        || pixi.lineSegmentIntersects(this.a, c, { inside: true }) ) return true;
+    }
+    return false;
+  }
+
   containsTile(tile) {
     // If the elevations don't change, the tile cannot be an obstacle.
     if ( this.elevationZ.min === this.elevationZ.max ) return false;
@@ -278,6 +296,59 @@ export class VisionTriangle {
       || tBounds.lineSegmentIntersects(this.a, this.c, { inside: true });
   }
 
+  containsRegion(region) {
+    // Ignore regions not within the vision rectangle elevation.
+    const { topZ, bottomZ } = regionElevation(region);
+    if ( topZ < this.elevationZ.min || bottomZ > this.elevationZ.max ) return false;
+
+    // For each region shape, use the ideal version to test b/c circles and ellipses can be tested faster than polys.
+    // Ignore holes (some shape with holes may get included but rather be over-inclusive here)
+    // Yes or no, regardless of how many shapes of a region are in the vision triangle.
+    for ( const shape of region.shapes ) {
+      const pixi = this._convertShapeToPIXI(shape);
+      if ( pixi.lineSegmentIntersects(this.a, this.b, { inside: true })
+        || pixi.lineSegmentIntersects(this.a, this.c, { inside: true }) ) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Converts region shape to a temporary PIXI shape.
+   * Must clone the shape if needed more than just temporarily.
+   * @param {RegionShape} regionShape
+   * @returns {PIXI.Rectangle|PIXI.Circle|PIXI.Polygon|Ellipse}
+   */
+  _convertShapeToPIXI(regionShape) {
+    const shapeData = regionShape.data;
+    switch ( shapeData.type ) {
+      case "rectangle": {
+        // TODO: What about the shape data rotation parameter? Is it actually used?
+        tmpRectangle.copyFrom(shapeData);
+        return tmpRectangle;
+      }
+      case "polygon": {
+        tmpPolygon.points = shapeData.points;
+        return tmpPolygon;
+      }
+      case "circle": {
+        tmpCircle.x = shapeData.x;
+        tmpCircle.y = shapeData.y;
+        tmpCircle.radius = shapeData.radius;
+        return tmpCircle;
+      }
+      case "ellipse": {
+        tmpEllipse.x = shapeData.x;
+        tmpEllipse.y = shapeData.y;
+        tmpEllipse.width = shapeData.radiusX;
+        tmpEllipse.height = shapeData.radiusY;
+        tmpEllipse.rotation = shapeData.rotation;
+        tmpEllipse.recalculateProperties();
+        return tmpEllipse;
+      }
+      default: console.error(`Shape ${shapeData.type} not recognized.`, regionShape);
+    }
+  }
+
   /**
    * Boundary rectangle that extends from the viewpoint beyond the edge of the canvas.
    * @returns {PIXI.Rectangle}
@@ -307,6 +378,10 @@ export class VisionTriangle {
   findBackgroundTiles() {
     const collisionTest = o => this.tileInBackground(o.t);
     return canvas.tiles.quadtree.getObjects(this.backgroundBounds(), { collisionTest });
+  }
+
+  findBackgroundRegions() {
+    return new Set(canvas.regions.placeables.filter(r => this.regionInBackground(r)));
   }
 
   /**
@@ -378,6 +453,24 @@ export class VisionTriangle {
    * @returns {Token[]|Set<Token>}
    */
   filterTokens(tokens) { return tokens.filter(t => this.containsToken(t)); }
+
+  /**
+   * Filter regions in the scene by a triangle representing the view from viewingPoint to
+   * token (or other two points). Only considers 2d top-down view.
+   * @return {Set<Region>}
+   */
+  findRegions() {
+    // Currently no quadtree for regions. TODO: Make one?
+    return new Set(canvas.regions.placeables.filter(r => this.containsRegion(r)));
+  }
+
+  /**
+   * Same as findRegions but filters based on an existing set.
+   * @param {Region[]|Set<Region>} regions
+   * @returns {Region[]|Set<Region>}
+   */
+  filterRegions(regions) { return regions.filter(t => this.containsRegion(t)); }
+
 }
 
 /* Testing
