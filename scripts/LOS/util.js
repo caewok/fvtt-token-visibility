@@ -11,6 +11,7 @@ Ray,
 
 import { EPSILON, MODULE_ID, MODULES_ACTIVE } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { Ellipse } from "../geometry/Ellipse.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
@@ -568,4 +569,47 @@ export function regionElevation(region) {
   if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
   if ( !(bottomZ && isFinite(bottomZ)) ) bottomZ = -1e06;
   return { topZ, bottomZ };
+}
+
+
+/**
+ * Converts region shape to a temporary PIXI shape.
+ * Must clone the shape if needed more than just temporarily.
+ * @param {RegionShape} regionShape
+ * @returns {PIXI.Rectangle|PIXI.Circle|PIXI.Polygon|Ellipse}
+ */
+const tmpRectangle = new PIXI.Rectangle();
+const tmpCircle = new PIXI.Circle();
+const tmpPolygon = new PIXI.Polygon();
+const tmpEllipse = new PIXI.Ellipse(); // No need for rotation right now?
+
+export function convertRegionShapeToPIXI(regionShape) {
+  const shapeData = regionShape.data;
+  switch ( shapeData.type ) {
+    case "rectangle": {
+      // TODO: What about the shape data rotation parameter? Is it actually used?
+      tmpRectangle.copyFrom(shapeData);
+      return tmpRectangle;
+    }
+    case "polygon": {
+      tmpPolygon.points = shapeData.points;
+      return tmpPolygon;
+    }
+    case "circle": {
+      tmpCircle.x = shapeData.x;
+      tmpCircle.y = shapeData.y;
+      tmpCircle.radius = shapeData.radius;
+      return tmpCircle;
+    }
+    case "ellipse": {
+      // TODO: What about the shape data rotation parameter? Is it actually used?
+      tmpEllipse.x = shapeData.x;
+      tmpEllipse.y = shapeData.y;
+      tmpEllipse.width = shapeData.radiusX;
+      tmpEllipse.height = shapeData.radiusY;
+      // tmpEllipse.rotation = shapeData.rotation;
+      return tmpEllipse;
+    }
+    default: console.error(`Shape ${shapeData.type} not recognized.`, regionShape);
+  }
 }

@@ -16,7 +16,7 @@ import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
 import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
-import { regionElevation } from "./util.js";
+import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
@@ -513,7 +513,6 @@ export class RegionTriangles extends AbstractPolygonTriangles {
   /** @type {number[]} */
   static _hooks = [];
 
-  static regionTriangleMap = new WeakMap();
 
   /** @type {Polygon3d[]} */
   tops = [];
@@ -522,20 +521,27 @@ export class RegionTriangles extends AbstractPolygonTriangles {
 
   bottoms = [];
 
+  polygons = [];
+
   constructor(region) {
     super(region);
     this.updateRegionPolygons();
   }
 
-  get triangles() {
-    return [...this.tops, ...this.bottoms, ...this.sides];
-  }
+  get triangles() { return this.polygons; }
 
   updateRegionPolygons() {
-    const res = this.regionPolygons3d();
-    this.tops = res.tops;
-    this.sides = res.sides;
-    this.bottoms = res.bottoms;
+    // TODO: Handle holes
+    // TODO: Handle combining polygons.
+    this.buildRegionPolygons3d();
+
+    // Tops and bottoms are Polygons3d and can simply be added to the polygons array.
+    // Sides are arrays of Polygon3d and must be flattened.
+    this.polygons = [
+      ...this.tops,
+      ...this.bottoms,
+      ...this.sides.flatMap(elem => elem),
+    ];
   }
 
   /**
@@ -545,64 +551,100 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     const region = placeableD.object;
     if ( !region ) return;
     // NOTE: Keep the polygons regardless of whether the region would block.
-    // TODO: Only update shapes that require updating.
+    // TODO: If only updating elevation, don't update the entire group of polygons.
     const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
-    if ( this.CHANGE_KEYS.some(key => changeKeys.has(key)) ) {
-      region[MODULE_ID][AbstractPolygonTrianglesID].updateRegionPolygons();
-    }
+    if ( !this.CHANGE_KEYS.some(key => changeKeys.has(key)) ) return;
+    this.updateRegionPolygons();
   }
 
-  regionPolygons3d() {
+  // TODO: Preset PIXI shapes for each shape?
+  combine2dShapes() {
+    const region = this.placeable;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+
+    // Regions can have distinct polygons.
+    // Keep them separate by testing for overlap.
+    const nShapes = region.shapes.length;
+    if ( !nShapes ) return [];
+
+    const usedShapes = new Set();
+    const uniqueShapes = [];
+    for ( let i = 0; i < nShapes; i += 1 ) {
+      if ( usedShapes.has(i) ) continue; // Don't need to add to usedShapes b/c not returning to this i.
+      const shape = region.shapes[i];
+      const shapePIXI = convertRegionShapeToPIXI(shape).clone();
+      const paths = [this.constructor.shapeToClipperPaths(shape)];
+      for ( let j = i + 1; j < nShapes; j += 1 ) {
+        if ( usedShapes.has(j) ) continue;
+        usedShapes.add(j);
+        const other = region.shapes[j];
+        const otherPIXI = convertRegionShapeToPIXI(other); // Temporary.
+        if ( !shapePIXI.overlaps(otherPIXI) ) continue;
+        paths.push(this.constructor.shapeToClipperPaths(other));
+      }
+      const combinedPath = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
+      uniqueShapes.push(combinedPath);
+    }
+    return uniqueShapes;
+  }
+
+  buildRegionPolygons3d() {
     const region = this.placeable;
 
-    // TODO: Convert combined region shapes into a single polygon?
-    // TODO: Handle holes
-    const tops = [];
-    const bottoms = [];
-    const sides = [];
-    if ( !region.shapes.length ) return { tops, bottoms, sides }
+    // Clear prior data.
+    this.tops.length = 0;
+    this.bottoms.length = 0;
+    this.sides.length = 0;
+    if ( !region.shapes.length ) return;
 
-    // NOTE: Region polygons are in world space, not centered at 0,0.
     const { topZ, bottomZ } = regionElevation(region);
-    for ( const shape of region.shapes ) {
-      const path = this.constructor.toClipperPaths(shape.clipperPaths);
-      const t = Polygon3d.fromClipperPaths(path)[0]; // Each shape should be representable by a single polygon.
-      tops.push(t);
-      const b = t.clone();
-      bottoms.push(b);
-
-      // Set elevation.
-      // TODO: Handle ramps
-      t.setZ(topZ);
-      b.setZ(bottomZ);
+    const uniqueShapes = this.combine2dShapes();
+    const nUnique = uniqueShapes.length;
+    this.tops.length = this.bottoms.length = this.sides.length = nUnique;
+    for ( let i = 0; i < nUnique; i += 1 ) {
+      // Combine and convert to Polygons3d.
+      // Technically, all of these could be a single Polygons3d but better to keep separate for culling.
+      const path = uniqueShapes[i].combine();
+      const polys = Polygons3d.fromClipperPaths(path, topZ);
+      const t = this.tops[i] = polys;
+      const b = this.bottoms[i] = polys.clone();
+      b.setZ(bottomZ); // topZ already set above.
 
       // Set side rectangles.
       // NOTE: Cannot iterate the bottom edges once reversed.
-      const topIter = t.iterateEdges({ close: true });
-      const bottomIter = b.iterateEdges({ close: true });
-      while ( true ) {
-        const topEdge = topIter.next().value;
-        const bottomEdge = bottomIter.next().value;
-        if ( !(topEdge || bottomEdge ) ) break;
+      // Must create sides for each polygon in the set (incl. holes)
+      const nPolys = polys.polygons.length;
+      const sidePolys = this.sides[i] = [];
+      for ( let i = 0; i < nPolys; i += 1 ) {
+        const tPoly = t.polygons[i];
+        const bPoly = b.polygons[i];
+        // Iterate through each edge and construct the corresponding side rectangle.
+        const topIter = tPoly.iterateEdges({ close: true });
+        const bottomIter = bPoly.iterateEdges({ close: true });
+        while ( true ) {
+          const topEdge = topIter.next().value;
+          const bottomEdge = bottomIter.next().value;
+          if ( !(topEdge || bottomEdge ) ) break;
 
-        // Counter-clockwise.
-        sides.push(Polygon3d.from3dPoints([topEdge.B, topEdge.A, bottomEdge.A, bottomEdge.B]));
+          // Counter-clockwise.
+          const side = Polygon3d.from3dPoints([topEdge.B, topEdge.A, bottomEdge.A, bottomEdge.B]);
+          sidePolys.push(side);
+        }
       }
 
-      // Flip bottom to face the other direction.
+      // Fix the bottom orientation now that we have iterated through the sides.
       b.reverseOrientation();
     }
-
-    return { tops, bottoms, sides };
   }
 
   /**
    * Convert a shape's clipper points to the clipper path class.
    */
-  static toClipperPaths(clipperPoints) {
+  static shapeToClipperPaths(shape) {
+    const clipperPoints = shape.clipperPaths;
     const scalingFactor = Region.CLIPPER_SCALING_FACTOR;
     const ClipperPaths = CONFIG.tokenvisibility.ClipperPaths;
-    switch ( CONFIG.tokenvisibility.clipperVersion ) {
+    switch ( CONFIG[MODULE_ID].clipperVersion ) {
       // For both, the points are already scaled, so just pass through the scaling factor to the constructor.
       case 1: return new ClipperPaths(clipperPoints, { scalingFactor });
       case 2: return new ClipperPaths(ClipperPaths.pathFromClipper1Points(clipperPoints), { scalingFactor });
@@ -613,6 +655,8 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     super.registerExistingPlaceables(canvas.regions.placeables);
   }
 }
+
+
 
 /* Testing
 api = game.modules.get("tokenvisibility").api;
