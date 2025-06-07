@@ -290,7 +290,7 @@ export class AbstractViewpoint {
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const polys = placeable[AbstractPolygonTrianglesID].triangles;
+    const polys = placeable[MODULE_ID][AbstractPolygonTrianglesID].triangles;
     return polys.filter(poly => poly.isFacing(viewpoint));
   }
 

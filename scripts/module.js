@@ -35,15 +35,6 @@ import * as range from "./visibility_range.js";
 
 import { Polygon3d, Triangle3d, Polygons3d } from "./LOS/Polygon3d.js";
 
-import {
-  DirectionalWallTriangles,
-  WallTriangles,
-  TileTriangles,
-  TokenTriangles,
-  ConstrainedTokenTriangles,
-  Grid3dTriangles,
- } from "./LOS/PlaceableTriangles.js";
-
 import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/WebGPU/Camera.js";
 
@@ -273,16 +264,10 @@ Hooks.once("init", function() {
 
     DocumentUpdateTracker, TokenUpdateTracker,
 
-    triangles: {
+    geometry: {
       Polygon3d,
       Triangle3d,
       Polygons3d,
-      DirectionalWallTriangles,
-      WallTriangles,
-      TileTriangles,
-      TokenTriangles,
-      ConstrainedTokenTriangles,
-      Grid3dTriangles,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,

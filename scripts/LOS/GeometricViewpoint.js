@@ -276,13 +276,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const target = this.target;
 
     // Prefer the constrained token triangles whenever possible.
-    if ( !useLitTargetShape ) return target[AbstractPolygonTrianglesID].triangles;
+    if ( !useLitTargetShape ) return target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
 
     const shape = target.litTokenBorder; // Don't trigger until needed.
     if ( !shape || shape.equals(target.constrainedTokenBorder)
-      || shape.equals(target.tokenBorder) ) return target[AbstractPolygonTrianglesID].triangles;
+      || shape.equals(target.tokenBorder) ) return target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
 
-    return target[AbstractPolygonTrianglesID].litTriangles;
+    return target[MODULE_ID][AbstractPolygonTrianglesID].litTriangles;
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
