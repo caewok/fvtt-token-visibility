@@ -557,38 +557,41 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     this.updateRegionPolygons();
   }
 
-  // TODO: Preset PIXI shapes for each shape?
-  combine2dShapes() {
+  combineRegionShapes() {
     const region = this.placeable;
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
-
-    // Regions can have distinct polygons.
-    // Keep them separate by testing for overlap.
     const nShapes = region.shapes.length;
     if ( !nShapes ) return [];
 
+    // Form groups of shapes. If any shape overlaps another, they share a group.
+    // So if A overlaps B and B overlaps C, [A,B,C] form a group regardless of whether A overlaps C.
     const usedShapes = new Set();
     const uniqueShapes = [];
     for ( let i = 0; i < nShapes; i += 1 ) {
       if ( usedShapes.has(i) ) continue; // Don't need to add to usedShapes b/c not returning to this i.
       const shape = region.shapes[i];
       const shapePIXI = convertRegionShapeToPIXI(shape).clone();
-      const paths = [this.constructor.shapeToClipperPaths(shape)];
+      const shapeGroup = [{ shape, shapePIXI }];
+      uniqueShapes.push(shapeGroup);
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         if ( usedShapes.has(j) ) continue;
-        usedShapes.add(j);
         const other = region.shapes[j];
         const otherPIXI = convertRegionShapeToPIXI(other); // Temporary.
-        if ( !shapePIXI.overlaps(otherPIXI) ) continue;
-        paths.push(this.constructor.shapeToClipperPaths(other));
+
+        // Any overlap counts.
+        for ( const obj of shapeGroup ) {
+          if ( obj.shapePIXI.overlaps(otherPIXI) ) {
+            shapeGroup.push({ shape: other, shapePIXI: otherPIXI.clone() });
+            usedShapes.add(j);
+            break;
+          }
+        }
       }
-      const combinedPath = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
-      uniqueShapes.push(combinedPath);
     }
     return uniqueShapes;
   }
 
   buildRegionPolygons3d() {
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     const region = this.placeable;
 
     // Clear prior data.
@@ -598,13 +601,16 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     if ( !region.shapes.length ) return;
 
     const { topZ, bottomZ } = regionElevation(region);
-    const uniqueShapes = this.combine2dShapes();
+    const uniqueShapes = this.combineRegionShapes();
     const nUnique = uniqueShapes.length;
     this.tops.length = this.bottoms.length = this.sides.length = nUnique;
     for ( let i = 0; i < nUnique; i += 1 ) {
       // Combine and convert to Polygons3d.
       // Technically, all of these could be a single Polygons3d but better to keep separate for culling.
-      const path = uniqueShapes[i].combine();
+      const paths = uniqueShapes[i].map(shapeObj => this.constructor.shapeToClipperPaths(shapeObj.shape));
+      const combinedPaths = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
+
+      const path = combinedPaths.combine();
       const polys = Polygons3d.fromClipperPaths(path, topZ);
       const t = this.tops[i] = polys;
       const b = this.bottoms[i] = polys.clone();
@@ -615,9 +621,9 @@ export class RegionTriangles extends AbstractPolygonTriangles {
       // Must create sides for each polygon in the set (incl. holes)
       const nPolys = polys.polygons.length;
       const sidePolys = this.sides[i] = [];
-      for ( let i = 0; i < nPolys; i += 1 ) {
-        const tPoly = t.polygons[i];
-        const bPoly = b.polygons[i];
+      for ( let j = 0; j < nPolys; j += 1 ) {
+        const tPoly = t.polygons[j];
+        const bPoly = b.polygons[j];
         // Iterate through each edge and construct the corresponding side rectangle.
         const topIter = tPoly.iterateEdges({ close: true });
         const bottomIter = bPoly.iterateEdges({ close: true });

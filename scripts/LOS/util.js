@@ -613,3 +613,16 @@ export function convertRegionShapeToPIXI(regionShape) {
     default: console.error(`Shape ${shapeData.type} not recognized.`, regionShape);
   }
 }
+
+/**
+ * Sets a typed array to the values of another, in place if possible.
+ * If the source length differs from the destination, a new destination is created.
+ * @param {TypedArray} dst
+ * @param {TypedArray} src
+ * @returns {TypedArray} dst, possibly new
+ */
+export function setTypedArray(dst, src) {
+  if ( src.length !== dst.length ) dst = new dst.constructor(src);
+  else dst.set(src);
+  return dst;
+}

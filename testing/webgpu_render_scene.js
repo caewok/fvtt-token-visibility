@@ -103,17 +103,6 @@ let {
 } = api.webgpu
 
 
-let {
-  Triangle,
-  ConstrainedTokenTriangles,
-  DirectionalWallTriangles,
-  Grid3dTriangles,
-  TileTriangles,
-  TokenTriangles,
-  WallTriangles,
-} = api.triangles
-
-
 device = await WebGPUDevice.getDevice()
 
 viewer = _token
@@ -1315,5 +1304,13 @@ fn2 = function(pixels) {
 N = 1000
 await QBenchmarkLoopFn(N, fn1, "fn1", pixels)
 await QBenchmarkLoopFn(N, fn1, "fn2", pixels)
+
+
+
+// Test geometry vertices
+
+geom = new api.geometry.GeometryToken(_token)
+
+
 
 

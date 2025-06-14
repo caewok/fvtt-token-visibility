@@ -42,10 +42,6 @@ import {
   mat2, mat2d, mat3, mat4,
   quat, quat2,
   vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
-import { GeometryDesc } from "./LOS/WebGPU/GeometryDesc.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc } from "./LOS/WebGPU/GeometryToken.js";
-import { GeometryHorizontalPlaneDesc } from "./LOS/WebGPU/GeometryTile.js";
-import { GeometryWallDesc } from "./LOS/WebGPU/GeometryWall.js";
 import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
@@ -80,6 +76,20 @@ import {
   DebugVisibilityViewerWebGPU,
   DebugVisibilityViewerWebGPUAsync,
 } from "./LOS/WebGPU/WebGPUViewpoint.js";
+
+import {
+  HorizontalQuadVertices,
+  VerticalQuadVertices,
+  Rectangle3dVertices,
+  Polygon3dVertices,
+  Ellipse3dVertices,
+  Circle3dVertices,
+} from "./LOS/BasicVertices.js";
+
+import { GeometryTile } from "./LOS/GeometryTile.js";
+import { GeometryToken, GeometryConstrainedToken, GeometryLitToken } from "./LOS/GeometryToken.js";
+import { GeometryWall } from "./LOS/GeometryWall.js";
+import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/GeometryRegion.js";
 
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
 
@@ -268,6 +278,24 @@ Hooks.once("init", function() {
       Polygon3d,
       Triangle3d,
       Polygons3d,
+
+      HorizontalQuadVertices,
+      VerticalQuadVertices,
+      Rectangle3dVertices,
+      Polygon3dVertices,
+      Ellipse3dVertices,
+      Circle3dVertices,
+
+      GeometryTile,
+      GeometryToken,
+      GeometryConstrainedToken,
+      GeometryLitToken,
+      GeometryWall,
+      GeometryRegion,
+      GeometryRectangleRegionShape,
+      GeometryPolygonRegionShape,
+      GeometryEllipseRegionShape,
+      GeometryCircleRegionShape,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,
@@ -317,11 +345,6 @@ Hooks.once("init", function() {
       WebGPUBuffer,
       WebGPUTexture,
       Camera,
-      GeometryDesc,
-      GeometryWallDesc,
-      GeometryCubeDesc,
-      GeometryHorizontalPlaneDesc,
-      GeometryConstrainedTokenDesc,
       RenderObstacles,
       WebGPUSumRedPixels,
       wgsl,
@@ -329,6 +352,7 @@ Hooks.once("init", function() {
       PlaceableInstanceHandler,
       WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
     },
+
 
     AbstractViewpoint,
 
