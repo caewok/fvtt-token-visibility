@@ -15,16 +15,23 @@ import {
   DrawableDirectionalWallWebGL2,
   DrawableNonDirectionalTerrainWallWebGL2,
   DrawableDirectionalTerrainWallWebGL2,
+} from "./DrawableWall.js";
+
+import {
   DrawableTileWebGL2,
-  DrawableTokenWebGL2,
-  ConstrainedDrawableTokenWebGL2,
   DrawableSceneBackgroundWebGL2,
+} from "./DrawableTile.js";
+
+import {
+  DrawableTokenWebGL2,
+  DrawableHexTokenWebGL2,
+  ConstrainedDrawableTokenWebGL2,
   ConstrainedDrawableHexTokenWebGL2,
-  DrawableGridShape,
   LitDrawableTokenWebGL2,
   LitDrawableHexTokenWebGL2,
-  DrawableHexTokenWebGL2,
-} from "./DrawableObjectsWebGL2.js";
+  DrawableGridShape,
+} from "./DrawableToken.js";
+
 
 export class RenderObstaclesWebGL2 {
 

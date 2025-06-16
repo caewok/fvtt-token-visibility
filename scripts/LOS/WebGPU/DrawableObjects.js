@@ -11,15 +11,9 @@ import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc, GeometryHexTokenShapesDesc, GeometryGridFromTokenDesc } from "./GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
-import {
-  WallInstanceHandler,
-  TerrainWallInstanceHandler,
-  NonTerrainWallInstanceHandler,
-  // DirectionalWallInstanceHandler,
-  // NonDirectionalWallInstanceHandler,
-  TileInstanceHandler,
-  TokenInstanceHandler,
-} from "./PlaceableInstanceHandler.js";
+import { WallInstanceHandler, TerrainWallInstanceHandler, NonTerrainWallInstanceHandler } from "../placeable_handler/PlaceableWallInstanceHandler.js";
+import { TileInstanceHandler } from "../placeable_handler/PlaceableTileInstanceHandler.js";
+import { TokenInstanceHandler } from "../placeable_handler/PlaceableTokenInstanceHandler.js";
 
 
 /*

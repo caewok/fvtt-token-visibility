@@ -5,7 +5,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { combineTypedArrays } from "./util.js";
+import { combineTypedArrays } from "../util.js";
 
 const N = -0.5
 const S = 0.5;
@@ -103,10 +103,12 @@ export class BasicVertices {
     const indices = new Uint16Array(nVertices);
     const sliceFn = Array.isArray(vertices) ? "slice" : "subarray";
 
-    // Construct a maximum-length array buffer and later shrink it once we know how
+    // Cannot use resizable buffer with WebGL2 bufferData.
+    // Instead, construct a maximum-length array buffer and copy it over later once we know how
     // many vertices were copied over.
+    // (Could use resizable and transfer later but little point here)
     const maxByteLength = vertices.byteLength;
-    const buffer = new ArrayBuffer(maxByteLength, { maxByteLength });
+    const buffer = new ArrayBuffer(maxByteLength);
     const newVertices = new Float32Array(buffer, 0, vLen);
 
     // For each vertex, determine if it has been seen before.
@@ -124,13 +126,13 @@ export class BasicVertices {
       indices[i] = uniqueV.get(key);
     }
 
-    // Shrink the vertices based on number of unique.
+    // Copy the vertices to a new buffer.
     const byteLength = uniqueV.size * stride * Float32Array.BYTES_PER_ELEMENT;
-    buffer.resize(byteLength);
+    const newBuffer = buffer.transferToFixedLength(byteLength);
 
     return {
       indices,
-      vertices: new Float32Array(buffer),
+      vertices: new Float32Array(newBuffer),
       numVertices: uniqueV.size,
       stride,
     };
@@ -450,13 +452,13 @@ export class VerticalQuadVertices extends BasicVertices {
     return this.transformVertexPositions(vertices, M);
   }
 
-  static transformMatrixFromSegment(a, b, { topZ = T, bottomZ = B, outMatrix } = {}) {
+  static transformMatrixFromSegment(a, b, { topZ = T, bottomZ = B, rotate = 0, outMatrix } = {}) {
     outMatrix ??= CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
     const zHeight = topZ - bottomZ;
     const z = bottomZ + (zHeight * 0.5);
     const dy = b.y - a.y;
     const dx = b.x - a.x;
-    const radians = Math.atan2(dy, dx);
+    const radians = Math.atan2(dy, dx) + rotate;
     const center = new PIXI.Point(a.x + (dx / 2), a.y + (dy / 2));
     const length = PIXI.Point.distanceBetween(a, b);
 

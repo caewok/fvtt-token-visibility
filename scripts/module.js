@@ -46,25 +46,23 @@ import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
-import {
-  PlaceableInstanceHandler,
-  WallInstanceHandler,
-  TileInstanceHandler,
-  TokenInstanceHandler,
- } from "./LOS/WebGPU/PlaceableInstanceHandler.js";
+import { PlaceableInstanceHandler } from "./LOS/placeable_handler/PlaceableInstanceHandler.js";
+import { WallInstanceHandler } from "./LOS/placeable_handler/PlaceableWallInstanceHandler.js";
+import { TileInstanceHandler } from "./LOS/placeable_handler/PlaceableTileInstanceHandler.js";
+import { TokenInstanceHandler } from "./LOS/placeable_handler/PlaceableTokenInstanceHandler.js";
 
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
+
 import {
   DrawableNonDirectionalWallWebGL2,
   DrawableDirectionalWallWebGL2,
   DrawableNonDirectionalTerrainWallWebGL2,
-  DrawableDirectionalTerrainWallWebGL2,
-  DrawableTileWebGL2,
-  DrawableTokenWebGL2,
-  DrawableSceneBackgroundWebGL2,
-} from "./LOS/WebGL2/DrawableObjectsWebGL2.js";
+  DrawableDirectionalTerrainWallWebGL2, } from "./LOS/WebGL2/DrawableWall.js";
+import { DrawableTileWebGL2, DrawableSceneBackgroundWebGL2 } from "./LOS/WebGL2/DrawableTile.js";
+import { DrawableTokenWebGL2 } from "./LOS/WebGL2/DrawableToken.js";
 
-import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstaclesWebGL2.js";
+
+import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstacles.js";
 
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
@@ -84,14 +82,16 @@ import {
   Polygon3dVertices,
   Ellipse3dVertices,
   Circle3dVertices,
-} from "./LOS/BasicVertices.js";
+} from "./LOS/geometry/BasicVertices.js";
 
-import { GeometryTile } from "./LOS/GeometryTile.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryLitToken } from "./LOS/GeometryToken.js";
-import { GeometryWall } from "./LOS/GeometryWall.js";
-import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/GeometryRegion.js";
+import { GeometryTile } from "./LOS/geometry/GeometryTile.js";
+import { GeometryToken, GeometryConstrainedToken, GeometryLitToken } from "./LOS/geometry/GeometryToken.js";
+import { GeometryWall } from "./LOS/geometry/GeometryWall.js";
+import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/geometry/GeometryRegion.js";
 
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
+import { VariableLengthTrackingBuffer, FixedLengthTrackingBuffer } from "./LOS/placeable_handler/TrackingBuffer.js";
+
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
@@ -146,6 +146,8 @@ Hooks.once("init", function() {
     useStencil: false,
 
     usePixelReducer: false,
+
+    allowInteriorWalls: true,
 
 
     /** @type {string} */
@@ -339,6 +341,15 @@ Hooks.once("init", function() {
       twgl,
     },
 
+    placeableHandler: {
+      VariableLengthTrackingBuffer,
+      FixedLengthTrackingBuffer,
+      PlaceableInstanceHandler,
+      WallInstanceHandler,
+      TileInstanceHandler,
+      TokenInstanceHandler,
+    },
+
     webgpu: {
       WebGPUDevice,
       WebGPUShader,
@@ -349,8 +360,6 @@ Hooks.once("init", function() {
       WebGPUSumRedPixels,
       wgsl,
       AsyncQueue,
-      PlaceableInstanceHandler,
-      WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler,
     },
 
 

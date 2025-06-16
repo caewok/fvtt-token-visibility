@@ -5,23 +5,21 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { GeometryDesc } from "./GeometryDesc.js";
+import { GeometryInstanced } from "./GeometryDesc.js";
 import { HorizontalQuadVertices } from "./BasicVertices.js";
 
 const tmpRect = new PIXI.Rectangle();
 
-export class GeometryTile extends GeometryDesc {
+export class GeometryTile extends GeometryInstanced {
 
   get tile() { return this.placeable; }
 
-  static verticesIndicesMap = new Map();
-
-  _defineStaticVertices() {
+  _defineInstanceVertices() {
     return HorizontalQuadVertices.calculateVertices(undefined, { type: "doubleUp"} );
   }
 
-  calculateTransformMatrix() {
-    const tile = this.placeable;
+  calculateTransformMatrix(tile) {
+    tile ??= this.placeable;
     const { rotation, x, y, width, height, elevation } = tile.document;
     const radians = Math.toRadians(rotation);
     const rotateM = CONFIG.GeometryLib.MatrixFlat.rotationZ(radians);

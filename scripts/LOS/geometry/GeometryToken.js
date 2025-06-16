@@ -5,23 +5,23 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { GeometryDesc } from "./GeometryDesc.js";
+import { GeometryInstanced, GeometryNonInstanced } from "./GeometryDesc.js";
 import { Rectangle3dVertices, Polygon3dVertices } from "./BasicVertices.js";
 
 const tmpRect = new PIXI.Rectangle();
 
-export class GeometryToken extends GeometryDesc {
+export class GeometryToken extends GeometryInstanced {
 
   get token() { return this.placeable; }
 
   static verticesIndicesMap = new Map();
 
-  _defineStaticVertices() {
+  _defineInstanceVertices() {
     return Rectangle3dVertices.calculateVertices();
   }
 
-  calculateTransformMatrix() {
-    const token = this.placeable;
+  calculateTransformMatrix(token) {
+    token ??= this.placeable;
     const { x, y, width, height } = token.document;
     const { topZ, bottomZ } = token;
     tmpRect.x = x;
@@ -36,14 +36,18 @@ export class GeometryToken extends GeometryDesc {
 export class GeometryConstrainedToken extends GeometryToken {
 
   // No static vertices per se but can use GeometryToken when not constrained.
+  _calculateModel(vertices, indices) {
+    const token = this.token;
+    if ( token && token.isConstrainedTokenBorder ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
+    return super._calculateModel(vertices, indices);
+  }
 
-  calculateModelVertices() {
-    const token = this.placeable
-    if ( token.isConstrainedTokenBorder ) {
-      const { topZ, bottomZ, constrainedTokenBorder } = token;
-      return Polygon3dVertices.calculateVertices(constrainedTokenBorder, { topZ, bottomZ });
-    }
-    return super.calculateModelVertices();
+  // Calculation when token is constrained.
+  _calculateModelVertices(_vertices) {
+    const token = this.token;
+    if ( !token ) return;
+    const { topZ, bottomZ, constrainedTokenBorder } = token;
+    return Polygon3dVertices.calculateVertices(constrainedTokenBorder.toPolygon(), { topZ, bottomZ });
   }
 }
 
@@ -51,18 +55,28 @@ export class GeometryLitToken extends GeometryToken {
 
   // No static vertices per se but can use GeometryToken when not lit.
 
-  calculateModelVertices() {
-    const { litTokenBorder, tokenBorder, topZ, bottomZ } = this.placeable;
-    if ( !litTokenBorder.equals(tokenBorder) ) return Polygon3dVertices.calculateVertices(litTokenBorder, { topZ, bottomZ });
-    return super.calculateModelVertices();
+  _calculateModel(vertices, indices) {
+    const token = this.token;
+    if ( !token ) return super._calculateModel(vertices, indices);
+    const { litTokenBorder, tokenBorder, topZ, bottomZ } = token;
+    if ( !litTokenBorder.equals(tokenBorder) ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
+    return super._calculateModel(vertices, indices);
+  }
+
+  _calculateModelVertices(_vertices) {
+    const token = this.token;
+    if ( !token ) return;
+    const { litTokenBorder, topZ, bottomZ } = this.placeable;
+    return Polygon3dVertices.calculateVertices(litTokenBorder.toPolygon(), { topZ, bottomZ });
   }
 }
 
 export class GeometrySquareGrid extends GeometryToken {
 
-  calculateTransformMatrix() {
+  calculateTransformMatrix(token) {
+    token ??= this.placeable;
+
     // Don't adjust for size but do adjust for elevation.
-    const token = this.placeable;
     const { x, y, elevation } = token.document;
     tmpRect.x = x;
     tmpRect.y = y;

@@ -14,7 +14,10 @@ import { GeometryDesc } from "./WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
-import { PlaceableInstanceHandler, WallInstanceHandler, TileInstanceHandler, TokenInstanceHandler, } from "./WebGPU/PlaceableInstanceHandler.js";
+import { PlaceableInstanceHandler  } from "./placeable_handler/PlaceableInstanceHandler.js";
+import { WallInstanceHandler } from "./placeable_handler/PlaceableWallInstanceHandler.js";
+import { TileInstanceHandler } from "./placeable_handler/PlaceableTileInstanceHandler.js";
+import { TokenInstanceHandler } from "./placeable_handler/PlaceableTokenInstanceHandler.js";
 import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
