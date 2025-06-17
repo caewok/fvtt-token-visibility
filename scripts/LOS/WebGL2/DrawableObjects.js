@@ -28,9 +28,6 @@ export class DrawableObjectsWebGL2Abstract {
   /** @type {string} */
   static fragmentFile = "obstacle_fragment_ubo";
 
-  /** @type {number[4]} */
-  static obstacleColor = [0, 0, 1, 1];
-
   /** @type {string} */
   static vertexDrawType = "STATIC_DRAW";
 
@@ -54,6 +51,8 @@ export class DrawableObjectsWebGL2Abstract {
   // ----- NOTE: Initialization ----- //
 
   #initialized = false;
+
+  get initialized() { return this.#initialized; }
 
   /**
    * Set up all parts of the render pipeline that will not change often.

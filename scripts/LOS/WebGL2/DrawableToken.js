@@ -8,7 +8,7 @@ import { DrawableObjectsInstancingWebGL2Abstract, DrawableObjectsWebGL2Abstract 
 import { MODULE_ID } from "../../const.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid } from "../geometry/GeometryToken.js";
-import { TokenInstanceHandler } from "../placeable_handler/PlaceableTokenInstanceHandler.js";
+import { TokenInstanceHandler } from "../placeable_tracking/PlaceableTokenInstanceHandler.js";
 
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";

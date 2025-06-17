@@ -9,7 +9,7 @@ import { GeometryTile } from "../geometry/GeometryTile.js";
 import {
   TileInstanceHandler,
   SceneInstanceHandler,
-} from "../placeable_handler/PlaceableTileInstanceHandler.js";
+} from "../placeable_tracking/PlaceableTileInstanceHandler.js";
 
 import * as twgl from "./twgl.js";
 

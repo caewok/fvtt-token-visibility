@@ -14,10 +14,10 @@ import { GeometryDesc } from "./WebGPU/GeometryDesc.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
-import { PlaceableInstanceHandler  } from "./placeable_handler/PlaceableInstanceHandler.js";
-import { WallInstanceHandler } from "./placeable_handler/PlaceableWallInstanceHandler.js";
-import { TileInstanceHandler } from "./placeable_handler/PlaceableTileInstanceHandler.js";
-import { TokenInstanceHandler } from "./placeable_handler/PlaceableTokenInstanceHandler.js";
+import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
+import { WallInstanceHandler } from "./placeable_tracking/PlaceableWallInstanceHandler.js";
+import { TileInstanceHandler } from "./placeable_tracking/PlaceableTileInstanceHandler.js";
+import { TokenInstanceHandler } from "./placeable_tracking/PlaceableTokenInstanceHandler.js";
 import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
@@ -125,7 +125,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
   }
 
   /** @type {class} */
-  static instanceHandlerClass = PlaceableInstanceHandler;
+  static instanceHandlerClass = PlaceableTracker;
 
   /** @type {PlaceableInstanceHandler} */
   static _instanceHandler; // Cannot use # with static getter if it will change based on child class.

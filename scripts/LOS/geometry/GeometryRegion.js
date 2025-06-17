@@ -82,6 +82,9 @@ export class GeometryRegion {
 //     });
 //   }
 
+  // Can get a decent ellipse or circle with density around 50. Works for radius of 5000+.
+  static CIRCLE_DENSITY = 50;
+
   /**
    * Combines shapes as necessary and returns data to construct the entire region:
    * 1. For single shapes: the geom
@@ -93,7 +96,7 @@ export class GeometryRegion {
     const { topZ, bottomZ } = regionElevation(region);
     const uniqueShapes = this.combineRegionShapes();
     const { addNormals, addUVs } = this;
-    const opts = { addNormals, addUVs };
+    const opts = { addNormals, addUVs, density: this.constructor.CIRCLE_DENSITY };
     const instanceGeoms = [];
     const polygonVertices = [];
     const useFan = this.useFan;
@@ -102,6 +105,7 @@ export class GeometryRegion {
         if ( shapeGroup.hasHole ) continue; // Should not occur.
         const shape = shapeGroup.shapes[0];
         const geom = GeometryRectangleRegionShape.fromRegion(region, shape, opts);
+        geom.id = `${region.id}_${shapeGroup.idx}`;
         if ( shape.data.type === "polygon" ) polygonVertices.push(geom.untrimmedVertices);
         else instanceGeoms.push(geom);
       } else {
@@ -180,7 +184,7 @@ export class GeometryRegion {
     for ( let i = 0; i < nShapes; i += 1 ) {
       const shape = region.shapes[i];
       if ( usedShapes.has(shape) ) continue; // Don't need to add to usedShapes b/c not returning to this shape.
-      const shapeGroup = { shapes: [shape], hasHole: shape.data.hole };
+      const shapeGroup = { shapes: [shape], hasHole: shape.data.hole, shapeIdx: i };
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         const other = region.shapes[j];
         if ( usedShapes.has(other) ) continue;
@@ -308,6 +312,7 @@ export class GeometryRectangleRegionShape extends RegionShapeMixin(GeometryInsta
 export class GeometryEllipseRegionShape extends RegionShapeMixin(GeometryInstanced) {
 
   static NUM_DENSITY_INCREMENTS = 10;
+
 
   get density() { return this.type; }
 

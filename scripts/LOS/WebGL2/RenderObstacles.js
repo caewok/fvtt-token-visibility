@@ -10,13 +10,7 @@ PIXI,
 import { WebGL2 } from "./WebGL2.js";
 import { Camera } from "../WebGPU/Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
-import {
-  DrawableNonDirectionalWallWebGL2,
-  DrawableDirectionalWallWebGL2,
-  DrawableNonDirectionalTerrainWallWebGL2,
-  DrawableDirectionalTerrainWallWebGL2,
-} from "./DrawableWall.js";
-
+import { DrawableWallWebGL2 } from "./DrawableWall.js";
 import {
   DrawableTileWebGL2,
   DrawableSceneBackgroundWebGL2,
@@ -93,15 +87,12 @@ export class RenderObstaclesWebGL2 {
   _buildDrawableObjects(useSceneBackground = false) {
     this.drawableObjects.length = 0;
     this.drawableFloor = undefined;
+    let obj;
+    const drawableObjs = [];
 
-    // Construct the various drawable instances.
     const drawableClasses = [
       DrawableTileWebGL2,
       DrawableGridShape,
-      DrawableNonDirectionalWallWebGL2,
-      DrawableDirectionalWallWebGL2,
-      DrawableNonDirectionalTerrainWallWebGL2,
-      DrawableDirectionalTerrainWallWebGL2,
     ];
     if ( canvas.grid.isHexagonal  ) drawableClasses.push(
       DrawableHexTokenWebGL2,
@@ -113,48 +104,78 @@ export class RenderObstaclesWebGL2 {
       ConstrainedDrawableTokenWebGL2,
       LitDrawableTokenWebGL2,
     );
-
-
     if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
 
-    for ( const cl of drawableClasses) {
-      const drawableObj = new cl(this);
-      this.drawableObjects.push(drawableObj);
+    for ( const cl of drawableClasses ) this.drawableObjects.push(new cl(this));
 
-      switch ( cl ) {
+    // Walls: Need normal, directional, terrain, terrain directional
+    // Normal
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = false;
+    obj.limitedWall = false;
+    this.drawableObjects.push(obj);
+
+    // Terrain
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = false;
+    obj.limitedWall = true;
+    this.drawableObjects.push(obj);
+
+    // Directional
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = true;
+    obj.limitedWall = false;
+    this.drawableObjects.push(obj);
+
+    // Terrain && Directional
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = true;
+    obj.limitedWall = true;
+    this.drawableObjects.push(obj);
+
+    // Regions (use senseType?)
+
+    // Categorize each drawable object.
+    for ( const drawableObj of this.drawableObjects) {
+      switch ( drawableObj.constructor.name ) {
         // Lit tokens not used as obstacles; only targets.
-        case LitDrawableTokenWebGL2:
-        case LitDrawableHexTokenWebGL2:
+        case "LitDrawableTokenWebGL2":
+        case "LitDrawableHexTokenWebGL2":
           this.drawableLitToken = drawableObj; break;
 
         // Constrained tokens used as obstacles but handled separately.
-        case ConstrainedDrawableTokenWebGL2:
-        case ConstrainedDrawableHexTokenWebGL2:
+        case "ConstrainedDrawableTokenWebGL2":
+        case "ConstrainedDrawableHexTokenWebGL2":
           this.drawableConstrainedToken = drawableObj;
           this.drawableObstacles.push(drawableObj);
           break;
 
-        case DrawableTokenWebGL2:
-        case DrawableHexTokenWebGL2:
+        case "DrawableTokenWebGL2":
+        case "DrawableHexTokenWebGL2":
           this.drawableUnconstrainedToken = drawableObj;
           this.drawableObstacles.push(drawableObj);
           break;
 
         // Scene background not an obstacle; handled separately.
-        case DrawableSceneBackgroundWebGL2:
+        case "DrawableSceneBackgroundWebGL2":
           this.drawableFloor = drawableObj;
           break;
 
         // Grid shape not an obstacle; handled separately.
-        case DrawableGridShape:
+        case "DrawableGridShape":
           this.drawableGridShape = drawableObj;
           break;
 
         // Terrain walls have special rendering considerations.
-        case DrawableNonDirectionalTerrainWallWebGL2:
-        case DrawableDirectionalTerrainWallWebGL2:
-          this.drawableTerrain.push(drawableObj);
+        case "DrawableWallWebGL2":{
+          if ( drawableObj.terrain ) this.drawableTerrain.push(drawableObj);
+          else this.drawableObstacles.push(drawableObj);
           break;
+        }
 
         default:
           this.drawableObstacles.push(drawableObj);

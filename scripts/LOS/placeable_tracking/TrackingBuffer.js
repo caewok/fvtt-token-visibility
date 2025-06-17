@@ -23,11 +23,10 @@ export class VariableLengthTrackingBuffer {
   /** @type {ArrayBuffer} */
   buffer;
 
-  constructor(numFacets, opts) {
+  constructor(numFacets = 0, opts = {}) {
     if ( opts.type ) this.#type = opts.type;
-    numFacets = Math.max(Math.round(numFacets), 1);
 
-    let facetLengths = opts.facetLengths;
+    let facetLengths = opts.facetLengths ?? [];
     if ( Number.isNumeric(facetLengths) ) facetLengths = (new Array(numFacets)).fill(facetLengths);
     if ( facetLengths.length !== numFacets ) console.error(`Must have ${numFacets} elements in facetLength array`, { facetLengths });
     this.#facetLengths = facetLengths;
@@ -35,7 +34,8 @@ export class VariableLengthTrackingBuffer {
     // Construct a new array bufffer.
     this.calculateOffsets();
     const arrayLength = facetLengths.reduce((acc, curr) => acc + curr, 0);
-    const maxByteLength = this.#maxByteLength = arrayLength * this.type.BYTES_PER_ELEMENT;
+    const maxByteLength = Math.max(arrayLength * this.type.BYTES_PER_ELEMENT, opts.maxByteLength || 0);
+    this.#maxByteLength = maxByteLength;
     this.buffer = new ArrayBuffer(maxByteLength);
   }
 
@@ -77,38 +77,27 @@ export class VariableLengthTrackingBuffer {
 
   facetOffsetAtIndex(idx) { return this.#cumulativeFacetLengths[idx] - this.#facetLengths[idx]; }
 
-  setFacetLength(idx, { facetLength, newValues } = {}) {
+  updateFacetAtId(id, opts) {
+    opts.id = id;
+    return this.setFacetLength(this.facetIdMap.get(id), opts);
+  }
+
+  updateFacet(idx, { id, facetLength, newValues } = {}) {
     facetLength ??= newValues.length;
     if ( !facetLength || facetLength < 0 ) console.error(`setFacetLength|Either valid length or new values must be provided.`, { facetLength, newValues });
     if ( idx < 0 || idx > this.#facetLengths.length ) console.error(`setFacetLength|idx ${idx} is out of bounds.`);
 
     const oldLength = this.#facetLengths[idx];
-    if ( oldLength === facetLength ) return false;
-
-    const oldRemainderOffset = this.#cumulativeFacetLengths[idx + 1];
-    const oldFullLength = this.arrayLength;
-    let expanded = false;
-    if ( oldLength > facetLength ) {
-      // Confirm space is available for the move.
-      const newSize = (oldFullLength + facetLength) * this.type.BYTES_PER_ELEMENT;
-      expanded = newSize > this.maxByteLength;
-      if ( expanded ) this.expand();
+    if ( oldLength === facetLength ) {
+      if ( newValues ) this.viewFacetAtIndex(idx).set(newValues);
+      return false;
     }
 
-    // Update the offsets
-    this.calculateOffsets();
-    const newOffset = this.#cumulativeFacetLengths[idx];
-    const newRemainderOffset = this.#cumulativeFacetLengths[idx + 1];
-
-    // Move everything after the idx to its new location.
-    const view = this.viewWholeBuffer;
-    view.set(view.subarray(oldRemainderOffset, oldFullLength), newRemainderOffset); // TODO: Can use subarray here, right? Seems to work.
-
-    // Copy the new values.
-    if ( newValues ) view.set(newValues, newOffset)
-
-    // Return true if the buffer is expanded.
-    return expanded;
+    // Facet length has changed.
+    // Remove the old facet and add anew.
+    id ??= this.facetIdMap.getKeyAtIndex(idx);
+    this.deleteFacet(idx); // Will delete only if present.
+    return this.addFacet({ facetLength, newValues, id });
   }
 
   // ----- NOTE: Array buffer views ----- //
@@ -134,7 +123,7 @@ export class VariableLengthTrackingBuffer {
 
   // ----- NOTE: Facet handling ----- //
 
-  facetIdMap = new Map();
+  facetIdMap = new IndexMap();
 
   setFacetId(id, idx) {
     if ( idx < 0 || idx > (this.numFacets - 1) ) console.warn(`idx ${idx} is out of bounds.`);
@@ -193,7 +182,7 @@ export class VariableLengthTrackingBuffer {
     // If out of space, double the buffer max size.
     const newSize = this.arrayLength * type.BYTES_PER_ELEMENT;
     const expanded = newSize > this.maxByteLength;
-    if ( expanded ) this.expand();
+    if ( expanded ) this.expand(newSize);
 
     // Update the element count.
     const idx = this.numFacets - 1;
@@ -210,21 +199,22 @@ export class VariableLengthTrackingBuffer {
   /**
    * Double the size of the array buffer.
    */
-  expand() {
-    const maxByteLength = this.#maxByteLength *= this.constructor.RESIZE_MULTIPLIER;
-    this.buffer = this.buffer.transferToFixedLength(maxByteLength);
+  expand(minSize) {
+    this.#maxByteLength ||= this.type.BYTES_PER_ELEMENT; // So we are not multiplying by 0.
+    while ( this.#maxByteLength < minSize ) this.#maxByteLength *= this.constructor.RESIZE_MULTIPLIER;
+    this.buffer = this.buffer.transferToFixedLength(this.#maxByteLength);
   }
 }
 
 
 export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
-  constructor(numFacets, { facetLength = 1, ...opts } = {}) {
-    opts.facetLengths ??= facetLength;
+  constructor(numFacets, { facetLength = 0, ...opts } = {}) {
+    const ln = opts.facetLengths ??= facetLength;
     super(numFacets, opts);
 
-    this.#numFacets = Math.max(Math.round(numFacets), 1);
-    this.#facetLength = opts.facetLengths;
+    this.#numFacets = numFacets;
+    this.#facetLength = ln;
   }
 
   // ----- NOTE: Properties fixed at construction ----- //
@@ -264,7 +254,14 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
   facetOffsetAtIndex(idx) { return this.#facetLength * idx; }
 
-  setFacetLength() { console.warn("FixedLengthTrackingBuffer cannot modify facet lengths."); return false; }
+  updateFacet(idx, opts = {}) {
+    opts.facetLength ??= opts.newValues.length;
+    if ( opts.facetLength !== this.facetLength ) {
+      console.error("FixedLengthTrackingBuffer cannot modify facet lengths.");
+      return false;
+    }
+    return super.updateFacet(idx, opts);
+  }
 
   calculateOffsets() { return; } // Unused.
 
@@ -277,6 +274,32 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
   _addFacetWithLength(_facetLength) { this.#numFacets += 1; }
 }
+
+class IndexMap extends Map {
+  index = [];
+
+  set(key, value) {
+    if ( !Number.isInteger(value) || value < 0 ) return console.error("IndexedMap|Value must be positive integer", value);
+    this.index[value] = key;
+    super.set(key, value);
+  }
+
+  hasIndex(value) { return Boolean(this.index[value]); }
+
+  getKeyAtIndex(value) { return this.index[value]; }
+
+  clear() {
+    this.index.length = 0;
+    super.clear();
+  }
+
+  delete(key) {
+    const value = this.get(key);
+    if ( typeof value !== "undefined" ) this.index[value] = null;
+    return super.delete(key);
+  }
+}
+
 
 
 

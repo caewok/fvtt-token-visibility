@@ -5,7 +5,7 @@ CONFIG,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { PlaceableInstanceHandler } from "./PlaceableInstanceHandler.js";
+import { PlaceableModelMatrixTracker } from "./PlaceableTracker.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
 import { MODULES_ACTIVE } from "../../const.js";
 
@@ -22,7 +22,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 /** @type {MatrixFlat<4,4>} */
 const rotationM = MatrixFloat32.identity(4, 4);
 
-export class TileInstanceHandler extends PlaceableInstanceHandler {
+export class TileInstanceHandler extends PlaceableModelMatrixTracker {
   static HOOKS = [
     { createTile: "_onPlaceableCreation" },
     { updateTile: "_onPlaceableUpdate" },
@@ -63,39 +63,26 @@ export class TileInstanceHandler extends PlaceableInstanceHandler {
     return true;
   }
 
-  /**
-   * Update the instance array of a specific placeable.
-   * @param {string} placeableId          Id of the placeable
-   * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
-   */
-  updateInstanceBuffer(idx) {
-    const tile = this.placeableFromInstanceIndex.get(idx);
-    if ( !tile ) return;
-    const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
-
-    const ctr = this.constructor.tileCenter(tile);
-    const { width, height } = this.constructor.tileDimensions(tile);
-
+  translationMatrixForPlaceable(tile) {
     // Move from center of tile.
-    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
-
-    // Scale based on width, height of tile.
-    MatrixFloat32.scale(width, height, 1.0, scaleM);
-
-    // Rotate based on tile rotation.
-    MatrixFloat32.rotationZ(this.constructor.tileRotation(tile), true, rotationM);
-
-    return super.updateInstanceBuffer(idx,
-      { rotation: rotationM, translation: translationM, scale: scaleM });
+    const ctr = this.constructor.tileCenter(tile);
+    CONFIG.GeometryLib.MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
+    return translationM;
   }
 
-  rotationMatrixForInstance(idx) {
-    const tile = this.placeableFromInstanceIndex.get(idx);
-    if ( !tile ) return super.rotationMatrixForInstance(idx);
-    const rot = this.constructor.tileRotation(tile)
-    MatrixFloat32.rotationZ(rot, true, rotationM);
+  scaleMatrixForPlaceable(tile) {
+    // Scale based on width, height of tile.
+    const { width, height } = this.constructor.tileDimensions(tile);
+    CONFIG.GeometryLib.MatrixFloat32.scale(width, height, 1.0, scaleM);
+    return scaleM;
+  }
+
+  rotationMatrixForPlaceable(tile) {
+    // Rotate based on tile rotation.
+    CONFIG.GeometryLib.MatrixFloat32.rotationZ(this.constructor.tileRotation(tile), true, rotationM);
     return rotationM;
   }
+
 
   /**
    * Determine the tile rotation.

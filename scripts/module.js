@@ -46,18 +46,19 @@ import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
 import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
 import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
-import { PlaceableInstanceHandler } from "./LOS/placeable_handler/PlaceableInstanceHandler.js";
-import { WallInstanceHandler } from "./LOS/placeable_handler/PlaceableWallInstanceHandler.js";
-import { TileInstanceHandler } from "./LOS/placeable_handler/PlaceableTileInstanceHandler.js";
-import { TokenInstanceHandler } from "./LOS/placeable_handler/PlaceableTokenInstanceHandler.js";
+
+
+import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
+import { WallInstanceHandler } from "./LOS/placeable_tracking/PlaceableWallInstanceHandler.js";
+import { TileInstanceHandler } from "./LOS/placeable_tracking/PlaceableTileInstanceHandler.js";
+import { TokenInstanceHandler } from "./LOS/placeable_tracking/PlaceableTokenInstanceHandler.js";
+import { RegionInstanceHandler } from "./LOS/placeable_tracking/PlaceableRegionInstanceHandler.js";
+import { VariableLengthTrackingBuffer, FixedLengthTrackingBuffer } from "./LOS/placeable_tracking/TrackingBuffer.js";
+
 
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
 
-import {
-  DrawableNonDirectionalWallWebGL2,
-  DrawableDirectionalWallWebGL2,
-  DrawableNonDirectionalTerrainWallWebGL2,
-  DrawableDirectionalTerrainWallWebGL2, } from "./LOS/WebGL2/DrawableWall.js";
+import { DrawableWallWebGL2 } from "./LOS/WebGL2/DrawableWall.js";
 import { DrawableTileWebGL2, DrawableSceneBackgroundWebGL2 } from "./LOS/WebGL2/DrawableTile.js";
 import { DrawableTokenWebGL2 } from "./LOS/WebGL2/DrawableToken.js";
 
@@ -90,7 +91,6 @@ import { GeometryWall } from "./LOS/geometry/GeometryWall.js";
 import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/geometry/GeometryRegion.js";
 
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
-import { VariableLengthTrackingBuffer, FixedLengthTrackingBuffer } from "./LOS/placeable_handler/TrackingBuffer.js";
 
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
@@ -330,10 +330,7 @@ Hooks.once("init", function() {
 
     webgl: {
       WebGL2,
-      DrawableNonDirectionalWallWebGL2,
-      DrawableDirectionalWallWebGL2,
-      DrawableNonDirectionalTerrainWallWebGL2,
-      DrawableDirectionalTerrainWallWebGL2,
+      DrawableWallWebGL2,
       DrawableTileWebGL2,
       DrawableTokenWebGL2,
       DrawableSceneBackgroundWebGL2,
@@ -344,10 +341,12 @@ Hooks.once("init", function() {
     placeableHandler: {
       VariableLengthTrackingBuffer,
       FixedLengthTrackingBuffer,
-      PlaceableInstanceHandler,
+      PlaceableTracker,
+      PlaceableModelMatrixTracker,
       WallInstanceHandler,
       TileInstanceHandler,
       TokenInstanceHandler,
+      RegionInstanceHandler
     },
 
     webgpu: {

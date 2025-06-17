@@ -6,6 +6,7 @@ Hooks,
 "use strict";
 
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
 // Base folder
 
@@ -20,19 +21,27 @@ const scaleM = MatrixFloat32.identity(4, 4);
 /** @type {MatrixFlat<4,4>} */
 const rotationM = MatrixFloat32.identity(4, 4);
 
+/** @type {MatrixFlat<4,4>} */
+const tmpMat = MatrixFloat32.identity(4, 4);
 
-export class PlaceableInstanceHandler {
+const identityM = MatrixFloat32.identity(4, 4);
+
+
+
+/**
+Track when given placeables are added, updated or removed.
+Base class sets up the hooks and calls a base update method.
+Instance class tracks translation/scale/rotation matrices.
+
+*/
+
+export class PlaceableTracker {
 
   /**
    * Only keep one instance of each handler type. Class and sense type.
    * @type {Map<string, PlaceableInstanceHandler>}
    */
   static handlers = new WeakMap();
-
-  /** @type {number} */
-  static INSTANCE_ELEMENT_LENGTH = 16; // Single mat4x4.
-
-  static INSTANCE_ELEMENT_SIZE = this.INSTANCE_ELEMENT_LENGTH * Float32Array.BYTES_PER_ELEMENT;
 
   /**
    * Change keys in updateDocument hook that indicate a relevant change to the placeable.
@@ -65,14 +74,6 @@ export class PlaceableInstanceHandler {
   /** @type {number} */
   get numInstances() { return this.instanceIndexFromId.size; }
 
-  /** @type {ArrayBuffer} */
-  instanceArrayBuffer;
-
-  get instanceArrayValues() { return new Float32Array(this.instanceArrayBuffer); }
-
-  /** @type {MatrixFloat32[]} */
-  matrices = [];
-
   /**
    * Initialize all placeables.
    */
@@ -80,22 +81,11 @@ export class PlaceableInstanceHandler {
     this.instanceIndexFromId.clear();
     this.placeableFromInstanceIndex.clear();
     const placeables = this.getPlaceables();
-
-    // mat4x4 for each placeable; 4 bytes per entry.
-    this._createInstanceBuffer(placeables.length);
+    this._initializePlaceables(placeables);
     placeables.forEach((placeable, idx) => this._initializePlaceable(placeable, idx));
   }
 
-  /**
-   * Construct data related to the number of instances.
-   * @param {number} numPlaceables
-   */
-  _createInstanceBuffer(numPlaceables) {
-    this.instanceArrayBuffer = new ArrayBuffer(numPlaceables * this.constructor.INSTANCE_ELEMENT_SIZE);
-    this.matrices.length = numPlaceables;
-    this.#bufferId += 1;
-    this.instanceLastUpdated.clear();
-  }
+  _initializePlaceables(placeables) { return; }
 
   /**
    * Initialize a single placeable at a given index.
@@ -103,10 +93,9 @@ export class PlaceableInstanceHandler {
    * @param {number} idx
    */
   _initializePlaceable(placeable, idx) {
+    // TODO: Are these maps still needed?
     this.instanceIndexFromId.set(placeable.id, idx);
     this.placeableFromInstanceIndex.set(idx, placeable);
-    this.matrices[idx] = new MatrixFloat32(this.getPlaceableInstanceData(placeable.id, idx), 4, 4);
-    this.updateInstanceBuffer(idx);
   }
 
   /**
@@ -124,46 +113,6 @@ export class PlaceableInstanceHandler {
    */
   includePlaceable(_placeable) { return true; }
 
-  /**
-   * Update the instance array of a specific placeable.
-   * @param {string} placeableId          Id of the placeable
-   * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
-   * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
-   */
-  updateInstanceBuffer(idx, { rotation, translation, scale } = {}) {
-    this.instanceLastUpdated.set(idx, this.#updateId);
-    rotation ??= MatrixFloat32.identity(4, 4, rotationM);
-    translation ??= MatrixFloat32.identity(4, 4, translationM);
-    scale ??= MatrixFloat32.identity(4, 4, scaleM);
-
-    const M = this.matrices[idx];
-    scale
-      .multiply4x4(rotation, M)
-      .multiply4x4(translation, M);
-
-    // NOTE: Return only for debugging.
-    return {
-      translation,
-      scale,
-      rotation,
-      out: M
-    };
-  }
-
-  rotationMatrixForInstance(_idx) {
-    return MatrixFloat32.identity(4, 4, rotationM);
-  }
-
-  /**
-   * Retrieve the array views associated with a given placeable.
-   * @param {string} placeableId  Id of the placeable
-   * @param {number} [idx]        Optional placeable index; will be looked up using placeableId otherwise
-   */
-  getPlaceableInstanceData(placeableId, idx) {
-    idx ??= this.instanceIndexFromId.get(placeableId);
-    const i = idx * this.constructor.INSTANCE_ELEMENT_SIZE;
-    return new Float32Array(this.instanceArrayBuffer, i, 16);
-  }
 
   /* ----- NOTE: Hooks and updating ----- */
 
@@ -179,9 +128,8 @@ export class PlaceableInstanceHandler {
 
   get updateId() { return this.#updateId; }
 
-  // Track what instance indices are not currently used.
-  /** @type {Set<number>} */
-  #emptyIndices = new Set();
+  /** @type {Set<string>} */
+  static UPDATE_KEYS = new Set();
 
   /**
    * Add the placeable to the instance array. May trigger a rebuild of the array.
@@ -193,46 +141,12 @@ export class PlaceableInstanceHandler {
     if ( !this.includePlaceable(placeable) ) return false;
 
     this.#updateId += 1;
-    if ( this._addPlaceableUsingIndex(placeable) ) return true;
-    this.initializePlaceables(); // Redo the instance buffer.
-    return true;
-  }
-
-  /**
-   * Attempt to add the placeable object to the existing instance array.
-   * Only works if there are empty spaces in the array.
-   * @param {PlaceableObject} placeable
-   * @returns {boolean} True if successfully added.
-   */
-  _addPlaceableUsingIndex(placeable) {
-    if ( !this.#emptyIndices.size ) return false;
-    const idx = this.#emptyIndices.first();
-    this.#emptyIndices.delete(idx);
     this.instanceIndexFromId.set(idx, placeable.id);
     this.placeableFromInstanceIndex.set(idx, placeable);
-    this.updateInstanceBuffer(idx);
-  }
-
-  /**
-   * Remove the placeable from the instance array. Simply removes the associated index
-   * without rebuilding the array.
-   * @param {PlaceableObject} placeable
-   * @returns {boolean} True if it resulted in a change.
-   */
-  removePlaceable(placeableId) {
-    if ( !this.instanceIndexFromId.has(placeableId) ) return false;
-
-    this.#updateId += 1;
-    const idx = this.instanceIndexFromId.get(placeableId);
-    this.instanceIndexFromId.delete(placeableId);
-    this.placeableFromInstanceIndex.delete(idx);
-    this.instanceLastUpdated.delete(idx);
-    this.#emptyIndices.add(idx);
+    this.instanceLastUpdated.set(idx, this.#updateId);
+    if ( !this._addPlaceable(placeable) ) this.initializePlaceables(); // Redo the instance buffer.
     return true;
   }
-
-  /** @type {Set<string>} */
-  static UPDATE_KEYS = new Set();
 
   /**
    * Update some data about the placeable in the array.
@@ -250,20 +164,42 @@ export class PlaceableInstanceHandler {
 
     // If the changes include one or more relevant keys, update.
     if ( !changeKeys.some(key => this.constructor.UPDATE_KEYS.has(key)) ) return false;
-    return this._updatePlaceable(placeable);
+    const idx = this.instanceIndexFromId.get(placeable.id);
+    this.#updateId += 1;
+    this.instanceLastUpdated.set(idx, this.#updateId);
+    if ( !this._updatePlaceable(placeable) ) this.initializePlaceables(); // Redo the instance buffer.
+    return true;
   }
 
   /**
-   * Update the placeable; assumes the placeable is tracked and need not be added/deleted.
+   * Remove the placeable from the instance array. Simply removes the associated index
+   * without rebuilding the array.
    * @param {PlaceableObject} placeable
    * @returns {boolean} True if it resulted in a change.
    */
-  _updatePlaceable(placeable) {
-    const idx = this.instanceIndexFromId.get(placeable.id);
+  removePlaceable(placeableId) {
+    if ( !this.instanceIndexFromId.has(placeableId) ) return false;
+
     this.#updateId += 1;
-    this.updateInstanceBuffer(idx);
+    const idx = this.instanceIndexFromId.get(placeableId);
+    this.instanceIndexFromId.delete(placeableId);
+    this.placeableFromInstanceIndex.delete(idx);
+    this.instanceLastUpdated.delete(idx);
+    if ( !this._removePlaceable(placeableId) ) this.initializePlaceables(); // Redo the instance buffer.
     return true;
   }
+
+  // Subclass methods
+
+  /**
+   * Attempt to add the placeable to the tracker.
+   * Return false if unable to add, triggering re-initialization of the placeables.
+   */
+  _addPlaceable(placeable) { return true; }
+
+  _updatePlaceable(placeable) { return true; }
+
+  _removePlaceable(placeableId) { return true; }
 
   /** @type {number[]} */
   _hooks = [];
@@ -346,9 +282,78 @@ export class PlaceableInstanceHandler {
   _onPlaceableDestroy(object) { this.removePlaceable(object.id); }
 }
 
+/**
+ * Update a 4x4 matrix (stored as 16-element array) as placeables are updated.
+ * Tracks rotation, scale, translation.
+ */
+export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
+  /** @type {number} */
+  static MODEL_ELEMENT_LENGTH = 16; // Single mat4x4.
 
+  static MODEL_ELEMENT_SIZE = this.MODEL_ELEMENT_LENGTH * Float32Array.BYTES_PER_ELEMENT;
 
+  get modelMatrixBuffer() { return this.tracker.buffer; }
 
+  /** @type {FixedLengthTrackingBuffer} */
+  tracker;
 
+  _initializePlaceables(placeables) {
+    const tracker = this.tracker = new FixedLengthTrackingBuffer(placeables.length, { facetLengths: this.constructor.MODEL_ELEMENT_LENGTH });
 
+    // Track placeable ids so removing placeables is easier.
+    placeables.forEach((placeable, idx) => tracker.setFacetId(placeable.id, idx));
+  }
+
+  _initializePlaceable(placeable, idx) {
+    super._initializePlaceable(placeable, idx);
+
+    // Track placeable ids so removing placeables is easier.
+    this.tracker.setFacetId(placeable.id, idx);
+  }
+
+  rotationMatrixForPlaceable(placeable) { return identityM.copyTo(rotationM); }
+
+  translationMatrixForPlaceable(placeable) { return identityM.copyTo(translationM); }
+
+  scaleMatrixForPlaceable(placeable) { return identityM.copyTo(scaleM); }
+
+  getMatrixForPlaceableId(placeableId) {
+    const arr = this.tracker.viewFacetForId(placeableId);
+    return new CONFIG.GeometryLib.MatrixFloat32(arr, 4, 4);
+  }
+
+  /**
+   * Update the model matrix of a specific placeable.
+   * @param {string} placeableId          Id of the placeable
+   * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
+   * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
+   */
+  updatePlaceableModelMatrix(placeable) {
+    const rotation = this.rotationMatrixForPlaceable(placeable);
+    const translation = this.translationMatrixForPlaceable(placeable);
+    const scale = this.scaleMatrixForPlaceable(placeable);
+    const M = this.getMatrixForPlaceableId(placeable.id);
+    scale
+      .multiply4x4(rotation, M)
+      .multiply4x4(translation, M);
+  }
+
+  _addPlaceable(placeable) {
+    // TODO: Do we need to track if the buffer was modified?
+    const bufferModified = this.tracker.addFacet({ id: placeable.id });
+    this.updatePlaceableModelMatrix(placeable);
+    return true;
+  }
+
+  _updatePlaceable(placeable) {
+    this.updatePlaceableModelMatrix(placeable);
+    return true;
+  }
+
+  _removePlaceable(placeableId) {
+    // TODO: Do we need to track if the buffer was modified?
+    const bufferModified = this.tracker.deleteFacetById(placeableId);
+    return true;
+  }
+}

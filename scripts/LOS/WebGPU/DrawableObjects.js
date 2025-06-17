@@ -11,9 +11,9 @@ import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc, GeometryHexTokenShapesDesc, GeometryGridFromTokenDesc } from "./GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
-import { WallInstanceHandler, TerrainWallInstanceHandler, NonTerrainWallInstanceHandler } from "../placeable_handler/PlaceableWallInstanceHandler.js";
-import { TileInstanceHandler } from "../placeable_handler/PlaceableTileInstanceHandler.js";
-import { TokenInstanceHandler } from "../placeable_handler/PlaceableTokenInstanceHandler.js";
+import { WallInstanceHandler } from "../placeable_tracking/PlaceableWallInstanceHandler.js";
+import { TileInstanceHandler } from "../placeable_tracking/PlaceableTileInstanceHandler.js";
+import { TokenInstanceHandler } from "../placeable_tracking/PlaceableTokenInstanceHandler.js";
 
 
 /*
@@ -452,7 +452,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   get mappedInstanceTransferBuffer() {
     // Make sure we get a buffer that is the correct size.
-    const size = this.placeableHandler.instanceArrayBuffer.byteLength;
+    const size = this.placeableHandler.modelMatrixBuffer.byteLength;
     let buffer;
     while ( (buffer = this._mappedInstanceTransferBuffers.pop()) ) {
       if ( buffer.size ) return buffer;
@@ -474,9 +474,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   _createInstanceBuffer() {
     if ( !this.placeableHandler.numInstances ) return;
-
-
-    const size = this.placeableHandler.instanceArrayBuffer.byteLength;
+    const size = this.placeableHandler.modelMatrixBuffer.byteLength;
     if ( this.buffers.instance && this.buffers.instance.size !== size ) {
       log(`${this.constructor.name}|_createInstanceBuffer|Destroying existing size ${this.buffers.instance.size} to replace with ${size}.`);
       this.buffers.instance.destroy();
@@ -501,7 +499,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     this.rawBuffers.instanceTransfer = new Float32Array(this.buffers.instanceTransfer.getMappedRange());
 
     // Copy the entire instance data array.
-    this.rawBuffers.instanceTransfer.set(this.placeableHandler.instanceArrayValues);
+    this.rawBuffers.instanceTransfer.set(this.placeableHandler.viewWholeBuffer);
 
     // By definition, copying the entire instance array makes everything up-to-date.
     this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
@@ -1029,7 +1027,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
 // and because tokens get updated much more often.
 export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
   /** @type {WallInstanceHandler} */
-  static handlerClass = NonTerrainWallInstanceHandler;
+  static handlerClass = WallInstanceHandler;
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   #senseType = "sight";
@@ -1067,7 +1065,7 @@ export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
 // and because tokens get updated much more often.
 export class DrawableTerrainWallInstances extends DrawableWallInstances {
   /** @type {WallInstanceHandler} */
-  static handlerClass = TerrainWallInstanceHandler;
+  static handlerClass = WallInstanceHandler;
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   #senseType = "sight";

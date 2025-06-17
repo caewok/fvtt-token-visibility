@@ -7,29 +7,37 @@
 import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { GeometryWall } from "../geometry/GeometryWall.js";
-import {
-  NonDirectionalWallInstanceHandler,
-  DirectionalWallInstanceHandler,
-  NonDirectionalTerrainWallInstanceHandler,
-  DirectionalTerrainWallInstanceHandler,
-} from "../placeable_handler/PlaceableWallInstanceHandler.js";
+import { WallInstanceHandler } from "../placeable_tracking/PlaceableWallInstanceHandler.js";
 
 
 export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = NonDirectionalWallInstanceHandler;
+  static handlerClass = WallInstanceHandler;
 
   /** @type {class} */
   static geomClass = GeometryWall;
 
   /** @type {boolean} */
-  static directional = false;
+  #directional = false;
+
+  get directional() { return this.#directional; }
+
+  set directional(value) {
+    if ( this.initialized ) console.error("Cannot set directional value after initialization.");
+    else this.#directional = value;
+  }
+
+  senseType = "sight";
+
+  limitedWall = false;
+
+  get terrain() { return this.limitedWall; }
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   get senseType() { return this.renderer.senseType; }
 
   _initializeGeoms() {
-    const type = this.constructor.directional ? "directional" : "double";
+    const type = this.directional ? "directional" : "double";
     super._initializeGeoms({ type });
   }
 
@@ -47,45 +55,13 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
     // Limit to walls within the vision triangle
     // Drop open doors.
-    const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    const opts = { senseType: this.senseType };
+    const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, opts);
+    const ph = this.placeableHandler;
     for ( const [idx, wall] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+      if ( WallInstanceHandler.isTerrain(wall.edge, opts) ^ this.limitedWall ) continue;
+      if ( WallInstanceHandler.isDirectional(wall.edge) ^ this.directional ) continue;
       if ( edges.has(wall.edge) ) instanceSet.add(idx);
     }
   }
-}
-
-export class DrawableNonDirectionalWallWebGL2 extends DrawableWallWebGL2 {
-  /** @type {class} */
-  static handlerClass = NonDirectionalWallInstanceHandler;
-
-  /** @type {boolean} */
-  static directional = false;
-}
-
-export class DrawableDirectionalWallWebGL2 extends DrawableWallWebGL2 {
-  /** @type {class} */
-  static handlerClass = DirectionalWallInstanceHandler;
-
-  /** @type {boolean} */
-  static directional = true;
-}
-
-export class DrawableNonDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
-  /** @type {class} */
-  static handlerClass = NonDirectionalTerrainWallInstanceHandler;
-
-  /** @type {boolean} */
-  static directional = false;
-
-  static obstacleColor = [0, 0.5, 0.0, 0.5];
-}
-
-export class DrawableDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2 {
-  /** @type {class} */
-  static handlerClass = DirectionalTerrainWallInstanceHandler;
-
-  /** @type {boolean} */
-  static directional = true;
-
-  static obstacleColor = [0, 0.5, 0.0, 0.5];
 }

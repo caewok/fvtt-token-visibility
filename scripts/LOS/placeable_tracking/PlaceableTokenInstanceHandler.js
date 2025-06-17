@@ -5,7 +5,7 @@ CONFIG,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { PlaceableInstanceHandler } from "./PlaceableInstanceHandler.js";
+import { PlaceableModelMatrixTracker } from "./PlaceableTracker.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
 
 // Base folder
@@ -21,7 +21,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 /** @type {MatrixFlat<4,4>} */
 // const rotationM = MatrixFloat32.identity(4, 4);
 
-export class TokenInstanceHandler extends PlaceableInstanceHandler {
+export class TokenInstanceHandler extends PlaceableModelMatrixTracker {
   static HOOKS = [
     { drawToken: "_onPlaceableDraw" },
     { refreshToken: "_onPlaceableRefresh" },
@@ -43,34 +43,18 @@ export class TokenInstanceHandler extends PlaceableInstanceHandler {
     return canvas.tokens.placeables.filter(token => this.includePlaceable(token));
   }
 
-  /**
-   * Should this token be included in the scene render?
-   * Constrained tokens included here; handled later in prerender.
-   */
-  // includePlaceable(_token) { return true; }
-
-  /**
-   * Update the instance array of a specific placeable.
-   * @param {string} placeableId          Id of the placeable
-   * @param {number} [idx]                Optional placeable index; will be looked up using placeableId otherwise
-   * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
-   */
-  updateInstanceBuffer(idx) {
-    const token = this.placeableFromInstanceIndex.get(idx);
-    if ( !token ) return;
-    const MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32;
-
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    const { width, height, zHeight } = this.constructor.tokenDimensions(token);
-
+  translationMatrixForPlaceable(token) {
     // Move from center of token.
-    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
+    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    CONFIG.GeometryLib.MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
+    return translationM;
+  }
 
+  scaleMatrixForPlaceable(token) {
     // Scale based on width, height, zHeight of token.
-    MatrixFloat32.scale(width, height, zHeight, scaleM);
-
-    return super.updateInstanceBuffer(idx,
-      { translation: translationM, scale: scaleM });
+    const { width, height, zHeight } = this.constructor.tokenDimensions(token);
+    CONFIG.GeometryLib.MatrixFloat32.scale(width, height, zHeight, scaleM);
+    return scaleM;
   }
 
   /**

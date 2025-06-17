@@ -56,6 +56,8 @@ export class GeometryNonInstanced {
     if ( placeable ) this.#placeable = placeable;
   }
 
+  id = foundry.utils.randomID();
+
   // ----- NOTE: Properties set at the constructor ----- //
 
   #addNormals = false;
