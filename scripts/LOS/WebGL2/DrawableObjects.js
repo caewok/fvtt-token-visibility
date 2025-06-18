@@ -454,8 +454,9 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     // Define the model matrix, which changes 1 per instance.
     vertexProps.aModel = {
       numComponents: 16,
-      data: this.placeableHandler.instanceArrayValues,
+      data: this.placeableHandler.tracker.buffer,
       drawType: this.gl.DYNAMIC_DRAW,
+      // stride: Float32Array.BYTES_PER_ELEMENT * 16,
       // stride: this.placeableHandler.instanceArrayValues.BYTES_PER_ELEMENT * 16,
       offset: 0,
       divisor: 1,
@@ -493,7 +494,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     log (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
     const mOffset = 4 * 16 * idx;
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, this.placeableHandler.matrices[idx].arr);
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, this.placeableHandler.tracker.viewFacetAtIndex(idx));
   }
 
   // ----- NOTE: Placeable handler ----- //

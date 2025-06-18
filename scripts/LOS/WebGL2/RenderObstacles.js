@@ -35,9 +35,6 @@ export class RenderObstaclesWebGL2 {
   /** @type {DrawObjectsAbstract[]} */
   drawableObjects = [];
 
-  /** @type {DrawObjectsAbstract} */
-  drawableTargets = [];
-
   /** @type {DrawObjectsAbstract[]} */
   drawableObstacles = []
 

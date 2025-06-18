@@ -86,7 +86,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   _initializeTextures() {
     const textureOpts = this.constructor.textureOptions(this.gl);
     for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-      const tile = this.placeableHandler.getPlaceableFromId(id)
+      const tile = this.placeableHandler.getPlaceableFromId(id);
       if ( !tile ) continue;
       textureOpts.src = this.constructor.tileSource(tile);
       this.textures.set(idx, twgl.createTexture(this.gl, textureOpts))

@@ -552,7 +552,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     // TODO: If only updating elevation, don't update the entire group of polygons.
     const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
     if ( !this.CHANGE_KEYS.some(key => changeKeys.has(key)) ) return;
-    this.updateRegionPolygons();
+    region[MODULE_ID][AbstractPolygonTrianglesID].updateRegionPolygons();
   }
 
   combineRegionShapes() {
