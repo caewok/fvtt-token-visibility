@@ -172,7 +172,9 @@ export class DrawableObjectsWebGL2Abstract {
    */
   _initializeVertices() {
     const offsetData = this.offsetData;
-    const numPlaceableIndices = Math.max(...this.placeableHandler.placeableFromInstanceIndex.keys()) + 1;
+    const numPlaceableIndices = this.placeableHandler.instanceIndexFromId.size;
+
+    // const numPlaceableIndices = Math.max(...this.placeableHandler.placeableFromInstanceIndex.keys()) + 1;
     if ( numPlaceableIndices !== this.geoms.length ) { console.error(`_initializeVertices|Number of placeable indices (${numPlaceableIndices}) and number of geoms (${this.geoms.length}) should match`)}
 
     // Use one large buffer for the vertices and another for the indices.

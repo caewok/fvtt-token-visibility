@@ -58,7 +58,8 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     const opts = { senseType: this.senseType };
     const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, opts);
     const ph = this.placeableHandler;
-    for ( const [idx, wall] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      const wall = this.placeableHandler.getPlaceableFromId(id);
       if ( WallInstanceHandler.isTerrain(wall.edge, opts) ^ this.limitedWall ) continue;
       if ( WallInstanceHandler.isDirectional(wall.edge) ^ this.directional ) continue;
       if ( edges.has(wall.edge) ) instanceSet.add(idx);

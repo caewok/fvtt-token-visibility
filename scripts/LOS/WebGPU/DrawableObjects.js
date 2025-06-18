@@ -1007,7 +1007,9 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
-    for ( const [idx, wall] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      const wall = this.placeableHandler.getPlaceableFromId(id);
+      if ( !wall ) continue;
       const edge = wall.edge;
       // If the edge is an open door or non-blocking wall, ignore.
       if ( !edges.has(edge) ) continue;
@@ -1189,7 +1191,9 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       // Add in all viewable tokens.
       const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
-      for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries()) {
+      for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries()) {
+        const token = this.placeableHandler.getPlaceableFromId(id);
+        if ( !token ) continue;
         if ( token.isConstrainedTokenBorder ) continue;
         if ( tokens.has(token) ) {
           // log (`${this.constructor.name}|filterObjects|Adding ${token.name}, ${token.id} to instance set at index ${idx}`);
@@ -1354,7 +1358,9 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     // this.textures = Array(numTiles);
     const defaultDrawable = this.drawables.get("tile");
     this.drawables.delete("tile");
-    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      const tile = this.placeableHandler.getPlaceableFromId(id);
+      if ( !tile ) continue;
       const drawable = { ...defaultDrawable };
       const source = this.constructor.tileSource(tile);
       const url = tile.document.texture.src;
@@ -1411,9 +1417,10 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     }
 
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle)
-    for ( const tile of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      const drawable = this.drawables.get(tile.id);
-      drawable.numInstances = Boolean(tiles.has(tile));
+    const tileIds = tiles.map(tile => tile.id);
+    for ( const id of this.placeableHandler.instanceIndexFromId.keys() ) {
+      const drawable = this.drawables.get(id);
+      drawable.numInstances = Boolean(tileIds.has(tile));
     }
     super.filterObjects(visionTriangle);
   }
@@ -1455,7 +1462,10 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
       this.targetDrawables.clear();
       const materialBG = this.materials.bindGroups.get("obstacle");
       const targetBG = this.materials.bindGroups.get("target");
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      for ( const id of this.placeableHandler.instanceIndexFromId.values() ) {
+        const token = this.placeableHandler.getPlaceableFromId(id);
+        if ( !token ) continue;
+
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
@@ -1500,10 +1510,11 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
       // Add in all viewable tokens.
       const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-        const drawable = this.drawables.get(token.id);
+      const tokenIds = tokens.map(token => token.id);
+      for ( const id of this.placeableHandler.instanceIndexFromId.keys() ) {
+        const drawable = this.drawables.get(id);
         if ( !drawable ) continue;
-        drawable.numInstances = Number(tokens.has(token));
+        drawable.numInstances = Number(tokenIds.has(id));
         // log (`${this.constructor.name}|filterObjects|Adding constrained ${token.name}, ${token.id} as numInstances = ${drawable.numInstances}`);
       }
     }
@@ -1579,7 +1590,9 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
       this.drawables.clear();
       this.targetDrawables.clear();
       const materialBG = this.materials.bindGroups.get("target");
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      for ( const id of this.placeableHandler.instanceIndexFromId.keys() ) {
+        const token = this.placeableHandler.getPlaceableFromId(id);
+        if ( !token ) continue;
         if ( token.constrainedTokenBorder.equals(token.litTokenBorder) ) continue;
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
@@ -1618,7 +1631,10 @@ export class DrawableGridShape extends DrawableConstrainedTokens {
       this.drawables.clear();
       this.targetDrawables.clear();
       const targetBG = this.materials.bindGroups.get("target");
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      for ( const id of this.placeableHandler.instanceIndexFromId.keys() ) {
+        const token = this.placeableHandler.getPlaceableFromId(id);
+        if ( !token ) continue;
+
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.

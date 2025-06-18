@@ -41,12 +41,7 @@ export class TileInstanceHandler extends PlaceableModelMatrixTracker {
     "rotation",
   ]);
 
-  /**
-   * Get tiles in the scene.
-   */
-  getPlaceables() {
-    return canvas.tiles.placeables.filter(tile => this.includePlaceable(tile));
-  }
+  static layer = "tiles";
 
   /**
    * Should this tile be included in the scene render?

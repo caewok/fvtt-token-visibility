@@ -108,9 +108,11 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     // Drop excluded token categories.
     const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
       { viewer, target, blockingTokensOpts: blocking.tokens });
-    for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      const token = this.placeableHandler.getPlaceableFromId(id);
+      if ( !token ) continue;
       if ( !this.constructor.includeToken(token) ) continue;
-      if ( tokens.has(token )) instanceSet.add(idx);
+      if ( tokens.has(token)) instanceSet.add(idx);
     }
   }
 }
@@ -168,7 +170,9 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
     const geoms = this.geoms;
     let geomIndex = 0;
     geoms.length = 0;
-    for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      const token = this.placeableHandler.getPlaceableFromId(id);
+      if ( !token ) continue;
       if ( this.constructor.includeToken(token) ) this._includedPHIndices.set(idx, geomIndex);
       geomIndex += 1;
       opts.placeable = token;
@@ -185,7 +189,7 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
 
   _updateInstanceVertex(idx) {
     // TODO: Keep a map of inactive indices?
-    const token = this.placeableHandler.placeableFromInstanceIndex.get(idx);
+    const token = this.placeableHandler.getPlaceableFromInstanceIndex(idx);
     const shouldInclude = this.constructor.includeToken(token);
 
     // If a constrained geometry is already created, either remove from set or update.
@@ -234,7 +238,7 @@ export class ConstrainedDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenW
     // If the token is now unconstrained, that is fine (will be skipped).
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-      const token = placeableHandler.placeableFromInstanceIndex.get(idx);
+      const token = placeableHandler.getPlaceableFromInstanceIndex(idx);
       if ( token?.isConstrainedTokenBorder ) this._updateAllInstances();
     }
     DrawableTokenWebGL2.prototype.validateInstances.call(this);
@@ -256,7 +260,7 @@ export class LitDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenWebGL2 {
     // If the token is now unconstrained, that is fine (will be skipped).
     for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
       if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-      const token = placeableHandler.placeableFromInstanceIndex.get(idx);
+      const token = placeableHandler.getPlaceableFromInstanceIndex(idx);
       if ( token?.litTokenBorder ) this._updateAllInstances();
     }
     DrawableTokenWebGL2.prototype.validateInstances.call(this);

@@ -626,3 +626,41 @@ export function setTypedArray(dst, src) {
   else dst.set(src);
   return dst;
 }
+
+/**
+ * Map mean to link arbitrary ids to index integers.
+ * Allows reverse lookup and tracking of used indices.
+ */
+export class IndexMap extends Map {
+  index = [];
+
+  set(key, value) {
+    if ( !Number.isInteger(value) || value < 0 ) return console.error("IndexedMap|Value must be positive integer", value);
+    this.index[value] = key;
+    super.set(key, value);
+  }
+
+  hasIndex(value) { return Boolean(this.index[value]); }
+
+  getKeyAtIndex(value) { return this.index[value]; }
+
+  clear() {
+    this.index.length = 0;
+    super.clear();
+  }
+
+  delete(key) {
+    const value = this.get(key);
+    if ( typeof value !== "undefined" ) this.index[value] = null;
+    return super.delete(key);
+  }
+
+  /**
+   * The next empty index or a new index if the index array is full.
+   */
+  nextIndex() {
+    const i = this.index.findIndex(elem => elem == null);
+    if ( ~i ) return i;
+    return this.index.length;
+  }
+}

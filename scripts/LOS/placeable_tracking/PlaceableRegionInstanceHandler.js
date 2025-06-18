@@ -65,12 +65,7 @@ export class RegionInstanceHandler extends PlaceableTracker {
     "shapes",
   ]);
 
-  /**
-   * Get relevant regions in the scene.
-   */
-  getPlaceables() {
-    return canvas.regions.placeables.filter(region => this.includePlaceable(region));
-  }
+  static layer = "regions";
 
   /**
    * Should this region be included in the scene render?
@@ -123,8 +118,8 @@ export class RegionInstanceHandler extends PlaceableTracker {
       const maxByteLength = this.constructor.MODEL_ELEMENT_LENGTH * Float32Array.BYTES_PER_ELEMENT * count[type];
       this.trackers[type] = new FixedLengthTrackingBuffer(0, { maxByteLength });
     }
-    this.tracker.polygon.vertices = new VariableLengthTrackingBuffer();
-    this.tracker.polygon.indices = new VariableLengthTrackingBuffer(0, { type: Uint16Array });
+    this.trackers.polygon.vertices = new VariableLengthTrackingBuffer();
+    this.trackers.polygon.indices = new VariableLengthTrackingBuffer(0, { type: Uint16Array });
   }
 
   _initializePlaceable(region, idx) {
@@ -150,7 +145,7 @@ export class RegionInstanceHandler extends PlaceableTracker {
 
   _addPlaceable(region) {
     // TODO: Remove this dependency on idx
-    const idx = this.placeableFromInstanceIndex.keys().reduce((acc, curr) => Math.max(acc, curr), 0) + 1;
+    const idx = this.instanceIndexFromId.nextIndex();
     this._initializePlaceable(region, idx);
   }
 

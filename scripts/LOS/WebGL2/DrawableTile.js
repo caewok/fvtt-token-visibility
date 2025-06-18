@@ -85,7 +85,9 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
   _initializeTextures() {
     const textureOpts = this.constructor.textureOptions(this.gl);
-    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      const tile = this.placeableHandler.getPlaceableFromId(id)
+      if ( !tile ) continue;
       textureOpts.src = this.constructor.tileSource(tile);
       this.textures.set(idx, twgl.createTexture(this.gl, textureOpts))
     }
@@ -147,7 +149,7 @@ for (let i = 0; i < numImages; ++i) {
 
   _drawUnfilteredInstances() {
     // Still need to draw each one at a time so texture uniform can be changed.
-    const instanceSet = this.placeableHandler.placeableFromInstanceIndex.keys(); // Not a set but works in the for/of loop above.
+    const instanceSet = this.placeableHandler.instanceIndexFromId.values(); // Not a set but works in the for/of loop above.
     super._drawFilteredInstances(instanceSet);
   }
 
@@ -169,8 +171,9 @@ for (let i = 0; i < numImages; ++i) {
 
     // Limit to tiles within the vision triangle
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
-    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
-      if ( tiles.has(tile) ) instanceSet.add(idx);
+    const tileIds = tiles.map(t => t.id);
+    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+      if ( tileIds.has(id) ) instanceSet.add(idx);
     }
   }
 }
@@ -191,7 +194,7 @@ export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
     this.placeableHandler.registerPlaceableHooks();
     this._initializePlaceableHandler();
 
-    const sceneObj = this.placeableHandler.placeableFromInstanceIndex.get(0);
+    const sceneObj = this.placeableHandler.instanceIndexFromId.index[0];
     if ( sceneObj && sceneObj.src ) {
       this.backgroundImage = await loadImageBitmap(sceneObj.src, {
         //imageOrientation: "flipY",

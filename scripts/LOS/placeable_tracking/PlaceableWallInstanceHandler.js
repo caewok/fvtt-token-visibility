@@ -45,13 +45,8 @@ export class WallInstanceHandler extends PlaceableModelMatrixTracker {
     "dir",
   ]);
 
+  static layer = "walls";
 
-  /**
-   * Get walls in the scene.
-   */
-  getPlaceables() {
-    return canvas.walls.placeables.filter(wall => this.includePlaceable(wall));
-  }
 
   translationMatrixForPlaceable(wall) {
     const edge = wall.edge;
@@ -71,12 +66,8 @@ export class WallInstanceHandler extends PlaceableModelMatrixTracker {
   scaleMatrixForPlaceable(wall) {
     const edge = wall.edge;
     const ln = this.constructor.edgeLength(edge);
-    let z = 0.0;
-    let scaleZ = 1.0;
-    if ( top != bottom ) {
-      z = ((0.5 * top) + (0.5 * bottom));
-      scaleZ = top - bottom;
-    }
+    const { top, bottom } = this.constructor.edgeElevation(edge);
+    const scaleZ = top === bottom ? 1.0 : (top - bottom);
     CONFIG.GeometryLib.MatrixFloat32.scale(ln, 1.0, scaleZ, scaleM);
     return scaleM;
   }

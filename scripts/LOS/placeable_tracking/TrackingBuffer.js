@@ -3,7 +3,7 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-
+import { IndexMap } from "../util.js";
 
 
 /** Tracking buffer
@@ -275,30 +275,7 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
   _addFacetWithLength(_facetLength) { this.#numFacets += 1; }
 }
 
-class IndexMap extends Map {
-  index = [];
 
-  set(key, value) {
-    if ( !Number.isInteger(value) || value < 0 ) return console.error("IndexedMap|Value must be positive integer", value);
-    this.index[value] = key;
-    super.set(key, value);
-  }
-
-  hasIndex(value) { return Boolean(this.index[value]); }
-
-  getKeyAtIndex(value) { return this.index[value]; }
-
-  clear() {
-    this.index.length = 0;
-    super.clear();
-  }
-
-  delete(key) {
-    const value = this.get(key);
-    if ( typeof value !== "undefined" ) this.index[value] = null;
-    return super.delete(key);
-  }
-}
 
 
 

@@ -36,12 +36,7 @@ export class TokenInstanceHandler extends PlaceableModelMatrixTracker {
     "refreshSize",
   ]);
 
-  /**
-   * Get edges in the scene.
-   */
-  getPlaceables() {
-    return canvas.tokens.placeables.filter(token => this.includePlaceable(token));
-  }
+  static layer = "tokens";
 
   translationMatrixForPlaceable(token) {
     // Move from center of token.
