@@ -140,9 +140,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
   /* ----- NOTE: Constructor ----- */
 
   get triangles() {
-    const handler = this.constructor.instanceHandler;
-    const idx = handler.instanceIndexFromId.get(this.placeable.id);
-    const M = handler.matrices[idx];
+    const M = this.constructor.instanceHandler.getMatrixForPlaceableId(this.placeable.id);
     if ( !M ) return [];
     return this.constructor.prototypeTriangles.map(tri => tri.transform(M));
   }
@@ -176,11 +174,8 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
   static _hooks = [];
 
   get triangle() {
-    const handler = this.constructor.instanceHandler;
-    const idx = handler.instanceIndexFromId.get(this.placeable.id);
-    const M = handler.matrices[idx];
+    const M = this.constructor.instanceHandler.getMatrixForPlaceableId(this.placeable.id);
     if ( !M ) return [];
-
     const instance = WallInstanceHandler.isDirectional(this.placeable.edge)
           ? DirectionalWallTriangles : WallTriangles;
     return instance.prototypeTriangles.map(tri => tri.transform(M));

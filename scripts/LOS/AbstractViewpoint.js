@@ -496,7 +496,7 @@ export class AbstractViewpoint {
     const { walls, tiles, terrainWalls, tokens } = blockingObjects;
     walls.forEach(wall => debugDraw.segment(wall, { color: colors.red }));
     // tiles.forEach(tile => debugDraw.shape(tile.bounds, { color: colors.yellow }));
-    tiles.forEach(tile => tile.tokenvisibility.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));
+    tiles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));
     terrainWalls.forEach(wall => debugDraw.segment(wall, { color: colors.lightgreen }));
     tokens.forEach(token => debugDraw.shape(token.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.2 }));
   }
