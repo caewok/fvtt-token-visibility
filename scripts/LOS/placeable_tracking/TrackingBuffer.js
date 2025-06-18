@@ -71,34 +71,9 @@ export class VariableLengthTrackingBuffer {
 
   get numFacets() { return this.#facetLengths.length; }
 
-
-  // ----- NOTE: Other properties ----- //
   facetLengthAtIndex(idx) { return this.#facetLengths[idx]; }
 
   facetOffsetAtIndex(idx) { return this.#cumulativeFacetLengths[idx] - this.#facetLengths[idx]; }
-
-  updateFacetAtId(id, opts) {
-    opts.id = id;
-    return this.setFacetLength(this.facetIdMap.get(id), opts);
-  }
-
-  updateFacet(idx, { id, facetLength, newValues } = {}) {
-    facetLength ??= newValues.length;
-    if ( !facetLength || facetLength < 0 ) console.error(`setFacetLength|Either valid length or new values must be provided.`, { facetLength, newValues });
-    if ( idx < 0 || idx > this.#facetLengths.length ) console.error(`setFacetLength|idx ${idx} is out of bounds.`);
-
-    const oldLength = this.#facetLengths[idx];
-    if ( oldLength === facetLength ) {
-      if ( newValues ) this.viewFacetAtIndex(idx).set(newValues);
-      return false;
-    }
-
-    // Facet length has changed.
-    // Remove the old facet and add anew.
-    id ??= this.facetIdMap.getKeyAtIndex(idx);
-    this.deleteFacet(idx); // Will delete only if present.
-    return this.addFacet({ facetLength, newValues, id });
-  }
 
   // ----- NOTE: Array buffer views ----- //
 
@@ -173,7 +148,7 @@ export class VariableLengthTrackingBuffer {
   addFacet({ facetLength, id, newValues } = {}) {
     const { type, facetIdMap } = this;
     facetLength ??= newValues.length;
-    if ( !facetLength || facetLength < 0 ) console.error(`setFacetLength|Either valid length or new values must be provided.`, { facetLength, newValues });
+    if ( !facetLength || facetLength < 0 ) console.error(`addFacet|Either valid length or new values must be provided.`, { facetLength, newValues });
 
     // Add the facet length to the tracking array and recalculate.
     this._addFacetWithLength(facetLength);
@@ -195,6 +170,30 @@ export class VariableLengthTrackingBuffer {
   }
 
   _addFacetWithLength(facetLength) { this.#facetLengths.push(facetLength); }
+
+  updateFacetAtId(id, opts = {}) {
+    opts.id = id;
+    return this.updateFacet(this.facetIdMap.get(id), opts);
+  }
+
+  updateFacet(idx, { id, facetLength, newValues } = {}) {
+    facetLength ??= newValues.length;
+    if ( !facetLength || facetLength < 0 ) console.error(`updateFacet|Either valid length or new values must be provided.`, { facetLength, newValues });
+    if ( idx < 0 || idx > this.#facetLengths.length ) console.error(`updateFacet|idx ${idx} is out of bounds.`);
+
+    const oldLength = this.#facetLengths[idx];
+    if ( oldLength === facetLength ) {
+      if ( newValues ) this.viewFacetAtIndex(idx).set(newValues);
+      return false;
+    }
+
+    // Facet length has changed.
+    // Remove the old facet and add anew.
+    id ??= this.facetIdMap.getKeyAtIndex(idx);
+    this.deleteFacet(idx); // Will delete only if present.
+    return this.addFacet({ facetLength, newValues, id });
+  }
+
 
   /**
    * Double the size of the array buffer.

@@ -48,7 +48,7 @@ geom.indices --> points to model indices
  */
 export class GeometryNonInstanced {
 
-  constructor({ addNormals, addUVs, type, placeable }) {
+  constructor({ addNormals, addUVs, type, placeable } = {}) {
     this.#type = type;
     this.#instanceType = `${this.constructor.name}_${type}`;
     if ( addNormals ) this.#addNormals = true;
@@ -248,7 +248,7 @@ export class GeometryInstanced extends GeometryNonInstanced {
 
   constructor(opts) {
     super(opts);
-    this.defineInstance(opts);
+    this.defineInstance();
   }
 
   get instanced() { return true; }
@@ -301,7 +301,7 @@ export class GeometryInstanced extends GeometryNonInstanced {
 
   // ----- NOTE: Transform matrix ----- //
 
-  #transformMatrix = CONFIG.GeometryLib.MatrixFlat.identity(4, 4);
+  #transformMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
 
   get transformMatrix() { return this.#transformMatrix; }
 
@@ -310,7 +310,12 @@ export class GeometryInstanced extends GeometryNonInstanced {
     this.dirtyModel = true;
   }
 
-  linkTransformMatrix(M) { this.#transformMatrix = M; }
+  linkTransformMatrix(arr) {
+    if ( !(arr.length === 16 && arr instanceof Float32Array) ) console.warn("linkTransformMatrix|arr should be 16-element Float32Array", arr);
+    this.#transformMatrix.arr = arr;
+  }
+
+  get placeable() { return super.placeable; }
 
   set placeable(value) {
     super.placeable = value;

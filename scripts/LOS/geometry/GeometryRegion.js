@@ -37,6 +37,9 @@ export class GeometryRegion {
    // TODO: Cache the data params for the shape. Only update when needed.
    // Use a WeakMap to store the shapes?
 
+  // Can get a decent ellipse or circle with density around 50. Works for radius of 5000+.
+  static CIRCLE_DENSITY = 50;
+
   /** @type {Region} */
   region;
 
@@ -68,10 +71,11 @@ export class GeometryRegion {
 
   updateShapes() {
     this.shapeData = new WeakMap();
+    const opts = { addUVs: this.addUVs, addNormals: this.addNormals, density: this.constructor.CIRCLE_DENSITY };
     this.region.shapes.forEach(shape => {
       this.shapeData.set(shape, {
         shapePIXI: convertRegionShapeToPIXI(shape).clone(),
-        geom: GeometryRectangleRegionShape.fromRegion(this.region, shape),
+        geom: GeometryRectangleRegionShape.fromRegion(this.region, shape, opts),
       });
     });
   }
@@ -82,8 +86,7 @@ export class GeometryRegion {
 //     });
 //   }
 
-  // Can get a decent ellipse or circle with density around 50. Works for radius of 5000+.
-  static CIRCLE_DENSITY = 50;
+
 
   /**
    * Combines shapes as necessary and returns data to construct the entire region:
@@ -95,8 +98,7 @@ export class GeometryRegion {
     const region = this.region;
     const { topZ, bottomZ } = regionElevation(region);
     const uniqueShapes = this.combineRegionShapes();
-    const { addNormals, addUVs } = this;
-    const opts = { addNormals, addUVs, density: this.constructor.CIRCLE_DENSITY };
+    const opts = { addUVs: this.addUVs, addNormals: this.addNormals, density: this.constructor.CIRCLE_DENSITY };
     const instanceGeoms = [];
     const polygonVertices = [];
     const useFan = this.useFan;
@@ -105,7 +107,7 @@ export class GeometryRegion {
         if ( shapeGroup.hasHole ) continue; // Should not occur.
         const shape = shapeGroup.shapes[0];
         const geom = GeometryRectangleRegionShape.fromRegion(region, shape, opts);
-        geom.id = `${region.id}_${shapeGroup.idx}`;
+        geom.id = `${region.id}_${shapeGroup.shapeIdx}`;
         if ( shape.data.type === "polygon" ) polygonVertices.push(geom.untrimmedVertices);
         else instanceGeoms.push(geom);
       } else {
@@ -129,8 +131,10 @@ export class GeometryRegion {
     const untrimmedInstanceVs = instanceGeoms.map(geom => geom.untrimmedVertices);
     if ( !(polygonVertices.length || untrimmedInstanceVs.length) ) return {};
 
+    // TODO: Create one or multiple poly shapes?
+
     const trimmedData = BasicVertices.trimVertexData(combineTypedArrays(...polygonVertices, ...untrimmedInstanceVs), { addNormals, addUVs });
-    const polyShape = new GeometryPolygonRegionShape(this.region, { region: this.region, addNormals, addUVs });
+    const polyShape = new GeometryPolygonRegionShape({region: this.region, addNormals, addUVs });
     polyShape._vertices = trimmedData.vertices;
     polyShape._indices = trimmedData.indices;
     return polyShape;
@@ -143,17 +147,22 @@ export class GeometryRegion {
   calculateInstancedGeometry() {
     const { addNormals, addUVs } = this;
     const { instanceGeoms, polygonVertices } = this._calculateRegionGeometry();
-    const trimmedPolys = polygonVertices.length ?
-      BasicVertices.trimVertexData(combineTypedArrays(...polygonVertices), { addNormals, addUVs })
-      : null;
+
+    // TODO: Create one or multiple poly shapes?
+    const combinedPolys = polygonVertices.length ? combineTypedArrays(...polygonVertices) : [];
+
+//     const trimmedPolys = polygonVertices.length ?
+//       BasicVertices.trimVertexData(combineTypedArrays(...polygonVertices), { addNormals, addUVs })
+//       : null;
 
     // TODO: Circles and ellipses could be an issue as they use multiple instances.
     // For now, just return the instanceGeoms and sort it out later.
     let polyShape = null;
-    if ( trimmedPolys ) {
-      polyShape = new GeometryPolygonRegionShape(this.region, { region: this.region, addNormals, addUVs });
-      polyShape._vertices = trimmedPolys.vertices;
-      polyShape._indices = trimmedPolys.indices;
+    if ( combinedPolys.length ) {
+      polyShape = new GeometryPolygonRegionShape({ region: this.region, addNormals, addUVs });
+      polyShape._untrimmedVertices = combinedPolys;
+//       polyShape._modelVertices = trimmedPolys.vertices;
+//       polyShape._modelIndices = trimmedPolys.indices;
     }
     return { polyShape, instanceGeoms };
   }
@@ -253,35 +262,35 @@ const RegionShapeMixin = function(Base) {
 
     region; // Needed to get elevation and flag data.
 
-    constructor(placeable, { region, ...opts } = {}) {
-      super(placeable, opts);
+    constructor({ region, ...opts } = {}) {
+      super(opts);
       this.region = region;
     }
 
     static fromRegion(region, shape = 0, opts = {}) {
       if ( Number.isNumeric(shape) ) shape = region.shapes[shape];
       const cl = REGION_SHAPE_CLASSES[shape.data.type];
-      return new cl(shape, { region, ...opts });
+      return new cl({ placeable: shape, region, ...opts });
     }
 
-    #untrimmedInstanceVertices = new Float32Array();
+    _untrimmedInstanceVertices = new Float32Array();
 
-    #untrimmedVertices = new Float32Array();
+    _untrimmedVertices = new Float32Array();
 
     get untrimmedVertices() {
       if ( this.dirtyModel ) {
         this.calculateModel();
         if ( this.instanced ) {
-          this.#untrimmedVertices = setTypedArray(this.#untrimmedVertices, this.#untrimmedInstanceVertices);
-          BasicVertices.transformVertexPositions(this.#untrimmedVertices, this.transformMatrix); // Must use default stride = 8 here.
+          this._untrimmedVertices = setTypedArray(this._untrimmedVertices, this._untrimmedInstanceVertices);
+          BasicVertices.transformVertexPositions(this._untrimmedVertices, this.transformMatrix); // Must use default stride = 8 here.
         }
       }
       return this._untrimmedVertices;
     }
 
     _defineInstanceVertices(cl, opts) {
-      this.#untrimmedInstanceVertices = cl.calculateVertices(undefined, opts);
-      return this.#untrimmedInstanceVertices;
+      this._untrimmedInstanceVertices = cl.calculateVertices(undefined, opts);
+      return this._untrimmedInstanceVertices;
     }
   }
   return GeometryRegionShape;
@@ -291,7 +300,7 @@ export class GeometryRectangleRegionShape extends RegionShapeMixin(GeometryInsta
 
   _defineInstanceVertices() {
     const untrimmedV = Rectangle3dVertices.calculateVertices();
-    return super._defineInstanceVertices(untrimmedV);
+    return super._defineInstanceVertices(Rectangle3dVertices, untrimmedV);
   }
 
   calculateTransformMatrix(shape) {
@@ -316,9 +325,9 @@ export class GeometryEllipseRegionShape extends RegionShapeMixin(GeometryInstanc
 
   get density() { return this.type; }
 
-  constructor({ radius, ...opts } = {}) {
-    if ( !radius ) console.error("GeometryEllipseRegionShape requires a radius", radius);
-    const density = GeometryEllipseRegionShape.instanceDensityForRadius(radius); // Cannot use "this" yet.
+  constructor({ radius, density, ...opts } = {}) {
+    if ( !(radius || density) ) console.error("GeometryEllipseRegionShape requires a radius or density", { radius, density });
+    density ??= GeometryEllipseRegionShape.instanceDensityForRadius(radius); // Cannot use "this" yet.
     opts.type = density;
     super(opts);
   }
@@ -370,6 +379,7 @@ export class GeometryCircleRegionShape extends GeometryEllipseRegionShape {
 export class GeometryPolygonRegionShape extends RegionShapeMixin(GeometryNonInstanced) {
 
   _calculateModelVertices() {
+    if ( !this.placeable ) return this._untrimmedVertices;
     tmpPoly.points = this.placeable.data.points;
     const elev = regionElevation(this.region);
     this._untrimmedVertices = Polygon3dVertices.calculateVertices(tmpPoly, elev);

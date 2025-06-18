@@ -116,7 +116,7 @@ export class RegionInstanceHandler extends PlaceableTracker {
     // Track the matrices for circles, rectangles, and ellipses.
     for ( const type of MODEL_SHAPES ) {
       const maxByteLength = this.constructor.MODEL_ELEMENT_LENGTH * Float32Array.BYTES_PER_ELEMENT * count[type];
-      this.trackers[type] = new FixedLengthTrackingBuffer(0, { maxByteLength });
+      this.trackers[type] = new FixedLengthTrackingBuffer(0, { maxByteLength, facetLength: this.constructor.MODEL_ELEMENT_LENGTH });
     }
     this.trackers.polygon.vertices = new VariableLengthTrackingBuffer();
     this.trackers.polygon.indices = new VariableLengthTrackingBuffer(0, { type: Uint16Array });
@@ -167,7 +167,7 @@ export class RegionInstanceHandler extends PlaceableTracker {
     for ( const type of MODEL_SHAPES ) idsInTracker[type] = new Set();
     for ( const type of MODEL_SHAPES ) {
       const tracker = this.trackers[type];
-      for ( const id of tracker.values() ) {
+      for ( const id of tracker.facetIdMap.keys() ) {
         if ( id.startsWith(region.id) ) idsInTracker[type].add(id);
       }
     }
@@ -196,7 +196,7 @@ export class RegionInstanceHandler extends PlaceableTracker {
     // Remove all ids associated with this region in the model trackers.
     for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
-      for ( const id of tracker.values() ) {
+      for ( const id of tracker.facetIdMap.keys() ) {
         if ( id.startsWith(region.id) ) tracker.deleteFacetById(id);
       }
     }
