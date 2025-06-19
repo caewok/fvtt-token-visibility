@@ -519,35 +519,35 @@ export class Rectangle3dVertices extends BasicVertices {
 
     south: setFloatView([
       // Position     Normal      UV
-      W, N, B,        0, -1, 0,   1, 1,
-      W, N, T,        0, -1, 0,   1, 0,
-      E, N, T,        0, -1, 0,   0, 0,
+      E, S, T,        0, 1, 0,   1, 0,
+      W, S, T,        0, 1, 0,   0, 0,
+      W, S, B,        0, 1, 0,   0, 1,
 
-      W, N, B,        0, -1, 0,   1, 1,
-      E, N, T,        0, -1, 0,   0, 0,
-      E, N, B,        0, -1, 0,   0, 1,
+      E, S, B,        0, 1, 0,   1, 1,
+      E, S, T,        0, 1, 0,   1, 0,
+      W, S, B,        0, 1, 0,   0, 1,
     ], this.verticesBuffer, this.NUM_FACE_ELEMENTS * 3),
 
     east: setFloatView([
       // Position     Normal      UV
-      W, N, B,        0, -1, 0,   1, 1,
-      W, N, T,        0, -1, 0,   1, 0,
-      E, N, T,        0, -1, 0,   0, 0,
+      E, N, B,        1, 0, 0,   1, 1,
+      E, N, T,        1, 0, 0,   1, 0,
+      E, S, T,        1, 0, 0,   0, 0,
 
-      W, N, B,        0, -1, 0,   1, 1,
-      E, N, T,        0, -1, 0,   0, 0,
-      E, N, B,        0, -1, 0,   0, 1,
+      E, N, B,        1, 0, 0,   1, 1,
+      E, S, T,        1, 0, 0,   0, 0,
+      E, S, B,        1, 0, 0,   0, 1,
     ], this.verticesBuffer, this.NUM_FACE_ELEMENTS * 4),
 
     west: setFloatView([
       // Position     Normal      UV
-      W, N, B,        0, -1, 0,   1, 1,
-      W, N, T,        0, -1, 0,   1, 0,
-      E, N, T,        0, -1, 0,   0, 0,
+      W, S, T,        -1, 0, 0,   1, 0,
+      W, N, T,        -1, 0, 0,   0, 0,
+      W, N, B,        -1, 0, 0,   0, 1,
 
-      W, N, B,        0, -1, 0,   1, 1,
-      E, N, T,        0, -1, 0,   0, 0,
-      E, N, B,        0, -1, 0,   0, 1,
+      W, S, B,        -1, 0, 0,   1, 1,
+      W, S, T,        -1, 0, 0,   1, 0,
+      W, N, B,        -1, 0, 0,   0, 1,
     ], this.verticesBuffer, this.NUM_FACE_ELEMENTS * 5),
   }
 
