@@ -6,42 +6,42 @@
 import { IndexMap } from "../util.js";
 
 
-/** Tracking buffer
-
-Helper class that creates a typed array buffer:
-- Tracks X elements each of N length.
-- Access each object in the buffer.
-- Delete object and (optionally) shrink the buffer.
-- Add objects and expand the buffer.
-- Get view of any given object or the entire buffer.
-*/
-
-export class VariableLengthTrackingBuffer {
+/**
+ * Helper class that tracks the offsets of a variable length buffer,
+ * but does not actually create the buffer or its components (facets).
+ * Tracks total buffer size and associates arbitrary ids with indexes along the buffer.
+ */
+export class VariableLengthAbstractBuffer {
   /** @type {number} */
   static RESIZE_MULTIPLIER = 2; // Must be an integer.
 
-  /** @type {ArrayBuffer} */
-  buffer;
+  /**
+   * @param {object} [opts]
+   * @param {number} [numFacets=0]                  Number of components / facets to represent
+   * @param {class} [opts.type=Float32Array]        Class of the typed array; may be modified at any time
+   * @param {number|number[]} [opts.facetLengths]   Array identifying the length of each facet or a number if each facet has the same length
+   * @param {number} [opts.maxLength]               If set, the buffer will be at least this large; useful if numFacets is 0
+   * @param {*[]} [opts.ids]                        Label for each facet; extra labels will be ignored; defaults to index number
+   */
+  constructor({ numFacets, facetLengths, type, maxLength, ids } = {}) {
+    if ( type ) this.#type = type;
+    facetLengths ??= [];
+    maxLength ??= 0;
 
-  constructor(numFacets = 0, opts = {}) {
-    if ( opts.type ) this.#type = opts.type;
-
-    let facetLengths = opts.facetLengths ?? [];
-    if ( Number.isNumeric(facetLengths) ) facetLengths = (new Array(numFacets)).fill(facetLengths);
-    if ( facetLengths.length !== numFacets ) console.error(`Must have ${numFacets} elements in facetLength array`, { facetLengths });
+    let arrayLength;
+    if ( Number.isNumeric(facetLengths) ) {
+      numFacets ||= 0;
+      arrayLength = facetLengths * numFacets;
+      facetLengths = (new Array(numFacets)).fill(facetLengths);
+    } else arrayLength = facetLengths.reduce((acc, curr) => acc + curr, 0);
     this.#facetLengths = facetLengths;
+    this.#maxLength = Math.max(arrayLength, maxLength);
 
-    // Construct a new array bufffer.
-    this.calculateOffsets();
-    const arrayLength = facetLengths.reduce((acc, curr) => acc + curr, 0);
-    const maxByteLength = Math.max(arrayLength * this.type.BYTES_PER_ELEMENT, opts.maxByteLength || 0);
-    this.#maxByteLength = maxByteLength;
-    this.buffer = new ArrayBuffer(maxByteLength);
+    // Set the index ids for each facet created thus far.
+    numFacets = this.#facetLengths.length;
+    ids ??= Array.fromRange(numFacets);
+    for ( let i = 0; i < numFacets; i += 1 ) this.facetIdMap.set(ids[i], i);
   }
-
-  #facetLengths = [];
-
-  #cumulativeFacetLengths = [];
 
   calculateOffsets() {
     const numFacets = this.numFacets;
@@ -52,51 +52,38 @@ export class VariableLengthTrackingBuffer {
     }
   }
 
-  // ----- NOTE: Properties fixed at construction ----- //
-
-  /** @type {number} */
-  #maxByteLength;
-
-  get maxByteLength() { return this.#maxByteLength; }
-
-  /** @type {number} */
-  get arrayLength() { return this.#cumulativeFacetLengths.at(-1); }
-
-  /** @type {class} */
+  // ----- NOTE: Properties ----- //
   #type = Float32Array;
 
   get type() { return this.#type; }
 
+  set type(value) { this.#type = value; }
+
+  #maxLength = 0;
+
+  get maxLength() { return this.#maxLength; }
+
+  #facetLengths = [];
+
+  get facetLength() { return [...this.#facetLengths]; }
+
+  #cumulativeFacetLengths = [];
+
+  get cumulativeFacetLengths() { return [...this.#cumulativeFacetLengths]; }
+
   // ----- NOTE: Calculated properties ----- //
 
+  get maxByteLength() { return this.#maxLength * this.#type.BYTES_PER_ELEMENT; }
+
   get numFacets() { return this.#facetLengths.length; }
+
+  get arrayLength() { return this.#cumulativeFacetLengths.at(-1) || 0; }
 
   facetLengthAtIndex(idx) { return this.#facetLengths[idx]; }
 
   facetOffsetAtIndex(idx) { return this.#cumulativeFacetLengths[idx] - this.#facetLengths[idx]; }
 
-  // ----- NOTE: Array buffer views ----- //
-
-  /** @type {TypedArray} */
-  get viewBuffer() { return new this.#type(this.buffer, 0, this.arrayLength); }
-
-  get viewWholeBuffer() { return new this.#type(this.buffer, 0, Math.floor(this.#maxByteLength / this.#type.BYTES_PER_ELEMENT)); }
-
-  viewFacetAtIndex(idx) {
-    if ( idx < 0 || idx > (this.numFacets - 1) ) return null;
-    return new this.type(
-      this.buffer,
-      this.facetOffsetAtIndex(idx) * this.type.BYTES_PER_ELEMENT, // Byte offset to get to this element.
-      this.facetLengthAtIndex(idx) // Length of this element.
-    );
-  }
-
-  viewFacetById(id) {
-    if ( !this.facetIdMap.has(id) ) return null;
-    return this.viewFacetAtIndex(this.facetIdMap.get(id));
-  }
-
-  // ----- NOTE: Facet handling ----- //
+  // ----- NOTE: Facet tracking ----- //
 
   facetIdMap = new IndexMap();
 
@@ -105,116 +92,254 @@ export class VariableLengthTrackingBuffer {
     this.facetIdMap.set(id, idx);
   }
 
-  deleteFacetById(id) {
-    if ( !this.facetIdMap.has(id) ) return false;
-    return this.deleteFacet(this.facetIdMap.get(id));
-  }
+  /**
+   * Add a facet to any spot in the array that has sufficient space.
+   * @param {*} id                  Any value that can be a key in a map
+   * @param {number} facetLength    Length of the facet / component
+   * @param {number[]|TypedArray}   The values to set for this facet
+   * @returns {boolean} True if the buffer had to be expanded to add the new facet
+   */
+  addFacet({ id, facetLength, newValues } = {}) {
+    if ( id != null && this.facetIdMap.has(id) ) return this.updateFacet(id, { facetLength, newValues });
+    id ??= this.facetIdMap.nextIndex;
 
-  deleteFacet(idx) {
-    const { buffer, facetIdMap, type, numFacets } = this;
-    if ( numFacets < idx ) return false;
+    facetLength ??= newValues.length;
+    if ( !facetLength || facetLength < 0 ) console.error(`updateFacet|Valid facetLength or newValues must be provided.`, { facetLength, newValues });
 
-    // Determine if hanging data needs to be shifted down given the removed facet.
-    const numHanging = numFacets - idx - 1;
-    if ( numHanging > 0 ) {
-      const hangingLength = this.arrayLength - this.facetOffsetAtIndex(idx) - this.facetLengthAtIndex(idx);
-      const hangingOffset = this.facetOffsetAtIndex(idx + 1);
-      const idxOffset = this.facetOffsetAtIndex(idx);
-
-      // Shift the element values after idx to move down, so the buffer remains contiguous.
-      const remainingView = new type(buffer, hangingOffset * type.BYTES_PER_ELEMENT, hangingLength);
-      this.viewBuffer.set(remainingView, idxOffset);
+    let i;
+    for ( i of this.facetIdMap.iterateEmptyIndices() ) {
+      const existingLength = this.facetLengthAtIndex[i];
+      if ( facetLength === existingLength || !existingLength ) break;
     }
 
-    // Remove the facet from the lengths array and recalculate.
-    this._removeFacetAtIndex(idx);
+    this.facetIdMap.set(id, i);
+    this.#facetLengths[i] = facetLength;
     this.calculateOffsets();
+    const expanded = this.arrayLength > this.maxLength;
+    if ( expanded ) this.expand();
 
-    // Change ids to match
-    for ( const [id, i] of facetIdMap.entries() ) {
-      if ( i < idx ) continue;
-      if ( i === idx ) facetIdMap.delete(id);
-      facetIdMap.set(id, i - 1);
-    }
-    return true;
+    // Flag for subclasses that modification should occur.
+    if ( newValues ) this._updateFacetAtIndex(i, newValues);
+    return expanded;
   }
-
-  _removeFacetAtIndex(idx) { this.#facetLengths.splice(idx, 1); }
 
   /**
-   * Add element to the end.
-   * Expands array as needed.
+   * Update the facet at the given id.
+   * Moves it elsewhere if necessary to keep the array.
+   * @param {*} id                  Any value that can be a key in a map
+   * @param {number} facetLength    Length of the facet / component
+   * @param {number[]|TypedArray}   The values to set for this facet
+   * @returns {boolean} True if the buffer had to be expanded (because facet length changed).
    */
-  addFacet({ facetLength, id, newValues } = {}) {
-    const { type, facetIdMap } = this;
+  updateFacet(id, { facetLength, newValues } = {}) {
+    if ( !this.facetIdMap.has(id) ) return this.addFacet({ id, facetLength, newValues });
     facetLength ??= newValues.length;
-    if ( !facetLength || facetLength < 0 ) console.error(`addFacet|Either valid length or new values must be provided.`, { facetLength, newValues });
+    if ( !facetLength || facetLength < 0 ) console.error(`updateFacet|Valid facetLength or newValues must be provided.`, { facetLength, newValues });
 
-    // Add the facet length to the tracking array and recalculate.
-    this._addFacetWithLength(facetLength);
-    this.calculateOffsets();
-
-    // If out of space, double the buffer max size.
-    const newSize = this.arrayLength * type.BYTES_PER_ELEMENT;
-    const expanded = newSize > this.maxByteLength;
-    if ( expanded ) this.expand(newSize);
-
-    // Update the element count.
-    const idx = this.numFacets - 1;
-    if ( id ) facetIdMap.set(id, idx)
-
-    // Copy the new values.
-    if ( newValues ) this.viewFacetAtIndex(idx).set(newValues);
-
-    return expanded; // Return expanded so buffer can be swapped out as needed.
-  }
-
-  _addFacetWithLength(facetLength) { this.#facetLengths.push(facetLength); }
-
-  updateFacetAtId(id, opts = {}) {
-    opts.id = id;
-    return this.updateFacet(this.facetIdMap.get(id), opts);
-  }
-
-  updateFacet(idx, { id, facetLength, newValues } = {}) {
-    facetLength ??= newValues.length;
-    if ( !facetLength || facetLength < 0 ) console.error(`updateFacet|Either valid length or new values must be provided.`, { facetLength, newValues });
-    if ( idx < 0 || idx > this.#facetLengths.length ) console.error(`updateFacet|idx ${idx} is out of bounds.`);
-
-    const oldLength = this.#facetLengths[idx];
-    if ( oldLength === facetLength ) {
-      if ( newValues ) this.viewFacetAtIndex(idx).set(newValues);
-      return false;
+    const idx = this.facetIdMap.get(id);
+    if ( this.facetLengthAtIndex(idx) !== facetLength ) {
+      this.deleteFacet(id);
+      return this.addFacet(id, { facetLength, newValues });
     }
 
-    // Facet length has changed.
-    // Remove the old facet and add anew.
-    id ??= this.facetIdMap.getKeyAtIndex(idx);
-    this.deleteFacet(idx); // Will delete only if present.
-    return this.addFacet({ facetLength, newValues, id });
+    // Flag for subclasses that modification should occur.
+    if ( newValues ) this._updateFacetAtIndex(idx, newValues);
+    return false;
   }
 
+  /**
+   * Delete the facet at the given id.
+   * Does not otherwise modify the buffer length.
+   * @param {*} id                  Any value that can be a key in a map
+   */
+  deleteFacet(id) {
+    if ( !this.facetIdMap.has(id) ) return false;
+    const idx = this.facetIdMap.get(id);
+    this.facetIdMap.delete(id);
+    this._deleteFacetAtIndex(idx);
+    this.calculateOffsets();
+  }
+
+  deleteFacetAtIndex(idx) {
+    const id = this.facetIdMap.index[idx];
+    if ( id == null ) return false;
+    return this.deleteFacet(id);
+  }
+
+  // Force either a facet to be added at the index or override the current.
+  updateFacetAtIndex(idx, opts) {
+    const id = this.facetIdMap.index[idx];
+    if ( id == null ) return this.addFacet(opts);
+    return this.updateFacet(id, opts);
+  }
+
+  // ----- NOTE: Facet creation/update/deletion ----- //
+
+  _updateFacetAtIndex(_idx, _newValues) { return; }
+
+  _deleteFacetAtIndex(_idx) { return; }
+
+  /**
+   * Drop all empty facet slots in the array and make the array contiguous.
+   * @returns {boolean} True if the buffer would have to be modified, false otherwise.
+   */
+  makeContiguous() {
+    const mapIndex = this.facetIdMap.index;
+    let bufferModified = false;
+    for ( let i = 0, iMax = mapIndex.length; i < iMax; i += 1 ) {
+      if ( mapIndex[i] != null ) continue;
+      bufferModified ||= true;
+
+      // Shift the next non-null facet to the left.
+      let j;
+      for ( j = i + 1; j < iMax; j += 1 ) {
+        const id = mapIndex[j];
+        if ( id == null ) continue;
+        const hangingLength = this.facetLengthAtIndex(j);
+        const hangingOffset = this.facetOffsetAtIndex(j);
+        const targetOffset = this.facetOffsetAtIndex(i);
+        this._shift(hangingOffset, hangingLength, targetOffset);
+        this.facetIdMap.set(id, i);
+        mapIndex[j] = null;
+        this.#facetLengths[i] = this.#facetLengths[j];
+        this.#facetLengths[j] = 0;
+        break;
+      }
+      i = j - 1;
+
+    }
+    // Facet lengths were moved so that the end lengths no longer valid.
+    this.#facetLengths.length = this.facetIdMap.size;
+    this.calculateOffsets();
+    return bufferModified;
+  }
+
+  // Meant to be used like this:
+  // blockToShift = new type(buffer, byteOffset, length);
+  // viewBuffer.set(blockToShift, targetOffset)
+  _shift(_byteOffset, _length, _targetOffset) { return; }
+
+  expand(minLength) {
+    this.#maxLength ||= 1; // So we are not multiplying by 0.
+    minLength ||= this.arrayLength;
+    while ( this.#maxLength < minLength ) this.#maxLength *= this.constructor.RESIZE_MULTIPLIER;
+  }
+
+  // ----- NOTE: Views ----- //
+
+  viewBuffer(buffer) { return new this.type(buffer, 0, this.arrayLength); }
+
+  viewWholeBuffer(buffer) { return new this.type(buffer, 0, Math.floor(this.maxLength)); }
+
+  viewFacetById(buffer, id) {
+    if ( !this.facetIdMap.has(id) ) return null;
+    return this.viewFacetAtIndex(this.facetIdMap.get(id));
+  }
+
+  viewFacetAtIndex(buffer, idx) {
+    if ( idx < 0 || idx > (this.numFacets - 1) ) return null;
+    return new this.type(
+      buffer,
+      this.facetOffsetAtIndex(idx) * this.type.BYTES_PER_ELEMENT, // Byte offset to get to this element.
+      this.facetLengthAtIndex(idx) // Length of this element.
+    );
+  }
+}
+
+/** Tracking buffer
+
+Helper class that creates a typed array buffer:
+- Tracks X elements each of N length.
+- Access each object in the buffer.
+- Delete object and (optionally) shrink the buffer.
+- Add objects and expand the buffer.
+- Get view of any given object or the entire buffer.
+*/
+export class VariableLengthTrackingBuffer extends VariableLengthAbstractBuffer {
+
+  /** @type {ArrayBuffer} */
+  buffer;
+
+  /**
+   * @param {number} [numFacets=0]    Number of components / facets to represent
+   * @param {object} [opts]
+   * @param {class} [opts.type=Float32Array]        Class of the typed array
+   * @param {number|number[]} [opts.facetLengths]   Array identifying the length of each facet or a number if each facet has the same length
+   * @param {number} [opts.maxByteLength]           If set, the buffer will be at least this large; useful if numFacets is 0
+   */
+  constructor(opts) {
+    super(opts);
+
+    // Construct a new array bufffer.
+    this.buffer = new ArrayBuffer(this.maxByteLength);
+  }
+
+  get type() { return super.type; }
+
+  // ----- NOTE: Views ----- //
+
+  /** @type {TypedArray} */
+  get viewBuffer() { return super.viewBuffer(this.buffer); }
+
+  get viewWholeBuffer() { return super.viewWholeBuffer(this.buffer); }
+
+  viewFacetAtIndex(idx) { return super.viewFacetAtIndex(this.buffer, idx); }
+
+  viewFacetById(id) { return super.viewFacetById(this.buffer, id); }
+
+  // ----- NOTE: Facet handling ----- //
+
+  _updateFacetAtIndex(idx, newValues) { this.viewFacetAtIndex(idx).set(newValues); }
+
+  // Don't really need to do anything; just ignore those values.
+  // _deleteFacetAtIndex(idx) {}
+
+  _shift(byteOffset, length, targetOffset) {
+    const blockToShift = new this.type(this.buffer, byteOffset, length);
+    this.viewBuffer.set(blockToShift, targetOffset);
+  }
 
   /**
    * Double the size of the array buffer.
    */
-  expand(minSize) {
-    this.#maxByteLength ||= this.type.BYTES_PER_ELEMENT; // So we are not multiplying by 0.
-    while ( this.#maxByteLength < minSize ) this.#maxByteLength *= this.constructor.RESIZE_MULTIPLIER;
-    this.buffer = this.buffer.transferToFixedLength(this.#maxByteLength);
+  expand(minLength) {
+    super.expand(minLength);
+    this.buffer = this.buffer.transferToFixedLength(this.maxByteLength);
   }
 }
 
-
 export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
-  constructor(numFacets, { facetLength = 0, ...opts } = {}) {
-    const ln = opts.facetLengths ??= facetLength;
-    super(numFacets, opts);
+  constructor(opts = {}) {
+    // Determine the number of facets and facet lengths based on the facetLengths array and other options.
+    let facetLength;
+    let numFacets;
+    if ( Number.isNumeric(opts.facetLengths) ) {
+      facetLength = opts.facetLengths;
+      numFacets = opts.numFacets;
+    } else {  // Must be array.
+      facetLength = opts.facetLengths[0];
+      numFacets = opts.numFacets ??= opts.facetLengths.length;
+    }
+    facetLength ||= 1;
+    numFacets ||= 0;
+
+    // Use the constructor to build a zero-length array.
+    opts.numFacets = 0
+    opts.facetLengths = [];
+    opts.maxLength = Math.max(facetLength * numFacets, opts.maxLength || 0); // Ensure buffer is sufficiently large to hold the actual number of facets.
+    super(opts);
 
     this.#numFacets = numFacets;
-    this.#facetLength = ln;
+    this.#facetLength = facetLength;
+
+    // Set the index ids for each facet created thus far.
+    opts.ids ??= Array.fromRange(numFacets);
+    for ( let i = 0; i < numFacets; i += 1 ) this.facetIdMap.set(opts.ids[i], i);
   }
+
+  // Unneeded b/c each offset is the same.
+  calculateOffsets() { return; }
 
   // ----- NOTE: Properties fixed at construction ----- //
 
@@ -229,49 +354,81 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
   // ----- NOTE: Calculated properties ----- //
 
-  get maxN() { return Math.floor(this.maxByteLength / this.facetSize); }
+  get arrayLength() { return this.numFacets * this.facetLength; }
 
-  get facetSize() { return this.#facetLength * this.type.BYTES_PER_ELEMENT; }
+  get cumulativeFacetLengths() { return this.facetLength * this.numFacets; }
 
-  get arrayLength() { return this.#numFacets * this.facetLength; }
+  facetLengthAtIndex(_idx) { return this.facetLength; }
 
-  // ----- NOTE: Array buffer views ----- //
+  facetOffsetAtIndex(idx) { return this.numFacets * idx; }
 
-  /** @type {TypedArray} */
-  get viewBuffer() { return new this.type(this.buffer, 0, this.#numFacets * this.#facetLength); }
+  // ----- NOTE: Facet tracking ----- //
 
-  get viewWholeBuffer() { return new this.type(this.buffer, 0, this.maxN * this.#facetLength); }
+  /**
+   * Add a facet to any spot in the array that has sufficient space.
+   * @param {*} id                  Any value that can be a key in a map
+   * @param {number[]|TypedArray}   The values to set for this facet; length must equal the preset facet length
+   * @returns {boolean} True if the buffer had to be expanded to add the new facet
+   */
+  addFacet(id, { newValues } = {}) {
+    if ( newValues && newValues.length !== this.facetLength ) console.error(`New values length must equal ${this.facetLength}`, newValues);
 
-  viewFacetAtIndex(idx) {
-    if ( idx < 0 || idx > (this.numFacets - 1) ) return null;
-    return new this.type(this.buffer, idx * this.facetSize, this.facetLength);
+    const i = this.facetIdMap.nextIndex;
+    this.facetIdMap.set(id, i);
+    const expanded = this.arrayLength > this.maxLength;
+    if ( expanded ) this.expand();
+
+    // Flag for subclasses that modification should occur.
+    if ( newValues ) this._updateFacetAtIndex(i, newValues);
+    return expanded;
   }
 
-  // ----- NOTE: Element handling ----- //
+  /**
+   * Update the facet at the given id.
+   * Moves it elsewhere if necessary to keep the array.
+   * @param {*} id                  Any value that can be a key in a map
+   * @param {number[]|TypedArray}   The values to set for this facet; length must equal the preset facet length
+   * @returns {boolean} Always false
+   */
+  updateFacet(id, { newValues } = {}) {
+    if ( newValues && newValues.length !== this.facetLength ) console.error(`New values length must equal ${this.facetLength}`, newValues);
+    if ( !this.facetIdMap.has(id) ) return this.addFacet(id, { newValues });
 
-  facetLengthAtIndex(_idx) { return this.#facetLength; }
+    // Flag for subclasses that modification should occur.
+    if ( newValues ) this._updateFacetAtIndex(this.facetIdMap.get(id), newValues);
+    return false;
+  }
 
-  facetOffsetAtIndex(idx) { return this.#facetLength * idx; }
+   /**
+   * Drop all empty facet slots in the array and make the array contiguous.
+   * @returns {boolean} True if the buffer would have to be modified, false otherwise.
+   */
+  makeContiguous() {
+    const mapIndex = this.facetIdMap.index;
+    let bufferModified = false;
+    for ( let i = 0, iMax = mapIndex.length; i < iMax; i += 1 ) {
+      if ( mapIndex[i] != null ) continue;
+      bufferModified ||= true;
 
-  updateFacet(idx, opts = {}) {
-    opts.facetLength ??= opts.newValues.length;
-    if ( opts.facetLength !== this.facetLength ) {
-      console.error("FixedLengthTrackingBuffer cannot modify facet lengths.");
-      return false;
+      // Shift the next non-null facet to the left.
+      let j;
+      for ( j = i + 1; j < iMax; j += 1 ) {
+        const id = mapIndex[j];
+        if ( id == null ) continue;
+        const hangingLength = this.facetLengthAtIndex(j);
+        const hangingOffset = this.facetOffsetAtIndex(j);
+        const targetOffset = this.facetOffsetAtIndex(i);
+        this._shift(hangingOffset, hangingLength, targetOffset);
+        this.facetIdMap.set(id, i);
+        mapIndex[j] = null;
+        break;
+      }
+      i = j - 1;
     }
-    return super.updateFacet(idx, opts);
+    // Facet lengths were moved so that the end lengths no longer valid.
+    this.calculateOffsets();
+    return bufferModified;
   }
-
-  calculateOffsets() { return; } // Unused.
-
-  addFacet(opts = {}) {
-    opts.facetLength = this.#facetLength;
-    return super.addFacet(opts);
-  }
-
-  _removeFacetAtIndex(_idx) { this.#numFacets -= 1; }
-
-  _addFacetWithLength(_facetLength) { this.#numFacets += 1; }
 }
 
 
@@ -282,20 +439,42 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 /* Testing
 MODULE_ID = "tokenvisibility"
 api = game.modules.get("tokenvisibility").api
+VariableLengthAbstractBuffer = api.placeableHandler.VariableLengthAbstractBuffer
 FixedLengthTrackingBuffer = api.placeableHandler.FixedLengthTrackingBuffer
 VariableLengthTrackingBuffer = api.placeableHandler.VariableLengthTrackingBuffer
-tb = new VariableLengthTrackingBuffer(5, { facetLengths: [3,4,5,5,5] })
+tb = new VariableLengthTrackingBuffer({ facetLengths: [3,4,5,5,5] })
+
+
 tb.viewFacetAtIndex(0).set([1,2,3])
 tb.viewFacetAtIndex(1).set([1,2,3,4])
 tb.viewFacetAtIndex(2).set([1,2,3,4,5])
 
 tb.deleteFacet(1)
+tb.addFacet({ newValues: [10,11,12,13]})
 
-tb = new FixedLengthTrackingBuffer(5, { facetLengths: 4 })
+
+
+tb = new FixedLengthTrackingBuffer({ facetLengths: 4, numFacets: 5 })
 tb.viewFacetAtIndex(0).set([0,1,2,3])
 tb.viewFacetAtIndex(1).set([4,5,6,7])
 tb.viewFacetAtIndex(2).set([8,9,10,11])
 tb.viewFacetAtIndex(3).set([12,13,14,15])
 tb.viewFacetAtIndex(4).set([16,17,18,19])
+
+tb = new VariableLengthTrackingBuffer()
+tb = new VariableLengthAbstractBuffer()
+tb.addFacet({ id: "A", facetLength: 5 })
+tb.addFacet({ id: "B", facetLength: 10 })
+tb.addFacet({ id: "C", facetLength: 5 })
+tb.addFacet({ id: "D", facetLength: 7 })
+tb.addFacet({ id: "E", facetLength: 9 })
+
+tb.deleteFacet("B")
+tb.deleteFacet("D")
+
+tb.makeContiguous()
+
+5 10 5 7 9
+5 5 9
 
 */

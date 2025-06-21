@@ -658,9 +658,18 @@ export class IndexMap extends Map {
   /**
    * The next empty index or a new index if the index array is full.
    */
-  nextIndex() {
+  get nextIndex() {
     const i = this.index.findIndex(elem => elem == null);
     if ( ~i ) return i;
     return this.index.length;
+  }
+
+  *iterateEmptyIndices() {
+    const index = this.index;
+    for ( let i = 0, iMax = index.length; i < iMax; i += 1 ) {
+      const elem = index[i];
+      if ( elem == null ) yield i;
+    }
+    yield this.index.length;
   }
 }
