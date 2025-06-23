@@ -24,7 +24,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 const rotationM = MatrixFloat32.identity(4, 4);
 
 
-export class WallInstanceHandler extends PlaceableModelMatrixTracker {
+export class WallTracker extends PlaceableModelMatrixTracker {
   static HOOKS = [
     { createWall: "_onPlaceableCreation" },
     { updateWall: "_onPlaceableUpdate" },

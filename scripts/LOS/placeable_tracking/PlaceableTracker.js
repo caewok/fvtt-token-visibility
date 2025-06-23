@@ -9,7 +9,7 @@ Hooks,
 
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
-import { IndexMap } from "../util.js";
+import { isString } from "../util.js";
 
 // Base folder
 
@@ -24,7 +24,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 /** @type {MatrixFlat<4,4>} */
 const rotationM = MatrixFloat32.identity(4, 4);
 
-
+/** @type {MatrixFlat<4,4>} */
 const identityM = MatrixFloat32.identity(4, 4);
 
 
@@ -63,20 +63,8 @@ export class PlaceableTracker {
     handlers.set(this.constructor, this);
   }
 
-  /** @type {Map<string, number>} */
-  instanceIndexFromId = new IndexMap();
-
-  /**
-   * Pulls the placeable given an index that corresponds to the instanceIndexFromId map.
-   * Placeable must still exist; retrieves from the id.
-   * @param {number} idx
-   * @returns {Placeable}
-   */
-  getPlaceableFromInstanceIndex(idx) {
-    const id = this.instanceIndexFromId.getKeyAtIndex(idx);
-    if ( !id ) return null;
-    return this.getPlaceableFromId(id);
-  }
+  /** @type {Set<PlaceableObject>} */
+  placeables = new foundry.utils.IterableWeakSet();
 
   getPlaceableFromId(id) {
     const doc = canvas[this.constructor.layer].documentCollection.get(id);
@@ -85,35 +73,26 @@ export class PlaceableTracker {
   }
 
   /**
-   * Track when each instance index was last updated, by updateId
-   * @type {Map<number, number>}
+   * Track when each placeable was last updated.
+   * @type {Map<PlaceableObject, number>}
    */
-  instanceLastUpdated = new Map();
-
-  /** @type {number} */
-  get numInstances() { return this.instanceIndexFromId.size; }
+  placeableLastUpdated = new foundry.utils.IterableWeakMap();
 
   /**
    * Initialize all placeables.
    */
   initializePlaceables() {
-    this.instanceIndexFromId.clear();
+    this.placeables.clear();
     const placeables = this.getPlaceables();
     this._initializePlaceables(placeables);
-    placeables.forEach((placeable, idx) => this._initializePlaceable(placeable, idx));
-    placeables.forEach(placeable => this._updatePlaceable(placeable));
+    placeables.forEach(placeable => {
+      this.placeables.add(placeable);
+      this._updatePlaceable(placeable)
+    });
   }
 
   _initializePlaceables(_placeables) { return; }
 
-  /**
-   * Initialize a single placeable at a given index.
-   * @param {PlaceableObject|Edge} placeable
-   * @param {number} idx
-   */
-  _initializePlaceable(placeable, idx) {
-    this.instanceIndexFromId.set(placeable.id, idx);
-  }
 
   /**
    * Subclass locate placeables.
@@ -154,13 +133,13 @@ export class PlaceableTracker {
    * @returns {boolean} True if it resulted in a change.
    */
   addPlaceable(placeable) {
-    if ( this.instanceIndexFromId.has(placeable.id) ) return false;
+    if ( this.placeables.has(placeable) ) return false;
     if ( !this.includePlaceable(placeable) ) return false;
 
+
     this.#updateId += 1;
-    const idx = this.instanceIndexFromId.nextIndex();
-    this.instanceIndexFromId.set(idx, placeable.id);
-    this.instanceLastUpdated.set(idx, this.#updateId);
+    this.placeables.add(placeable);
+    this.placeableLastUpdated.set(placeable, this.#updateId);
     if ( !this._addPlaceable(placeable) ) this.initializePlaceables(); // Redo the instance buffer.
     return true;
   }
@@ -173,7 +152,7 @@ export class PlaceableTracker {
    */
   updatePlaceable(placeable, changeKeys) {
     // Possible that the placeable needs to be added or removed instead of simply updated.
-    const alreadyTracking = this.instanceIndexFromId.has(placeable.id);
+    const alreadyTracking = this.placeables.has(placeable);
     const shouldTrack = this.includePlaceable(placeable);
     if ( !(alreadyTracking && shouldTrack) ) return false;
     if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.id);
@@ -181,27 +160,36 @@ export class PlaceableTracker {
 
     // If the changes include one or more relevant keys, update.
     if ( !changeKeys.some(key => this.constructor.UPDATE_KEYS.has(key)) ) return false;
-    const idx = this.instanceIndexFromId.get(placeable.id);
     this.#updateId += 1;
-    this.instanceLastUpdated.set(idx, this.#updateId);
+    this.placeableLastUpdated.set(placeable, this.#updateId);
     if ( !this._updatePlaceable(placeable) ) this.initializePlaceables(); // Redo the instance buffer.
     return true;
+  }
+
+  _placeableOrId(placeable) {
+    let placeableId;
+    if ( isString(placeable) ) {
+      placeableId = placeable;
+      placeable = this.getPlaceableFromId(placeableId);
+    } else placeableId = placeable.id;
+    return { placeable, placeableId };
   }
 
   /**
    * Remove the placeable from the instance array. Simply removes the associated index
    * without rebuilding the array.
-   * @param {PlaceableObject} placeable
+   * @param {PlaceableObject|string} placeable object or its id
    * @returns {boolean} True if it resulted in a change.
    */
-  removePlaceable(placeableId) {
-    if ( !this.instanceIndexFromId.has(placeableId) ) return false;
-
-    this.#updateId += 1;
-    const idx = this.instanceIndexFromId.get(placeableId);
-    this.instanceIndexFromId.delete(placeableId);
-    this.instanceLastUpdated.delete(idx);
-    if ( !this._removePlaceable(placeableId) ) this.initializePlaceables(); // Redo the instance buffer.
+  removePlaceable(placeableOrId) {
+    // Attempt to retrieve the placeable and its id. Placeable may be undefined.
+    const { placeable, placeableId } = this._placeableOrId(placeableOrId);
+    if ( placeable ) {
+      if ( !this.placeables.has(placeable) ) return false;
+      this.placeables.delete(placeable);
+      this.instanceLastUpdated.delete(placeable);
+    }
+    if ( !this._removePlaceable(placeable, placeableId) ) this.initializePlaceables();
     return true;
   }
 
@@ -215,7 +203,7 @@ export class PlaceableTracker {
 
   _updatePlaceable(_placeable) { return true; }
 
-  _removePlaceable(_placeableId) { return true; }
+  _removePlaceable(_placeable, _placeableId) { return true; }
 
   /** @type {number[]} */
   _hooks = [];
@@ -295,7 +283,7 @@ export class PlaceableTracker {
    * A hook event that fires when a {@link PlaceableObject} is destroyed.
    * @param {PlaceableObject} object    The object instance being destroyed
    */
-  _onPlaceableDestroy(object) { this.removePlaceable(object.id); }
+  _onPlaceableDestroy(object) { this.removePlaceable(object); }
 }
 
 /**
@@ -315,17 +303,9 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
   tracker;
 
   _initializePlaceables(placeables) {
-    const tracker = this.tracker = new FixedLengthTrackingBuffer(placeables.length, { facetLengths: this.constructor.MODEL_ELEMENT_LENGTH });
-
-    // Track placeable ids so removing placeables is easier.
-    placeables.forEach((placeable, idx) => tracker.setFacetId(placeable.id, idx));
-  }
-
-  _initializePlaceable(placeable, idx) {
-    super._initializePlaceable(placeable, idx);
-
-    // Track placeable ids so removing placeables is easier.
-    this.tracker.setFacetId(placeable.id, idx);
+    const ids = placeables.map(p => p.id);
+    this.tracker = new FixedLengthTrackingBuffer(
+      { numFacets: placeables.length, facetLengths: this.constructor.MODEL_ELEMENT_LENGTH, ids });
   }
 
   rotationMatrixForPlaceable(_placeable) { return identityM.copyTo(rotationM); }
@@ -367,9 +347,9 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
     return true;
   }
 
-  _removePlaceable(placeableId) {
+  _removePlaceable(_placeable, placeableId) {
     // TODO: Do we need to track if the buffer was modified?
-    const bufferModified = this.tracker.deleteFacetById(placeableId);
+    const bufferModified = this.tracker.deleteFacet(placeableId);
     return true;
   }
 }
@@ -378,7 +358,7 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
 api = game.modules.get("tokenvisibility").api;
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
-let { TileInstanceHandler, TokenInstanceHandler, WallInstanceHandler, RegionInstanceHandler } = api.placeableHandler;
+let { TileInstanceHandler, TokenInstanceHandler, WallInstanceHandler, RegionInstanceHandler } = api.placeableTracker;
 
 tileH = new TileInstanceHandler()
 tokenH = new TokenInstanceHandler()

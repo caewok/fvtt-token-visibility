@@ -627,6 +627,8 @@ export function setTypedArray(dst, src) {
   return dst;
 }
 
+export function isString(obj) { return typeof obj === "string" || obj instanceof String; }
+
 /**
  * Map mean to link arbitrary ids to index integers.
  * Allows reverse lookup and tracking of used indices.

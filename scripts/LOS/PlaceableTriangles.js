@@ -15,9 +15,9 @@ import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc } 
 import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
 import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
 import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
-import { WallInstanceHandler } from "./placeable_tracking/PlaceableWallInstanceHandler.js";
-import { TileInstanceHandler } from "./placeable_tracking/PlaceableTileInstanceHandler.js";
-import { TokenInstanceHandler } from "./placeable_tracking/PlaceableTokenInstanceHandler.js";
+import { WallTracker } from "./placeable_tracking/WallTracker.js";
+import { TileTracker } from "./placeable_tracking/TileTracker.js";
+import { TokenTracker } from "./placeable_tracking/TokenTracker.js";
 import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
@@ -161,7 +161,7 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
   static _prototypeTriangles;
 
   /** @type {class} */
-  static instanceHandlerClass = WallInstanceHandler;
+  static instanceHandlerClass = WallTracker;
 
   static _instanceHandler;
 
@@ -176,7 +176,7 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
   get triangle() {
     const M = this.constructor.instanceHandler.getMatrixForPlaceableId(this.placeable.id);
     if ( !M ) return [];
-    const instance = WallInstanceHandler.isDirectional(this.placeable.edge)
+    const instance = WallTracker.isDirectional(this.placeable.edge)
           ? DirectionalWallTriangles : WallTriangles;
     return instance.prototypeTriangles.map(tri => tri.transform(M));
   }
@@ -202,7 +202,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   static _prototypeTriangles;
 
   /** @type {class} */
-  static instanceHandlerClass = TileInstanceHandler;
+  static instanceHandlerClass = TileTracker;
 
   static _instanceHandler;
 
@@ -411,7 +411,7 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
   static _prototypeTriangles;
 
   /** @type {class} */
-  static instanceHandlerClass = TokenInstanceHandler;
+  static instanceHandlerClass = TokenTracker;
 
   static _instanceHandler;
 

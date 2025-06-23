@@ -53,7 +53,10 @@ export class GeometryNonInstanced {
     this.#instanceType = `${this.constructor.name}_${type}`;
     if ( addNormals ) this.#addNormals = true;
     if ( addUVs ) this.#addUVs = true;
-    if ( placeable ) this.#placeable = placeable;
+    if ( placeable ) {
+      this.#placeable = placeable;
+      this.id = placeable.id ?? foundry.utils.randomID();
+    }
   }
 
   id = foundry.utils.randomID();
@@ -125,7 +128,11 @@ export class GeometryNonInstanced {
 
   get indexOffset() { return this.#indexOffset; }
 
-  set indexOffset(value) { this.#indexOffset = value; this.dirtyModel = true; }
+  set indexOffset(value) {
+    if ( this.#indexOffset === value ) return;
+    this.#indexOffset = value;
+    this.dirtyModel = true;
+  }
 
   // ----- NOTE: Model methods ----- //
 
@@ -332,7 +339,8 @@ export class GeometryInstanced extends GeometryNonInstanced {
   _calculateModel(vertices, _indices) {
     vertices = setTypedArray(vertices, this.instanceVertices);
     return {
-      vertices: BasicVertices.transformVertexPositions(vertices, this.transformMatrix, this.stride)
+      vertices: BasicVertices.transformVertexPositions(vertices, this.transformMatrix, this.stride),
+      indices: this.instanceIndices,
     }
   }
 }

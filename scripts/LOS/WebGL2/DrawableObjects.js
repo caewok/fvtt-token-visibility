@@ -6,8 +6,8 @@ CONFIG,
 
 import { MODULE_ID } from "../../const.js";
 import { WebGL2 } from "./WebGL2.js";
-import { GeometryNonInstanced, GeometryInstanced } from "../geometry/GeometryDesc.js";
-
+import { GeometryInstanced } from "../geometry/GeometryDesc.js";
+import { VariableLengthAbstractBuffer } from "../placeable_tracking/TrackingBuffer.js";
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
 
@@ -59,18 +59,19 @@ export class DrawableObjectsWebGL2Abstract {
    */
   async initialize() {
     if ( this.#initialized ) return;
-    this.placeableHandler = new this.constructor.handlerClass();
+    this.placeableTracker ??= new this.constructor.handlerClass();
     this.programInfo = await this._createProgram();
-    this.placeableHandler.registerPlaceableHooks();
+    this.placeableTracker.registerPlaceableHooks();
     this._initializePlaceableHandler();
     this._initializeGeoms();
-    this._initializeOffsets();
+    this._initializeOffsetTrackers();
     this._initializeAttributes();
     this._initializeUniforms();
+    this._updateAllVertices();
 
     // Register that we are synced with the current placeable data.
-    this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
-    this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
+    this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
+    this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
 
     this.#initialized = true;
   }
@@ -115,29 +116,21 @@ export class DrawableObjectsWebGL2Abstract {
 
   // ----- NOTE: Attributes ----- //
 
-  /** @type {GeometryNonInstanced[]|GeometryNonInstanced} */
-  geoms = [];
+  /** @type {Map<string, GeometryNonInstanced>} */
+  geoms = new Map();
 
   /** @type {object} */
   offsetData = {};
 
-  /** @type {ArrayBuffer} */
-  verticesBuffer = new ArrayBuffer();
+  trackers = {
+    indices: null,
+    vertices: null,
+  };
 
-  /** @type {ArrayBuffer} */
-  indicesBuffer = new ArrayBuffer();
-
-  /** @type {Float32Array} */
-  verticesArray = new Float32Array();
-
-  /** @type {Uint16Array} */
-  indicesArray = new Uint16Array();
-
-  /** @type {Float32Array[]} */
-  vertices = [];
-
-  /** @type {Uint16Array[]} */
-  indices = [];
+  buffers = {
+    indices: null,
+    vertices: null,
+  };
 
   /** @type {object} */
   vertexProps = {};
@@ -156,8 +149,14 @@ export class DrawableObjectsWebGL2Abstract {
     console.error("_initializeGeoms must be overriden by child class.");
   }
 
-  _initializeOffsets() {
-    this.offsetData = GeometryNonInstanced.computeBufferOffsets(this.geoms);
+  _initializeOffsetTrackers() {
+    this.trackers.indices = new VariableLengthAbstractBuffer({ type: Uint16Array });
+    this.trackers.vertices = new VariableLengthAbstractBuffer({ type: Float32Array });
+    for ( const geom of this.geoms ) {
+      this.trackers.indices.addFacet({ id: geom.id, facetLength: geom.indices.length });
+      this.trackers.vertices.addFacet({ id: geom.id, facetLength: geom.vertices.length });
+    }
+    // this.offsetData = GeometryNonInstanced.computeBufferOffsets(this.geoms);
   }
 
   _initializeAttributes() {
@@ -170,37 +169,56 @@ export class DrawableObjectsWebGL2Abstract {
   /**
    * Construct data arrays representing vertices and indices.
    */
-  _initializeVertices() {
-    const offsetData = this.offsetData;
-    const numPlaceableIndices = this.placeableHandler.instanceIndexFromId.size;
+  _updateAllVertices() {
+    const { indices, vertices } = this.trackers;
+    const ph = this.placeableTracker;
 
-    // const numPlaceableIndices = Math.max(...this.placeableHandler.placeableFromInstanceIndex.keys()) + 1;
-    if ( numPlaceableIndices !== this.geoms.length ) { console.error(`_initializeVertices|Number of placeable indices (${numPlaceableIndices}) and number of geoms (${this.geoms.length}) should match`)}
-
-    // Use one large buffer for the vertices and another for the indices.
-    const vClass = this.verticesArray.constructor;
-    const iClass = this.indicesArray.constructor;
-    this.verticesBuffer = new ArrayBuffer(offsetData.vertex.totalSize);
-    this.indicesBuffer = new ArrayBuffer(offsetData.index.totalSize);
-    this.verticesArray = new vClass(this.verticesBuffer);
-    this.indicesArray = new iClass(this.indicesBuffer);
-
-    // Create distinct views into the vertices and indices buffers, linked to geoms.
-    this.vertices = new Array(numPlaceableIndices);
-    this.indices = new Array(numPlaceableIndices);
-    for ( let i = 0; i < numPlaceableIndices; i += 1 ) {
-      const vs = this.vertices[i] = new vClass(this.verticesBuffer, offsetData.vertex.offsets[i], offsetData.vertex.lengths[i]);
-      const is = this.indices[i] = new iClass(this.indicesBuffer, offsetData.index.offsets[i], offsetData.index.lengths[i]);
-
-      const geom = this.geoms[i];
-      geom.linkModelVertices(vs);
-      geom.linkModelIndices(is);
-      geom.indexOffset = offsetData.vertex.cumulativeNum[i];
-      geom.dirtyModel = true;
-      geom.calculateModel();
+    // Remove missing/deleted ids from the trackers.
+    // Can assume id set is same in indices and vertices.
+    for ( const id of indices.facetIdMap.keys() ) {
+      if ( ph.instanceIndexFromId.has(id) ) continue;
+      indices.deleteFacet(id);
+      vertices.deleteFacet(id);
     }
-  }
 
+    // Update the geometry and rebuild the trackers.
+    // TODO: Can this be done elsewhere to avoid updating all geometry here?
+    for ( const [id, geom] of this.geoms.entries() ) {
+      geom.calculateModel();
+      indices.updateFacet(id, { newValues: geom.modelIndices });
+      vertices.updateFacet(id, { newValues: geom.modelVertices });
+    }
+
+    // Copy to JS buffer first to avoid calling bufferSubData repeatedly.
+    const iArrayBuffer = new ArrayBuffer(indices.arraySize);
+    const vArrayBuffer = new ArrayBuffer(vertices.arraySize);
+    for ( const [id, geom] of this.geoms.entries() ) {
+      // Update the index numbers based on the location in the index and update the geometry.
+      geom.indices.offset = indices.facetOffsetAtId(id);
+
+      // Copy the index data to the temporary JS buffer.
+      const iView = indices.viewFacetById(iArrayBuffer, id);
+      iView.set(geom.modelIndices);
+
+      // Copy the vertex data to the temporary JS buffer.
+      const vView = vertices.viewFacetById(vArrayBuffer, id);
+      vView.set(geom.modelVertices);
+    }
+
+    // Redo the GPU buffers, whose size may have changed.
+    const gl = this.gl;
+    const iWebGLBuffer = this.buffers.indices = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, iWebGLBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, indices.viewBuffer(iArrayBuffer), gl[this.constructor.vertexDrawType]);
+
+    const vWebGLBuffer = this.buffers.vertices = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vWebGLBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices.viewBuffer(vArrayBuffer), gl[this.constructor.vertexDrawType]);
+
+    this.vertexProps.aPos.buffer = this.buffers.vertices;
+    this.vertexProps.indices.buffer = this.buffers.indices;
+    if ( this.debugViewNormals ) this.vertexProps.aNorm.buffer = this.buffers.vertices;
+  }
 
   /**
    * Build the vertex and index buffers along with any other attributes.
@@ -210,88 +228,86 @@ export class DrawableObjectsWebGL2Abstract {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
     log (`${this.constructor.name}|_defineAttributeProperties`);
-    const gl = this.gl;
-    const vBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.vertexDrawType]);
-
+    const vSize = this.trackers.vertices.type.BYTES_PER_ELEMENT;
     const debugViewNormals = this.debugViewNormals;
     const vertexProps = {
       aPos: {
         numComponents: 3,
-        buffer: vBuffer,
+        buffer: this.buffers.vertices,
         drawType: this.constructor.vertexDrawType,
-        stride: this.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+        stride: vSize * (debugViewNormals ? 6 : 3),
         offset: 0,
-
       },
-      indices: this.indicesArray,
+      indices: {
+        buffer: this.buffers.indices,
+      },
     };
 
     if ( debugViewNormals ) vertexProps.aNorm = {
       numComponents: 3,
-      buffer: vBuffer,
-      stride: this.verticesArray.BYTES_PER_ELEMENT * 6,
-      offset: 3 * this.verticesArray.BYTES_PER_ELEMENT,
+      buffer: this.buffers.vertices,
+      stride: vSize * 6,
+      offset: 3 * vSize,
     };
     return vertexProps;
   }
 
   /**
    * Update the vertex data for an instance.
-   * @param {number} idx      The placeable index to update
+   * @param {number} id      The id of the placeable update
    * @returns {boolean} True if successfully updated; false if array length is off (requiring full rebuild).
    */
-  _updateInstanceVertex(idx) {
-    const geom = this.geoms[idx];
+  _updateInstanceVertex(id) {
+    const geom = this.geoms.get(id);
     geom.dirtyModel = true;
     geom.calculateModel();
 
-    // If the arrays no longer match, that means the model vertices/indices have changed length
-    // and so everything must be recalculated.
-    return this.indices[idx] === geom.modelIndices && this.vertices[idx] === geom.modelVertices;
+    const { indices, vertices } = this.trackers;
+    let needFullBufferUpdate = vertices.updateFacet(id, { newValues: geom.modelVertices });
+    needFullBufferUpdate = indices.updateFacet(id, { newValues: geom.modelIndices }) || needFullBufferUpdate; // Note order so the updateFacet will be triggered.
+    geom.indices.offset = indices.facetOffsetAtId(id);
+    return needFullBufferUpdate;
   }
 
-  _updateAttributeBuffersForInstance(idx) {
+  _updateAttributeBuffersForPlaceableId(id) {
     const gl = this.gl;
-    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
-    const iBuffer = this.attributeBufferInfo.indices;
-    const vOffsets = this.offsetData.vertex.offsets;
-    const iOffsets = this.offsetData.index.offsets;
+    const { vertices: vBuffer, indices: iBuffer } = this.buffers;
+    const { vertices, indices } = this.trackers;
+    const geom = this.geoms.get(id);
 
     // See twgl.setAttribInfoBufferFromArray.
-    log (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
-    const vOffset = vOffsets[idx];
+    log (`${this.constructor.name}|_updateAttributeBuffersForPlaceableId ${id}`);
+    const vOffset = vertices.facetOffsetAtId(id);
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, this.vertices[idx]);
+    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, geom.modelVertices);
 
-    const iOffset = iOffsets[idx];
+    const iOffset = indices.facetOffsetAt(id);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, this.indices[idx]);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, geom.modelIndices);
   }
 
   // ----- NOTE: Placeable handler ----- //
 
   /** @type {PlaceableInstanceHandler} */
-  placeableHandler;
+  placeableTracker;
 
   /** @type {number} */
-  #placeableHandlerUpdateId = 0;
+  #placeableTrackerUpdateId = 0;
 
   /** @type {number} */
-  #placeableHandlerBufferId = 0;
+  #placeableTrackerBufferId = 0;
 
   /** @type {number} */
-  get placeableHandlerUpdateId() { return this.#placeableHandlerUpdateId; }
+  get placeableTrackerUpdateId() { return this.#placeableTrackerUpdateId; }
 
   /** @type {number} */
-  get placeableHandlerBufferId() { return this.#placeableHandlerBufferId; }
+  get placeableTrackerBufferId() { return this.#placeableTrackerBufferId; }
 
   _initializePlaceableHandler() {
-    this.placeableHandler.initializePlaceables();
+    this.placeableTracker.initializePlaceables();
     // Set the ids when initializing the vertices.
-    // this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
-    // this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
+    // this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
+    // this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
   }
 
   /**
@@ -309,16 +325,16 @@ export class DrawableObjectsWebGL2Abstract {
    */
   validateInstances() {
     // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
-    const placeableHandler = this.placeableHandler;
-    if ( this.rebuildNeeded || placeableHandler.bufferId < this.#placeableHandlerBufferId ) return this.updateAllInstances(); // Number of instances changed.
-    if ( placeableHandler.updateId <= this.#placeableHandlerUpdateId ) return; // No changes since last update.
+    const placeableTracker = this.placeableTracker;
+    if ( this.rebuildNeeded || placeableTracker.bufferId < this.#placeableTrackerBufferId ) return this.updateAllInstances(); // Number of instances changed.
+    if ( placeableTracker.updateId <= this.#placeableTrackerUpdateId ) return; // No changes since last update.
 
-    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
-      if ( lastUpdate <= this.#placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-      this._updateInstance(idx);
+    for ( const [placeable, lastUpdate] of placeableTracker.instanceLastUpdated.entries() ) {
+      if ( lastUpdate <= this.#placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
+      this._updateInstance(placeable);
       if ( this.rebuildNeeded ) break; // If _updateInstance set rebuildNeeded to true.
     }
-    this.#placeableHandlerUpdateId = placeableHandler.updateId;
+    this.#placeableTrackerUpdateId = placeableTracker.updateId;
     if ( this.rebuildNeeded ) this.updateAllInstances();
   }
 
@@ -330,24 +346,26 @@ export class DrawableObjectsWebGL2Abstract {
     this.#rebuildNeeded = false;
 
     // Register that we are synced with the current placeable data.
-    this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
-    this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
+    this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
+    this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
   }
 
   _updateAllInstances() {
     // TODO: Can we keep some of the original, and call _rebuildAttributes instead?
-    this._initializeGeoms();
-    this._initializeOffsets();
-    this._initializeAttributes();
+//     this._initializeGeoms();
+//     this._initializeOffsetTrackers();
+//     this._initializeAttributes();
+
+    this._updateAllVertices();
   }
 
-  _updateInstance(idx) {
+  _updateInstance(placeable) {
     // If vertex array or index array length no longer matches, redo.
-    if ( !this._updateInstanceVertex(idx) ) {
+    if ( !this._updateInstanceVertex(placeable) ) {
       this.rebuildNeeded = true;
       return;
     }
-    this._updateAttributeBuffersForInstance(idx);
+    this._updateAttributeBuffersForPlaceableId(placeable);
 
   }
 
@@ -367,9 +385,11 @@ export class DrawableObjectsWebGL2Abstract {
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
   filterObjects(_visionTriangle, _opts) {
-    const instanceSet = this.instanceSet;
-    instanceSet.clear();
-    this.placeableHandler.instanceIndexFromId.values().forEach(idx => instanceSet.add(idx));
+    this.instanceSet.clear();
+    this.placeableTracker.placeables.forEach(p => {
+      const idx = this.trackers.indices.facetIdMap.get(p.id);
+      this.instanceSet.add(idx);
+    });
   }
 
   /**
@@ -378,9 +398,7 @@ export class DrawableObjectsWebGL2Abstract {
    * E.g., tokens that move a lot.
    * Camera (e.g., viewer, target) may still change after prerender
    */
-  prerender() {
-    this.validateInstances();
-  }
+  prerender() { this.validateInstances(); }
 
   /**
    * Render this drawable.
@@ -391,28 +409,21 @@ export class DrawableObjectsWebGL2Abstract {
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
-    // twgl.setBuffersAndAttributes(gl, this.programInfo, this.vertexArrayInfo);
-    // twgl.setUniforms(this.programInfo, this.materialUniforms);
-
-
-
-    // twgl.bindUniformBlock(gl, this.programInfo, this.renderer.uboInfo.camera);
-
     log (`${this.constructor.name}|render`);
-    if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
+    if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances();
     else this._drawUnfilteredInstances();
     gl.bindVertexArray(null);
     // this.gl.flush(); // For debugging
   }
 
-  _drawFilteredInstances(instanceSet) {
-    WebGL2.drawSet(this.gl, instanceSet, this.offsetData);
+  _drawFilteredInstances() {
+    const { facetLength, facetLengths, byteOffsets } = this.indices.tracker;
+    WebGL2.drawSet(this.gl, this.instanceSet, facetLength || facetLengths, byteOffsets);
   }
 
   _drawUnfilteredInstances() {
-    const instanceLength = Number.isNumeric(this.offsetData.index.lengths)
-        ? this.offsetData.index.lengths : 0;
-      WebGL2.draw(this.gl, instanceLength * this.placeableHandler.numInstances);
+    const n = this.tracker.indices.arrayLength;
+    WebGL2.draw(this.gl, n);
   }
 }
 
@@ -425,6 +436,8 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
   /** @type {class} */
   static geomClass = GeometryInstanced;
+
+  static MODEL_MATRIX_LENGTH = 16;
 
   // ----- NOTE: Program ----- //
 
@@ -444,8 +457,10 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     this.geoms = new this.constructor.geomClass(opts);
   }
 
-  _initializeOffsets() {
-    this.offsetData = GeometryNonInstanced.computeBufferOffsets((new Array(this.placeableHandler.numInstances)).fill(this.geoms));
+  _initializeOffsetTrackers() {
+    // Unused for instances.
+
+    // this.offsetData = GeometryNonInstanced.computeBufferOffsets((new Array(this.placeableTracker.numInstances)).fill(this.geoms));
   }
 
   _defineAttributeProperties() {
@@ -453,27 +468,22 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
     // Define the model matrix, which changes 1 per instance.
     vertexProps.aModel = {
-      numComponents: 16,
-      data: this.placeableHandler.tracker.buffer,
+      numComponents: this.constructor.MODEL_MATRIX_LENGTH,
+      data: this.placeableTracker.tracker.buffer,
       drawType: this.gl.DYNAMIC_DRAW,
       // stride: Float32Array.BYTES_PER_ELEMENT * 16,
-      // stride: this.placeableHandler.instanceArrayValues.BYTES_PER_ELEMENT * 16,
+      // stride: this.placeableTracker.instanceArrayValues.BYTES_PER_ELEMENT * 16,
       offset: 0,
       divisor: 1,
     };
     return vertexProps;
   }
 
-  _initializeVertices() {
-    this.verticesArray = this.geoms.vertices;
-    this.indicesArray = this.geoms.indices;
-  }
+  _initializeVertices() { return; }
 
-  _setVertices() {
-    // Handled by _initializeVertices.
-  }
+  _setVertices() { return; }
 
-  _updateInstanceVertex(_idx) {
+  _updateInstanceVertex(_placeable) {
     console.error("DrawableObjectsInstancingWebGL2Abstract does not update individual instance vertices.");
   }
 
@@ -486,15 +496,16 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
   }
 
-  _updateModelBufferForInstance(idx) {
+  _updateModelBufferForInstance(placeable) {
     const gl = this.gl;
     const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
 
     // See twgl.setAttribInfoBufferFromArray.
-    log (`${this.constructor.name}|_updateBuffersForInstance ${idx}`);
-    const mOffset = 4 * 16 * idx;
+    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.id}`);
+    const tracker = this.placeable.tracker;
+    const mOffset = tracker.facetOffsetAtId(placeable.id) * tracker.type.BYTES_PER_ELEMENT;
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, this.placeableHandler.tracker.viewFacetAtIndex(idx));
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.id));
   }
 
   // ----- NOTE: Placeable handler ----- //
@@ -503,20 +514,20 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     this._rebuildModelBuffer();
   }
 
-  _updateInstance(idx) {
-    this._updateModelBufferForInstance(idx);
+  _updateInstance(placeable) {
+    this._updateModelBufferForInstance(placeable);
   }
 
   // ----- NOTE: Render ----- //
 
-  _drawFilteredInstances(instanceSet) {
+  _drawFilteredInstances() {
     // To draw select instances, modify the buffer offset.
-    // const tmp = this.placeableHandler.instanceArrayValues;
-    // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableHandler.numInstances} placeables`);
-    const nVertices = this.indicesArray.length; // Number of vertices to draw.
+    // const tmp = this.placeableTracker.instanceArrayValues;
+    // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableTracker.numInstances} placeables`);
+    const nVertices = this.geoms.indices.length; // Number of vertices to draw.
     WebGL2.drawInstancedMatrixSet(
       this.gl,
-      instanceSet,
+      this.instanceSet,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
       this.aModelAttribLoc,
@@ -525,7 +536,8 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
   _drawUnfilteredInstances() {
     // Draw every instance
-    const nVertices = this.indicesArray.length; // Number of vertices to draw.
-    WebGL2.drawInstanced(this.gl, nVertices, 0, this.placeableHandler.numInstances);
+    const n = this.tracker.indices.arrayLength;
+    const nVertices = this.geoms.indices.length; // Number of vertices to draw.
+    WebGL2.drawInstanced(this.gl, nVertices, 0, n);
   }
 }

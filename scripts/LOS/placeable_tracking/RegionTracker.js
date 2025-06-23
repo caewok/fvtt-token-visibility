@@ -41,7 +41,7 @@ The main RegionInstanceHandler keeps track of the mini-handlers.
 
 */
 
-export class RegionInstanceHandler extends PlaceableTracker {
+export class RegionTracker extends PlaceableTracker {
   static HOOKS = [
     { createRegion: "_onPlaceableCreation" },
     { updateRegion: "_onPlaceableUpdate" },
@@ -101,48 +101,6 @@ export class RegionInstanceHandler extends PlaceableTracker {
 
   static MODEL_ELEMENT_LENGTH = 16; // Single mat4x4.
 
-  _initializePlaceables(regions) {
-    this.regionGeoms = new WeakMap(); // No clear in WeakMap.
-    this.polygons = new WeakMap();
-
-    // Get the maximum number of shapes
-    const MODEL_SHAPES = this.constructor.MODEL_SHAPES;
-    const count = {};
-    for ( const type of MODEL_SHAPES ) count[type] = 0;
-    for ( const region of regions ) {
-      for ( const shape of region.shapes ) count[shape.data.type] += 1;
-    }
-
-    // Track the matrices for circles, rectangles, and ellipses.
-    for ( const type of MODEL_SHAPES ) {
-      const maxByteLength = this.constructor.MODEL_ELEMENT_LENGTH * Float32Array.BYTES_PER_ELEMENT * count[type];
-      this.trackers[type] = new FixedLengthTrackingBuffer(0, { maxByteLength, facetLength: this.constructor.MODEL_ELEMENT_LENGTH });
-    }
-    this.trackers.polygon.vertices = new VariableLengthTrackingBuffer();
-    this.trackers.polygon.indices = new VariableLengthTrackingBuffer(0, { type: Uint16Array });
-  }
-
-  _initializePlaceable(region, idx) {
-    super._initializePlaceable(region, idx);
-    const geom = new GeometryRegion(region);
-    this.regionGeoms.set(region, geom);
-    geom.updateShapes();
-    const { instanceGeoms, polyShape } = geom.calculateInstancedGeometry();
-    if ( polyShape ) {
-      this.polygons.set(region, polyShape);
-      this.trackers.polygon.vertices.addFacet({ id: region.id, newValues: polyShape.vertices });
-      this.trackers.polygon.indices.addFacet({ id: region.id, newValues: polyShape.indices });
-    }
-
-    for ( const geom of instanceGeoms ) {
-      const type = geom.shape.data.type;
-      const tracker = this.trackers[type];
-      tracker.addFacet({ id: geom.id });
-      geom.linkTransformMatrix(tracker.viewFacetById(geom.id));
-      geom.calculateModel(); // Will not stay linked once the tracker increases buffer size.
-    }
-  }
-
   _addPlaceable(region) {
     // TODO: Remove this dependency on idx
     const idx = this.instanceIndexFromId.nextIndex();
@@ -189,15 +147,17 @@ export class RegionInstanceHandler extends PlaceableTracker {
     }
   }
 
-  _removePlaceable(region) {
-    this.polygons.delete(region);
-    this.regionGeoms.delete(region);
+  _removePlaceable(region, regionId) {
+    if ( region ) {
+      this.polygons.delete(region);
+      this.regionGeoms.delete(region);
+    }
 
     // Remove all ids associated with this region in the model trackers.
     for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
       for ( const id of tracker.facetIdMap.keys() ) {
-        if ( id.startsWith(region.id) ) tracker.deleteFacetById(id);
+        if ( id.startsWith(regionId) ) tracker.deleteFacetById(id);
       }
     }
   }

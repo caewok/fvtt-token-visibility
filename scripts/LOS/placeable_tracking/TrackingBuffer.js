@@ -65,7 +65,7 @@ export class VariableLengthAbstractBuffer {
 
   #facetLengths = [];
 
-  get facetLength() { return [...this.#facetLengths]; }
+  get facetLengths() { return [...this.#facetLengths]; }
 
   #cumulativeFacetLengths = [];
 
@@ -79,9 +79,15 @@ export class VariableLengthAbstractBuffer {
 
   get arrayLength() { return this.#cumulativeFacetLengths.at(-1) || 0; }
 
+  get arraySize() { return this.arrayLength * this.#type.BYTES_PER_ELEMENT; }
+
+  get byteOffsets() { return this.#cumulativeFacetLengths.map(elem => elem * this.#type.BYTES_PER_ELEMENT); }
+
   facetLengthAtIndex(idx) { return this.#facetLengths[idx]; }
 
   facetOffsetAtIndex(idx) { return this.#cumulativeFacetLengths[idx] - this.#facetLengths[idx]; }
+
+  facetOffsetAtId(id) { return this.facetOffsetAtIndex(this.facetIdMap.get(id)); }
 
   // ----- NOTE: Facet tracking ----- //
 
@@ -348,6 +354,8 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
   get facetLength() { return this.#facetLength; }
 
+  get facetLengths() { return (new Array(this.#numFacets).fill(this.facetLength)); }
+
   #numFacets = 0;
 
   get numFacets() { return this.#numFacets; }
@@ -370,7 +378,7 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
    * @param {number[]|TypedArray}   The values to set for this facet; length must equal the preset facet length
    * @returns {boolean} True if the buffer had to be expanded to add the new facet
    */
-  addFacet(id, { newValues } = {}) {
+  addFacet({id, newValues } = {}) {
     if ( newValues && newValues.length !== this.facetLength ) console.error(`New values length must equal ${this.facetLength}`, newValues);
 
     const i = this.facetIdMap.nextIndex;
@@ -439,9 +447,9 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 /* Testing
 MODULE_ID = "tokenvisibility"
 api = game.modules.get("tokenvisibility").api
-VariableLengthAbstractBuffer = api.placeableHandler.VariableLengthAbstractBuffer
-FixedLengthTrackingBuffer = api.placeableHandler.FixedLengthTrackingBuffer
-VariableLengthTrackingBuffer = api.placeableHandler.VariableLengthTrackingBuffer
+VariableLengthAbstractBuffer = api.placeableTracker.VariableLengthAbstractBuffer
+FixedLengthTrackingBuffer = api.placeableTracker.FixedLengthTrackingBuffer
+VariableLengthTrackingBuffer = api.placeableTracker.VariableLengthTrackingBuffer
 tb = new VariableLengthTrackingBuffer({ facetLengths: [3,4,5,5,5] })
 
 
@@ -476,5 +484,18 @@ tb.makeContiguous()
 
 5 10 5 7 9
 5 5 9
+
+ph = new api.placeableTracker.TokenInstanceHandler(
+
+opts = {
+      addNormals: false,
+      addUVs: false,
+      placeable: null,
+    };
+geoms = []
+opts.token = canvas.tokens.placeables[0]
+geoms.push(new api.geometry.GeometryConstrainedToken(opts))
+opts.token = canvas.tokens.placeables[1]
+geoms.push(new api.geometry.GeometryConstrainedToken(opts))
 
 */

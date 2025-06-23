@@ -7,12 +7,12 @@
 import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { GeometryWall } from "../geometry/GeometryWall.js";
-import { WallInstanceHandler } from "../placeable_tracking/PlaceableWallInstanceHandler.js";
+import { WallTracker } from "../placeable_tracking/WallTracker.js";
 
 
 export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = WallInstanceHandler;
+  static handlerClass = WallTracker;
 
   /** @type {class} */
   static geomClass = GeometryWall;
@@ -56,13 +56,14 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     // Limit to walls within the vision triangle
     // Drop open doors.
     const opts = { senseType: this.senseType };
-    const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, opts);
-    const ph = this.placeableHandler;
-    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-      const wall = this.placeableHandler.getPlaceableFromId(id);
-      if ( WallInstanceHandler.isTerrain(wall.edge, opts) ^ this.limitedWall ) continue;
-      if ( WallInstanceHandler.isDirectional(wall.edge) ^ this.directional ) continue;
-      if ( edges.has(wall.edge) ) instanceSet.add(idx);
+    const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, opts);
+    const ph = this.placeableTracker;
+    for ( const wall of walls ) {
+      if ( !(this.placeableTracker.placeables.has(wall) && this.constructor.includeWall(wall)) ) continue;
+      if ( WallTracker.isTerrain(wall, opts) ^ this.limitedWall ) continue;
+      if ( WallTracker.isDirectional(wall) ^ this.directional ) continue;
+      const idx = this.trackers.indices.facetIdMap.get(wall.id);
+      this.instanceSet.add(idx);
     }
   }
 }

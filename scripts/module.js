@@ -49,11 +49,11 @@ import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
 
 
 import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
-import { WallInstanceHandler } from "./LOS/placeable_tracking/PlaceableWallInstanceHandler.js";
-import { TileInstanceHandler } from "./LOS/placeable_tracking/PlaceableTileInstanceHandler.js";
-import { TokenInstanceHandler } from "./LOS/placeable_tracking/PlaceableTokenInstanceHandler.js";
-import { RegionInstanceHandler } from "./LOS/placeable_tracking/PlaceableRegionInstanceHandler.js";
-import { VariableLengthTrackingBuffer, FixedLengthTrackingBuffer } from "./LOS/placeable_tracking/TrackingBuffer.js";
+import { WallTracker } from "./LOS/placeable_tracking/WallTracker.js";
+import { TileTracker } from "./LOS/placeable_tracking/TileTracker.js";
+import { TokenTracker } from "./LOS/placeable_tracking/TokenTracker.js";
+import { RegionTracker } from "./LOS/placeable_tracking/RegionTracker.js";
+import { VariableLengthAbstractBuffer, VariableLengthTrackingBuffer, FixedLengthTrackingBuffer } from "./LOS/placeable_tracking/TrackingBuffer.js";
 
 
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
@@ -338,15 +338,16 @@ Hooks.once("init", function() {
       twgl,
     },
 
-    placeableHandler: {
+    placeableTracker: {
+      VariableLengthAbstractBuffer,
       VariableLengthTrackingBuffer,
       FixedLengthTrackingBuffer,
       PlaceableTracker,
       PlaceableModelMatrixTracker,
-      WallInstanceHandler,
-      TileInstanceHandler,
-      TokenInstanceHandler,
-      RegionInstanceHandler
+      WallTracker,
+      TileTracker,
+      TokenTracker,
+      RegionTracker
     },
 
     webgpu: {

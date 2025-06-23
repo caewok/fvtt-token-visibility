@@ -7,9 +7,9 @@ import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { GeometryTile } from "../geometry/GeometryTile.js";
 import {
-  TileInstanceHandler,
-  SceneInstanceHandler,
-} from "../placeable_tracking/PlaceableTileInstanceHandler.js";
+  TileTracker,
+  SceneBackgroundTracker,
+} from "../placeable_tracking/TileTracker.js";
 
 import * as twgl from "./twgl.js";
 
@@ -19,7 +19,7 @@ const TMP_SET = new Set();
 
 export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TileInstanceHandler;
+  static handlerClass = TileTracker;
 
   /** @type {class} */
   static geomClass = GeometryTile;
@@ -85,11 +85,9 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
   _initializeTextures() {
     const textureOpts = this.constructor.textureOptions(this.gl);
-    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-      const tile = this.placeableHandler.getPlaceableFromId(id);
-      if ( !tile ) continue;
+    for ( const tile of this.placeableTracker.placeables ) {
       textureOpts.src = this.constructor.tileSource(tile);
-      this.textures.set(idx, twgl.createTexture(this.gl, textureOpts))
+      this.textures.set(id, twgl.createTexture(this.gl, textureOpts));
     }
   }
 
@@ -149,7 +147,7 @@ for (let i = 0; i < numImages; ++i) {
 
   _drawUnfilteredInstances() {
     // Still need to draw each one at a time so texture uniform can be changed.
-    const instanceSet = this.placeableHandler.instanceIndexFromId.values(); // Not a set but works in the for/of loop above.
+    const instanceSet = this.placeableTracker.instanceIndexFromId.values(); // Not a set but works in the for/of loop above.
     super._drawFilteredInstances(instanceSet);
   }
 
@@ -172,7 +170,7 @@ for (let i = 0; i < numImages; ++i) {
     // Limit to tiles within the vision triangle
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     const tileIds = tiles.map(t => t.id);
-    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
+    for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries() ) {
       if ( tileIds.has(id) ) instanceSet.add(idx);
     }
   }
@@ -181,7 +179,7 @@ for (let i = 0; i < numImages; ++i) {
 // TODO: Fix DrawableSceneBackgroundWebGL2.
 export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
   /** @type {class} */
-  static handlerClass = SceneInstanceHandler;
+  static handlerClass = SceneBackgroundTracker;
 
   /** @type {class} */
   static geomClass = GeometryTile;
@@ -191,10 +189,10 @@ export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
 
   async initialize() {
     const promises = [this._createProgram()];
-    this.placeableHandler.registerPlaceableHooks();
+    this.placeableTracker.registerPlaceableHooks();
     this._initializePlaceableHandler();
 
-    const sceneObj = this.placeableHandler.instanceIndexFromId.index[0];
+    const sceneObj = this.placeableTracker.instanceIndexFromId.index[0];
     if ( sceneObj && sceneObj.src ) {
       this.backgroundImage = await loadImageBitmap(sceneObj.src, {
         //imageOrientation: "flipY",

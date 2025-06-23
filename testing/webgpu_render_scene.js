@@ -102,6 +102,14 @@ let {
   // wgsl
 } = api.webgpu
 
+let {
+  GeometryEllipseRegionShape,
+  GeometryPolygonRegionShape,
+  GeometryRectangleRegionShape,
+  GeometryCircleRegionShape,
+  GeometryRegion,
+} = api.geometry
+
 
 device = await WebGPUDevice.getDevice()
 

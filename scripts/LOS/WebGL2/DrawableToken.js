@@ -8,7 +8,7 @@ import { DrawableObjectsInstancingWebGL2Abstract, DrawableObjectsWebGL2Abstract 
 import { MODULE_ID } from "../../const.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid } from "../geometry/GeometryToken.js";
-import { TokenInstanceHandler } from "../placeable_tracking/PlaceableTokenInstanceHandler.js";
+import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
 
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
@@ -20,7 +20,7 @@ const TMP_SET = new Set();
 
 export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TokenInstanceHandler;
+  static handlerClass = TokenTracker;
 
   /** @type {class} */
   static geomClass = GeometryToken;
@@ -43,7 +43,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
   }
 
   renderTarget(target) {
-    const idx = this.placeableHandler.instanceIndexFromId.get(target.id);
+    const idx = this.placeableTracker.instanceIndexFromId.get(target.id);
     if ( typeof idx === "undefined" ) return;
     if ( !this.constructor.includeToken(target) ) return;
 
@@ -108,11 +108,10 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     // Drop excluded token categories.
     const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
       { viewer, target, blockingTokensOpts: blocking.tokens });
-    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-      const token = this.placeableHandler.getPlaceableFromId(id);
-      if ( !token ) continue;
-      if ( !this.constructor.includeToken(token) ) continue;
-      if ( tokens.has(token)) instanceSet.add(idx);
+    for ( const token of tokens ) {
+      if ( !(this.placeableTracker.placeables.has(token) && this.constructor.includeToken(token)) ) continue;
+      const idx = this.trackers.indices.facetIdMap.get(token.id);
+      this.instanceSet.add(idx);
     }
   }
 }
@@ -128,7 +127,7 @@ export class DrawableHexTokenWebGL2 extends DrawableTokenWebGL2 {
 
 export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TokenInstanceHandler;
+  static handlerClass = TokenTracker;
 
   /** @type {class} */
   static geomClass = GeometryConstrainedToken;
@@ -170,10 +169,8 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
     const geoms = this.geoms;
     let geomIndex = 0;
     geoms.length = 0;
-    for ( const [id, idx] of this.placeableHandler.instanceIndexFromId.entries() ) {
-      const token = this.placeableHandler.getPlaceableFromId(id);
-      if ( !token ) continue;
-      if ( this.constructor.includeToken(token) ) this._includedPHIndices.set(idx, geomIndex);
+    for ( const token of this.placeableTracker.placeables ) {
+      if ( this.constructor.includeToken(token) ) this._includedPHIndices.set(token.id, geomIndex);
       geomIndex += 1;
       opts.placeable = token;
       geoms.push(new geomClass(opts));
@@ -187,18 +184,17 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
     super._updateAllInstances();
   }
 
-  _updateInstanceVertex(idx) {
+  _updateInstanceVertex(token) {
     // TODO: Keep a map of inactive indices?
-    const token = this.placeableHandler.getPlaceableFromInstanceIndex(idx);
     const shouldInclude = this.constructor.includeToken(token);
 
     // If a constrained geometry is already created, either remove from set or update.
-    if ( this._includedPHIndices.has(idx) ) {
+    if ( this._includedPHIndices.has(token.id) ) {
       if ( !shouldInclude ) {
-        this._includedPHIndices.delete(idx);
+        this._includedPHIndices.delete(token.id);
         return true;
       }
-      return super._updateInstanceVertex(idx);
+      return super._updateInstanceVertex(token.id);
 
     } else if ( shouldInclude ) return false; // Must insert a new geometry.
     // TODO: Add new tokens on the end without redoing every geometry?
@@ -231,14 +227,13 @@ export class ConstrainedDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenW
   }
 
   validateInstances() {
-    const placeableHandler = this.placeableHandler;
-    if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return DrawableTokenWebGL2.prototype.validateInstances.call(this); // No changes since last update.
+    const placeableTracker = this.placeableTracker;
+    if ( placeableTracker.updateId <= this.placeableTrackerUpdateId ) return DrawableTokenWebGL2.prototype.validateInstances.call(this); // No changes since last update.
 
     // If any constrained token has changed, need to rebuild.
     // If the token is now unconstrained, that is fine (will be skipped).
-    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
-      if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-      const token = placeableHandler.getPlaceableFromInstanceIndex(idx);
+    for ( const [token, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
+      if ( lastUpdate <= this.placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
       if ( token?.isConstrainedTokenBorder ) this._updateAllInstances();
     }
     DrawableTokenWebGL2.prototype.validateInstances.call(this);
@@ -253,14 +248,13 @@ export class LitDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenWebGL2 {
   }
 
   validateInstances() {
-    const placeableHandler = this.placeableHandler;
-    if ( placeableHandler.updateId <= this.placeableHandlerUpdateId ) return DrawableTokenWebGL2.prototype.validateInstances.call(this); // No changes since last update.
+    const placeableTracker = this.placeableTracker;
+    if ( placeableTracker.updateId <= this.placeableTrackerUpdateId ) return DrawableTokenWebGL2.prototype.validateInstances.call(this); // No changes since last update.
 
     // If any constrained token has changed, need to rebuild.
     // If the token is now unconstrained, that is fine (will be skipped).
-    for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
-      if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-      const token = placeableHandler.getPlaceableFromInstanceIndex(idx);
+    for ( const [token, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
+      if ( lastUpdate <= this.placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
       if ( token?.litTokenBorder ) this._updateAllInstances();
     }
     DrawableTokenWebGL2.prototype.validateInstances.call(this);

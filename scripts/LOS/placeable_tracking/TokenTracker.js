@@ -21,7 +21,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 /** @type {MatrixFlat<4,4>} */
 // const rotationM = MatrixFloat32.identity(4, 4);
 
-export class TokenInstanceHandler extends PlaceableModelMatrixTracker {
+export class TokenTracker extends PlaceableModelMatrixTracker {
   static HOOKS = [
     { drawToken: "_onPlaceableDraw" },
     { refreshToken: "_onPlaceableRefresh" },

@@ -22,7 +22,7 @@ const scaleM = MatrixFloat32.identity(4, 4);
 /** @type {MatrixFlat<4,4>} */
 const rotationM = MatrixFloat32.identity(4, 4);
 
-export class TileInstanceHandler extends PlaceableModelMatrixTracker {
+export class TileTracker extends PlaceableModelMatrixTracker {
   static HOOKS = [
     { createTile: "_onPlaceableCreation" },
     { updateTile: "_onPlaceableUpdate" },
@@ -118,7 +118,7 @@ export class TileInstanceHandler extends PlaceableModelMatrixTracker {
   }
 }
 
-export class SceneInstanceHandler extends TileInstanceHandler {
+export class SceneBackgroundTracker extends TileTracker {
   static HOOKS = []; // TODO: Scene hook if the scene background changes?
 
   getPlaceables() {
