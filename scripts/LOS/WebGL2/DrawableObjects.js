@@ -152,7 +152,7 @@ export class DrawableObjectsWebGL2Abstract {
   _initializeOffsetTrackers() {
     this.trackers.indices = new VariableLengthAbstractBuffer({ type: Uint16Array });
     this.trackers.vertices = new VariableLengthAbstractBuffer({ type: Float32Array });
-    for ( const geom of this.geoms ) {
+    for ( const geom of this.geoms.values() ) {
       this.trackers.indices.addFacet({ id: geom.id, facetLength: geom.indices.length });
       this.trackers.vertices.addFacet({ id: geom.id, facetLength: geom.vertices.length });
     }
@@ -215,8 +215,8 @@ export class DrawableObjectsWebGL2Abstract {
     // Redo the GPU buffers, whose size may have changed.
     const gl = this.gl;
     const iWebGLBuffer = this.buffers.indices = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, iWebGLBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, indices.viewBuffer(iArrayBuffer), gl.ELEMENT_ARRAY_BUFFER);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iWebGLBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices.viewBuffer(iArrayBuffer), gl[this.constructor.vertexDrawType]);
 
     const vWebGLBuffer = this.buffers.vertices = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vWebGLBuffer);

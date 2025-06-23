@@ -145,7 +145,7 @@ export class VariableLengthAbstractBuffer {
     const idx = this.facetIdMap.get(id);
     if ( this.facetLengthAtIndex(idx) !== facetLength ) {
       this.deleteFacet(id);
-      return this.addFacet(id, { facetLength, newValues });
+      return this.addFacet({ id, facetLength, newValues });
     }
 
     // Flag for subclasses that modification should occur.
@@ -239,7 +239,7 @@ export class VariableLengthAbstractBuffer {
 
   viewFacetById(buffer, id) {
     if ( !this.facetIdMap.has(id) ) return null;
-    return this.viewFacetAtIndex(this.facetIdMap.get(id));
+    return this.viewFacetAtIndex(buffer, this.facetIdMap.get(id));
   }
 
   viewFacetAtIndex(buffer, idx) {
@@ -404,7 +404,7 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
    */
   updateFacet(id, { newValues } = {}) {
     if ( newValues && newValues.length !== this.facetLength ) console.error(`New values length must equal ${this.facetLength}`, newValues);
-    if ( !this.facetIdMap.has(id) ) return this.addFacet(id, { newValues });
+    if ( !this.facetIdMap.has(id) ) return this.addFacet({ id, newValues });
 
     // Flag for subclasses that modification should occur.
     if ( newValues ) this._updateFacetAtIndex(this.facetIdMap.get(id), newValues);
