@@ -101,11 +101,7 @@ export class RegionTracker extends PlaceableTracker {
 
   static MODEL_ELEMENT_LENGTH = 16; // Single mat4x4.
 
-  _addPlaceable(region) {
-    // TODO: Remove this dependency on idx
-    const idx = this.instanceIndexFromId.nextIndex();
-    this._initializePlaceable(region, idx);
-  }
+  _addPlaceable(region) { return this._updatePlaceable(region); }
 
   _updatePlaceable(region) {
     const geom = new GeometryRegion(region);

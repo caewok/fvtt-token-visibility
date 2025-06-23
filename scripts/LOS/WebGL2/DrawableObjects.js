@@ -160,10 +160,16 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   _initializeAttributes() {
-    this._initializeVertices();
+    this._initializeAttributeBuffers();
     this.vertexProps = this._defineAttributeProperties();
     this.attributeBufferInfo = twgl.createBufferInfoFromArrays(this.gl, this.vertexProps);
     this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, this.attributeBufferInfo);
+  }
+
+  _initializeAttributeBuffers() {
+    const gl = this.gl;
+    this.buffers.indices = gl.createBuffer();
+    this.buffers.vertices = gl.createBuffer();
   }
 
   /**
@@ -171,12 +177,13 @@ export class DrawableObjectsWebGL2Abstract {
    */
   _updateAllVertices() {
     const { indices, vertices } = this.trackers;
-    const ph = this.placeableTracker;
+    const pt = this.placeableTracker;
 
     // Remove missing/deleted ids from the trackers.
     // Can assume id set is same in indices and vertices.
     for ( const id of indices.facetIdMap.keys() ) {
-      if ( ph.instanceIndexFromId.has(id) ) continue;
+      const placeable = pt.getPlaceableFromId(id);
+      if ( pt.placeables.has(placeable) ) continue;
       indices.deleteFacet(id);
       vertices.deleteFacet(id);
     }
@@ -209,7 +216,7 @@ export class DrawableObjectsWebGL2Abstract {
     const gl = this.gl;
     const iWebGLBuffer = this.buffers.indices = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, iWebGLBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, indices.viewBuffer(iArrayBuffer), gl[this.constructor.vertexDrawType]);
+    gl.bufferData(gl.ARRAY_BUFFER, indices.viewBuffer(iArrayBuffer), gl.ELEMENT_ARRAY_BUFFER);
 
     const vWebGLBuffer = this.buffers.vertices = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vWebGLBuffer);
@@ -228,7 +235,7 @@ export class DrawableObjectsWebGL2Abstract {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
     log (`${this.constructor.name}|_defineAttributeProperties`);
-    const vSize = this.trackers.vertices.type.BYTES_PER_ELEMENT;
+    const vSize = Float32Array.BYTES_PER_ELEMENT;
     const debugViewNormals = this.debugViewNormals;
     const vertexProps = {
       aPos: {
@@ -480,6 +487,17 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   }
 
   _initializeVertices() { return; }
+
+  _updateAllVertices() {
+    const gl = this.gl;
+    const iWebGLBuffer = this.buffers.indices = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iWebGLBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.geoms.instanceIndices, gl[this.constructor.vertexDrawType]);
+
+    const vWebGLBuffer = this.buffers.vertices = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vWebGLBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.geoms.instanceVertices, gl[this.constructor.vertexDrawType]);
+  }
 
   _setVertices() { return; }
 

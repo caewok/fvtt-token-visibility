@@ -8,7 +8,7 @@ PIXI,
 "use strict";
 
 import { WebGL2 } from "./WebGL2.js";
-import { Camera } from "../WebGPU/Camera.js";
+import { Camera } from "../Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
 import { DrawableWallWebGL2 } from "./DrawableWall.js";
 import {

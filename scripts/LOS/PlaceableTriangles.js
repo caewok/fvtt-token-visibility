@@ -10,10 +10,10 @@ Region,
 "use strict";
 
 import { MODULE_ID } from "../const.js";
-import { GeometryDesc } from "./WebGPU/GeometryDesc.js";
-import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc } from "./WebGPU/GeometryToken.js";
-import { GeometryWallDesc } from "./WebGPU/GeometryWall.js";
-import { GeometryHorizontalPlaneDesc } from "./WebGPU/GeometryTile.js";
+import { Polygon3dVertices } from "./geometry/BasicVertices.js";
+import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid } from "./geometry/GeometryToken.js";
+import { GeometryWall } from "./geometry/GeometryWall.js";
+import { GeometryTile } from "./geometry/GeometryTile.js";
 import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
 import { WallTracker } from "./placeable_tracking/WallTracker.js";
 import { TileTracker } from "./placeable_tracking/TileTracker.js";
@@ -23,18 +23,6 @@ import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
-Hooks.on("canvasReady", function() {
-  console.debug(`${MODULE_ID}|PlaceableTriangles|canvasReady`);
-  WallTriangles.registerExistingPlaceables();
-  TileTriangles.registerExistingPlaceables();
-  TokenTriangles.registerExistingPlaceables();
-  RegionTriangles.registerExistingPlaceables();
-
-  WallTriangles.registerPlaceableHooks();
-  TileTriangles.registerPlaceableHooks();
-  TokenTriangles.registerPlaceableHooks();
-  RegionTriangles.registerPlaceableHooks();
-});
 
 /**
 Store triangles representing Foundry object shapes.
@@ -115,12 +103,15 @@ class AbstractPolygonTriangles {
 }
 
 class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
-  static geom;
+  static geomClass;
+
+  static geomOpts = {};
 
   /** @type {Triangle3d[]} */
   static _prototypeTriangles;
 
   static get prototypeTriangles() {
+    this.geom ??= new this.constructor.geomClass(this.constructor.geomOpts);
     return (this._prototypeTriangles ??= Triangle3d.fromVertices(this.geom.vertices, this.geom.indices));
   }
 
@@ -155,7 +146,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
 
 export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
   /** @type {GeometryDesc} */
-  static geom = new GeometryWallDesc({ directional: false });
+  static geomClass = GeometryWall;
 
   /** @type {Triangle3d[]} */
   static _prototypeTriangles;
@@ -188,7 +179,9 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
 
 export class DirectionalWallTriangles extends WallTriangles {
   /** @type {GeometryDesc} */
-  static geom = new GeometryWallDesc({ directional: true });
+  static geomClass = GeometryWall;
+
+  static geomOpts = { type: "directional" };
 
   /** @type {Triangle3d[]} */
   static _prototypeTriangles;
@@ -196,7 +189,7 @@ export class DirectionalWallTriangles extends WallTriangles {
 
 export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   /** @type {GeometryDesc} */
-  static geom = new GeometryHorizontalPlaneDesc();
+  static geomClass = GeometryTile;
 
   /** @type {Triangle3d[]} */
   static _prototypeTriangles;
@@ -276,8 +269,8 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     // Trickier than leaving as polygons but can dramatically cut down the number of polys
     // for more complex shapes.
     const tris = [];
-    const topFace = GeometryDesc.polygonTopBottomFaces(polys, { top: true, addUVs: false, addNormals: false });
-    const bottomFace = GeometryDesc.polygonTopBottomFaces(polys, { top: false, addUVs: false, addNormals: false });
+    const topFace = Polygon3dVertices.polygonTopBottomFaces(polys, { top: true, addUVs: false, addNormals: false });
+    const bottomFace = Polygon3dVertices.polygonTopBottomFaces(polys, { top: false, addUVs: false, addNormals: false });
     tris.push(
       ...Triangle3d.fromVertices(topFace.vertices, topFace.indices),
       ...Triangle3d.fromVertices(bottomFace.vertices, bottomFace.indices)
@@ -375,7 +368,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   get triangles() {
     const tile = this.placeable;
 
-    if ( !this.constructor.instanceHandler.instanceIndexFromId.has(tile.id) ) return [];
+    if ( !this.constructor.instanceHandler.placeables.has(tile) ) return [];
     if ( !tile.evPixelCache ) return super.triangles.call(this);
 
 
@@ -405,7 +398,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
 
 export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
   /** @type {GeometryDesc} */
-  static geom = new GeometryCubeDesc();
+  static geomClass = GeometryToken;
 
   /** @type {Triangle3d[]} */
   static _prototypeTriangles;
@@ -444,13 +437,13 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
     const token = this.placeable;
     if ( !token.litTokenBorder ) return null;
 
-    const geom = new GeometryLitTokenDesc({ token });
+    const geom = new GeometryLitToken({ token });
     return Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
   get constrainedTriangles() {
     const token = this.placeable;
-    const geom = new GeometryConstrainedTokenDesc({ token });
+    const geom = new GeometryConstrainedToken({ token });
     return Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
@@ -474,10 +467,7 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
 
   static buildGridGeom() {
     // TODO: Hex grids
-    const w = canvas.grid.sizeX;
-    const d = canvas.grid.sizeY;
-    const h = canvas.dimensions.size;
-    const geom = new GeometryCubeDesc({ w, d, h });
+    const geom = new GeometrySquareGrid();
     this.prototypeTriangles = Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 

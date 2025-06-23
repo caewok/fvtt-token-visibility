@@ -6,7 +6,7 @@ PIXI,
 "use strict";
 
 import { MODULE_ID } from "../../const.js";
-import { wgsl } from "../WebGPU/wgsl-preprocessor.js";
+import { wgsl } from "../wgsl-preprocessor.js";
 import * as twgl from "./twgl.js";
 import { applyConsecutively, log } from "../util.js";
 

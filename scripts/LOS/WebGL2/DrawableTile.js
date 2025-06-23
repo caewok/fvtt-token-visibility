@@ -39,7 +39,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
   // ----- NOTE: Attributes ----- //
 
-  /** @type {WebGLTexture[]} */
+  /** @type {Map<string, WebGLTexture>} */
   textures = new Map();
 
   _initializeGeoms(opts = {}) {
@@ -52,9 +52,9 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     const debugViewNormals = this.debugViewNormals;
 
     // coords (3), normal (3), uv (2)
-    let stride = this.verticesArray.BYTES_PER_ELEMENT * 5;
+    let stride = Float32Array.BYTES_PER_ELEMENT * 5;
     if ( debugViewNormals ) {
-      stride = this.verticesArray.BYTES_PER_ELEMENT * 8;
+      stride = Float32Array.BYTES_PER_ELEMENT * 8;
       vertexProps.aNorm.stride = stride;
     }
     vertexProps.aPos.stride = stride;
@@ -62,7 +62,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
       numComponents: 2,
       buffer: vertexProps.aPos.buffer,
       stride,
-      offset: this.verticesArray.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+      offset: Float32Array.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
     }
     return vertexProps;
   }
@@ -87,7 +87,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     const textureOpts = this.constructor.textureOptions(this.gl);
     for ( const tile of this.placeableTracker.placeables ) {
       textureOpts.src = this.constructor.tileSource(tile);
-      this.textures.set(id, twgl.createTexture(this.gl, textureOpts));
+      this.textures.set(tile.id, twgl.createTexture(this.gl, textureOpts));
     }
   }
 
@@ -138,7 +138,9 @@ for (let i = 0; i < numImages; ++i) {
     for ( const idx of instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(idx));
+      const id = this.trackers.indices.facetIdMap.index[idx];
+      if ( !id ) continue;
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(id));
       // uniforms.uTileTexture = this.textures.get(idx);
       // twgl.setUniforms(this.programInfo, uniforms);
       super._drawFilteredInstances(TMP_SET);
@@ -147,7 +149,8 @@ for (let i = 0; i < numImages; ++i) {
 
   _drawUnfilteredInstances() {
     // Still need to draw each one at a time so texture uniform can be changed.
-    const instanceSet = this.placeableTracker.instanceIndexFromId.values(); // Not a set but works in the for/of loop above.
+
+    const instanceSet = Array.fromRange(this.trackers.indices.facetIdMap.index.length - 1);
     super._drawFilteredInstances(instanceSet);
   }
 
@@ -169,9 +172,10 @@ for (let i = 0; i < numImages; ++i) {
 
     // Limit to tiles within the vision triangle
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
-    const tileIds = tiles.map(t => t.id);
-    for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries() ) {
-      if ( tileIds.has(id) ) instanceSet.add(idx);
+    for ( const tile of tiles ) {
+      if ( !(this.placeableTracker.placeables.has(token) && this.constructor.includeToken(token)) ) continue;
+      const idx = this.trackers.indices.facetIdMap.get(tile.id);
+      instanceSet.add(idx);
     }
   }
 }
@@ -192,7 +196,7 @@ export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
     this.placeableTracker.registerPlaceableHooks();
     this._initializePlaceableHandler();
 
-    const sceneObj = this.placeableTracker.instanceIndexFromId.index[0];
+    const sceneObj = this.placeableTracker.placeables.first();
     if ( sceneObj && sceneObj.src ) {
       this.backgroundImage = await loadImageBitmap(sceneObj.src, {
         //imageOrientation: "flipY",

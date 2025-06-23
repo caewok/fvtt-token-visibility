@@ -43,9 +43,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
   }
 
   renderTarget(target) {
-    const idx = this.placeableTracker.instanceIndexFromId.get(target.id);
-    if ( typeof idx === "undefined" ) return;
-    if ( !this.constructor.includeToken(target) ) return;
+    if ( !(this.placeableTracker.placeables.has(target) && this.constructor.includeToken(target)) ) return;
 
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
@@ -60,7 +58,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
     log (`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
     TMP_SET.clear();
-    TMP_SET.add(idx);
+    TMP_SET.add(this.trackers.indices.facetIdMap.get(target.id));
     this._drawFilteredInstances(TMP_SET)
     gl.bindVertexArray(null);
     // this.gl.flush(); // For debugging
@@ -173,7 +171,7 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
       if ( this.constructor.includeToken(token) ) this._includedPHIndices.set(token.id, geomIndex);
       geomIndex += 1;
       opts.placeable = token;
-      geoms.push(new geomClass(opts));
+      geoms.set(token.id, new geomClass(opts));
     }
   }
 

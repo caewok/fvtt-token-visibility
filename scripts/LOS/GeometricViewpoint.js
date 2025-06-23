@@ -12,7 +12,7 @@ import { Settings } from "../settings.js";
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
-import { Camera } from "./WebGPU/Camera.js";
+import { Camera } from "./Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
 import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";

@@ -233,6 +233,21 @@ class DrawableObjectsAbstract {
    */
   _createStaticGeometries() {}
 
+  trackers = {
+    indices: null,
+    vertices: null,
+  };
+
+  _initializeOffsetTrackers() {
+    this.trackers.indices = new VariableLengthAbstractBuffer({ type: Uint16Array });
+    this.trackers.vertices = new VariableLengthAbstractBuffer({ type: Float32Array });
+    for ( const geom of this.geoms ) {
+      this.trackers.indices.addFacet({ id: geom.id, facetLength: geom.indices.length });
+      this.trackers.vertices.addFacet({ id: geom.id, facetLength: geom.vertices.length });
+    }
+    // this.offsetData = GeometryNonInstanced.computeBufferOffsets(this.geoms);
+  }
+
   /**
    * Define vertex and index buffers for the static geometries.
    * Geometries will share a single vertex buffer and single index buffer, with offsets.
@@ -245,37 +260,38 @@ class DrawableObjectsAbstract {
 
     if ( this.buffers.staticVertex ) this.buffers.staticVertex = this.buffers.staticVertex.destroy();
     if ( this.buffers.staticIndex ) this.buffers.staticIndex = this.buffers.staticIndex.destroy();
+    this._initializeOffsetTrackers();
+    const { vertices, indices } = this.trackers;
 
-    const offsetData = GeometryDesc.computeBufferOffsets(geoms);
-    const vertexArray = combineTypedArrays(...geoms.map(g => g.vertices));
     this.buffers.staticVertex = this.device.createBuffer({
         label: "Static Vertex Buffer",
-        size: offsetData.vertex.totalSize,
+        size: vertices.arraySize,
         usage: GPUBufferUsage.VERTEX,
         mappedAtCreation: true,
       });
     // Only copying once, so use mappedAtCreation instead of writeBuffer.
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
-    const dst = new vertexArray.constructor(this.buffers.staticVertex.getMappedRange());
-    dst.set(vertexArray);
-    this.buffers.staticVertex.unmap();
-    // this.rawBuffers.staticVertex = vertexArray;
+    const dstV = new vertices.type(this.buffers.staticVertex.getMappedRange());
 
-    if ( offsetData.index.totalSize ) {
-      const indexArray = combineTypedArrays(...geoms.filter(g => Boolean(g.indices)).map(g => g.indices));
+    if ( indices.arraySize ) {
       this.buffers.staticIndex = this.device.createBuffer({
         label: "Static Index Buffer",
-        size: offsetData.index.totalSize,
+        size: indices.arraySize,
         usage: GPUBufferUsage.INDEX,
         mappedAtCreation: true,
       });
-      // Only copying once, so use mappedAtCreation instead of writeBuffer.
-      // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
-      const dst = new indexArray.constructor(this.buffers.staticIndex.getMappedRange());
-      dst.set(indexArray);
+      const dstI = new indexArray.constructor(this.buffers.staticIndex.getMappedRange());
+
+      for ( const geom of geoms ) {
+        dstV.set(geom.vertices, vertices.facetOffsetAtId(geom.id));
+        dstI.set(geom.indices, indices.facetOffsetAtId(geom.id));
+      }
       this.buffers.staticIndex.unmap();
-      // this.rawBuffers.staticIndex = indexArray;
+
+    } else { // Only vertices.
+      for ( const geom of geoms ) dstV.set(geom.vertices, vertices.facetOffsetAtId(geom.id));
     }
+    this.buffers.staticVertex.unmap();
 
     for ( let i = 0, n = geoms.length; i < n; i += 1 ) {
       const geom = geoms[i];
@@ -1006,10 +1022,21 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     if ( !blocking.walls ) return;
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
-    const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    for ( const wall of walls ) {
+      if ( !(this.placeableTracker.placeables.has(wall) && this.constructor.includeWall(wall)) ) continue;
+      if ( !this.includeEdge(wall.edge) ) continue;
+
+      // Add this edge to the drawable set.
+      const idx = this.trackers.indices.facetIdMap.get(wall.id);
+      const key = this.edgeDrawableKey(edge);
+      this.drawables.get(key).instanceSet.add(idx);
+
+    }
+
+
     for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries() ) {
-      const wall = this.placeableTracker.getPlaceableFromId(id);
-      if ( !wall ) continue;
+
       const edge = wall.edge;
       // If the edge is an open door or non-blocking wall, ignore.
       if ( !edges.has(edge) ) continue;

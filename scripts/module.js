@@ -35,17 +35,17 @@ import * as range from "./visibility_range.js";
 
 import { Polygon3d, Triangle3d, Polygons3d } from "./LOS/Polygon3d.js";
 
-import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
-import { Camera } from "./LOS/WebGPU/Camera.js";
+// import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
+import { Camera } from "./LOS/Camera.js";
 
 import {
   mat2, mat2d, mat3, mat4,
   quat, quat2,
   vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
-import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
-import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
-import { wgsl } from "./LOS/WebGPU/wgsl-preprocessor.js";
-import { AsyncQueue } from "./LOS/WebGPU/AsyncQueue.js";
+// import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
+// import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
+import { wgsl } from "./LOS/wgsl-preprocessor.js";
+import { AsyncQueue } from "./LOS/AsyncQueue.js";
 
 
 import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
@@ -69,12 +69,12 @@ import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./L
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
-import {
-  PercentVisibleCalculatorWebGPU,
-  PercentVisibleCalculatorWebGPUAsync,
-  DebugVisibilityViewerWebGPU,
-  DebugVisibilityViewerWebGPUAsync,
-} from "./LOS/WebGPU/WebGPUViewpoint.js";
+// import {
+//   PercentVisibleCalculatorWebGPU,
+//   PercentVisibleCalculatorWebGPUAsync,
+//   DebugVisibilityViewerWebGPU,
+//   DebugVisibilityViewerWebGPUAsync,
+// } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 import {
   HorizontalQuadVertices,
@@ -98,7 +98,7 @@ import * as MarchingSquares from "./marchingsquares-esm.js";
 
 // Other self-executing hooks
 import "./changelog.js";
-import "./LOS/WebGPU/webgpu-map-sync.js";
+// import "./LOS/WebGPU/webgpu-map-sync.js";
 
 Hooks.once("init", function() {
   // Load bitmap font
@@ -210,8 +210,8 @@ Hooks.once("init", function() {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webgl2: PercentVisibleCalculatorWebGL2,
-      webgpu: PercentVisibleCalculatorWebGPU,
-      "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
+      // webgpu: PercentVisibleCalculatorWebGPU,
+      // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
       hybrid: PercentVisibleCalculatorHybrid,
     },
 
@@ -219,8 +219,8 @@ Hooks.once("init", function() {
       points: null,
       geometric: null,
       webgl2: null,
-      webgpu: null,
-      "webgpu-async": null,
+      // webgpu: null,
+      // "webgpu-async": null,
       hybrid: null,
     },
 
@@ -231,8 +231,8 @@ Hooks.once("init", function() {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
       webgl2: DebugVisibilityViewerWebGL2,
-      webgpu: DebugVisibilityViewerWebGPU,
-      "webgpu-async": DebugVisibilityViewerWebGPUAsync,
+      // webgpu: DebugVisibilityViewerWebGPU,
+      // "webgpu-async": DebugVisibilityViewerWebGPUAsync,
       hybrid: DebugVisibilityViewerHybrid,
     },
 
@@ -308,8 +308,8 @@ Hooks.once("init", function() {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webGL2: PercentVisibleCalculatorWebGL2,
-      webGPU: PercentVisibleCalculatorWebGPU,
-      webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
+      // webGPU: PercentVisibleCalculatorWebGPU,
+      // webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
       hybrid: PercentVisibleCalculatorHybrid,
     },
 
@@ -323,8 +323,8 @@ Hooks.once("init", function() {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
       webGL2: DebugVisibilityViewerWebGL2,
-      webGPU: DebugVisibilityViewerWebGPU,
-      webGPUAsync: DebugVisibilityViewerWebGPUAsync,
+      // webGPU: DebugVisibilityViewerWebGPU,
+      // webGPUAsync: DebugVisibilityViewerWebGPUAsync,
       hybrid: DebugVisibilityViewerHybrid,
     },
 
@@ -350,17 +350,17 @@ Hooks.once("init", function() {
       RegionTracker
     },
 
-    webgpu: {
-      WebGPUDevice,
-      WebGPUShader,
-      WebGPUBuffer,
-      WebGPUTexture,
-      Camera,
-      RenderObstacles,
-      WebGPUSumRedPixels,
-      wgsl,
-      AsyncQueue,
-    },
+//     webgpu: {
+//       WebGPUDevice,
+//       WebGPUShader,
+//       WebGPUBuffer,
+//       WebGPUTexture,
+//       Camera,
+//       RenderObstacles,
+//       WebGPUSumRedPixels,
+//       wgsl,
+//       AsyncQueue,
+//     },
 
 
     AbstractViewpoint,
@@ -424,10 +424,10 @@ Hooks.on("canvasReady", function() {
     "webgl2",
     "hybrid",
   ];
-  const webGPUCalcs = [
-    "webgpu",
-    "webgpu-async",
-  ];
+//   const webGPUCalcs = [
+//     "webgpu",
+//     "webgpu-async",
+//   ];
   const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
   const calcClasses = CONFIG[MODULE_ID].sightCalculatorClasses;
   Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
@@ -439,28 +439,28 @@ Hooks.on("canvasReady", function() {
     calc.initialize(); // Async.
   }
 
-  WebGPUDevice.getDevice().then(device => {
-    if ( !device ) {
-      console.warn("No WebGPU device located. Falling back to WebGL2.");
-      const currAlg = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
-      if ( currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU
-        || currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU_ASYNC ) {
-        Settings.set(Settings.KEYS.LOS.TARGET.ALGORITHM, Settings.KEYS.LOS.TARGET.TYPES.WEBGL2);
-      }
-      sightCalcs.webGPU = sightCalcs.webGL2;
-      sightCalcs.webGPUAsync = sightCalcs.webGL2;
-
-    } else {
-      CONFIG[MODULE_ID].webGPUDevice = device;
-      for ( const calcName of webGPUCalcs ) {
-        const cl = calcClasses[calcName];
-        const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
-        calc.initialize(); // Async.
-      }
-    }
-
-    if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
-  });
+//   WebGPUDevice.getDevice().then(device => {
+//     if ( !device ) {
+//       console.warn("No WebGPU device located. Falling back to WebGL2.");
+//       const currAlg = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
+//       if ( currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU
+//         || currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU_ASYNC ) {
+//         Settings.set(Settings.KEYS.LOS.TARGET.ALGORITHM, Settings.KEYS.LOS.TARGET.TYPES.WEBGL2);
+//       }
+//       sightCalcs.webGPU = sightCalcs.webGL2;
+//       sightCalcs.webGPUAsync = sightCalcs.webGL2;
+//
+//     } else {
+//       CONFIG[MODULE_ID].webGPUDevice = device;
+//       for ( const calcName of webGPUCalcs ) {
+//         const cl = calcClasses[calcName];
+//         const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
+//         calc.initialize(); // Async.
+//       }
+//     }
+//
+//     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
+//   });
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

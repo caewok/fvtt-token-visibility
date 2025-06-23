@@ -21,7 +21,7 @@ import { PointsViewpoint } from "./PointsViewpoint.js";
 import { GeometricViewpoint } from "./GeometricViewpoint.js";
 import { Hybrid3dViewpoint } from "./Hybrid3dViewpoint.js";
 import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
-import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
+// import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -96,16 +96,16 @@ export class AbstractViewerLOS {
       "geometric": GeometricViewpoint,
       "hybrid": Hybrid3dViewpoint,
       "webgl2": WebGL2Viewpoint,
-      "webgpu": WebGPUViewpoint,
-      "webgpu-async": WebGPUViewpointAsync,
+      // "webgpu": WebGPUViewpoint,
+      // "webgpu-async": WebGPUViewpointAsync,
 
       // Cannot reliably test for class, so test for class name instead.
       "PointsViewpoint": "points",
       "GeometricViewpoint": "geometric",
       "Hybrid3dViewpoint": "hybrid",
       "WebGL2Viewpoint": "webgl2",
-      "WebGPUViewpoint": "webgpu",
-      "WebGPUViewpointAsync": "webgpu-async",
+      // "WebGPUViewpoint": "webgpu",
+      // "WebGPUViewpointAsync": "webgpu-async",
     }
   };
 

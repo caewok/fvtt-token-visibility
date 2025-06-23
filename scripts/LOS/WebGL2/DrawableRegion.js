@@ -157,15 +157,13 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     const geoms = this.geoms;
     let geomIndex = 0;
     geoms.length = 0;
-    for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries() ) {
-      const region = this.placeableTracker.getPlaceableFromId(id);
-      if ( !region ) continue;
-      if ( this.constructor.includeRegion(region) ) this._includedPHIndices.set(idx, geomIndex);
+    for ( const region of this.placeableTracker.placeables ) {
+      if ( !this.constructor.includeRegion(region) ) continue;
       geomIndex += 1;
       opts.placeable = region;
       const geom = new geomClass(opts);
       geom.updateGeometry();
-      geoms.push(geom);
+      geoms.set(region.id, geom);
     }
   }
 

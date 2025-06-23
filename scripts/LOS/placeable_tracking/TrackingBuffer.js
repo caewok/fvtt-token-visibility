@@ -250,6 +250,10 @@ export class VariableLengthAbstractBuffer {
       this.facetLengthAtIndex(idx) // Length of this element.
     );
   }
+
+  copyToBufferArrayById(id, arr, newValues) {
+    arr.set(newValues, this.facetOffsetAtId(id))
+  }
 }
 
 /** Tracking buffer
