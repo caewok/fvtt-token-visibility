@@ -23,11 +23,20 @@ import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
-
 /**
 Store triangles representing Foundry object shapes.
 */
-
+Hooks.on("canvasReady", function() {
+  console.debug(`${MODULE_ID}|PlaceableTriangles|canvasReady`);
+  WallTriangles.registerExistingPlaceables();
+  TileTriangles.registerExistingPlaceables();
+  TokenTriangles.registerExistingPlaceables();
+  RegionTriangles.registerExistingPlaceables();
+  WallTriangles.registerPlaceableHooks();
+  TileTriangles.registerPlaceableHooks();
+  TokenTriangles.registerPlaceableHooks();
+  RegionTriangles.registerPlaceableHooks();
+});
 
 const SENSE_TYPES = {};
 CONST.WALL_RESTRICTION_TYPES.forEach(type => SENSE_TYPES[type] = Symbol(type));
@@ -111,7 +120,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
   static _prototypeTriangles;
 
   static get prototypeTriangles() {
-    this.geom ??= new this.constructor.geomClass(this.constructor.geomOpts);
+    this.geom ??= new this.geomClass(this.geomOpts);
     return (this._prototypeTriangles ??= Triangle3d.fromVertices(this.geom.vertices, this.geom.indices));
   }
 
@@ -269,11 +278,15 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     // Trickier than leaving as polygons but can dramatically cut down the number of polys
     // for more complex shapes.
     const tris = [];
-    const topFace = Polygon3dVertices.polygonTopBottomFaces(polys, { top: true, addUVs: false, addNormals: false });
-    const bottomFace = Polygon3dVertices.polygonTopBottomFaces(polys, { top: false, addUVs: false, addNormals: false });
+    const elev = this.placeable.elevationZ;
+    const { top, bottom } = Polygon3dVertices.polygonTopBottomFaces(polys, {  topZ: elev, bottomZ: elev });
+
+    // Trim the UVs and Normals.
+    const topTrimmed = Polygon3dVertices.trimNormalsAndUVs(top);
+    const bottomTrimmed = Polygon3dVertices.trimNormalsAndUVs(bottom);
     tris.push(
-      ...Triangle3d.fromVertices(topFace.vertices, topFace.indices),
-      ...Triangle3d.fromVertices(bottomFace.vertices, bottomFace.indices)
+      ...Triangle3d.fromVertices(topTrimmed),
+      ...Triangle3d.fromVertices(bottomTrimmed)
     );
 
     // Drop any triangles that are nearly collinear or have very small areas.
