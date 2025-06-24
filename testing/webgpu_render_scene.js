@@ -82,25 +82,25 @@ let { DocumentUpdateTracker, TokenUpdateTracker } = api;
 
 buildDebugViewer = api.buildDebugViewer
 
-let {
-  WebGPUDevice,
-  WebGPUShader,
-  WebGPUBuffer,
-  WebGPUTexture,
-  Camera,
-  GeometryWallDesc,
-  GeometryCubeDesc,
-  GeometryTileDesc,
-  GeometryConstrainedTokenDesc,
-  RenderWalls,
-  RenderTokens,
-  RenderTiles,
-  RenderObstacles,
-  WebGPUSumRedPixels,
-  AsyncQueue,
-  PlaceableInstanceHandler
-  // wgsl
-} = api.webgpu
+// let {
+//   WebGPUDevice,
+//   WebGPUShader,
+//   WebGPUBuffer,
+//   WebGPUTexture,
+//   Camera,
+//   GeometryWallDesc,
+//   GeometryCubeDesc,
+//   GeometryTileDesc,
+//   GeometryConstrainedTokenDesc,
+//   RenderWalls,
+//   RenderTokens,
+//   RenderTiles,
+//   RenderObstacles,
+//   WebGPUSumRedPixels,
+//   AsyncQueue,
+//   PlaceableInstanceHandler
+//   // wgsl
+// } = api.webgpu
 
 let {
   GeometryEllipseRegionShape,
@@ -111,7 +111,7 @@ let {
 } = api.geometry
 
 
-device = await WebGPUDevice.getDevice()
+// device = await WebGPUDevice.getDevice()
 
 viewer = _token
 target = game.user.targets.first()

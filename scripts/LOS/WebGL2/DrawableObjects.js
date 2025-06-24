@@ -17,7 +17,7 @@ import { log } from "../util.js";
  */
 export class DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static handlerClass;
+  static trackerClass;
 
   /** @type {class} */
   static geomClass;
@@ -59,9 +59,9 @@ export class DrawableObjectsWebGL2Abstract {
    */
   async initialize() {
     if ( this.#initialized ) return;
-    this.placeableTracker ??= new this.constructor.handlerClass();
-    this.programInfo = await this._createProgram();
+    this.placeableTracker = this.constructor.trackerClass.cachedBuild();
     this.placeableTracker.registerPlaceableHooks();
+    this.programInfo = await this._createProgram();
     this._initializePlaceableHandler();
     this._initializeGeoms();
     this._initializeOffsetTrackers();
@@ -204,11 +204,11 @@ export class DrawableObjectsWebGL2Abstract {
       geom.indices.offset = indices.facetOffsetAtId(id);
 
       // Copy the index data to the temporary JS buffer.
-      const iView = indices.viewFacetById(iArrayBuffer, id);
+      const iView = indices.viewFacetById(id, iArrayBuffer);
       iView.set(geom.modelIndices);
 
       // Copy the vertex data to the temporary JS buffer.
-      const vView = vertices.viewFacetById(vArrayBuffer, id);
+      const vView = vertices.viewFacetById(id, vArrayBuffer);
       vView.set(geom.modelVertices);
     }
 
@@ -276,19 +276,19 @@ export class DrawableObjectsWebGL2Abstract {
     return needFullBufferUpdate;
   }
 
-  _updateAttributeBuffersForPlaceableId(id) {
+  _updateAttributeBuffersForPlaceable(placeable) {
     const gl = this.gl;
     const { vertices: vBuffer, indices: iBuffer } = this.buffers;
     const { vertices, indices } = this.trackers;
-    const geom = this.geoms.get(id);
+    const geom = this.geoms.get(placeable.id);
 
     // See twgl.setAttribInfoBufferFromArray.
-    log (`${this.constructor.name}|_updateAttributeBuffersForPlaceableId ${id}`);
-    const vOffset = vertices.facetOffsetAtId(id);
+    log (`${this.constructor.name}|_updateAttributeBuffersForPlaceable ${placeable.name}, ${placeable.id}`);
+    const vOffset = vertices.facetOffsetAtId(placeable.id);
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, geom.modelVertices);
 
-    const iOffset = indices.facetOffsetAt(id);
+    const iOffset = indices.facetOffsetAtId(placeable.id);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, geom.modelIndices);
   }
@@ -336,7 +336,7 @@ export class DrawableObjectsWebGL2Abstract {
     if ( this.rebuildNeeded || placeableTracker.bufferId < this.#placeableTrackerBufferId ) return this.updateAllInstances(); // Number of instances changed.
     if ( placeableTracker.updateId <= this.#placeableTrackerUpdateId ) return; // No changes since last update.
 
-    for ( const [placeable, lastUpdate] of placeableTracker.instanceLastUpdated.entries() ) {
+    for ( const [placeable, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
       if ( lastUpdate <= this.#placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
       this._updateInstance(placeable);
       if ( this.rebuildNeeded ) break; // If _updateInstance set rebuildNeeded to true.
@@ -359,8 +359,8 @@ export class DrawableObjectsWebGL2Abstract {
 
   _updateAllInstances() {
     // TODO: Can we keep some of the original, and call _rebuildAttributes instead?
-//     this._initializeGeoms();
-//     this._initializeOffsetTrackers();
+    this._initializeGeoms();
+    this._initializeOffsetTrackers();
 //     this._initializeAttributes();
 
     this._updateAllVertices();
@@ -372,7 +372,7 @@ export class DrawableObjectsWebGL2Abstract {
       this.rebuildNeeded = true;
       return;
     }
-    this._updateAttributeBuffersForPlaceableId(placeable);
+    this._updateAttributeBuffersForPlaceable(placeable);
 
   }
 
@@ -394,10 +394,13 @@ export class DrawableObjectsWebGL2Abstract {
   filterObjects(_visionTriangle, _opts) {
     this.instanceSet.clear();
     this.placeableTracker.placeables.forEach(p => {
-      const idx = this.trackers.indices.facetIdMap.get(p.id);
+      const idx = this._indexForPlaceable(p);
       this.instanceSet.add(idx);
     });
   }
+
+  // Pull from the index for the indices.
+  _indexForPlaceable(placeable) { return this.trackers.indices.facetIdMap.get(placeable.id); }
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -416,11 +419,11 @@ export class DrawableObjectsWebGL2Abstract {
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
-    log (`${this.constructor.name}|render`);
+    log(`${this.constructor.name}|render`);
     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances();
     else this._drawUnfilteredInstances();
     gl.bindVertexArray(null);
-    // this.gl.flush(); // For debugging
+    this.gl.finish(); // For debugging
   }
 
   _drawFilteredInstances() {
@@ -465,9 +468,8 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   }
 
   _initializeOffsetTrackers() {
-    // Unused for instances.
-
-    // this.offsetData = GeometryNonInstanced.computeBufferOffsets((new Array(this.placeableTracker.numInstances)).fill(this.geoms));
+    // Don't need indices or vertices trackers.
+    // Model matrices stored in placeableTracker.
   }
 
   _defineAttributeProperties() {
@@ -520,7 +522,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
     // See twgl.setAttribInfoBufferFromArray.
     log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.id}`);
-    const tracker = this.placeable.tracker;
+    const tracker = this.placeableTracker.tracker;
     const mOffset = tracker.facetOffsetAtId(placeable.id) * tracker.type.BYTES_PER_ELEMENT;
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.id));
@@ -537,6 +539,9 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   }
 
   // ----- NOTE: Render ----- //
+
+  // Pull from the placeable tracker matrix indexes.
+  _indexForPlaceable(placeable) { return this.placeableTracker.tracker.facetIdMap.get(placeable.id); }
 
   _drawFilteredInstances() {
     // To draw select instances, modify the buffer offset.

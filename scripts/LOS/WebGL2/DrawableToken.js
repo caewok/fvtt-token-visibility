@@ -20,7 +20,7 @@ const TMP_SET = new Set();
 
 export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TokenTracker;
+  static trackerClass = TokenTracker;
 
   /** @type {class} */
   static geomClass = GeometryToken;
@@ -58,31 +58,31 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
     log (`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
     TMP_SET.clear();
-    TMP_SET.add(this.trackers.indices.facetIdMap.get(target.id));
+    TMP_SET.add(this._indexForPlaceable(target));
     this._drawFilteredInstances(TMP_SET)
     gl.bindVertexArray(null);
-    // this.gl.flush(); // For debugging
+    this.gl.finish(); // For debugging
   }
 
   // TODO: Handle material uniform using binding; avoid setUniforms here.
-  render() {
-    if ( !this.instanceSet.size ) return;
-
-    const gl = this.gl;
-    this.webGL2.useProgram(this.programInfo);
-    twgl.setBuffersAndAttributes(gl, this.programInfo, this.vertexArrayInfo);
-    // twgl.bindUniformBlock(gl, this.programInfo, this.renderer.uboInfo.camera);
-
-
-    // for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
-    // twgl.setUniforms(this.programInfo, this.materialUniforms);
-
-    log (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
-    if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
-    else this._drawUnfilteredInstances();
-    gl.bindVertexArray(null)
-    // this.gl.flush(); // For debugging
-  }
+//   render() {
+//     if ( !this.instanceSet.size ) return;
+//
+//     const gl = this.gl;
+//     this.webGL2.useProgram(this.programInfo);
+//     twgl.setBuffersAndAttributes(gl, this.programInfo, this.vertexArrayInfo);
+//     // twgl.bindUniformBlock(gl, this.programInfo, this.renderer.uboInfo.camera);
+//
+//
+//     // for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
+//     // twgl.setUniforms(this.programInfo, this.materialUniforms);
+//
+//     log (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
+//     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
+//     else this._drawUnfilteredInstances();
+//     gl.bindVertexArray(null)
+//     // this.gl.flush(); // For debugging
+//   }
 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
@@ -108,7 +108,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
       { viewer, target, blockingTokensOpts: blocking.tokens });
     for ( const token of tokens ) {
       if ( !(this.placeableTracker.placeables.has(token) && this.constructor.includeToken(token)) ) continue;
-      const idx = this.trackers.indices.facetIdMap.get(token.id);
+      const idx = this._indexForPlaceable(token);
       this.instanceSet.add(idx);
     }
   }
@@ -125,7 +125,7 @@ export class DrawableHexTokenWebGL2 extends DrawableTokenWebGL2 {
 
 export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TokenTracker;
+  static trackerClass = TokenTracker;
 
   /** @type {class} */
   static geomClass = GeometryConstrainedToken;

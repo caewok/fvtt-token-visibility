@@ -19,7 +19,7 @@ const TMP_SET = new Set();
 
 export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = TileTracker;
+  static trackerClass = TileTracker;
 
   /** @type {class} */
   static geomClass = GeometryTile;
@@ -97,48 +97,11 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   }
 
   _drawFilteredInstances(instanceSet) {
-    // TODO: Bind instead of setting textures.
-/*
-// Create textures
-const textures = [];
-for (let i = 0; i < numImages; ++i) {
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  textures.push(texture);
-}
-
-// Load images and upload to textures
-for (let i = 0; i < numImages; ++i) {
-  const image = new Image();
-  image.src = imageUrls[i];
-  image.onload = () => {
-    gl.bindTexture(gl.TEXTURE_2D, textures[i]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    gl.generateMipmap(gl.TEXTURE_2D); // If using mipmaps
-  };
-}
-
-// Draw with different textures
-for (let i = 0; i < numImages; ++i) {
-  // Activate the texture unit
-  gl.activeTexture(gl[`TEXTURE${i}`]);  // e.g., gl.TEXTURE0, gl.TEXTURE1
-  // Bind the texture
-  gl.bindTexture(gl.TEXTURE_2D, textures[i]);
-  // Set the shader uniform (assuming u_sampler is the uniform name)
-  gl.uniform1i(shaderProgram.uSampler, i); // or whatever index matches the texture unit
-
-  // Draw the scene using the current texture
-  gl.drawArrays(gl.TRIANGLES, 0, numVertices);  // Or drawElements
-}
-
-
-*/
-
-    // const uniforms = { uTileTexture: -1 };
+    instanceSet ??= this.instanceSet;
     for ( const idx of instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      const id = this.trackers.indices.facetIdMap.index[idx];
+      const id = this.placeableTracker.tracker.facetIdMap.index[idx];
       if ( !id ) continue;
       this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(id));
       // uniforms.uTileTexture = this.textures.get(idx);
@@ -173,8 +136,8 @@ for (let i = 0; i < numImages; ++i) {
     // Limit to tiles within the vision triangle
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const tile of tiles ) {
-      if ( !(this.placeableTracker.placeables.has(token) && this.constructor.includeToken(token)) ) continue;
-      const idx = this.trackers.indices.facetIdMap.get(tile.id);
+      if ( !this.placeableTracker.placeables.has(tile) ) continue;
+      const idx = this._indexForPlaceable(tile);
       instanceSet.add(idx);
     }
   }
@@ -183,7 +146,7 @@ for (let i = 0; i < numImages; ++i) {
 // TODO: Fix DrawableSceneBackgroundWebGL2.
 export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
   /** @type {class} */
-  static handlerClass = SceneBackgroundTracker;
+  static trackerClass = SceneBackgroundTracker;
 
   /** @type {class} */
   static geomClass = GeometryTile;

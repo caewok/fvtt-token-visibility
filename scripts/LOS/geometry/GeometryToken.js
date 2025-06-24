@@ -59,7 +59,7 @@ export class GeometryLitToken extends GeometryToken {
     const token = this.token;
     if ( !token ) return super._calculateModel(vertices, indices);
     const { litTokenBorder, tokenBorder, topZ, bottomZ } = token;
-    if ( !litTokenBorder.equals(tokenBorder) ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
+    if ( !litTokenBorder || !litTokenBorder.equals(tokenBorder) ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
     return super._calculateModel(vertices, indices);
   }
 

@@ -132,7 +132,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
 
   static get instanceHandler() {
     if ( this._instanceHandler ) return this._instanceHandler;
-    this._instanceHandler = new this.instanceHandlerClass();
+    this._instanceHandler = this.instanceHandlerClass.cachedBuild();
     this._instanceHandler.initializePlaceables();
     return this._instanceHandler;
   }

@@ -57,10 +57,15 @@ export class PlaceableTracker {
   /** @type {string} */
   static layer = ""; // e.g. "walls"
 
-  constructor() {
-    const handlers = this.constructor.handlers;
-    if ( handlers.has(this.constructor) ) return handlers.get(this.constructor);
-    handlers.set(this.constructor, this);
+  /**
+   * Build a new Placeable Tracker and cache to reuse in future.
+   */
+  static cachedBuild() {
+    const handlers = this.handlers;
+    if ( handlers.has(this) ) return handlers.get(this);
+    const out = new this();
+    handlers.set(this, out);
+    return out;
   }
 
   /** @type {Set<PlaceableObject>} */
@@ -82,17 +87,24 @@ export class PlaceableTracker {
    * Initialize all placeables.
    */
   initializePlaceables() {
-    this.placeables.clear();
-    const placeables = this.getPlaceables();
-    this._initializePlaceables(placeables);
-    placeables.forEach(placeable => {
-      this.placeables.add(placeable);
-      this._updatePlaceable(placeable)
+    const oldPlaceables = new Set([...this.placeables]);
+    const newPlaceables = new Set([...this.getPlaceables()]);
+    const toDelete = oldPlaceables.difference(newPlaceables);
+    const toAdd = newPlaceables.difference(oldPlaceables);
+    if ( !toDelete.size && !toAdd.size ) return;
+    this.#updateId += 1;
+    toDelete.forEach(p => {
+      this.placeables.delete(p);
+      this.placeableLastUpdated.delete(p);
+      this._removePlaceables(p, p.id);
     });
+    toAdd.forEach(p => {
+      this.placeables.add(p);
+      this.placeableLastUpdated.set(p, this.#updateId);
+      this._addPlaceable(p);
+    });
+
   }
-
-  _initializePlaceables(_placeables) { return; }
-
 
   /**
    * Subclass locate placeables.
@@ -187,7 +199,7 @@ export class PlaceableTracker {
     if ( placeable ) {
       if ( !this.placeables.has(placeable) ) return false;
       this.placeables.delete(placeable);
-      this.instanceLastUpdated.delete(placeable);
+      this.placeableLastUpdated.delete(placeable);
     }
     if ( !this._removePlaceable(placeable, placeableId) ) this.initializePlaceables();
     return true;
@@ -221,6 +233,7 @@ export class PlaceableTracker {
    */
   registerPlaceableHooks() {
     if ( this._hooks.length ) return; // Only register once.
+    this.initializePlaceables();
     for ( const hookDatum of this.constructor.HOOKS ) {
       const [name, methodName] = Object.entries(hookDatum)[0];
       const id = Hooks.on(name, this[methodName].bind(this));
@@ -302,10 +315,16 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
   /** @type {FixedLengthTrackingBuffer} */
   tracker;
 
-  _initializePlaceables(placeables) {
-    const ids = placeables.map(p => p.id);
-    this.tracker = new FixedLengthTrackingBuffer(
-      { numFacets: placeables.length, facetLengths: this.constructor.MODEL_ELEMENT_LENGTH, ids });
+  initializePlaceables() {
+    if ( !this.tracker ) {
+      const placeables = [...this.placeables];
+      this.tracker = new FixedLengthTrackingBuffer({
+        numFacets: placeables.length,
+        facetLengths: this.constructor.MODEL_ELEMENT_LENGTH,
+        ids: placeables.map(p => p.id)
+      });
+    }
+    super.initializePlaceables();
   }
 
   rotationMatrixForPlaceable(_placeable) { return identityM.copyTo(rotationM); }
@@ -358,12 +377,12 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
 api = game.modules.get("tokenvisibility").api;
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
-let { TileInstanceHandler, TokenInstanceHandler, WallInstanceHandler, RegionInstanceHandler } = api.placeableTracker;
+let { TileTracker, TokenTracker, WallTracker, RegionTracker } = api.placeableTracker;
 
-tileH = new TileInstanceHandler()
-tokenH = new TokenInstanceHandler()
-wallH = new WallInstanceHandler()
-regionH = new RegionInstanceHandler()
+tileH = TileTracker.cachedBuild()
+tokenH = TokenTracker.bucachedBuild()
+wallH = WallTracker.cachedBuild()
+regionH = RegionTracker.cachedBuild()
 
 tileH.initializePlaceables();
 tokenH.initializePlaceables();

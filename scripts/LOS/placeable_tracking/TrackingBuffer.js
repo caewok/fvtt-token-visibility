@@ -237,12 +237,12 @@ export class VariableLengthAbstractBuffer {
 
   viewWholeBuffer(buffer) { return new this.type(buffer, 0, Math.floor(this.maxLength)); }
 
-  viewFacetById(buffer, id) {
+  viewFacetById(id, buffer) {
     if ( !this.facetIdMap.has(id) ) return null;
-    return this.viewFacetAtIndex(buffer, this.facetIdMap.get(id));
+    return this.viewFacetAtIndex(this.facetIdMap.get(id), buffer);
   }
 
-  viewFacetAtIndex(buffer, idx) {
+  viewFacetAtIndex(idx, buffer) {
     if ( idx < 0 || idx > (this.numFacets - 1) ) return null;
     return new this.type(
       buffer,
@@ -293,9 +293,9 @@ export class VariableLengthTrackingBuffer extends VariableLengthAbstractBuffer {
 
   get viewWholeBuffer() { return super.viewWholeBuffer(this.buffer); }
 
-  viewFacetAtIndex(idx) { return super.viewFacetAtIndex(this.buffer, idx); }
+  viewFacetAtIndex(idx) { return super.viewFacetAtIndex(idx, this.buffer); }
 
-  viewFacetById(id) { return super.viewFacetById(this.buffer, id); }
+  viewFacetById(id) { return super.viewFacetById(id, this.buffer); }
 
   // ----- NOTE: Facet handling ----- //
 
@@ -372,7 +372,7 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
   facetLengthAtIndex(_idx) { return this.facetLength; }
 
-  facetOffsetAtIndex(idx) { return this.numFacets * idx; }
+  facetOffsetAtIndex(idx) { return this.facetLength * idx; }
 
   // ----- NOTE: Facet tracking ----- //
 
@@ -384,9 +384,12 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
    */
   addFacet({id, newValues } = {}) {
     if ( newValues && newValues.length !== this.facetLength ) console.error(`New values length must equal ${this.facetLength}`, newValues);
+    if ( id != null && this.facetIdMap.has(id) ) return this.updateFacet(id, { facetLength, newValues });
+    id ??= this.facetIdMap.nextIndex;
 
     const i = this.facetIdMap.nextIndex;
     this.facetIdMap.set(id, i);
+    this.#numFacets += 1;
     const expanded = this.arrayLength > this.maxLength;
     if ( expanded ) this.expand();
 
@@ -409,6 +412,16 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
     // Flag for subclasses that modification should occur.
     if ( newValues ) this._updateFacetAtIndex(this.facetIdMap.get(id), newValues);
     return false;
+  }
+
+  /**
+   * Delete the facet at the given id.
+   * Does not otherwise modify the buffer length.
+   * @param {*} id                  Any value that can be a key in a map
+   */
+  deleteFacet(id) {
+    const res = super.deleteFacet(id);
+    if ( res ) this.#numFacets = Math.max(0, this.#numFacets - 1);
   }
 
    /**

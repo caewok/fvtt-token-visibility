@@ -127,7 +127,7 @@ export class DrawableRegionRectangleShapeWebGL2 extends DrawableObjectsInstancin
  */
 export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = RegionTracker;
+  static trackerClass = RegionTracker;
 
   static geomClass = GeometryRegion;
 

@@ -12,7 +12,7 @@ import { WallTracker } from "../placeable_tracking/WallTracker.js";
 
 export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static handlerClass = WallTracker;
+  static trackerClass = WallTracker;
 
   /** @type {class} */
   static geomClass = GeometryWall;
@@ -59,10 +59,10 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, opts);
     const ph = this.placeableTracker;
     for ( const wall of walls ) {
-      if ( !(this.placeableTracker.placeables.has(wall) && this.constructor.includeWall(wall)) ) continue;
+      if ( !this.placeableTracker.placeables.has(wall) ) continue;
       if ( WallTracker.isTerrain(wall, opts) ^ this.limitedWall ) continue;
       if ( WallTracker.isDirectional(wall) ^ this.directional ) continue;
-      const idx = this.trackers.indices.facetIdMap.get(wall.id);
+      const idx = this._indexForPlaceable(wall);
       this.instanceSet.add(idx);
     }
   }
