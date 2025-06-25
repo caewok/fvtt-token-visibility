@@ -47,12 +47,15 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
     if ( CONFIG[MODULE_ID].debug ) {
       const i = this._indexForPlaceable(target);
-      const res = this.trackers.vi?.viewFacetAtIdx(i);
-      const model = this.trackers.model?.viewFacetAtIdx(i);
-
-      log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
-      if ( res ) console.table({ vertices: [...res.vertices], indices: [...res.indices], indicesAdj: [...res.indicesAdj] });
-      if ( model ) console.table({ vertices: [...this.verticesArray], indices: [...this.indicesArray], model: [...model] });
+      log(`${this.constructor.name}|renderTarget${target.name}, ${target.id}|${i}`);
+      if ( this.trackers.vi ) {
+        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
+        console.table({ vertices: [...res.vertices], indices: [...res.indices], indicesAdj: [...res.indicesAdj] });
+      }
+      if ( this.trackers.model ) {
+        const model = this.trackers.model.viewFacetAtIndex(i);
+        console.table({ vertices: [...this.verticesArray], indices: [...this.indicesArray], model: [...model] });
+      }
     }
 
     const gl = this.gl;
@@ -66,7 +69,6 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     // for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.targetColor[i];
     // twgl.setUniforms(this.programInfo, this.materialUniforms);
 
-    log (`${this.constructor.name}|renderTarget ${target.name}, ${target.id}`);
     TMP_SET.clear();
     TMP_SET.add(this._indexForPlaceable(target));
     this._drawFilteredInstances(TMP_SET)

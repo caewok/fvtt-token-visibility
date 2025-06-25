@@ -533,34 +533,34 @@ export class DrawableObjectsWebGL2Abstract {
     this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
     log(`${this.constructor.name}|render`);
-    if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances();
+    if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
     else this._drawUnfilteredInstances();
     gl.bindVertexArray(null);
     this.gl.finish(); // For debugging
   }
 
-  _drawFilteredInstances() {
+  _drawFilteredInstances(instanceSet) {
     // Debug: what model are we rendering?
     // Debug: what model are we rendering?
     if ( CONFIG[MODULE_ID].debug ) {
-      for ( const i of this.instanceSet ) {
-        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIdx(i);
+      for ( const i of instanceSet ) {
+        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
         log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
         console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
       }
     }
 
     const { facetLength, facetLengths, byteOffsets } = this.indices.tracker;
-    WebGL2.drawSet(this.gl, this.instanceSet, facetLength || facetLengths, byteOffsets);
+    WebGL2.drawSet(this.gl, instanceSet, facetLength || facetLengths, byteOffsets);
   }
 
   _drawUnfilteredInstances() {
-    const n = this.tracker.indices.arrayLength;
+    const n = this.tracker.vi.numFacets;
 
     // Debug: what model are we rendering?
     if ( CONFIG[MODULE_ID].debug ) {
       for ( let i = 0; i < n; i += 1 ) {
-        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIdx(i);
+        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
         log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
         console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
       }
@@ -685,7 +685,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   // Pull from the placeable tracker matrix indexes.
   _indexForPlaceable(placeable) { return this.placeableTracker.tracker.facetIdMap.get(placeable.id); }
 
-  _drawFilteredInstances() {
+  _drawFilteredInstances(instanceSet) {
     // To draw select instances, modify the buffer offset.
     // const tmp = this.placeableTracker.instanceArrayValues;
     // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableTracker.numInstances} placeables`);
@@ -697,8 +697,8 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       const indices = this.indicesArray;
       console.table({ vertices: [...vertices], indices: [...indices] });
 
-      for ( const i of this.instanceSet ) {
-        const model = this.tracker.model.viewFacetAtIdx(i);
+      for ( const i of instanceSet ) {
+        const model = this.trackers.model.viewFacetAtIndex(i);
         log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
         console.table({  model: [...model] });
       }
@@ -706,7 +706,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
     WebGL2.drawInstancedMatrixSet(
       this.gl,
-      this.instanceSet,
+      instanceSet,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
       this.aModelAttribLoc,
@@ -715,7 +715,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
   _drawUnfilteredInstances() {
     // Draw every instance
-    const n = this.tracker.indices.arrayLength;
+    const n = this.trackers.models.numFacets;
     const nVertices = this.geoms.indices.length; // Number of vertices to draw.
 
     if ( CONFIG[MODULE_ID].debug ) {
@@ -725,7 +725,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       console.table({ vertices: [...vertices], indices: [...indices] });
 
       for ( const i of this.instanceSet ) {
-        const model = this.tracker.model.viewFacetAtIdx(i);
+        const model = this.tracker.model.viewFacetAtIndex(i);
         log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
         console.table({  model: [...model] });
       }

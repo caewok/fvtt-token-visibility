@@ -604,7 +604,7 @@ export class VerticesIndicesTrackingBuffer extends VerticesIndicesAbstractTracki
     return {
       indices: this.indices.viewFacetById(id),
       vertices: this.vertices.viewFacetById(id),
-      indicesAdj: this.indices.viewFacetById.call(id, this.indicesAdjBuffer),
+      indicesAdj: this.indices.viewFacetById(id, this.indicesAdjBuffer),
     }
   }
 
