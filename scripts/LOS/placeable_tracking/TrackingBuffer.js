@@ -495,7 +495,7 @@ export class VerticesIndicesAbstractTrackingBuffer {
 
   addFacet({ id, verticesLength, newVertices, indicesLength, newIndices } = {}) {
     if ( !(indicesLength || newIndices) ) {
-      verticesLength ??= newVerticesLength;
+      verticesLength ??= newVertices.length;
       newIndices = Array.fromRange(verticesLength / this.stride);
     }
     this.vertices.addFacet({ id, newValues: newVertices, facetLength: verticesLength });
@@ -504,7 +504,7 @@ export class VerticesIndicesAbstractTrackingBuffer {
 
   updateFacet(id, { verticesLength, newVertices, indicesLength, newIndices }) {
     if ( !(indicesLength || newIndices) ) {
-      verticesLength ??= newVerticesLength;
+      verticesLength ??= newVertices.length;
       newIndices = Array.fromRange(verticesLength / this.stride);
     }
     this.vertices.updateFacet(id, { newValues: newVertices, facetLength: verticesLength });
@@ -575,7 +575,7 @@ export class VerticesIndicesTrackingBuffer extends VerticesIndicesAbstractTracki
   updateFacet(id, opts = {}) {
     const expanded = super.updateFacet(id, opts);
     if ( expanded ) this.expand();
-    this.copyToIndicesBufferById(opts.id, this.indicesAdjBuffer, this.indices.viewFacetById(opts.id));
+    this.copyToIndicesBufferById(id, this.indicesAdjBuffer, this.indices.viewFacetById(id));
     return expanded;
     // No change to other facet indices b/c vertices are added at the end or replace vertex facet of equal length.
   }
@@ -588,7 +588,7 @@ export class VerticesIndicesTrackingBuffer extends VerticesIndicesAbstractTracki
     return {
       indices: this.indices.viewBuffer(),
       vertices: this.vertices.viewBuffer(),
-      verticesAdj: this.indices.viewBuffer(this.indicesAdjBuffer),
+      indicesAdj: this.indices.viewBuffer(this.indicesAdjBuffer),
     };
   }
 
@@ -596,7 +596,7 @@ export class VerticesIndicesTrackingBuffer extends VerticesIndicesAbstractTracki
     return {
       indices: this.indices.viewWholeBuffer(),
       vertices: this.vertices.viewWholeBuffer(),
-      verticesAdj: this.indices.viewWholeBuffer(this.indicesAdjBuffer),
+      indicesAdj: this.indices.viewWholeBuffer(this.indicesAdjBuffer),
     }
   }
 
@@ -604,7 +604,7 @@ export class VerticesIndicesTrackingBuffer extends VerticesIndicesAbstractTracki
     return {
       indices: this.indices.viewFacetById(id),
       vertices: this.vertices.viewFacetById(id),
-      verticesAdj: this.indices.viewFacetById.call(id, this.indicesAdjBuffer),
+      indicesAdj: this.indices.viewFacetById.call(id, this.indicesAdjBuffer),
     }
   }
 
@@ -612,7 +612,7 @@ export class VerticesIndicesTrackingBuffer extends VerticesIndicesAbstractTracki
     return {
       indices: this.indices.viewFacetAtIndex(idx),
       vertices: this.vertices.viewFacetAtIndex(idx),
-      verticesAdj: this.indices.viewFacetAtIndex(idx, this.indicesAdjBuffer),
+      indicesAdj: this.indices.viewFacetAtIndex(idx, this.indicesAdjBuffer),
     }
   }
 

@@ -7,7 +7,7 @@ CONFIG,
 import { MODULE_ID } from "../../const.js";
 import { WebGL2 } from "./WebGL2.js";
 import { GeometryInstanced } from "../geometry/GeometryDesc.js";
-import { VariableLengthAbstractBuffer, VariableLengthTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
+import { VariableLengthAbstractBuffer, VariableLengthTrackingBuffer, VerticesIndicesTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
 
@@ -124,8 +124,7 @@ export class DrawableObjectsWebGL2Abstract {
   offsetData = {};
 
   trackers = {
-    indices: null,
-    vertices: null,
+    vi: null
   };
 
   buffers = {
@@ -140,10 +139,14 @@ export class DrawableObjectsWebGL2Abstract {
   get indicesBuffer() { return this.trackers.indices.buffer; }
 
   /** @type {Float32Array} */
-  get verticesArray() { return this.trackers.vertices.viewBuffer(); }
+  get verticesArray() { return this.trackers.vi.vertices.viewBuffer(); }
 
   /** @type {Uint16Array} */
-  get indicesArray() { return this.trackers.indices.viewBuffer(); }
+  get indicesArray() {
+    // See VerticesIndicesTrackingBuffer#viewBuffer.
+    const vi = this.trackers.vi;
+    return vi.indices.viewBuffer(vi.indicesAdjBuffer);
+  }
 
   /** @type {Float32Array[]} */
   vertices = [];
@@ -170,12 +173,14 @@ export class DrawableObjectsWebGL2Abstract {
 
   _initializeOffsetTrackers() {
     // TODO: Use VariableLengthAbstractBuffer and don't copy over the geometry indices and vertices.
-    this.trackers.indices = new VariableLengthTrackingBuffer({ type: Uint16Array });
-    this.trackers.vertices = new VariableLengthTrackingBuffer({ type: Float32Array });
-    for ( const geom of this.geoms.values() ) {
-      this.trackers.indices.addFacet({ id: geom.id, facetLength: geom.indices.length });
-      this.trackers.vertices.addFacet({ id: geom.id, facetLength: geom.vertices.length });
-    }
+    const stride = this.debugViewNormals ? 6 : 3;
+    this.trackers.vi = new VerticesIndicesTrackingBuffer({ stride });
+    for ( const [id, geom] of this.geoms.entries() ) this.trackers.vi.addFacet({
+      id,
+      newVertices: geom.vertices,
+      newIndices: geom.indices
+    });
+
     // this.offsetData = GeometryNonInstanced.computeBufferOffsets(this.geoms);
   }
 
@@ -199,57 +204,49 @@ export class DrawableObjectsWebGL2Abstract {
    * Construct data arrays representing vertices and indices.
    */
   _initializeVertices() {
-    const { indices, vertices } = this.trackers;
+    const vi = this.trackers.vi;
     // const pt = this.placeableTracker;
     this._updateAllVertices();
 
     // Create distinct views into the vertices and indices buffers
-    const n = indices.numFacets;
+    const n = vi.numFacets;
     this.vertices.length = n;
     this.indices.length = n;
     for ( let i = 0; i < n; i += 1 ) {
-      this.vertices[i] = vertices.viewFacetAtIndex(i, this.verticesBuffer);
-      this.indices[i] = indices.viewFacetAtIndex(i, this.indicesBuffer);
-    }
-
-    // Copy over the geometry data.
-    for ( const [id, geom] of this.geoms.entries() ) {
-      geom.calculateModel();
-      indices.updateFacet(id, { newValues: geom.modelVertices });
-      vertices.updateFacet(id, { newValues: geom.modelIndices });
+      const { vertices, indicesAdj } = vi.viewFacetAtIndex(i);
+      this.vertices[i] = vertices;
+      this.indices[i] = indicesAdj;
     }
   }
 
   _updateAllVertices() {
-    const { indices, vertices } = this.trackers;
+    const vi = this.trackers.vi;
     const pt = this.placeableTracker;
 
     // Remove missing/deleted ids from the trackers.
     // Assume id is same in indices and vertices.
-    for ( const id of indices.facetIdMap.keys() ) {
+    for ( const id of vi.indices.facetIdMap.keys() ) {
       const placeable = pt.getPlaceableFromId(id);
       if ( pt.placeables.has(placeable) ) continue;
-      indices.deleteFacet(id);
-      vertices.deleteFacet(id);
+      vi.deleteFacet(id);
     }
 
     // Update the geometry and rebuild the trackers.
     // TODO: Can this be done elsewhere to avoid updating all geometry here?
     for ( const [id, geom] of this.geoms.entries() ) {
       geom.calculateModel();
-      indices.updateFacet(id, { newValues: geom.modelIndices });
-      vertices.updateFacet(id, { newValues: geom.modelVertices });
+      vi.updateFacet(id, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
     }
 
-    const n = indices.numFacets;
+    // Update all the views.
+    const n = vi.numFacets;
     this.vertices.length = n;
     this.indices.length = n;
     for ( let i = 0; i < n; i += 1 ) {
-      this.vertices[i] = vertices.viewFacetAtIndex(i, this.verticesBuffer);
-      this.indices[i] = indices.viewFacetAtIndex(i, this.indicesBuffer);
+      const { vertices, indicesAdj } = vi.viewFacetAtIndex(i);
+      this.vertices[i] = vertices;
+      this.indices[i] = indicesAdj;
     }
-
-
   }
 
   /*
@@ -381,35 +378,32 @@ export class DrawableObjectsWebGL2Abstract {
     geom.dirtyModel = true;
     geom.calculateModel();
 
-    const { indices, vertices } = this.trackers;
-    let needFullBufferUpdate = vertices.updateFacet(id, { newValues: geom.modelVertices });
-    needFullBufferUpdate = indices.updateFacet(id, { newValues: geom.modelIndices }) || needFullBufferUpdate; // Note order so the updateFacet will be triggered.
-    geom.indices.offset = indices.facetOffsetAtId(id);
-    return needFullBufferUpdate;
+    const vi = this.trackers.vi;
+    const needFullBufferUpdate = vi.updateFacet(id, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
+    return !needFullBufferUpdate;
   }
 
   _updateAttributeBuffersForPlaceable(placeable) {
-    const gl = this.gl;
-    // const { vertices: vBuffer, indices: iBuffer } = this.buffers;
-    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
-    const iBuffer = this.attributeBufferInfo.indices;
-
-    const { vertices, indices } = this.trackers;
-    const geom = this.geoms.get(placeable.id);
-    geom.calculateModel();
-    indices.updateFacet(placeable.id, { newValues: geom.modelIndices });
-    vertices.updateFacet(placeable.id, { newValues: geom.modelVertices });
-
     // See twgl.setAttribInfoBufferFromArray.
-    const vOffset = vertices.facetOffsetAtId(placeable.id);
+    const gl = this.gl;
+    const id = placeable.id;
+    const vi = this.trackers.vi;
+
+    // Copy the vertices and adjusted indices to their webGL buffers.
+    const { vertices, indicesAdj } = vi.viewFacetById(id);
+    const vOffset = vi.vertices.facetOffsetAtId(id);
+    const iOffset = vi.indices.facetOffsetAtId(id);
+
+    // Vertices.
+    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, geom.modelVertices);
+    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
 
-
-    const iOffset = indices.facetOffsetAtId(placeable.id);
+    // Indices.
+    const iBuffer = this.attributeBufferInfo.indices;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, geom.modelIndices);
-    log (`${this.constructor.name}|_updateAttributeBuffersForPlaceable ${placeable.name}, ${placeable.id} with vOffset ${vOffset} and iOffset ${iOffset}`, { vertices: geom.modelVertices, indices: geom.modelIndices });
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, indicesAdj);
+    log (`${this.constructor.name}|_updateAttributeBuffersForPlaceable ${placeable.name}, ${placeable.id} with vOffset ${vOffset} and iOffset ${iOffset}`, { vertices, indicesAdj });
   }
 
   // ----- NOTE: Placeable handler ----- //
@@ -546,12 +540,32 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   _drawFilteredInstances() {
+    // Debug: what model are we rendering?
+    // Debug: what model are we rendering?
+    if ( CONFIG[MODULE_ID].debug ) {
+      for ( const i of this.instanceSet ) {
+        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIdx(i);
+        log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+        console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
+      }
+    }
+
     const { facetLength, facetLengths, byteOffsets } = this.indices.tracker;
     WebGL2.drawSet(this.gl, this.instanceSet, facetLength || facetLengths, byteOffsets);
   }
 
   _drawUnfilteredInstances() {
     const n = this.tracker.indices.arrayLength;
+
+    // Debug: what model are we rendering?
+    if ( CONFIG[MODULE_ID].debug ) {
+      for ( let i = 0; i < n; i += 1 ) {
+        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIdx(i);
+        log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+        console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
+      }
+    }
+
     WebGL2.draw(this.gl, n);
   }
 }
@@ -676,6 +690,20 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     // const tmp = this.placeableTracker.instanceArrayValues;
     // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableTracker.numInstances} placeables`);
     const nVertices = this.geoms.indices.length; // Number of vertices to draw.
+
+    if ( CONFIG[MODULE_ID].debug ) {
+      log(`${this.constructor.name}|_drawUnfilteredInstances`);
+      const vertices = this.verticesArray;
+      const indices = this.indicesArray;
+      console.table({ vertices: [...vertices], indices: [...indices] });
+
+      for ( const i of this.instanceSet ) {
+        const model = this.tracker.model.viewFacetAtIdx(i);
+        log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+        console.table({  model: [...model] });
+      }
+    }
+
     WebGL2.drawInstancedMatrixSet(
       this.gl,
       this.instanceSet,
@@ -689,6 +717,20 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     // Draw every instance
     const n = this.tracker.indices.arrayLength;
     const nVertices = this.geoms.indices.length; // Number of vertices to draw.
+
+    if ( CONFIG[MODULE_ID].debug ) {
+      log(`${this.constructor.name}|_drawUnfilteredInstances`);
+      const vertices = this.verticesArray;
+      const indices = this.indicesArray;
+      console.table({ vertices: [...vertices], indices: [...indices] });
+
+      for ( const i of this.instanceSet ) {
+        const model = this.tracker.model.viewFacetAtIdx(i);
+        log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+        console.table({  model: [...model] });
+      }
+    }
+
     WebGL2.drawInstanced(this.gl, nVertices, 0, n);
   }
 }

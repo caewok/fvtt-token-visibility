@@ -45,6 +45,16 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
   renderTarget(target) {
     if ( !(this.placeableTracker.placeables.has(target) && this.constructor.includeToken(target)) ) return;
 
+    if ( CONFIG[MODULE_ID].debug ) {
+      const i = this._indexForPlaceable(target);
+      const res = this.trackers.vi?.viewFacetAtIdx(i);
+      const model = this.trackers.model?.viewFacetAtIdx(i);
+
+      log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+      if ( res ) console.table({ vertices: [...res.vertices], indices: [...res.indices], indicesAdj: [...res.indicesAdj] });
+      if ( model ) console.table({ vertices: [...this.verticesArray], indices: [...this.indicesArray], model: [...model] });
+    }
+
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
@@ -93,7 +103,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+  filterObjects(visionTriangle, { viewer, target, blocking } = {}) {
     const instanceSet = this.instanceSet;
     instanceSet.clear();
     blocking.tokens ??= {};
