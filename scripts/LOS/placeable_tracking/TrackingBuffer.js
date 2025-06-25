@@ -251,8 +251,9 @@ export class VariableLengthAbstractBuffer {
     );
   }
 
-  copyToBufferArrayById(id, arr, newValues) {
-    arr.set(newValues, this.facetOffsetAtId(id))
+  copyToBufferById(id, buffer, newValues) {
+    const arr = this.viewFacetById(id, buffer);
+    arr.set(newValues);
   }
 }
 
@@ -289,13 +290,13 @@ export class VariableLengthTrackingBuffer extends VariableLengthAbstractBuffer {
   // ----- NOTE: Views ----- //
 
   /** @type {TypedArray} */
-  get viewBuffer() { return super.viewBuffer(this.buffer); }
+  viewBuffer(buffer) { return super.viewBuffer(buffer || this.buffer); }
 
-  get viewWholeBuffer() { return super.viewWholeBuffer(this.buffer); }
+  viewWholeBuffer(buffer) { return super.viewWholeBuffer(buffer || this.buffer); }
 
-  viewFacetAtIndex(idx) { return super.viewFacetAtIndex(idx, this.buffer); }
+  viewFacetAtIndex(idx, buffer) { return super.viewFacetAtIndex(idx, buffer || this.buffer); }
 
-  viewFacetById(id) { return super.viewFacetById(id, this.buffer); }
+  viewFacetById(id, buffer) { return super.viewFacetById(id, buffer || this.buffer); }
 
   // ----- NOTE: Facet handling ----- //
 
@@ -306,7 +307,7 @@ export class VariableLengthTrackingBuffer extends VariableLengthAbstractBuffer {
 
   _shift(byteOffset, length, targetOffset) {
     const blockToShift = new this.type(this.buffer, byteOffset, length);
-    this.viewBuffer.set(blockToShift, targetOffset);
+    this.viewBuffer().set(blockToShift, targetOffset);
   }
 
   /**
@@ -384,7 +385,7 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
    */
   addFacet({id, newValues } = {}) {
     if ( newValues && newValues.length !== this.facetLength ) console.error(`New values length must equal ${this.facetLength}`, newValues);
-    if ( id != null && this.facetIdMap.has(id) ) return this.updateFacet(id, { facetLength, newValues });
+    if ( id != null && this.facetIdMap.has(id) ) return this.updateFacet(id, { newValues });
     id ??= this.facetIdMap.nextIndex;
 
     const i = this.facetIdMap.nextIndex;
@@ -456,6 +457,169 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
   }
 }
 
+/**
+ * Track vertices and indices together.
+ * Calculate offset for indices.
+ * Assumes indices do not reference vertices across facets.
+ * (More compressed version could use a single large set of vertices, but then it would require more frequent rebuilds.)
+ * Example:
+ *   stride = 3 (3 coordinates make up one vertex referenced by a single index)
+ *   facetLengths = [9, 12]
+ *   facetOffsets = [0, 9]
+ *   vertices = [10, 11, 12,  20, 21, 22,  30, 31, 32, | 40, 41, 42,  50, 51, 52,  60, 61, 62,  70, 71, 72]
+ *   indices = [0, 1, 2, |  3, 2, 1, 0 ] <-- Add 3 to the second set of vertices, 6 to the third.
+ *     --> indices become [0, 1, 2 | 6, 5, 4, 3]
+ */
+export class VerticesIndicesAbstractTrackingBuffer {
+  static vBufferClass = VariableLengthAbstractBuffer;
+
+  static iBufferClass = VariableLengthAbstractBuffer;
+
+  vertices;
+
+  indices;
+
+  get numFacets() { return this.vertices.numFacets; }
+
+  stride = 3;
+
+  indicesOffsetAtId(id) { return Math.floor(this.vertices.facetOffsetAtId(id) / this.stride); }
+
+  indicesOffsetAtIdx(idx) { return Math.floor(this.vertices.facetOffsetAtIdx(idx) / this.stride); }
+
+  constructor({ verticesType = Float32Array, indicesType = Uint16Array, stride = 3 } = {}) {
+    this.vertices = new this.constructor.vBufferClass({ type: verticesType });
+    this.indices = new this.constructor.iBufferClass({ type: indicesType });
+    this.stride = stride;
+  }
+
+  addFacet({ id, verticesLength, newVertices, indicesLength, newIndices } = {}) {
+    if ( !(indicesLength || newIndices) ) {
+      verticesLength ??= newVerticesLength;
+      newIndices = Array.fromRange(verticesLength / this.stride);
+    }
+    this.vertices.addFacet({ id, newValues: newVertices, facetLength: verticesLength });
+    return this.indices.addFacet({ id, newValues: newIndices, facetLength: indicesLength });
+  }
+
+  updateFacet(id, { verticesLength, newVertices, indicesLength, newIndices }) {
+    if ( !(indicesLength || newIndices) ) {
+      verticesLength ??= newVerticesLength;
+      newIndices = Array.fromRange(verticesLength / this.stride);
+    }
+    this.vertices.updateFacet(id, { newValues: newVertices, facetLength: verticesLength });
+    return this.indices.updateFacet(id, { newValues: newIndices, facetLength: indicesLength });
+  }
+
+  deleteFacet(id) {
+    this.vertices.deleteFacet(id);
+    this.indices.deleteFacet(id);
+  }
+
+  viewBuffer(verticesBuffer, indicesBuffer) {
+    return {
+      indices: this.indices.viewBuffer(indicesBuffer),
+      vertices: this.vertices.viewBuffer(verticesBuffer)
+    }
+  }
+
+  viewWholeBuffer(verticesBuffer, indicesBuffer) {
+    return {
+      indices: this.indices.viewBuffer(indicesBuffer),
+      vertices: this.vertices.viewBuffer(verticesBuffer)
+    }
+  }
+
+  viewFacetById(id, verticesBuffer, indicesBuffer) {
+   return {
+      indices: this.indices.viewFacetById(id, indicesBuffer),
+      vertices: this.vertices.viewFacetById(id, verticesBuffer)
+    }
+  }
+
+  // Copy the index, adjusting by offset.
+  copyToIndicesBuffer(buffer) {
+    for ( const id of this.indices.facetIdMap.keys() ) {
+      this.copyToIndicesBufferById(id, buffer, this.indices.viewFacetById(id, buffer));
+    }
+  }
+
+  // Copy the index, adjusting by offset.
+  copyToIndicesBufferById(id, buffer, newValues) {
+    newValues = newValues.map(elem => elem + this.indicesOffsetAtId(id));
+    this.indices.copyToBufferById(id, buffer, newValues);
+  }
+}
+
+export class VerticesIndicesTrackingBuffer extends VerticesIndicesAbstractTrackingBuffer {
+  static vBufferClass = VariableLengthTrackingBuffer;
+
+  static iBufferClass = VariableLengthTrackingBuffer;
+
+  indicesAdjBuffer; // With offset applied.
+
+  constructor(opts = {}) {
+    super(opts);
+    this.indicesAdjBuffer = new ArrayBuffer(this.indices.maxByteLength);
+  }
+
+  addFacet(opts = {}) {
+    opts.id ??= this.indices.facetIdMap.nextIndex;
+    const expanded = super.addFacet(opts);
+    if ( expanded ) this.expand();
+    this.copyToIndicesBufferById(opts.id, this.indicesAdjBuffer, this.indices.viewFacetById(opts.id));
+    return expanded;
+    // No change to other facet indices b/c vertices are added at the end or replace vertex facet of equal length.
+  }
+
+  updateFacet(id, opts = {}) {
+    const expanded = super.updateFacet(id, opts);
+    if ( expanded ) this.expand();
+    this.copyToIndicesBufferById(opts.id, this.indicesAdjBuffer, this.indices.viewFacetById(opts.id));
+    return expanded;
+    // No change to other facet indices b/c vertices are added at the end or replace vertex facet of equal length.
+  }
+
+  expand() {
+    this.indicesAdjBuffer = this.indicesAdjBuffer.transferToFixedLength(this.indices.maxByteLength);
+  }
+
+  viewBuffer(_buffer) {
+    return {
+      indices: this.indices.viewBuffer(),
+      vertices: this.vertices.viewBuffer(),
+      verticesAdj: this.indices.viewBuffer(this.indicesAdjBuffer),
+    };
+  }
+
+  viewWholeBuffer(_buffer) {
+    return {
+      indices: this.indices.viewWholeBuffer(),
+      vertices: this.vertices.viewWholeBuffer(),
+      verticesAdj: this.indices.viewWholeBuffer(this.indicesAdjBuffer),
+    }
+  }
+
+  viewFacetById(id, _buffer) {
+    return {
+      indices: this.indices.viewFacetById(id),
+      vertices: this.vertices.viewFacetById(id),
+      verticesAdj: this.indices.viewFacetById.call(id, this.indicesAdjBuffer),
+    }
+  }
+
+  viewFacetAtIndex(idx, _buffer) {
+    return {
+      indices: this.indices.viewFacetAtIndex(idx),
+      vertices: this.vertices.viewFacetAtIndex(idx),
+      verticesAdj: this.indices.viewFacetAtIndex(idx, this.indicesAdjBuffer),
+    }
+  }
+
+  // Not yet implemented: makeContiguous.
+  // Requires resetting the indicesAdjBuffer and ensuring indices and vertices stay in sync.
+
+}
 
 
 
@@ -467,9 +631,10 @@ api = game.modules.get("tokenvisibility").api
 VariableLengthAbstractBuffer = api.placeableTracker.VariableLengthAbstractBuffer
 FixedLengthTrackingBuffer = api.placeableTracker.FixedLengthTrackingBuffer
 VariableLengthTrackingBuffer = api.placeableTracker.VariableLengthTrackingBuffer
+VerticesIndicesAbstractTrackingBuffer = api.placeableTracker.VerticesIndicesAbstractTrackingBuffer
+VerticesIndicesTrackingBuffer = api.placeableTracker.VerticesIndicesTrackingBuffer
+
 tb = new VariableLengthTrackingBuffer({ facetLengths: [3,4,5,5,5] })
-
-
 tb.viewFacetAtIndex(0).set([1,2,3])
 tb.viewFacetAtIndex(1).set([1,2,3,4])
 tb.viewFacetAtIndex(2).set([1,2,3,4,5])
@@ -515,4 +680,7 @@ geoms.push(new api.geometry.GeometryConstrainedToken(opts))
 opts.token = canvas.tokens.placeables[1]
 geoms.push(new api.geometry.GeometryConstrainedToken(opts))
 
+viTracker = new VerticesIndicesTrackingBuffer({ stride: 3})
+viTracker.addFacet({ newVertices: [10, 11, 12, 20, 21, 22, 30, 31, 32], newIndices: [0, 1, 2]})
+viTracker.addFacet({ newVertices: [40, 41, 42,  50, 51, 52,  60, 61, 62,  70, 71, 72], newIndices: [3, 2, 1, 0]})
 */

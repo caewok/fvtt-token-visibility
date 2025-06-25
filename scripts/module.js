@@ -53,7 +53,12 @@ import { WallTracker } from "./LOS/placeable_tracking/WallTracker.js";
 import { TileTracker } from "./LOS/placeable_tracking/TileTracker.js";
 import { TokenTracker } from "./LOS/placeable_tracking/TokenTracker.js";
 import { RegionTracker } from "./LOS/placeable_tracking/RegionTracker.js";
-import { VariableLengthAbstractBuffer, VariableLengthTrackingBuffer, FixedLengthTrackingBuffer } from "./LOS/placeable_tracking/TrackingBuffer.js";
+import {
+  VariableLengthAbstractBuffer,
+  VariableLengthTrackingBuffer,
+  FixedLengthTrackingBuffer,
+  VerticesIndicesAbstractTrackingBuffer,
+  VerticesIndicesTrackingBuffer } from "./LOS/placeable_tracking/TrackingBuffer.js";
 
 
 import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
@@ -262,7 +267,7 @@ Hooks.once("init", function() {
      */
     regionsBlock: true,
 
-    debug: false,
+    debug: true,
   };
 
   Object.defineProperty(CONFIG[MODULE_ID], "ClipperPaths", {
@@ -342,6 +347,8 @@ Hooks.once("init", function() {
       VariableLengthAbstractBuffer,
       VariableLengthTrackingBuffer,
       FixedLengthTrackingBuffer,
+      VerticesIndicesAbstractTrackingBuffer,
+      VerticesIndicesTrackingBuffer,
       PlaceableTracker,
       PlaceableModelMatrixTracker,
       WallTracker,

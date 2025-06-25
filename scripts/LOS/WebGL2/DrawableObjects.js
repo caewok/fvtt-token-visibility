@@ -7,7 +7,7 @@ CONFIG,
 import { MODULE_ID } from "../../const.js";
 import { WebGL2 } from "./WebGL2.js";
 import { GeometryInstanced } from "../geometry/GeometryDesc.js";
-import { VariableLengthAbstractBuffer } from "../placeable_tracking/TrackingBuffer.js";
+import { VariableLengthAbstractBuffer, VariableLengthTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
 
@@ -59,6 +59,7 @@ export class DrawableObjectsWebGL2Abstract {
    */
   async initialize() {
     if ( this.#initialized ) return;
+    log(`${this.constructor.name}|intialize`);
     this.placeableTracker = this.constructor.trackerClass.cachedBuild();
     this.placeableTracker.registerPlaceableHooks();
     this.programInfo = await this._createProgram();
@@ -67,7 +68,7 @@ export class DrawableObjectsWebGL2Abstract {
     this._initializeOffsetTrackers();
     this._initializeAttributes();
     this._initializeUniforms();
-    this._updateAllVertices();
+    // this._updateAllVertices();
 
     // Register that we are synced with the current placeable data.
     this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
@@ -132,6 +133,24 @@ export class DrawableObjectsWebGL2Abstract {
     vertices: null,
   };
 
+  /** @type {ArrayBuffer} */
+  get verticesBuffer() { return this.trackers.vertices.buffer; }
+
+  /** @type {ArrayBuffer} */
+  get indicesBuffer() { return this.trackers.indices.buffer; }
+
+  /** @type {Float32Array} */
+  get verticesArray() { return this.trackers.vertices.viewBuffer(); }
+
+  /** @type {Uint16Array} */
+  get indicesArray() { return this.trackers.indices.viewBuffer(); }
+
+  /** @type {Float32Array[]} */
+  vertices = [];
+
+  /** @type {Uint16Array[]} */
+  indices = [];
+
   /** @type {object} */
   vertexProps = {};
 
@@ -150,8 +169,9 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   _initializeOffsetTrackers() {
-    this.trackers.indices = new VariableLengthAbstractBuffer({ type: Uint16Array });
-    this.trackers.vertices = new VariableLengthAbstractBuffer({ type: Float32Array });
+    // TODO: Use VariableLengthAbstractBuffer and don't copy over the geometry indices and vertices.
+    this.trackers.indices = new VariableLengthTrackingBuffer({ type: Uint16Array });
+    this.trackers.vertices = new VariableLengthTrackingBuffer({ type: Float32Array });
     for ( const geom of this.geoms.values() ) {
       this.trackers.indices.addFacet({ id: geom.id, facetLength: geom.indices.length });
       this.trackers.vertices.addFacet({ id: geom.id, facetLength: geom.vertices.length });
@@ -160,21 +180,79 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   _initializeAttributes() {
-    this._initializeAttributeBuffers();
+    this._initializeVertices();
+    // this._initializeAttributeBuffers();
     this.vertexProps = this._defineAttributeProperties();
+    log(`${this.constructor.name}|_initializeAttributes`, { aModel: this.vertexProps.aModel?.data, indices: this.vertexProps.indices })
+
     this.attributeBufferInfo = twgl.createBufferInfoFromArrays(this.gl, this.vertexProps);
     this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, this.attributeBufferInfo);
   }
 
-  _initializeAttributeBuffers() {
-    const gl = this.gl;
-    this.buffers.indices = gl.createBuffer();
-    this.buffers.vertices = gl.createBuffer();
-  }
+//   _initializeAttributeBuffers() {
+//     const gl = this.gl;
+//     this.buffers.indices = gl.createBuffer();
+//     this.buffers.vertices = gl.createBuffer();
+//   }
 
   /**
    * Construct data arrays representing vertices and indices.
    */
+  _initializeVertices() {
+    const { indices, vertices } = this.trackers;
+    // const pt = this.placeableTracker;
+    this._updateAllVertices();
+
+    // Create distinct views into the vertices and indices buffers
+    const n = indices.numFacets;
+    this.vertices.length = n;
+    this.indices.length = n;
+    for ( let i = 0; i < n; i += 1 ) {
+      this.vertices[i] = vertices.viewFacetAtIndex(i, this.verticesBuffer);
+      this.indices[i] = indices.viewFacetAtIndex(i, this.indicesBuffer);
+    }
+
+    // Copy over the geometry data.
+    for ( const [id, geom] of this.geoms.entries() ) {
+      geom.calculateModel();
+      indices.updateFacet(id, { newValues: geom.modelVertices });
+      vertices.updateFacet(id, { newValues: geom.modelIndices });
+    }
+  }
+
+  _updateAllVertices() {
+    const { indices, vertices } = this.trackers;
+    const pt = this.placeableTracker;
+
+    // Remove missing/deleted ids from the trackers.
+    // Assume id is same in indices and vertices.
+    for ( const id of indices.facetIdMap.keys() ) {
+      const placeable = pt.getPlaceableFromId(id);
+      if ( pt.placeables.has(placeable) ) continue;
+      indices.deleteFacet(id);
+      vertices.deleteFacet(id);
+    }
+
+    // Update the geometry and rebuild the trackers.
+    // TODO: Can this be done elsewhere to avoid updating all geometry here?
+    for ( const [id, geom] of this.geoms.entries() ) {
+      geom.calculateModel();
+      indices.updateFacet(id, { newValues: geom.modelIndices });
+      vertices.updateFacet(id, { newValues: geom.modelVertices });
+    }
+
+    const n = indices.numFacets;
+    this.vertices.length = n;
+    this.indices.length = n;
+    for ( let i = 0; i < n; i += 1 ) {
+      this.vertices[i] = vertices.viewFacetAtIndex(i, this.verticesBuffer);
+      this.indices[i] = indices.viewFacetAtIndex(i, this.indicesBuffer);
+    }
+
+
+  }
+
+  /*
   _updateAllVertices() {
     const { indices, vertices } = this.trackers;
     const pt = this.placeableTracker;
@@ -226,11 +304,44 @@ export class DrawableObjectsWebGL2Abstract {
     this.vertexProps.indices.buffer = this.buffers.indices;
     if ( this.debugViewNormals ) this.vertexProps.aNorm.buffer = this.buffers.vertices;
   }
+  */
 
   /**
    * Build the vertex and index buffers along with any other attributes.
    * @returns {object} The attribute property object passed to twgl.createBufferInfoFromArrays.
    */
+  _defineAttributeProperties() {
+    // Define a vertex buffer to be shared.
+    // https://github.com/greggman/twgl.js/issues/132.
+    const vSize = Float32Array.BYTES_PER_ELEMENT;
+    const debugViewNormals = this.debugViewNormals;
+    const gl = this.gl;
+    const vBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    log (`${this.constructor.name}|_defineAttributeProperties`, { vertices: this.verticesArray });
+    gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.vertexDrawType]);
+
+    const vertexProps = {
+      aPos: {
+        numComponents: 3,
+        buffer: vBuffer,
+        drawType: this.constructor.vertexDrawType,
+        stride: vSize * (debugViewNormals ? 6 : 3),
+        offset: 0,
+      },
+      indices: this.indicesArray,
+    };
+
+    if ( debugViewNormals ) vertexProps.aNorm = {
+      numComponents: 3,
+      buffer: vBuffer,
+      stride: vSize * 6,
+      offset: 3 * vSize,
+    };
+    return vertexProps;
+  }
+
+  /*
   _defineAttributeProperties() {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
@@ -258,6 +369,7 @@ export class DrawableObjectsWebGL2Abstract {
     };
     return vertexProps;
   }
+  */
 
   /**
    * Update the vertex data for an instance.
@@ -278,19 +390,26 @@ export class DrawableObjectsWebGL2Abstract {
 
   _updateAttributeBuffersForPlaceable(placeable) {
     const gl = this.gl;
-    const { vertices: vBuffer, indices: iBuffer } = this.buffers;
+    // const { vertices: vBuffer, indices: iBuffer } = this.buffers;
+    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
+    const iBuffer = this.attributeBufferInfo.indices;
+
     const { vertices, indices } = this.trackers;
     const geom = this.geoms.get(placeable.id);
+    geom.calculateModel();
+    indices.updateFacet(placeable.id, { newValues: geom.modelIndices });
+    vertices.updateFacet(placeable.id, { newValues: geom.modelVertices });
 
     // See twgl.setAttribInfoBufferFromArray.
-    log (`${this.constructor.name}|_updateAttributeBuffersForPlaceable ${placeable.name}, ${placeable.id}`);
     const vOffset = vertices.facetOffsetAtId(placeable.id);
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, geom.modelVertices);
 
+
     const iOffset = indices.facetOffsetAtId(placeable.id);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, geom.modelIndices);
+    log (`${this.constructor.name}|_updateAttributeBuffersForPlaceable ${placeable.name}, ${placeable.id} with vOffset ${vOffset} and iOffset ${iOffset}`, { vertices: geom.modelVertices, indices: geom.modelIndices });
   }
 
   // ----- NOTE: Placeable handler ----- //
@@ -470,6 +589,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   _initializeOffsetTrackers() {
     // Don't need indices or vertices trackers.
     // Model matrices stored in placeableTracker.
+    this.trackers.model = this.placeableTracker.tracker;
   }
 
   _defineAttributeProperties() {
@@ -477,28 +597,36 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
     // Define the model matrix, which changes 1 per instance.
     vertexProps.aModel = {
-      numComponents: this.constructor.MODEL_MATRIX_LENGTH,
-      data: this.placeableTracker.tracker.buffer,
+      numComponents: 16,
+      data: this.trackers.model.viewBuffer(),
       drawType: this.gl.DYNAMIC_DRAW,
-      // stride: Float32Array.BYTES_PER_ELEMENT * 16,
-      // stride: this.placeableTracker.instanceArrayValues.BYTES_PER_ELEMENT * 16,
+      // stride: this.placeableHandler.instanceArrayValues.BYTES_PER_ELEMENT * 16,
       offset: 0,
       divisor: 1,
     };
+
     return vertexProps;
   }
 
-  _initializeVertices() { return; }
+  get verticesArray() { return this.geoms.instanceVertices; }
+
+  get indicesArray() { return this.geoms.instanceIndices; }
+
+  get modelMatrixArray() { return this.trackers.model.viewBuffer(); }
+
+  _initializeVertices() {
+//     const gl = this.gl;
+//     const iWebGLBuffer = this.buffers.indices = gl.createBuffer();
+//     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iWebGLBuffer);
+//     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.geoms.instanceIndices, gl[this.constructor.vertexDrawType]);
+//
+//     const vWebGLBuffer = this.buffers.vertices = gl.createBuffer();
+//     gl.bindBuffer(gl.ARRAY_BUFFER, vWebGLBuffer);
+//     gl.bufferData(gl.ARRAY_BUFFER, this.geoms.instanceVertices, gl[this.constructor.vertexDrawType]);
+  }
 
   _updateAllVertices() {
-    const gl = this.gl;
-    const iWebGLBuffer = this.buffers.indices = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iWebGLBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.geoms.instanceIndices, gl[this.constructor.vertexDrawType]);
-
-    const vWebGLBuffer = this.buffers.vertices = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vWebGLBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.geoms.instanceVertices, gl[this.constructor.vertexDrawType]);
+    console.error("DrawableObjectsInstancingWebGL2Abstract does not update instance vertices.");
   }
 
   _setVertices() { return; }
@@ -521,9 +649,9 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
 
     // See twgl.setAttribInfoBufferFromArray.
-    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.id}`);
-    const tracker = this.placeableTracker.tracker;
-    const mOffset = tracker.facetOffsetAtId(placeable.id) * tracker.type.BYTES_PER_ELEMENT;
+    const tracker = this.trackers.model;
+    const mOffset = tracker.facetOffsetAtId(placeable.id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.id} with offset ${mOffset}`, { model: tracker.viewFacetById(placeable.id) });
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.id));
   }

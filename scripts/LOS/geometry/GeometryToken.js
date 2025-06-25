@@ -35,10 +35,15 @@ export class GeometryToken extends GeometryInstanced {
 
 export class GeometryConstrainedToken extends GeometryToken {
 
+  get vertices() { return this.modelVertices; }
+
+  get indices() { return this.modelIndices; }
+
   // No static vertices per se but can use GeometryToken when not constrained.
   _calculateModel(vertices, indices) {
     const token = this.token;
     if ( token && token.isConstrainedTokenBorder ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
+    this.transformMatrix = this.calculateTransformMatrix();
     return super._calculateModel(vertices, indices);
   }
 
@@ -53,13 +58,17 @@ export class GeometryConstrainedToken extends GeometryToken {
 
 export class GeometryLitToken extends GeometryToken {
 
-  // No static vertices per se but can use GeometryToken when not lit.
+  get vertices() { return this.modelVertices; }
 
+  get indices() { return this.modelIndices; }
+
+  // No static vertices per se but can use GeometryToken when not lit.
   _calculateModel(vertices, indices) {
     const token = this.token;
     if ( !token ) return super._calculateModel(vertices, indices);
     const { litTokenBorder, tokenBorder, topZ, bottomZ } = token;
     if ( !litTokenBorder || !litTokenBorder.equals(tokenBorder) ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
+    this.transformMatrix = this.calculateTransformMatrix();
     return super._calculateModel(vertices, indices);
   }
 
