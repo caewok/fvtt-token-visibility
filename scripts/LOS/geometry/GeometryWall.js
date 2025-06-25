@@ -15,7 +15,7 @@ export class GeometryWall extends GeometryInstanced {
     super(opts);
   }
 
-  defineInstance() {
+  _defineInstanceVertices() {
     // Directional south walls will be rotated 180º to match north.
     return VerticalQuadVertices.calculateVertices(undefined, undefined, { type: this.wallDirection } );
   }
