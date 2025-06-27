@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -36,12 +35,17 @@ Non-instances: Polygon
 Tracks all regions in the scene, and all shapes within each region.
 Shapes that must be combined are handled by Polygon.
 
-Each of the shape types have their own mini-handler, and track instance information therein.
-The main RegionInstanceHandler keeps track of the mini-handlers.
-
+Single instance shaped have an associated transformation matrix.
+Instance shapes that must be combined (e.g., holes or overlapping) do not.
+This limits the number of draw calls that skip over instances.
 */
 
 export class RegionTracker extends PlaceableTracker {
+  /** @type {number} */
+  static MODEL_ELEMENT_LENGTH = 16; // Single mat4x4.
+
+  static MODEL_ELEMENT_SIZE = this.MODEL_ELEMENT_LENGTH * Float32Array.BYTES_PER_ELEMENT;
+
   static HOOKS = [
     { createRegion: "_onPlaceableCreation" },
     { updateRegion: "_onPlaceableUpdate" },
@@ -85,69 +89,80 @@ export class RegionTracker extends PlaceableTracker {
 
   regionGeoms = new WeakMap();
 
-  polygons = new WeakMap();
+  polygons = new Map();
+
+  shapeGroups = new foundry.utils.IterableWeakMap();
 
   trackers = {
     circle: null,
     ellipse: null,
     rectangle: null,
-    polygon: {
-      vertices: null,
-      indices: null,
-    },
   }
 
   static MODEL_SHAPES = new Set(["circle", "ellipse", "rectangle"]);
 
-  static MODEL_ELEMENT_LENGTH = 16; // Single mat4x4.
+  initializePlaceables() {
+    if ( !this.trackers.circle ) {
+      const opts = { facetLengths: this.constructor.MODEL_ELEMENT_LENGTH };
+      this.trackers.circle = new FixedLengthTrackingBuffer(opts);
+      this.trackers.ellipse = new FixedLengthTrackingBuffer(opts);
+      this.trackers.rectangle = new FixedLengthTrackingBuffer(opts);
+    }
+  }
 
-  _addPlaceable(region) { return this._updatePlaceable(region); }
-
-  _updatePlaceable(region) {
+  _addPlaceable(region) {
     const geom = new GeometryRegion(region);
     this.regionGeoms.set(region, geom);
-    geom.updateShapes();
-    const { instanceGeoms, polyShape } = geom.calculateInstancedGeometry();
-    if ( polyShape ) {
-      this.polygons.set(region, polyShape);
-      this.trackers.polygon.vertices.updateFacetAtId(region.id, { newValues: polyShape.vertices });
-      this.trackers.polygon.indices.updateFacetAtId(region.id, { newValues: polyShape.indices });
+    this._updatePlaceable(region);
+  }
 
-    } else this.polygons.delete(region);
+  _updatePlaceable(region) {
+    const regionGeom = this.regionGeoms.get(region);
+    regionGeom.updateShapes();
 
-    // Need to remove all shapes that were in the tracker but are no longer required.
-    const MODEL_SHAPES = this.constructor.MODEL_SHAPES;
-    const idsInTracker = {};
-    for ( const type of MODEL_SHAPES ) idsInTracker[type] = new Set();
-    for ( const type of MODEL_SHAPES ) {
+    // See GeometryRegion#calculateInstancedGeometry
+    const uniqueShapes = regionGeom.calculateUniqueShapes();
+    const shapeGroups = regionGeom._groupRegionShapes(uniqueShapes);
+    this.shapeGroups.set(region, shapeGroups);
+    const groupedGeoms = regionGeom._calculateRegionGeometry(shapeGroups);
+
+    // Record which ids are in the current geometry, to compare later against the previous.
+    const currIds = new Set();
+
+    // Update the model matrix tracker for each geom.
+    for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
-      for ( const id of tracker.facetIdMap.keys() ) {
-        if ( id.startsWith(region.id) ) idsInTracker[type].add(id);
+      for ( const geom of groupedGeoms[type] ) {
+        const id = geom.id;
+        currIds.add(id);
+        if ( !tracker.facetIdMap.has(id) ) tracker.addFacet({ id });
+        geom.linkTransformMatrix(tracker.viewFacetById(id));
+        geom.calculateModel(); // Will not stay linked once the tracker increases buffer size.
       }
     }
 
-    // Update the model trackers.
-    for ( const geom of instanceGeoms ) {
-      const type = geom.shape.data.type;
-      const tracker = this.trackers[type];
-      if ( !tracker.facetIdMap.has(geom.id) ) tracker.addFacet({ id: geom.id });
-      geom.linkTransformMatrix(tracker.viewFacetById(geom.id));
-      geom.calculateModel(); // Will not stay linked once the tracker increases buffer size.
-      idsInTracker[type].delete(geom.id);
+    // Update the polygon geom map.
+    // Vertices/indices are handled by the DrawableObject b/c it handles normals, uvs.
+    for ( const geom of groupedGeoms.polygon ) {
+      const id = geom.id;
+      this.polygons.set(id, geom);
+      currIds.add(id);
     }
 
     // Remove the unneeded geoms.
-    for ( const type of MODEL_SHAPES ) {
+    for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
-      for ( const id of idsInTracker[type] ) tracker.deleteFacetById(id);
+      for ( const id of tracker.facetIdMap.keys() ) {
+        if ( !currIds.has(id) ) tracker.deleteFacetById(id);
+      }
+    }
+    for ( const id of this.polygons.keys() ) {
+      if ( !currIds.has(id) ) this.polygons.delete(id);
     }
   }
 
   _removePlaceable(region, regionId) {
-    if ( region ) {
-      this.polygons.delete(region);
-      this.regionGeoms.delete(region);
-    }
+    if ( region ) this.regionGeoms.delete(region);
 
     // Remove all ids associated with this region in the model trackers.
     for ( const type of this.constructor.MODEL_SHAPES ) {
@@ -155,6 +170,10 @@ export class RegionTracker extends PlaceableTracker {
       for ( const id of tracker.facetIdMap.keys() ) {
         if ( id.startsWith(regionId) ) tracker.deleteFacetById(id);
       }
+    }
+
+    for ( const id of this.polygons.keys() ) {
+      if ( id.startsWith(regionId) ) this.polygons.delete(id);
     }
   }
 }

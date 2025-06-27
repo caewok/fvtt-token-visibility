@@ -48,11 +48,11 @@ geom.indices --> points to model indices
  */
 export class GeometryNonInstanced {
 
-  constructor({ addNormals, addUVs, type, placeable } = {}) {
+  constructor({ addNormals = false, addUVs = false, type, placeable } = {}) {
     this.#type = type;
     this.#instanceType = `${this.constructor.name}_${type}`;
-    if ( addNormals ) this.#addNormals = true;
-    if ( addUVs ) this.#addUVs = true;
+    this.#addNormals = addNormals;
+    this.#addUVs = addUVs;
     if ( placeable ) {
       this.#placeable = placeable;
       this.id = placeable.id ?? foundry.utils.randomID();
@@ -63,25 +63,30 @@ export class GeometryNonInstanced {
 
   // ----- NOTE: Properties set at the constructor ----- //
 
-  #addNormals = false;
-
-  #addUVs = false;
-
   #instanceType;
 
   #type;
 
-  get addNormals() { return this.#addNormals; }
-
-  get addUVs() { return this.#addUVs; }
-
-  get stride() { return 3 + (this.#addNormals * 3) + (this.#addUVs * 2); }
+  get stride() { return 3 + (this.addNormals * 3) + (this.addUVs * 2); }
 
   get instanceType() { return this.#instanceType; }
 
   get type() { return this.#type; }
 
   get instanced() { return false; }
+
+  #addNormals = false;
+
+  #addUVs = false;
+
+  get addNormals() { return this.#addNormals; }
+
+  set addNormals(value) {
+    this.dirtyModel = true;
+    this.#addNormals = value;
+  }
+
+  get addUVs() { return this.#addUVs; }
 
   // ----- NOTE: Model properties ----- //
 
@@ -259,6 +264,13 @@ export class GeometryInstanced extends GeometryNonInstanced {
   }
 
   get instanced() { return true; }
+
+  get addNormals() { return super.addNormals; }
+
+  set addNormals(value) {
+    this.defineInstance(); // Recreate the instance vertices (and indices).
+    super.addNormals(value);
+  }
 
   // ----- NOTE: Instance vertices and indices ---- //
 

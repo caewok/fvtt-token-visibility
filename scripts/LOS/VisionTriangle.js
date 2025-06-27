@@ -292,18 +292,28 @@ export class VisionTriangle {
 
   containsRegion(region) {
     // Ignore regions not within the vision rectangle elevation.
-    const { topZ, bottomZ } = regionElevation(region);
-    if ( topZ < this.elevationZ.min || bottomZ > this.elevationZ.max ) return false;
+    if ( outsideRegionElevation(region) ) return false;
 
     // For each region shape, use the ideal version to test b/c circles and ellipses can be tested faster than polys.
     // Ignore holes (some shape with holes may get included but rather be over-inclusive here)
     // Yes or no, regardless of how many shapes of a region are in the vision triangle.
     for ( const shape of region.shapes ) {
-      const pixi = convertRegionShapeToPIXI(shape);
-      if ( pixi.lineSegmentIntersects(this.a, this.b, { inside: true })
-        || pixi.lineSegmentIntersects(this.a, this.c, { inside: true }) ) return true;
+      if ( this.containsRegionShape(shape) ) return true;
     }
     return false;
+  }
+
+  outsideRegionElevation(region) {
+    const { topZ, bottomZ } = regionElevation(region);
+    return ( topZ < this.elevationZ.min && bottomZ > this.elevationZ.max );
+  }
+
+
+  // Does not test elevation.
+  containsRegionShape(regionShape) {
+    const pixi = convertRegionShapeToPIXI(regionShape);
+    return ( pixi.lineSegmentIntersects(this.a, this.b, { inside: true })
+        || pixi.lineSegmentIntersects(this.a, this.c, { inside: true }) );
   }
 
   /**

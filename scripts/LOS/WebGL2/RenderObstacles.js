@@ -15,7 +15,6 @@ import {
   DrawableTileWebGL2,
   DrawableSceneBackgroundWebGL2,
 } from "./DrawableTile.js";
-
 import {
   DrawableTokenWebGL2,
   DrawableHexTokenWebGL2,
@@ -25,7 +24,7 @@ import {
   LitDrawableHexTokenWebGL2,
   DrawableGridShape,
 } from "./DrawableToken.js";
-
+import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
 
 export class RenderObstaclesWebGL2 {
 
@@ -90,6 +89,7 @@ export class RenderObstaclesWebGL2 {
     const drawableClasses = [
       DrawableTileWebGL2,
       DrawableGridShape,
+      DrawableRegionWebGL2,
     ];
     if ( canvas.grid.isHexagonal  ) drawableClasses.push(
       DrawableHexTokenWebGL2,

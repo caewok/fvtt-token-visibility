@@ -12,6 +12,8 @@ const tmpRect = new PIXI.Rectangle();
 
 export class GeometryTile extends GeometryInstanced {
 
+  get addUVs() { return true; } // Always add UVs for tiles.
+
   get tile() { return this.placeable; }
 
   _defineInstanceVertices() {

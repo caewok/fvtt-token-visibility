@@ -10,7 +10,7 @@ Region,
 import { MODULE_ID } from "../../const.js";
 import { GeometryNonInstanced, GeometryInstanced } from "./GeometryDesc.js";
 import { BasicVertices, Rectangle3dVertices, Circle3dVertices, Ellipse3dVertices, Polygon3dVertices } from "./BasicVertices.js";
-import { regionElevation, convertRegionShapeToPIXI, setTypedArray, combineTypedArrays } from "../util.js";
+import { regionElevation, convertRegionShapeToPIXI, setTypedArray } from "../util.js";
 
 const tmpRect = new PIXI.Rectangle();
 const tmpPoly = new PIXI.Polygon();
@@ -39,6 +39,9 @@ export class GeometryRegion {
 
   // Can get a decent ellipse or circle with density around 50. Works for radius of 5000+.
   static CIRCLE_DENSITY = 50;
+
+  static MODEL_SHAPES = new Set(["circle", "ellipse", "rectangle"]);
+
 
   /** @type {Region} */
   region;
@@ -113,82 +116,93 @@ export class GeometryRegion {
    * 1. For single shapes: the geom
    * 2. For combined polygons or polygons with holes: the untrimmed vertices
    */
-  _calculateRegionGeometry() {
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
-    const region = this.region;
+  _calculateRegionGeometry(shapeGroups) {
+    shapeGroups ??= this._groupRegionShapes();
+    const { region, addNormals, addUVs } = this;
+    const opts = { region, addNormals, addUVs, density: this.constructor.CIRCLE_DENSITY };
+    const out = {
+      circle: new Array(shapeGroups.circle.length),
+      ellipse: new Array(shapeGroups.ellipse.length),
+      rectangle: new Array(shapeGroups.rectangle.length),
+      polygon: new Array(shapeGroups.polygon.length),
+    };
+
+    // Create a geom for each single circle, ellipse, and rectangle.
+    for ( const modelType of this.constructor.MODEL_SHAPES ) {
+      const groupArr = shapeGroups[modelType];
+      const outArr = out[modelType];
+      for ( let i = 0, iMax = groupArr.length; i < iMax; i += 1 ) {
+        const shapeGroup = groupArr[i];
+        const geom = GeometryRectangleRegionShape.fromRegion(region, shapeGroup.shape, opts);
+        geom.id = `${region.id}_${shapeGroup.type}_${shapeGroup.shapeIdx}`;
+        outArr[i] = geom;
+      }
+    }
+
+    // Copy over the unclipped polygon vertices directly to new polygon geoms.
     const { topZ, bottomZ } = regionElevation(region);
-    const uniqueShapes = this.combineRegionShapes();
-    const opts = { addUVs: this.addUVs, addNormals: this.addNormals, density: this.constructor.CIRCLE_DENSITY };
-    const instanceGeoms = {
+    const polyVOpts = { topZ, bottomZ, useFan: this.useFan };
+    for ( let i = 0, iMax = shapeGroups.polygon.length; i < iMax; i += 1 ) {
+      const shapeGroup = shapeGroups.polygons[i];
+      const vertices = Polygon3dVertices.calculateVertices(shapeGroup.path, polyVOpts);
+      const geom = new GeometryPolygonRegionShape(opts);
+      geom._untrimmedVertices = vertices;
+      out.polygon[i] = geom;
+    }
+    return out;
+  }
+
+  _groupRegionShapes(uniqueShapes) {
+    uniqueShapes ??= this.combineRegionShapes();
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+    const out = {
       circle: [],
       ellipse: [],
       rectangle: [],
+      polygon: [],
     };
-    const polygonVertices = [];
-    const useFan = this.useFan;
     for ( const shapeGroup of uniqueShapes ) {
-      if ( shapeGroup.shapes.length === 1 ) {
-        if ( shapeGroup.hasHole ) continue; // Should not occur.
-        const shape = shapeGroup.shapes[0];
-        const geom = GeometryRectangleRegionShape.fromRegion(region, shape, opts);
-        geom.id = `${region.id}_${shapeGroup.shapeIdx}`;
-        if ( shape.data.type === "polygon" ) polygonVertices.push(geom.untrimmedVertices);
-        else instanceGeoms[shapeGroup.type].push(geom);
-      } else {
+      if ( shapeGroup.type === "combined" ) {
         // Combine using Clipper.
         const paths = shapeGroup.shapes.map(shape => this.constructor.shapeToClipperPaths(shape));
         const combinedPaths = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
         const path = combinedPaths.combine();
-        polygonVertices.push(Polygon3dVertices.calculateVertices(path, { topZ, bottomZ, useFan }));
-      }
+        shapeGroup.path = path;
+        out.polygon.push(shapeGroup);
+      } else out[shapeGroup.type].push(shapeGroup);
     }
-   return { instanceGeoms, polygonVertices };
+    return out;
   }
 
   /**
    * Calculate the region geometry and combine into a single large vertex and index.
    * No instancing
    */
-  calculateNonInstancedGeometry() {
-    const { addNormals, addUVs } = this;
-    const { instanceGeoms, polygonVertices } = this._calculateRegionGeometry();
-    const untrimmedInstanceVs = instanceGeoms.map(geom => geom.untrimmedVertices);
-    if ( !(polygonVertices.length || untrimmedInstanceVs.length) ) return {};
-
-    // TODO: Create one or multiple poly shapes?
-
-    const trimmedData = BasicVertices.trimVertexData(combineTypedArrays(...polygonVertices, ...untrimmedInstanceVs), { addNormals, addUVs });
-    const polyShape = new GeometryPolygonRegionShape({region: this.region, addNormals, addUVs });
-    polyShape._vertices = trimmedData.vertices;
-    polyShape._indices = trimmedData.indices;
-    return polyShape;
-  }
+//   calculateNonInstancedGeometry() {
+//     const { addNormals, addUVs } = this;
+//     const { instanceGeoms, polygonVertices } = this._calculateRegionGeometry();
+//     const untrimmedInstanceVs = instanceGeoms.map(geom => geom.untrimmedVertices);
+//     if ( !(polygonVertices.length || untrimmedInstanceVs.length) ) return {};
+//
+//     // TODO: Create one or multiple poly shapes?
+//
+//
+//
+//     const trimmedData = BasicVertices.trimVertexData(combineTypedArrays(...polygonVertices, ...untrimmedInstanceVs), { addNormals, addUVs });
+//     const polyShape = new GeometryPolygonRegionShape({region: this.region, addNormals, addUVs });
+//     polyShape._vertices = trimmedData.vertices;
+//     polyShape._indices = trimmedData.indices;
+//     return polyShape;
+//   }
 
   /**
    * Calculate the region geometry and combine into a single large vertex and index for the polygons.
    * Keep instanced region separate
    */
   calculateInstancedGeometry() {
-    const { addNormals, addUVs } = this;
-    const { instanceGeoms, polygonVertices } = this._calculateRegionGeometry();
-
-    // TODO: Create one or multiple poly shapes?
-    const combinedPolys = polygonVertices.length ? combineTypedArrays(...polygonVertices) : [];
-
-//     const trimmedPolys = polygonVertices.length ?
-//       BasicVertices.trimVertexData(combineTypedArrays(...polygonVertices), { addNormals, addUVs })
-//       : null;
-
-    // TODO: Circles and ellipses could be an issue as they use multiple instances.
-    // For now, just return the instanceGeoms and sort it out later.
-    let polyShape = null;
-    if ( combinedPolys.length ) {
-      polyShape = new GeometryPolygonRegionShape({ region: this.region, addNormals, addUVs });
-      polyShape._untrimmedVertices = combinedPolys;
-//       polyShape._modelVertices = trimmedPolys.vertices;
-//       polyShape._modelIndices = trimmedPolys.indices;
-    }
-    return { polyShape, instanceGeoms };
+    const uniqueShapes = this.calculateUniqueShapes();
+    const shapeGroups = this._groupRegionShapes(uniqueShapes);
+    return this._calculateRegionGeometry(shapeGroups);
   }
 
   /**
@@ -217,7 +231,7 @@ export class GeometryRegion {
     for ( let i = 0; i < nShapes; i += 1 ) {
       const shape = region.shapes[i];
       if ( usedShapes.has(shape) ) continue; // Don't need to add to usedShapes b/c not returning to this shape.
-      const shapeGroup = { shapes: [shape], hasHole: shape.data.hole, shapeIdx: i, type: shape.data.type };
+      const shapeGroup = { shapes: [shape], hasHole: shape.data.hole, shapeIdx: i, type: shape.data.type, path: null };
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         const other = region.shapes[j];
         if ( usedShapes.has(other) ) continue;

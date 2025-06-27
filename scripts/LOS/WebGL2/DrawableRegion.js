@@ -4,98 +4,76 @@
 "use strict";
 
 import { DrawableObjectsWebGL2Abstract, DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
+import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import {
   GeometryRegion,
+  GeometryPolygonRegionShape,
   GeometryCircleRegionShape,
   GeometryEllipseRegionShape,
   GeometryRectangleRegionShape } from "../geometry/GeometryRegion.js";
 import { RegionTracker } from "../placeable_tracking/RegionTracker.js";
-import { FixedLengthTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
+import { log, isString } from "../util.js";
 
-export class DrawableRegionCircleShapeWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
-  /** @type {class} */
-  static geomClass = GeometryCircleRegionShape;
 
-  constructor(renderer, regionDrawableObject) {
-    super(renderer);
-    this.regionDrawableObject = regionDrawableObject;
-  }
+const RegionShapeMixin = function(Base) {
+  class DrawableRegionShape extends Base {
+    static trackerClass = RegionTracker;
 
-  get placeableTracker() { return this.regionDrawableObject.placeableTracker; }
-
-  _initializeGeoms(_opts) {
-    this.#numInstances = 0;
-    this.regionDrawableObject.geoms.forEach(geom => this.#numInstances += geom.instanceGeoms.circle.length);
-    this._trackAllGeomModels();
-  }
-
-  _trackAllGeomModels() {
-    const facetLength = this.constructor.MODEL_MATRIX_LENGTH;
-    this.tracker = new FixedLengthTrackingBuffer({ numFacets: this.numInstances, facetLength });
-    for ( const regionGeom of this.regionDrawableObject.geoms ) {
-      for ( const geom of regionGeom.instanceGeoms[this.constructor.TYPE] ) {
-        this.tracker.addFacet({ id: geom.id });
-        geom.linkTransformMatrix(this.tracker.viewFacetById(geom.id));
-      }
-    }
-  }
-
-  tracker;
-
-  static TYPE = "circle";
-
-  #numInstances = 0;
-
-  get numInstances() { return this.#numInstances; }
-
-  // TODO: Cache the region shape calculations, which are shared among the three instance shapes + polygons.
-  _defineAttributeProperties() {
-    const vertexProps = super._defineAttributeProperties();
-
-    // Need to track the region shape across several regions.
-    // const facetLength = this.constructor.MODEL_MATRIX_LENGTH;
-
-    // Substitute in the tracker specific to circles instead of the regionDrawableObject's tracker.
-    vertexProps.aModel.data = this.tracker.buffer;
-    return vertexProps;
-  }
-
-  _updateAllInstances() {
-    this._trackAllGeomModels();
-    super._updateAllInstances();
-  }
-
-  _updateInstance(region) {
-    const type = this.type;
-
-    // Remove all the region's geoms' data from the tracker.
-    for ( const id of this.tracker.facetIdMap.values() ) {
-      if ( !id.startsWith(region.id) ) continue;
-      this.#numInstances -= 1;
-      this.deleteFacetById(id);
+    constructor(renderer, regionDrawableObject) {
+      super(renderer);
+      this.regionDrawableObject = regionDrawableObject;
+      delete this.placeableTracker; // So the getter works. See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa/77093264.
     }
 
-    // Add back in the region's geoms data.
-    for ( const regionGeom of this.regionDrawableObject.geoms ) {
-      if ( regionGeom.region !== region ) continue;
-      for ( const geom of regionGeom.instanceGeoms[type] ) {
-        this.#numInstances += 1;
-        this.tracker.addFacet({ id: geom.id });
-        geom.linkTransformMatrix(this.tracker.viewFacetById(geom.id));
-      }
+    get placeableTracker() { return this.regionDrawableObject.placeableTracker; }
+
+    set placeableTracker(_value) { return; } // Ignore any attempts to set it but do not throw error.
+
+    get numInstances() { return this.placeableTracker.trackers[this.constructor.TYPE].numFacets; }
+
+    _initializePlaceableHandler() { return; } // Can skip b/c the region drawable controls the handler.
+  }
+  return DrawableRegionShape;
+}
+
+export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
+  _initializeOffsetTrackers() {
+    // Don't need indices or vertices trackers.
+    // Model matrices stored in placeableTracker.
+    this.trackers.model = this.placeableTracker.trackers[this.constructor.TYPE];
+  }
+
+  _updateModelBufferForInstance(region) {
+    if ( this.trackers.model.arraySize > this.bufferSizes.model ) {
+      this.rebuildNeeded = true;
+      return;
     }
-    super._updateInstance(region);
+
+    // Update each shape of this type in the region.
+    log(`${this.constructor.name}|_updateModelBufferForInstance ${region.id}`);
+    const currIds = [this.trackers.model.facetIdMap.keys().filter(key => key.startsWith(region.id))];
+    for ( const id of currIds ) this._updateModelBufferForShapeId(id);
+  }
+
+  _updateModelBufferForShapeId(id) {
+    const gl = this.gl;
+    const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
+
+    // See twgl.setAttribInfoBufferFromArray.
+    const tracker = this.trackers.model;
+    const mOffset = tracker.facetOffsetAtId(id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    log(`${this.constructor.name}|_updateModelBufferForInstance ${id} with offset ${mOffset}`, { model: tracker.viewFacetById(id) });
+    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
   }
 }
 
-export class DrawableRegionEllipseShapeWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
-  /** @type {class} */
+export class DrawableRegionEllipseShapeWebGL2 extends DrawableRegionInstanceShapeWebGL2 {
+  /** @type {class<GeometryInstanced>} */
   static geomClass = GeometryEllipseRegionShape;
 
-  constructor(renderer, regionDrawableObject) {
-    super(renderer);
-    this.regionDrawableObject = regionDrawableObject;
-  }
+  /** @type {foundry.data.BaseShapeData.TYPES} */
+  static TYPE = "ellipse";
 
   _initializeGeoms(opts = {}) {
     opts.density ??= GeometryRegion.CIRCLE_DENSITY;
@@ -103,16 +81,38 @@ export class DrawableRegionEllipseShapeWebGL2 extends DrawableObjectsInstancingW
   }
 }
 
-export class DrawableRegionRectangleShapeWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
-  /** @type {class} */
+export class DrawableRegionCircleShapeWebGL2 extends DrawableRegionEllipseShapeWebGL2 {
+  /** @type {class<GeometryInstanced>} */
+  static geomClass = GeometryCircleRegionShape;
+
+  /** @type {foundry.data.BaseShapeData.TYPES} */
+  static TYPE = "circle";
+}
+
+export class DrawableRegionRectangleShapeWebGL2 extends DrawableRegionInstanceShapeWebGL2 {
+  /** @type {class<GeometryInstanced>} */
   static geomClass = GeometryRectangleRegionShape;
 
-  regionDrawableObject;
+  /** @type {foundry.data.BaseShapeData.TYPES} */
+  static TYPE = "rectangle";
+}
+
+
+export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableObjectsWebGL2Abstract) {
+  /** @type {class<GeometryInstanced>} */
+  static geomClass = GeometryPolygonRegionShape;
+
+  /** @type {foundry.data.BaseShapeData.TYPES} */
+  static TYPE = "polygon";
 
   constructor(renderer, regionDrawableObject) {
-    super(renderer);
-    this.regionDrawableObject = regionDrawableObject;
+    super(renderer, regionDrawableObject);
+    delete this.geoms; // So the geom getter works.
   }
+
+  get geoms() { return this.placeableTracker.trackers[this.constructor.TYPE].polygons; }
+
+  _initializeGeoms() { return; }
 }
 
 /**
@@ -131,6 +131,10 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   static geomClass = GeometryRegion;
 
+  get numPolygons() { return this.placeableTracker.trackers.polygon.numFacets; }
+
+  // Drawables for the different instanced shapes.
+  // In addition, this class represents the non-instanced polygon shapes.
   drawables = {
     circle: null,
     ellipse: null,
@@ -146,30 +150,113 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   async initialize() {
     await super.initialize();
-    for ( const drawable of this.drawables ) await drawable.initialize();
+    for ( const drawable of Object.values(this.drawables) ) await drawable.initialize();
   }
 
   _initializeGeoms(opts = {}) {
-    opts.addNormals ??= this.addNormals;
-    opts.addUVs ??= this.addUVs;
-    opts.placeable = null;
-    const geomClass = this.constructor.geomClass;
+    const polygonGeoms = this.placeableTracker.polygons;
+    opts.addNormals ??= this.debugViewNormals;
+    opts.addUVs ??= false;
     const geoms = this.geoms;
-    let geomIndex = 0;
-    geoms.length = 0;
-    for ( const region of this.placeableTracker.placeables ) {
-      if ( !this.constructor.includeRegion(region) ) continue;
-      geomIndex += 1;
-      opts.placeable = region;
-      const geom = new geomClass(opts);
-      geom.updateGeometry();
-      geoms.set(region.id, geom);
+    for ( const polyGeom of polygonGeoms.values() ) {
+      // Create new geom so addNormals can be set correctly.
+      opts.region = polyGeom.region;
+      const geom = new GeometryPolygonRegionShape(opts);
+      geom._untrimmedVertices = polyGeom._untrimmedVertices; // TODO: Does this need to be copied to avoid modification?
+      geoms.set(geom.id, geom);
     }
   }
 
-  static includeRegion(region) {
-    // TODO: Fix
-    return Boolean(region.polygonGeom);
+  hasPlaceable(placeableOrId) {
+    // Check if this is a shape id, which is likely. If so, extract the region id.
+    if ( isString(placeableOrId) ) {
+      const regex = /^.*?(?=_)/; // Capture everything before the first underscore ("_").
+      const res = placeableOrId.match(regex);
+      if ( res ) placeableOrId = res[0];
+    }
+    return super.hasPlaceable(placeableOrId);
+  }
+
+  validateInstances() {
+    super.validateInstances();
+    for ( const drawable of Object.values(this.drawables) ) drawable.validateInstances();
+  }
+
+  _updateInstanceVertex(placeable) {
+    // Update each shape of this type in the region.
+    for ( const geom of this.geoms ) {
+      geom.dirtyModel = true;
+      geom.calculateModel();
+
+      const vi = this.trackers.vi;
+      const needFullBufferUpdate = vi.updateFacet(geom.id, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
+      if ( needFullBufferUpdate ) return false;
+    }
+    for ( const drawable of Object.values(this.drawables) ) {
+      if ( !drawable._updateInstanceVertex(placeable) ) return
+    }
+  }
+
+  _updateInstance(placeable) {
+    if ( this.trackers.vi.vertices.arraySize > this.bufferSizes.vertex ) {
+      this.rebuildNeeded = true;
+      return;
+    }
+
+    if ( !this._updateInstanceVertex(placeable) ) {
+      this.rebuildNeeded = true;
+      return;
+    }
+
+    for ( const geom of this.geoms ) this._updateAttributeBuffersForId(geom.id);
+  }
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * Camera (viewer/target) are set by the renderer and will not change between now and render.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   */
+  filterObjects(visionTriangle, _opts) {
+    this.instanceSet.clear();
+    for ( const drawable of Object.values(this.drawables) ) drawable.instanceSet.clear();
+
+    const regions = AbstractViewpoint.filterRegionsByVisionTriangle(visionTriangle);
+
+    // For each region, determine which shapes are within the vision triangle.
+    // Add the id of each shape group to its respective drawable.
+    for ( const region of regions ) {
+      if ( !this.placeableTracker.placeables.has(region) ) continue;
+      // Test for region inclusion as a drawable?
+      // if ( visionTriangle.outsideRegionElevation(region) ) continue; // Not needed b/c filtered above.
+      const shapeGroups = this.placeableTracker.shapeGroups.get(region);
+      for ( const shapeGroup of shapeGroups ) {
+        const id = `${region.id}_${shapeGroup.type}_${shapeGroup.shapeIdx}`;
+        for ( const shape of shapeGroup.shapes ) {
+          if ( shape.data.hole ) continue; // Ignore holes.
+          if ( visionTriangle.containsRegionShape(shape) ) {
+            if ( shapeGroup.type === "polygon" || shapeGroup.type === "combined" )  {
+              const idx = this.trackers.indices.facetIdMap.get(id);
+              this.instanceSet.add(idx);
+            } else {
+              const drawable = this.drawables[shapeGroup.type];
+              const idx = drawable.trackers.model.facetIdMap.get(id);
+              drawable.instanceSet.add(idx);
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  render() {
+    super.render();
+    for ( const drawable of Object.values(this.drawables) ) drawable.render();
   }
 }
 
