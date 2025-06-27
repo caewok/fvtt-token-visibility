@@ -513,6 +513,8 @@ export class DrawableObjectsWebGL2Abstract {
 
   // ----- NOTE: Render ----- //
 
+  get numObjectsToDraw() { return this.instanceSet.size; }
+
   /** @type {Set<number>} */
   instanceSet = new Set();
 
@@ -549,7 +551,7 @@ export class DrawableObjectsWebGL2Abstract {
    * Render this drawable.
    */
   render() {
-    if ( !this.instanceSet.size ) return;
+    if ( !this.numObjectsToDraw ) return;
 
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
@@ -567,13 +569,13 @@ export class DrawableObjectsWebGL2Abstract {
     if ( CONFIG[MODULE_ID].debug ) {
       for ( const i of instanceSet ) {
         const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
-        log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+        log(`${this.constructor.name}|_drawFilteredInstances|${i}`);
         console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
       }
     }
 
-    const { facetLength, facetLengths, byteOffsets } = this.indices.tracker;
-    WebGL2.drawSet(this.gl, instanceSet, facetLength || facetLengths, byteOffsets);
+    const { facetLength, facetLengths, byteOffsets } = this.trackers.vi.indices;
+    WebGL2.drawSet(this.gl, instanceSet, byteOffsets, facetLength || facetLengths);
   }
 
   _drawUnfilteredInstances() {
@@ -722,14 +724,14 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     const nVertices = this.geoms.indices.length; // Number of vertices to draw.
 
     if ( CONFIG[MODULE_ID].debug ) {
-      log(`${this.constructor.name}|_drawUnfilteredInstances`);
+      log(`${this.constructor.name}|_drawFilteredInstances`);
       const vertices = this.verticesArray;
       const indices = this.indicesArray;
       console.table({ vertices: [...vertices], indices: [...indices] });
 
       for ( const i of instanceSet ) {
         const model = this.trackers.model.viewFacetAtIndex(i);
-        log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+        log(`${this.constructor.name}|_drawFilteredInstances|${i}`);
         console.table({  model: [...model] });
       }
     }

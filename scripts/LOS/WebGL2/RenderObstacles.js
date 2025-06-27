@@ -426,8 +426,8 @@ export class RenderObstaclesWebGL2 {
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     this.drawableTerrain.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 
-    const hasObstacles = this.drawableObstacles.some(drawable => drawable.instanceSet.size);
-    const hasTerrain = this.drawableTerrain.some(drawable => drawable.instanceSet.size);
+    const hasObstacles = this.drawableObstacles.some(drawable => drawable.numObjectsToDraw);
+    const hasTerrain = this.drawableTerrain.some(drawable => drawable.numObjectsToDraw);
     if ( !(hasObstacles || hasTerrain) ) return;
 
     this._setCamera(viewerLocation, target, { targetLocation });

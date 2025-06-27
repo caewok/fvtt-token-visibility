@@ -44,11 +44,11 @@ export class VariableLengthAbstractBuffer {
   }
 
   calculateOffsets() {
-    const numFacets = this.numFacets;
-    this.#cumulativeFacetLengths.length = this.#facetLengths.length;
-    this.#cumulativeFacetLengths[0] = this.#facetLengths[0];
-    for ( let i = 1; i < numFacets; i += 1 ) {
-      this.#cumulativeFacetLengths[i] = this.#cumulativeFacetLengths[i - 1] + this.#facetLengths[i];
+    const n = this.numFacets + 1;
+    this.#cumulativeFacetLengths.length = n;
+    this.#cumulativeFacetLengths[0] = 0;
+    for ( let i = 1; i < n; i += 1 ) {
+      this.#cumulativeFacetLengths[i] = this.#cumulativeFacetLengths[i - 1] + this.#facetLengths[i - 1];
     }
   }
 
@@ -85,7 +85,7 @@ export class VariableLengthAbstractBuffer {
 
   facetLengthAtIndex(idx) { return this.#facetLengths[idx]; }
 
-  facetOffsetAtIndex(idx) { return this.#cumulativeFacetLengths[idx] - this.#facetLengths[idx]; }
+  facetOffsetAtIndex(idx) { return this.#cumulativeFacetLengths[idx]; }
 
   facetOffsetAtId(id) { return this.facetOffsetAtIndex(this.facetIdMap.get(id)); }
 
@@ -235,7 +235,7 @@ export class VariableLengthAbstractBuffer {
 
   viewBuffer(buffer) { return new this.type(buffer, 0, this.arrayLength); }
 
-  viewWholeBuffer(buffer) { return new this.type(buffer, 0, Math.floor(this.maxLength)); }
+  viewWholeBuffer(buffer) { return new this.type(buffer, 0, this.maxLength); }
 
   viewFacetById(id, buffer) {
     if ( !this.facetIdMap.has(id) ) return null;
@@ -639,6 +639,7 @@ tb = new VariableLengthTrackingBuffer({ facetLengths: [3,4,5,5,5] })
 tb.viewFacetAtIndex(0).set([1,2,3])
 tb.viewFacetAtIndex(1).set([1,2,3,4])
 tb.viewFacetAtIndex(2).set([1,2,3,4,5])
+tb.calculateOffsets()
 
 tb.deleteFacet(1)
 tb.addFacet({ newValues: [10,11,12,13]})

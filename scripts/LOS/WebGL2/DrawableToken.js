@@ -78,7 +78,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
   // TODO: Handle material uniform using binding; avoid setUniforms here.
 //   render() {
-//     if ( !this.instanceSet.size ) return;
+//     if ( !this.numObjectsToDraw ) return;
 //
 //     const gl = this.gl;
 //     this.webGL2.useProgram(this.programInfo);
@@ -89,7 +89,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 //     // for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
 //     // twgl.setUniforms(this.programInfo, this.materialUniforms);
 //
-//     log (`${this.constructor.name}|render ${this.instanceSet.size} tokens`);
+//     log (`${this.constructor.name}|render ${this.numObjectsToDraw} tokens`);
 //     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
 //     else this._drawUnfilteredInstances();
 //     gl.bindVertexArray(null)

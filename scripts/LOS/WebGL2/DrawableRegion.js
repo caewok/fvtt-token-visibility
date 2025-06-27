@@ -32,6 +32,7 @@ const RegionShapeMixin = function(Base) {
     get numInstances() { return this.placeableTracker.trackers[this.constructor.TYPE].numFacets; }
 
     _initializePlaceableHandler() { return; } // Can skip b/c the region drawable controls the handler.
+
   }
   return DrawableRegionShape;
 }
@@ -65,6 +66,24 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     log(`${this.constructor.name}|_updateModelBufferForInstance ${id} with offset ${mOffset}`, { model: tracker.viewFacetById(id) });
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
+  }
+
+  _filterShapesForRegion(visionTriangle, region, _opts) {
+    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByVisionTriangle.
+    // And this.placeableTracker.placeables has the region.
+    const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
+    const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
+    for ( const shapeGroup of shapeGroupArr ) {
+      const id = `${region.id}_${shapeGroup.type}_${shapeGroup.idx}`;
+      for ( const shape of shapeGroup.shapes ) {
+        if ( shape.data.hole ) continue; // Ignore holes.
+        if ( visionTriangle.containsRegionShape(shape) ) {
+          const idx = this.trackers.model.facetIdMap.get(id);
+          this.instanceSet.add(idx);
+          break;
+        }
+      }
+    }
   }
 }
 
@@ -112,7 +131,25 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
 
   get geoms() { return this.placeableTracker.polygons; }
 
-  _initializeGeoms(opts = {}) { return; }
+  _initializeGeoms(_opts) { return; }
+
+  _filterShapesForRegion(visionTriangle, region, _opts) {
+    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByVisionTriangle.
+    // And this.placeableTracker.placeables has the region.
+    const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
+    const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
+    for ( const shapeGroup of shapeGroupArr ) {
+      const id = `${region.id}_${shapeGroup.type}_${shapeGroup.idx}`;
+      for ( const shape of shapeGroup.shapes ) {
+        if ( shape.data.hole ) continue; // Ignore holes.
+        if ( visionTriangle.containsRegionShape(shape) ) {
+          const idx = this.trackers.vi.indices.facetIdMap.get(id);
+          this.instanceSet.add(idx);
+          break;
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -132,6 +169,12 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   static geomClass = GeometryRegion;
 
   get numPolygons() { return this.placeableTracker.trackers.polygon.numFacets; }
+
+  get numObjectsToDraw() {
+    let n = 0;
+    for ( const drawable of Object.values(this.drawables) ) n += drawable.instanceSet.size;
+    return n;
+  }
 
   // Drawables for the different instanced shapes.
   // In addition, this class represents the non-instanced polygon shapes.
@@ -159,7 +202,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   // _initializePlaceableHandler() { return; }
 
-  _initializeGeoms(opts = {}) { return; }
+  _initializeGeoms(_opts) { return; }
 
   _initializeOffsetTrackers() { return; }
 
@@ -191,7 +234,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, _opts) {
+  filterObjects(visionTriangle, opts) {
     this.instanceSet.clear();
     for ( const drawable of Object.values(this.drawables) ) drawable.instanceSet.clear();
 
@@ -201,26 +244,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     // Add the id of each shape group to its respective drawable.
     for ( const region of regions ) {
       if ( !this.placeableTracker.placeables.has(region) ) continue;
-      // Test for region inclusion as a drawable?
-      // if ( visionTriangle.outsideRegionElevation(region) ) continue; // Not needed b/c filtered above.
-      const shapeGroups = this.placeableTracker.shapeGroups.get(region);
-      for ( const shapeGroup of shapeGroups ) {
-        const id = `${region.id}_${shapeGroup.type}_${shapeGroup.shapeIdx}`;
-        for ( const shape of shapeGroup.shapes ) {
-          if ( shape.data.hole ) continue; // Ignore holes.
-          if ( visionTriangle.containsRegionShape(shape) ) {
-            if ( shapeGroup.type === "polygon" || shapeGroup.type === "combined" )  {
-              const idx = this.trackers.indices.facetIdMap.get(id);
-              this.instanceSet.add(idx);
-            } else {
-              const drawable = this.drawables[shapeGroup.type];
-              const idx = drawable.trackers.model.facetIdMap.get(id);
-              drawable.instanceSet.add(idx);
-            }
-            break;
-          }
-        }
-      }
+      for ( const drawable of Object.values(this.drawables) ) drawable._filterShapesForRegion(visionTriangle, region, opts);
     }
   }
 

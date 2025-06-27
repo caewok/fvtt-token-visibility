@@ -292,7 +292,7 @@ export class VisionTriangle {
 
   containsRegion(region) {
     // Ignore regions not within the vision rectangle elevation.
-    if ( outsideRegionElevation(region) ) return false;
+    if ( this.outsideRegionElevation(region) ) return false;
 
     // For each region shape, use the ideal version to test b/c circles and ellipses can be tested faster than polys.
     // Ignore holes (some shape with holes may get included but rather be over-inclusive here)
