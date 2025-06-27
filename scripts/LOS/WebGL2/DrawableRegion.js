@@ -107,12 +107,12 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
 
   constructor(renderer, regionDrawableObject) {
     super(renderer, regionDrawableObject);
-    delete this.geoms; // So the geom getter works.
+    delete this.geoms; // So the getter works. See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa/77093264.
   }
 
-  get geoms() { return this.placeableTracker.trackers[this.constructor.TYPE].polygons; }
+  get geoms() { return this.placeableTracker.polygons; }
 
-  _initializeGeoms() { return; }
+  _initializeGeoms(opts = {}) { return; }
 }
 
 /**
@@ -139,10 +139,12 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     circle: null,
     ellipse: null,
     rectangle: null,
+    polygon: null,
   };
 
   constructor(renderer) {
     super(renderer);
+    this.drawables.polygon = new DrawableRegionPolygonShapeWebGL2(renderer, this);
     this.drawables.circle = new DrawableRegionCircleShapeWebGL2(renderer, this);
     this.drawables.ellipse = new DrawableRegionEllipseShapeWebGL2(renderer, this);
     this.drawables.rectangle = new DrawableRegionRectangleShapeWebGL2(renderer, this);
@@ -153,19 +155,17 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     for ( const drawable of Object.values(this.drawables) ) await drawable.initialize();
   }
 
-  _initializeGeoms(opts = {}) {
-    const polygonGeoms = this.placeableTracker.polygons;
-    opts.addNormals ??= this.debugViewNormals;
-    opts.addUVs ??= false;
-    const geoms = this.geoms;
-    for ( const polyGeom of polygonGeoms.values() ) {
-      // Create new geom so addNormals can be set correctly.
-      opts.region = polyGeom.region;
-      const geom = new GeometryPolygonRegionShape(opts);
-      geom._untrimmedVertices = polyGeom._untrimmedVertices; // TODO: Does this need to be copied to avoid modification?
-      geoms.set(geom.id, geom);
-    }
-  }
+  async _initializeProgram() { return; }
+
+  // _initializePlaceableHandler() { return; }
+
+  _initializeGeoms(opts = {}) { return; }
+
+  _initializeOffsetTrackers() { return; }
+
+  _initializeAttributes() { return; }
+
+  _initializeUniforms() { return; }
 
   hasPlaceable(placeableOrId) {
     // Check if this is a shape id, which is likely. If so, extract the region id.
@@ -178,37 +178,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 
   validateInstances() {
-    super.validateInstances();
     for ( const drawable of Object.values(this.drawables) ) drawable.validateInstances();
-  }
-
-  _updateInstanceVertex(placeable) {
-    // Update each shape of this type in the region.
-    for ( const geom of this.geoms ) {
-      geom.dirtyModel = true;
-      geom.calculateModel();
-
-      const vi = this.trackers.vi;
-      const needFullBufferUpdate = vi.updateFacet(geom.id, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
-      if ( needFullBufferUpdate ) return false;
-    }
-    for ( const drawable of Object.values(this.drawables) ) {
-      if ( !drawable._updateInstanceVertex(placeable) ) return
-    }
-  }
-
-  _updateInstance(placeable) {
-    if ( this.trackers.vi.vertices.arraySize > this.bufferSizes.vertex ) {
-      this.rebuildNeeded = true;
-      return;
-    }
-
-    if ( !this._updateInstanceVertex(placeable) ) {
-      this.rebuildNeeded = true;
-      return;
-    }
-
-    for ( const geom of this.geoms ) this._updateAttributeBuffersForId(geom.id);
   }
 
   /**
@@ -255,7 +225,6 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 
   render() {
-    super.render();
     for ( const drawable of Object.values(this.drawables) ) drawable.render();
   }
 }

@@ -82,6 +82,7 @@ export class GeometryNonInstanced {
   get addNormals() { return this.#addNormals; }
 
   set addNormals(value) {
+    if ( this.#addNormals === value ) return;
     this.dirtyModel = true;
     this.#addNormals = value;
   }
@@ -268,8 +269,8 @@ export class GeometryInstanced extends GeometryNonInstanced {
   get addNormals() { return super.addNormals; }
 
   set addNormals(value) {
+    super.addNormals = value;
     this.defineInstance(); // Recreate the instance vertices (and indices).
-    super.addNormals(value);
   }
 
   // ----- NOTE: Instance vertices and indices ---- //

@@ -103,7 +103,6 @@ export class PlaceableTracker {
       this.placeableLastUpdated.set(p, this.#updateId);
       this._addPlaceable(p);
     });
-
   }
 
   /**

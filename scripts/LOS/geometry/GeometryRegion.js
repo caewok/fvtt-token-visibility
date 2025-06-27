@@ -73,12 +73,13 @@ export class GeometryRegion {
   shapeData = new WeakMap();
 
   updateShapes() {
+    // Cache the PIXI shape and geometry for each region shape.
     this.shapeData = new WeakMap();
     const opts = { addUVs: this.addUVs, addNormals: this.addNormals, density: this.constructor.CIRCLE_DENSITY };
-    this.region.shapes.forEach(shape => {
+    this.region.shapes.forEach((shape, idx) => {
       this.shapeData.set(shape, {
         shapePIXI: convertRegionShapeToPIXI(shape).clone(),
-        geom: GeometryRectangleRegionShape.fromRegion(this.region, shape, opts),
+        geom: GeometryRectangleRegionShape.fromRegion(this.region, idx, opts),
       });
     });
   }
@@ -116,7 +117,7 @@ export class GeometryRegion {
    * 1. For single shapes: the geom
    * 2. For combined polygons or polygons with holes: the untrimmed vertices
    */
-  _calculateRegionGeometry(shapeGroups) {
+  calculateRegionGeometry(shapeGroups) {
     shapeGroups ??= this._groupRegionShapes();
     const { region, addNormals, addUVs } = this;
     const opts = { region, addNormals, addUVs, density: this.constructor.CIRCLE_DENSITY };
@@ -133,9 +134,9 @@ export class GeometryRegion {
       const outArr = out[modelType];
       for ( let i = 0, iMax = groupArr.length; i < iMax; i += 1 ) {
         const shapeGroup = groupArr[i];
-        const geom = GeometryRectangleRegionShape.fromRegion(region, shapeGroup.shape, opts);
-        geom.id = `${region.id}_${shapeGroup.type}_${shapeGroup.shapeIdx}`;
-        outArr[i] = geom;
+        const shape = shapeGroup.shapes[0]; // Always singular for circle, ellipse, rect.
+        if ( !this.shapeData.has(shape) ) this.updateShapes(); // TODO: Should not be needed here.
+        outArr[i] = this.shapeData.get(shape).geom;
       }
     }
 
@@ -143,16 +144,24 @@ export class GeometryRegion {
     const { topZ, bottomZ } = regionElevation(region);
     const polyVOpts = { topZ, bottomZ, useFan: this.useFan };
     for ( let i = 0, iMax = shapeGroups.polygon.length; i < iMax; i += 1 ) {
-      const shapeGroup = shapeGroups.polygons[i];
-      const vertices = Polygon3dVertices.calculateVertices(shapeGroup.path, polyVOpts);
-      const geom = new GeometryPolygonRegionShape(opts);
-      geom._untrimmedVertices = vertices;
+      const shapeGroup = shapeGroups.polygon[i];
+      let geom;
+      if ( shapeGroup.type === "polygon" ) { // Single polygon; use the predefined geom.
+        const shape = shapeGroup.shapes[0];
+        if ( !this.shapeData.has(shape) ) this.updateShapes(); // TODO: Should not be needed here.
+        geom = this.shapeData.get(shape).geom;
+      } else { // Combined. No defined shape.
+        const vertices = Polygon3dVertices.calculateVertices(shapeGroup.path, polyVOpts);
+        geom = new GeometryPolygonRegionShape(opts);
+        geom.id = `${region.id}_${shapeGroup.type}_${shapeGroup.idx}`;
+        geom._untrimmedVertices = vertices;
+      }
       out.polygon[i] = geom;
     }
     return out;
   }
 
-  _groupRegionShapes(uniqueShapes) {
+  groupRegionShapes(uniqueShapes) {
     uniqueShapes ??= this.combineRegionShapes();
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     const out = {
@@ -180,7 +189,7 @@ export class GeometryRegion {
    */
 //   calculateNonInstancedGeometry() {
 //     const { addNormals, addUVs } = this;
-//     const { instanceGeoms, polygonVertices } = this._calculateRegionGeometry();
+//     const { instanceGeoms, polygonVertices } = this.calculateRegionGeometry();
 //     const untrimmedInstanceVs = instanceGeoms.map(geom => geom.untrimmedVertices);
 //     if ( !(polygonVertices.length || untrimmedInstanceVs.length) ) return {};
 //
@@ -200,9 +209,9 @@ export class GeometryRegion {
    * Keep instanced region separate
    */
   calculateInstancedGeometry() {
-    const uniqueShapes = this.calculateUniqueShapes();
-    const shapeGroups = this._groupRegionShapes(uniqueShapes);
-    return this._calculateRegionGeometry(shapeGroups);
+    const uniqueShapes = this.combineRegionShapes();
+    const shapeGroups = this.groupRegionShapes(uniqueShapes);
+    return this.calculateRegionGeometry(shapeGroups);
   }
 
   /**
@@ -231,7 +240,7 @@ export class GeometryRegion {
     for ( let i = 0; i < nShapes; i += 1 ) {
       const shape = region.shapes[i];
       if ( usedShapes.has(shape) ) continue; // Don't need to add to usedShapes b/c not returning to this shape.
-      const shapeGroup = { shapes: [shape], hasHole: shape.data.hole, shapeIdx: i, type: shape.data.type, path: null };
+      const shapeGroup = { shapes: [shape], hasHole: shape.data.hole, idx: i, type: shape.data.type, path: null };
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         const other = region.shapes[j];
         if ( usedShapes.has(other) ) continue;
@@ -306,10 +315,12 @@ const RegionShapeMixin = function(Base) {
       this.region = region;
     }
 
-    static fromRegion(region, shape = 0, opts = {}) {
-      if ( Number.isNumeric(shape) ) shape = region.shapes[shape];
+    static fromRegion(region, idx, opts = {}) {
+      const shape = region.shapes[idx];
       const cl = REGION_SHAPE_CLASSES[shape.data.type];
-      return new cl({ placeable: shape, region, ...opts });
+      const geom = new cl({ region, placeable: shape, ...opts });
+      geom.id = `${region.id}_${shape.data.type}_${idx}`;
+      return geom;
     }
 
     _untrimmedInstanceVertices = new Float32Array();

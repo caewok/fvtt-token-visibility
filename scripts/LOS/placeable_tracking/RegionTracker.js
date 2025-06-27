@@ -108,6 +108,7 @@ export class RegionTracker extends PlaceableTracker {
       this.trackers.ellipse = new FixedLengthTrackingBuffer(opts);
       this.trackers.rectangle = new FixedLengthTrackingBuffer(opts);
     }
+    super.initializePlaceables();
   }
 
   _addPlaceable(region) {
@@ -121,10 +122,10 @@ export class RegionTracker extends PlaceableTracker {
     regionGeom.updateShapes();
 
     // See GeometryRegion#calculateInstancedGeometry
-    const uniqueShapes = regionGeom.calculateUniqueShapes();
-    const shapeGroups = regionGeom._groupRegionShapes(uniqueShapes);
+    const uniqueShapes = regionGeom.combineRegionShapes();
+    const shapeGroups = regionGeom.groupRegionShapes(uniqueShapes);
     this.shapeGroups.set(region, shapeGroups);
-    const groupedGeoms = regionGeom._calculateRegionGeometry(shapeGroups);
+    const groupedGeoms = regionGeom.calculateRegionGeometry(shapeGroups);
 
     // Record which ids are in the current geometry, to compare later against the previous.
     const currIds = new Set();
@@ -153,10 +154,12 @@ export class RegionTracker extends PlaceableTracker {
     for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
       for ( const id of tracker.facetIdMap.keys() ) {
-        if ( !currIds.has(id) ) tracker.deleteFacetById(id);
+        if ( !id.startsWith(region.id) ) continue; // Only consider geometries for this region.
+        if ( !currIds.has(id) ) tracker.deleteFacet(id);
       }
     }
     for ( const id of this.polygons.keys() ) {
+      if ( !id.startsWith(region.id) ) continue; // Only consider geometries for this region.
       if ( !currIds.has(id) ) this.polygons.delete(id);
     }
   }
@@ -168,7 +171,7 @@ export class RegionTracker extends PlaceableTracker {
     for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
       for ( const id of tracker.facetIdMap.keys() ) {
-        if ( id.startsWith(regionId) ) tracker.deleteFacetById(id);
+        if ( id.startsWith(regionId) ) tracker.deleteFacet(id);
       }
     }
 

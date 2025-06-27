@@ -321,27 +321,28 @@ export class VariableLengthTrackingBuffer extends VariableLengthAbstractBuffer {
 
 export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
 
-  constructor(opts = {}) {
+  constructor({ facetLengths, numFacets, maxLength, ...opts } = {}) {
     // Determine the number of facets and facet lengths based on the facetLengths array and other options.
+    // Avoid obliterating the originally passed options, in case they are reused.
     let facetLength;
-    let numFacets;
-    if ( Number.isNumeric(opts.facetLengths) ) {
-      facetLength = opts.facetLengths;
-      numFacets = opts.numFacets;
+    let origNumFacets;
+    if ( Number.isNumeric(facetLengths) ) {
+      facetLength = facetLengths;
+      origNumFacets = numFacets;
     } else {  // Must be array.
-      facetLength = opts.facetLengths[0];
-      numFacets = opts.numFacets ??= opts.facetLengths.length;
+      facetLength = facetLengths[0];
+      origNumFacets = numFacets ??= facetLengths.length;
     }
     facetLength ||= 1;
-    numFacets ||= 0;
+    origNumFacets ||= 0;
 
     // Use the constructor to build a zero-length array.
-    opts.numFacets = 0
-    opts.facetLengths = [];
-    opts.maxLength = Math.max(facetLength * numFacets, opts.maxLength || 0); // Ensure buffer is sufficiently large to hold the actual number of facets.
-    super(opts);
+    numFacets = 0
+    facetLengths = [];
+    maxLength = Math.max(facetLength * origNumFacets, maxLength || 0); // Ensure buffer is sufficiently large to hold the actual number of facets.
+    super({ numFacets, facetLengths, maxLength, ...opts });
 
-    this.#numFacets = numFacets;
+    this.#numFacets = origNumFacets;
     this.#facetLength = facetLength;
 
     // Set the index ids for each facet created thus far.

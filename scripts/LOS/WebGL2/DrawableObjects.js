@@ -60,7 +60,7 @@ export class DrawableObjectsWebGL2Abstract {
    */
   async initialize() {
     if ( this.#initialized ) return;
-    log(`${this.constructor.name}|intialize`);
+    log(`${this.constructor.name}|initialize`);
     await this._initializeProgram();
     this._initializePlaceableHandler();
     this._initializeGeoms();
@@ -183,11 +183,14 @@ export class DrawableObjectsWebGL2Abstract {
     // TODO: Use VariableLengthAbstractBuffer and don't copy over the geometry indices and vertices.
     const stride = this.debugViewNormals ? 6 : 3;
     this.trackers.vi = new VerticesIndicesTrackingBuffer({ stride });
-    for ( const [id, geom] of this.geoms.entries() ) this.trackers.vi.addFacet({
-      id,
-      newVertices: geom.vertices,
-      newIndices: geom.indices
-    });
+    for ( const [id, geom] of this.geoms.entries() ) {
+      geom.addNormals = this.debugViewNormals;
+      this.trackers.vi.addFacet({
+        id,
+        newVertices: geom.vertices,
+        newIndices: geom.indices
+      });
+    }
 
     // this.offsetData = GeometryNonInstanced.computeBufferOffsets(this.geoms);
   }
@@ -246,6 +249,7 @@ export class DrawableObjectsWebGL2Abstract {
     // Update the geometry and rebuild the trackers.
     // TODO: Can this be done elsewhere to avoid updating all geometry here?
     for ( const [id, geom] of this.geoms.entries() ) {
+      geom.addNormals = this.debugViewNormals;
       geom.calculateModel();
       vi.updateFacet(id, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
     }
@@ -391,6 +395,7 @@ export class DrawableObjectsWebGL2Abstract {
    */
   _updateInstanceVertex(placeable) {
     const geom = this.geoms.get(placeable.id);
+    geom.addNormals = this.debugViewNormals;
     geom.dirtyModel = true;
     geom.calculateModel();
 
@@ -641,9 +646,15 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     return vertexProps;
   }
 
-  get verticesArray() { return this.geoms.instanceVertices; }
+  get verticesArray() {
+    this.geoms.addNormals = this.debugViewNormals;
+    return this.geoms.instanceVertices;
+  }
 
-  get indicesArray() { return this.geoms.instanceIndices; }
+  get indicesArray() {
+    this.geoms.addNormals = this.debugViewNormals;
+    return this.geoms.instanceIndices;
+  }
 
   get modelMatrixArray() { return this.trackers.model.viewBuffer(); }
 
