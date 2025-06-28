@@ -410,6 +410,7 @@ export class DrawableObjectsWebGL2Abstract {
 
     // Copy the vertices and adjusted indices to their webGL buffers.
     const { vertices, indicesAdj } = vi.viewFacetById(id);
+    if ( !vertices || !indicesAdj ) console.error(`${this.constructor.name}|_updateAttributeBuffersForId|${id} id not found`);
     const vOffset = vi.vertices.facetOffsetAtId(id);
     const iOffset = vi.indices.facetOffsetAtId(id);
 
