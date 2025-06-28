@@ -11,15 +11,9 @@ import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc, GeometryHexTokenShapesDesc, GeometryGridFromTokenDesc } from "./GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
-import {
-  WallInstanceHandler,
-  TerrainWallInstanceHandler,
-  NonTerrainWallInstanceHandler,
-  // DirectionalWallInstanceHandler,
-  // NonDirectionalWallInstanceHandler,
-  TileInstanceHandler,
-  TokenInstanceHandler,
-} from "./PlaceableInstanceHandler.js";
+import { WallTracker } from "../placeable_tracking/WallTracker.js";
+import { TileTracker } from "../placeable_tracking/TileTracker.js";
+import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
 
 
 /*
@@ -239,6 +233,21 @@ class DrawableObjectsAbstract {
    */
   _createStaticGeometries() {}
 
+  trackers = {
+    indices: null,
+    vertices: null,
+  };
+
+  _initializeOffsetTrackers() {
+    this.trackers.indices = new VariableLengthAbstractBuffer({ type: Uint16Array });
+    this.trackers.vertices = new VariableLengthAbstractBuffer({ type: Float32Array });
+    for ( const geom of this.geoms ) {
+      this.trackers.indices.addFacet({ id: geom.id, facetLength: geom.indices.length });
+      this.trackers.vertices.addFacet({ id: geom.id, facetLength: geom.vertices.length });
+    }
+    // this.offsetData = GeometryNonInstanced.computeBufferOffsets(this.geoms);
+  }
+
   /**
    * Define vertex and index buffers for the static geometries.
    * Geometries will share a single vertex buffer and single index buffer, with offsets.
@@ -251,37 +260,38 @@ class DrawableObjectsAbstract {
 
     if ( this.buffers.staticVertex ) this.buffers.staticVertex = this.buffers.staticVertex.destroy();
     if ( this.buffers.staticIndex ) this.buffers.staticIndex = this.buffers.staticIndex.destroy();
+    this._initializeOffsetTrackers();
+    const { vertices, indices } = this.trackers;
 
-    const offsetData = GeometryDesc.computeBufferOffsets(geoms);
-    const vertexArray = combineTypedArrays(...geoms.map(g => g.vertices));
     this.buffers.staticVertex = this.device.createBuffer({
         label: "Static Vertex Buffer",
-        size: offsetData.vertex.totalSize,
+        size: vertices.arraySize,
         usage: GPUBufferUsage.VERTEX,
         mappedAtCreation: true,
       });
     // Only copying once, so use mappedAtCreation instead of writeBuffer.
     // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
-    const dst = new vertexArray.constructor(this.buffers.staticVertex.getMappedRange());
-    dst.set(vertexArray);
-    this.buffers.staticVertex.unmap();
-    // this.rawBuffers.staticVertex = vertexArray;
+    const dstV = new vertices.type(this.buffers.staticVertex.getMappedRange());
 
-    if ( offsetData.index.totalSize ) {
-      const indexArray = combineTypedArrays(...geoms.filter(g => Boolean(g.indices)).map(g => g.indices));
+    if ( indices.arraySize ) {
       this.buffers.staticIndex = this.device.createBuffer({
         label: "Static Index Buffer",
-        size: offsetData.index.totalSize,
+        size: indices.arraySize,
         usage: GPUBufferUsage.INDEX,
         mappedAtCreation: true,
       });
-      // Only copying once, so use mappedAtCreation instead of writeBuffer.
-      // See https://webgpufundamentals.org/webgpu/lessons/webgpu-optimization.html
-      const dst = new indexArray.constructor(this.buffers.staticIndex.getMappedRange());
-      dst.set(indexArray);
+      const dstI = new indexArray.constructor(this.buffers.staticIndex.getMappedRange());
+
+      for ( const geom of geoms ) {
+        dstV.set(geom.vertices, vertices.facetOffsetAtId(geom.id));
+        dstI.set(geom.indices, indices.facetOffsetAtId(geom.id));
+      }
       this.buffers.staticIndex.unmap();
-      // this.rawBuffers.staticIndex = indexArray;
+
+    } else { // Only vertices.
+      for ( const geom of geoms ) dstV.set(geom.vertices, vertices.facetOffsetAtId(geom.id));
     }
+    this.buffers.staticVertex.unmap();
 
     for ( let i = 0, n = geoms.length; i < n; i += 1 ) {
       const geom = geoms[i];
@@ -368,12 +378,12 @@ class DrawableObjectsAbstract {
 }
 
 class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
-  /** @type {PlaceableInstanceHandler} */
-  placeableHandler;
+  /** @type {PlaceableTracker} */
+  placeableTracker;
 
   constructor(...args) {
     super(...args);
-    this.placeableHandler = new this.constructor.handlerClass();
+    this.placeableTracker = new this.constructor.handlerClass();
   }
 
   /**
@@ -383,7 +393,7 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
     await super.initialize();
 
     // Initialize the changeable buffers.
-    this.placeableHandler.initializePlaceables();
+    this.placeableTracker.initializePlaceables();
   }
 
   /**
@@ -395,9 +405,9 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
 
   // ----- NOTE: Placeable updating ----- //
 
-  #placeableHandlerBufferId = -1;
+  #placeableTrackerBufferId = -1;
 
-  get placeableHandlerBufferId() { return this.#placeableHandlerBufferId; }
+  get placeableTrackerBufferId() { return this.#placeableTrackerBufferId; }
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -406,10 +416,10 @@ class DrawableObjectPlaceableAbstract extends DrawableObjectsAbstract {
    * @returns {boolean} True if something changed.
    */
   prerender(_commandEncoder, _opts) {
-    if ( this.placeableHandler.bufferId > this.#placeableHandlerBufferId ) {
-      // log (`${this.constructor.name}|prerender|This buffer id ${this.#placeableHandlerBufferId} ≤ placeable bid ${this.placeableHandler.bufferId}`);
+    if ( this.placeableTracker.bufferId > this.#placeableTrackerBufferId ) {
+      // log (`${this.constructor.name}|prerender|This buffer id ${this.#placeableTrackerBufferId} ≤ placeable bid ${this.placeableTracker.bufferId}`);
       // One or more placeables were added/removed. Re-do the buffers.
-      this.#placeableHandlerBufferId = this.placeableHandler.bufferId;
+      this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
       this.updatePlaceableBuffers();
     }
   }
@@ -458,7 +468,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
 
   get mappedInstanceTransferBuffer() {
     // Make sure we get a buffer that is the correct size.
-    const size = this.placeableHandler.instanceArrayBuffer.byteLength;
+    const size = this.placeableTracker.modelMatrixBuffer.byteLength;
     let buffer;
     while ( (buffer = this._mappedInstanceTransferBuffers.pop()) ) {
       if ( buffer.size ) return buffer;
@@ -479,10 +489,8 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   // But in general the instance buffer is not resized often (only when placeables added/removed).
 
   _createInstanceBuffer() {
-    if ( !this.placeableHandler.numInstances ) return;
-
-
-    const size = this.placeableHandler.instanceArrayBuffer.byteLength;
+    if ( !this.placeableTracker.numInstances ) return;
+    const size = this.placeableTracker.modelMatrixBuffer.byteLength;
     if ( this.buffers.instance && this.buffers.instance.size !== size ) {
       log(`${this.constructor.name}|_createInstanceBuffer|Destroying existing size ${this.buffers.instance.size} to replace with ${size}.`);
       this.buffers.instance.destroy();
@@ -507,10 +515,10 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     this.rawBuffers.instanceTransfer = new Float32Array(this.buffers.instanceTransfer.getMappedRange());
 
     // Copy the entire instance data array.
-    this.rawBuffers.instanceTransfer.set(this.placeableHandler.instanceArrayValues);
+    this.rawBuffers.instanceTransfer.set(this.placeableTracker.viewWholeBuffer);
 
     // By definition, copying the entire instance array makes everything up-to-date.
-    this.#placeableHandlerUpdateId = this.placeableHandler.updateId;
+    this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
     // Buffer id updated in parent class.
   }
 
@@ -525,7 +533,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
   }
 
   _createInstanceBindGroup() {
-    if ( !this.placeableHandler.numInstances ) return;
+    if ( !this.placeableTracker.numInstances ) return;
     this.bindGroups.instance = this.device.createBindGroup({
       label: `${this.constructor.name} Instance`,
       layout: this.bindGroupLayouts.instance,
@@ -546,22 +554,22 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     super.prerender(commandEncoder, opts);
 
     // Check for placeable handler updates for specific placeables.
-    const placeableHandler = this.placeableHandler;
-    if ( placeableHandler.updateId > this.placeableHandlerUpdateId ) {
+    const placeableTracker = this.placeableTracker;
+    if ( placeableTracker.updateId > this.placeableTrackerUpdateId ) {
       // Changes since last update.
-      for ( const [idx, lastUpdate] of placeableHandler.instanceLastUpdated.entries() ) {
-        if ( lastUpdate <= this.placeableHandlerUpdateId ) continue; // No changes for this instance since last update.
-        // log (`${this.constructor.name}|prerender (instances)|This update ${lastUpdate} ≤ placeable bid ${this.placeableHandlerUpdateId}`);
-        this.partialUpdateInstanceBuffer(idx);
+      for ( const [id, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
+        if ( lastUpdate <= this.placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
+        // log (`${this.constructor.name}|prerender (instances)|This update ${lastUpdate} ≤ placeable bid ${this.placeableTrackerUpdateId}`);
+        this.partialUpdateInstanceBuffer(id);
       }
-      this.#placeableHandlerUpdateId = placeableHandler.updateId;
+      this.#placeableTrackerUpdateId = placeableTracker.updateId;
     }
     this._copyTransferBuffers(commandEncoder);
 
   }
 
   _copyTransferBuffers(commandEncoder) {
-    if ( !this.placeableHandler.numInstances ) {
+    if ( !this.placeableTracker.numInstances ) {
       if ( this.buffers.instanceTransfer?.mapState === "mapped" ) this.buffers.instanceTransfer.unmap();
       if ( this.buffers.indirectTransfer?.mapState === "mapped" ) this.buffers.indirectTransfer.unmap();
       if ( this.buffers.culledTransfer?.mapState === "mapped" ) this.buffers.culledTransfer.unmap();
@@ -620,9 +628,9 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     }
   }
 
-  #placeableHandlerUpdateId = -1;
+  #placeableTrackerUpdateId = -1;
 
-  get placeableHandlerUpdateId() { return this.#placeableHandlerUpdateId; }
+  get placeableTrackerUpdateId() { return this.#placeableTrackerUpdateId; }
 
 
 
@@ -637,7 +645,7 @@ export class DrawableObjectInstancesAbstract extends DrawableObjectPlaceableAbst
     // Due to caching or other reasons, some calcs might not be needed right away, causing multiple (delayed) updates.
     this._createInstanceTransferBuffer();
 
-    const h = this.placeableHandler
+    const h = this.placeableTracker
     const M = h.matrices[idx];
     log (`${this.constructor.name}|partialUpdateInstanceBuffer|Updating ${idx}`);
     // M.print();
@@ -707,12 +715,12 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   }
 
   _createIndirectBuffer() {
-    log(`${this.constructor.name}|_createIndirectBuffer with ${this.placeableHandler.numInstances} placeables`);
+    log(`${this.constructor.name}|_createIndirectBuffer with ${this.placeableTracker.numInstances} placeables`);
 
     // Track the indirect draw commands for each drawable.
     // Used in conjunction with the culling buffer.
     // The indirect buffer sets the number of instances while the culling buffer defines which instances.
-    if ( !this.placeableHandler.numInstances ) return;
+    if ( !this.placeableTracker.numInstances ) return;
 
 
     // There is only one size, as this.drawables.size is fixed.
@@ -762,7 +770,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
   // Ensure size is divisible by 256.
   get culledBufferSize() {
     const minSize = 256;
-    const size = (Math.ceil((this.placeableHandler.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
+    const size = (Math.ceil((this.placeableTracker.numInstances * Uint32Array.BYTES_PER_ELEMENT) / minSize) * minSize);
     return size * this.drawables.size;
   }
 
@@ -796,7 +804,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
    *     https://github.com/toji/webgpu-bundle-culling/blob/main/index.html
    */
   _createCulledBuffer() {
-    if ( !this.placeableHandler.numInstances ) return;
+    if ( !this.placeableTracker.numInstances ) return;
 
     const size = this.culledBufferSize;
     if ( this.buffers.culled ) {
@@ -842,7 +850,7 @@ export class DrawableObjectCulledInstancesAbstract extends DrawableObjectInstanc
       drawable.culledBufferRaw = new Uint32Array(
         this.rawBuffers.culledTransfer,
         culledBufferOffset,
-        this.placeableHandler.numInstances, // Alt: Math.floor(size / Uint32Array.BYTES_PER_ELEMENT),
+        this.placeableTracker.numInstances, // Alt: Math.floor(size / Uint32Array.BYTES_PER_ELEMENT),
       );
     }
   }
@@ -934,8 +942,8 @@ export class DrawableObjectRBCulledInstancesAbstract extends DrawableObjectCulle
 // Instances of walls. Could include tokens but prefer to keep separate both for simplicity
 // and because tokens get updated much more often.
 export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstract {
-  /** @type {WallInstanceHandler} */
-  static handlerClass = WallInstanceHandler;
+  /** @type {WallTracker} */
+  static handlerClass = WallTracker;
 
   /** @type {string} */
   static shaderFile = "wall";
@@ -946,7 +954,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   constructor(device, materials, camera, { senseType = "sight", ...opts } = {}) {
     super(device, materials, camera, opts);
     this.senseType = senseType;
-    this.placeableHandler.senseType = senseType;
+    this.placeableTracker.senseType = senseType;
   }
 
   /**
@@ -1014,8 +1022,21 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     if ( !blocking.walls ) return;
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
-    const edges = AbstractViewpoint.filterEdgesByVisionTriangle(visionTriangle, { senseType: this.senseType });
-    for ( const [idx, wall] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    for ( const wall of walls ) {
+      if ( !(this.placeableTracker.placeables.has(wall) && this.constructor.includeWall(wall)) ) continue;
+      if ( !this.includeEdge(wall.edge) ) continue;
+
+      // Add this edge to the drawable set.
+      const idx = this.trackers.indices.facetIdMap.get(wall.id);
+      const key = this.edgeDrawableKey(edge);
+      this.drawables.get(key).instanceSet.add(idx);
+
+    }
+
+
+    for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries() ) {
+
       const edge = wall.edge;
       // If the edge is an open door or non-blocking wall, ignore.
       if ( !edges.has(edge) ) continue;
@@ -1034,8 +1055,8 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
 // Instances of walls. Could include tokens but prefer to keep separate both for simplicity
 // and because tokens get updated much more often.
 export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
-  /** @type {WallInstanceHandler} */
-  static handlerClass = NonTerrainWallInstanceHandler;
+  /** @type {WallTracker} */
+  static handlerClass = WallTracker;
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   #senseType = "sight";
@@ -1072,8 +1093,8 @@ export class DrawableNonTerrainWallInstances extends DrawableWallInstances {
 // Instances of walls. Could include tokens but prefer to keep separate both for simplicity
 // and because tokens get updated much more often.
 export class DrawableTerrainWallInstances extends DrawableWallInstances {
-  /** @type {WallInstanceHandler} */
-  static handlerClass = TerrainWallInstanceHandler;
+  /** @type {WallTracker} */
+  static handlerClass = WallTracker;
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   #senseType = "sight";
@@ -1138,8 +1159,8 @@ export class DrawableTerrainWallInstances extends DrawableWallInstances {
 }
 
 export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstract {
-  /** @type {TokenInstanceHandler} */
-  static handlerClass = TokenInstanceHandler;
+  /** @type {TokenTracker} */
+  static handlerClass = TokenTracker;
 
   /** @type {string} */
   static shaderFile = "token";
@@ -1197,7 +1218,9 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
       // Add in all viewable tokens.
       const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
-      for ( const [idx, token] of this.placeableHandler.placeableFromInstanceIndex.entries()) {
+      for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries()) {
+        const token = this.placeableTracker.getPlaceableFromId(id);
+        if ( !token ) continue;
         if ( token.isConstrainedTokenBorder ) continue;
         if ( tokens.has(token) ) {
           // log (`${this.constructor.name}|filterObjects|Adding ${token.name}, ${token.id} to instance set at index ${idx}`);
@@ -1282,8 +1305,8 @@ export class DrawableHexTokenInstances extends DrawableTokenInstances {
 
 // Tile instances.
 export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
-  /** @type {TokenInstanceHandler} */
-  static handlerClass = TileInstanceHandler;
+  /** @type {TokenTracker} */
+  static handlerClass = TileTracker;
 
   /** @type {string} */
   static shaderFile = "tile";
@@ -1357,12 +1380,14 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     });
 
     // For each tile, add a drawable with its specific texture and bindgroup.
-    const numTiles = this.placeableHandler.numInstances;
+    const numTiles = this.placeableTracker.numInstances;
     this.bindGroups.tileTextures = Array(numTiles);
     // this.textures = Array(numTiles);
     const defaultDrawable = this.drawables.get("tile");
     this.drawables.delete("tile");
-    for ( const [idx, tile] of this.placeableHandler.placeableFromInstanceIndex.entries() ) {
+    for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries() ) {
+      const tile = this.placeableTracker.getPlaceableFromId(id);
+      if ( !tile ) continue;
       const drawable = { ...defaultDrawable };
       const source = this.constructor.tileSource(tile);
       const url = tile.document.texture.src;
@@ -1419,9 +1444,10 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
     }
 
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle)
-    for ( const tile of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-      const drawable = this.drawables.get(tile.id);
-      drawable.numInstances = Boolean(tiles.has(tile));
+    const tileIds = tiles.map(tile => tile.id);
+    for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {
+      const drawable = this.drawables.get(id);
+      drawable.numInstances = Boolean(tileIds.has(tile));
     }
     super.filterObjects(visionTriangle);
   }
@@ -1439,8 +1465,8 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
 
 // Handle constrained tokens and the target token in red.
 export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
-  /** @type {WallInstanceHandler} */
-  static handlerClass = TokenInstanceHandler;
+  /** @type {WallTracker} */
+  static handlerClass = TokenTracker;
 
   /** @type {string} */
   static shaderFile = "constrained_token";
@@ -1455,7 +1481,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
   #prerendered = false;
 
   prerender(commandEncoder, opts) {
-    if ( !this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
+    if ( !this.#prerendered || this.placeableTracker.updateId > this.placeableTrackerUpdateId ) {
       // Create a geometry for each constrained token.
       // Get every token so we don't have to redo the buffer every time we change targets.
       this.geometries.clear();
@@ -1463,7 +1489,10 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
       this.targetDrawables.clear();
       const materialBG = this.materials.bindGroups.get("obstacle");
       const targetBG = this.materials.bindGroups.get("target");
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      for ( const id of this.placeableTracker.instanceIndexFromId.values() ) {
+        const token = this.placeableTracker.getPlaceableFromId(id);
+        if ( !token ) continue;
+
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
@@ -1508,10 +1537,11 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
       // Add in all viewable tokens.
       const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
-        const drawable = this.drawables.get(token.id);
+      const tokenIds = tokens.map(token => token.id);
+      for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {
+        const drawable = this.drawables.get(id);
         if ( !drawable ) continue;
-        drawable.numInstances = Number(tokens.has(token));
+        drawable.numInstances = Number(tokenIds.has(id));
         // log (`${this.constructor.name}|filterObjects|Adding constrained ${token.name}, ${token.id} as numInstances = ${drawable.numInstances}`);
       }
     }
@@ -1580,14 +1610,16 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
   // Construct the lit token border geometries for all tokens; used to render targets.
   // Skips any lit borders equivalent to the constrained border b/c constrained handles all of these.
   prerender(commandEncoder, opts) {
-    if ( !this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
+    if ( !this.#prerendered || this.placeableTracker.updateId > this.placeableTrackerUpdateId ) {
       // Create a geometry for each constrained token.
       // Get every token so we don't have to redo the buffer every time we change targets.
       this.geometries.clear();
       this.drawables.clear();
       this.targetDrawables.clear();
       const materialBG = this.materials.bindGroups.get("target");
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {
+        const token = this.placeableTracker.getPlaceableFromId(id);
+        if ( !token ) continue;
         if ( token.constrainedTokenBorder.equals(token.litTokenBorder) ) continue;
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
@@ -1619,14 +1651,17 @@ export class DrawableGridShape extends DrawableConstrainedTokens {
   #prerendered = false;
 
   prerender(commandEncoder, opts) {
-    if ( !this.#prerendered || this.placeableHandler.updateId > this.placeableHandlerUpdateId ) {
+    if ( !this.#prerendered || this.placeableTracker.updateId > this.placeableTrackerUpdateId ) {
       // Create a geometry for each constrained token.
       // Get every token so we don't have to redo the buffer every time we change targets.
       this.geometries.clear();
       this.drawables.clear();
       this.targetDrawables.clear();
       const targetBG = this.materials.bindGroups.get("target");
-      for ( const token of this.placeableHandler.placeableFromInstanceIndex.values() ) {
+      for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {
+        const token = this.placeableTracker.getPlaceableFromId(id);
+        if ( !token ) continue;
+
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.

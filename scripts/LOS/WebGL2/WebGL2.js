@@ -6,7 +6,7 @@ PIXI,
 "use strict";
 
 import { MODULE_ID } from "../../const.js";
-import { wgsl } from "../WebGPU/wgsl-preprocessor.js";
+import { wgsl } from "../wgsl-preprocessor.js";
 import * as twgl from "./twgl.js";
 import { applyConsecutively, log } from "../util.js";
 
@@ -284,20 +284,19 @@ export class WebGL2 {
   }
 
 
-  static drawSet(gl, instanceSet, offsetData) {
+  static drawSet(gl, instanceSet, offsets, lengths) {
     if ( !(instanceSet.size || instanceSet.length) ) return;
 
     // Handle either instances all same number of vertices or different number.
-    const instanceLength = Number.isNumeric(offsetData.index.lengths)
-      ? offsetData.index.lengths : 0;
+    const instanceLength = Number.isNumeric(lengths) ? lengths : 0;
 
     // For a consecutive group, draw all at once.
     // So if 0–5, 7–9, 12, should result in 3 draw calls.
     applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
       // Pull the offset and count from the offsetData.
-      const offset = offsetData.index.offsets[firstInstance];
+      const offset = offsets[firstInstance];
       const count = (instanceLength * instanceCount)
-        || sumArray(offsetData.index.lengths.slice(firstInstance, firstInstance + instanceCount));
+        || sumArray(lengths.slice(firstInstance, firstInstance + instanceCount));
       log(`drawSet|Drawing ${count} from ${firstInstance} using offset ${offset}`);
       this.draw(gl, count, offset);
     });

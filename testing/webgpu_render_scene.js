@@ -82,39 +82,36 @@ let { DocumentUpdateTracker, TokenUpdateTracker } = api;
 
 buildDebugViewer = api.buildDebugViewer
 
+// let {
+//   WebGPUDevice,
+//   WebGPUShader,
+//   WebGPUBuffer,
+//   WebGPUTexture,
+//   Camera,
+//   GeometryWallDesc,
+//   GeometryCubeDesc,
+//   GeometryTileDesc,
+//   GeometryConstrainedTokenDesc,
+//   RenderWalls,
+//   RenderTokens,
+//   RenderTiles,
+//   RenderObstacles,
+//   WebGPUSumRedPixels,
+//   AsyncQueue,
+//   PlaceableInstanceHandler
+//   // wgsl
+// } = api.webgpu
+
 let {
-  WebGPUDevice,
-  WebGPUShader,
-  WebGPUBuffer,
-  WebGPUTexture,
-  Camera,
-  GeometryWallDesc,
-  GeometryCubeDesc,
-  GeometryTileDesc,
-  GeometryConstrainedTokenDesc,
-  RenderWalls,
-  RenderTokens,
-  RenderTiles,
-  RenderObstacles,
-  WebGPUSumRedPixels,
-  AsyncQueue,
-  PlaceableInstanceHandler
-  // wgsl
-} = api.webgpu
+  GeometryEllipseRegionShape,
+  GeometryPolygonRegionShape,
+  GeometryRectangleRegionShape,
+  GeometryCircleRegionShape,
+  GeometryRegion,
+} = api.geometry
 
 
-let {
-  Triangle,
-  ConstrainedTokenTriangles,
-  DirectionalWallTriangles,
-  Grid3dTriangles,
-  TileTriangles,
-  TokenTriangles,
-  WallTriangles,
-} = api.triangles
-
-
-device = await WebGPUDevice.getDevice()
+// device = await WebGPUDevice.getDevice()
 
 viewer = _token
 target = game.user.targets.first()
@@ -1315,5 +1312,13 @@ fn2 = function(pixels) {
 N = 1000
 await QBenchmarkLoopFn(N, fn1, "fn1", pixels)
 await QBenchmarkLoopFn(N, fn1, "fn2", pixels)
+
+
+
+// Test geometry vertices
+
+geom = new api.geometry.GeometryToken(_token)
+
+
 
 

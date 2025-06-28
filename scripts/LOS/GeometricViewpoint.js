@@ -12,7 +12,7 @@ import { Settings } from "../settings.js";
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
-import { Camera } from "./WebGPU/Camera.js";
+import { Camera } from "./Camera.js";
 import { Polygons3d } from "./Polygon3d.js";
 import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
@@ -76,6 +76,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     tokens: NULL_SET,
     walls: NULL_SET,
     terrainWalls: NULL_SET,
+    regions: NULL_SET,
   };
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
@@ -120,8 +121,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    *   obscuredSides: The unobscured portions of the sidePolys
    */
   _obscuredArea() {
-    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
-    if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size) ) return { targetArea: 1, obscuredArea: 0 };
+    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
+    if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size || regions.size) ) return { targetArea: 1, obscuredArea: 0 };
 
     // Construct polygons representing the perspective view of the target and blocking objects.
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
@@ -244,7 +245,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    * Construct polygons that are used to form the 2d perspective.
    */
   _constructPerspectivePolygons() {
-    const { walls, tokens, tiles, terrainWalls } = this.blockingObjects;
+    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
 
     // Construct polygons representing the perspective view of the target and blocking objects.
     const viewpoint = this.viewpoint
@@ -259,7 +260,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
       console.warn(`_applyPerspective|All target z values are positive for ${this.viewer.name} --> ${this.target.name}`);
     }
 
-    const blockingPolys = [...walls, ...tiles, ...tokens].flatMap(obj =>
+    const blockingPolys = [...walls, ...tiles, ...tokens, ...regions].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
 
     const blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
@@ -275,13 +276,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const target = this.target;
 
     // Prefer the constrained token triangles whenever possible.
-    if ( !useLitTargetShape ) return target[AbstractPolygonTrianglesID].triangles;
+    if ( !useLitTargetShape ) return target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
 
     const shape = target.litTokenBorder; // Don't trigger until needed.
     if ( !shape || shape.equals(target.constrainedTokenBorder)
-      || shape.equals(target.tokenBorder) ) return target[AbstractPolygonTrianglesID].triangles;
+      || shape.equals(target.tokenBorder) ) return target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
 
-    return target[AbstractPolygonTrianglesID].litTriangles;
+    return target[MODULE_ID][AbstractPolygonTrianglesID].litTriangles;
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
@@ -416,7 +417,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     }
 
     backgroundTiles.forEach(tile => backgroundTestFn(tile, colors.orange, colors.orange));
-    backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
+    // backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
     backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
     backgroundPolys.forEach(obj => obj.poly.scale({ x: width, y: height }).draw2d({ draw, color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }));
 

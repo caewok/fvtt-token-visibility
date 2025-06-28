@@ -17,6 +17,7 @@ export class PercentVisibleCalculatorAbstract {
     blocking: {
       walls: true,
       tiles: true,
+      regions: true,
       tokens: {
         dead: true,
         live: true,

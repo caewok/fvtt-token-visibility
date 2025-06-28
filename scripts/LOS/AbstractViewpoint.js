@@ -144,7 +144,8 @@ export class AbstractViewpoint {
     const blockingObjs = this.constructor.findBlockingWalls(visionTri, opts);
     if ( blockingObjs.walls.size || blockingObjs.terrainWalls.size > 1 ) return true;
     if ( this.constructor.findBlockingTiles(visionTri, opts).size
-      || this.constructor.findBlockingTokens(visionTri, opts).size ) return true;
+      || this.constructor.findBlockingTokens(visionTri, opts).size
+      || this.constructor.findBlockingRegions(visionTri, opts).size ) return true;
     return false;
   }
 
@@ -168,6 +169,7 @@ export class AbstractViewpoint {
     const blockingObjs = this.findBlockingWalls(visionTri, opts);
     blockingObjs.tiles = this.findBlockingTiles(visionTri, opts);
     blockingObjs.tokens = this.findBlockingTokens(visionTri, opts);
+    blockingObjs.regions = this.findBlockingRegions(visionTri, opts);
     return blockingObjs;
   }
 
@@ -201,10 +203,26 @@ export class AbstractViewpoint {
       : NULL_SET;
   }
 
+  static findBlockingRegions(visionTri, { senseType = "sight", blockingOpts = {} } = {}) {
+    blockingOpts.regions ??= true;
+    return blockingOpts.regions ? this.filterRegionsByVisionTriangle(visionTri, { senseType }) : NULL_SET;
+  }
+
+  /**
+   * Filter regions in the scene by a triangle representing the view from viewingPoint to
+   * target (or other two points). Only considers 2d top-down view.
+   * @returns {Set<Region>}
+   */
+  static filterRegionsByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+    // TODO: Filter by sense type
+    if ( !CONFIG[MODULE_ID].regionsBlock ) return NULL_SET;
+    return visionTri.findRegions();
+  }
+
   /**
    * Filter walls in the scene by a triangle representing the view from viewingPoint to
    * target (or other two points). Only considers 2d top-down view.
-   * @return {Set<Wall>}
+   * @returns {Set<Wall>}
    */
   static filterWallsByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
     // Ignore walls that are not blocking for the type.
@@ -221,7 +239,7 @@ export class AbstractViewpoint {
   /**
    * Filter tiles in the scene by a triangle representing the view from viewingPoint to
    * target (or other two points). Only considers 2d top-down view.
-   * @return {Set<Tile>}
+   * @returns {Set<Tile>}
    */
   static filterTilesByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
     const tiles = visionTri.findTiles();
@@ -238,7 +256,7 @@ export class AbstractViewpoint {
    * token (or other two points). Only considers 2d top-down view.
    * Excludes the target and the visionSource token. If no visionSource, excludes any
    * token under the viewer point.
-   * @return {Set<Token>}
+   * @returns {Set<Token>}
    */
   static filterTokensByVisionTriangle(visionTri, {
     viewer,
@@ -272,7 +290,7 @@ export class AbstractViewpoint {
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const polys = placeable[AbstractPolygonTrianglesID].triangles;
+    const polys = placeable[MODULE_ID][AbstractPolygonTrianglesID].triangles;
     return polys.filter(poly => poly.isFacing(viewpoint));
   }
 
@@ -478,7 +496,7 @@ export class AbstractViewpoint {
     const { walls, tiles, terrainWalls, tokens } = blockingObjects;
     walls.forEach(wall => debugDraw.segment(wall, { color: colors.red }));
     // tiles.forEach(tile => debugDraw.shape(tile.bounds, { color: colors.yellow }));
-    tiles.forEach(tile => tile.tokenvisibility.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));
+    tiles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));
     terrainWalls.forEach(wall => debugDraw.segment(wall, { color: colors.lightgreen }));
     tokens.forEach(token => debugDraw.shape(token.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.2 }));
   }

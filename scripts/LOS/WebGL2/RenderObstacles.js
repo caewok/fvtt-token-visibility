@@ -8,23 +8,24 @@ PIXI,
 "use strict";
 
 import { WebGL2 } from "./WebGL2.js";
-import { Camera } from "../WebGPU/Camera.js";
+import { Camera } from "../Camera.js";
 import { VisionTriangle } from "../VisionTriangle.js";
+import { DrawableWallWebGL2 } from "./DrawableWall.js";
 import {
-  DrawableNonDirectionalWallWebGL2,
-  DrawableDirectionalWallWebGL2,
-  DrawableNonDirectionalTerrainWallWebGL2,
-  DrawableDirectionalTerrainWallWebGL2,
   DrawableTileWebGL2,
-  DrawableTokenWebGL2,
-  ConstrainedDrawableTokenWebGL2,
   DrawableSceneBackgroundWebGL2,
+} from "./DrawableTile.js";
+import {
+  DrawableTokenWebGL2,
+  DrawableHexTokenWebGL2,
+  ConstrainedDrawableTokenWebGL2,
   ConstrainedDrawableHexTokenWebGL2,
-  DrawableGridShape,
   LitDrawableTokenWebGL2,
   LitDrawableHexTokenWebGL2,
-  DrawableHexTokenWebGL2,
-} from "./DrawableObjectsWebGL2.js";
+  DrawableGridShape,
+} from "./DrawableToken.js";
+import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
+import { log } from "../util.js";
 
 export class RenderObstaclesWebGL2 {
 
@@ -33,9 +34,6 @@ export class RenderObstaclesWebGL2 {
 
   /** @type {DrawObjectsAbstract[]} */
   drawableObjects = [];
-
-  /** @type {DrawObjectsAbstract} */
-  drawableTargets = [];
 
   /** @type {DrawObjectsAbstract[]} */
   drawableObstacles = []
@@ -86,15 +84,13 @@ export class RenderObstaclesWebGL2 {
   _buildDrawableObjects(useSceneBackground = false) {
     this.drawableObjects.length = 0;
     this.drawableFloor = undefined;
+    let obj;
+    const drawableObjs = [];
 
-    // Construct the various drawable instances.
     const drawableClasses = [
       DrawableTileWebGL2,
       DrawableGridShape,
-      DrawableNonDirectionalWallWebGL2,
-      DrawableDirectionalWallWebGL2,
-      DrawableNonDirectionalTerrainWallWebGL2,
-      DrawableDirectionalTerrainWallWebGL2,
+      DrawableRegionWebGL2,
     ];
     if ( canvas.grid.isHexagonal  ) drawableClasses.push(
       DrawableHexTokenWebGL2,
@@ -106,48 +102,78 @@ export class RenderObstaclesWebGL2 {
       ConstrainedDrawableTokenWebGL2,
       LitDrawableTokenWebGL2,
     );
-
-
     if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
 
-    for ( const cl of drawableClasses) {
-      const drawableObj = new cl(this);
-      this.drawableObjects.push(drawableObj);
+    for ( const cl of drawableClasses ) this.drawableObjects.push(new cl(this));
 
-      switch ( cl ) {
+    // Walls: Need normal, directional, terrain, terrain directional
+    // Normal
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = false;
+    obj.limitedWall = false;
+    this.drawableObjects.push(obj);
+
+    // Terrain
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = false;
+    obj.limitedWall = true;
+    this.drawableObjects.push(obj);
+
+    // Directional
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = true;
+    obj.limitedWall = false;
+    this.drawableObjects.push(obj);
+
+    // Terrain && Directional
+    obj = new DrawableWallWebGL2(this);
+    obj.senseType = this.senseType;
+    obj.directional = true;
+    obj.limitedWall = true;
+    this.drawableObjects.push(obj);
+
+    // Regions (use senseType?)
+
+    // Categorize each drawable object.
+    for ( const drawableObj of this.drawableObjects) {
+      switch ( drawableObj.constructor.name ) {
         // Lit tokens not used as obstacles; only targets.
-        case LitDrawableTokenWebGL2:
-        case LitDrawableHexTokenWebGL2:
+        case "LitDrawableTokenWebGL2":
+        case "LitDrawableHexTokenWebGL2":
           this.drawableLitToken = drawableObj; break;
 
         // Constrained tokens used as obstacles but handled separately.
-        case ConstrainedDrawableTokenWebGL2:
-        case ConstrainedDrawableHexTokenWebGL2:
+        case "ConstrainedDrawableTokenWebGL2":
+        case "ConstrainedDrawableHexTokenWebGL2":
           this.drawableConstrainedToken = drawableObj;
           this.drawableObstacles.push(drawableObj);
           break;
 
-        case DrawableTokenWebGL2:
-        case DrawableHexTokenWebGL2:
+        case "DrawableTokenWebGL2":
+        case "DrawableHexTokenWebGL2":
           this.drawableUnconstrainedToken = drawableObj;
           this.drawableObstacles.push(drawableObj);
           break;
 
         // Scene background not an obstacle; handled separately.
-        case DrawableSceneBackgroundWebGL2:
+        case "DrawableSceneBackgroundWebGL2":
           this.drawableFloor = drawableObj;
           break;
 
         // Grid shape not an obstacle; handled separately.
-        case DrawableGridShape:
+        case "DrawableGridShape":
           this.drawableGridShape = drawableObj;
           break;
 
         // Terrain walls have special rendering considerations.
-        case DrawableNonDirectionalTerrainWallWebGL2:
-        case DrawableDirectionalTerrainWallWebGL2:
-          this.drawableTerrain.push(drawableObj);
+        case "DrawableWallWebGL2":{
+          if ( drawableObj.terrain ) this.drawableTerrain.push(drawableObj);
+          else this.drawableObstacles.push(drawableObj);
           break;
+        }
 
         default:
           this.drawableObstacles.push(drawableObj);
@@ -222,8 +248,9 @@ export class RenderObstaclesWebGL2 {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     const camera = this.camera;
     camera.cameraPosition = viewerLocation;
-    // camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
+    camera.targetPosition = targetLocation;
     camera.setTargetTokenFrustum(target);
+    log(`${this.constructor.name}|_setCamera|viewer at ${viewerLocation}; target ${target.name} at ${targetLocation}`);
 
     /*
     camera.perspectiveParameters = {
@@ -401,8 +428,8 @@ export class RenderObstaclesWebGL2 {
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
     this.drawableTerrain.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
 
-    const hasObstacles = this.drawableObstacles.some(drawable => drawable.instanceSet.size);
-    const hasTerrain = this.drawableTerrain.some(drawable => drawable.instanceSet.size);
+    const hasObstacles = this.drawableObstacles.some(drawable => drawable.numObjectsToDraw);
+    const hasTerrain = this.drawableTerrain.some(drawable => drawable.numObjectsToDraw);
     if ( !(hasObstacles || hasTerrain) ) return;
 
     this._setCamera(viewerLocation, target, { targetLocation });

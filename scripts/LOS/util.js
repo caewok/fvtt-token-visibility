@@ -9,8 +9,9 @@ Ray,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { EPSILON, MODULE_ID } from "../const.js";
+import { EPSILON, MODULE_ID, MODULES_ACTIVE } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { Ellipse } from "../geometry/Ellipse.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
@@ -430,6 +431,35 @@ export function targetWithinLimitedAngleVision(visionSource, targetShape) {
   return 0;
 }
 
+/* Orient3dFast license
+https://github.com/mourner/robust-predicates/tree/main
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <http://unlicense.org>
+
+*/
+
 /**
  * See https://github.com/mourner/robust-predicates/blob/main/src/orient3d.js
  * Returns a positive value if the point d lies above the plane passing through a, b, and c,
@@ -523,4 +553,125 @@ export function flipObjectKeyValues(obj) {
 
 export function isTypedArray(obj) {
   return ArrayBuffer.isView(obj) && !(obj instanceof DataView);
+}
+
+/**
+ * Determine elevation of a region, specific to LOS considerations.
+ * If terrain mapper is present, returns the top of the plateau or ramp.
+ * Ensures top and bottom have a defined MIN/MAX, not null or infinity.
+ * @param {Region} region
+ * @returns {object<topZ: {number}, bottomZ: {number}>}
+ */
+export function regionElevation(region) {
+  let topZ = (( MODULES_ACTIVE.TERRAIN_MAPPER && region.terrainmapper.isElevated )
+    ? region.terrainmapper.plateauElevation : region.topZ);
+  let bottomZ = region.bottomZ;
+  if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
+  if ( !(bottomZ && isFinite(bottomZ)) ) bottomZ = -1e06;
+  return { topZ, bottomZ };
+}
+
+
+/**
+ * Converts region shape to a temporary PIXI shape.
+ * Must clone the shape if needed more than just temporarily.
+ * @param {RegionShape} regionShape
+ * @returns {PIXI.Rectangle|PIXI.Circle|PIXI.Polygon|Ellipse}
+ */
+const tmpRectangle = new PIXI.Rectangle();
+const tmpCircle = new PIXI.Circle();
+const tmpPolygon = new PIXI.Polygon();
+const tmpEllipse = new PIXI.Ellipse(); // No need for rotation right now?
+
+export function convertRegionShapeToPIXI(regionShape) {
+  const shapeData = regionShape.data;
+  switch ( shapeData.type ) {
+    case "rectangle": {
+      // TODO: What about the shape data rotation parameter? Is it actually used?
+      tmpRectangle.copyFrom(shapeData);
+      return tmpRectangle;
+    }
+    case "polygon": {
+      tmpPolygon.points = shapeData.points;
+      return tmpPolygon;
+    }
+    case "circle": {
+      tmpCircle.x = shapeData.x;
+      tmpCircle.y = shapeData.y;
+      tmpCircle.radius = shapeData.radius;
+      return tmpCircle;
+    }
+    case "ellipse": {
+      // TODO: What about the shape data rotation parameter? Is it actually used?
+      tmpEllipse.x = shapeData.x;
+      tmpEllipse.y = shapeData.y;
+      tmpEllipse.width = shapeData.radiusX;
+      tmpEllipse.height = shapeData.radiusY;
+      // tmpEllipse.rotation = shapeData.rotation;
+      return tmpEllipse;
+    }
+    default: console.error(`Shape ${shapeData.type} not recognized.`, regionShape);
+  }
+}
+
+/**
+ * Sets a typed array to the values of another, in place if possible.
+ * If the source length differs from the destination, a new destination is created.
+ * @param {TypedArray} dst
+ * @param {TypedArray} src
+ * @returns {TypedArray} dst, possibly new
+ */
+export function setTypedArray(dst, src) {
+  if ( src.length !== dst.length ) dst = new dst.constructor(src);
+  else dst.set(src);
+  return dst;
+}
+
+export function isString(obj) { return typeof obj === "string" || obj instanceof String; }
+
+/**
+ * Map mean to link arbitrary ids to index integers.
+ * Allows reverse lookup and tracking of used indices.
+ */
+export class IndexMap extends Map {
+  index = [];
+
+  set(key, value) {
+    if ( !Number.isInteger(value) || value < 0 ) return console.error("IndexedMap|Value must be positive integer", value);
+    this.index[value] = key;
+    super.set(key, value);
+  }
+
+  hasIndex(value) { return Boolean(this.index[value]); }
+
+  getKeyAtIndex(value) { return this.index[value]; }
+
+  clear() {
+    this.index.length = 0;
+    super.clear();
+  }
+
+  delete(key) {
+    const value = this.get(key);
+    if ( typeof value !== "undefined" ) this.index[value] = null;
+    return super.delete(key);
+  }
+
+  /**
+   * The next empty index or a new index if the index array is full.
+   */
+  get nextIndex() {
+    const i = this.index.findIndex(elem => elem == null);
+    if ( ~i ) return i;
+    return this.index.length;
+  }
+
+  *iterateEmptyIndices() {
+    const index = this.index;
+    for ( let i = 0, iMax = index.length; i < iMax; i += 1 ) {
+      const elem = index[i];
+      if ( elem == null ) yield i;
+    }
+    yield this.index.length;
+  }
 }

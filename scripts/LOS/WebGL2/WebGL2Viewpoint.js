@@ -6,7 +6,7 @@ PIXI,
 "use strict";
 
 import { WebGL2 } from "./WebGL2.js";
-import { RenderObstaclesWebGL2 } from "./RenderObstaclesWebGL2.js";
+import { RenderObstaclesWebGL2 } from "./RenderObstacles.js";
 import { RedPixelCounter } from "./RedPixelCounter.js";
 import * as twgl from "./twgl.js";
 

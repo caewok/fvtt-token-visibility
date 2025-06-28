@@ -140,12 +140,12 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
 
-    const { terrainWalls, tiles, tokens, walls } = blockingObjects;
+    const { terrainWalls, tiles, tokens, walls, regions } = blockingObjects;
     for ( const terrainWall of terrainWalls ) {
       const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(terrainWall, viewerLocation);
       this.terrainPolygons.push(...polygons);
     }
-    for ( const placeable of [...tiles, ...tokens, ...walls] ) {
+    for ( const placeable of [...tiles, ...tokens, ...walls, ...regions] ) {
       const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
       this.polygons.push(...polygons);
     }

@@ -9,7 +9,7 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { SETTINGS, Settings } from "./settings.js";
 import { targetWithinLimitedAngleVision } from "./LOS/util.js";
-import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
+// import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};
