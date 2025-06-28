@@ -52,7 +52,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
 
     // Update each shape of this type in the region.
     log(`${this.constructor.name}|_updateModelBufferForInstance ${region.id}`);
-    const currIds = [this.trackers.model.facetIdMap.keys().filter(key => key.startsWith(region.id))];
+    const currIds = this.trackers.model.facetIdMap.keys().filter(key => key.startsWith(region.id));
     for ( const id of currIds ) this._updateModelBufferForShapeId(id);
   }
 
