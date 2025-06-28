@@ -11,7 +11,6 @@ Ray,
 
 import { EPSILON, MODULE_ID, MODULES_ACTIVE } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { Ellipse } from "../geometry/Ellipse.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
@@ -637,26 +636,28 @@ export class IndexMap extends Map {
   // Each arbitrary id is stored in an element of the array corresponding to its index.
   // Index may have null or undefined values.
   /** @type {*[]} */
-  index = [];
+  #index = [];
 
   set(key, value) {
     if ( !Number.isInteger(value) || value < 0 ) return console.error("IndexedMap|Value must be positive integer", value);
-    this.index[value] = key;
+    this.#index[value] = key;
     super.set(key, value);
   }
 
-  hasIndex(value) { return Boolean(this.index[value]); }
+  hasIndex(value) { return Boolean(this.#index[value]); }
 
-  getKeyAtIndex(value) { return this.index[value]; }
+  getKeyAtIndex(value) { return this.#index[value]; }
+
+  get maxIndex() { return this.#index.length - 1; }
 
   clear() {
-    this.index.length = 0;
+    this.#index.length = 0;
     super.clear();
   }
 
   delete(key) {
     const value = this.get(key);
-    if ( typeof value !== "undefined" ) this.index[value] = null;
+    if ( typeof value !== "undefined" ) this.#index[value] = null;
     return super.delete(key);
   }
 
@@ -664,34 +665,77 @@ export class IndexMap extends Map {
    * The next empty index or a new index if the index array is full.
    */
   get nextIndex() {
-    const i = this.index.findIndex(elem => elem == null);
+    const i = this.#index.findIndex(elem => elem == null);
     if ( ~i ) return i;
-    return this.index.length;
+    return this.#index.length;
   }
 
   *iterateEmptyIndices() {
-    const index = this.index;
+    const index = this.#index;
     for ( let i = 0, iMax = index.length; i < iMax; i += 1 ) {
       const elem = index[i];
       if ( elem == null ) yield i;
     }
-    yield this.index.length;
+    yield index.length;
   }
 }
 
 export class IndexWeakMap extends WeakMap {
-  #maxIndex = 0;
-
-  usedIndices = new Set();
+  #index = [];
 
   set(key, value) {
     if ( !Number.isInteger(value) || value < 0 ) return console.error("IndexedMap|Value must be positive integer", value);
-
+    this.#index[value] = new WeakRef(key);
+    super.set(key, value);
   }
 
-  hasIndex(value) { return this.usedIndices.has(value); }
+  mayHaveIndex(value) { return Boolean(this.#index[value]); }
 
-  getKeyAtIndex(value) {}
+  hasIndex(value) { return Boolean(this.getKeyAtIndex(value)); }
 
+  getKeyAtIndex(value) { return this.#index[value]?.deref(); }
 
+  clear() {
+    this.#index.length = 0;
+    // No WeakMap#clear.
+  }
+
+  delete(key) {
+    const value = this.get(key);
+    if ( typeof value !== "undefined" ) this.#index[value] = null;
+    return super.delete(key);
+  }
+
+  /**
+   * The next empty index or a new index if the index array is full.
+   * @type {number}
+   */
+  get nextIndex() {
+    const index = this.#index;
+    for ( let i = 0, iMax = index.length; i < iMax; i += 1 ) {
+      const elem = index[i];
+      if ( !elem ) return i;
+      if ( typeof elem.deref() === "undefined" ) return i;
+    }
+    return index.length;
+  }
+
+  *iterateEmptyIndices() {
+    const index = this.#index;
+    for ( let i = 0, iMax = index.length; i < iMax; i += 1 ) {
+      const elem = index[i];
+      if ( elem == null ) yield i;
+      else if ( typeof elem.deref() === "undefined") return i;
+    }
+    yield index.length;
+  }
+
+  clean() {
+    const index = this.#index;
+    for ( let i = 0, iMax = index.length; i < iMax; i += 1 ) {
+      const elem = index[i];
+      if ( elem == null ) continue;
+      if ( typeof elem.deref() === "undefined") index[i] = null;
+    }
+  }
 }

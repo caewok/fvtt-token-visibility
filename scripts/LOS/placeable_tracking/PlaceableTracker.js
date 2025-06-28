@@ -300,6 +300,8 @@ export class PlaceableTracker {
 /**
  * Update a 4x4 matrix (stored as 16-element array) as placeables are updated.
  * Tracks rotation, scale, translation.
+ * Uses ids to track b/c the placeables do not necessarily get deleted (gc'd) when removed from canvas.
+ * Particularly true of tokens.
  */
 export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
@@ -331,8 +333,8 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
   scaleMatrixForPlaceable(_placeable) { return identityM.copyTo(scaleM); }
 
-  getMatrixForPlaceableId(placeableId) {
-    const arr = this.tracker.viewFacetById(placeableId);
+  getMatrixForPlaceable(placeable) {
+    const arr = this.tracker.viewFacetById(placeable.sourceId);
     return new CONFIG.GeometryLib.MatrixFloat32(arr, 4, 4);
   }
 
@@ -346,7 +348,7 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
     const rotation = this.rotationMatrixForPlaceable(placeable);
     const translation = this.translationMatrixForPlaceable(placeable);
     const scale = this.scaleMatrixForPlaceable(placeable);
-    const M = this.getMatrixForPlaceableId(placeable.sourceId);
+    const M = this.getMatrixForPlaceable(placeable);
     scale
       .multiply4x4(rotation, M)
       .multiply4x4(translation, M);
