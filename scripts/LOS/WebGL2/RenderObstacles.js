@@ -25,6 +25,7 @@ import {
   DrawableGridShape,
 } from "./DrawableToken.js";
 import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
+import { log } from "../util.js";
 
 export class RenderObstaclesWebGL2 {
 
@@ -247,8 +248,9 @@ export class RenderObstaclesWebGL2 {
     targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
     const camera = this.camera;
     camera.cameraPosition = viewerLocation;
-    // camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
+    camera.targetPosition = targetLocation;
     camera.setTargetTokenFrustum(target);
+    log(`${this.constructor.name}|_setCamera|viewer at ${viewerLocation}; target ${target.name} at ${targetLocation}`);
 
     /*
     camera.perspectiveParameters = {

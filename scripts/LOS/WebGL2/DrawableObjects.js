@@ -466,6 +466,8 @@ export class DrawableObjectsWebGL2Abstract {
    * Check for whether the placeable handler has been updated due to a change in 1+ placeables.
    */
   validateInstances() {
+    log(`${this.constructor.name}|validateInstances`);
+
     // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
     const placeableTracker = this.placeableTracker;
     if ( this.rebuildNeeded || placeableTracker.bufferId < this.#placeableTrackerBufferId ) return this.updateAllInstances(); // Number of instances changed.
@@ -484,6 +486,7 @@ export class DrawableObjectsWebGL2Abstract {
    * Called when a placeable update requires all placeable-specific attributes to be rebuilt.
    */
   updateAllInstances() {
+    log(`${this.constructor.name}|updateAllInstances`);
     this._updateAllInstances();
     this.#rebuildNeeded = false;
 
@@ -502,6 +505,7 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   _updateInstance(placeable) {
+    log(`${this.constructor.name}|_updateInstance`);
     // If vertex array or index array length no longer matches, redo.
     if ( !this._updateInstanceVertex(placeable) ) {
       this.rebuildNeeded = true;
@@ -696,6 +700,9 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
     // See twgl.setAttribInfoBufferFromArray.
     const tracker = this.trackers.model;
+    const modelArr = tracker.viewFacetById(placeable.id);
+    if ( !modelArr ) console.error(`${this.constructor.name}|_updateModelBufferForInstance|Placeable ${placeable.name}, ${placeable.id} not found in model tracker.`);
+
     const mOffset = tracker.facetOffsetAtId(placeable.id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.id} with offset ${mOffset}`, { model: tracker.viewFacetById(placeable.id) });
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
@@ -709,6 +716,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   }
 
   _updateInstance(placeable) {
+    log(`${this.constructor.name}|_updateInstance`);
     this._updateModelBufferForInstance(placeable);
   }
 
