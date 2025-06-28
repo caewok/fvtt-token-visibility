@@ -43,7 +43,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
   }
 
   renderTarget(target) {
-    if ( !(this.placeableTracker.placeables.has(target) && this.constructor.includeToken(target)) ) return;
+    if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
 
     if ( CONFIG[MODULE_ID].debug ) {
       const i = this._indexForPlaceable(target);
@@ -119,7 +119,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
       { viewer, target, blockingTokensOpts: blocking.tokens });
     for ( const token of tokens ) {
-      if ( !(this.placeableTracker.placeables.has(token) && this.constructor.includeToken(token)) ) continue;
+      if ( !(this.placeableTracker.hasPlaceable(token) && this.constructor.includeToken(token)) ) continue;
       const idx = this._indexForPlaceable(token);
       this.instanceSet.add(idx);
     }

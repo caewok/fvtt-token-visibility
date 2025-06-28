@@ -67,9 +67,6 @@ export class PlaceableTracker {
     return out;
   }
 
-  /** @type {Set<PlaceableObject>} */
-  placeables = new foundry.utils.IterableWeakSet();
-
   getPlaceableFromId(id) {
     // const suffix = ".preview$";
     // const escapedSuffix = suffix.replace(/\./g, "\\.");
@@ -88,6 +85,10 @@ export class PlaceableTracker {
    */
   placeableLastUpdated = new foundry.utils.IterableWeakMap();
 
+  hasPlaceable(placeable) { return this.placeableLastUpdated.has(placeable); }
+
+  get placeables() { return this.placeableLastUpdated.keys(); }
+
   /**
    * Initialize all placeables.
    */
@@ -99,12 +100,10 @@ export class PlaceableTracker {
     if ( !toDelete.size && !toAdd.size ) return;
     this.#updateId += 1;
     toDelete.forEach(p => {
-      this.placeables.delete(p);
       this.placeableLastUpdated.delete(p);
       this._removePlaceables(p, p.id);
     });
     toAdd.forEach(p => {
-      this.placeables.add(p);
       this.placeableLastUpdated.set(p, this.#updateId);
       this._addPlaceable(p);
     });
@@ -143,11 +142,10 @@ export class PlaceableTracker {
    * @returns {boolean} True if it resulted in a change.
    */
   addPlaceable(placeable) {
-    if ( this.placeables.has(placeable) ) return false;
+    if ( this.hasPlaceable(placeable) ) return false;
     if ( !this.includePlaceable(placeable) ) return false;
 
     this.#updateId += 1;
-    this.placeables.add(placeable);
     this.placeableLastUpdated.set(placeable, this.#updateId);
     if ( !this._addPlaceable(placeable) ) this.initializePlaceables(); // Redo the instance buffer.
     return true;
@@ -161,7 +159,7 @@ export class PlaceableTracker {
    */
   updatePlaceable(placeable, changeKeys) {
     // Possible that the placeable needs to be added or removed instead of simply updated.
-    const alreadyTracking = this.placeables.has(placeable);
+    const alreadyTracking = this.hasPlaceable(placeable);
     const shouldTrack = this.includePlaceable(placeable);
     if ( !(alreadyTracking && shouldTrack) ) return false;
     if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.sourceId);
@@ -194,8 +192,7 @@ export class PlaceableTracker {
     // Attempt to retrieve the placeable and its id. Placeable may be undefined.
     const { placeable, placeableId } = this._placeableOrId(placeableOrId);
     if ( placeable ) {
-      if ( !this.placeables.has(placeable) ) return false;
-      this.placeables.delete(placeable);
+      if ( !this.hasPlaceable(placeable) ) return false;
       this.placeableLastUpdated.delete(placeable);
     }
     if ( !this._removePlaceable(placeable, placeableId) ) this.initializePlaceables();

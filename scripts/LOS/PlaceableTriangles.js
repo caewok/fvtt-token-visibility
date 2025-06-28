@@ -381,7 +381,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   get triangles() {
     const tile = this.placeable;
 
-    if ( !this.constructor.instanceHandler.placeables.has(tile) ) return [];
+    if ( !this.constructor.instanceHandler.hasPlaceable(tile) ) return [];
     if ( !tile.evPixelCache ) return super.triangles.call(this);
 
 

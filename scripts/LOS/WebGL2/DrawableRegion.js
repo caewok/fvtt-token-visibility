@@ -243,7 +243,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     // For each region, determine which shapes are within the vision triangle.
     // Add the id of each shape group to its respective drawable.
     for ( const region of regions ) {
-      if ( !this.placeableTracker.placeables.has(region) ) continue;
+      if ( !this.placeableTracker.hasPlaceable(region) ) continue;
       for ( const drawable of Object.values(this.drawables) ) drawable._filterShapesForRegion(visionTriangle, region, opts);
     }
   }

@@ -136,7 +136,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     // Limit to tiles within the vision triangle
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const tile of tiles ) {
-      if ( !this.placeableTracker.placeables.has(tile) ) continue;
+      if ( !this.placeableTracker.hasPlaceable(tile) ) continue;
       const idx = this._indexForPlaceable(tile);
       instanceSet.add(idx);
     }
@@ -159,7 +159,7 @@ export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
     this.placeableTracker.registerPlaceableHooks();
     this._initializePlaceableHandler();
 
-    const sceneObj = this.placeableTracker.placeables.first();
+    const sceneObj = this.placeableTracker.placeables.next().value;
     if ( sceneObj && sceneObj.src ) {
       this.backgroundImage = await loadImageBitmap(sceneObj.src, {
         //imageOrientation: "flipY",
