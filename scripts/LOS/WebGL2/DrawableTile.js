@@ -113,7 +113,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   _drawUnfilteredInstances() {
     // Still need to draw each one at a time so texture uniform can be changed.
 
-    const instanceSet = Array.fromRange(this.trackers.indices.facetIdMap.index.length - 1);
+    const instanceSet = Array.fromRange(this.trackers.indices.facetIdMap.maxIndex);
     super._drawFilteredInstances(instanceSet);
   }
 

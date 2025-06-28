@@ -153,7 +153,7 @@ export class GeometryRegion {
       } else { // Combined. No defined shape.
         const vertices = Polygon3dVertices.calculateVertices(shapeGroup.path, polyVOpts);
         geom = new GeometryPolygonRegionShape(opts);
-        geom.id = `${region.id}_${shapeGroup.type}_${shapeGroup.idx}`;
+        geom.id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
         geom._untrimmedVertices = vertices;
       }
       out.polygon[i] = geom;
@@ -319,7 +319,7 @@ const RegionShapeMixin = function(Base) {
       const shape = region.shapes[idx];
       const cl = REGION_SHAPE_CLASSES[shape.data.type];
       const geom = new cl({ region, placeable: shape, ...opts });
-      geom.id = `${region.id}_${shape.data.type}_${idx}`;
+      geom.id = `${region.sourceId}_${shape.data.type}_${idx}`;
       return geom;
     }
 

@@ -154,12 +154,12 @@ export class RegionTracker extends PlaceableTracker {
     for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
       for ( const id of tracker.facetIdMap.keys() ) {
-        if ( !id.startsWith(region.id) ) continue; // Only consider geometries for this region.
+        if ( !id.startsWith(region.sourceId) ) continue; // Only consider geometries for this region.
         if ( !currIds.has(id) ) tracker.deleteFacet(id);
       }
     }
     for ( const id of this.polygons.keys() ) {
-      if ( !id.startsWith(region.id) ) continue; // Only consider geometries for this region.
+      if ( !id.startsWith(region.sourceId) ) continue; // Only consider geometries for this region.
       if ( !currIds.has(id) ) this.polygons.delete(id);
     }
   }

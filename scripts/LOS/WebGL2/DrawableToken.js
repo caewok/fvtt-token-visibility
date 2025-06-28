@@ -204,7 +204,7 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
         this._includedPHIndices.delete(token.sourceId);
         return true;
       }
-      return super._updateInstanceVertex(token.sourceId);
+      return super._updateInstanceVertex(token);
 
     } else if ( shouldInclude ) return false; // Must insert a new geometry.
     // TODO: Add new tokens on the end without redoing every geometry?
