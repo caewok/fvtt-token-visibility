@@ -70,7 +70,6 @@ export class DrawableObjectsWebGL2Abstract {
     // this._updateAllVertices();
 
     // Register that we are synced with the current placeable data.
-    this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
     this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
 
     this.#initialized = true;
@@ -233,7 +232,7 @@ export class DrawableObjectsWebGL2Abstract {
   hasPlaceable(placeableOrId) {
     const pt = this.placeableTracker;
     const { placeable } = pt._placeableOrId(placeableOrId);
-    return pt.placeables.has(placeable);
+    return pt.hasPlaceable(placeable);
   }
 
   _updateAllVertices() {
@@ -274,7 +273,7 @@ export class DrawableObjectsWebGL2Abstract {
     // Can assume id set is same in indices and vertices.
     for ( const id of indices.facetIdMap.keys() ) {
       const placeable = pt.getPlaceableFromId(id);
-      if ( pt.placeables.has(placeable) ) continue;
+      if ( pt.hasPlaceable(placeable) ) continue;
       indices.deleteFacet(id);
       vertices.deleteFacet(id);
     }
@@ -394,14 +393,14 @@ export class DrawableObjectsWebGL2Abstract {
    * @returns {boolean} True if successfully updated; false if array length is off (requiring full rebuild).
    */
   _updateInstanceVertex(placeable) {
-    const geom = this.geoms.get(placeable.id);
+    const geom = this.geoms.get(placeable.sourceId);
     geom.addNormals = this.debugViewNormals;
     geom.dirtyModel = true;
     geom.calculateModel();
 
     const vi = this.trackers.vi;
-    const needFullBufferUpdate = vi.updateFacet(placeable.id, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
-    return !needFullBufferUpdate;
+    const expanded = vi.updateFacet(placeable.sourceId, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
+    return !expanded;
   }
 
   _updateAttributeBuffersForId(id) {
@@ -411,6 +410,7 @@ export class DrawableObjectsWebGL2Abstract {
 
     // Copy the vertices and adjusted indices to their webGL buffers.
     const { vertices, indicesAdj } = vi.viewFacetById(id);
+    if ( !vertices || !indicesAdj ) console.error(`${this.constructor.name}|_updateAttributeBuffersForId|${id} id not found`);
     const vOffset = vi.vertices.facetOffsetAtId(id);
     const iOffset = vi.indices.facetOffsetAtId(id);
 
@@ -435,13 +435,7 @@ export class DrawableObjectsWebGL2Abstract {
   #placeableTrackerUpdateId = 0;
 
   /** @type {number} */
-  #placeableTrackerBufferId = 0;
-
-  /** @type {number} */
   get placeableTrackerUpdateId() { return this.#placeableTrackerUpdateId; }
-
-  /** @type {number} */
-  get placeableTrackerBufferId() { return this.#placeableTrackerBufferId; }
 
   _initializePlaceableHandler() {
     this.placeableTracker = this.constructor.trackerClass.cachedBuild();
@@ -449,7 +443,6 @@ export class DrawableObjectsWebGL2Abstract {
     this.placeableTracker.initializePlaceables();
     // Set the ids when initializing the vertices.
     // this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
-    // this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
   }
 
   /**
@@ -467,53 +460,55 @@ export class DrawableObjectsWebGL2Abstract {
    */
   validateInstances() {
     log(`${this.constructor.name}|validateInstances`);
+    if ( this.rebuildNeeded ) return this.updateAllPlaceableData();
 
     // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
     const placeableTracker = this.placeableTracker;
-    if ( this.rebuildNeeded || placeableTracker.bufferId < this.#placeableTrackerBufferId ) return this.updateAllInstances(); // Number of instances changed.
     if ( placeableTracker.updateId <= this.#placeableTrackerUpdateId ) return; // No changes since last update.
-
     for ( const [placeable, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
       if ( lastUpdate <= this.#placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
-      this._updateInstance(placeable);
-      if ( this.rebuildNeeded ) break; // If _updateInstance set rebuildNeeded to true.
+      if ( !this.updatePlaceableData(placeable) ) return this.updateAllPlaceableData(); // If _updateInstance set rebuildNeeded to true.
     }
     this.#placeableTrackerUpdateId = placeableTracker.updateId;
-    if ( this.rebuildNeeded ) this.updateAllInstances();
   }
 
   /**
    * Called when a placeable update requires all placeable-specific attributes to be rebuilt.
    */
-  updateAllInstances() {
-    log(`${this.constructor.name}|updateAllInstances`);
-    this._updateAllInstances();
+  updateAllPlaceableData() {
+    log(`${this.constructor.name}|updateAllPlaceableData`);
+    this._updateAllPlaceableData();
     this.#rebuildNeeded = false;
 
     // Register that we are synced with the current placeable data.
-    this.#placeableTrackerBufferId = this.placeableTracker.bufferId;
     this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
   }
 
-  _updateAllInstances() {
+  _updateAllPlaceableData() {
     // TODO: Can we keep some of the original, and call _rebuildAttributes instead?
     this._initializeGeoms();
     this._initializeOffsetTrackers();
-//     this._initializeAttributes();
-
+    this._initializeAttributes();
     this._updateAllVertices();
   }
 
-  _updateInstance(placeable) {
-    log(`${this.constructor.name}|_updateInstance`);
+  /**
+   * Attempt to update a single placeable instance.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if update was successful; false otherwise.
+   */
+  updatePlaceableData(placeable) {
+    log(`${this.constructor.name}|updatePlaceableData`);
     // If vertex array or index array length no longer matches, redo.
-    if ( !this._updateInstanceVertex(placeable) ) {
-      this.rebuildNeeded = true;
-      return;
-    }
-    this._updateAttributeBuffersForId(placeable.id);
-
+    if ( !this._updatePlaceableData(placeable) ) return false;
+    this.updatePlaceableBuffer(placeable);
   }
+
+  _updatePlaceableData(placeable) {
+    return this._updateInstanceVertex(placeable);
+  }
+
+  updatePlaceableBuffer(placeable) { this._updateAttributeBuffersForId(placeable.sourceId); }
 
   // ----- NOTE: Render ----- //
 
@@ -541,7 +536,7 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   // Pull from the index for the indices.
-  _indexForPlaceable(placeable) { return this.trackers.indices.facetIdMap.get(placeable.id); }
+  _indexForPlaceable(placeable) { return this.trackers.indices.facetIdMap.get(placeable.sourceId); }
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -652,6 +647,17 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     return vertexProps;
   }
 
+  _updateModelProperties() {
+    const vertexProps = this.vertexProps;
+    vertexProps.aModel.data = this.trackers.model.viewBuffer();
+  }
+
+  _updateAttributes() {
+    this._updateModelProperties();
+    this.attributeBufferInfo = twgl.createBufferInfoFromArrays(this.gl, this.vertexProps);
+    this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, this.attributeBufferInfo);
+  }
+
   get verticesArray() {
     this.geoms.addNormals = this.debugViewNormals;
     return this.geoms.instanceVertices;
@@ -688,7 +694,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   _rebuildModelBuffer() {
     // Update the model attribute with a new buffer.
     const attribs = this.attributeBufferInfo;
-    attribs.aModel = twgl.createAttribsFromArray({ aModel: this.vertexProps.aModel });
+    attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.vertexProps.aModel });
 
     // Update the VAO with the new model buffer information.
     this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
@@ -700,30 +706,40 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
     // See twgl.setAttribInfoBufferFromArray.
     const tracker = this.trackers.model;
-    const modelArr = tracker.viewFacetById(placeable.id);
-    if ( !modelArr ) console.error(`${this.constructor.name}|_updateModelBufferForInstance|Placeable ${placeable.name}, ${placeable.id} not found in model tracker.`);
+    const modelArr = tracker.viewFacetById(placeable.sourceId);
+    if ( !modelArr ) console.error(`${this.constructor.name}|_updateModelBufferForInstance|Placeable ${placeable.name}, ${placeable.sourceId} not found in model tracker.`);
 
-    const mOffset = tracker.facetOffsetAtId(placeable.id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.id} with offset ${mOffset}`, { model: tracker.viewFacetById(placeable.id) });
+    const mOffset = tracker.facetOffsetAtId(placeable.sourceId) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.sourceId} with offset ${mOffset}`, { model: tracker.viewFacetById(placeable.sourceId) });
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.id));
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.sourceId));
   }
 
   // ----- NOTE: Placeable handler ----- //
 
-  _updateAllInstances() {
-    this._rebuildModelBuffer();
+  _updateAllPlaceableData() {
+    // this._rebuildModelBuffer();
+    this._updateAttributes();
   }
 
-  _updateInstance(placeable) {
+  _updatePlaceableData(placeable) {
+    return this.trackers.model.facetIdMap.has(placeable.sourceId);
+  }
+
+  /**
+   * Attempt to update a single placeable instance.
+   * @param {PlaceableObject} placeable
+   * @returns {boolean} True if update was successful; false otherwise.
+   */
+  updatePlaceableBuffer(placeable) {
     log(`${this.constructor.name}|_updateInstance`);
-    this._updateModelBufferForInstance(placeable);
+    return this._updateModelBufferForInstance(placeable);
   }
 
   // ----- NOTE: Render ----- //
 
   // Pull from the placeable tracker matrix indexes.
-  _indexForPlaceable(placeable) { return this.placeableTracker.tracker.facetIdMap.get(placeable.id); }
+  _indexForPlaceable(placeable) { return this.placeableTracker.tracker.facetIdMap.get(placeable.sourceId); }
 
   _drawFilteredInstances(instanceSet) {
     // To draw select instances, modify the buffer offset.

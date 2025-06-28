@@ -59,7 +59,7 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, opts);
     const ph = this.placeableTracker;
     for ( const wall of walls ) {
-      if ( !this.placeableTracker.placeables.has(wall) ) continue;
+      if ( !this.placeableTracker.hasPlaceable(wall) ) continue;
       if ( WallTracker.isTerrain(wall, opts) ^ this.limitedWall ) continue;
       if ( WallTracker.isDirectional(wall) ^ this.directional ) continue;
       const idx = this._indexForPlaceable(wall);

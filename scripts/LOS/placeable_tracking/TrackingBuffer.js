@@ -160,21 +160,21 @@ export class VariableLengthAbstractBuffer {
    */
   deleteFacet(id) {
     if ( !this.facetIdMap.has(id) ) return false;
-    const idx = this.facetIdMap.get(id);
+    // const idx = this.facetIdMap.get(id);
     this.facetIdMap.delete(id);
-    this._deleteFacetAtIndex(idx);
-    this.calculateOffsets();
+    // this._deleteFacetAtIndex(idx);
+    // this.calculateOffsets();
   }
 
   deleteFacetAtIndex(idx) {
-    const id = this.facetIdMap.index[idx];
+    const id = this.facetIdMap.getKeyAtIndex(idx);
     if ( id == null ) return false;
     return this.deleteFacet(id);
   }
 
   // Force either a facet to be added at the index or override the current.
   updateFacetAtIndex(idx, opts) {
-    const id = this.facetIdMap.index[idx];
+    const id = this.facetIdMap.getKeyAtIndex(idx);
     if ( id == null ) return this.addFacet(opts);
     return this.updateFacet(id, opts);
   }
@@ -190,23 +190,22 @@ export class VariableLengthAbstractBuffer {
    * @returns {boolean} True if the buffer would have to be modified, false otherwise.
    */
   makeContiguous() {
-    const mapIndex = this.facetIdMap.index;
     let bufferModified = false;
-    for ( let i = 0, iMax = mapIndex.length; i < iMax; i += 1 ) {
-      if ( mapIndex[i] != null ) continue;
+    for ( let i = 0, iMax = this.facetIdMap.maxIndex + 1; i < iMax; i += 1 ) {
+      if ( this.facetIdMap.hasIndex(i) ) continue;
       bufferModified ||= true;
 
       // Shift the next non-null facet to the left.
       let j;
       for ( j = i + 1; j < iMax; j += 1 ) {
-        const id = mapIndex[j];
+        const id = this.facetIdMap.getKeyAtIndex(j);
         if ( id == null ) continue;
         const hangingLength = this.facetLengthAtIndex(j);
         const hangingOffset = this.facetOffsetAtIndex(j);
         const targetOffset = this.facetOffsetAtIndex(i);
         this._shift(hangingOffset, hangingLength, targetOffset);
-        this.facetIdMap.set(id, i);
-        mapIndex[j] = null;
+        this.facetIdMap.delete(id); // Deletes id at index j.
+        this.facetIdMap.set(id, i); // Re-add id at index i.
         this.#facetLengths[i] = this.#facetLengths[j];
         this.#facetLengths[j] = 0;
         break;
@@ -431,23 +430,22 @@ export class FixedLengthTrackingBuffer extends VariableLengthTrackingBuffer {
    * @returns {boolean} True if the buffer would have to be modified, false otherwise.
    */
   makeContiguous() {
-    const mapIndex = this.facetIdMap.index;
     let bufferModified = false;
-    for ( let i = 0, iMax = mapIndex.length; i < iMax; i += 1 ) {
-      if ( mapIndex[i] != null ) continue;
+    for ( let i = 0, iMax = this.facetIdMap.maxIndex + 1; i < iMax; i += 1 ) {
+      if ( this.facetIdMap.hasIndex(i) ) continue;
       bufferModified ||= true;
 
       // Shift the next non-null facet to the left.
       let j;
       for ( j = i + 1; j < iMax; j += 1 ) {
-        const id = mapIndex[j];
+        const id = this.facetIdMap.getKeyAtIndex(j);
         if ( id == null ) continue;
         const hangingLength = this.facetLengthAtIndex(j);
         const hangingOffset = this.facetOffsetAtIndex(j);
         const targetOffset = this.facetOffsetAtIndex(i);
         this._shift(hangingOffset, hangingLength, targetOffset);
-        this.facetIdMap.set(id, i);
-        mapIndex[j] = null;
+        this.facetIdMap.delete(id); // Deletes id at index j.
+        this.facetIdMap.set(id, i); // Re-add id at index i.
         break;
       }
       i = j - 1;

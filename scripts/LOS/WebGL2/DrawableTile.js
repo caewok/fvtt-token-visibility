@@ -87,7 +87,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     const textureOpts = this.constructor.textureOptions(this.gl);
     for ( const tile of this.placeableTracker.placeables ) {
       textureOpts.src = this.constructor.tileSource(tile);
-      this.textures.set(tile.id, twgl.createTexture(this.gl, textureOpts));
+      this.textures.set(tile.sourceId, twgl.createTexture(this.gl, textureOpts));
     }
   }
 
@@ -101,7 +101,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     for ( const idx of instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      const id = this.placeableTracker.tracker.facetIdMap.index[idx];
+      const id = this.placeableTracker.tracker.facetIdMap.getKeyAtIndex(idx);
       if ( !id ) continue;
       this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(id));
       // uniforms.uTileTexture = this.textures.get(idx);
@@ -113,7 +113,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   _drawUnfilteredInstances() {
     // Still need to draw each one at a time so texture uniform can be changed.
 
-    const instanceSet = Array.fromRange(this.trackers.indices.facetIdMap.index.length - 1);
+    const instanceSet = Array.fromRange(this.trackers.indices.facetIdMap.maxIndex);
     super._drawFilteredInstances(instanceSet);
   }
 
@@ -136,7 +136,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     // Limit to tiles within the vision triangle
     const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const tile of tiles ) {
-      if ( !this.placeableTracker.placeables.has(tile) ) continue;
+      if ( !this.placeableTracker.hasPlaceable(tile) ) continue;
       const idx = this._indexForPlaceable(tile);
       instanceSet.add(idx);
     }
@@ -159,7 +159,7 @@ export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
     this.placeableTracker.registerPlaceableHooks();
     this._initializePlaceableHandler();
 
-    const sceneObj = this.placeableTracker.placeables.first();
+    const sceneObj = this.placeableTracker.placeables.next().value;
     if ( sceneObj && sceneObj.src ) {
       this.backgroundImage = await loadImageBitmap(sceneObj.src, {
         //imageOrientation: "flipY",

@@ -51,8 +51,8 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     }
 
     // Update each shape of this type in the region.
-    log(`${this.constructor.name}|_updateModelBufferForInstance ${region.id}`);
-    const currIds = this.trackers.model.facetIdMap.keys().filter(key => key.startsWith(region.id));
+    log(`${this.constructor.name}|_updateModelBufferForInstance ${region.sourceId}`);
+    const currIds = this.trackers.model.facetIdMap.keys().filter(key => key.startsWith(region.sourceId));
     for ( const id of currIds ) this._updateModelBufferForShapeId(id);
   }
 
@@ -74,7 +74,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
     const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
     for ( const shapeGroup of shapeGroupArr ) {
-      const id = `${region.id}_${shapeGroup.type}_${shapeGroup.idx}`;
+      const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
       for ( const shape of shapeGroup.shapes ) {
         if ( shape.data.hole ) continue; // Ignore holes.
         if ( visionTriangle.containsRegionShape(shape) ) {
@@ -139,7 +139,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
     const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
     for ( const shapeGroup of shapeGroupArr ) {
-      const id = `${region.id}_${shapeGroup.type}_${shapeGroup.idx}`;
+      const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
       for ( const shape of shapeGroup.shapes ) {
         if ( shape.data.hole ) continue; // Ignore holes.
         if ( visionTriangle.containsRegionShape(shape) ) {
@@ -243,7 +243,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     // For each region, determine which shapes are within the vision triangle.
     // Add the id of each shape group to its respective drawable.
     for ( const region of regions ) {
-      if ( !this.placeableTracker.placeables.has(region) ) continue;
+      if ( !this.placeableTracker.hasPlaceable(region) ) continue;
       for ( const drawable of Object.values(this.drawables) ) drawable._filterShapesForRegion(visionTriangle, region, opts);
     }
   }

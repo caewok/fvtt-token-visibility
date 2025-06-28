@@ -76,7 +76,8 @@ export class GeometryLitToken extends GeometryToken {
     const token = this.token;
     if ( !token ) return;
     const { litTokenBorder, topZ, bottomZ } = this.placeable;
-    return Polygon3dVertices.calculateVertices(litTokenBorder.toPolygon(), { topZ, bottomZ });
+    const border = litTokenBorder || this.placeable.constrainedTokenBorder;
+    return Polygon3dVertices.calculateVertices(border.toPolygon(), { topZ, bottomZ });
   }
 }
 

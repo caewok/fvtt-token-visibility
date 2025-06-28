@@ -101,6 +101,8 @@ export class RegionTracker extends PlaceableTracker {
 
   static MODEL_SHAPES = new Set(["circle", "ellipse", "rectangle"]);
 
+  // TODO: Would it be simpler/better to store the geoms for all the single shapes, tracking the instance geom matrices?
+  // As opposed to only tracking single shapes that do not overlap other shapes?
   initializePlaceables() {
     if ( !this.trackers.circle ) {
       const opts = { facetLengths: this.constructor.MODEL_ELEMENT_LENGTH };
@@ -154,12 +156,12 @@ export class RegionTracker extends PlaceableTracker {
     for ( const type of this.constructor.MODEL_SHAPES ) {
       const tracker = this.trackers[type];
       for ( const id of tracker.facetIdMap.keys() ) {
-        if ( !id.startsWith(region.id) ) continue; // Only consider geometries for this region.
+        if ( !id.startsWith(region.sourceId) ) continue; // Only consider geometries for this region.
         if ( !currIds.has(id) ) tracker.deleteFacet(id);
       }
     }
     for ( const id of this.polygons.keys() ) {
-      if ( !id.startsWith(region.id) ) continue; // Only consider geometries for this region.
+      if ( !id.startsWith(region.sourceId) ) continue; // Only consider geometries for this region.
       if ( !currIds.has(id) ) this.polygons.delete(id);
     }
   }

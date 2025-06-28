@@ -1024,7 +1024,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
     const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const wall of walls ) {
-      if ( !(this.placeableTracker.placeables.has(wall) && this.constructor.includeWall(wall)) ) continue;
+      if ( !(this.placeableTracker.hasPlaceable(wall) && this.constructor.includeWall(wall)) ) continue;
       if ( !this.includeEdge(wall.edge) ) continue;
 
       // Add this edge to the drawable set.

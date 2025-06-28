@@ -34,6 +34,7 @@ export class TokenTracker extends PlaceableModelMatrixTracker {
   static UPDATE_KEYS = new Set([
     "refreshPosition",
     "refreshSize",
+    "refreshElevation",
   ]);
 
   static layer = "tokens";

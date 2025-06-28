@@ -33,7 +33,6 @@ const identityM = MatrixFloat32.identity(4, 4);
 Track when given placeables are added, updated or removed.
 Base class sets up the hooks and calls a base update method.
 Instance class tracks translation/scale/rotation matrices.
-
 */
 
 export class PlaceableTracker {
@@ -68,13 +67,16 @@ export class PlaceableTracker {
     return out;
   }
 
-  /** @type {Set<PlaceableObject>} */
-  placeables = new foundry.utils.IterableWeakSet();
-
   getPlaceableFromId(id) {
+    // const suffix = ".preview$";
+    // const escapedSuffix = suffix.replace(/\./g, "\\.");
+    // const regex = new RegExp(escapedSuffix);
+    const isPreview = id.endsWith(".preview");
+    const regex = /\.preview$/;
+    id = id.replace(regex, "");
     const doc = canvas[this.constructor.layer].documentCollection.get(id);
     if ( !doc ) return null;
-    return doc.object;
+    return isPreview ? (doc.object._preview ?? doc.object) : doc.object;
   }
 
   /**
@@ -82,6 +84,10 @@ export class PlaceableTracker {
    * @type {Map<PlaceableObject, number>}
    */
   placeableLastUpdated = new foundry.utils.IterableWeakMap();
+
+  hasPlaceable(placeable) { return this.placeableLastUpdated.has(placeable); }
+
+  get placeables() { return this.placeableLastUpdated.keys(); }
 
   /**
    * Initialize all placeables.
@@ -94,12 +100,10 @@ export class PlaceableTracker {
     if ( !toDelete.size && !toAdd.size ) return;
     this.#updateId += 1;
     toDelete.forEach(p => {
-      this.placeables.delete(p);
       this.placeableLastUpdated.delete(p);
       this._removePlaceables(p, p.id);
     });
     toAdd.forEach(p => {
-      this.placeables.add(p);
       this.placeableLastUpdated.set(p, this.#updateId);
       this._addPlaceable(p);
     });
@@ -123,12 +127,6 @@ export class PlaceableTracker {
 
   /* ----- NOTE: Hooks and updating ----- */
 
-  // Increment every time the buffer is created.
-  /** @type {number} */
-  #bufferId = 0;
-
-  get bufferId() { return this.#bufferId; }
-
   // Increment every time there is an update.
   /** @type {number} */
   #updateId = 0;
@@ -144,12 +142,10 @@ export class PlaceableTracker {
    * @returns {boolean} True if it resulted in a change.
    */
   addPlaceable(placeable) {
-    if ( this.placeables.has(placeable) ) return false;
+    if ( this.hasPlaceable(placeable) ) return false;
     if ( !this.includePlaceable(placeable) ) return false;
 
-
     this.#updateId += 1;
-    this.placeables.add(placeable);
     this.placeableLastUpdated.set(placeable, this.#updateId);
     if ( !this._addPlaceable(placeable) ) this.initializePlaceables(); // Redo the instance buffer.
     return true;
@@ -163,10 +159,10 @@ export class PlaceableTracker {
    */
   updatePlaceable(placeable, changeKeys) {
     // Possible that the placeable needs to be added or removed instead of simply updated.
-    const alreadyTracking = this.placeables.has(placeable);
+    const alreadyTracking = this.hasPlaceable(placeable);
     const shouldTrack = this.includePlaceable(placeable);
     if ( !(alreadyTracking && shouldTrack) ) return false;
-    if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.id);
+    if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.sourceId);
     else if ( !alreadyTracking && shouldTrack ) return this.addPlaceable(placeable);
 
     // If the changes include one or more relevant keys, update.
@@ -182,7 +178,7 @@ export class PlaceableTracker {
     if ( isString(placeable) ) {
       placeableId = placeable;
       placeable = this.getPlaceableFromId(placeableId);
-    } else placeableId = placeable.id;
+    } else placeableId = placeable.sourceId;
     return { placeable, placeableId };
   }
 
@@ -196,11 +192,11 @@ export class PlaceableTracker {
     // Attempt to retrieve the placeable and its id. Placeable may be undefined.
     const { placeable, placeableId } = this._placeableOrId(placeableOrId);
     if ( placeable ) {
-      if ( !this.placeables.has(placeable) ) return false;
-      this.placeables.delete(placeable);
+      if ( !this.hasPlaceable(placeable) ) return false;
       this.placeableLastUpdated.delete(placeable);
     }
     if ( !this._removePlaceable(placeable, placeableId) ) this.initializePlaceables();
+    this.#updateId += 1;
     return true;
   }
 
@@ -301,6 +297,8 @@ export class PlaceableTracker {
 /**
  * Update a 4x4 matrix (stored as 16-element array) as placeables are updated.
  * Tracks rotation, scale, translation.
+ * Uses ids to track b/c the placeables do not necessarily get deleted (gc'd) when removed from canvas.
+ * Particularly true of tokens.
  */
 export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
@@ -332,8 +330,9 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
   scaleMatrixForPlaceable(_placeable) { return identityM.copyTo(scaleM); }
 
-  getMatrixForPlaceableId(placeableId) {
-    const arr = this.tracker.viewFacetById(placeableId);
+  getMatrixForPlaceable(placeable) {
+    const arr = this.tracker.viewFacetById(placeable.sourceId);
+    if ( !arr ) return null;
     return new CONFIG.GeometryLib.MatrixFloat32(arr, 4, 4);
   }
 
@@ -344,10 +343,11 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updatePlaceableModelMatrix(placeable) {
+    const M = this.getMatrixForPlaceable(placeable);
+    if ( !M ) return;
     const rotation = this.rotationMatrixForPlaceable(placeable);
     const translation = this.translationMatrixForPlaceable(placeable);
     const scale = this.scaleMatrixForPlaceable(placeable);
-    const M = this.getMatrixForPlaceableId(placeable.id);
     scale
       .multiply4x4(rotation, M)
       .multiply4x4(translation, M);
@@ -355,7 +355,7 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
   _addPlaceable(placeable) {
     // TODO: Do we need to track if the buffer was modified?
-    const bufferModified = this.tracker.addFacet({ id: placeable.id });
+    const bufferModified = this.tracker.addFacet({ id: placeable.sourceId });
     this.updatePlaceableModelMatrix(placeable);
     return true;
   }
@@ -379,7 +379,7 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 let { TileTracker, TokenTracker, WallTracker, RegionTracker } = api.placeableTracker;
 
 tileH = TileTracker.cachedBuild()
-tokenH = TokenTracker.bucachedBuild()
+tokenH = TokenTracker.cachedBuild()
 wallH = WallTracker.cachedBuild()
 regionH = RegionTracker.cachedBuild()
 
