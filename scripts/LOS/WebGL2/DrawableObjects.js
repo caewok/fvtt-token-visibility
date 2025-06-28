@@ -394,13 +394,13 @@ export class DrawableObjectsWebGL2Abstract {
    * @returns {boolean} True if successfully updated; false if array length is off (requiring full rebuild).
    */
   _updateInstanceVertex(placeable) {
-    const geom = this.geoms.get(placeable.id);
+    const geom = this.geoms.get(placeable.sourceId);
     geom.addNormals = this.debugViewNormals;
     geom.dirtyModel = true;
     geom.calculateModel();
 
     const vi = this.trackers.vi;
-    const needFullBufferUpdate = vi.updateFacet(placeable.id, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
+    const needFullBufferUpdate = vi.updateFacet(placeable.sourceId, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
     return !needFullBufferUpdate;
   }
 
@@ -511,7 +511,7 @@ export class DrawableObjectsWebGL2Abstract {
       this.rebuildNeeded = true;
       return;
     }
-    this._updateAttributeBuffersForId(placeable.id);
+    this._updateAttributeBuffersForId(placeable.sourceId);
 
   }
 
@@ -541,7 +541,7 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   // Pull from the index for the indices.
-  _indexForPlaceable(placeable) { return this.trackers.indices.facetIdMap.get(placeable.id); }
+  _indexForPlaceable(placeable) { return this.trackers.indices.facetIdMap.get(placeable.sourceId); }
 
   /**
    * Set up parts of the render chain that change often but not necessarily every render.
@@ -700,13 +700,13 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
     // See twgl.setAttribInfoBufferFromArray.
     const tracker = this.trackers.model;
-    const modelArr = tracker.viewFacetById(placeable.id);
-    if ( !modelArr ) console.error(`${this.constructor.name}|_updateModelBufferForInstance|Placeable ${placeable.name}, ${placeable.id} not found in model tracker.`);
+    const modelArr = tracker.viewFacetById(placeable.sourceId);
+    if ( !modelArr ) console.error(`${this.constructor.name}|_updateModelBufferForInstance|Placeable ${placeable.name}, ${placeable.sourceId} not found in model tracker.`);
 
-    const mOffset = tracker.facetOffsetAtId(placeable.id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.id} with offset ${mOffset}`, { model: tracker.viewFacetById(placeable.id) });
+    const mOffset = tracker.facetOffsetAtId(placeable.sourceId) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.sourceId} with offset ${mOffset}`, { model: tracker.viewFacetById(placeable.sourceId) });
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.id));
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.sourceId));
   }
 
   // ----- NOTE: Placeable handler ----- //
@@ -723,7 +723,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   // ----- NOTE: Render ----- //
 
   // Pull from the placeable tracker matrix indexes.
-  _indexForPlaceable(placeable) { return this.placeableTracker.tracker.facetIdMap.get(placeable.id); }
+  _indexForPlaceable(placeable) { return this.placeableTracker.tracker.facetIdMap.get(placeable.sourceId); }
 
   _drawFilteredInstances(instanceSet) {
     // To draw select instances, modify the buffer offset.

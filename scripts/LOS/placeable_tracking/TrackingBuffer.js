@@ -162,8 +162,8 @@ export class VariableLengthAbstractBuffer {
     if ( !this.facetIdMap.has(id) ) return false;
     const idx = this.facetIdMap.get(id);
     this.facetIdMap.delete(id);
-    this._deleteFacetAtIndex(idx);
-    this.calculateOffsets();
+    // this._deleteFacetAtIndex(idx);
+    // this.calculateOffsets();
   }
 
   deleteFacetAtIndex(idx) {

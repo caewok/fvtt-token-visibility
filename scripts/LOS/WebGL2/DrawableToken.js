@@ -47,7 +47,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
     if ( CONFIG[MODULE_ID].debug ) {
       const i = this._indexForPlaceable(target);
-      log(`${this.constructor.name}|renderTarget${target.name}, ${target.id}|${i}`);
+      log(`${this.constructor.name}|renderTarget${target.name}, ${target.sourceId}|${i}`);
       if ( this.trackers.vi ) {
         const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
         console.table({ vertices: [...res.vertices], indices: [...res.indices], indicesAdj: [...res.indicesAdj] });
@@ -180,10 +180,10 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
     let geomIndex = 0;
     geoms.length = 0;
     for ( const token of this.placeableTracker.placeables ) {
-      if ( this.constructor.includeToken(token) ) this._includedPHIndices.set(token.id, geomIndex);
+      if ( this.constructor.includeToken(token) ) this._includedPHIndices.set(token.sourceId, geomIndex);
       geomIndex += 1;
       opts.placeable = token;
-      geoms.set(token.id, new geomClass(opts));
+      geoms.set(token.sourceId, new geomClass(opts));
     }
   }
 
@@ -199,12 +199,12 @@ export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstrac
     const shouldInclude = this.constructor.includeToken(token);
 
     // If a constrained geometry is already created, either remove from set or update.
-    if ( this._includedPHIndices.has(token.id) ) {
+    if ( this._includedPHIndices.has(token.sourceId) ) {
       if ( !shouldInclude ) {
-        this._includedPHIndices.delete(token.id);
+        this._includedPHIndices.delete(token.sourceId);
         return true;
       }
-      return super._updateInstanceVertex(token.id);
+      return super._updateInstanceVertex(token.sourceId);
 
     } else if ( shouldInclude ) return false; // Must insert a new geometry.
     // TODO: Add new tokens on the end without redoing every geometry?

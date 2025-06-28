@@ -55,7 +55,7 @@ export class GeometryNonInstanced {
     this.#addUVs = addUVs;
     if ( placeable ) {
       this.#placeable = placeable;
-      this.id = placeable.id ?? foundry.utils.randomID();
+      this.id = placeable.sourceId ?? foundry.utils.randomID();
     }
   }
 

@@ -634,6 +634,9 @@ export function isString(obj) { return typeof obj === "string" || obj instanceof
  * Allows reverse lookup and tracking of used indices.
  */
 export class IndexMap extends Map {
+  // Each arbitrary id is stored in an element of the array corresponding to its index.
+  // Index may have null or undefined values.
+  /** @type {*[]} */
   index = [];
 
   set(key, value) {
@@ -674,4 +677,21 @@ export class IndexMap extends Map {
     }
     yield this.index.length;
   }
+}
+
+export class IndexWeakMap extends WeakMap {
+  #maxIndex = 0;
+
+  usedIndices = new Set();
+
+  set(key, value) {
+    if ( !Number.isInteger(value) || value < 0 ) return console.error("IndexedMap|Value must be positive integer", value);
+
+  }
+
+  hasIndex(value) { return this.usedIndices.has(value); }
+
+  getKeyAtIndex(value) {}
+
+
 }

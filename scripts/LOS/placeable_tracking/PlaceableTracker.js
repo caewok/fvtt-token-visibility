@@ -33,7 +33,6 @@ const identityM = MatrixFloat32.identity(4, 4);
 Track when given placeables are added, updated or removed.
 Base class sets up the hooks and calls a base update method.
 Instance class tracks translation/scale/rotation matrices.
-
 */
 
 export class PlaceableTracker {
@@ -72,9 +71,15 @@ export class PlaceableTracker {
   placeables = new foundry.utils.IterableWeakSet();
 
   getPlaceableFromId(id) {
+    // const suffix = ".preview$";
+    // const escapedSuffix = suffix.replace(/\./g, "\\.");
+    // const regex = new RegExp(escapedSuffix);
+    const isPreview = id.endsWith(".preview");
+    const regex = /\.preview$/;
+    id = id.replace(regex, "");
     const doc = canvas[this.constructor.layer].documentCollection.get(id);
     if ( !doc ) return null;
-    return doc.object;
+    return isPreview ? (doc.object._preview ?? doc.object) : doc.object;
   }
 
   /**
@@ -123,12 +128,6 @@ export class PlaceableTracker {
 
   /* ----- NOTE: Hooks and updating ----- */
 
-  // Increment every time the buffer is created.
-  /** @type {number} */
-  #bufferId = 0;
-
-  get bufferId() { return this.#bufferId; }
-
   // Increment every time there is an update.
   /** @type {number} */
   #updateId = 0;
@@ -166,7 +165,7 @@ export class PlaceableTracker {
     const alreadyTracking = this.placeables.has(placeable);
     const shouldTrack = this.includePlaceable(placeable);
     if ( !(alreadyTracking && shouldTrack) ) return false;
-    if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.id);
+    if ( alreadyTracking && !shouldTrack ) return this.removePlaceable(placeable.sourceId);
     else if ( !alreadyTracking && shouldTrack ) return this.addPlaceable(placeable);
 
     // If the changes include one or more relevant keys, update.
@@ -182,7 +181,7 @@ export class PlaceableTracker {
     if ( isString(placeable) ) {
       placeableId = placeable;
       placeable = this.getPlaceableFromId(placeableId);
-    } else placeableId = placeable.id;
+    } else placeableId = placeable.sourceId;
     return { placeable, placeableId };
   }
 
@@ -347,7 +346,7 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
     const rotation = this.rotationMatrixForPlaceable(placeable);
     const translation = this.translationMatrixForPlaceable(placeable);
     const scale = this.scaleMatrixForPlaceable(placeable);
-    const M = this.getMatrixForPlaceableId(placeable.id);
+    const M = this.getMatrixForPlaceableId(placeable.sourceId);
     scale
       .multiply4x4(rotation, M)
       .multiply4x4(translation, M);
@@ -355,7 +354,7 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
   _addPlaceable(placeable) {
     // TODO: Do we need to track if the buffer was modified?
-    const bufferModified = this.tracker.addFacet({ id: placeable.id });
+    const bufferModified = this.tracker.addFacet({ id: placeable.sourceId });
     this.updatePlaceableModelMatrix(placeable);
     return true;
   }
