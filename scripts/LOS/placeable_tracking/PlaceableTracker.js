@@ -146,7 +146,6 @@ export class PlaceableTracker {
     if ( this.placeables.has(placeable) ) return false;
     if ( !this.includePlaceable(placeable) ) return false;
 
-
     this.#updateId += 1;
     this.placeables.add(placeable);
     this.placeableLastUpdated.set(placeable, this.#updateId);
@@ -200,6 +199,7 @@ export class PlaceableTracker {
       this.placeableLastUpdated.delete(placeable);
     }
     if ( !this._removePlaceable(placeable, placeableId) ) this.initializePlaceables();
+    this.#updateId += 1;
     return true;
   }
 
@@ -335,6 +335,7 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
 
   getMatrixForPlaceable(placeable) {
     const arr = this.tracker.viewFacetById(placeable.sourceId);
+    if ( !arr ) return null;
     return new CONFIG.GeometryLib.MatrixFloat32(arr, 4, 4);
   }
 
@@ -345,10 +346,11 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
    * @param {Placeable|Edge} [placeable]  The placeable associated with the id; will be looked up otherwise
    */
   updatePlaceableModelMatrix(placeable) {
+    const M = this.getMatrixForPlaceable(placeable);
+    if ( !M ) return;
     const rotation = this.rotationMatrixForPlaceable(placeable);
     const translation = this.translationMatrixForPlaceable(placeable);
     const scale = this.scaleMatrixForPlaceable(placeable);
-    const M = this.getMatrixForPlaceable(placeable);
     scale
       .multiply4x4(rotation, M)
       .multiply4x4(translation, M);
@@ -380,7 +382,7 @@ Point3d = CONFIG.GeometryLib.threeD.Point3d
 let { TileTracker, TokenTracker, WallTracker, RegionTracker } = api.placeableTracker;
 
 tileH = TileTracker.cachedBuild()
-tokenH = TokenTracker.bucachedBuild()
+tokenH = TokenTracker.cachedBuild()
 wallH = WallTracker.cachedBuild()
 regionH = RegionTracker.cachedBuild()
 
