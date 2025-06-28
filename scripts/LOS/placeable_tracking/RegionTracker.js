@@ -138,7 +138,7 @@ export class RegionTracker extends PlaceableTracker {
         currIds.add(id);
         if ( !tracker.facetIdMap.has(id) ) tracker.addFacet({ id });
         geom.linkTransformMatrix(tracker.viewFacetById(id));
-        geom.calculateModel(); // Will not stay linked once the tracker increases buffer size.
+        // geom.calculateModel(); // Will not stay linked once the tracker increases buffer size.
       }
     }
 

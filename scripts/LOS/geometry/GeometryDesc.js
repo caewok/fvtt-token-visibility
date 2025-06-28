@@ -321,9 +321,17 @@ export class GeometryInstanced extends GeometryNonInstanced {
 
   // ----- NOTE: Transform matrix ----- //
 
-  #transformMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
+  #transformMatrix = null;
 
-  get transformMatrix() { return this.#transformMatrix; }
+  get transformMatrix() {
+    if ( !this.#transformMatrix ) {
+      // Cannot calculate the transform in the constructor b/c RegionGeometry will not yet have set the region property.
+      this.#transformMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
+      this.calculateTransformMatrix();
+      this.dirtyModel = true;
+    }
+    return this.#transformMatrix;
+  }
 
   set transformMatrix(M) {
     M.copyTo(this.#transformMatrix);
@@ -332,7 +340,9 @@ export class GeometryInstanced extends GeometryNonInstanced {
 
   linkTransformMatrix(arr) {
     if ( !(arr.length === 16 && arr instanceof Float32Array) ) console.warn("linkTransformMatrix|arr should be 16-element Float32Array", arr);
+    if ( !this.#transformMatrix ) this.#transformMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
     this.#transformMatrix.arr = arr;
+    this.calculateTransformMatrix();
   }
 
   get placeable() { return super.placeable; }
@@ -350,6 +360,7 @@ export class GeometryInstanced extends GeometryNonInstanced {
   // ----- NOTE: Model methods ----- //
 
   _calculateModel(vertices, _indices) {
+    this.calculateTransformMatrix();
     vertices = setTypedArray(vertices, this.instanceVertices);
     return {
       vertices: BasicVertices.transformVertexPositions(vertices, this.transformMatrix, this.stride),
