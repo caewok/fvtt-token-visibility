@@ -25,7 +25,7 @@ import {
   DrawableGridShape,
 } from "./DrawableToken.js";
 import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
-import { log } from "../util.js";
+import { log, sameSide } from "../util.js";
 
 export class RenderObstaclesWebGL2 {
 
@@ -37,6 +37,9 @@ export class RenderObstaclesWebGL2 {
 
   /** @type {DrawObjectsAbstract[]} */
   drawableObstacles = []
+
+  /** @type {DrawableObjectsAbstract[]} */
+  drawableNonTerrainWalls = [];
 
   /** @type {DrawableObjectsAbstract[]} */
   drawableTerrain = [];
@@ -85,7 +88,6 @@ export class RenderObstaclesWebGL2 {
     this.drawableObjects.length = 0;
     this.drawableFloor = undefined;
     let obj;
-    const drawableObjs = [];
 
     const drawableClasses = [
       DrawableTileWebGL2,
@@ -94,12 +96,12 @@ export class RenderObstaclesWebGL2 {
     ];
     if ( canvas.grid.isHexagonal  ) drawableClasses.push(
       DrawableHexTokenWebGL2,
-      ConstrainedDrawableHexTokenWebGL2,
+      // ConstrainedDrawableHexTokenWebGL2,
       LitDrawableHexTokenWebGL2,
     );
     else drawableClasses.push(
       DrawableTokenWebGL2,
-      ConstrainedDrawableTokenWebGL2,
+      // ConstrainedDrawableTokenWebGL2,
       LitDrawableTokenWebGL2,
     );
     if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
@@ -171,7 +173,10 @@ export class RenderObstaclesWebGL2 {
         // Terrain walls have special rendering considerations.
         case "DrawableWallWebGL2":{
           if ( drawableObj.terrain ) this.drawableTerrain.push(drawableObj);
-          else this.drawableObstacles.push(drawableObj);
+          else {
+            this.drawableNonTerrainWalls.push(drawableObj);
+            this.drawableObstacles.push(drawableObj);
+          }
           break;
         }
 
@@ -334,7 +339,7 @@ export class RenderObstaclesWebGL2 {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
 
     if ( this.config.useLitTargetShape ) this.drawableLitToken.prerender();
-    this.drawableConstrainedToken.prerender();
+    // this.drawableConstrainedToken.prerender();
   }
 
   renderGridShape(viewerLocation, target, { targetLocation, frame } = {}) {
@@ -416,7 +421,7 @@ export class RenderObstaclesWebGL2 {
     this._setMaterial("target");
     if ( useLitTargetShape && this.drawableLitToken.constructor.includeToken(target) ) this.drawableLitToken.renderTarget(target);
     else {
-      this.drawableConstrainedToken.renderTarget(target);
+      // this.drawableConstrainedToken.renderTarget(target);
       this.drawableUnconstrainedToken.renderTarget(target); // Only runs if the target is unconstrained.
     }
   }
@@ -458,19 +463,21 @@ export class RenderObstaclesWebGL2 {
     // Draw blue obstacles.
     if ( hasObstacles ) {
       this._setMaterial("obstacle");
-      webGL2.setDepthTest(true);
       webGL2.setBlending(false);
       if ( colorCoded ) webGL2.setColorMask(WebGL2.blueAlphaMask);
       else webGL2.setColorMask(WebGL2.noColorMask); // Either red from target, blue
 
+      this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, visionTriangle, viewerLocation);
+
+      webGL2.setDepthTest(true);
       this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
     }
 
     // Draw green limited (terrain) walls.
     if ( hasTerrain ) {
       this._setMaterial("terrain");
-      webGL2.setDepthTest(false);
       webGL2.setBlending(true);
+      webGL2.setDepthTest(false);
       if ( colorCoded ) webGL2.setColorMask(WebGL2.greenAlphaMask);
       else webGL2.setColorMask(WebGL2.noColorMask); // Either red from target, blue
 
@@ -480,9 +487,35 @@ export class RenderObstaclesWebGL2 {
       const dstAlpha = colorCoded ? gl.ZERO : gl.ONE_MINUS_SRC_ALPHA;
       gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 
+      this._renderConstrainingWalls(this.drawableTerrainWalls, target, viewer, visionTriangle, viewerLocation);
       this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
     }
     // this.gl.flush();
+  }
+
+  // Draw walls that intersect the target border and are in front of the target border.
+  // This is an alternative to drawing separate constrained tokens.
+  _renderConstrainingWalls(drawables, target, viewer, visionTriangle, viewerLocation) {
+    for ( const drawable of drawables ) {
+      // Draw only the intersecting walls that are in front of the center of the token from this camera view.
+      const intersectingWalls = [];
+      intersectingWalls.push(...constrainingWallsForDrawable(drawable, target, viewerLocation));
+      if ( !intersectingWalls.length ) continue;
+
+      this.webGL2.setDepthTest(false);
+
+      // Temporarily override the instances and render the intersecting walls only.
+      const intersectingIndexes = intersectingWalls
+        .map(wall => drawable.trackers.model.facetIdMap.get(wall.sourceId))
+        .filter(idx => drawable.instanceSet.has(idx)); // Just in case.
+      const oldSet = new Set([...drawable.instanceSet]);
+      drawable.instanceSet.clear();
+      intersectingIndexes.forEach(idx => drawable.instanceSet.add(idx));
+      drawable.render(target, viewer, visionTriangle);
+
+      // Keep only the non-intersecting instances.
+      drawable.instanceSet = oldSet.difference(drawable.instanceSet);
+    }
   }
 
   destroy() {}
@@ -492,3 +525,17 @@ export class RenderObstaclesWebGL2 {
 RenderObstaclesWebGL2.MATERIAL_COLORS.target.set([1, 0, 0, 1]);
 RenderObstaclesWebGL2.MATERIAL_COLORS.obstacle.set([0, 0, 1, 1]);
 RenderObstaclesWebGL2.MATERIAL_COLORS.terrain.set([0, 0.5, 0, 0.5]);
+
+function constrainingWallsForDrawable(drawable, target, viewerLocation) {
+  const intersectingWalls = [];
+  for ( const idx of drawable.instanceSet ) {
+    // Walls are all instanced.
+    const id = drawable.trackers.model.facetIdMap.getKeyAtIndex(idx);
+    const wall = drawable.placeableTracker.getPlaceableFromId(id);
+    if ( !wall ) continue;
+    const { a, b } = wall.edge;
+    if ( !sameSide(a, b, target.center, viewerLocation)
+      && target.tokenBorder.lineSegmentIntersects(a, b, { inside: true }) ) intersectingWalls.push(wall);
+  }
+  return intersectingWalls;
+}

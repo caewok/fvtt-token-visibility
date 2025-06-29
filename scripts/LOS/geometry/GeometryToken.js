@@ -43,7 +43,7 @@ export class GeometryConstrainedToken extends GeometryToken {
   _calculateModel(vertices, indices) {
     const token = this.token;
     if ( token && token.isConstrainedTokenBorder ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
-    this.transformMatrix = this.calculateTransformMatrix();
+    this.transformMatrix = this.calculateTransformMatrix(token);
     return super._calculateModel(vertices, indices);
   }
 
@@ -68,7 +68,7 @@ export class GeometryLitToken extends GeometryToken {
     if ( !token ) return super._calculateModel(vertices, indices);
     const { litTokenBorder, tokenBorder, topZ, bottomZ } = token;
     if ( !litTokenBorder || !litTokenBorder.equals(tokenBorder) ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
-    this.transformMatrix = this.calculateTransformMatrix();
+    this.transformMatrix = this.calculateTransformMatrix(token);
     return super._calculateModel(vertices, indices);
   }
 

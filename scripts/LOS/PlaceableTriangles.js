@@ -450,13 +450,13 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
     const token = this.placeable;
     if ( !token.litTokenBorder ) return null;
 
-    const geom = new GeometryLitToken({ token });
+    const geom = new GeometryLitToken({ placeable: token });
     return Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
   get constrainedTriangles() {
     const token = this.placeable;
-    const geom = new GeometryConstrainedToken({ token });
+    const geom = new GeometryConstrainedToken({ placeable: token });
     return Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 

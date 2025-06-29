@@ -37,7 +37,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
   static includeToken(token) {
     const { constrained, lit, tokenHasCustomLitBorder } = this
-    if ( constrained !== null && (constrained ^ token.isConstrainedTokenBorder) ) return false;
+    // if ( constrained !== null && (constrained ^ token.isConstrainedTokenBorder) ) return false;
     if ( lit !== null && (lit ^ tokenHasCustomLitBorder(token)) ) return false;
     return true;
   }

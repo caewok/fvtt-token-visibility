@@ -1497,7 +1497,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
         // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-        const geom = new GeometryConstrainedTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
+        const geom = new GeometryConstrainedTokenDesc({ placeable: token, addNormals: this.debugViewNormals, addUVs: false })
         this.geometries.set(token.id, geom);
         this.targetDrawables.set(token.id, {
           label: `Target drawable ${token.id}`,

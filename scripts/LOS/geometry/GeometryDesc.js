@@ -32,7 +32,7 @@ geom.updateModel --> recalculate for given placeable
 geom.transformMatrix --> switch matrices; force recalc when modelVertices used again.
 
 2. Non-instanced object, e.g., constrained token.
-Define single geom per token. geomToken = new GeometryConstrainedToken({ token, ...});
+Define single geom per token. geomToken = new GeometryConstrainedToken({ placeable: token, ...});
 geom.placeable = token --> change the underlying placeable
 geom.vertices --> points to model vertices
 geom.indices --> points to model indices
