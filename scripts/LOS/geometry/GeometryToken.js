@@ -6,15 +6,13 @@ PIXI,
 "use strict";
 
 import { GeometryInstanced, GeometryNonInstanced } from "./GeometryDesc.js";
-import { Rectangle3dVertices, Polygon3dVertices } from "./BasicVertices.js";
+import { Rectangle3dVertices, Polygon3dVertices, Hex3dVertices } from "./BasicVertices.js";
 
 const tmpRect = new PIXI.Rectangle();
 
 export class GeometryToken extends GeometryInstanced {
 
   get token() { return this.placeable; }
-
-  static verticesIndicesMap = new Map();
 
   _defineInstanceVertices() {
     return Rectangle3dVertices.calculateVertices();
@@ -66,7 +64,7 @@ export class GeometryLitToken extends GeometryToken {
   _calculateModel(vertices, indices) {
     const token = this.token;
     if ( !token ) return super._calculateModel(vertices, indices);
-    const { litTokenBorder, tokenBorder, topZ, bottomZ } = token;
+    const { litTokenBorder, tokenBorder } = token;
     if ( !litTokenBorder || !litTokenBorder.equals(tokenBorder) ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
     this.transformMatrix = this.calculateTransformMatrix(token);
     return super._calculateModel(vertices, indices);
@@ -99,7 +97,38 @@ export class GeometrySquareGrid extends GeometryToken {
   }
 }
 
-// TODO: Hexes
+export class GeometryHexToken extends GeometryToken {
+  calculateTransformMatrix(token) {
+    token ??= this.placeable;
+    const { x, y } = token.document;
+    const { topZ, bottomZ } = token;
+    tmpRect.x = x;
+    tmpRect.y = y;
+
+    // Hex template already accounts for size.
+    tmpRect.width = canvas.dimensions.size;
+    tmpRect.height = canvas.dimensions.size;
+
+    return Rectangle3dVertices.transformMatrixFromRectangle(tmpRect,
+      { topZ, bottomZ, outMatrix: this.transformMatrix });
+  }
+
+  hexKey = "0_1_1";
+
+  get instanceKey() {
+    return `${super.instanceKey}_${this.hexKey}`;
+  }
+
+  defineInstance(opts = {}) {
+    this.hexKey = opts.hexKey || "0_1_1";
+    super.defineInstance();
+  }
+
+  _defineInstanceVertices() {
+    const { hexagonalShape, width, height } = Hex3dVertices.hexPropertiesForKey(this.hexKey);
+    return Hex3dVertices.calculateVertices(hexagonalShape, { width, height });
+  }
+}
 
 
 

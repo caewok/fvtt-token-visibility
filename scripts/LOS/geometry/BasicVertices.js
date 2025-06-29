@@ -1,5 +1,8 @@
 /* globals
+canvas,
 CONFIG,
+CONST,
+foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -910,6 +913,53 @@ export class Polygon3dVertices extends BasicVertices {
   }
 }
 
+export class Hex3dVertices extends Polygon3dVertices {
+
+  static canUseFan(_hex) { return true; }
+
+  /**
+   * Determine the 3d vertices for a given hex shape.
+   * The hex polygon represents the top and bottom of the shape, using rectangular side faces.
+   * @param {CONST.TOKEN_HEXAGONAL_SHAPES} hexagonalShape
+   * @param {object} [opts]
+   * @param {number} [opts.topZ=T]        Top elevation
+   * @param {number} [opts.bottomZ=B]     Botom elevation
+   * @param {boolean} [opts.useFan]       Force fan or force no fan
+   * @returns {Float32Array} The vertices, untrimmed
+   */
+  static calculateVertices(hexagonalShape, { width = 1, height = 1, ...opts } = {}) {
+    const hexRes = getHexagonalShape(canvas.scene.grid.columns, hexagonalShape, width, height);
+    let poly;
+    if ( hexRes ) {
+      // getHexagonalShape returns {points, center, snapping}
+      // Translate to 0,0.
+      poly = new PIXI.Polygon(hexRes.points);
+      poly = poly.translate(-hexRes.center.x, -hexRes.center.y);
+    } else poly = (new PIXI.Rectangle(-width * 0.5, -height * 0.5, width * 0.5, height * 0.5)).toPolygon(); // Fallback.
+
+    // Convert to 3d polygon vertices.
+    opts.useFan = true;
+    opts.centroid = new PIXI.Point(0, 0); // Centered at 0, 0.
+    return super.calculateVertices(poly, opts);
+  }
+
+  static calculateVerticesForToken(token) {
+    // Center the token at 0,0,0, with unit size 1.
+    const { width, height, hexagonalShape } = token.document;
+    return this.calculateVertices(hexagonalShape, { width, height });
+  }
+
+  static hexKeyForToken(token) {
+    const { width, height, hexagonalShape } = token.document;
+    return `${hexagonalShape}_${width}_${height}`;
+  }
+
+  static hexPropertiesForKey(hexKey) {
+    const values = hexKey.split("_").map(elem => Number(elem));
+    return { hexagonalShape: values[0], width: values[1], height: values[2] }
+  }
+}
+
 export class Ellipse3dVertices extends Polygon3dVertices {
   static unitEllipse = new PIXI.Ellipse(0, 0, 1, 1);
 
@@ -985,3 +1035,285 @@ function setFloatView(arr, buffer, offset = 0) {
   out.set(arr);
   return out;
 };
+
+// Taken from foundry.js Token.#getHexagonalShape.
+/**
+ * Get the hexagonal shape given the type, width, and height.
+ * @param {boolean} columns    Column-based instead of row-based hexagonal grid?
+ * @param {number} type        The hexagonal shape (one of {@link CONST.TOKEN_HEXAGONAL_SHAPES})
+ * @param {number} width       The width of the Token (positive)
+ * @param {number} height      The height of the Token (positive)
+ * @returns {DeepReadonly<TokenHexagonalShape>|null}    The hexagonal shape or null if there is no shape
+ *                                                      for the given combination of arguments
+ */
+const hexagonalShapes = new Map();
+
+function getHexagonalShape(columns, type, width, height) {
+  if ( !Number.isInteger(width * 2) || !Number.isInteger(height * 2) ) return null;
+  const key = `${columns ? "C" : "R"},${type},${width},${height}`;
+  let shape = hexagonalShapes.get(key);
+  if ( shape ) return shape;
+  const T = CONST.TOKEN_HEXAGONAL_SHAPES;
+  const M = CONST.GRID_SNAPPING_MODES;
+
+  // Hexagon symmetry
+  if ( columns ) {
+    const rowShape = getHexagonalShape(false, type, height, width);
+    if ( !rowShape ) return null;
+
+    // Transpose and reverse the points of the shape in row orientation
+    const points = [];
+    for ( let i = rowShape.points.length; i > 0; i -= 2 ) {
+      points.push(rowShape.points[i - 1], rowShape.points[i - 2]);
+    }
+    shape = {
+      points,
+      center: {x: rowShape.center.y, y: rowShape.center.x},
+      snapping: {
+        behavior: rowShape.snapping.behavior,
+        anchor: {x: rowShape.snapping.anchor.y, y: rowShape.snapping.anchor.x}
+      }
+    };
+  }
+
+  // Small hexagon
+  else if ( (width === 0.5) && (height === 0.5) ) {
+    shape = {
+      points: [0.25, 0.0, 0.5, 0.125, 0.5, 0.375, 0.25, 0.5, 0.0, 0.375, 0.0, 0.125],
+      center: {x: 0.25, y: 0.25},
+      snapping: {behavior: {mode: M.CENTER, resolution: 1}, anchor: {x: 0.25, y: 0.25}}
+    };
+  }
+
+  // Normal hexagon
+  else if ( (width === 1) && (height === 1) ) {
+    shape = {
+      points: [0.5, 0.0, 1.0, 0.25, 1, 0.75, 0.5, 1.0, 0.0, 0.75, 0.0, 0.25],
+      center: {x: 0.5, y: 0.5},
+      snapping: {behavior: {mode: M.TOP_LEFT_CORNER, resolution: 1}, anchor: {x: 0.0, y: 0.0}}
+    };
+  }
+
+  // Hexagonal ellipse or trapezoid
+  else if ( type <= T.TRAPEZOID_2 ) {
+    shape = createHexagonalEllipseOrTrapezoid(type, width, height);
+  }
+
+  // Hexagonal rectangle
+  else if ( type <= T.RECTANGLE_2 ) {
+    shape = createHexagonalRectangle(type, width, height);
+  }
+
+  // Cache the shape
+  if ( shape ) {
+    Object.freeze(shape);
+    Object.freeze(shape.points);
+    Object.freeze(shape.center);
+    Object.freeze(shape.snapping);
+    Object.freeze(shape.snapping.behavior);
+    Object.freeze(shape.snapping.anchor);
+    hexagonalShapes.set(key, shape);
+  }
+  return shape;
+}
+
+/**
+ * Create the row-based hexagonal ellipse/trapezoid given the type, width, and height.
+ * @param {number} type                   The shape type (must be ELLIPSE_1, ELLIPSE_1, TRAPEZOID_1, or TRAPEZOID_2)
+ * @param {number} width                  The width of the Token (positive)
+ * @param {number} height                 The height of the Token (positive)
+ * @returns {TokenHexagonalShape|null}    The hexagonal shape or null if there is no shape
+ *                                        for the given combination of arguments
+ */
+function createHexagonalEllipseOrTrapezoid(type, width, height) {
+  if ( !Number.isInteger(width) || !Number.isInteger(height) ) return null;
+  const T = CONST.TOKEN_HEXAGONAL_SHAPES;
+  const M = CONST.GRID_SNAPPING_MODES;
+  const points = [];
+  let top;
+  let bottom;
+  switch ( type ) {
+    case T.ELLIPSE_1:
+      if ( height >= 2 * width ) return null;
+      top = Math.floor(height / 2);
+      bottom = Math.floor((height - 1) / 2);
+      break;
+    case T.ELLIPSE_2:
+      if ( height >= 2 * width ) return null;
+      top = Math.floor((height - 1) / 2);
+      bottom = Math.floor(height / 2);
+      break;
+    case T.TRAPEZOID_1:
+      if ( height > width ) return null;
+      top = height - 1;
+      bottom = 0;
+      break;
+    case T.TRAPEZOID_2:
+      if ( height > width ) return null;
+      top = 0;
+      bottom = height - 1;
+      break;
+  }
+  let x = 0.5 * bottom;
+  let y = 0.25;
+  for ( let k = width - bottom; k--; ) {
+    points.push(x, y);
+    x += 0.5;
+    y -= 0.25;
+    points.push(x, y);
+    x += 0.5;
+    y += 0.25;
+  }
+  points.push(x, y);
+  for ( let k = bottom; k--; ) {
+    y += 0.5;
+    points.push(x, y);
+    x += 0.5;
+    y += 0.25;
+    points.push(x, y);
+  }
+  y += 0.5;
+  for ( let k = top; k--; ) {
+    points.push(x, y);
+    x -= 0.5;
+    y += 0.25;
+    points.push(x, y);
+    y += 0.5;
+  }
+  for ( let k = width - top; k--; ) {
+    points.push(x, y);
+    x -= 0.5;
+    y += 0.25;
+    points.push(x, y);
+    x -= 0.5;
+    y -= 0.25;
+  }
+  points.push(x, y);
+  for ( let k = top; k--; ) {
+    y -= 0.5;
+    points.push(x, y);
+    x -= 0.5;
+    y -= 0.25;
+    points.push(x, y);
+  }
+  y -= 0.5;
+  for ( let k = bottom; k--; ) {
+    points.push(x, y);
+    x += 0.5;
+    y -= 0.25;
+    points.push(x, y);
+    y -= 0.5;
+  }
+  return {
+    points,
+    // We use the centroid of the polygon for ellipse and trapzoid shapes
+    center: foundry.utils.polygonCentroid(points),
+    snapping: {
+      behavior: {mode: bottom % 2 ? M.BOTTOM_RIGHT_VERTEX : M.TOP_LEFT_CORNER, resolution: 1},
+      anchor: {x: 0.0, y: 0.0}
+    }
+  };
+}
+
+/**
+ * Create the row-based hexagonal rectangle given the type, width, and height.
+ * @param {number} type                   The shape type (must be RECTANGLE_1 or RECTANGLE_2)
+ * @param {number} width                  The width of the Token (positive)
+ * @param {number} height                 The height of the Token (positive)
+ * @returns {TokenHexagonalShape|null}    The hexagonal shape or null if there is no shape
+ *                                        for the given combination of arguments
+ */
+function createHexagonalRectangle(type, width, height) {
+  if ( (width < 1) || !Number.isInteger(height) ) return null;
+  if ( (width === 1) && (height > 1) ) return null;
+  if ( !Number.isInteger(width) && (height === 1) ) return null;
+  const T = CONST.TOKEN_HEXAGONAL_SHAPES;
+  const M = CONST.GRID_SNAPPING_MODES;
+  const even = (type === T.RECTANGLE_1) || (height === 1);
+  let x = even ? 0.0 : 0.5;
+  let y = 0.25;
+  const points = [x, y];
+  while ( x + 1 <= width ) {
+    x += 0.5;
+    y -= 0.25;
+    points.push(x, y);
+    x += 0.5;
+    y += 0.25;
+    points.push(x, y);
+  }
+  if ( x !== width ) {
+    y += 0.5;
+    points.push(x, y);
+    x += 0.5;
+    y += 0.25;
+    points.push(x, y);
+  }
+  while ( y + 1.5 <= 0.75 * height ) {
+    y += 0.5;
+    points.push(x, y);
+    x -= 0.5;
+    y += 0.25;
+    points.push(x, y);
+    y += 0.5;
+    points.push(x, y);
+    x += 0.5;
+    y += 0.25;
+    points.push(x, y);
+  }
+  if ( y + 0.75 < 0.75 * height ) {
+    y += 0.5;
+    points.push(x, y);
+    x -= 0.5;
+    y += 0.25;
+    points.push(x, y);
+  }
+  y += 0.5;
+  points.push(x, y);
+  while ( x - 1 >= 0 ) {
+    x -= 0.5;
+    y += 0.25;
+    points.push(x, y);
+    x -= 0.5;
+    y -= 0.25;
+    points.push(x, y);
+  }
+  if ( x !== 0 ) {
+    y -= 0.5;
+    points.push(x, y);
+    x -= 0.5;
+    y -= 0.25;
+    points.push(x, y);
+  }
+  while ( y - 1.5 > 0 ) {
+    y -= 0.5;
+    points.push(x, y);
+    x += 0.5;
+    y -= 0.25;
+    points.push(x, y);
+    y -= 0.5;
+    points.push(x, y);
+    x -= 0.5;
+    y -= 0.25;
+    points.push(x, y);
+  }
+  if ( y - 0.75 > 0 ) {
+    y -= 0.5;
+    points.push(x, y);
+    x += 0.5;
+    y -= 0.25;
+    points.push(x, y);
+  }
+  return {
+    points,
+    // We use center of the rectangle (and not the centroid of the polygon) for the rectangle shapes
+    center: {
+      x: width / 2,
+      y: ((0.75 * Math.floor(height)) + (0.5 * (height % 1)) + 0.25) / 2
+    },
+    snapping: {
+      behavior: {mode: even ? M.TOP_LEFT_CORNER : M.BOTTOM_RIGHT_VERTEX, resolution: 1},
+      anchor: {x: 0.0, y: 0.0}
+    }
+  };
+}
+

@@ -7,8 +7,9 @@ CONFIG,
 import { DrawableObjectsInstancingWebGL2Abstract, DrawableObjectsWebGL2Abstract } from "./DrawableObjects.js";
 import { MODULE_ID } from "../../const.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid } from "../geometry/GeometryToken.js";
+import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid, GeometryHexToken } from "../geometry/GeometryToken.js";
 import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
+import { Hex3dVertices } from "../geometry/BasicVertices.js";
 
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
@@ -29,7 +30,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
   static vertexDrawType = "STATIC_DRAW";
 
-  static constrained = false;
+  // static constrained = false;
 
   static lit = null; // Draw tokens
 
@@ -50,7 +51,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
       log(`${this.constructor.name}|renderTarget${target.name}, ${target.sourceId}|${i}`);
       if ( this.trackers.vi ) {
         const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
-        console.table({ vertices: [...res.vertices], indices: [...res.indices], indicesAdj: [...res.indicesAdj] });
+        console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
       }
       if ( this.trackers.model ) {
         const model = this.trackers.model.viewFacetAtIndex(i);
@@ -126,13 +127,112 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
   }
 }
 
-
-
-// TODO: Fix.
-// Should group tokens into distinct hex instances.
+// Group tokens into distinct hex instances.
 // So draw 1x1, 2x2, etc.
 export class DrawableHexTokenWebGL2 extends DrawableTokenWebGL2 {
 
+  drawables = new Map();
+
+  async initialize() {
+    await super.initialize();
+
+    // Build drawables based on all available tokens.
+    for ( const token of this.placeableTracker.placeables ) {
+      const hexKey = Hex3dVertices.hexKeyForToken(token);
+      if ( !this.drawables.has(hexKey) ) this.drawables.set(hexKey, new DrawableHexShape(this.renderer, this, hexKey));
+    }
+    for ( const drawable of this.drawables.values() ) await drawable.initialize();
+  }
+
+  filterObjects(visionTriangle, opts) {
+    super.filterObjects(visionTriangle, opts);
+    this.drawables.forEach(drawable => drawable.filterObjects());
+  }
+
+  async _initializeProgram() { return; }
+
+  // _initializePlaceableHandler() { return; }
+
+  _initializeGeoms(_opts) { return; }
+
+  _initializeOffsetTrackers() { return; }
+
+  _initializeAttributes() { return; }
+
+  _initializeUniforms() { return; }
+
+  validateInstances() {
+    // If the tracker has been updated, check for new token hex types.
+    if ( this.placeableTracker.updateId > this.placeableTrackerUpdateId ) {
+      for ( const [token, lastUpdate] of this.placeableTracker.placeableLastUpdated.entries() ) {
+        if ( lastUpdate <= this.placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
+        const hexKey = Hex3dVertices.hexKeyForToken(token);
+        if ( !this.drawables.has(hexKey) ) {
+          const drawable = new DrawableHexShape(this.renderer, this, hexKey);
+          this.drawables.set(hexKey, drawable);
+          drawable.initialize(); // Async; see DrawableHexShape#filterObjects for handling.
+        }
+      }
+    }
+    this.drawables.forEach(drawable => drawable.validateInstances());
+  }
+
+  renderTarget(target) {
+    if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
+    this.drawables.forEach(drawable => drawable.renderTarget(target));
+  }
+
+}
+
+export class DrawableHexShape extends DrawableTokenWebGL2 {
+
+  parent;
+
+  static geomClass = GeometryHexToken;
+
+  hexKey = "0_1_1";
+
+  constructor(renderer, parentDrawableObject, hexKey = "0_1_1") {
+    super(renderer);
+    this.parent = parentDrawableObject;
+    this.hexKey = hexKey;
+    delete this.placeableTracker; // So the getter works. See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa/77093264.
+  }
+
+  get placeableTracker() { return this.parent.placeableTracker; }
+
+  set placeableTracker(_value) { return; } // Ignore any attempts to set it but do not throw error.
+
+  get numInstances() { return this.placeableTracker.trackers[this.TYPE].numFacets; }
+
+  _initializePlaceableHandler() { return; } // Can skip b/c the region drawable controls the handler.
+
+  _initializeGeoms(opts = {}) {
+    opts.hexKey = this.hexKey;
+    super._initializeGeoms(opts);
+  }
+
+  validateInstances() {
+    if ( !this.initialized ) return; // Possible that this geometry was just added.
+    super.validateInstances();
+  }
+
+  filterObjects() {
+    this.instanceSet.clear();
+    if ( !this.initialized ) return; // Possible that this geometry was just added.
+    for ( const idx of this.parent.instanceSet ) {
+      const id = this.placeableTracker.tracker.facetIdMap.getKeyAtIndex(idx);
+      const token = this.placeableTracker.getPlaceableFromId(id);
+      if ( !token ) continue;
+      if ( Hex3dVertices.hexKeyForToken(token) !== this.hexKey ) continue;
+      this.instanceSet.add(idx);
+    }
+  }
+
+  renderTarget(target) {
+    if ( Hex3dVertices.hexKeyForToken(target) !== this.hexKey ) return;
+    super.renderTarget(target);
+  }
 }
 
 export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
