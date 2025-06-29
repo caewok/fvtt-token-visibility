@@ -72,8 +72,13 @@ export class PlaceableTracker {
     // const escapedSuffix = suffix.replace(/\./g, "\\.");
     // const regex = new RegExp(escapedSuffix);
     const isPreview = id.endsWith(".preview");
-    const regex = /\.preview$/;
-    id = id.replace(regex, "");
+    const regexSuffix = /\.preview$/;
+    id = id.replace(regexSuffix, "");
+
+    // const regexPrefix = /^.*\./ // Drop prefixes like Wall., Region., etc.
+    const regexPrefix = /^(Wall|Region|Token|Tile)\./;
+    id = id.replace(regexPrefix, "");
+
     const doc = canvas[this.constructor.layer].documentCollection.get(id);
     if ( !doc ) return null;
     return isPreview ? (doc.object._preview ?? doc.object) : doc.object;

@@ -629,6 +629,19 @@ export function setTypedArray(dst, src) {
 export function isString(obj) { return typeof obj === "string" || obj instanceof String; }
 
 /**
+ * Test if point p0 and point p1 are on the same side relative to segment a|b.
+ * @param {PIXI.Point} a
+ * @param {PIXI.Point} b
+ * @param {PIXI.Point} p0
+ * @param {PIXI.Point} p1
+ * @returns {boolean}
+ */
+export function sameSide(a, b, p0, p1) {
+  return (foundry.utils.orient2dFast(a, b, p0) * foundry.utils.orient2dFast(a, b, p1)) > 0;
+}
+
+
+/**
  * Map mean to link arbitrary ids to index integers.
  * Allows reverse lookup and tracking of used indices.
  */
