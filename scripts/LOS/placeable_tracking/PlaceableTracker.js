@@ -106,7 +106,7 @@ export class PlaceableTracker {
     this.#updateId += 1;
     toDelete.forEach(p => {
       this.placeableLastUpdated.delete(p);
-      this._removePlaceables(p, p.id);
+      this._removePlaceable(p, p.id);
     });
     toAdd.forEach(p => {
       this.placeableLastUpdated.set(p, this.#updateId);

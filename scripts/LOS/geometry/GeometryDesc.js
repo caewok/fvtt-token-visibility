@@ -261,7 +261,7 @@ export class GeometryInstanced extends GeometryNonInstanced {
 
   constructor(opts) {
     super(opts);
-    this.defineInstance();
+    this.defineInstance(opts);
   }
 
   get instanced() { return true; }
@@ -285,7 +285,7 @@ export class GeometryInstanced extends GeometryNonInstanced {
 
   #instanceVertices = new Float32Array();
 
-  defineInstance() {
+  defineInstance(_opts) {
     const map = this.constructor.instanceMap;
     const key = this.instanceKey;
     let trimmed;

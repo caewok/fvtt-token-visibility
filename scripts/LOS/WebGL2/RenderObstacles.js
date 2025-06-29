@@ -97,7 +97,7 @@ export class RenderObstaclesWebGL2 {
     if ( canvas.grid.isHexagonal  ) drawableClasses.push(
       DrawableHexTokenWebGL2,
       // ConstrainedDrawableHexTokenWebGL2,
-      LitDrawableHexTokenWebGL2,
+      // LitDrawableHexTokenWebGL2, // TODO: Fix
     );
     else drawableClasses.push(
       DrawableTokenWebGL2,

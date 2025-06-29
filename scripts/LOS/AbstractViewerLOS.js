@@ -437,10 +437,11 @@ export class AbstractViewerLOS {
   /**
    * Test if any part of the target is within the limited angle vision of the token.
    * @param {PointVisionSource} visionSource
-   * @param {PIXI.Rectangle|PIXI.Polygon} targetShape
+   * @param {Token|PIXI.Rectangle|PIXI.Polygon} targetShape
    * @returns {boolean}
    */
-  static targetWithinLimitedAngleVision(visionSource, targetShape) {
+  static targetWithinLimitedAngleVision(visionSource, targetOrShape) {
+    const targetShape = targetOrShape instanceof Token ? targetOrShape.tokenBorder : targetOrShape;
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return true;
 
@@ -462,14 +463,14 @@ export class AbstractViewerLOS {
     const rMax = Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
 
     const targetWithin = () => {
-      const inside = true;
-      const ixFn = targetShape.lineSegmentIntersects;
-      const hasIx = ixFn(rMin.A, rMin.B, { inside }) || ixFn(rMax.A, rMax.B, { inside });
+      const opts = { inside: true };
+      const hasIx = targetShape.lineSegmentIntersects(rMin.A, rMin.B, opts)
+                 || targetShape.lineSegmentIntersects(rMax.A, rMax.B, opts);
       return hasIx + 1; // 1 if inside (no intersection); 2 if intersects.
     };
 
     // Probably worth checking the target center first
-    const center = this.targetCenter;
+    const center = targetShape.center;
     if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
     if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
 
