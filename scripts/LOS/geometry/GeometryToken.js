@@ -108,6 +108,7 @@ export class GeometryHexToken extends GeometryToken {
     // Hex template already accounts for size.
     tmpRect.width = canvas.dimensions.size;
     tmpRect.height = canvas.dimensions.size;
+
     return Rectangle3dVertices.transformMatrixFromRectangle(tmpRect,
       { topZ, bottomZ, outMatrix: this.transformMatrix });
   }
