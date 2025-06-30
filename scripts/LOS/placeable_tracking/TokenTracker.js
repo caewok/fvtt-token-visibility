@@ -65,7 +65,7 @@ export class TokenTracker extends PlaceableModelMatrixTracker {
     // For hex grids, the token instances already account for width and height.
     const width = canvas.grid.isHexagonal ? 1 : token.document.width;
     const height = canvas.grid.isHexagonal ? 1 : token.document.height;
-    const zHeight = canvas.grid.isHexagonal ? canvas.dimensions.size : (token.topZ - token.bottomZ)
+    const zHeight = token.topZ - token.bottomZ;
 
     // Shrink tokens slightly to avoid z-fighting with walls and tiles.
     return {

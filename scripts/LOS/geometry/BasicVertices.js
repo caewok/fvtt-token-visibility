@@ -676,6 +676,7 @@ export class Polygon3dVertices extends BasicVertices {
 
   static polygonTopBottomFacesFan(poly, { bounds, center, top, bottom, topZ = T, bottomZ = B } = {}) {
     if ( this.isClipper(poly) ) poly = poly.simplify();
+    if ( poly.isHole ^ poly.isClockwise ) poly.reverseOrientation();
 
     top ??= new Float32Array(this.topLength(poly));
     bottom ??= new Float32Array(top.length);
@@ -686,8 +687,26 @@ export class Polygon3dVertices extends BasicVertices {
     const normalBottom = [0, 0, -1];
 
     // Start by copy the x,y from the polygon to an array with 8 vertex "slots" per vertex.
-    this.copyVerticesToArray(poly.points, { stride: 2, outArr: top });
-    this.copyVerticesToArray(poly.points, { stride: 2, outArr: bottom });
+    // Copy the center and two points of the polygon to the array.
+    // Triangles should match poly orientation (typically ccw). If poly is ccw, triangles will be ccw.
+    center = [center.x, center.y];
+    const ln = poly.points.length;
+    let a = poly.points.slice(ln - 2, ln); // i, i + 2 for the very last point; cycle through to beginning.
+    for ( let i = 0, j = 0; i < ln; ) {
+      top.set(center, j);
+      bottom.set(center, j);
+      j += 8;
+
+      top.set(a, j);
+      bottom.set(a, j);
+      j += 8;
+
+      const b = poly.points.slice(i, i + 2);
+      top.set(b, j);
+      bottom.set(b, j);
+      i += 2; j += 8; // Only increment i once; next triangle shares one point (and center) with this one.
+      a = b;
+    }
 
     // Add in elevation in place.
     // Note that after copyVerticesToArray, the stride is now 8.
@@ -702,7 +721,7 @@ export class Polygon3dVertices extends BasicVertices {
     this.appendUVs(top, { bounds, stride: 8, offset: 6, outArr: top });
     this.appendUVs(bottom, { bounds, stride: 8, offset: 6, outArr: bottom });
 
-    // Flip the bottom to be counterclockwise.
+    // Flip the bottom.
     this.flipVertexArrayOrientation(bottom)
     return { top, bottom };
   }
@@ -751,6 +770,7 @@ export class Polygon3dVertices extends BasicVertices {
       holes = coords.holes;
     } else {
       if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
+      if ( poly.isHole ^ poly.isClockwise ) poly.reverseOrientation();
       vertices2d = poly.points;
     }
 
@@ -830,8 +850,7 @@ export class Polygon3dVertices extends BasicVertices {
   }
 
   static polygonSideFaces(poly, { topZ = T, bottomZ = B, sides } = {}) {
-    // TODO: Do we need to test poly orientation?
-    // if ( poly.isHole ^ !poly.isClockwise ) poly.reverseOrientation();
+
     sides ??= new Float32Array(this.sidesLength(poly));
     if ( this.isClipper(poly) ) poly = poly.toPolygons();
     if ( Array.isArray(poly) ) {
@@ -839,6 +858,9 @@ export class Polygon3dVertices extends BasicVertices {
       sides.set(combineTypedArrays(...multipleSides));
       return sides;
     }
+
+    // TODO: Do we need to test poly orientation?
+    if ( poly.isHole ^ poly.isClockwise ) poly.reverseOrientation();
 
     const vertexOffset = this.NUM_VERTEX_ELEMENTS;
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
@@ -935,12 +957,18 @@ export class Hex3dVertices extends Polygon3dVertices {
       // Translate to 0,0.
       poly = new PIXI.Polygon(hexRes.points);
       poly = poly.translate(-hexRes.center.x, -hexRes.center.y);
+      if ( poly.isClockwise ) poly.reverseOrientation();
+
     } else poly = (new PIXI.Rectangle(-width * 0.5, -height * 0.5, width * 0.5, height * 0.5)).toPolygon(); // Fallback.
 
     // Convert to 3d polygon vertices.
     opts.useFan = true;
     opts.centroid = new PIXI.Point(0, 0); // Centered at 0, 0.
     return super.calculateVertices(poly, opts);
+  }
+
+  static hexagonalShapeForToken(token) {
+    return getHexagonalShape(canvas.scene.grid.columns, token.document.hexagonalShape, token.document.width, token.document.height);
   }
 
   static calculateVerticesForToken(token) {
