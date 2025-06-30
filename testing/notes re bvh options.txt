@@ -1,0 +1,123 @@
+Options for handling lit vs unlit targets.
+
+Note for constrained tokens:
+- Technically, need them for targets and obstacles. Because we don't want a constrained token blocking
+  if, for example, it extends beyond its wall.
+- Can fake constrained targets (more or less) by turning off depth test. Doesn't work for obstacles.
+- If using BVH for obstacles, could maybe check in the shader but would be hard b/c would need info on the target center and walls.
+  -- e.g., is this target triangle real? Need to know whether there is a wall between it and its center.
+- Could simplify constrained tokens to a shrunken cube instead of arbitrary polygon.
+- Or could stick with default Foundry and ignore constrained tokens. Treat as not my problem.
+
+Blocking tokens:
+- To simplify lighting test, could ignore tokens. In base Foundry, tokens don't block lights.
+- That would leave walls, tiles, regions. Only polygon regions / holes are complicated to test.
+
+
+1. Polygon border <-- Attempt first
+
+- Draw distinct lit target polygon based on token.litTokenBorder.
+
+Pros:
+- Relatively simple.
+- Can use existing WebGL drawing indices/vertices for all
+- If it worked, could be done without WebGL
+
+Cons:
+- Less accurate light testing
+- Does not work with complex shapes.
+- To handle complex shapes, would need to intersect the 3d shape with the light poly.
+  Could maybe flatten to 2d, but still hard and likely imprecise
+
+2. Lit face textures.
+
+Represent each target with a texture cube representing its cube border.
+For each light and each target:
+- Draw the scene from the view of the light looking at the target center.
+- Draw indices/vertices normally for all targets and obstacles.
+- Likely use orthogonal perspective.
+- Identify where the bright and dim light (measured by distance) hit each part of the face.
+- Convert each face to a texture. For given light/target combination, up to 3 faces will be seen.
+  Requires some sort of clever transform to convert the frag destination to 0 --> 1 uv.
+
+Then:
+- Draw indices/vertices normally for all targets and obstacles.
+- Use the texture cube of light to identify bright and dim portions of the target faces (up to 3 faces)
+- To get the exact position for complex shapes, draw line from fragment to cube face using the cube face normal
+  (This might be done automatically for cube textures in WebGL)
+
+Pros:
+- Reasonably accurate light details
+- No intersection testing
+
+Cons:
+- Massive amounts of textures and pre-rendering.
+- 6 textures per target token.
+- Must render each light and token combination separately.
+- Non-trivial translation of target face --> cube texture face.
+
+For a scene with 5 lights and 10 tokens, requires 50 pre-renders and 60 textures.
+
+3. BVH lite
+
+Draw indices/vertices normally for all targets and obstacles.
+When lit portion of target required, use textures and BVH to test intersection between fragment and light source.
+- Light sources represented as uniforms? Or texture?
+- Texture for tokens, tiles, walls, regions, region polygons?, constrained tokens?
+  - Is it possible to flag region holes and otherwise treat as simple shape?
+  - Would still have region polygons...
+
+Pros:
+- Accurate light details
+- Fewer textures
+- Only needed for the lit target option.
+
+Cons:
+- Textures
+- Light uniforms
+- Complexity
+- More work
+- Unlikely to handle constrained tokens
+
+Walls, tiles, basic tokens and basic region shapes can all be represented using model matrix.
+- Use 1 texture for each
+- Use float32 to represent model matrix.
+- 16 elements for each? Maybe less if using [scaleX, scaleY, scaleZ, rotateX, rotateY, rotateZ, translateX, translateY, translateZ]
+- 1+ entries to identify characteristics. E.g., directional wall.
+- Advantage over triangles: Can intersect the wall quad, tile quad directly.
+- Instead of model matrix, maybe put in the characteristics directly?
+
+Constrained tokens and complex region polygons likely would use triangles
+- 1 texture for tokens
+- 1 texture for region polygons
+- Could maybe use uint16 to represent vertices of the triangles
+- 3 vertices * 3 coordinates per triangle.
+- 1 triangle per row
+- Could start with triangles for all objects and see.
+
+Lights could be uniforms?
+- Each would need a vec3 position, plus dim and bright float radius.
+- Could handle directional lights
+
+For a scene with 5 lights and 10 tokens, and 100 walls, 2 tiles, 2 regions:
+- 1 texture for walls, 1 for tiles, 1 for regions, 1 for tokens
+- 1 texture for complex tokens and region polygons
+-
+
+
+4. BVH
+
+Draw indices/vertices normally for all targets
+Use textures and BVH for all non-target rendering.
+
+Pros:
+- Accurate light details
+- Fewer textures
+- Already have the token information in textures, so avoids copying it again to draw the target.
+
+Cons:
+- Textures
+- Light uniforms
+- Complexity
+- Need for all options
+- Unlikely to handle constrained tokens

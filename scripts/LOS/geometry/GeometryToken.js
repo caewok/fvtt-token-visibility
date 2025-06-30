@@ -98,6 +98,12 @@ export class GeometrySquareGrid extends GeometryToken {
 }
 
 export class GeometryHexToken extends GeometryToken {
+
+  constructor(opts = {}) {
+    opts.type = opts.hexKey || "0_1_1";
+    super(opts);
+  }
+
   calculateTransformMatrix(token) {
     token ??= this.placeable;
     const { x, y } = token.document;
@@ -113,16 +119,7 @@ export class GeometryHexToken extends GeometryToken {
       { topZ, bottomZ, outMatrix: this.transformMatrix });
   }
 
-  hexKey = "0_1_1";
-
-  get instanceKey() {
-    return `${super.instanceKey}_${this.hexKey}`;
-  }
-
-  defineInstance(opts = {}) {
-    this.hexKey = opts.hexKey || "0_1_1";
-    super.defineInstance();
-  }
+  get hexKey() { return this.type; }
 
   _defineInstanceVertices() {
     const { hexagonalShape, width, height } = Hex3dVertices.hexPropertiesForKey(this.hexKey);

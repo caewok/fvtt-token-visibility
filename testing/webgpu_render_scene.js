@@ -108,6 +108,7 @@ let {
   GeometryRectangleRegionShape,
   GeometryCircleRegionShape,
   GeometryRegion,
+  Hex3dVertices,
 } = api.geometry
 
 
