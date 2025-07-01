@@ -385,7 +385,7 @@ export class GeometryDesc {
     const flip = top;
 
     let vertices2d;
-    let holes;
+    let holes = [];
 
     // Earcut to determine indices. Then construct the vertices.
     if ( poly instanceof CONFIG.GeometryLib.ClipperPaths
@@ -393,10 +393,6 @@ export class GeometryDesc {
       // Assume a more complex shape, possibly with holes. See ClipperPaths.prototype.earcut.
       const coords = poly.toEarcutCoordinates();
       vertices2d = coords.vertices;
-      if ( poly.scalingFactor !== 1 ) {
-        const invScale = 1 / poly.scalingFactor;
-        for ( let i = 0, iMax = vertices2d.length; i < iMax; i += 1 ) vertices2d[i] *= invScale; // In place; faster than using map.
-      }
       holes = coords.holes;
     } else {
       if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();

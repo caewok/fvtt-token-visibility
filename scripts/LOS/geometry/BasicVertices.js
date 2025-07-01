@@ -9,6 +9,7 @@ PIXI,
 "use strict";
 
 import { combineTypedArrays } from "../util.js";
+import { Triangle3d } from "../Polygon3d.js";
 
 const N = -0.5
 const S = 0.5;
@@ -295,12 +296,19 @@ export class BasicVertices {
   }
 
 
-  static debugDraw(vertices, indices, { drawTool, omitAxis = "z", addNormals = false, addUVs = false, ...opts} = {}) {
+  static debugDraw(vertices, indices, { draw, omitAxis = "z", addNormals = false, addUVs = false, ...opts} = {}) {
+    draw ??= CONFIG.GeometryLib.Draw;
+    const triangles = this.toTriangles(vertices, indices, { addNormals, addUVs });
+    triangles.forEach(tri => tri.draw2d({ draw, omitAxis, ...opts }));
+    return triangles;
+  }
+
+  static toTriangles(vertices, indices, { addNormals = false, addUVs = false } = {}) {
     indices ??= Array.fromRange(vertices.length);
-    drawTool ??= CONFIG.GeometryLib.Draw;
     const offset = 3 + (addNormals * 3) + (addUVs * 2);
-    const axes = { x: omitAxis === "x" ? "z" : "x", y: omitAxis === "y" ? "z" : "y" };
-    for ( let i = 0, iMax = indices.length; i < iMax;) {
+
+    const triangles = Array(indices.length / 3 );
+    for ( let i = 0, j = 0, iMax = indices.length; i < iMax;) {
       const idx1 = indices[i++] * offset;
       const idx2 = indices[i++] * offset;
       const idx3 = indices[i++] * offset;
@@ -308,8 +316,9 @@ export class BasicVertices {
       const a = CONFIG.GeometryLib.threeD.Point3d._tmp1.set(vertices[idx1], vertices[idx1+1], vertices[idx1+2]);
       const b = CONFIG.GeometryLib.threeD.Point3d._tmp2.set(vertices[idx2], vertices[idx2+1], vertices[idx2+2]);
       const c = CONFIG.GeometryLib.threeD.Point3d._tmp3.set(vertices[idx3], vertices[idx3+1], vertices[idx3+2]);
-      drawTool.connectPoints([a.to2d(axes), b.to2d(axes), c.to2d(axes)], opts);
+      triangles[j++] = Triangle3d.from3Points(a, b, c);
     }
+    return triangles;
   }
 }
 
@@ -756,17 +765,13 @@ export class Polygon3dVertices extends BasicVertices {
     */
 
     let vertices2d;
-    let holes;
+    let holes = [];
 
     // Earcut to determine indices. Then construct the vertices.
     if ( this.isClipper(poly) ) {
       // Assume a more complex shape, possibly with holes. See ClipperPaths.prototype.earcut.
       const coords = poly.toEarcutCoordinates();
       vertices2d = coords.vertices;
-      if ( poly.scalingFactor !== 1 ) {
-        const invScale = 1 / poly.scalingFactor;
-        for ( let i = 0, iMax = vertices2d.length; i < iMax; i += 1 ) vertices2d[i] *= invScale; // In place; faster than using map.
-      }
       holes = coords.holes;
     } else {
       if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();

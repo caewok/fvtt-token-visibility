@@ -89,6 +89,7 @@ import {
   Ellipse3dVertices,
   Circle3dVertices,
   Hex3dVertices,
+  BasicVertices,
 } from "./LOS/geometry/BasicVertices.js";
 
 import { GeometryTile } from "./LOS/geometry/GeometryTile.js";
@@ -294,6 +295,7 @@ Hooks.once("init", function() {
       Ellipse3dVertices,
       Circle3dVertices,
       Hex3dVertices,
+      BasicVertices,
 
       GeometryTile,
       GeometryToken,
