@@ -146,7 +146,7 @@ export class RegionTracker extends PlaceableTracker {
 
     // Update the polygon geom map.
     // Vertices/indices are handled by the DrawableObject b/c it handles normals, uvs.
-    for ( const geom of groupedGeoms.polygon ) {
+    for ( const geom of [...groupedGeoms.polygon, ...groupedGeoms.combined] ) {
       const id = geom.id;
       this.polygons.set(id, geom);
       currIds.add(id);

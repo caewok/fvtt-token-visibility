@@ -221,7 +221,7 @@ export class AbstractViewpoint {
     const regions = visionTri.findRegions();
     if ( !MODULES_ACTIVE.TERRAIN_MAPPER ) return regions;
     return visionTri.findRegions().filter(r => {
-      const senseTypes = new Set(r.document.getKey(TERRAIN_MAPPER, FLAGS.TERRAIN_MAPPER.REGION.WALL_RESTRICTIONS) || []);
+      const senseTypes = new Set(r.document.getFlag(TERRAIN_MAPPER, FLAGS.TERRAIN_MAPPER.REGION.WALL_RESTRICTIONS) || []);
       if ( senseType === "move" && senseTypes.has("cover") ) return true; // Treat all move restrictions as physical cover; same as with walls.
       return senseTypes.has(senseType);
     });

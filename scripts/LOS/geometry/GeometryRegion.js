@@ -12,6 +12,7 @@ import { GeometryNonInstanced, GeometryInstanced } from "./GeometryDesc.js";
 import { BasicVertices, Rectangle3dVertices, Circle3dVertices, Ellipse3dVertices, Polygon3dVertices } from "./BasicVertices.js";
 import { regionElevation, convertRegionShapeToPIXI, setTypedArray } from "../util.js";
 
+const TERRAIN_MAPPER = "terrainmapper";
 const tmpRect = new PIXI.Rectangle();
 const tmpPoly = new PIXI.Polygon();
 const tmpCircle = new PIXI.Circle();
@@ -121,42 +122,71 @@ export class GeometryRegion {
     shapeGroups ??= this._groupRegionShapes();
     const { region, addNormals, addUVs } = this;
     const opts = { region, addNormals, addUVs, density: this.constructor.CIRCLE_DENSITY };
-    const out = {
-      circle: new Array(shapeGroups.circle.length),
-      ellipse: new Array(shapeGroups.ellipse.length),
-      rectangle: new Array(shapeGroups.rectangle.length),
-      polygon: new Array(shapeGroups.polygon.length),
-    };
-
-    // Create a geom for each single circle, ellipse, and rectangle.
-    for ( const modelType of this.constructor.MODEL_SHAPES ) {
-      const groupArr = shapeGroups[modelType];
-      const outArr = out[modelType];
-      for ( let i = 0, iMax = groupArr.length; i < iMax; i += 1 ) {
-        const shapeGroup = groupArr[i];
-        const shape = shapeGroup.shapes[0]; // Always singular for circle, ellipse, rect.
-        if ( !this.shapeData.has(shape) ) this.updateShapes(); // TODO: Should not be needed here.
-        outArr[i] = this.shapeData.get(shape).geom;
-      }
-    }
-
-    // Copy over the unclipped polygon vertices directly to new polygon geoms.
     const { topZ, bottomZ } = regionElevation(region);
     const polyVOpts = { topZ, bottomZ, useFan: this.useFan };
-    for ( let i = 0, iMax = shapeGroups.polygon.length; i < iMax; i += 1 ) {
-      const shapeGroup = shapeGroups.polygon[i];
-      let geom;
-      if ( shapeGroup.type === "polygon" ) { // Single polygon; use the predefined geom.
-        const shape = shapeGroup.shapes[0];
-        if ( !this.shapeData.has(shape) ) this.updateShapes(); // TODO: Should not be needed here.
-        geom = this.shapeData.get(shape).geom;
-      } else { // Combined. No defined shape.
-        const vertices = Polygon3dVertices.calculateVertices(shapeGroup.path, polyVOpts);
-        geom = new GeometryPolygonRegionShape(opts);
-        geom.id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
-        geom._untrimmedVertices = vertices;
+    const out = {
+      circle: [],
+      ellipse: [],
+      rectangle: [],
+      polygon: [],
+      combined: [],
+    };
+
+    // If the region is a ramp or step, make all the shapes polygons or combined.
+    if ( this.region[TERRAIN_MAPPER].isElevated ) {
+      for ( const [type, groupArr] of Object.entries(shapeGroups) ) {
+        const outArr = type === "combined" ? out.combined : out.polygon;
+        for ( const shapeGroup of groupArr ) {
+          let geom;
+          const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
+          switch ( type ) {
+            case "circle":
+            case "ellipse":
+            case "rectangle":
+            case "polygon": {
+              const shape = shapeGroup.shapes[0]; // Always singular for circle, ellipse, rect.
+              geom = new GeometryRampRegionShape({ placeable: shape, ...opts });
+              geom.id = id;
+              break;
+            }
+            case "combined": {
+              const vertices = Polygon3dVertices.calculateVertices(shapeGroup.path, polyVOpts);
+              geom = new GeometryRampRegionShape(opts);
+              geom.id = id;
+              geom._untrimmedVertices = vertices;
+              break;
+            }
+          }
+          outArr.push(geom);
+        }
       }
-      out.polygon[i] = geom;
+      return out;
+    }
+
+    for ( const [type, groupArr] of Object.entries(shapeGroups) ) {
+      const outArr = out[type];
+      for ( const shapeGroup of groupArr ) {
+        let geom;
+        switch ( type ) {
+          case "circle":
+          case "ellipse":
+          case "rectangle":
+          case "polygon": {
+            const shape = shapeGroup.shapes[0]; // Always singular for circle, ellipse, rect.
+            if ( !this.shapeData.has(shape) ) this.updateShapes(); // TODO: Should not be needed here.
+            geom = this.shapeData.get(shape).geom;
+            break;
+          }
+          case "combined": {
+            const vertices = Polygon3dVertices.calculateVertices(shapeGroup.path, polyVOpts);
+            geom = new GeometryPolygonRegionShape(opts);
+            geom.id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
+            geom._untrimmedVertices = vertices;
+            break;
+          }
+        }
+        outArr.push(geom);
+      }
     }
     return out;
   }
@@ -169,6 +199,7 @@ export class GeometryRegion {
       ellipse: [],
       rectangle: [],
       polygon: [],
+      combined: [],
     };
     for ( const shapeGroup of uniqueShapes ) {
       if ( shapeGroup.type === "combined" ) {
@@ -178,7 +209,8 @@ export class GeometryRegion {
         const path = combinedPaths.combine();
         shapeGroup.path = path;
         out.polygon.push(shapeGroup);
-      } else out[shapeGroup.type].push(shapeGroup);
+      }
+      out[shapeGroup.type].push(shapeGroup);
     }
     return out;
   }
@@ -429,12 +461,47 @@ export class GeometryCircleRegionShape extends GeometryEllipseRegionShape {
 export class GeometryPolygonRegionShape extends RegionShapeMixin(GeometryNonInstanced) {
 
   _calculateModelVertices() {
+    // TODO: Can we cache the untrimmed vertices?
     if ( !this.placeable ) return this._untrimmedVertices;
     tmpPoly.points = this.placeable.data.points;
     const elev = regionElevation(this.region);
     this._untrimmedVertices = Polygon3dVertices.calculateVertices(tmpPoly, elev);
     return this._untrimmedVertices;
   }
+}
+
+export class GeometryRampRegionShape extends GeometryPolygonRegionShape {
+  /** @type {PIXI.Polygon} */
+  poly;
+
+  constructor(opts = {}) {
+    super(opts);
+    if ( this.placeable ) this.poly = convertRegionShapeToPIXI(this.placeable).toPolygon({ density: opts.density || GeometryRegion.CIRCLE_DENSITY });
+  }
+
+  // TODO: Can we cache the untrimmed vertices or untrimmed + elevation change?
+  _calculateModelVertices() {
+    const elev = regionElevation(this.region);
+    if ( this.placeable ) this._untrimmedVertices = Polygon3dVertices.calculateVertices(this.poly, elev);
+
+    const vs = this._untrimmedVertices;
+    const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
+    const tm = this.region[TERRAIN_MAPPER];
+    const useSteps = false;
+
+    // Modify elevation for ramp.
+    // Replace each top elevation with elevation at that point.
+    const out = new Float32Array(this._untrimmedVertices); // Make a copy so untrimmed is not changed.
+    for ( let i = 0, iMax = vs.length; i < iMax; i += 8 ) {
+      const [x, y, z] = out.subarray(i, 3);
+      if ( z !== elev.topZ ) continue;
+      const waypoint = RegionMovementWaypoint3d.fromPoint({ x, y, z });
+      out[i + 2] = tm._rampElevation(waypoint, useSteps);
+    }
+
+    return out;
+  }
+
 }
 
 const REGION_SHAPE_CLASSES = {

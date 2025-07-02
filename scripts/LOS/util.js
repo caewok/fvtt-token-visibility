@@ -562,12 +562,15 @@ export function isTypedArray(obj) {
  * @returns {object<topZ: {number}, bottomZ: {number}>}
  */
 export function regionElevation(region) {
-  let topZ = (( MODULES_ACTIVE.TERRAIN_MAPPER && region.terrainmapper.isElevated )
-    ? region.terrainmapper.plateauElevation : region.topZ);
+  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels
+  const tm = region.terrainmapper;
+  let topZ = (MODULES_ACTIVE.TERRAIN_MAPPER && tm.isElevated)
+    ? gridUnitsToPixels(tm.plateauElevation) : region.topZ;
   let bottomZ = region.bottomZ;
   if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
   if ( !(bottomZ && isFinite(bottomZ)) ) bottomZ = -1e06;
-  return { topZ, bottomZ };
+  const rampFloor = tm.isRamp ? gridUnitsToPixels(tm.rampFloor) : null;
+  return { topZ, bottomZ, rampFloor };
 }
 
 
