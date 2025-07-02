@@ -133,7 +133,7 @@ export class GeometryRegion {
     };
 
     // If the region is a ramp or step, make all the shapes polygons or combined.
-    if ( this.region[TERRAIN_MAPPER].isElevated ) {
+    if ( this.region[TERRAIN_MAPPER].isRamp ) {
       for ( const [type, groupArr] of Object.entries(shapeGroups) ) {
         const outArr = type === "combined" ? out.combined : out.polygon;
         for ( const shapeGroup of groupArr ) {

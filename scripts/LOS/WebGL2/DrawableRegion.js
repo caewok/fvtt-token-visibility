@@ -69,7 +69,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
   }
 
   _filterShapesForRegion(visionTriangle, region, _opts) {
-    if ( region[TERRAIN_MAPPER].isElevated ) return; // Handled by polygons.
+    if ( region[TERRAIN_MAPPER].isRamp ) return; // Handled by polygons.
 
     // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByVisionTriangle.
     // And this.placeableTracker.placeables has the region.
@@ -140,7 +140,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
     // And this.placeableTracker.placeables has the region.
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region); // circle, ellipse, rectangle, polygon, combined
     const groupTypes = ["polygon", "combined"];
-    if ( region[TERRAIN_MAPPER].isElevated ) groupTypes.push(...this.placeableTracker.constructor.MODEL_SHAPES);
+    if ( region[TERRAIN_MAPPER].isRamp ) groupTypes.push(...this.placeableTracker.constructor.MODEL_SHAPES);
     for ( const groupType of groupTypes ) {
       const shapeGroupArr = regionShapeGroups[groupType];
       for ( const shapeGroup of shapeGroupArr ) {
@@ -164,8 +164,9 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
    * @returns {boolean} True if successfully updated; false if array length is off (requiring full rebuild).
    */
   _updateInstanceVertex(region) {
+    const id = `Region.${region.id}`;
     for ( const geom of this.geoms.values() ) {
-      if ( !geom.id.startsWith(`Region.${region.id}`) ) continue;
+      if ( !geom.id.startsWith(id) ) continue;
       geom.addNormals = this.debugViewNormals;
       geom.dirtyModel = true;
       geom.calculateModel();
@@ -175,6 +176,13 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
       if ( expanded ) return false;
     }
     return true;
+  }
+
+  updatePlaceableBuffer(region) {
+    const id = `Region.${region.id}`;
+    for ( const id of this.geoms.keys() ) {
+      if ( id.startsWith(id) ) this._updateAttributeBuffersForId(id);
+    }
   }
 }
 
