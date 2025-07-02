@@ -13,7 +13,7 @@ import {
   GeometryRectangleRegionShape } from "../geometry/GeometryRegion.js";
 import { RegionTracker } from "../placeable_tracking/RegionTracker.js";
 import { log, isString } from "../util.js";
-
+const TERRAIN_MAPPER = "terrainmapper";
 
 const RegionShapeMixin = function(Base) {
   class DrawableRegionShape extends Base {
@@ -69,6 +69,8 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
   }
 
   _filterShapesForRegion(visionTriangle, region, _opts) {
+    if ( region[TERRAIN_MAPPER].isRamp ) return; // Handled by polygons.
+
     // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByVisionTriangle.
     // And this.placeableTracker.placeables has the region.
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
@@ -136,18 +138,50 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
   _filterShapesForRegion(visionTriangle, region, _opts) {
     // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByVisionTriangle.
     // And this.placeableTracker.placeables has the region.
-    const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
-    const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
-    for ( const shapeGroup of shapeGroupArr ) {
-      const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
-      for ( const shape of shapeGroup.shapes ) {
-        if ( shape.data.hole ) continue; // Ignore holes.
-        if ( visionTriangle.containsRegionShape(shape) ) {
-          const idx = this.trackers.vi.indices.facetIdMap.get(id);
-          this.instanceSet.add(idx);
-          break;
+    const regionShapeGroups = this.placeableTracker.shapeGroups.get(region); // circle, ellipse, rectangle, polygon, combined
+    const groupTypes = ["polygon", "combined"];
+    if ( region[TERRAIN_MAPPER].isRamp ) groupTypes.push(...this.placeableTracker.constructor.MODEL_SHAPES);
+    for ( const groupType of groupTypes ) {
+      const shapeGroupArr = regionShapeGroups[groupType];
+      for ( const shapeGroup of shapeGroupArr ) {
+        const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
+        if ( !this.trackers.vi.indices.facetIdMap.has(id) ) continue;
+        for ( const shape of shapeGroup.shapes ) {
+          if ( shape.data.hole ) continue; // Ignore holes.
+          if ( visionTriangle.containsRegionShape(shape) ) {
+            const idx = this.trackers.vi.indices.facetIdMap.get(id);
+            this.instanceSet.add(idx);
+            break;
+          }
         }
       }
+    }
+  }
+
+  /**
+   * Update the vertex data for an instance.
+   * @param {number} id      The id of the placeable update
+   * @returns {boolean} True if successfully updated; false if array length is off (requiring full rebuild).
+   */
+  _updateInstanceVertex(region) {
+    const id = `Region.${region.id}`;
+    for ( const geom of this.geoms.values() ) {
+      if ( !geom.id.startsWith(id) ) continue;
+      geom.addNormals = this.debugViewNormals;
+      geom.dirtyModel = true;
+      geom.calculateModel();
+
+      const vi = this.trackers.vi;
+      const expanded = vi.updateFacet(region.sourceId, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
+      if ( expanded ) return false;
+    }
+    return true;
+  }
+
+  updatePlaceableBuffer(region) {
+    const id = `Region.${region.id}`;
+    for ( const id of this.geoms.keys() ) {
+      if ( id.startsWith(id) ) this._updateAttributeBuffersForId(id);
     }
   }
 }

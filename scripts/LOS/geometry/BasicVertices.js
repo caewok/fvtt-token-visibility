@@ -584,6 +584,18 @@ export class Polygon3dVertices extends BasicVertices {
 
   static NUM_TRIANGLE_ELEMENTS = 3 * this.NUM_VERTEX_ELEMENTS;
 
+/*
+  •--•
+ /    \
+ • •  •
+ |    |
+ •----•
+
+Ex: 6 points, 6 outer edges.
+    Fan creates 6 triangles, 1 per outer edge.
+    So poly.points * 1/2 * triangle length is total length.
+*/
+
   static topLength(poly) {
     if ( this.isClipper(poly) ) console.error("topLength cannot take a clipper path")
     return Math.floor(this.NUM_TRIANGLE_ELEMENTS * poly.points.length * 0.5);
