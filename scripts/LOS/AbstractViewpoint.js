@@ -9,8 +9,10 @@ Wall,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+const TERRAIN_MAPPER = "terrainmapper";
+
 // Base folder
-import { MODULES_ACTIVE, MODULE_ID } from "../const.js";
+import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
@@ -214,9 +216,15 @@ export class AbstractViewpoint {
    * @returns {Set<Region>}
    */
   static filterRegionsByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
-    // TODO: Filter by sense type
     if ( !CONFIG[MODULE_ID].regionsBlock ) return NULL_SET;
-    return visionTri.findRegions();
+
+    const regions = visionTri.findRegions();
+    if ( !MODULES_ACTIVE.TERRAIN_MAPPER ) return regions;
+    return visionTri.findRegions().filter(r => {
+      const senseTypes = new Set(r.document.getKey(TERRAIN_MAPPER, FLAGS.TERRAIN_MAPPER.REGION.WALL_RESTRICTIONS) || []);
+      if ( senseType === "move" && senseTypes.has("cover") ) return true; // Treat all move restrictions as physical cover; same as with walls.
+      return senseTypes.has(senseType);
+    });
   }
 
   /**
