@@ -28,3 +28,11 @@ Hooks.once("init", function() {
 
   if ( MODULES_ACTIVE.RIDEABLE ) MODULES_ACTIVE.API.RIDEABLE = game.modules.get("Rideable").api;
 });
+
+export const FLAGS = {
+  TERRAIN_MAPPER: {
+    REGION: {
+      WALL_RESTRICTIONS: "wallRestrictions",
+    }
+  }
+};
