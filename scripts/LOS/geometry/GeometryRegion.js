@@ -488,15 +488,17 @@ export class GeometryRampRegionShape extends GeometryPolygonRegionShape {
     const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
     const tm = this.region[TERRAIN_MAPPER];
     const useSteps = false;
+    const round = false;
+    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
 
     // Modify elevation for ramp.
     // Replace each top elevation with elevation at that point.
     const out = new Float32Array(this._untrimmedVertices); // Make a copy so untrimmed is not changed.
     for ( let i = 0, iMax = vs.length; i < iMax; i += 8 ) {
-      const [x, y, z] = out.subarray(i, 3);
+      const [x, y, z] = out.subarray(i, i + 3);
       if ( z !== elev.topZ ) continue;
       const waypoint = RegionMovementWaypoint3d.fromPoint({ x, y, z });
-      out[i + 2] = tm._rampElevation(waypoint, useSteps);
+      out[i + 2] = gridUnitsToPixels(tm._rampElevation(waypoint, useSteps, round));
     }
 
     return out;
