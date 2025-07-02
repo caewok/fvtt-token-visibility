@@ -157,6 +157,25 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
       }
     }
   }
+
+  /**
+   * Update the vertex data for an instance.
+   * @param {number} id      The id of the placeable update
+   * @returns {boolean} True if successfully updated; false if array length is off (requiring full rebuild).
+   */
+  _updateInstanceVertex(region) {
+    for ( const geom of this.geoms.values() ) {
+      if ( !geom.id.startsWith(`Region.${region.id}`) ) continue;
+      geom.addNormals = this.debugViewNormals;
+      geom.dirtyModel = true;
+      geom.calculateModel();
+
+      const vi = this.trackers.vi;
+      const expanded = vi.updateFacet(region.sourceId, { newVertices: geom.modelVertices, newIndices: geom.modelIndices });
+      if ( expanded ) return false;
+    }
+    return true;
+  }
 }
 
 /**
