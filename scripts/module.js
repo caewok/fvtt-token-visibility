@@ -92,6 +92,8 @@ import {
   BasicVertices,
 } from "./LOS/geometry/BasicVertices.js";
 
+import { OBJParser } from "./LOS/geometry/OBJParser.js";
+
 import { GeometryTile } from "./LOS/geometry/GeometryTile.js";
 import { GeometryToken, GeometryConstrainedToken, GeometryLitToken } from "./LOS/geometry/GeometryToken.js";
 import { GeometryWall } from "./LOS/geometry/GeometryWall.js";
@@ -307,6 +309,8 @@ Hooks.once("init", function() {
       GeometryPolygonRegionShape,
       GeometryEllipseRegionShape,
       GeometryCircleRegionShape,
+
+      OBJParser,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,

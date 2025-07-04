@@ -111,7 +111,7 @@ export class BasicVertices {
     // Instead, construct a maximum-length array buffer and copy it over later once we know how
     // many vertices were copied over.
     // (Could use resizable and transfer later but little point here)
-    const maxByteLength = vertices.byteLength;
+    const maxByteLength = vertices.byteLength || (Float32Array.BYTES_PER_ELEMENT * vertices.length);
     const buffer = new ArrayBuffer(maxByteLength);
     const newVertices = new Float32Array(buffer, 0, vLen);
 
