@@ -33,7 +33,7 @@ import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "
 
 import * as range from "./visibility_range.js";
 
-import { Polygon3d, Triangle3d, Polygons3d } from "./LOS/Polygon3d.js";
+import { Polygon3d, Triangle3d, Polygons3d } from "./LOS/geometry/Polygon3d.js";
 
 // import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/Camera.js";

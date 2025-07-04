@@ -9,7 +9,7 @@ PIXI,
 "use strict";
 
 import { combineTypedArrays } from "../util.js";
-import { Triangle3d } from "../Polygon3d.js";
+import { Triangle3d } from "./Polygon3d.js";
 
 const N = -0.5
 const S = 0.5;

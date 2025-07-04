@@ -18,7 +18,7 @@ import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
 import { WallTracker } from "./placeable_tracking/WallTracker.js";
 import { TileTracker } from "./placeable_tracking/TileTracker.js";
 import { TokenTracker } from "./placeable_tracking/TokenTracker.js";
-import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
+import { Polygon3d, Triangle3d, Polygons3d } from "./geometry/Polygon3d.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
