@@ -7,8 +7,9 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
-import { orient3dFast } from "./util.js";
+import { MODULE_ID } from "../../const.js";
+import { orient3dFast } from "../util.js";
+import { Polygon3dVertices } from "./BasicVertices.js";
 
 const lte = (x, b) => x < b || x.almostEqual(b);
 const gte = (x, b) => x > b || x.almostEqual(b);
@@ -131,6 +132,22 @@ get bounds() {
       this.#plane = Plane.fromPoints(this.points[0], this.points[1], this.points[2]);
     }
     return this.#plane;
+  }
+
+  /** @type {PIXI.Point[]} */
+  #planarPoints = [];
+
+  // Points on the 2d plane in the plane's coordinate system.
+  get planarPoints() {
+    if ( !this.#planarPoints.length ) {
+      const nPoints = this.points.length;
+      this.#planarPoints.length === nPoints;
+      const to2dM = this.plane.conversion2dMatrix;
+      for ( let i = 0; i < nPoints; i += 1 ) {
+        this.#planarPoints[i] = to2dM.multiplyPoint3d(this.points[i]).to2d();
+      }
+    }
+    return this.#planarPoints;
   }
 
   // ----- NOTE: Centroid ----- //
@@ -301,6 +318,47 @@ get bounds() {
       const invZ = 1 / pt.z;
       return [pt.x * invZ, pt.y * invZ];
     }));
+  }
+
+  /**
+   * Triangulate the polygon, converting it to an array of Triangle3d (can be stored as Polygons3d)
+   * @param {object} [opts]
+   * @param {boolean} [opts.useFan]       If true, force fan (can cause errors); if false, never use; otherwise let algorithm decide
+   * @returns {Triangle3d[]} Array of Triangle3d
+   */
+  triangulate({ useFan } = {}) {
+    // Convert the polygon points to 2d, then use Polygon3dVertices to create fan or earcut, then convert back.
+    const to2dM = this.plane.conversion2dMatrix;
+
+    const points2d = this.points.map(pt => to2dM.multiplyPoint3d(pt));
+    const poly = new PIXI.Polygon(points2d); // PIXI.Polygon ignores z values.
+    useFan ??= Polygon3dVertices.canUseFan(poly, this.#centroid); // Don't recalculate the centroid b/c it will be calculated again by canUseFan.
+    if ( useFan ) {
+      // Can do this in 3d; just build triangle for each edge.
+      const centroid = this.centroid;
+      const tris = new Array(Math.floor(this.points.length / 2)); // Equals number of edges.
+      for ( const edge of this.iterateEdges({ close: true }) ) tris.push(Triangle3d.from3Points(centroid, edge.A, edge.B));
+      return tris;
+    }
+
+    // Use earcut in 2d and convert back.
+    // While earcut can take multiple dimensions, it ignores them and so will not work with, e.g., a vertical plane.
+    const tris = [];
+    const indices = PIXI.utils.earcut(poly.points);
+    const from2dM = this.plane.conversion2dMatrixInverse;
+    const nTris = Math.floor(indices.length / 3);
+    const tris = new Array(Math.floor(indices.length / 3));
+    for ( let t = 0, i = 0, j = 0; t < nTris; t += 1 ) {
+      const pts = Array(3);
+      for ( let j = 0; j < 3; j += 1 ) {
+        const idx = indices[i++];
+        const pt = new Point3d(poly.points[idx], poly.points[idx + 1]);
+        from2dM.multiplyPoint3d(pt, pt);
+        pts[j] = pt;
+      }
+      tris[t] = Triangle3d.from3Points(...pts);
+    }
+    return tris;
   }
 
   // ----- NOTE: Iterators ----- //
@@ -513,6 +571,60 @@ get bounds() {
     return out;
   }
 
+  /**
+   * @typedef {object} Segment3d
+   * @prop {Point3d} a
+   * @prop {Point3d} b
+   */
+
+  /**
+   * Intersect this Polygon3d against a plane.
+   * @param {Plane} plane
+   * @returns {null|Point3d[]|Segment3d[]}
+   */
+  intersectPlane(plane) {
+    const res = this.plane.intersectPlane(plane);
+    if ( !res ) return null;
+
+    // Convert the intersecting ray to 2d values on this plane.
+    const to2dM = this.plane.conversion2dMatrix
+    const b3d = res.point.add(res.direction);
+    const a = to2dM.multiplyPoint3d(res.point).to2d();
+    const b = to2dM.multiplyPoint3d(b3d).to2d();
+
+    // Find the portion of the ray that is inside this polygon.
+    // Cannot assume convex polygon, so may be multiple segments or points.
+    /*
+    api = game.modules.get("tokenvisibility").api
+    Polygon3d = api.geometry.Polygon3d
+    let { Point3d, Plane } = CONFIG.GeometryLib.threeD
+    Draw = CONFIG.GeometryLib.Draw
+    poly3d = Polygon3d.from2dPoints([{ x: -50, y: -50 }, { x: -50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: -50 }], 100)
+    plane = Plane.fromPoints(new Point3d(-25, -50, 100), new Point3d(-50, -25, 100), new Point3d(-25, -50, 0))
+    poly3d.draw2d()
+    Draw.segment({ a: plane.threePoints.a, b: plane.threePoints.b })
+    Draw.point(res.point, { radius: 2 })
+    Draw.point(b3d, { radius: 2 })
+    */
+
+    const poly2d = new PIXI.Polygon(this.planarPoints);
+    const ixs = poly2d.lineIntersections(a, b);
+    ixs.sort((a, b) => a.t0 - b.t0);
+    const from2dM = this.plane.conversion2dMatrixInverse;
+    ixs.map(ix => from2dM.multiplyPoint3d(Point3d._tmp.set(ix.x, ix.y, 0)));
+    if ( ix.length === 1 ) return ixs[0];
+    const segments = [];
+    let currSegment = { A: null, B: null };
+    ixs.forEach(ix => {
+      if ( !currSegment.A ) { currSegment.A = ix; return; }
+      currSegment.B = ix;
+      segments.push(currSegment);
+      currSegment = { A: null, B: null };
+    });
+    return segments;
+  }
+
+
   /* ----- NOTE: Debug ----- */
 
   draw2d({ draw, omitAxis = "z", ...opts } = {}) {
@@ -603,6 +715,11 @@ export class Triangle3d extends Polygon3d {
     return this.fromVertices(vertices, indices);
   }
 
+  // ----- NOTE: Conversions to ----- //
+
+  // Trivially, a Triangle3d is already triangulated.
+  triangulate() { return this; }
+
   // ----- NOTE: Intersection ----- //
 
   /**
@@ -670,6 +787,49 @@ export class Triangle3d extends Polygon3d {
     out.isHole = this.isHole;
     out.points.forEach((pt, idx) => pt.copyFrom(toKeep[idx]));
     return out;
+  }
+
+  /**
+   * Intersect this Triangle3d against a plane.
+   * @param {Plane} plane
+   * @returns {null|Point3d|Segment3d}
+   */
+  intersectPlane(plane) {
+    // Check for parallel planes.
+    if ( this.plane.isParallelToPlane(plane) ) return null;
+
+    // Instead of intersecting the planes, intersect the triangle segments with the plane directly.
+    const ixAB = plane.lineSegmentIntersection(this.a, this.b);
+    const ixBC = plane.lineSegmentIntersection(this.b, this.c);
+    const ixCA = plane.lineSegmentIntersection(this.c, this.a);
+    if ( ixAB && ixBC && ixCA ) console.error(`${this.constructor.name}|intersectPlane|Has three intersections with non-parallel plane.`, plane);
+    if ( !(ixAB || ixBC || ixCA) ) return null; // Triangle does not touch plane.
+
+    // Most of the time, a triangle that touches a plane should create a 3d segment on that plane.
+    if ( ixAB && ixBC ) return { a: ixAB, b: ixBC };
+    if ( ixAB && ixCA ) return { a: ixCA, b: ixAB };
+    if ( ixBC && ixCA ) return { a: ixBC, b: ixCA };
+
+    // No segment intersects but perhaps a point touches the plane.
+    if ( ixAB ) return ixAB;
+    if ( ixBC ) return ixBC;
+    if ( ixCA ) return ixCA;
+
+    console.error(`${this.constructor.name}|intersectPlane|Reached end of tests.`, plane);
+    return null; // Should not happen.
+
+    /*
+    api = game.modules.get("tokenvisibility").api
+    Triangle3d = api.geometry.Triangle3d
+    let { Point3d, Plane } = CONFIG.GeometryLib.threeD
+    Draw = CONFIG.GeometryLib.Draw
+    tri3d = Triangle3d.from2dPoints([{ x: -50, y: -50 }, { x: -50, y: 50 }, { x: 50, y: 50 }], 100)
+    plane = Plane.fromPoints(new Point3d(-25, -50, 100), new Point3d(-50, -25, 100), new Point3d(-25, -50, 0))
+    tri3d.draw2d()
+    Draw.point(ixAB, { radius: 2 })
+    Draw.point(ixBC, { radius: 2 })
+    Draw.point(ixCA, { radius: 2 })
+    */
   }
 
   // ----- NOTE: Property tests ----- //
@@ -832,6 +992,12 @@ export class Polygons3d extends Polygon3d {
   to2dPolygon(omitAxis) { return this.#applyMethodToAllWithReturn("to2dPolygon", omitAxis); }
 
   toPerspectivePolygon() { return this.#applyMethodToAllWithReturn("toPerspectivePolygon"); }
+
+  triangulate(opts) {
+    const out = new this();
+    this.polygons.forEach(poly => out.polygons.push(...poly.triangulate(opts)));
+    return out;
+  }
 
   // ----- NOTE: Iterators ----- //
 
