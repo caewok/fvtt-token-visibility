@@ -486,7 +486,7 @@ export class DrawableObjectsWebGL2Abstract {
 
   _updateAllPlaceableData() {
     // TODO: Can we keep some of the original, and call _rebuildAttributes instead?
-    this._initializeGeoms();
+    // this._initializeGeoms();
     this._initializeOffsetTrackers();
     this._initializeAttributes();
     this._updateAllVertices();
@@ -633,7 +633,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     const vertexProps = super._defineAttributeProperties();
 
     // Define the model matrix, which changes 1 per instance.
-    const data = this.trackers.model.viewBuffer();
+    const data = this.modelMatrixArray;
     vertexProps.aModel = {
       numComponents: 16,
       data,
@@ -647,9 +647,10 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
     return vertexProps;
   }
 
+
   _updateModelProperties() {
     const vertexProps = this.vertexProps;
-    vertexProps.aModel.data = this.trackers.model.viewBuffer();
+    vertexProps.aModel.data = this.modelMatrixArray;
   }
 
   _updateAttributes() {

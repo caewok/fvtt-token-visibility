@@ -12,7 +12,7 @@ Wall,
 const TERRAIN_MAPPER = "terrainmapper";
 
 // Base folder
-import { MODULES_ACTIVE, MODULE_ID, FLAGS } from "../const.js";
+import { OTHER_MODULES, MODULE_ID, FLAGS } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
@@ -23,7 +23,8 @@ import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 
 import {
   insetPoints,
-  tokensOverlap } from "./util.js";
+  tokensOverlap,
+  getFlagFast } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -219,9 +220,11 @@ export class AbstractViewpoint {
     if ( !CONFIG[MODULE_ID].regionsBlock ) return NULL_SET;
 
     const regions = visionTri.findRegions();
-    if ( !MODULES_ACTIVE.TERRAIN_MAPPER ) return regions;
+    const TM = OTHER_MODULES.TERRAIN_MAPPER;
+
+    if ( !TM.ACTIVE ) return regions;
     return visionTri.findRegions().filter(r => {
-      const senseTypes = new Set(r.document.getFlag(TERRAIN_MAPPER, FLAGS.TERRAIN_MAPPER.REGION.WALL_RESTRICTIONS) || []);
+      const senseTypes = new Set(getFlagFast(r.document, TM.KEY, TM.FLAGS.REGION.WALL_RESTRICTIONS) || []);
       if ( senseType === "move" && senseTypes.has("cover") ) return true; // Treat all move restrictions as physical cover; same as with walls.
       return senseTypes.has(senseType);
     });
@@ -253,8 +256,9 @@ export class AbstractViewpoint {
     const tiles = visionTri.findTiles();
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
-    if ( MODULES_ACTIVE.LEVELS && senseType === "sight" ) {
-      return tiles.filter(t => !t.document?.flags?.levels?.noCollision);
+    const LEVELS = OTHER_MODULES.LEVELS;
+    if ( LEVELS.ACTIVE && senseType === "sight" ) {
+      return tiles.filter(t => !getFlagFast(t.document, LEVELS.KEY, LEVELS.FLAGS.ALLOW_SIGHT));
     }
     return tiles;
   }
@@ -275,7 +279,7 @@ export class AbstractViewpoint {
 
     // Filter out the viewer and target from the token set.
     // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
-    const api = MODULES_ACTIVE.API.RIDEABLE;
+    const api = OTHER_MODULES.RIDEABLE.API;
     if ( target ) {
       tokens.delete(target);
       if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, target))

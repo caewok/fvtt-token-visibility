@@ -1,25 +1,176 @@
 /* globals
+canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2Abstract, DrawableObjectsWebGL2Abstract } from "./DrawableObjects.js";
-import { MODULE_ID } from "../../const.js";
+import { MODULE_ID, OTHER_MODULES, FLAGS } from "../../const.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid, GeometryHexToken } from "../geometry/GeometryToken.js";
+import { GeometryToken, GeometryConstrainedToken, GeometryCustomToken, GeometryLitToken, GeometrySquareGrid, GeometryHexToken, GeometryConstrainedCustomToken, GeometryLitCustomToken } from "../geometry/GeometryToken.js";
 import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
 import { Hex3dVertices } from "../geometry/BasicVertices.js";
 
 import * as twgl from "./twgl.js";
-import { log } from "../util.js";
+import { log, getFlagFast } from "../util.js";
 
 // Set that is used for temporary values.
 // Not guaranteed to have any specific value.
 const TMP_SET = new Set();
 
 
-export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
+/* Handle drawing all different token types.
+Regular tokens:
+- instanced cubes
+- instanced hex shapes
+- instanced custom token shapes
+
+If constrained config option is set:
+- constrained token shapes (using token border)
+- constrained custom token shapes (trimming polygons by 1+ planes)
+
+If lit token is requested:
+Option 1: 2d polygon representing the portion of the token that overlaps 1+ light polygons.
+- lit token from token border
+- lit custom token (trimming polygons by 1+ planes)
+Option 2: TODO: Use BVH to determine lit portion of token shape; distinguish bright/dim portions
+- instanced shapes
+- instanced custom token shapes
+
+Lit tokens only required for targets.
+
+*/
+
+/**
+ * Handle drawing token types.
+ * - instanced
+ * - constrained (normal & custom)
+ * - lit (normal & custom)
+ * - custom (instanced)
+ *
+ * Instanced should draw all tokens. This class handles exclusion b/c the tokens fit another category.
+ * Custom draws only normal custom tokens if the custom file loads.
+ * Constrained and lit fall back on the polygon shape if not actually constrained/lit.
+ */
+export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
+  /** @type {class} */
+  static trackerClass = TokenTracker;
+
+  static drawConstrained(token) { return CONFIG[MODULE_ID].constrainTokens && token.isConstrainedTokenBorder; }
+
+  static drawLit(token) { return CONFIG[MODULE_ID].litTokens && token.litTokenBorder && !token.litTokenBorder.equals(token.constrainedTokenBorder); }
+
+  static isCustom(token) { return getFlagFast(token.document, OTHER_MODULES.ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC); }
+
+  drawCustom(token) {
+    return this.constructor.isCustom(token)
+      && this.drawables.custom.has(token.sourceId)
+      && this.drawables.custom.get(token.sourceId).initialized;
+  }
+
+  drawables = {
+    instanced: null,
+    constrained: null,
+    lit: null,
+    custom: new Map(),
+  };
+
+  drawablesArray = [];
+
+  async initialize() {
+    await super.initialize();
+
+    // Define drawables.
+    this.drawables.instanced = canvas.grid.isHexagonal
+      ? new DrawableHexTokenShapesWebGL2(this.renderer) : new DrawableTokenShapesWebGL2(this.renderer);
+    await this.drawables.instanced;
+    this.drawablesArray.push(this.drawables.instanced);
+
+    // All constrained and lit are handled as single set of vertices/indices for each.
+    // Because they change often and so instancing doesn't make sense.
+    if ( CONFIG[MODULE_ID].constrainTokens ) {
+      this.drawables.constrained = new DrawableConstrainedTokenShapesWebGL2(this.renderer);
+      await this.drawables.constrained;
+      this.drawablesArray.push(this.drawables.constrained);
+    }
+    if ( CONFIG[MODULE_ID].litTokens ) {
+      this.drawables.lit = new DrawableLitTokenShapesWebGL2(this.renderer);
+      await this.drawables.lit;
+      this.drawablesArray.push(this.drawables.lit);
+    }
+
+    // Custom tokens are each instanced separately.
+    for ( const token of this.placeableTracker.placeables ) {
+      if ( DrawableCustomTokenShapeWebGL2.isCustom(token) ) {
+        const drawable = new DrawableCustomTokenShapeWebGL2(token, this.renderer);
+        await drawable.initialize();
+        this.drawables.custom.set(token.sourceId, drawable);
+        this.drawablesArray.push(drawable);
+      }
+    }
+  }
+
+  async _initializeProgram() { return; }
+
+  // _initializePlaceableHandler() { return; }
+
+  _initializeGeoms(_opts) { return; }
+
+  _initializeOffsetTrackers() { return; }
+
+  _initializeAttributes() { return; }
+
+  _initializeUniforms() { return; }
+
+  validateInstances() {
+    for ( const drawable of this.drawablesArray ) drawable.validateInstances();
+  }
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * Camera (viewer/target) are set by the renderer and will not change between now and render.
+   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   */
+  filterObjects(visionTriangle, { viewer, target, blocking } = {}) {
+    for ( const drawable of this.drawablesArray ) drawable.instanceSet.clear();
+
+    blocking.tokens ??= {};
+    blocking.tokens.dead ??= true;
+    blocking.tokens.live ??= true;
+    blocking.tokens.prone ??= true;
+    if ( !(blocking.tokens.dead || blocking.tokens.live) ) return;
+
+    // Limit to tokens within the vision triangle.
+    const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+      { viewer, target, blockingTokensOpts: blocking.tokens });
+    for ( const token of tokens ) {
+      if ( !(this.placeableTracker.hasPlaceable(token) && this.constructor.includeToken(token)) ) continue;
+      if ( this.constructor.drawConstrained(token) ) this.drawables.constrained.addToInstanceSet(token);
+      else if ( this.drawCustom(token) ) this.drawables.get(token.sourceId).addToInstanceSet(token);
+      else this.drawables.instance.addToInstanceSet(token);
+    }
+  }
+
+  render() {
+    for ( const drawable of this.drawablesArray ) drawable.render();
+  }
+
+  renderTarget(target, useLitTargetShape = false) {
+    if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
+    if ( useLitTargetShape && this.constructor.drawLit(target) ) this.drawables.lit.renderTarget(target);
+    if ( this.constructor.drawConstrained(target) ) this.drawables.constrained.renderTarget(target);
+    else if ( this.drawCustom(target) ) this.drawables.get(target.sourceId).renderTarget(target);
+    else this.drawables.instance.renderTarget(target);
+  }
+}
+
+export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
   static trackerClass = TokenTracker;
 
@@ -30,21 +181,8 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
 
   static vertexDrawType = "STATIC_DRAW";
 
-  // static constrained = false;
-
-  static lit = null; // Draw tokens
-
-  static tokenHasCustomLitBorder(token) { return token.litTokenBorder && !token.litTokenBorder.equals(token.constrainedTokenBorder); }
-
-  static includeToken(token) {
-    const { constrained, lit, tokenHasCustomLitBorder } = this
-    // if ( constrained !== null && (constrained ^ token.isConstrainedTokenBorder) ) return false;
-    if ( lit !== null && (lit ^ tokenHasCustomLitBorder(token)) ) return false;
-    return true;
-  }
-
   renderTarget(target) {
-    if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
+    // if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
 
     if ( CONFIG[MODULE_ID].debug ) {
       const i = this._indexForPlaceable(target);
@@ -77,59 +215,15 @@ export class DrawableTokenWebGL2 extends DrawableObjectsInstancingWebGL2Abstract
     this.gl.finish(); // For debugging
   }
 
-  // TODO: Handle material uniform using binding; avoid setUniforms here.
-//   render() {
-//     if ( !this.numObjectsToDraw ) return;
-//
-//     const gl = this.gl;
-//     this.webGL2.useProgram(this.programInfo);
-//     twgl.setBuffersAndAttributes(gl, this.programInfo, this.vertexArrayInfo);
-//     // twgl.bindUniformBlock(gl, this.programInfo, this.renderer.uboInfo.camera);
-//
-//
-//     // for ( let i = 0; i < 4; i += 1 ) this.materialUniforms.uColor[i] = this.constructor.obstacleColor[i];
-//     // twgl.setUniforms(this.programInfo, this.materialUniforms);
-//
-//     log (`${this.constructor.name}|render ${this.numObjectsToDraw} tokens`);
-//     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
-//     else this._drawUnfilteredInstances();
-//     gl.bindVertexArray(null)
-//     // this.gl.flush(); // For debugging
-//   }
-
-  /**
-   * Filter the objects to be rendered by those that may be viewable between target and token.
-   * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
-   * @param {object} [opts]
-   * @param {Token} [opts.viewer]
-   * @param {Token} [opts.target]
-   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
-   */
-  filterObjects(visionTriangle, { viewer, target, blocking } = {}) {
-    const instanceSet = this.instanceSet;
-    instanceSet.clear();
-    blocking.tokens ??= {};
-    blocking.tokens.dead ??= true;
-    blocking.tokens.live ??= true;
-    blocking.tokens.prone ??= true;
-    if ( !(blocking.tokens.dead || blocking.tokens.live) ) return;
-
-    // Limit to tokens within the vision triangle.
-    // Drop excluded token categories.
-    const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
-      { viewer, target, blockingTokensOpts: blocking.tokens });
-    for ( const token of tokens ) {
-      if ( !(this.placeableTracker.hasPlaceable(token) && this.constructor.includeToken(token)) ) continue;
-      const idx = this._indexForPlaceable(token);
-      this.instanceSet.add(idx);
-    }
+  addToInstanceSet(token) {
+    const idx = this._indexForPlaceable(token);
+    this.instanceSet.add(idx);
   }
 }
 
 // Group tokens into distinct hex instances.
 // So draw 1x1, 2x2, etc.
-export class DrawableHexTokenWebGL2 extends DrawableTokenWebGL2 {
+export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
 
   drawables = new Map();
 
@@ -177,14 +271,112 @@ export class DrawableHexTokenWebGL2 extends DrawableTokenWebGL2 {
     this.drawables.forEach(drawable => drawable.validateInstances());
   }
 
+  addToInstanceSet(tokens) {
+    this.drawables.forEach(drawable => drawable.addToInstanceSet(tokens));
+  }
+
+
   renderTarget(target) {
     if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
     this.drawables.forEach(drawable => drawable.renderTarget(target));
   }
-
 }
 
-export class DrawableHexShape extends DrawableTokenWebGL2 {
+
+/**
+ * Uses instancing to draw a custom token model.
+ * For a single custom token:
+ * - builds distinct vertex/index array centered at 0,0,0.
+ * - as the token moves, changes the token model matrix
+ * - draws a single instanced token
+ */
+export class DrawableCustomTokenShapeWebGL2 extends DrawableTokenShapesWebGL2 {
+  /** @type {class} */
+  static geomClass = GeometryCustomToken;
+
+  static includeToken(token) {
+    if ( !super.includeToken(token) ) return false;
+    return this.isCustom(token);
+  }
+
+  static isCustom(token) {
+    return Boolean(getFlagFast(token.document, OTHER_MODULES.ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC));
+  }
+
+  token;
+
+  constructor(token, renderer) {
+    super(renderer);
+    this.token = token;
+  }
+
+  async initialize(opts = {}) {
+    opts.addNormals ??= this.debugViewNormals;
+    opts.addUVs ??= false;
+    opts.placeable = this.token;
+    this.geoms = new this.geomClass(opts);
+    try {
+      await this.geoms.initialize();
+    } catch ( error ) {
+      console.error(error);
+      return; // Refuse to initialize if the geometry throws an error (likely issue with shape file).
+    }
+    return super.initialize();
+  }
+
+  _initializePlaceableHandler() { return; } // Can skip b/c the parent drawable controls the handler.
+
+  _initializeGeoms() { return; } // Handled at top-level initialize.
+
+  // _initializeOffsetTrackers // Handled by Instance drawable parent class.
+
+  // _initializeUniforms // Handled by parent drawable object class
+
+  get modelMatrixArray() {
+    // Only need model for the designated token.
+    return this.trackers.model.viewFacetById(this.token.sourceId);
+  }
+
+  _updateModelBufferForInstance(placeable) {
+    if ( placeable !== this.token ) return;
+    const gl = this.gl;
+    const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
+
+    // See twgl.setAttribInfoBufferFromArray.
+    const tracker = this.trackers.model;
+    const modelArr = tracker.viewFacetById(placeable.sourceId);
+    if ( !modelArr ) console.error(`${this.constructor.name}|_updateModelBufferForInstance|Placeable ${placeable.name}, ${placeable.sourceId} not found in model tracker.`);
+
+    const mOffset = 0; // 4 * 16 * idx
+    log (`${this.constructor.name}|_updateModelBufferForInstance ${placeable.sourceId} with offset ${mOffset}`, { model: tracker.viewFacetById(placeable.sourceId) });
+    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(placeable.sourceId));
+  }
+
+  // ----- NOTE: Placeable handler ----- //
+
+  _updatePlaceableData(placeable) {
+    return this.placeable === this.token && this.trackers.model.facetIdMap.has(placeable.sourceId);
+  }
+
+  // ----- NOTE: Render ----- //
+
+  // Only a single token and single matrix here.
+  _indexForPlaceable(_placeable) { return 0; }
+
+  addToInstanceSet(token) {
+    if ( token !== this.token ) return;
+    this.instanceSet.add(0);
+  }
+
+  renderTarget(target) {
+    if ( !this.initialized ) return;
+    if ( this.token !== target ) return;
+    super.renderTarget(target);
+  }
+}
+
+export class DrawableHexShape extends DrawableTokenShapesWebGL2 {
 
   parent;
 
@@ -217,16 +409,11 @@ export class DrawableHexShape extends DrawableTokenWebGL2 {
     super.validateInstances();
   }
 
-  filterObjects() {
-    this.instanceSet.clear();
+  addToInstanceSet(token) {
     if ( !this.initialized ) return; // Possible that this geometry was just added.
-    for ( const idx of this.parent.instanceSet ) {
-      const id = this.placeableTracker.tracker.facetIdMap.getKeyAtIndex(idx);
-      const token = this.placeableTracker.getPlaceableFromId(id);
-      if ( !token ) continue;
-      if ( Hex3dVertices.hexKeyForToken(token) !== this.hexKey ) continue;
-      this.instanceSet.add(idx);
-    }
+    if ( Hex3dVertices.hexKeyForToken(token) !== this.hexKey ) return;
+    const idx = this._indexForPlaceable(token);
+    this.instanceSet.add(idx);
   }
 
   renderTarget(target) {
@@ -235,155 +422,95 @@ export class DrawableHexShape extends DrawableTokenWebGL2 {
   }
 }
 
-export class ConstrainedDrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
+/**
+ * Handles all constrained tokens by updating their vertices/indices based on model location.
+ * If the token is not constrained, its unconstrained polygon is used.
+ * Custom tokens use their custom vertices/incides, falling back on their non-custom values.
+ */
+export class DrawableConstrainedTokenShapesWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
   static trackerClass = TokenTracker;
 
   /** @type {class} */
   static geomClass = GeometryConstrainedToken;
 
+  static geomCustomClass = GeometryConstrainedCustomToken;
+
   static targetColor = [1, 0, 0, 1];
 
   static vertexDrawType = "DYNAMIC_DRAW";
 
-  static constrained = true;
+  async initialize() {
+    await super.initialize();
 
-  static lit = null;
-
-  static includeToken(token) { return DrawableTokenWebGL2.includeToken.call(this, token); }
-
-  static tokenHasCustomLitBorder(token) { return DrawableTokenWebGL2.tokenHasCustomLitBorder(token); }
-
-  // ----- NOTE: Attributes ----- //
-
-  /**
-   * Indices of tokens that should be include in this render set.
-   * E.g., constrained token indices.
-   * Link the PH index to the number for this geom.
-   * @type {Map<number, number>}
-   */
-  _includedPHIndices = new Map();
-
-  /**
-   * Indices of tokens that have a geometry but are not currently used.
-   */
-  // _inactivePHIndices = new Map();
+    const opts = { addNormals: this.debugViewNormals, addUVs: false, placeable: null }
+    let geomsChanged = false;
+    for ( const token of this.placeableTracker.placeables ) {
+      opts.placeable = token
+      if ( DrawableTokenWebGL2.isCustom(token) ) {
+        const geom = new this.constructor.geomCustomClass(opts);
+        await geom.initialize();
+        if ( geom.initialized ) {
+          this.geoms.set(token.sourceId, geom);
+          geomsChanged ||= true;
+        }
+//         geom.initialize().then(() => {
+//           if ( !geom.initialized ) return;
+//           this.geoms.set(token.sourceId, geom);
+//           this._updateAllPlaceableData();
+//
+//         });
+      }
+    }
+    if ( geomsChanged ) this._updateAllPlaceableData();
+  }
 
   _initializeGeoms() {
-    const opts = {
-      addNormals: this.debugViewNormals,
-      addUVs: false,
-      placeable: null,
-    };
-    const geomClass = this.constructor.geomClass;
-    const geoms = this.geoms;
-    let geomIndex = 0;
-    geoms.length = 0;
+    const opts = { addNormals: this.debugViewNormals, addUVs: false, placeable: null }
     for ( const token of this.placeableTracker.placeables ) {
-      if ( this.constructor.includeToken(token) ) this._includedPHIndices.set(token.sourceId, geomIndex);
-      geomIndex += 1;
       opts.placeable = token;
-      geoms.set(token.sourceId, new geomClass(opts));
+      this.geoms.set(token.sourceId, new GeometryConstrainedToken(opts));
     }
   }
 
-  // ----- NOTE: Placeable Handler ----- //
+  // TODO: Need to monitor for changes to token custom options.
+  // Maybe use a separate hook and update all token geometry.
 
-  _updateAllInstances() {
-    this._initializeGeoms();
-    super._updateAllInstances();
+  addToInstanceSet(token) {
+    const idx = this._indexForPlaceable(token);
+    this.instanceSet.add(idx);
   }
 
-  _updateInstanceVertex(token) {
-    // TODO: Keep a map of inactive indices?
-    const shouldInclude = this.constructor.includeToken(token);
-
-    // If a constrained geometry is already created, either remove from set or update.
-    if ( this._includedPHIndices.has(token.sourceId) ) {
-      if ( !shouldInclude ) {
-        this._includedPHIndices.delete(token.sourceId);
-        return true;
-      }
-      return super._updateInstanceVertex(token);
-
-    } else if ( shouldInclude ) return false; // Must insert a new geometry.
-    // TODO: Add new tokens on the end without redoing every geometry?
-
-    else return true;
-  }
-
-  // ----- NOTE: Rendering ----- //
-
-  filterObjects(...args) { DrawableTokenWebGL2.prototype.filterObjects.call(this, ...args); }
-
-  renderTarget(target) { DrawableTokenWebGL2.prototype.renderTarget.call(this, target); }
-
-  render() { DrawableTokenWebGL2.prototype.render.call(this); }
-
+  renderTarget(target) { DrawableTokenShapesWebGL2.prototype.renderTarget.call(this, target); }
 }
 
-export class LitDrawableTokenWebGL2 extends ConstrainedDrawableTokenWebGL2 {
+/**
+ * Same as constrained tokens but uses the lit token border.
+ * Handles custom tokens in the same manner.
+ */
+export class DrawableLitTokenShapesWebGL2 extends DrawableConstrainedTokenShapesWebGL2 {
   /** @type {class} */
   static geomClass = GeometryLitToken;
 
-  static constrained = null;
+  static geomCustomClass = GeometryLitCustomToken;
 
-  static lit = true;
+  render(_target) { return; } // No lit obstacle rendering.
 }
 
-export class ConstrainedDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenWebGL2 {
-  renderTarget(target) {
-    DrawableTokenWebGL2.prototype.renderTarget.call(this, target); // Render all, not just constrained tokens.
-  }
+export class DrawableGridShape extends DrawableObjectsInstancingWebGL2Abstract {
+  /** @type {class} */
+  static trackerClass = TokenTracker;
 
-  validateInstances() {
-    const placeableTracker = this.placeableTracker;
-    if ( placeableTracker.updateId <= this.placeableTrackerUpdateId ) return DrawableTokenWebGL2.prototype.validateInstances.call(this); // No changes since last update.
-
-    // If any constrained token has changed, need to rebuild.
-    // If the token is now unconstrained, that is fine (will be skipped).
-    for ( const [token, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
-      if ( lastUpdate <= this.placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
-      if ( token?.isConstrainedTokenBorder ) this._updateAllInstances();
-    }
-    DrawableTokenWebGL2.prototype.validateInstances.call(this);
-  }
-}
-
-export class LitDrawableHexTokenWebGL2 extends ConstrainedDrawableTokenWebGL2 {
-  static constrained = null;
-
-  renderTarget(target) {
-    DrawableTokenWebGL2.prototype.renderTarget.call(this, target); // Render all, not just constrained tokens.
-  }
-
-  validateInstances() {
-    const placeableTracker = this.placeableTracker;
-    if ( placeableTracker.updateId <= this.placeableTrackerUpdateId ) return DrawableTokenWebGL2.prototype.validateInstances.call(this); // No changes since last update.
-
-    // If any constrained token has changed, need to rebuild.
-    // If the token is now unconstrained, that is fine (will be skipped).
-    for ( const [token, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
-      if ( lastUpdate <= this.placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
-      if ( token?.litTokenBorder ) this._updateAllInstances();
-    }
-    DrawableTokenWebGL2.prototype.validateInstances.call(this);
-  }
-}
-
-export class DrawableGridShape extends DrawableTokenWebGL2 {
   /** @type {class} */
   static geomClass = GeometrySquareGrid;
 
   static vertexDrawType = "STATIC_DRAW";
 
-  static constrained = null;
-
-  static lit = null;
-
   filterObjects() { return; }
 
   render() { return; }
+
+  renderTarget(target) { DrawableTokenShapesWebGL2.prototype.renderTarget.call(this, target); }
 
   get debugViewNormals() { return false; } // No normals.
 }

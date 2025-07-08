@@ -335,12 +335,12 @@ export class GeometryDesc {
     top ??= this.polygonTopBottomFaces(poly, { elevation: topZ, top: true });
     bottom ??= this.polygonTopBottomFaces(poly, { elevation: bottomZ, top: false });
     const side = this.polygonSideFaces(poly, { topZ, bottomZ });
-    const vertices = combineTypedArrays(top.vertices, side.vertices, bottom.vertices);
+    const vertices = combineTypedArrays([top.vertices, side.vertices, bottom.vertices]);
 
     // For indices, increase because they are getting combined into one.
     side.indices = side.indices.map(elem => elem + top.numVertices);
     bottom.indices = bottom.indices.map(elem => elem + top.numVertices + side.numVertices);
-    const indices = combineTypedArrays(top.indices, side.indices, bottom.indices);
+    const indices = combineTypedArrays([top.indices, side.indices, bottom.indices]);
 
     // Expand the vertices based on indices, so they can be trimmed as needed.
     const arr = new Array(indices.length * 8);

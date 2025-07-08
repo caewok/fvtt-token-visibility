@@ -66,6 +66,8 @@ export class Polygon3d {
   #cleaned = false;
 
   clean() {
+    if ( this.#cleaned ) return;
+
     // Drop collinear points.
     const iter = this.iteratePoints({ close: true });
     let a = iter.next().value;
@@ -230,15 +232,15 @@ get bounds() {
    * @param {Number[]} [indices]    Indices to determine order in which polygon points are created from vertices
    * @returns {Triangle[]}
    */
-  static fromVertices(vertices, indices) {
+  static fromVertices(vertices, indices, stride = 3) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const n = indices.length;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    if ( vertices.length % stride !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by stride ${stride}: ${vertices.length}`);
     indices ??= Array.fromRange(Math.floor(vertices.length / 3));
     if ( n % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
     const poly3d = new this(n);
     for ( let i = 0, j = 0, jMax = n; j < jMax; j += 1 ) {
-      poly3d.points[j].copyFrom(pointFromVertices(i++, vertices, indices, Point3d._tmp1));
+      poly3d.points[j].copyFrom(pointFromVertices(i++, vertices, indices, stride, Point3d._tmp1));
     }
     return poly3d;
   }
@@ -321,6 +323,16 @@ get bounds() {
   }
 
   /**
+   * Triangulate and convert to vertices.
+   * @param {object} [opts]
+   * @returns {Float32Array[]}
+   */
+  toVertices(opts) {
+    const tris = this.triangulate();
+    return Triangle3d.trianglesToVertices(tris, opts);
+  }
+
+  /**
    * Triangulate the polygon, converting it to an array of Triangle3d (can be stored as Polygons3d)
    * @param {object} [opts]
    * @param {boolean} [opts.useFan]       If true, force fan (can cause errors); if false, never use; otherwise let algorithm decide
@@ -343,16 +355,15 @@ get bounds() {
 
     // Use earcut in 2d and convert back.
     // While earcut can take multiple dimensions, it ignores them and so will not work with, e.g., a vertical plane.
-    const tris = [];
     const indices = PIXI.utils.earcut(poly.points);
     const from2dM = this.plane.conversion2dMatrixInverse;
     const nTris = Math.floor(indices.length / 3);
     const tris = new Array(Math.floor(indices.length / 3));
-    for ( let t = 0, i = 0, j = 0; t < nTris; t += 1 ) {
+    for ( let t = 0, i = 0; t < nTris; t += 1 ) {
       const pts = Array(3);
       for ( let j = 0; j < 3; j += 1 ) {
         const idx = indices[i++];
-        const pt = new Point3d(poly.points[idx], poly.points[idx + 1]);
+        const pt = new CONFIG.GeometryLib.threeD.Point3d(poly.points[idx], poly.points[idx + 1]);
         from2dM.multiplyPoint3d(pt, pt);
         pts[j] = pt;
       }
@@ -611,8 +622,8 @@ get bounds() {
     const ixs = poly2d.lineIntersections(a, b);
     ixs.sort((a, b) => a.t0 - b.t0);
     const from2dM = this.plane.conversion2dMatrixInverse;
-    ixs.map(ix => from2dM.multiplyPoint3d(Point3d._tmp.set(ix.x, ix.y, 0)));
-    if ( ix.length === 1 ) return ixs[0];
+    ixs.map(ix => from2dM.multiplyPoint3d(CONFIG.GeometryLib.threeD.Point3d._tmp.set(ix.x, ix.y, 0)));
+    if ( ixs.length === 1 ) return ixs[0];
     const segments = [];
     let currSegment = { A: null, B: null };
     ixs.forEach(ix => {
@@ -633,10 +644,10 @@ get bounds() {
   }
 }
 
-function pointFromVertices(i, vertices, indices, outPoint) {
+function pointFromVertices(i, vertices, indices, stride = 3, outPoint) {
   outPoint ??= new CONFIG.GeometryLib.threeD.Point3d;
   const idx = indices[i];
-  const v = vertices.slice(idx * 3, (idx * 3) + 3);
+  const v = vertices.slice(idx * stride, (idx * stride) + 3);
   outPoint.set(v[0], v[1], v[2]);
   return outPoint;
 }
@@ -684,16 +695,16 @@ export class Triangle3d extends Polygon3d {
    * @param {Number[]} [indices]    Indices to determine order in which triangles are created from vertices
    * @returns {Triangle[]}
    */
-  static fromVertices(vertices, indices) {
+  static fromVertices(vertices, indices, stride = 3) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    if ( vertices.length % stride !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by stride ${stride}: ${vertices.length}`);
     indices ??= Array.fromRange(Math.floor(vertices.length / 3));
     if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
     const tris = new Array(Math.floor(indices.length / 3));
     for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
-      const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
-      const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
-      const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
+      const a = pointFromVertices(i++, vertices, indices, stride, Point3d._tmp1);
+      const b = pointFromVertices(i++, vertices, indices, stride, Point3d._tmp2);
+      const c = pointFromVertices(i++, vertices, indices, stride, Point3d._tmp3);
       tris[j] = this.from3Points(a, b, c);
     }
     return tris;
@@ -717,8 +728,52 @@ export class Triangle3d extends Polygon3d {
 
   // ----- NOTE: Conversions to ----- //
 
+  /**
+   * Triangulate and convert to vertices.
+   * @param {object} [opts]
+   * @param {boolean} [opts.addNormal]        If true, add the normal to this polygon, facing CCW.
+   * @returns {Float32Array[]}
+   */
+  toVertices({ addNormals = false, outArr, outIdx = 0 } = {}) {
+    const { NUM_POSITION_COORDS, NUM_NORMAL_COORDS, NUM_POINTS } = this.constructor;
+    const stride = NUM_POSITION_COORDS + (addNormals * NUM_NORMAL_COORDS);
+    outArr ??= new Float32Array(stride * NUM_POINTS);
+    // TODO: How can we be sure the normal points the correct way?
+    // Should be set when constructing the triangle to point up when triangle is CCW.
+    if ( addNormals ) {
+      const normal = [...this.plane.normal];
+      outArr.set([...this.a, ...normal, ...this.b, ...normal, ...this.c, ...normal]);
+    } else outArr.set([...this.a, ...this.b, ...this.c], outIdx);
+    return outArr;
+  }
+
   // Trivially, a Triangle3d is already triangulated.
   triangulate() { return this; }
+
+  static NUM_POSITION_COORDS = 3;
+
+  static NUM_NORMAL_COORDS = 3;
+
+  static NUM_POINTS = 3;
+
+  /**
+   * Convert an array of triangles to a single Float32 array of vertices
+   * @param {object} [opts]
+   * @param {boolean} [opts.useNormal=false]      Add triangle normal to each vertex?
+   * @param {Float32Array[]} [opts.outArr]        Array large enough to hold the triangles
+   * @param {number} [opts.outIdx=0]              Copy triangle vertices to array starting here
+   */
+  static trianglesToVertices(tris, { addNormals = false, outArr, outIdx = 0 } = {}) {
+    const { NUM_POSITION_COORDS, NUM_NORMAL_COORDS, NUM_POINTS } = this;
+    const stride = NUM_POSITION_COORDS + (addNormals * NUM_NORMAL_COORDS);
+    outArr ??= new Float32Array(stride * NUM_POINTS * tris.length);
+    const opts = { addNormals, outArr, outIdx };
+    tris.forEach((tri, idx) => {
+      opts.outIdx += idx * stride * NUM_POINTS;
+      tri.toVertices(opts);
+    });
+    return outArr;
+  }
 
   // ----- NOTE: Intersection ----- //
 
@@ -992,6 +1047,12 @@ export class Polygons3d extends Polygon3d {
   to2dPolygon(omitAxis) { return this.#applyMethodToAllWithReturn("to2dPolygon", omitAxis); }
 
   toPerspectivePolygon() { return this.#applyMethodToAllWithReturn("toPerspectivePolygon"); }
+
+  toVertices(opts) {
+    const tris = [];
+    this.polygons.forEach(poly => tris.push(...poly.triangulate()));
+    return Triangle3d.trianglesToVertices(tris, opts);
+  }
 
   triangulate(opts) {
     const out = new this();

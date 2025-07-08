@@ -872,7 +872,7 @@ Ex: 6 points, 6 outer edges.
     if ( this.isClipper(poly) ) poly = poly.toPolygons();
     if ( Array.isArray(poly) ) {
       const multipleSides = poly.map(p => this.polygonSideFaces(p, { topZ, bottomZ }));
-      sides.set(combineTypedArrays(...multipleSides));
+      sides.set(combineTypedArrays(multipleSides));
       return sides;
     }
 

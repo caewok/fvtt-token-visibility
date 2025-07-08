@@ -229,7 +229,7 @@ export class GeometryRegion {
 //
 //
 //
-//     const trimmedData = BasicVertices.trimVertexData(combineTypedArrays(...polygonVertices, ...untrimmedInstanceVs), { addNormals, addUVs });
+//     const trimmedData = BasicVertices.trimVertexData(combineTypedArrays([...polygonVertices, ...untrimmedInstanceVs]), { addNormals, addUVs });
 //     const polyShape = new GeometryPolygonRegionShape({region: this.region, addNormals, addUVs });
 //     polyShape._vertices = trimmedData.vertices;
 //     polyShape._indices = trimmedData.indices;

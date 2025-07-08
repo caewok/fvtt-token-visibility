@@ -257,7 +257,7 @@ class OBJObject {
     const materialArrs = Array(this.materials.size);
     let i = 0;
     this.materials.forEach(material => materialArrs[i++] = material.data);
-    const vs = combineTypedArrays(...materialArrs);
+    const vs = combineTypedArrays(materialArrs);
     const trimmed = BasicVertices.trimNormalsAndUVs(vs, { keepNormals, keepUVs });
     return BasicVertices.condenseVertexData(trimmed, { stride: (3 + (keepNormals * 3) + (keepUVs * 2)) });
   }

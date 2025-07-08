@@ -158,6 +158,19 @@ Hooks.once("init", function() {
 
     allowInteriorWalls: true,
 
+    /**
+     * Whether to constrain token shapes that overlap walls.
+     * When enabled, reshape the token border to fit within the overlapping walls (based on token center).
+     * Performance-intensive for custom token shapes. Used for obstructing tokens and target tokens.
+     */
+    constrainTokens: false,
+
+    /**
+     * Whether to use special token shapes to represent partially lit tokens.
+     * This approximates what portion of the token is lit by 1+ lights.
+     */
+    litTokens: false,
+
 
     /** @type {string} */
     /*
