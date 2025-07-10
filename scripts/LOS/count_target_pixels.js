@@ -154,7 +154,7 @@ function wallsOcclude(rayOrigin, rayDirection, walls) {
     */
     const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
-    if ( t != null && t.between(0, 1, false) ) return true;
+    if ( t !== null && t.between(0, 1, false) ) return true;
   }
   return false;
 }
@@ -175,7 +175,7 @@ function terrainWallsOcclude(rayOrigin, rayDirection, walls) {
     */
     const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
-    if ( t == null || !t.between(0, 1, false) ) continue;
+    if ( t === null || !t.between(0, 1, false) ) continue;
     if ( limitedOcclusion++ ) return true;
   }
   return false;
@@ -197,7 +197,7 @@ function proximateWallsOcclude(rayOrigin, rayDirection, walls, senseType = "ligh
     */
     const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
-    if ( t == null || !t.between(0, 1, false) ) continue;
+    if ( t === null || !t.between(0, 1, false) ) continue;
   }
   return false;
 }
@@ -206,7 +206,7 @@ function tilesOcclude(rayOrigin, rayDirection, tiles) {
   for ( const tile of tiles ) {
     const quad = tile[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
-    if ( t == null || !t.between(0, 1, false) ) continue;
+    if ( t === null || !t.between(0, 1, false) ) continue;
     return true;
   }
   return false;
@@ -219,7 +219,7 @@ function tilesOccludeAlpha(rayOrigin, rayDirection, tiles) {
   for ( const tile of tiles ) {
     const quad = tile[MODULE_ID][AbstractPolygonTrianglesID].alphaQuad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
-    if ( t == null || !t.between(0, 1, false) ) continue;
+    if ( t === null || !t.between(0, 1, false) ) continue;
 
     // Check if the intersection is transparent.
     rayOrigin.add(rayDirection.multiplyScalar(t, tmpIx), tmpIx);
@@ -237,7 +237,7 @@ function tokensOcclude(rayOrigin, rayDirection, tokens) {
     const tris = token[MODULE_ID][AbstractPolygonTrianglesID].triangles.filter(tri => tri.isFacing(rayOrigin));
     for ( const tri of tris ) {
       const t = CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
-      if ( t != null && t.between(0, 1, false) ) return true;
+      if ( t !== null && t.between(0, 1, false) ) return true;
     }
   }
   return false;
@@ -251,7 +251,7 @@ function tokensOcclude(rayOrigin, rayDirection, tokens) {
 //     const tris = region.tokenvisibility.geometry.triangles.filter(tri => tri.isFacing(rayOrigin));
 //     for ( const tri of tris ) {
 //       const t = CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
-//       if ( t != null && t.between(0, 1, false) ) return true;
+//       if ( t !== null && t.between(0, 1, false) ) return true;
 //     }
 //   }
 //   return false;
@@ -279,7 +279,7 @@ function regionsOcclude(rayOrigin, rayDirection, regions) {
       for ( const quad of handler.shapesSides.get(shape) ) {
         if ( !quad.isFacing(rayOrigin) ) continue;
         const t = quad.intersectionT(rayOrigin, rayDirection);
-        if ( t != null && t.between(0, 1, false) ) return true;
+        if ( t !== null && t.between(0, 1, false) ) return true;
       }
     }
     if ( containsTB > 0 ) return true;
