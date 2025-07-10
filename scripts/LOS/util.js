@@ -9,7 +9,7 @@ Ray,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { EPSILON, MODULE_ID, MODULES_ACTIVE } from "../const.js";
+import { EPSILON, MODULE_ID, OTHER_MODULES } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 /**
@@ -346,13 +346,12 @@ export function minMaxPolygonCoordinates(polygons) {
   return { xMinMax: Math.minMax(...xs), yMinMax: Math.minMax(...ys) };
 }
 
-
 /**
  * Efficiently combine multiple typed arrays.
- * @param {...TypedArray} ...args
+ * @param {TypedArray[]} args
  * @returns {TypedArray}
  */
-export function combineTypedArrays(...arrs) {
+export function combineTypedArrays(arrs) {
   const len = arrs.reduce((acc, curr) => acc + curr.length, 0);
   const out = new arrs[0].constructor(len);
   out.set(arrs[0]);
@@ -564,7 +563,7 @@ export function isTypedArray(obj) {
 export function regionElevation(region) {
   const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels
   const tm = region.terrainmapper;
-  let topZ = (MODULES_ACTIVE.TERRAIN_MAPPER && tm.isElevated)
+  let topZ = (OTHER_MODULES.TERRAIN_MAPPER.ACTIVE && tm.isElevated)
     ? gridUnitsToPixels(tm.plateauElevation) : region.topZ;
   let bottomZ = region.bottomZ;
   if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
@@ -641,6 +640,18 @@ export function isString(obj) { return typeof obj === "string" || obj instanceof
  */
 export function sameSide(a, b, p0, p1) {
   return (foundry.utils.orient2dFast(a, b, p0) * foundry.utils.orient2dFast(a, b, p1)) > 0;
+}
+
+/**
+ * Fast version of PlaceableDocument.getFlag that avoid calling getProperty.
+ * Does not handle nested flags.
+ * @param {PlaceableDocument} doc
+ * @param {string} scope
+ * @param {string} key
+ * @returns {*|undefined} Undefined if no flag
+ */
+export function getFlagFast(doc, scope, key) {
+  return doc.flags?.[scope]?.[key];
 }
 
 

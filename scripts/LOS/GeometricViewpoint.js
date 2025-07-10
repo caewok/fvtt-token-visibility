@@ -13,7 +13,7 @@ import { Settings } from "../settings.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
 import { Camera } from "./Camera.js";
-import { Polygons3d } from "./Polygon3d.js";
+import { Polygons3d } from "./geometry/Polygon3d.js";
 import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { NULL_SET } from "./util.js";
@@ -99,6 +99,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
+    this.blockingObjects.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(this.blockingObjects.walls, this.config.senseType);
 
     const res = this._obscuredArea();
     this.targetArea = res.targetArea;

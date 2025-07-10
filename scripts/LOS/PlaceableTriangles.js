@@ -18,7 +18,7 @@ import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
 import { WallTracker } from "./placeable_tracking/WallTracker.js";
 import { TileTracker } from "./placeable_tracking/TileTracker.js";
 import { TokenTracker } from "./placeable_tracking/TokenTracker.js";
-import { Polygon3d, Triangle3d, Polygons3d } from "./Polygon3d.js";
+import { Polygon3d, Triangle3d, Polygons3d } from "./geometry/Polygon3d.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
@@ -106,9 +106,11 @@ class AbstractPolygonTriangles {
   draw(placeable, opts) { this.triangles.forEach(tri => tri.draw(opts)); }
 
   /**
-   * Draw shape but swap z and y positions.
+   * Draw shape, omitting an axis
    */
-  drawSplayed(placeable, opts) { this.triangles.forEach(tri => tri.drawSplayed(opts)); }
+  draw2d(placeable, opts) {
+    this.triangles.forEach(tri => tri.draw2d(opts));
+  }
 }
 
 class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
@@ -149,7 +151,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
 
   drawPrototypes(opts) { this.prototypeTriangles.forEach(tri => tri.draw(opts)); }
 
-  drawPrototypesSplayed(opts) { this.prototypeTriangles.forEach(tri => tri.drawSplayed(opts)); }
+  drawPrototypes2d(opts) { this.prototypeTriangles.forEach(tri => tri.draw2d(opts)); }
 
 }
 
@@ -664,7 +666,6 @@ export class RegionTriangles extends AbstractPolygonTriangles {
 }
 
 
-
 /* Testing
 api = game.modules.get("tokenvisibility").api;
 Draw = CONFIG.GeometryLib.Draw
@@ -695,7 +696,7 @@ wallTri.initialize()
 wallTri.update()
 wallTri.drawPrototypes({ color: Draw.COLORS.blue })
 wallTri.draw({ color: Draw.COLORS.blue }) // Same
-wallTri.drawSplayed({ color: Draw.COLORS.gray })
+wallTri.draw2d({ color: Draw.COLORS.gray })
 
 tile = canvas.tiles.controlled[0]
 tileTri = new TileTriangles(tile)
@@ -717,7 +718,7 @@ tokenTri.sides.draw({ color: Draw.COLORS.blue })
 
 tokenTri.drawPrototypes({ color: Draw.COLORS.blue })
 tokenTri.draw({ color: Draw.COLORS.blue })
-tokenTri.drawSplayed({ color: Draw.COLORS.red })
+tokenTri.draw2d({ color: Draw.COLORS.red })
 
 Draw = CONFIG.GeometryLib.Draw
 

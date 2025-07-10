@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 foundry,
 PIXI,
@@ -17,11 +16,6 @@ import {
 } from "./DrawableTile.js";
 import {
   DrawableTokenWebGL2,
-  DrawableHexTokenWebGL2,
-  ConstrainedDrawableTokenWebGL2,
-  ConstrainedDrawableHexTokenWebGL2,
-  LitDrawableTokenWebGL2,
-  LitDrawableHexTokenWebGL2,
   DrawableGridShape,
 } from "./DrawableToken.js";
 import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
@@ -45,13 +39,7 @@ export class RenderObstaclesWebGL2 {
   drawableTerrain = [];
 
   /** @type {DrawableTokenWebGL2} */
-  drawableUnconstrainedToken;
-
-  /** @type {DrawableTokenWebGL2} */
-  drawableConstrainedToken;
-
-  /** @type {DrawableTokenWebGL2} */
-  drawableLitToken;
+  drawableTokens;
 
   /** @type {DrawableObjectsAbstract} */
   drawableFloor;
@@ -93,17 +81,9 @@ export class RenderObstaclesWebGL2 {
       DrawableTileWebGL2,
       DrawableGridShape,
       DrawableRegionWebGL2,
-    ];
-    if ( canvas.grid.isHexagonal  ) drawableClasses.push(
-      DrawableHexTokenWebGL2,
-      // ConstrainedDrawableHexTokenWebGL2,
-      // LitDrawableHexTokenWebGL2, // TODO: Fix
-    );
-    else drawableClasses.push(
       DrawableTokenWebGL2,
-      // ConstrainedDrawableTokenWebGL2,
-      LitDrawableTokenWebGL2,
-    );
+    ];
+
     if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
 
     for ( const cl of drawableClasses ) this.drawableObjects.push(new cl(this));
@@ -143,20 +123,8 @@ export class RenderObstaclesWebGL2 {
     for ( const drawableObj of this.drawableObjects) {
       switch ( drawableObj.constructor.name ) {
         // Lit tokens not used as obstacles; only targets.
-        case "LitDrawableTokenWebGL2":
-        case "LitDrawableHexTokenWebGL2":
-          this.drawableLitToken = drawableObj; break;
-
-        // Constrained tokens used as obstacles but handled separately.
-        case "ConstrainedDrawableTokenWebGL2":
-        case "ConstrainedDrawableHexTokenWebGL2":
-          this.drawableConstrainedToken = drawableObj;
-          this.drawableObstacles.push(drawableObj);
-          break;
-
         case "DrawableTokenWebGL2":
-        case "DrawableHexTokenWebGL2":
-          this.drawableUnconstrainedToken = drawableObj;
+          this.drawableTokens = drawableObj;
           this.drawableObstacles.push(drawableObj);
           break;
 
@@ -404,26 +372,9 @@ export class RenderObstaclesWebGL2 {
       gl.stencilMask(0xFF); // Enable writing to the stencil buffer.
     }
 
-    this._drawTarget(target, useLitTargetShape);
-    // this.gl.flush();
-  }
-
-  _drawTarget(target, useLitTargetShape = false) {
-    // Draw the target using one of the drawable object options.
-    // Prefer the unconstrained token when possible.
-    // If token border is a rectangle, can use unconstrained.
-    // If the target lit token border is undefined, use a different border to avoid throwing error.
-    // Percent visible should have tested and rejected this possibility already.
-
-    // Lit token class only draws lit targets.
-    // Constrained draws any constrained or lit targets.
-    // Unconstrained only draws unconstrained.
     this._setMaterial("target");
-    if ( useLitTargetShape && this.drawableLitToken.constructor.includeToken(target) ) this.drawableLitToken.renderTarget(target);
-    else {
-      // this.drawableConstrainedToken.renderTarget(target);
-      this.drawableUnconstrainedToken.renderTarget(target); // Only runs if the target is unconstrained.
-    }
+    this.drawableTokens.renderTarget(target, useLitTargetShape);
+    // this.gl.flush();
   }
 
   renderObstacles(viewerLocation, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
@@ -467,7 +418,7 @@ export class RenderObstaclesWebGL2 {
       if ( colorCoded ) webGL2.setColorMask(WebGL2.blueAlphaMask);
       else webGL2.setColorMask(WebGL2.noColorMask); // Either red from target, blue
 
-      this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, visionTriangle, viewerLocation);
+      // this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, visionTriangle, viewerLocation);
 
       webGL2.setDepthTest(true);
       this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
@@ -487,7 +438,7 @@ export class RenderObstaclesWebGL2 {
       const dstAlpha = colorCoded ? gl.ZERO : gl.ONE_MINUS_SRC_ALPHA;
       gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 
-      this._renderConstrainingWalls(this.drawableTerrainWalls, target, viewer, visionTriangle, viewerLocation);
+      // this._renderConstrainingWalls(this.drawableTerrainWalls, target, viewer, visionTriangle, viewerLocation);
       this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
     }
     // this.gl.flush();

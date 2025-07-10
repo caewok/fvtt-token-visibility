@@ -7,8 +7,10 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
-import { orient3dFast } from "./util.js";
+import { MODULE_ID } from "../../const.js";
+import { orient3dFast } from "../util.js";
+import { Polygon3dVertices } from "./BasicVertices.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 const lte = (x, b) => x < b || x.almostEqual(b);
 const gte = (x, b) => x > b || x.almostEqual(b);
@@ -41,7 +43,6 @@ export class Polygon3d {
   points = [];
 
   constructor(n = 0) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     this.points.length = n;
     for ( let i = 0; i < n; i += 1 ) this.points[i] = new Point3d();
   }
@@ -65,6 +66,8 @@ export class Polygon3d {
   #cleaned = false;
 
   clean() {
+    if ( this.#cleaned ) return;
+
     // Drop collinear points.
     const iter = this.iteratePoints({ close: true });
     let a = iter.next().value;
@@ -131,6 +134,22 @@ get bounds() {
       this.#plane = Plane.fromPoints(this.points[0], this.points[1], this.points[2]);
     }
     return this.#plane;
+  }
+
+  /** @type {PIXI.Point[]} */
+  #planarPoints = [];
+
+  // Points on the 2d plane in the plane's coordinate system.
+  get planarPoints() {
+    if ( !this.#planarPoints.length ) {
+      const nPoints = this.points.length;
+      this.#planarPoints.length === nPoints;
+      const to2dM = this.plane.conversion2dMatrix;
+      for ( let i = 0; i < nPoints; i += 1 ) {
+        this.#planarPoints[i] = to2dM.multiplyPoint3d(this.points[i]).to2d();
+      }
+    }
+    return this.#planarPoints;
   }
 
   // ----- NOTE: Centroid ----- //
@@ -213,15 +232,15 @@ get bounds() {
    * @param {Number[]} [indices]    Indices to determine order in which polygon points are created from vertices
    * @returns {Triangle[]}
    */
-  static fromVertices(vertices, indices) {
+  static fromVertices(vertices, indices, stride = 3) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const n = indices.length;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    if ( vertices.length % stride !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by stride ${stride}: ${vertices.length}`);
     indices ??= Array.fromRange(Math.floor(vertices.length / 3));
     if ( n % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
     const poly3d = new this(n);
     for ( let i = 0, j = 0, jMax = n; j < jMax; j += 1 ) {
-      poly3d.points[j].copyFrom(pointFromVertices(i++, vertices, indices, Point3d._tmp1));
+      poly3d.points[j].copyFrom(pointFromVertices(i++, vertices, indices, stride, Point3d._tmp1));
     }
     return poly3d;
   }
@@ -301,6 +320,56 @@ get bounds() {
       const invZ = 1 / pt.z;
       return [pt.x * invZ, pt.y * invZ];
     }));
+  }
+
+  /**
+   * Triangulate and convert to vertices.
+   * @param {object} [opts]
+   * @returns {Float32Array[]}
+   */
+  toVertices(opts) {
+    const tris = this.triangulate();
+    return Triangle3d.trianglesToVertices(tris, opts);
+  }
+
+  /**
+   * Triangulate the polygon, converting it to an array of Triangle3d (can be stored as Polygons3d)
+   * @param {object} [opts]
+   * @param {boolean} [opts.useFan]       If true, force fan (can cause errors); if false, never use; otherwise let algorithm decide
+   * @returns {Triangle3d[]} Array of Triangle3d
+   */
+  triangulate({ useFan } = {}) {
+    // Convert the polygon points to 2d, then use Polygon3dVertices to create fan or earcut, then convert back.
+    const to2dM = this.plane.conversion2dMatrix;
+
+    const points2d = this.points.map(pt => to2dM.multiplyPoint3d(pt));
+    const poly = new PIXI.Polygon(points2d); // PIXI.Polygon ignores z values.
+    useFan ??= Polygon3dVertices.canUseFan(poly, this.#centroid); // Don't recalculate the centroid b/c it will be calculated again by canUseFan.
+    if ( useFan ) {
+      // Can do this in 3d; just build triangle for each edge.
+      const centroid = this.centroid;
+      const tris = new Array(Math.floor(this.points.length / 2)); // Equals number of edges.
+      for ( const edge of this.iterateEdges({ close: true }) ) tris.push(Triangle3d.from3Points(centroid, edge.A, edge.B));
+      return tris;
+    }
+
+    // Use earcut in 2d and convert back.
+    // While earcut can take multiple dimensions, it ignores them and so will not work with, e.g., a vertical plane.
+    const indices = PIXI.utils.earcut(poly.points);
+    const from2dM = this.plane.conversion2dMatrixInverse;
+    const nTris = Math.floor(indices.length / 3);
+    const tris = new Array(Math.floor(indices.length / 3));
+    for ( let t = 0, i = 0; t < nTris; t += 1 ) {
+      const pts = Array(3);
+      for ( let j = 0; j < 3; j += 1 ) {
+        const idx = indices[i++];
+        const pt = new CONFIG.GeometryLib.threeD.Point3d(poly.points[idx], poly.points[idx + 1]);
+        from2dM.multiplyPoint3d(pt, pt);
+        pts[j] = pt;
+      }
+      tris[t] = Triangle3d.from3Points(...pts);
+    }
+    return tris;
   }
 
   // ----- NOTE: Iterators ----- //
@@ -425,6 +494,18 @@ get bounds() {
   // ----- NOTE: Intersection ----- //
 
   /**
+   * Test if a ray intersects the polygon's plane. Does not consider whether this polygon is facing.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @returns {number|null} The t value of the plane intersection.
+   *  Does not test if the intersection is within bounds of the polygon.
+   *  For polygons, use intersection to test bounds.
+   */
+  intersectionT(rayOrigin, rayDirection) {
+    return this.plane.rayIntersection(rayOrigin, rayDirection);
+  }
+
+  /**
    * Test if a ray intersects the polygon. Does not consider whether this polygon is facing.
    * @param {Point3d} rayOrigin
    * @param {Point3d} rayDirection
@@ -438,9 +519,16 @@ get bounds() {
     if ( t == null || t < 0 ) return null;
     if ( t.almostEqual(0) ) return rayOrigin;
 
-    // Then test 3d bounds.
-    const ix = Point3d._tmp;
+    const ix = new Point3d();
     rayOrigin.add(rayDirection.multiplyScalar(t, ix), ix)
+
+    // If the plane is not vertical, can do a simple projection onto the x/y plane as a 2d polygon.
+    if ( plane.normal.z ) {
+      const poly2d = new PIXI.Polygon(this.points.map(pt3d => { return { x: pt3d.x, y: pt3d.y } }));
+      return poly2d.contains(ix.x, ix.y) ? ix : null;
+    }
+
+    // Otherwise, test 3d bounds by full conversion.
     const bounds = this.bounds;
     if ( !lte(ix.x, bounds.x.max)
       || !gte(ix.x, bounds.x.min)
@@ -513,6 +601,60 @@ get bounds() {
     return out;
   }
 
+  /**
+   * @typedef {object} Segment3d
+   * @prop {Point3d} a
+   * @prop {Point3d} b
+   */
+
+  /**
+   * Intersect this Polygon3d against a plane.
+   * @param {Plane} plane
+   * @returns {null|Point3d[]|Segment3d[]}
+   */
+  intersectPlane(plane) {
+    const res = this.plane.intersectPlane(plane);
+    if ( !res ) return null;
+
+    // Convert the intersecting ray to 2d values on this plane.
+    const to2dM = this.plane.conversion2dMatrix
+    const b3d = res.point.add(res.direction);
+    const a = to2dM.multiplyPoint3d(res.point).to2d();
+    const b = to2dM.multiplyPoint3d(b3d).to2d();
+
+    // Find the portion of the ray that is inside this polygon.
+    // Cannot assume convex polygon, so may be multiple segments or points.
+    /*
+    api = game.modules.get("tokenvisibility").api
+    Polygon3d = api.geometry.Polygon3d
+    let { Point3d, Plane } = CONFIG.GeometryLib.threeD
+    Draw = CONFIG.GeometryLib.Draw
+    poly3d = Polygon3d.from2dPoints([{ x: -50, y: -50 }, { x: -50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: -50 }], 100)
+    plane = Plane.fromPoints(new Point3d(-25, -50, 100), new Point3d(-50, -25, 100), new Point3d(-25, -50, 0))
+    poly3d.draw2d()
+    Draw.segment({ a: plane.threePoints.a, b: plane.threePoints.b })
+    Draw.point(res.point, { radius: 2 })
+    Draw.point(b3d, { radius: 2 })
+    */
+
+    const poly2d = new PIXI.Polygon(this.planarPoints);
+    const ixs = poly2d.lineIntersections(a, b);
+    ixs.sort((a, b) => a.t0 - b.t0);
+    const from2dM = this.plane.conversion2dMatrixInverse;
+    ixs.map(ix => from2dM.multiplyPoint3d(CONFIG.GeometryLib.threeD.Point3d._tmp.set(ix.x, ix.y, 0)));
+    if ( ixs.length === 1 ) return ixs[0];
+    const segments = [];
+    let currSegment = { A: null, B: null };
+    ixs.forEach(ix => {
+      if ( !currSegment.A ) { currSegment.A = ix; return; }
+      currSegment.B = ix;
+      segments.push(currSegment);
+      currSegment = { A: null, B: null };
+    });
+    return segments;
+  }
+
+
   /* ----- NOTE: Debug ----- */
 
   draw2d({ draw, omitAxis = "z", ...opts } = {}) {
@@ -521,10 +663,10 @@ get bounds() {
   }
 }
 
-function pointFromVertices(i, vertices, indices, outPoint) {
+function pointFromVertices(i, vertices, indices, stride = 3, outPoint) {
   outPoint ??= new CONFIG.GeometryLib.threeD.Point3d;
   const idx = indices[i];
-  const v = vertices.slice(idx * 3, (idx * 3) + 3);
+  const v = vertices.slice(idx * stride, (idx * stride) + 3);
   outPoint.set(v[0], v[1], v[2]);
   return outPoint;
 }
@@ -572,20 +714,21 @@ export class Triangle3d extends Polygon3d {
    * @param {Number[]} [indices]    Indices to determine order in which triangles are created from vertices
    * @returns {Triangle[]}
    */
-  static fromVertices(vertices, indices) {
+  static fromVertices(vertices, indices, stride = 3) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    if ( vertices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by 3: ${vertices.length}`);
+    if ( vertices.length % stride !== 0 ) console.error(`${this.name}.fromVertices|Length of vertices is not divisible by stride ${stride}: ${vertices.length}`);
     indices ??= Array.fromRange(Math.floor(vertices.length / 3));
     if ( indices.length % 3 !== 0 ) console.error(`${this.name}.fromVertices|Length of indices is not divisible by 3: ${indices.length}`);
     const tris = new Array(Math.floor(indices.length / 3));
     for ( let i = 0, j = 0, jMax = tris.length; j < jMax; j += 1 ) {
-      const a = pointFromVertices(i++, vertices, indices, Point3d._tmp1);
-      const b = pointFromVertices(i++, vertices, indices, Point3d._tmp2);
-      const c = pointFromVertices(i++, vertices, indices, Point3d._tmp3);
+      const a = pointFromVertices(i++, vertices, indices, stride, Point3d._tmp1);
+      const b = pointFromVertices(i++, vertices, indices, stride, Point3d._tmp2);
+      const c = pointFromVertices(i++, vertices, indices, stride, Point3d._tmp3);
       tris[j] = this.from3Points(a, b, c);
     }
     return tris;
   }
+
 
   /**
    * Create an array of triangles from given array of point 3ds and indices.
@@ -603,54 +746,76 @@ export class Triangle3d extends Polygon3d {
     return this.fromVertices(vertices, indices);
   }
 
+  // ----- NOTE: Conversions to ----- //
+
+  /**
+   * Triangulate and convert to vertices.
+   * @param {object} [opts]
+   * @param {boolean} [opts.addNormal]        If true, add the normal to this polygon, facing CCW.
+   * @returns {Float32Array[]}
+   */
+  toVertices({ addNormals = false, outArr, outIdx = 0 } = {}) {
+    const { NUM_POSITION_COORDS, NUM_NORMAL_COORDS, NUM_POINTS } = this.constructor;
+    const stride = NUM_POSITION_COORDS + (addNormals * NUM_NORMAL_COORDS);
+    outArr ??= new Float32Array(stride * NUM_POINTS);
+    // TODO: How can we be sure the normal points the correct way?
+    // Should be set when constructing the triangle to point up when triangle is CCW.
+    if ( addNormals ) {
+      const normal = [...this.plane.normal];
+      outArr.set([...this.a, ...normal, ...this.b, ...normal, ...this.c, ...normal]);
+    } else outArr.set([...this.a, ...this.b, ...this.c], outIdx);
+    return outArr;
+  }
+
+  // Trivially, a Triangle3d is already triangulated.
+  triangulate() { return this; }
+
+  static NUM_POSITION_COORDS = 3;
+
+  static NUM_NORMAL_COORDS = 3;
+
+  static NUM_POINTS = 3;
+
+  /**
+   * Convert an array of triangles to a single Float32 array of vertices
+   * @param {object} [opts]
+   * @param {boolean} [opts.useNormal=false]      Add triangle normal to each vertex?
+   * @param {Float32Array[]} [opts.outArr]        Array large enough to hold the triangles
+   * @param {number} [opts.outIdx=0]              Copy triangle vertices to array starting here
+   */
+  static trianglesToVertices(tris, { addNormals = false, outArr, outIdx = 0 } = {}) {
+    const { NUM_POSITION_COORDS, NUM_NORMAL_COORDS, NUM_POINTS } = this;
+    const stride = NUM_POSITION_COORDS + (addNormals * NUM_NORMAL_COORDS);
+    outArr ??= new Float32Array(stride * NUM_POINTS * tris.length);
+    const opts = { addNormals, outArr, outIdx };
+    tris.forEach((tri, idx) => {
+      opts.outIdx += idx * stride * NUM_POINTS;
+      tri.toVertices(opts);
+    });
+    return outArr;
+  }
+
   // ----- NOTE: Intersection ----- //
+
+
 
   /**
    * Test if a ray intersects the triangle. Does not consider whether this triangle is facing.
    * Möller-Trumbore intersection algorithm for a triangle.
    * @param {Point3d} rayOrigin
    * @param {Point3d} rayDirection
-   * @returns {t|null}
+   * @returns {t|null} Returns null if not within the triangle
    */
+  intersectionT(rayOrigin, rayDirection) {
+    return CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, ...this);
+  }
+
   intersection(rayOrigin, rayDirection) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const { a, b, c } = this;
-
-    // Calculate the edge vectors of the triangle
-    // Not really worth caching these values, as it would require updating them if a,b,c change.
-    const edge1 = b.subtract(a, Point3d._tmp1);
-    const edge2 = c.subtract(a, Point3d._tmp2);
-
-    // Calculate the determinant of the triangle
-    const pvec = rayDirection.cross(edge2, Point3d._tmp3);
-
-    // If the determinant is near zero, ray lies in plane of triangle
-    const det = edge1.dot(pvec);
-    if (det > -Number.EPSILON && det < Number.EPSILON) return null;  // Ray is parallel to triangle
-    const invDet = 1 / det;
-
-    // Calculate the intersection point using barycentric coordinates
-    const tvec = rayOrigin.subtract(a, Point3d._tmp);
-    const u = invDet * tvec.dot(pvec);
-    if (u < 0 || u > 1) return null;  // Intersection point is outside of triangle
-
-    const qvec = tvec.cross(edge1, Point3d._tmp3); // The tmp value cannot be tvec or edge1.
-    const v = invDet * rayDirection.dot(qvec);
-    if (v < 0 || u + v > 1) return null;  // Intersection point is outside of triangle
-
-    // Calculate the distance to the intersection point
-    const t = invDet * edge2.dot(qvec);
-    if ( t <= Number.EPSILON ) return null;
-
-    const tile = this.tile;
-    if ( !tile || !tile.mesh ) return t;
-
-    // Test tile transparency.
-    // TODO: Do we need to check if t is in range?
-    const ix = Point3d._tmp3;
-    rayOrigin.add(rayDirection.multiplyScalar(t, ix), ix);
-    if ( !tile.mesh.containsCanvasPoint(ix) ) return null; // Transparent, so no collision.
-    return t;
+    const t = this.intersectionT(rayOrigin, rayDirection);
+    if ( t == null || t < 0 ) return null;
+    if ( t.almostEqual(0) ) return rayOrigin;
+    const ix = new CONFIG.GeometryLib.threeD.Point3d();
+    return rayOrigin.add(rayDirection.multiplyScalar(t, ix), ix);
   }
 
   /**
@@ -672,11 +837,183 @@ export class Triangle3d extends Polygon3d {
     return out;
   }
 
+  /**
+   * Intersect this Triangle3d against a plane.
+   * @param {Plane} plane
+   * @returns {null|Point3d|Segment3d}
+   */
+  intersectPlane(plane) {
+    // Check for parallel planes.
+    if ( this.plane.isParallelToPlane(plane) ) return null;
+
+    // Instead of intersecting the planes, intersect the triangle segments with the plane directly.
+    const ixAB = plane.lineSegmentIntersection(this.a, this.b);
+    const ixBC = plane.lineSegmentIntersection(this.b, this.c);
+    const ixCA = plane.lineSegmentIntersection(this.c, this.a);
+    if ( ixAB && ixBC && ixCA ) console.error(`${this.constructor.name}|intersectPlane|Has three intersections with non-parallel plane.`, plane);
+    if ( !(ixAB || ixBC || ixCA) ) return null; // Triangle does not touch plane.
+
+    // Most of the time, a triangle that touches a plane should create a 3d segment on that plane.
+    if ( ixAB && ixBC ) return { a: ixAB, b: ixBC };
+    if ( ixAB && ixCA ) return { a: ixCA, b: ixAB };
+    if ( ixBC && ixCA ) return { a: ixBC, b: ixCA };
+
+    // No segment intersects but perhaps a point touches the plane.
+    if ( ixAB ) return ixAB;
+    if ( ixBC ) return ixBC;
+    if ( ixCA ) return ixCA;
+
+    console.error(`${this.constructor.name}|intersectPlane|Reached end of tests.`, plane);
+    return null; // Should not happen.
+
+    /*
+    api = game.modules.get("tokenvisibility").api
+    Triangle3d = api.geometry.Triangle3d
+    let { Point3d, Plane } = CONFIG.GeometryLib.threeD
+    Draw = CONFIG.GeometryLib.Draw
+    tri3d = Triangle3d.from2dPoints([{ x: -50, y: -50 }, { x: -50, y: 50 }, { x: 50, y: 50 }], 100)
+    plane = Plane.fromPoints(new Point3d(-25, -50, 100), new Point3d(-50, -25, 100), new Point3d(-25, -50, 0))
+    tri3d.draw2d()
+    Draw.point(ixAB, { radius: 2 })
+    Draw.point(ixBC, { radius: 2 })
+    Draw.point(ixCA, { radius: 2 })
+    */
+  }
+
   // ----- NOTE: Property tests ----- //
   isValid() {
     this.clean();
     return this.points.length === 3;
   }
+}
+
+/**
+ * A quad shape in 3d. Primarily for its fast intersection test and ease of splitting into triangles.
+ */
+export class Quad3d extends Polygon3d {
+  constructor() {
+    super(4);
+  }
+
+  /** @type {Point3d} */
+  get a() { return this.points[0]; }
+
+  /** @type {Point3d} */
+  get b() { return this.points[1]; }
+
+  /** @type {Point3d} */
+  get c() { return this.points[2]; }
+
+  /** @type {Point3d} */
+  get d() { return this.points[3]; }
+
+// ----- NOTE: Factory methods ----- //
+
+  static from4Points(a, b, c, d) {
+    const quad = new this();
+    quad.a.copyFrom(a);
+    quad.b.copyFrom(b);
+    quad.c.copyFrom(c);
+    quad.d.copyFrom(d);
+    return quad;
+  }
+
+  static fromPartial4Points(a, b, c, d) {
+    const quad = new this();
+    quad.a.copyPartial(a);
+    quad.b.copyPartial(b);
+    quad.c.copyPartial(c);
+    quad.c.copyPartial(d);
+    return quad;
+  }
+
+  triangulate() {
+    return [
+      Triangle3d.from3Points(this.a, this.b, this.c),
+      Triangle3d.from3Points(this.a, this.c, this.d),
+    ];
+  }
+
+  // ----- NOTE: Intersection ----- //
+
+  /**
+   * Test if a ray intersects the quad. Does not consider whether this triangle is facing.
+   * Lagae-Dutré intersection algorithm for a quad.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @returns {t|null} Returns null if not within the quad
+   */
+  intersectionT(rayOrigin, rayDirection) {
+    return CONFIG.GeometryLib.threeD.Plane.rayIntersectionQuad3dLD(rayOrigin, rayDirection, ...this);
+  }
+
+  intersection(rayOrigin, rayDirection) {
+    const t = this.intersectionT(rayOrigin, rayDirection);
+    if ( t == null || t < 0 ) return null;
+    if ( t.almostEqual(0) ) return rayOrigin;
+    const ix = new CONFIG.GeometryLib.threeD.Point3d();
+    return rayOrigin.add(rayDirection.multiplyScalar(t, ix), ix);
+  }
+
+  /**
+   * Clip this polygon in the z direction.
+   * @param {number} z
+   * @param {boolean} [keepLessThan=true]
+   * @returns {Polygon3d}
+   */
+  clipZ({ z = -0.1, keepLessThan = true } = {}) {
+    const toKeep = this.clipPlanePoints({
+      cutoff: z,
+      coordinate: "z",
+      cmp: keepLessThan ? "lessThan" : "greaterThan"
+    });
+    const nPoints = toKeep.length;
+    const out = nPoints === 4 ? (new this.constructor()) : (new Polygon3d(nPoints));
+    out.isHole = this.isHole;
+    out.points.forEach((pt, idx) => pt.copyFrom(toKeep[idx]));
+    return out;
+  }
+
+  /**
+   * Intersect this quad against a plane.
+   * @param {Plane} plane
+   * @returns {null|Point3d|Segment3d}
+   */
+  intersectPlane(plane) {
+    // Check for parallel planes.
+    if ( this.plane.isParallelToPlane(plane) ) return null;
+
+    // Instead of intersecting the planes, intersect the quad segments with the plane directly.
+    const ixAB = plane.lineSegmentIntersection(this.a, this.b);
+    const ixBC = plane.lineSegmentIntersection(this.b, this.c);
+    const ixCD = plane.lineSegmentIntersection(this.c, this.d);
+    const ixDA = plane.lineSegmentIntersection(this.d, this.a);
+    if ( ixAB && ixBC && ixCD && ixDA ) console.error(`${this.constructor.name}|intersectPlane|Has four intersections with non-parallel plane.`, plane);
+    if ( !(ixAB || ixBC || ixCD || ixDA) ) return null; // quad does not touch plane.
+
+    // Most of the time, a quad that touches a plane should create a 3d segment on that plane.
+    for ( const a of [ixAB, ixBC, ixCD, ixDA] ) {
+      for ( const b of [ixAB, ixBC, ixCD, ixDA] ) {
+        if ( a === b ) continue;
+        if ( a && b ) return { a, b };
+      }
+    }
+
+    // No segment intersects but perhaps a point touches the plane.
+    if ( ixAB ) return ixAB;
+    if ( ixBC ) return ixBC;
+    if ( ixCD ) return ixCD;
+    if ( ixDA ) return ixDA;
+
+    console.error(`${this.constructor.name}|intersectPlane|Reached end of tests.`, plane);
+    return null; // Should not happen.
+  }
+
+  isValid() {
+    this.clean();
+    return this.points.length === 4;
+  }
+
 }
 
 /**
@@ -832,6 +1169,18 @@ export class Polygons3d extends Polygon3d {
   to2dPolygon(omitAxis) { return this.#applyMethodToAllWithReturn("to2dPolygon", omitAxis); }
 
   toPerspectivePolygon() { return this.#applyMethodToAllWithReturn("toPerspectivePolygon"); }
+
+  toVertices(opts) {
+    const tris = [];
+    this.polygons.forEach(poly => tris.push(...poly.triangulate()));
+    return Triangle3d.trianglesToVertices(tris, opts);
+  }
+
+  triangulate(opts) {
+    const out = new this();
+    this.polygons.forEach(poly => out.polygons.push(...poly.triangulate(opts)));
+    return out;
+  }
 
   // ----- NOTE: Iterators ----- //
 

@@ -7,7 +7,8 @@ CONFIG,
 
 import { PlaceableModelMatrixTracker } from "./PlaceableTracker.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
-import { MODULES_ACTIVE } from "../../const.js";
+import { OTHER_MODULES } from "../../const.js";
+import { getFlagFast } from "../util.js";
 
 // Base folder
 
@@ -51,9 +52,10 @@ export class TileTracker extends PlaceableModelMatrixTracker {
     if ( !tile.elevationZ ) return false;
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
-    if ( MODULES_ACTIVE.LEVELS
+    const LEVELS = OTHER_MODULES;
+    if ( LEVELS.ACTIVE
       // && this.senseType === "sight"
-      && tile.document?.flags?.levels?.noCollision ) return false;
+      && getFlagFast(tile.document, LEVELS.KEY, LEVELS.FLAGS.ALLOW_SIGHT) ) return false;
 
     return true;
   }

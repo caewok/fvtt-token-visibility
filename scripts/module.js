@@ -20,6 +20,7 @@ import { getObjectProperty } from "./LOS/util.js";
 import * as bench from "./benchmark.js";
 
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
+import { VisionTriangle } from "./LOS/VisionTriangle.js";
 
 import {
   buildLOSCalculator,
@@ -33,7 +34,7 @@ import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "
 
 import * as range from "./visibility_range.js";
 
-import { Polygon3d, Triangle3d, Polygons3d } from "./LOS/Polygon3d.js";
+import { Polygon3d, Triangle3d, Quad3d, Polygons3d } from "./LOS/geometry/Polygon3d.js";
 
 // import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/Camera.js";
@@ -92,13 +93,14 @@ import {
   BasicVertices,
 } from "./LOS/geometry/BasicVertices.js";
 
+import { OBJParser } from "./LOS/geometry/OBJParser.js";
+
 import { GeometryTile } from "./LOS/geometry/GeometryTile.js";
 import { GeometryToken, GeometryConstrainedToken, GeometryLitToken } from "./LOS/geometry/GeometryToken.js";
 import { GeometryWall } from "./LOS/geometry/GeometryWall.js";
 import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/geometry/GeometryRegion.js";
 
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
-
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
@@ -155,6 +157,19 @@ Hooks.once("init", function() {
     usePixelReducer: false,
 
     allowInteriorWalls: true,
+
+    /**
+     * Whether to constrain token shapes that overlap walls.
+     * When enabled, reshape the token border to fit within the overlapping walls (based on token center).
+     * Performance-intensive for custom token shapes. Used for obstructing tokens and target tokens.
+     */
+    constrainTokens: false,
+
+    /**
+     * Whether to use special token shapes to represent partially lit tokens.
+     * This approximates what portion of the token is lit by 1+ lights.
+     */
+    litTokens: false,
 
 
     /** @type {string} */
@@ -287,6 +302,7 @@ Hooks.once("init", function() {
       Polygon3d,
       Triangle3d,
       Polygons3d,
+      Quad3d,
 
       HorizontalQuadVertices,
       VerticalQuadVertices,
@@ -307,6 +323,12 @@ Hooks.once("init", function() {
       GeometryPolygonRegionShape,
       GeometryEllipseRegionShape,
       GeometryCircleRegionShape,
+
+      Camera,
+
+      OBJParser,
+
+      VisionTriangle,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,

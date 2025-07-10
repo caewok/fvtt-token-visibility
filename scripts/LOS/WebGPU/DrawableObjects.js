@@ -4,7 +4,7 @@ CONST,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { combineTypedArrays, log } from "../util.js";
+import { log } from "../util.js";
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { GeometryDesc } from "./GeometryDesc.js";
@@ -14,6 +14,7 @@ import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
 import { WallTracker } from "../placeable_tracking/WallTracker.js";
 import { TileTracker } from "../placeable_tracking/TileTracker.js";
 import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
+import { VariableLengthAbstractBuffer } from "../placeable_tracking/TrackingBuffer.js";
 
 
 /*

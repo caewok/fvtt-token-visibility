@@ -9,7 +9,7 @@ PIXI,
 "use strict";
 
 import { combineTypedArrays } from "../util.js";
-import { Triangle3d } from "../Polygon3d.js";
+import { Triangle3d } from "./Polygon3d.js";
 
 const N = -0.5
 const S = 0.5;
@@ -111,7 +111,7 @@ export class BasicVertices {
     // Instead, construct a maximum-length array buffer and copy it over later once we know how
     // many vertices were copied over.
     // (Could use resizable and transfer later but little point here)
-    const maxByteLength = vertices.byteLength;
+    const maxByteLength = vertices.byteLength || (Float32Array.BYTES_PER_ELEMENT * vertices.length);
     const buffer = new ArrayBuffer(maxByteLength);
     const newVertices = new Float32Array(buffer, 0, vLen);
 
@@ -872,7 +872,7 @@ Ex: 6 points, 6 outer edges.
     if ( this.isClipper(poly) ) poly = poly.toPolygons();
     if ( Array.isArray(poly) ) {
       const multipleSides = poly.map(p => this.polygonSideFaces(p, { topZ, bottomZ }));
-      sides.set(combineTypedArrays(...multipleSides));
+      sides.set(combineTypedArrays(multipleSides));
       return sides;
     }
 
@@ -911,7 +911,7 @@ Ex: 6 points, 6 outer edges.
     ];
 
     let j = 0;
-    for ( const { A, B } of poly.iterateEdges({ closed: true }) ) {
+    for ( const { A, B } of poly.iterateEdges({ close: true }) ) {
       // Position                   Normal          UV
       // B.x, B.y, topZ     nx, ny, nz      0, 0
       // A.x, A.y, topZ     nx, ny, nz      0, 0
