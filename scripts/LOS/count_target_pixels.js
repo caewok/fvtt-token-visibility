@@ -27,12 +27,11 @@ Can we do token visibility testing entirely in JS but mimic WebGL?
 2 and 3 could be done using async. Or ideally, entire thing pushed to worker
 */
 
-import { MODULE_ID, OTHER_MODULES } from "../const.js";
+import { MODULE_ID } from "../const.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { convertRegionShapeToPIXI, regionElevation } from "./util.js";
-import { Polygon3d, Quad3d, Triangle3d } from "./geometry/Polygon3d.js";
+import { regionElevation } from "./util.js";
 
 /**
  * Test if a barycentric coordinate is within its defined triangle.
@@ -98,7 +97,7 @@ class BaryTriangleData {
 function baryFromTriangleData(p, triData, outPoint) {
   outPoint ??= new CONFIG.GeometryLib.threeD.Point3d;
   const { a, v0, v1, d00, d01, d11, denomInv } = triData;
-  const v2 = p.subtract(a, PIXI.Point._tmp3);
+  const v2 = p.subtract(a, outPoint);
   const d02 = v0.dot(v2);
   const d12 = v1.dot(v2);
 
@@ -153,7 +152,7 @@ function wallsOcclude(rayOrigin, rayDirection, walls) {
     const t = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri0.a, tri0.b, tri0.c)
       ?? Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri1.a, tri1.b, tri1.c);
     */
-    const quad = quadForWall(wall);
+    const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
     if ( t != null && t.between(0, 1, false) ) return true;
   }
@@ -174,7 +173,7 @@ function terrainWallsOcclude(rayOrigin, rayDirection, walls) {
     const t = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri0.a, tri0.b, tri0.c)
       ?? Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri1.a, tri1.b, tri1.c);
     */
-    const quad = quadForWall(wall);
+    const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
     if ( t == null || !t.between(0, 1, false) ) continue;
     if ( limitedOcclusion++ ) return true;
@@ -196,7 +195,7 @@ function proximateWallsOcclude(rayOrigin, rayDirection, walls, senseType = "ligh
     const t = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri0.a, tri0.b, tri0.c)
       ?? Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri1.a, tri1.b, tri1.c);
     */
-    const quad = quadForWall(wall);
+    const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
     if ( t == null || !t.between(0, 1, false) ) continue;
   }
@@ -205,7 +204,7 @@ function proximateWallsOcclude(rayOrigin, rayDirection, walls, senseType = "ligh
 
 function tilesOcclude(rayOrigin, rayDirection, tiles) {
   for ( const tile of tiles ) {
-    const quad = quadForTile(tile);
+    const quad = tile[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
     if ( t == null || !t.between(0, 1, false) ) continue;
     return true;
@@ -218,7 +217,7 @@ function tilesOccludeAlpha(rayOrigin, rayDirection, tiles) {
   const pxThreshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
 
   for ( const tile of tiles ) {
-    const quad = quadForTileAlpha(tile);
+    const quad = tile[MODULE_ID][AbstractPolygonTrianglesID].alphaQuad3d;
     const t = quad.intersectionT(rayOrigin, rayDirection);
     if ( t == null || !t.between(0, 1, false) ) continue;
 
@@ -230,54 +229,12 @@ function tilesOccludeAlpha(rayOrigin, rayDirection, tiles) {
   return false;
 }
 
-function quadForWall(wall) {
-  let topZ = wall.topZ;
-  let bottomZ = wall.bottomZ;
-  if ( !isFinite(topZ) ) topZ = 1e06;
-  if ( !isFinite(bottomZ) ) bottomZ = 1e06;
-
-  tmpQuad.points[0].set(...wall.edge.a, topZ);
-  tmpQuad.points[1].set(...wall.edge.a, bottomZ);
-  tmpQuad.points[2].set(...wall.edge.b, bottomZ);
-  tmpQuad.points[3].set(...wall.edge.b, topZ);
-  tmpQuad.clearCache();
-  return tmpQuad;
-}
-
-function quadForTile(tile) {
-  const elevZ = tile.elevationZ;
-
-  // Ignore polygon alpha shapes b/c will test alpha position above.
-  let bounds = tile.bounds;
-  tmpQuad.points[0].set(bounds.left, bounds.top, elevZ);
-  tmpQuad.points[1].set(bounds.left, bounds.bottom, elevZ);
-  tmpQuad.points[2].set(bounds.right, bounds.bottom, elevZ);
-  tmpQuad.points[3].set(bounds.right, bounds.top, elevZ);
-  tmpQuad.clearCache();
-  return tmpQuad;
-}
-
-function quadForTileAlpha(tile) {
-  const alphaShape = tile.evPixelCache.getThresholdCanvasBoundingBox(CONFIG[MODULE_ID].alphaThreshold);
-  const elevZ = tile.elevationZ;
-
-  // Ignore polygon alpha shapes b/c will test alpha position above.
-  let bounds = tile.bounds;
-  if ( alphaShape instanceof PIXI.Rectangle && !alphaShape.equals(bounds) ) bounds = alphaShape;
-  tmpQuad.points[0].set(bounds.left, bounds.top, elevZ);
-  tmpQuad.points[1].set(bounds.left, bounds.bottom, elevZ);
-  tmpQuad.points[2].set(bounds.right, bounds.bottom, elevZ);
-  tmpQuad.points[3].set(bounds.right, bounds.top, elevZ);
-  tmpQuad.clearCache();
-  return tmpQuad;
-}
-
 // TODO: Fix useConstrained to pull separate triangles.
 function tokensOcclude(rayOrigin, rayDirection, tokens) {
   // TODO: Would it be more performant to split out rectangular tokens and test quads separately? Or all non-custom tokens?
   //       Could test top/bottom only as needed.
   for ( const token of tokens ) {
-    const tris = token.tokenvisibility.geometry.triangles.filter(tri => tri.isFacing(rayOrigin));
+    const tris = token[MODULE_ID][AbstractPolygonTrianglesID].triangles.filter(tri => tri.isFacing(rayOrigin));
     for ( const tri of tris ) {
       const t = CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
       if ( t != null && t.between(0, 1, false) ) return true;
@@ -300,47 +257,28 @@ function tokensOcclude(rayOrigin, rayDirection, tokens) {
 //   return false;
 // }
 
-// TODO: In TerrainMapper, cache the region plateau plane
-// Cache the region top and bottom plane.
-const tmpQuad = new Quad3d()
-
 function regionsOcclude(rayOrigin, rayDirection, regions) {
-  const { Plane, Point3d } = CONFIG.GeometryLib.threeD;
-  const TM = OTHER_MODULES.TERRAIN_MAPPER;
   for ( const region of regions ) {
+    const handler = region[MODULE_ID][AbstractPolygonTrianglesID];
     const { topZ, bottomZ, rampFloor } = regionElevation(region);
     const testTop = rayOrigin > (rampFloor ?? topZ) && rayDirection.z < 0; // Ray above region top, moving down.
     const testBottom = rayOrigin < bottomZ && rayDirection.z > 0; // Ray below region bottom, moving up.
-    let ixTB;
-    if ( testTop ) {
-      const topPlane = TM.ACTIVE ? region[TM.KEY]._plateauPlane(): new Plane(new Point3d(0, 0, topZ));
-      ixTB = topPlane.rayIntersection(rayOrigin, rayDirection);
-    } else if ( testBottom ) {
-      const bottomPlane = new Plane(new Point3d(0, 0, bottomZ));
-      ixTB = bottomPlane.rayIntersection(rayOrigin, rayDirection);
-    }
+    const ixTB = testTop ? handler.topPlane.rayIntersection(rayOrigin, rayDirection)
+      : testBottom ? handler.bottomPlane.rayIntersection(rayOrigin, rayDirection)
+        : null;
 
     let containsTB = 0;
     for ( const shape of region.shapes ) {
-      const pixiShape = convertRegionShapeToPIXI(shape);
-
       // If the point is contained by more shapes than holes, it must intersect a non-hole.
       // Example: Rect contains ellipse hole that contains circle. If in circle, than +2 - 1 = 1. If in ellipses, +1 -1 = 0.
-      if ( ixTB && pixiShape.contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));
+      if ( ixTB && handler.shapesPixi.get(shape).contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));
 
       // Construct sides and test. Sides of a hole still block, so can treat all shapes equally.
       // A side is a vertical quad; basically a wall.
       // Check if facing.
-      const poly = pixiShape.toPolygon();
-      if ( shape.data.hole ^ poly.isClockwise ) poly.reverseOrientation();
-      for ( const edge of poly.iterateEdges({ close: true }) ) {
-        tmpQuad.points[0].set(edge.A.x, edge.A.y, topZ);
-        tmpQuad.points[1].set(edge.A.x, edge.A.y, bottomZ);
-        tmpQuad.points[2].set(edge.B.x, edge.B.y, bottomZ);
-        tmpQuad.points[3].set(edge.B.x, edge.B.y, topZ);
-        tmpQuad.clearCache();
-        if ( !tmpQuad.isFacing(rayOrigin) ) continue;
-        const t = tmpQuad.intersectionT(rayOrigin, rayDirection);
+      for ( const quad of handler.shapesSides.get(shape) ) {
+        if ( !quad.isFacing(rayOrigin) ) continue;
+        const t = quad.intersectionT(rayOrigin, rayDirection);
         if ( t != null && t.between(0, 1, false) ) return true;
       }
     }
@@ -443,6 +381,7 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
     tri._baryData = BaryTriangleData.fromTriangle3d(tri);
     tri._baryPoint = new CONFIG.GeometryLib.threeD.Point3d();
   });
+  // TODO: Filter trisScaled by z? If z unscaled, between z = 0 and z = 1?
 
   const srcs = calculateLitPortions ? canvas[sourceType].placeables : [];
 
@@ -471,8 +410,10 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
       // console.debug(`\ty: ${y}`);
       // Use barycentric coordinates to test for containment.
       gridPt.set(x, y);
-      trisScaled.forEach(tri => tri._baryPoint = baryFromTriangleData(gridPt, tri._baryData));
-      const containingTris = trisScaled.filter(tri => barycentricPointInsideTriangle(tri._baryPoint));
+      const containingTris = trisScaled.filter(tri => {
+        baryFromTriangleData(gridPt, tri._baryData, tri._baryPoint);
+        return barycentricPointInsideTriangle(tri._baryPoint);
+      });
 
       // If no containment, move to next.
       if ( !containingTris.length ) continue;

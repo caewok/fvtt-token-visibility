@@ -807,7 +807,7 @@ export class Triangle3d extends Polygon3d {
    * @returns {t|null} Returns null if not within the triangle
    */
   intersectionT(rayOrigin, rayDirection) {
-    return CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, ...this);
+    return CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, this.a, this.b, this.c);
   }
 
   intersection(rayOrigin, rayDirection) {
@@ -944,7 +944,7 @@ export class Quad3d extends Polygon3d {
    * @returns {t|null} Returns null if not within the quad
    */
   intersectionT(rayOrigin, rayDirection) {
-    return CONFIG.GeometryLib.threeD.Plane.rayIntersectionQuad3dLD(rayOrigin, rayDirection, ...this);
+    return CONFIG.GeometryLib.threeD.Plane.rayIntersectionQuad3dLD(rayOrigin, rayDirection, this.a, this.b, this.c, this.d);
   }
 
   intersection(rayOrigin, rayDirection) {
