@@ -101,6 +101,7 @@ import { GeometryWall } from "./LOS/geometry/GeometryWall.js";
 import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/geometry/GeometryRegion.js";
 
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
+import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
