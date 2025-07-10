@@ -102,8 +102,6 @@ import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShap
 
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
 
-import { countTargetPixels } from "./LOS/count_target_pixels.js";
-
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./marchingsquares-esm.js";
 
