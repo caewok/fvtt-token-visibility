@@ -398,6 +398,8 @@ Hooks.once("init", function() {
 
     AbstractViewpoint,
 
+    countTargetPixels,
+
     glmatrix: {
       mat2, mat2d, mat3, mat4,
       quat, quat2,
