@@ -9,10 +9,8 @@ Wall,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-const TERRAIN_MAPPER = "terrainmapper";
-
 // Base folder
-import { OTHER_MODULES, MODULE_ID, FLAGS } from "../const.js";
+import { OTHER_MODULES, MODULE_ID } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
@@ -144,8 +142,9 @@ export class AbstractViewpoint {
       target: this.target,
       blockingOpts: this.config.blocking,
     };
-    const blockingObjs = this.constructor.findBlockingWalls(visionTri, opts);
-    if ( blockingObjs.walls.size || blockingObjs.terrainWalls.size > 1 ) return true;
+    const walls = this.constructor.findBlockingWalls(visionTri, opts);
+    if ( walls.size > 1 ) return true; // 2+ walls or 2+ terrain walls present.
+    if ( walls.size && !walls.first().edge.isLimited(opts.senseType) ) return true; // Single non-limited wall present.
     if ( this.constructor.findBlockingTiles(visionTri, opts).size
       || this.constructor.findBlockingTokens(visionTri, opts).size
       || this.constructor.findBlockingRegions(visionTri, opts).size ) return true;
@@ -158,38 +157,63 @@ export class AbstractViewpoint {
    * highest target point, and the viewing point.
    * @returns {object} Object with possible properties:
    *   - @property {Set<Wall>} walls
-   *   - @property {Set<Wall>} terrainWalls
    *   - @property {Set<Tile>} tiles
    *   - @property {Set<Token>} tokens
+   *   - @property {Set<Region>} regions
    */
   static findBlockingObjects(viewpoint, target, opts = {}) {
     const visionTri = this.visionTriangle.rebuild(viewpoint, target);
-
     opts.blockingOpts ??= {};
     opts.senseType ??= "sight";
     opts.target ??= target;
-
-    const blockingObjs = this.findBlockingWalls(visionTri, opts);
-    blockingObjs.tiles = this.findBlockingTiles(visionTri, opts);
-    blockingObjs.tokens = this.findBlockingTokens(visionTri, opts);
-    blockingObjs.regions = this.findBlockingRegions(visionTri, opts);
-    return blockingObjs;
+    return {
+      walls: this.findBlockingWalls(visionTri, opts),
+      tiles: this.findBlockingTiles(visionTri, opts),
+      tokens: this.findBlockingTokens(visionTri, opts),
+      regions: this.findBlockingRegions(visionTri, opts),
+    }
   }
 
-  static findBlockingWalls(visionTri, { senseType = "sight", blockingOpts = {} } = {}) {
-    blockingOpts.walls ??= true;
-    if ( !blockingOpts.walls ) return { walls: NULL_SET, terrainWalls: NULL_SET };
-    const walls = this.filterWallsByVisionTriangle(visionTri, { senseType });
+  /**
+   * Pull out terrain walls from a set of walls.
+   * @param {Set<Wall>} walls       Set of walls to divide
+   * @param {string} [senseType="sight"]    Restriction type to test
+   * @returns {Set<Wall>}  Modifies walls set *in place* and returns terrain walls.
+   */
+  static pullOutTerrainWalls(walls, senseType = "sight") {
+    if ( !walls.size ) return NULL_SET;
     const terrainWalls = new Set();
-
-    // Separate walls into terrain and normal.
     walls.forEach(w => {
       if ( w.document[senseType] === CONST.WALL_SENSE_TYPES.LIMITED ) {
         walls.delete(w);
         terrainWalls.add(w);
       }
     });
-    return { walls, terrainWalls };
+    return terrainWalls;
+  }
+
+  /**
+   * Pull out threshold walls from a set of walls. Both proximate and reverse.
+   * @param {Set<Wall>} walls       Set of walls to divide
+   * @param {string} [senseType="sight"]    Restriction type to test
+   * @returns {Set<Wall>}  Modifies walls set *in place* and returns proximate/reverse walls.
+   */
+  static pullOutProximateWalls(walls, senseType = "sight") {
+    if ( !walls.size ) return NULL_SET;
+    const proximateWalls = new Set();
+    walls.forEach(w => {
+      if ( w.document[senseType] >= CONST.WALL_SENSE_TYPES.PROXIMATE ) {
+        walls.delete(w);
+        proximateWalls.add(w);
+      }
+    });
+    return proximateWalls;
+  }
+
+  static findBlockingWalls(visionTri, { senseType = "sight", blockingOpts = {} } = {}) {
+    blockingOpts.walls ??= true;
+    if ( !blockingOpts.walls ) return NULL_SET;
+    return this.filterWallsByVisionTriangle(visionTri, { senseType });
   }
 
   static findBlockingTiles(visionTri, { senseType = "sight", blockingOpts = {} } = {}) {
@@ -501,11 +525,12 @@ export class AbstractViewpoint {
    */
   _drawDetectedObjects(debugDraw) {
     // if ( !this.#blockingObjects.initialized ) return;
-    const blockingObjects = AbstractViewpoint.findBlockingObjects(this.viewpoint, this.target,
+    const { walls, tiles, tokens } = AbstractViewpoint.findBlockingObjects(this.viewpoint, this.target,
       { viewer: this.viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
+    const terrainWalls = AbstractViewpoint.pullOutTerrainWalls(walls, this.config.senseType);
     debugDraw ??= this.viewerLOS.config.debugDraw;
     const colors = Draw.COLORS;
-    const { walls, tiles, terrainWalls, tokens } = blockingObjects;
+
     walls.forEach(wall => debugDraw.segment(wall, { color: colors.red }));
     // tiles.forEach(tile => debugDraw.shape(tile.bounds, { color: colors.yellow }));
     tiles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));

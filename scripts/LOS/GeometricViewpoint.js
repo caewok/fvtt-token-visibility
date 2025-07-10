@@ -99,6 +99,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
 
     this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
       { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
+    this.blockingObjects.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(this.blockingObjects.walls, this.config.senseType);
 
     const res = this._obscuredArea();
     this.targetArea = res.targetArea;
