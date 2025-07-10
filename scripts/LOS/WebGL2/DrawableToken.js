@@ -84,19 +84,19 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     // Define drawables.
     this.drawables.instanced = canvas.grid.isHexagonal
       ? new DrawableHexTokenShapesWebGL2(this.renderer) : new DrawableTokenShapesWebGL2(this.renderer);
-    await this.drawables.instanced;
+    await this.drawables.instanced.initialize();
     this.drawablesArray.push(this.drawables.instanced);
 
     // All constrained and lit are handled as single set of vertices/indices for each.
     // Because they change often and so instancing doesn't make sense.
     if ( CONFIG[MODULE_ID].constrainTokens ) {
       this.drawables.constrained = new DrawableConstrainedTokenShapesWebGL2(this.renderer);
-      await this.drawables.constrained;
+      await this.drawables.constrained.initialize();
       this.drawablesArray.push(this.drawables.constrained);
     }
     if ( CONFIG[MODULE_ID].litTokens ) {
       this.drawables.lit = new DrawableLitTokenShapesWebGL2(this.renderer);
-      await this.drawables.lit;
+      await this.drawables.lit.initialize();
       this.drawablesArray.push(this.drawables.lit);
     }
 
@@ -150,10 +150,10 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
       { viewer, target, blockingTokensOpts: blocking.tokens });
     for ( const token of tokens ) {
-      if ( !(this.placeableTracker.hasPlaceable(token) && this.constructor.includeToken(token)) ) continue;
+      if ( !(this.placeableTracker.hasPlaceable(token)) ) continue;
       if ( this.constructor.drawConstrained(token) ) this.drawables.constrained.addToInstanceSet(token);
       else if ( this.drawCustom(token) ) this.drawables.get(token.sourceId).addToInstanceSet(token);
-      else this.drawables.instance.addToInstanceSet(token);
+      else this.drawables.instanced.addToInstanceSet(token);
     }
   }
 
@@ -162,11 +162,11 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 
   renderTarget(target, useLitTargetShape = false) {
-    if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
+    if ( !(this.placeableTracker.hasPlaceable(target)) ) return;
     if ( useLitTargetShape && this.constructor.drawLit(target) ) this.drawables.lit.renderTarget(target);
     if ( this.constructor.drawConstrained(target) ) this.drawables.constrained.renderTarget(target);
     else if ( this.drawCustom(target) ) this.drawables.get(target.sourceId).renderTarget(target);
-    else this.drawables.instance.renderTarget(target);
+    else this.drawables.instanced.renderTarget(target);
   }
 }
 
@@ -182,7 +182,7 @@ export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Ab
   static vertexDrawType = "STATIC_DRAW";
 
   renderTarget(target) {
-    // if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
+    // if ( !(this.placeableTracker.hasPlaceable(target)) ) return;
 
     if ( CONFIG[MODULE_ID].debug ) {
       const i = this._indexForPlaceable(target);
@@ -277,7 +277,7 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
 
 
   renderTarget(target) {
-    if ( !(this.placeableTracker.hasPlaceable(target) && this.constructor.includeToken(target)) ) return;
+    if ( !(this.placeableTracker.hasPlaceable(target)) ) return;
     this.drawables.forEach(drawable => drawable.renderTarget(target));
   }
 }
@@ -294,10 +294,10 @@ export class DrawableCustomTokenShapeWebGL2 extends DrawableTokenShapesWebGL2 {
   /** @type {class} */
   static geomClass = GeometryCustomToken;
 
-  static includeToken(token) {
-    if ( !super.includeToken(token) ) return false;
-    return this.isCustom(token);
-  }
+//   static includeToken(token) {
+//     if ( !super.includeToken(token) ) return false;
+//     return this.isCustom(token);
+//   }
 
   static isCustom(token) {
     return Boolean(getFlagFast(token.document, OTHER_MODULES.ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC));
