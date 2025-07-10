@@ -911,7 +911,7 @@ Ex: 6 points, 6 outer edges.
     ];
 
     let j = 0;
-    for ( const { A, B } of poly.iterateEdges({ closed: true }) ) {
+    for ( const { A, B } of poly.iterateEdges({ close: true }) ) {
       // Position                   Normal          UV
       // B.x, B.y, topZ     nx, ny, nz      0, 0
       // A.x, A.y, topZ     nx, ny, nz      0, 0
