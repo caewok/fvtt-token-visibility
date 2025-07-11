@@ -98,7 +98,7 @@ class AbstractPolygonTriangles {
     const placeable = placeableD.object;
     if ( !placeable ) return;
     const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
-    if ( changeKeys.some(key => this.constructor.UPDATE_KEYS.has(key)) ) placeable.update();
+    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable.update();
   }
 
   /* ----- NOTE: Constructor ----- */
