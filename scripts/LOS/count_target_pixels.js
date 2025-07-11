@@ -243,6 +243,22 @@ function tokensOcclude(rayOrigin, rayDirection, tokens) {
   return false;
 }
 
+// TODO: Fix useConstrained to pull separate triangles.
+//
+function tokensOcclude2(rayOrigin, rayDirection, tokens) {
+  // TODO: Would it be more performant to split out rectangular tokens and test quads separately? Or all non-custom tokens?
+  //       Could test top/bottom only as needed.
+  for ( const token of tokens ) {
+    for ( const tri of token[MODULE_ID][AbstractPolygonTrianglesID].triangles ) {
+      if ( tri.isFacing(rayOrigin) ) {
+        const t = CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
+        if ( t !== null && t.between(0, 1, false) ) return true;
+      }
+    }
+  }
+  return false;
+}
+
 // function regionsOcclude(rayOrigin, rayDirection, regions) {
 //   // TODO: Would it be more performant to handle simple regions separately?
 //   //       In particular, testing top/bottom of region circles and ellipses.
@@ -293,13 +309,15 @@ function attenuatedRadius() {
 
 }
 
+let tokensOccludeFn = tokensOcclude;
+
 
 function obstaclesOcclude(rayOrigin, rayDirection, obstacles, senseType) {
   return wallsOcclude(rayOrigin, rayDirection, obstacles.walls, senseType)
     || terrainWallsOcclude(rayOrigin, rayDirection, obstacles.terrainWalls, senseType)
     || proximateWallsOcclude(rayOrigin, rayDirection, obstacles.proximateWalls, senseType)
     || tilesOccludeAlpha(rayOrigin, rayDirection, obstacles.tiles, senseType)
-    || tokensOcclude(rayOrigin, rayDirection, obstacles.tokens, senseType)
+    || tokensOccludeFn(rayOrigin, rayDirection, obstacles.tokens, senseType)
     || regionsOcclude(rayOrigin, rayDirection, obstacles.regions, senseType);
 }
 
@@ -310,7 +328,7 @@ function obstaclesOcclude(rayOrigin, rayDirection, obstacles, senseType) {
 const tmpIx = new Point3d();
 const gridPt = new PIXI.Point();
 const pt3d = new Point3d();
-const SCALE = 50; // Will run from -50 to 50, or 100 pixels per row ( can drop 50, as contains should not use it)
+// const SCALE = 50; // Will run from -50 to 50, or 100 pixels per row ( can drop 50, as contains should not use it)
 
 /**
  * @typedef {object} OcclusionCount
@@ -322,13 +340,17 @@ const SCALE = 50; // Will run from -50 to 50, or 100 pixels per row ( can drop 5
  * @prop {number} bright
  */
 
+
+
 /**
  * @param {Camera} camera
  * @param {Token} target
  * @returns {OcclusionCount}
  */
-export function countTargetPixels(camera, target, { calculateLitPortions = false, senseType = "sight", sourceType = "lighting", blockingOpts = {} } = {}) {
+export function countTargetPixels(camera, target, { calculateLitPortions = false, senseType = "sight", sourceType = "lighting", blockingOpts = {}, scale = 50, tokensFn = 1 } = {}) {
   const viewpoint = camera.cameraPosition;
+
+  tokensOccludeFn = tokensFn === 1 ? tokensOcclude : tokensOcclude2;
 
   // TODO: Distinguish constrained from not constrained. This will return constrained if present.
   const targetTris = target[MODULE_ID][AbstractPolygonTrianglesID].triangles.filter(poly => poly.isFacing(viewpoint));
@@ -374,8 +396,8 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
 
   // Scale up to -50 to 50 so that we can easily get approximately 100 x 100 pixels.
   // Avoids where the frustum does not adequately capture the target.
-  // trisScaled = trisTransformed.map(tri => tri.multiplyScalar(SCALE))
-  const trisScaled = trisTransformed.map(tri => tri.scale({ x: SCALE * xScale, y: SCALE * yScale, z: SCALE }));
+  // trisScaled = trisTransformed.map(tri => tri.multiplyScalar(scale))
+  const trisScaled = trisTransformed.map(tri => tri.scale({ x: scale * xScale, y: scale * yScale, z: 1 }));
   trisScaled.forEach((tri, idx) => {
     tri._original = targetTris[idx]
     tri._baryData = BaryTriangleData.fromTriangle3d(tri);
@@ -404,12 +426,38 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
     dim: 0,
     bright: 0,
   };
-  for ( let x = -SCALE; x < SCALE; x += 1 ) {
+  for ( let x = -scale; x < scale; x += 1 ) {
     // console.debug(`x: ${x}`);
-    for ( let y = -SCALE; y < SCALE; y += 1 ) {
+    for ( let y = -scale; y < scale; y += 1 ) {
       // console.debug(`\ty: ${y}`);
       // Use barycentric coordinates to test for containment.
       gridPt.set(x, y);
+
+      // Locate the viewable triangle for this fragment.
+      // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
+      // Take the closest z.
+
+      // This appears slightly slower than below.
+//       let containingTri;
+//       let containingPt;
+//       for ( const tri of trisScaled ) {
+//         baryFromTriangleData(gridPt, tri._baryData, tri._baryPoint);
+//         if ( !barycentricPointInsideTriangle(tri._baryPoint) ) continue;
+//         if ( !containingTri ) {
+//           containingTri = tri;
+//           continue;
+//         } else {
+//           const newPt = interpolateBarycentricValue(tri._baryPoint, tri.a.z, tri.b.z, tri.c.z);
+//           containingPt ??= interpolateBarycentricValue(containingTri._baryPoint, containingTri.a.z, containingTri.b.z, containingTri.c.z);
+//           if ( newPt.z < containingPt.z ) {
+//             containingTri = tri;
+//             containingPt = newPt;
+//           }
+//         }
+//       }
+//       if ( !containingTri ) continue;
+
+
       const containingTris = trisScaled.filter(tri => {
         baryFromTriangleData(gridPt, tri._baryData, tri._baryPoint);
         return barycentricPointInsideTriangle(tri._baryPoint);
@@ -420,16 +468,23 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
 
       // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
       // Take the closest z.
-      if ( containingTris.length > 1 ) containingTris.sort((a, b) => {
-        const z0 = interpolateBarycentricValue(a._baryPoint, a.a.z, a.b.z, a.c.z);
-        const z1 = interpolateBarycentricValue(a._baryPoint, b.a.z, b.b.z, b.c.z);
-        return z0 - z1;
-      });
+      if ( containingTris.length > 1 ) {
+        const tri0 = containingTris[0];
+        let containingPt = interpolateBarycentricValue(tri0._baryPoint, tri0.a.z, tri0.b.z, tri0.c.z);
+        for ( let i = 1, iMax = containingTris.length; i < iMax; i += 1 ) {
+          const tri = containingTris[i];
+          const newPt = interpolateBarycentricValue(tri._baryPoint, tri.a.z, tri.b.z, tri.c.z);
+          if ( newPt.z < containingPt.z ) {
+            containingTris[0] = tri;
+            containingPt = newPt;
+          }
+        }
+      }
       const containingTri = containingTris[0];
 
       // Determine the 3d point by interpolating from the original triangle.
-      const { a, b, c } =  containingTri._original;
-      interpolateBarycentricPoint(containingTri._baryPoint, a, b, c, pt3d);
+      const origTri = containingTri._original;
+      interpolateBarycentricPoint(containingTri._baryPoint, origTri.a, origTri.b, origTri.c, pt3d);
 
       // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
       out.red += 1;
@@ -445,12 +500,12 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
       // Fragment brightness for each source if that option is requested.
       let isBright = false;
       let isDim = false;
-      const side = containingTri._original.plane.whichSide(viewpoint);
+      const side = origTri.plane.whichSide(viewpoint);
       for ( let i = 0, iMax = srcs.length; i < iMax; i += 1 ) {
         const src = srcs[i];
         const obstacles = srcObstacles[i];
         const srcOrigin = Point3d.fromPointSource(src);
-        if ( (side * containingTri._original.plane.whichSide(srcOrigin)) < 0 ) continue; // On opposite side of the triangle from the camera.
+        if ( (side * origTri.plane.whichSide(srcOrigin)) < 0 ) continue; // On opposite side of the triangle from the camera.
         const dist2 = Point3d.distanceSquaredBetween(pt3d, srcOrigin);
         if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
 
@@ -498,7 +553,7 @@ camera = new Camera({
 camera.cameraPosition = Point3d.fromTokenCenter(viewer);
 camera.targetPosition = Point3d.fromTokenCenter(target);
 
-opts = { calculateLitPortions: true, senseType: "sight", sourceType: "lighting" }
+opts = { calculateLitPortions: true, senseType: "sight", sourceType: "lighting", scale: 50 }
 res = countTargetPixels(camera, target, opts)
 
 percentVisible = (res.red - res.occluded) / res.red;
@@ -511,6 +566,53 @@ await QBenchmarkLoopFn(N, countTargetPixels, "countTargetPixels", camera, target
 
 
 */
+
+/* Test all tokens in scene.
+
+function testAll(camera, opts) {
+  const vMap = new WeakMap();
+  for ( const viewer of canvas.tokens.placeables ) {
+    const tMap = new WeakMap();
+    vMap.set(viewer, tMap);
+    camera.cameraPosition = Point3d.fromTokenCenter(viewer);
+    for ( const target of canvas.tokens.placeables ) {
+      if ( viewer === target ) continue
+      camera.targetPosition = Point3d.fromTokenCenter(target);
+      tMap.set(target, countTargetPixels(camera, target, opts))
+    }
+  }
+  return vMap;
+}
+
+camera = new Camera({
+    glType: "webGL2",
+    perspectiveType: "perspective",
+    up: new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1),
+    mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
+  });
+
+opts = { calculateLitPortions: true, senseType: "sight", sourceType: "lighting", scale: 50, tokensFn: 1 }
+testAll(camera, opts)
+
+N = 5
+opts = { calculateLitPortions: true, senseType: "sight", sourceType: "lighting", scale: 50, tokensFn: 1 }
+await QBenchmarkLoopFn(N, testAll, "testAll", camera, opts)
+
+opts = { calculateLitPortions: true, senseType: "sight", sourceType: "lighting", scale: 50, tokensFn: 2 }
+await QBenchmarkLoopFn(N, testAll, "testAll", camera, opts)
+
+console.log(`${canvas.tokens.placeables.length} tokens: ${(canvas.tokens.placeables.length ** 2) - canvas.tokens.placeables.length} combinations`)
+
+8 tokens, 56 combos:
+lit: true, scale: 50: 643.54ms     11.5 ms per token
+lit: false, scale 50: 507.32ms      9.1 ms per token
+lit: true, scale 25: 168.64ms       3.0 ms per token
+lit: false, scale 25: 131.2ms       2.3 ms per token
+
+
+
+*/
+
 
 /*
 function ix1(walls, rayOrigin, rayDirection) {
