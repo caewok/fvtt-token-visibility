@@ -249,7 +249,7 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
     let topZ = wall.topZ;
     let bottomZ = wall.bottomZ;
     if ( !isFinite(topZ) ) topZ = 1e06;
-    if ( !isFinite(bottomZ) ) bottomZ = 1e06;
+    if ( !isFinite(bottomZ) ) bottomZ = -1e06;
 
     quad.points[0].set(...wall.edge.a, topZ);
     quad.points[1].set(...wall.edge.a, bottomZ);

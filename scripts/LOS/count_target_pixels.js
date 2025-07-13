@@ -95,7 +95,7 @@ class BaryTriangleData {
  * @returns {vec3}
  */
 function baryFromTriangleData(p, triData, outPoint) {
-  outPoint ??= new CONFIG.GeometryLib.threeD.Point3d;
+  outPoint ??= new CONFIG.GeometryLib.threeD.Point3d();
   const { a, v0, v1, d00, d01, d11, denomInv } = triData;
   const v2 = p.subtract(a, outPoint);
   const d02 = v0.dot(v2);
@@ -347,7 +347,7 @@ const pt3d = new Point3d();
  * @param {Token} target
  * @returns {OcclusionCount}
  */
-export function countTargetPixels(camera, target, { calculateLitPortions = false, senseType = "sight", sourceType = "lighting", blockingOpts = {}, scale = 50, tokensFn = 1 } = {}) {
+export function countTargetPixels(camera, target, { calculateLitPortions = false, senseType = "sight", sourceType = "lighting", blockingOpts = {}, scale = 50, tokensFn = 1, debug = false } = {}) {
   const viewpoint = camera.cameraPosition;
 
   tokensOccludeFn = tokensFn === 1 ? tokensOcclude : tokensOcclude2;
@@ -419,114 +419,298 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
     return obstacles;
   });
 
-  const out = {
-    red: 0,
-    occluded: 0,
-    dark: 0,
-    dim: 0,
-    bright: 0,
-  };
+  const outArr = new Uint16Array(5);
+  let pixels;
+  let containingTris = new Set();
+  const width = scale + scale;
+  if ( debug ) pixels = new Uint8Array((width ** 2) * 4); // 4 channels per pixel (rgba)
+  const LIGHT_DIR = (new Point3d(.25, .5, 1)).normalize();
+
   for ( let x = -scale; x < scale; x += 1 ) {
     // console.debug(`x: ${x}`);
     for ( let y = -scale; y < scale; y += 1 ) {
-      // console.debug(`\ty: ${y}`);
-      // Use barycentric coordinates to test for containment.
-      gridPt.set(x, y);
+       const res = testPixelOcclusion(x, y, trisScaled, camera, srcs, srcObstacles, viewerObstacles, senseType);
+       for ( let i = 0; i < 5; i += 1 ) outArr[i] += res.counts[i];
+       if ( debug ) {
+         if ( !res.containingTri ) continue; // Already set to 0.
+         containingTris.add(res.containingTri);
 
-      // Locate the viewable triangle for this fragment.
-      // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
-      // Take the closest z.
+         // TODO: Move this inside the loop and set for each light source.
+         const brightness = res.counts[BRIGHT] * 1.0 || res.counts[DIM] * 0.75 || res.counts[DARK] * 0.5 || 0;
+         const color = PIXEL_COLOR.set(brightness, 0, res.counts[OCCLUDED]);
+         color.multiplyScalar(255, color);
 
-      // This appears slightly slower than below.
-//       let containingTri;
-//       let containingPt;
-//       for ( const tri of trisScaled ) {
-//         baryFromTriangleData(gridPt, tri._baryData, tri._baryPoint);
-//         if ( !barycentricPointInsideTriangle(tri._baryPoint) ) continue;
-//         if ( !containingTri ) {
-//           containingTri = tri;
-//           continue;
-//         } else {
-//           const newPt = interpolateBarycentricValue(tri._baryPoint, tri.a.z, tri.b.z, tri.c.z);
-//           containingPt ??= interpolateBarycentricValue(containingTri._baryPoint, containingTri.a.z, containingTri.b.z, containingTri.c.z);
-//           if ( newPt.z < containingPt.z ) {
-//             containingTri = tri;
-//             containingPt = newPt;
-//           }
-//         }
-//       }
-//       if ( !containingTri ) continue;
+         /*
+         const N = res.containingTri.plane.normal;
+         const NdotL = Math.max(N.dot(LIGHT_DIR), 0);
+         const surfaceColor = color.multiply(AMBIENT_COLOR, SURFACE_COLOR).add(color.multiplyScalar(NdotL, CONFIG.GeometryLib.threeD.Point3d._tmp3), SURFACE_COLOR);
+         surfaceColor.multiplyScalar(255, SURFACE_COLOR);
+         setPixel(pixels, x, y, scale, [...SURFACE_COLOR, 255]); // Set alpha to 1.
+         */
 
+         setPixel(pixels, x, y, scale, [...color, 255]);
+       }
+    }
+  }
+  return { pixels, counts: outArr, containingTris };
+}
 
-      const containingTris = trisScaled.filter(tri => {
-        baryFromTriangleData(gridPt, tri._baryData, tri._baryPoint);
-        return barycentricPointInsideTriangle(tri._baryPoint);
-      });
+const AMBIENT_COLOR = new Point3d(0.1, 0.1, 0.1);
+const LIGHT_COLOR = new Point3d(1, 1, 1);
+const PIXEL_COLOR = new Point3d();
+const SURFACE_COLOR = new Point3d();
 
-      // If no containment, move to next.
-      if ( !containingTris.length ) continue;
+function setPixel(pixels, x, y, scale, arr) {
+  const offset = pixelIndex(x + scale, y + scale, scale * 2);
+  pixels.set(arr, offset);
+}
 
-      // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
-      // Take the closest z.
-      if ( containingTris.length > 1 ) {
-        const tri0 = containingTris[0];
-        let containingPt = interpolateBarycentricValue(tri0._baryPoint, tri0.a.z, tri0.b.z, tri0.c.z);
-        for ( let i = 1, iMax = containingTris.length; i < iMax; i += 1 ) {
-          const tri = containingTris[i];
-          const newPt = interpolateBarycentricValue(tri._baryPoint, tri.a.z, tri.b.z, tri.c.z);
-          if ( newPt.z < containingPt.z ) {
-            containingTris[0] = tri;
-            containingPt = newPt;
-          }
-        }
-      }
-      const containingTri = containingTris[0];
+function pixelIndex(x, y, width = 1, channel = 0, numChannels = 4) {
+  return (y * width * numChannels) + (x * numChannels) + channel;
+}
 
-      // Determine the 3d point by interpolating from the original triangle.
-      const origTri = containingTri._original;
-      interpolateBarycentricPoint(containingTri._baryPoint, origTri.a, origTri.b, origTri.c, pt3d);
+function pixelCoordinates(i, width = 1, numChannels = 4) {
+  const channel = i % 4;
+  const idx = ~~(i / numChannels)
 
-      // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
-      out.red += 1;
+  const x = (idx % width);
+  const y = ~~(idx / width);
+  return { x, y, channel };
+}
 
-      // Is it occluded from the camera/viewer?
-      const viewpoint = camera.cameraPosition;
-      const rayDirection = pt3d.subtract(viewpoint); // NOTE: Don't normalize so the wall test can use 0 < t < 1.
-      if ( obstaclesOcclude(viewpoint, rayDirection, viewerObstacles, senseType) ) {
-        out.occluded += 1;
-        continue;
-      }
+function componentToHex(c) {
+  var hex = c.toString(16);
+  return hex.length == 1 ? "0" + hex : hex;
+}
+function rgbToHex(r, g, b) {
+  return "0x" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
 
-      // Fragment brightness for each source if that option is requested.
-      let isBright = false;
-      let isDim = false;
-      const side = origTri.plane.whichSide(viewpoint);
-      for ( let i = 0, iMax = srcs.length; i < iMax; i += 1 ) {
-        const src = srcs[i];
-        const obstacles = srcObstacles[i];
-        const srcOrigin = Point3d.fromPointSource(src);
-        if ( (side * origTri.plane.whichSide(srcOrigin)) < 0 ) continue; // On opposite side of the triangle from the camera.
-        const dist2 = Point3d.distanceSquaredBetween(pt3d, srcOrigin);
-        if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
+function drawPixels(pixels, scale) {
+  const width = scale * 2;
+  for ( let i = 0; i < pixels.length; i += 4 ) {
+    const px = pixels.subarray(i, i + 3);
+    const color = parseInt(rgbToHex(px[0], px[1], px[2]), 16);
+    const coords = pixelCoordinates(i, width);
+    CONFIG.GeometryLib.Draw.point({ x: coords.x - scale, y: coords.y - scale }, { radius: 1, color })
+  }
+}
 
-        // If blocked, then not bright or dim.
-        const rayDirection = pt3d.subtract(srcOrigin); // NOTE: Don't normalize so the wall test can use 0 < t < 1.
-        if ( obstaclesOcclude(srcOrigin, rayDirection, obstacles, senseType) ) continue;
-
-        // TODO: handle light/sound attenuation from threshold walls.
-        isBright ||= (dist2 <= (src.brightRadius ** 2));
-        isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
-        if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
-      }
-      out.bright += isBright;
-      out.dim += isDim;
-      out.dark += !(isBright || isDim);
+function summarizePixels(pixels, numChannels = 4) {
+  const out = new Array(numChannels);
+  for ( let i = 0; i < numChannels; i += 1 ) out[i] = new Map();
+  for ( let i = 0; i < pixels.length; i += numChannels ) {
+    for ( let j = 0; j < numChannels; j += 1 ) {
+      const px = pixels[i + j];
+      const count = out[j].get(px) || 0;
+      out[j].set(px, count + 1);
     }
   }
   return out;
 }
 
+const tmpCountArray = new Uint16Array(5);
 
+const RED = 0;
+const OCCLUDED = 1;
+const BRIGHT = 2;
+const DIM = 3;
+const DARK = 4;
+
+function testPixelOcclusion(x, y, trisScaled, camera, srcs, srcObstacles, viewerObstacles, senseType) {
+  tmpCountArray.fill(0);
+  const out = { containingTri: null, counts: tmpCountArray };
+  gridPt.set(x, y);
+
+  // Locate the viewable triangle for this fragment.
+  // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
+  // Take the closest z.
+  const containingTris = trisScaled.filter(tri => {
+    baryFromTriangleData(gridPt, tri._baryData, tri._baryPoint);
+    return barycentricPointInsideTriangle(tri._baryPoint);
+  });
+
+  // If no containment, move to next.
+  if ( !containingTris.length ) return out;
+
+  // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
+  // Take the closest z.
+  if ( containingTris.length > 1 ) {
+    const tri0 = containingTris[0];
+    let containingPt = interpolateBarycentricValue(tri0._baryPoint, tri0.a.z, tri0.b.z, tri0.c.z);
+    for ( let i = 1, iMax = containingTris.length; i < iMax; i += 1 ) {
+      const tri = containingTris[i];
+      const newPt = interpolateBarycentricValue(tri._baryPoint, tri.a.z, tri.b.z, tri.c.z);
+      if ( newPt.z < containingPt.z ) {
+        containingTris[0] = tri;
+        containingPt = newPt;
+      }
+    }
+  }
+  const containingTri = containingTris[0];
+  out.containingTri = containingTri;
+
+  // Determine the 3d point by interpolating from the original triangle.
+  const origTri = containingTri._original;
+  interpolateBarycentricPoint(containingTri._baryPoint, origTri.a, origTri.b, origTri.c, pt3d);
+
+  // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
+  tmpCountArray[RED] = 1;
+
+  // Is it occluded from the camera/viewer?
+  const viewpoint = camera.cameraPosition;
+  const rayDirection = pt3d.subtract(viewpoint); // NOTE: Don't normalize so the wall test can use 0 < t < 1.
+  if ( obstaclesOcclude(viewpoint, rayDirection, viewerObstacles, senseType) ) {
+    tmpCountArray[OCCLUDED] = 1;
+    return out;
+  }
+
+  // Fragment brightness for each source if that option is requested.
+  let isBright = false;
+  let isDim = false;
+  const side = origTri.plane.whichSide(viewpoint);
+  for ( let i = 0, iMax = srcs.length; i < iMax; i += 1 ) {
+    const src = srcs[i];
+    const obstacles = srcObstacles[i];
+    const srcOrigin = Point3d.fromPointSource(src);
+    if ( (side * origTri.plane.whichSide(srcOrigin)) < 0 ) continue; // On opposite side of the triangle from the camera.
+    const dist2 = Point3d.distanceSquaredBetween(pt3d, srcOrigin);
+    if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
+
+    // If blocked, then not bright or dim.
+    const rayDirection = pt3d.subtract(srcOrigin); // NOTE: Don't normalize so the wall test can use 0 < t < 1.
+    if ( obstaclesOcclude(srcOrigin, rayDirection, obstacles, senseType) ) continue;
+
+    // TODO: handle light/sound attenuation from threshold walls.
+    isBright ||= (dist2 <= (src.brightRadius ** 2));
+    isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
+    if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
+  }
+  tmpCountArray[BRIGHT] = isBright;
+  tmpCountArray[DIM] = isDim;
+  tmpCountArray[DARK] = !(isBright || isDim);
+  return out;
+}
+
+
+/*
+tmpObj = {
+  bright: 0,
+  dim: 0,
+  dark: 0,
+  occluded: 0,
+  red: 0,
+}
+
+tmpArray = new Uint16Array(5);
+
+function countArray(scale = 50) {
+  const outArr = new Uint16Array(5);
+  for ( let x = -scale; x < scale; x += 1 ) {
+    for ( let y = -scale; y < scale; y += 1 ) {
+      const res = randomCountArr();
+      for ( let i = 0; i < 5; i += 1 ) outArr[i] += res[i];
+    }
+  }
+  return outArr;
+}
+
+function countArray2(scale = 50) {
+  const outArr = new Uint16Array(5);
+  for ( let x = -scale; x < scale; x += 1 ) {
+    for ( let y = -scale; y < scale; y += 1 ) {
+      randomCountArr2(outArr);
+    }
+  }
+  return outArr;
+}
+
+function randomCountArr() {
+  tmpArray[0] = Math.round(Math.random())
+  tmpArray[1] = Math.round(Math.random())
+  tmpArray[2] = Math.round(Math.random())
+  tmpArray[3] = Math.round(Math.random())
+  tmpArray[4] = Math.round(Math.random());
+  return tmpArray;
+}
+
+function randomCountArr2(arr) {
+  arr[0] += Math.round(Math.random())
+  arr[1] += Math.round(Math.random())
+  arr[2] += Math.round(Math.random())
+  arr[3] += Math.round(Math.random())
+  arr[4] += Math.round(Math.random());
+  return arr;
+}
+
+function countObject(scale = 50) {
+  const outObj = {
+    bright: 0,
+    dim: 0,
+    dark: 0,
+    occluded: 0,
+    red: 0,
+  };
+
+  for ( let x = -scale; x < scale; x += 1 ) {
+    for ( let y = -scale; y < scale; y += 1 ) {
+       const res = randomCountObj();
+       outObj.bright += res.bright;
+       outObj.dim += res.dim;
+       outObj.dark += res.dark;
+       outObj.occluded += res.occluded;
+       outObj.red += res.red;
+    }
+  }
+  return outObj;
+}
+
+function countObject2(scale = 50) {
+  const outObj = {
+    bright: 0,
+    dim: 0,
+    dark: 0,
+    occluded: 0,
+    red: 0,
+  };
+
+  for ( let x = -scale; x < scale; x += 1 ) {
+    for ( let y = -scale; y < scale; y += 1 ) {
+       randomCountObj2(outObj);
+    }
+  }
+  return outObj;
+}
+
+function randomCountObj() {
+  tmpObj.bright = Math.round(Math.random())
+  tmpObj.dim = Math.round(Math.random())
+  tmpObj.dark = Math.round(Math.random())
+  tmpObj.occluded = Math.round(Math.random())
+  tmpObj.red = Math.round(Math.random());
+  return tmpObj;
+}
+
+function randomCountObj2(obj) {
+  obj.bright += Math.round(Math.random())
+  obj.dim += Math.round(Math.random())
+  obj.dark += Math.round(Math.random())
+  obj.occluded += Math.round(Math.random())
+  obj.red += Math.round(Math.random());
+  return obj;
+}
+
+N = 1000
+await QBenchmarkLoopFn(N, countObject, "countObject")
+await QBenchmarkLoopFn(N, countObject2, "countObject2")
+await QBenchmarkLoopFn(N, countArray, "countArray")
+await QBenchmarkLoopFn(N, countArray2, "countArray2")
+
+await QBenchmarkLoopFn(N, countArray2, "countArray2")
+await QBenchmarkLoopFn(N, countArray, "countArray")
+await QBenchmarkLoopFn(N, countObject, "countObject")
+await QBenchmarkLoopFn(N, countObject2, "countObject2")
+*/
 
 
 /* Testing
@@ -556,13 +740,52 @@ camera.targetPosition = Point3d.fromTokenCenter(target);
 opts = { calculateLitPortions: true, senseType: "sight", sourceType: "lighting", scale: 50 }
 res = countTargetPixels(camera, target, opts)
 
-percentVisible = (res.red - res.occluded) / res.red;
-percentDim = res.dim / res.red
-percentBright = res.bright / res.red
+RED = 0
+OCCLUDED = 1
+BRIGHT = 2
+DIM = 3
+DARK = 4
+
+counts = res.counts
+percentVisible = (counts[RED] - counts[OCCLUDED]) / counts[RED];
+percentDim = counts[DIM] / counts[RED]
+percentBright = counts[BRIGHT] / counts[RED]
 console.log(`${Math.round(percentVisible * 10000)/100}% visible | ${Math.round(percentDim * 10000)/100}% dim | ${Math.round(percentBright * 10000)/100}% bright`, res)
 
 N = 100
 await QBenchmarkLoopFn(N, countTargetPixels, "countTargetPixels", camera, target, opts)
+
+summarizePixels(res.pixels)
+
+drawPixels(res.pixels, opts.scale)
+res.containingTris.forEach(tri => tri.draw2d({ color: Draw.COLORS.green }))
+
+tex = PIXI.Texture.fromBuffer(res.pixels, 100, 100)
+sprite = new PIXI.Sprite(tex)
+canvas.stage.addChild(sprite)
+canvas.stage.removeChild(sprite)
+
+sprite.anchor.set(0.5)
+sprite.rotation = Math.PI / 2 // 90º
+
+function componentToHex(c) {
+  var hex = c.toString(16);
+  return hex.length == 1 ? "0" + hex : hex;
+}
+function rgbToHex(r, g, b) {
+  return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
+
+scale = 50;
+width = scale * 2;
+for ( let i = 0; i < res.pixels.length / 4; i += 1 ) {
+  const offset = i * 4;
+  const px = res.pixels.subarray(offset, offset + 4);
+  const color = rgbToHex(px[0], px[1], px[2]);
+  x = (i % width) - scale
+  y = (~~(i / width)) - scale
+  Draw.point({ x, y }, { radius: 1, color })
+}
 
 
 */

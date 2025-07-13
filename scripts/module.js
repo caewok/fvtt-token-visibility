@@ -73,6 +73,7 @@ import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstacles.js";
 
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
+import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/PerPixelViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 // import {
@@ -236,6 +237,7 @@ Hooks.once("init", function() {
       // webgpu: PercentVisibleCalculatorWebGPU,
       // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
       hybrid: PercentVisibleCalculatorHybrid,
+      "per-pixel": PercentVisibleCalculatorPerPixel,
     },
 
     sightCalculators: {
@@ -245,6 +247,7 @@ Hooks.once("init", function() {
       // webgpu: null,
       // "webgpu-async": null,
       hybrid: null,
+      "per-pixel": null,
     },
 
     /**
@@ -257,6 +260,7 @@ Hooks.once("init", function() {
       // webgpu: DebugVisibilityViewerWebGPU,
       // "webgpu-async": DebugVisibilityViewerWebGPUAsync,
       hybrid: DebugVisibilityViewerHybrid,
+      "per-pixel": DebugVisibilityViewerPerPixel,
     },
 
     /**
@@ -343,6 +347,7 @@ Hooks.once("init", function() {
       // webGPU: PercentVisibleCalculatorWebGPU,
       // webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
       hybrid: PercentVisibleCalculatorHybrid,
+      perPixel: PercentVisibleCalculatorPerPixel,
     },
 
     buildLOSCalculator,
@@ -358,6 +363,7 @@ Hooks.once("init", function() {
       // webGPU: DebugVisibilityViewerWebGPU,
       // webGPUAsync: DebugVisibilityViewerWebGPUAsync,
       hybrid: DebugVisibilityViewerHybrid,
+      perPixel: DebugVisibilityViewerPerPixel,
     },
 
     webgl: {
@@ -459,6 +465,7 @@ Hooks.on("canvasReady", function() {
     "geometric",
     "webgl2",
     "hybrid",
+    "per-pixel",
   ];
 //   const webGPUCalcs = [
 //     "webgpu",

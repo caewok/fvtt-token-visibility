@@ -466,8 +466,14 @@ export class VerticalQuadVertices extends BasicVertices {
 
   static transformMatrixFromSegment(a, b, { topZ = T, bottomZ = B, rotate = 0, outMatrix } = {}) {
     outMatrix ??= CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+
+    // Scale by absolute z-length (vertical height).
+    // If the topZ and bottomZ are unbalanced, translate in the z direction to reset topZ to correct elevation.
+    // (scale - topZ)
+    // e.g. elev 20, -100. zHeight = 120. Untranslated topZ would be 120/2 = 60. Move 20 - 60 = -40.
     const zHeight = topZ - bottomZ;
-    const z = bottomZ + (zHeight * 0.5);
+    const z = topZ - (zHeight * 0.5);
+
     const dy = b.y - a.y;
     const dx = b.x - a.x;
     const radians = Math.atan2(dy, dx) + rotate;

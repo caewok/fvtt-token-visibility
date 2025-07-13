@@ -21,6 +21,7 @@ import { PointsViewpoint } from "./PointsViewpoint.js";
 import { GeometricViewpoint } from "./GeometricViewpoint.js";
 import { Hybrid3dViewpoint } from "./Hybrid3dViewpoint.js";
 import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
+import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
 // import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
 /**
@@ -83,6 +84,7 @@ export class AbstractViewerLOS {
   static VIEWPOINT_ALGORITHM_SETTINGS = {
     "los-algorithm-points": "points",
     "los-algorithm-geometric": "geometric",
+    "los-algorithm-per-pixel": "per-pixel",
     "los-algorithm-hybrid": "hybrid",
     "los-algorithm-webgl2": "webGL2",
     "los-algorithm-webgpu": "webGPU",
@@ -94,6 +96,7 @@ export class AbstractViewerLOS {
     return {
       "points": PointsViewpoint,
       "geometric": GeometricViewpoint,
+      "per-pixel": PerPixelViewpoint,
       "hybrid": Hybrid3dViewpoint,
       "webgl2": WebGL2Viewpoint,
       // "webgpu": WebGPUViewpoint,
@@ -102,6 +105,7 @@ export class AbstractViewerLOS {
       // Cannot reliably test for class, so test for class name instead.
       "PointsViewpoint": "points",
       "GeometricViewpoint": "geometric",
+      "PerPixelViewpoint": "per-pixel",
       "Hybrid3dViewpoint": "hybrid",
       "WebGL2Viewpoint": "webgl2",
       // "WebGPUViewpoint": "webgpu",
