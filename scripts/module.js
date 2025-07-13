@@ -173,6 +173,8 @@ Hooks.once("init", function() {
      */
     litTokens: false,
 
+    perPixelScale: 50,
+
 
     /** @type {string} */
     /*

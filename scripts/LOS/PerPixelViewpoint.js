@@ -55,11 +55,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
-  static defaultConfiguration = {
-    ...PercentVisibleRenderCalculatorAbstract.defaultConfiguration,
-    scale: 50,
-  };
-
   /** @type {Camera} */
   camera = new Camera({
     glType: "webGL2",
@@ -88,6 +83,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   get obscuredArea() { return this.counts[OCCLUDED]; }
 
+  _scale = 0; // Allow override of scale
+
+  get scale() { return this._scale || CONFIG[MODULE_ID].perPixelScale; }
+
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
     this.viewer = viewer;
     this.target = target;
@@ -111,7 +110,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   _totalTargetArea() { return this.targetArea; }
 
-  _viewableTargetArea() { return this.obscuredArea; }
+  _viewableTargetArea() {
+    const targetArea = this.targetArea;
+    return (targetArea - this.obscuredArea) / targetArea;
+  }
 
 
   /* ----- NOTE: Pixel testing ----- */
@@ -119,8 +121,9 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
   counts = new Uint16Array(5);
 
   countTargetPixels() {
+    const scale = this.scale;
     this.counts.fill(0);
-    const ndcTris = this.transformTargetToNDC();
+    const ndcTris = this.transformTargetToNDC(scale);
     const viewerObstacles = this.locateViewerObstacles();
     let srcs = [];
     let srcObstacles = [];
@@ -128,7 +131,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       srcs = canvas[this.config.sourceType].placeables;
       srcObstacles = this.locateSourceObstacles();
     }
-    const scale = this.config.scale;
     for ( let x = -scale; x < scale; x += 1 ) {
       for ( let y = -scale; y < scale; y += 1 ) {
         this._testPixelOcclusion(x, y, ndcTris, viewerObstacles, srcs, srcObstacles);
@@ -254,7 +256,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
   }
 
 
-  transformTargetToNDC() {
+  transformTargetToNDC(scale = this.scale) {
     const triangleType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTriangles" : "triangles";
     const targetTris = this.target[MODULE_ID][AbstractPolygonTrianglesID][triangleType].filter(poly => poly.isFacing(this.viewpoint));
     const { lookAtMatrix, perspectiveMatrix } = this.camera;
@@ -279,10 +281,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     // Avoids where the frustum does not adequately capture the target.
     // trisScaled = trisTransformed.map(tri => tri.multiplyScalar(scale))
     // Ensure the scale is the same in x and y.
-    const scale = Math.min(xScale, yScale) * this.config.scale;
-    // const x = this.config.scale * scale;
-    // const y = this.config.scale * scale;
-    const scaleOpts = { x: scale, y: scale, z: 1 };
+    const scaleXY = Math.min(xScale, yScale) * scale;
+    // const x = this.scale * scale;
+    // const y = this.scale * scale;
+    const scaleOpts = { x: scaleXY, y: scaleXY, z: 1 };
     const trisScaled = trisTransformed.map(tri => tri.scale(scaleOpts));
     trisScaled.forEach((tri, idx) => {
       tri._original = targetTris[idx]
@@ -503,20 +505,21 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   // ----- NOTE: Debugging ----- //
 
-  pixels = new Uint8Array(((this.constructor.DEBUG_SCALE * 2) ** 2) * 4)
+  get pixelsLength() { return ((this.scale * 2) ** 2) * 4; } // 4 channels: rgba
+
+  pixels = new Uint8Array(this.pixelsLength);
 
   #fragmentColor = new Point3d();
 
   containingTris = new Set();
 
-  static DEBUG_SCALE = 50;
-
   countTargetPixelsDebug() {
     this.pixels.fill(0);
     this.containingTris.clear();
 
+    const scale = this.scale;
     this.counts.fill(0);
-    const ndcTris = this.transformTargetToNDC();
+    const ndcTris = this.transformTargetToNDC(scale);
     const viewerObstacles = this.locateViewerObstacles();
     let srcs = [];
     let srcObstacles = [];
@@ -524,24 +527,18 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       srcs = canvas[this.config.sourceType].placeables;
       srcObstacles = this.locateSourceObstacles();
     }
-    const scale = this.constructor.DEBUG_SCALE;
+
     for ( let x = -scale; x < scale; x += 1 ) {
       for ( let y = -scale; y < scale; y += 1 ) {
         this._testPixelOcclusionDebug(x, y, ndcTris, viewerObstacles, srcs, srcObstacles);
 
         this.#fragmentColor.multiplyScalar(255, this.#fragmentColor);
-        this.constructor.setPixel(this.pixels, x, y, this.config.scale, [...this.#fragmentColor, 255]);
+        this.constructor.setPixel(this.pixels, x, y, scale, [...this.#fragmentColor, 255]);
       }
     }
   }
 
   _testPixelOcclusionDebug(x, y, ndcTris, viewerObstacles, srcs, srcObstacles) {
-    // x = -x;
-    // y = -y;
-//     const tmp = x;
-//     x = -y;
-//     y = tmp;
-
     this.#fragmentColor.set(0, 0, 0);
     this.#gridPoint.set(x, y);
     const containingTri = this._locateFragmentTriangle(ndcTris, this.#gridPoint);
@@ -553,16 +550,17 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
     // if ( containingTri === this.containingTris.first() ) { this.#fragmentColor.y = 1; }
     // return;
-    if ( containingTri !== this.containingTris.first() ) return;
+    // if ( containingTri !== this.containingTris.first() ) return;
 
     const origTri = containingTri._original;
     containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
 
+    /*
     const midZ = (Math.max(origTri.a.z, origTri.b.z, origTri.c.z) - Math.min(origTri.a.z, origTri.b.z, origTri.c.z)) / 2;
     if ( this.#fragmentPoint.z > midZ ) this.#fragmentColor.y = 1;
     else this.#fragmentColor.x = 1;
     return;
-
+    */
 
     this.#fragmentColor.x = 1;
 
@@ -665,19 +663,26 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   #debugSprite;
 
-  /**
-   * For debugging.
-   * Draw the 3d objects in the popout.
-   */
-  _draw3dDebug(viewer, target, viewerLocation, targetLocation, { draw, container } = {}) {
-    draw ??= new CONFIG.GeometryLib.Draw();
-
+  #verifyDebugContainer(container, draw, scale = this.scale) {
     // Set up container if necessary.
     if ( this.#debugTexture && this.#debugTexture.destroyed ) {
       this.#debugTexture = undefined;
       this.#debugSprite = undefined;
     }
-    this.#debugTexture ??= PIXI.Texture.fromBuffer(this.pixels, this.constructor.DEBUG_SCALE * 2, this.constructor.DEBUG_SCALE * 2);
+
+    // Resize if needed.
+    if ( this.pixelsLength !== this.pixels.length ) {
+      if ( this.#debugTexture ) {
+        container.removeChild(this.#debugSprite);
+        this.#debugTexture.destroy();
+        this.#debugSprite.destroy();
+        this.#debugTexture = undefined;
+        this.#debugSprite = undefined;
+      }
+      this.pixels = new Uint8Array(this.pixelsLength);
+    }
+
+    this.#debugTexture ??= PIXI.Texture.fromBuffer(this.pixels, scale * 2, scale * 2);
     if ( !this.#debugSprite ) {
       this.#debugSprite = new PIXI.Sprite(this.#debugTexture);
       container.addChild(this.#debugSprite);
@@ -685,11 +690,23 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       // Rotate the sprite to match expected view.
       // this.#debugSprite.anchor.set(0.5);
       // this.#debugSprite.rotation = Math.PI / 2; // 90º
-      this.#debugSprite.position.set(-this.config.scale, -this.config.scale);
+      this.#debugSprite.position.set(-scale , -scale);
 
       container.sortableChildren = true;
       draw.g.zIndex = 10;
     }
+  }
+
+  /**
+   * For debugging.
+   * Draw the 3d objects in the popout.
+   */
+  _draw3dDebug(viewer, target, viewerLocation, targetLocation, { draw, container, width = 100 } = {}) {
+    draw ??= new CONFIG.GeometryLib.Draw();
+
+    const oldScale = this._scale;
+    const scale = this._scale = Math.floor(width / 2);
+    this.#verifyDebugContainer(container, draw, scale);
 
     // Reset as needed.
     this.viewer = viewer;
@@ -709,6 +726,20 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
     // Draw the triangle outlines.
     this.containingTris.forEach(tri => tri.draw2d({ color: Draw.COLORS.green, alpha: 0.75, draw }));
+
+    this._scale = oldScale;
+  }
+
+  destroy() {
+    if ( this.#debugSprite ) {
+      if ( !this.#debugSprite.destroyed ) this.#debugSprite.destroy();
+      this.#debugSprite = undefined;
+    }
+    if ( this.#debugTexture ) {
+      if ( !this.#debugTexture.destroyed ) this.#debugTexture.destroy();
+      this.#debugTexture = undefined;
+    }
+    super.destroy();
   }
 }
 
@@ -716,6 +747,20 @@ export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPI
   static viewpointClass = PerPixelViewpoint;
 
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.PER_PIXEL;
+
+  updatePopoutFooter(percentVisible) {
+    super.updatePopoutFooter(percentVisible);
+    const calc = this.viewerLOS.calculator;
+
+    const { RED, BRIGHT, DIM, DARK } = calc.constructor.OCCLUSION_TYPES;
+    const area = calc.counts[RED];
+    const bright = calc.counts[BRIGHT] / area;
+    const dim = calc.counts[DIM] / area;
+    const dark = calc.counts[DARK] / area;
+
+    const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
+    visibleTextElem.innerHTML += ` | ${(bright * 100).toFixed(0)}% bright | ${(dim * 100).toFixed(0)}% dim | ${(dark * 100).toFixed(0)}% dark`;
+  }
 }
 
 
