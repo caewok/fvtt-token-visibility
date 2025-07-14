@@ -652,7 +652,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     const viewerObstacles = this.locateViewerObstacles();
     let srcs = [];
     let srcObstacles = [];
-    if ( this.config.useLitTargetShape ) {
+    if ( CONFIG[MODULE_ID].perPixelDebugLit  ) { // Always use litTarget for debug.
       srcs = canvas[this.config.sourceType].placeables;
       srcObstacles = this.locateSourceObstacles();
     }
@@ -709,8 +709,9 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       return;
     }
 
-    // Fragment brightness for each source.
-    if ( this.config.useLitTargetShape ) this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
+    // Fragment brightness for each source. (For debug, always run.)
+    if ( CONFIG[MODULE_ID].perPixelDebugLit ) this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
+    // this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
   }
 
   #lightDirection = new Point3d();
@@ -762,9 +763,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       // Reflected light from this source.
       const lightColor = Point3d._tmp1;
       const srcReflectedColor = Point3d._tmp2;
+      const N = origTri.plane.normal.multiplyScalar(-1, Point3d._tmp3);
 
       srcOrigin.subtract(this.#fragmentPoint, this.#lightDirection).normalize(this.#lightDirection);
-      const lightStrength = Math.max(origTri.plane.normal.dot(this.#lightDirection), 0) * (isDim ? 0.5 : 1.0);
+      const lightStrength = Math.max(N.dot(this.#lightDirection), 0) * (isDim ? 0.5 : 1.0);
       lightColor.set(...src.lightSource.colorRGB);
       lightColor.multiplyScalar(lightStrength, srcReflectedColor);
       this.#reflectedLightColor.add(srcReflectedColor, this.#reflectedLightColor);
@@ -775,7 +777,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
         const halfVector = Point3d._tmp3;
 
         this.#lightDirection.add(this.#viewDirection, halfVector).normalize(halfVector);
-        const specularStrength = Math.pow(origTri.plane.normal.dot(halfVector), this.shininess);
+        const specularStrength = Math.pow(N.dot(halfVector), this.shininess);
         lightColor.multiplyScalar(specularStrength, srcSpecularColor);
         this.#specularLightColor.add(srcSpecularColor, this.#specularLightColor);
       }
@@ -786,10 +788,16 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
     this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
 
-    // this.#fragmentColor
-//       .add(this.#ambientLightColor, this.#fragmentColor)
-//       .add(this.#reflectedLightColor, this.#fragmentColor)
-//       .add(this.#specularLightColor, this.#fragmentColor);
+    // Multiply the various light strengths by the fragment color and add
+    /*
+    this.#ambientLightColor.multiply(this.#fragmentColor, this.#ambientLightColor);
+    this.#reflectedLightColor.multiply(this.#fragmentColor, this.#reflectedLightColor);
+    this.#specularLightColor.multiply(this.#fragmentColor, this.#specularLightColor);
+
+    this.#ambientLightColor
+      .add(this.#reflectedLightColor, this.#fragmentColor)
+      .add(this.#specularLightColor, this.#fragmentColor);
+    */
   }
 
 
@@ -840,6 +848,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
   _draw3dDebug(viewer, target, viewerLocation, targetLocation, { draw, container, width = 100 } = {}) {
     draw ??= new CONFIG.GeometryLib.Draw();
 
+    // Store the original scale
     const oldScale = this._scale;
     this._scale = width;
     this.#verifyDebugContainer(container, draw, width);

@@ -242,7 +242,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
     super(opts);
     this.popout = new this.constructor.popoutClass({
       width: this.constructor.WIDTH,
-      height: this.constructor.HEIGHT + 75,
+      height: this.constructor.HEIGHT + 100,
       resizable: false
     });
   }

@@ -175,7 +175,9 @@ Hooks.once("init", function() {
 
     perPixelScale: 50,
 
-    perPixelQuickInterpolation: true,
+    perPixelQuickInterpolation: false,
+
+    perPixelDebugLit: true,
 
 
     /** @type {string} */
