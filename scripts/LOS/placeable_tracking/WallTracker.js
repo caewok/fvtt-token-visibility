@@ -52,7 +52,8 @@ export class WallTracker extends PlaceableModelMatrixTracker {
     const edge = wall.edge;
     const pos = this.constructor.edgeCenter(edge);
     const { top, bottom } = this.constructor.edgeElevation(edge);
-    const z = top === bottom ? 0.0 : ((0.5 * top) + (0.5 * bottom));
+    const zHeight = top - bottom;
+    const z = top - (zHeight * 0.5);
     CONFIG.GeometryLib.MatrixFloat32.translation(pos.x, pos.y, z, translationM);
     return translationM;
   }
@@ -67,7 +68,7 @@ export class WallTracker extends PlaceableModelMatrixTracker {
     const edge = wall.edge;
     const ln = this.constructor.edgeLength(edge);
     const { top, bottom } = this.constructor.edgeElevation(edge);
-    const scaleZ = top === bottom ? 1.0 : (top - bottom);
+    const scaleZ = top - bottom;
     CONFIG.GeometryLib.MatrixFloat32.scale(ln, 1.0, scaleZ, scaleM);
     return scaleM;
   }

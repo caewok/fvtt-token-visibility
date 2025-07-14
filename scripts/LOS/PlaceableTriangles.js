@@ -9,7 +9,7 @@ Region,
 */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
+import { MODULE_ID, OTHER_MODULES } from "../const.js";
 import { Polygon3dVertices } from "./geometry/BasicVertices.js";
 import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid } from "./geometry/GeometryToken.js";
 import { GeometryWall } from "./geometry/GeometryWall.js";
@@ -18,7 +18,7 @@ import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
 import { WallTracker } from "./placeable_tracking/WallTracker.js";
 import { TileTracker } from "./placeable_tracking/TileTracker.js";
 import { TokenTracker } from "./placeable_tracking/TokenTracker.js";
-import { Polygon3d, Triangle3d, Polygons3d } from "./geometry/Polygon3d.js";
+import { Polygon3d, Triangle3d, Quad3d, Polygons3d } from "./geometry/Polygon3d.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
@@ -61,7 +61,7 @@ class AbstractPolygonTriangles {
   static HOOKS = {};
 
   /** @type {number[]} */
-  static _hooks = [];
+  static _hooks = []; // Also define in each child class to avoid all classes using the same array.
 
   /**
    * Register hooks for this placeable type that record updates.
@@ -80,12 +80,25 @@ class AbstractPolygonTriangles {
   }
 
   static registerExistingPlaceables(placeables) {
-    placeables.forEach(placeable => new this(placeable));
+    placeables.forEach(placeable => {
+      const handler = new this(placeable);
+      handler.update();
+    });
   }
 
   static _onPlaceableDocumentCreation(placeableD) {
     if ( !placeableD.object ) return;
-    new this(placeableD.object);
+    const handler = new this(placeableD.object);
+    handler.update();
+  }
+
+  static UPDATE_KEYS = new Set();
+
+  static _onPlaceableDocumentUpdate(placeableD, changed) {
+    const placeable = placeableD.object;
+    if ( !placeable ) return;
+    const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
+    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[MODULE_ID][AbstractPolygonTrianglesID].update();
   }
 
   /* ----- NOTE: Constructor ----- */
@@ -99,7 +112,9 @@ class AbstractPolygonTriangles {
     placeable[MODULE_ID][AbstractPolygonTrianglesID] = this;
   }
 
-  get triangles() { return []; }
+  triangles = [];
+
+  update() { }
 
   /* ----- NOTE: Debug ----- */
 
@@ -140,12 +155,24 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
   }
 
   /* ----- NOTE: Constructor ----- */
-
-  get triangles() {
+  updateTriangles() {
     const M = this.constructor.instanceHandler.getMatrixForPlaceable(this.placeable);
-    if ( !M ) return [];
-    return this.constructor.prototypeTriangles.map(tri => tri.transform(M));
+    if ( !M ) {
+      this.triangles.length = 0;
+      return;
+    }
+    const protoTris = this.constructor.prototypeTriangles;
+    const nTris = protoTris.length;
+    this.triangles.length = nTris;
+    for ( let i = 0; i < nTris; i += 1 ) this.triangles[i] = protoTris[i].transform(M);
   }
+
+  update() {
+    super.update();
+    this.updateTriangles();
+  }
+
+  static UPDATE_KEYS = new Set();
 
   /* ----- NOTE: Debug ----- */
 
@@ -170,21 +197,65 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
   /** @type {object[]} */
   static HOOKS = {
     createWall: "_onPlaceableDocumentCreation",
+    updateWall: "_onPlaceableDocumentUpdate",
   };
+
+  /**
+   * Change keys in updateWall hook that indicate a relevant change to the placeable.
+   */
+  static UPDATE_KEYS = new Set([
+    "x",
+    "y",
+    "flags.elevatedvision.elevation.top",
+    "flags.elevatedvision.elevation.bottom",
+    "flags.wall-height.top",
+    "flags.wall-height.top",
+    "c",
+    "dir",
+  ]);
 
   /** @type {number[]} */
   static _hooks = [];
 
-  get triangle() {
+  updateTriangles() {
     const M = this.constructor.instanceHandler.getMatrixForPlaceable(this.placeable);
-    if ( !M ) return [];
-    const instance = WallTracker.isDirectional(this.placeable.edge)
-          ? DirectionalWallTriangles : WallTriangles;
-    return instance.prototypeTriangles.map(tri => tri.transform(M));
+    if ( !M ) {
+      this.triangles.length = 0;
+      return;
+    }
+    const protoTris = this.constructor.prototypeTriangles;
+    const nTris = protoTris.length;
+    this.triangles.length = nTris;
+    const instance = WallTracker.isDirectional(this.placeable.edge) ? DirectionalWallTriangles : WallTriangles;
+    for ( let i = 0; i < nTris; i += 1 ) instance.prototypeTriangles[i] = protoTris[i].transform(M);
   }
 
   static registerExistingPlaceables() {
     super.registerExistingPlaceables(canvas.walls.placeables);
+  }
+
+  /** @type {Quad3d} */
+  quad3d = new Quad3d();
+
+  update() {
+    super.update();
+    this.updateQuad();
+  }
+
+  updateQuad() {
+    if ( !this.quad3d ) this.quad = new Quad3d();
+    const wall = this.placeable;
+    const quad = this.quad3d;
+    let topZ = wall.topZ;
+    let bottomZ = wall.bottomZ;
+    if ( !isFinite(topZ) ) topZ = 1e06;
+    if ( !isFinite(bottomZ) ) bottomZ = -1e06;
+
+    quad.points[0].set(...wall.edge.a, topZ);
+    quad.points[1].set(...wall.edge.a, bottomZ);
+    quad.points[2].set(...wall.edge.b, bottomZ);
+    quad.points[3].set(...wall.edge.b, topZ);
+    quad.clearCache();
   }
 }
 
@@ -213,10 +284,23 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   /** @type {object[]} */
   static HOOKS = {
     createTile: "_onPlaceableDocumentCreation",
+    updateTile: "_onPlaceableDocumentUpdate",
   };
 
-    /** @type {number[]} */
-  static _hooks = [];
+  /** @type {number[]} */
+  static _hooks = []; //
+
+  /**
+   * Change keys in updateDocument hook that indicate a relevant change to the placeable.
+   */
+  static UPDATE_KEYS = new Set([
+    "x",
+    "y",
+    "elevation",
+    "width",
+    "height",
+    "rotation",
+  ]);
 
   static registerExistingPlaceables() {
     super.registerExistingPlaceables(canvas.tiles.placeables);
@@ -238,13 +322,52 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   /** @type {ClipperPaths|ClipperPaths2} */
   #alphaThresholdPaths;
 
-  constructor(placeable) {
-    super(placeable);
+  /** @type {Quad3d} */
+  quad3d = new Quad3d();
+
+  alphaQuad3d = new Quad3d(); // Only if tile is not rotated.
+
+
+  update() {
+    super.update();
 
     // Add in alpha threshold polygons.
+    this.updateQuad();
+    this.updateAlphaQuad();
     this._updateAlphaPaths();
     this._updatePathsToFacePolygons();
     this._updatePathsToFaceTriangles();
+  }
+
+  updateQuad() {
+    if ( !this.quad3d ) this.quad = new Quad3d();
+    const tile = this.placeable;
+    const quad = this.quad3d;
+    const elevZ = tile.elevationZ;
+
+    // Ignore polygon alpha shapes b/c will test alpha position above.
+    let bounds = tile.bounds;
+    quad.points[0].set(bounds.left, bounds.top, elevZ);
+    quad.points[1].set(bounds.left, bounds.bottom, elevZ);
+    quad.points[2].set(bounds.right, bounds.bottom, elevZ);
+    quad.points[3].set(bounds.right, bounds.top, elevZ);
+    quad.clearCache();
+  }
+
+  updateAlphaQuad() {
+    const tile = this.placeable;
+    const quad = this.alphaQuad3d
+    const alphaShape = tile.evPixelCache.getThresholdCanvasBoundingBox(CONFIG[MODULE_ID].alphaThreshold || 0.75);
+    const elevZ = tile.elevationZ;
+
+    // Ignore polygon alpha shapes b/c will test alpha position separately.
+    let bounds = tile.bounds;
+    if ( alphaShape instanceof PIXI.Rectangle && !alphaShape.equals(bounds) ) bounds = alphaShape;
+    quad.points[0].set(bounds.left, bounds.top, elevZ);
+    quad.points[1].set(bounds.left, bounds.bottom, elevZ);
+    quad.points[2].set(bounds.right, bounds.bottom, elevZ);
+    quad.points[3].set(bounds.right, bounds.top, elevZ);
+    quad.clearCache();
   }
 
   _updateAlphaPaths() {
@@ -380,12 +503,17 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   }
 
 
-  get triangles() {
+  updateTriangles() {
     const tile = this.placeable;
 
-    if ( !this.constructor.instanceHandler.hasPlaceable(tile) ) return [];
-    if ( !tile.evPixelCache ) return super.triangles.call(this);
-
+    if ( !this.constructor.instanceHandler.hasPlaceable(tile) ) {
+      this.triangles.length = 0;
+      return;
+    };
+    if ( !tile.evPixelCache ) {
+      super.updateTriangles();
+      return;
+    }
 
     const triType = CONFIG[MODULE_ID].tileThresholdShape;
     const obj = tile[MODULE_ID] ?? {};
@@ -407,7 +535,10 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     // Add elevation translation.
     const elevationT = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, tile.elevationZ);
     const M = toCanvasM.multiply4x4(elevationT);
-    return tris.map(tri => tri.transform(M));
+
+    const nTris = tris.length;
+    this.triangles.length = nTris;
+    for ( let i = 0; i < nTris; i += 1 ) this.triangles[i] = tris[i].transform(M);
   }
 }
 
@@ -425,46 +556,64 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
 
   /** @type {object[]} */
   static HOOKS = {
-    createToken: "_onPlaceableDocumentCreation",
+    drawToken: "_onPlaceableDraw",
+    refreshToken: "_onPlaceableRefresh",
   };
 
   /** @type {number[]} */
   static _hooks = [];
 
-  /* Debugging
-  static get prototypeTriangles() {
-    // 12 triangles total, 36 indices.
-    // South facing (first 2 triangles)
-    // return (this._prototypeTriangles ??= Triangle3d.fromVertices(this.geom.vertices, this.geom.indices.slice(3*0, 3*2)));
+  static UPDATE_KEYS = new Set([
+    "refreshPosition",
+    "refreshSize",
+    "refreshElevation",
+  ]);
 
-    // Top facing (second to last 2 triangles)
-    // return (this._prototypeTriangles ??= Triangle3d.fromVertices(this.geom.vertices, this.geom.indices.slice(3*8, 3*10)));
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is initially drawn.
+   * @param {PlaceableObject} object    The object instance being drawn
+   */
+  static _onPlaceableDraw(object) { new this(object); }
 
-    // Bottom facing (last 2 triangles)
-    return (this._prototypeTriangles ??= Triangle3d.fromVertices(this.geom.vertices, this.geom.indices.slice(3*8, 3*10)));
+  /**
+   * A hook event that fires when a {@link PlaceableObject} is incrementally refreshed.
+   * @param {PlaceableObject} object    The object instance being refreshed
+   * @param {RenderFlags} flags
+   */
+  static _onPlaceableRefresh(object, flags) {
+    if ( !object[MODULE_ID]?.[AbstractPolygonTrianglesID] ) new this(object);
+
+    // TODO: Can flags be set to false? Need this filter if so.
+    // const changeKeys = Object.entries(flags).filter([key, value] => value).map([key, value] => key);
+    const changeKeys = Object.keys(flags);
+    if ( !this.UPDATE_KEYS.has(changeKeys) ) return;
+    object[MODULE_ID][AbstractPolygonTrianglesID].update();
   }
-  */
 
   /* ----- NOTE: Constructor ----- */
 
+  litTriangles = [];
 
-  get litTriangles() {
-    const token = this.placeable;
-    if ( !token.litTokenBorder ) return null;
+  constrainedTriangles = [];
 
-    const geom = new GeometryLitToken({ placeable: token });
-    return Triangle3d.fromVertices(geom.vertices, geom.indices);
-  }
-
-  get constrainedTriangles() {
+  updateConstrainedTriangles() {
     const token = this.placeable;
     const geom = new GeometryConstrainedToken({ placeable: token });
-    return Triangle3d.fromVertices(geom.vertices, geom.indices);
+    this.constrainedTriangles = Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
-  get triangles() {
-     if ( this.placeable.isConstrainedTokenBorder ) return this.constrainedTriangles;
-     else return super.triangles;
+  updateLitTriangles() {
+    const token = this.placeable;
+    if ( !token.litTokenBorder ) this.litTriangles.length = 0;
+
+    const geom = new GeometryLitToken({ placeable: token });
+    this.litTriangles = Triangle3d.fromVertices(geom.vertices, geom.indices);
+  }
+
+  update() {
+    super.update();
+    this.updateConstrainedTriangles();
+    this.updateLitTriangles();
   }
 
   static registerExistingPlaceables() {
@@ -526,21 +675,74 @@ export class RegionTriangles extends AbstractPolygonTriangles {
 
   polygons = [];
 
-  constructor(region) {
-    super(region);
-    this.updateRegionPolygons();
+  /* ----- NOTE: Constructor ----- */
+
+  topPlane;
+
+  bottomPlane;
+
+  shapesPixi = new WeakMap();
+
+  // shapesPoly = new WeakMap();
+
+  shapesSides = new WeakMap();
+
+  update() {
+    super.update();
+    this.updatePolygons();
+    this.updatePlanes();
+    this.updateShapes();
   }
 
-  get triangles() { return this.polygons; }
+  updatePlanes() {
+    const Plane = CONFIG.GeometryLib.threeD.Plane;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const TM = OTHER_MODULES.TERRAIN_MAPPER;
+    const region = this.placeable;
+    const { topZ, bottomZ } = regionElevation(region);
+    this.topPlane = TM.ACTIVE ? region[TM.KEY]._plateauPlane(): new Plane(new Point3d(0, 0, topZ));
+    this.bottomPlane = new Plane(new Point3d(0, 0, bottomZ));
+  }
 
-  updateRegionPolygons() {
+  // TODO: Handle ramps.
+  updateShapes() {
+    if ( !this.shapesPixi ) this.shapesPixi = new WeakMap();
+    // if ( !this.shapesPoly ) this.shapesPoly = new WeakMap();
+    if ( !this.shapesSides ) this.shapesSides = new WeakMap();
+
+    const region = this.placeable;
+    for ( const shape of region.shapes ) {
+      const pixiShape = convertRegionShapeToPIXI(shape);
+      const poly = pixiShape.toPolygon();
+      const quads = [];
+
+      this.shapesPixi.set(shape, pixiShape);
+      // this.shapesPoly.set(shape, poly);
+      this.shapesSides.set(shape, quads);
+
+      if ( shape.data.hole ^ poly.isClockwise ) poly.reverseOrientation();
+
+      const { topZ, bottomZ } = regionElevation(region);
+      for ( const edge of poly.iterateEdges({ close: true }) ) {
+        const quad = new Quad3d();
+        quad.points[0].set(edge.A.x, edge.A.y, topZ);
+        quad.points[1].set(edge.A.x, edge.A.y, bottomZ);
+        quad.points[2].set(edge.B.x, edge.B.y, bottomZ);
+        quad.points[3].set(edge.B.x, edge.B.y, topZ);
+        quad.clearCache();
+        quads.push(quad);
+      }
+    }
+  }
+
+  updatePolygons() {
     // TODO: Handle holes
     // TODO: Handle combining polygons.
     this.buildRegionPolygons3d();
 
     // Tops and bottoms are Polygons3d and can simply be added to the polygons array.
     // Sides are arrays of Polygon3d and must be flattened.
-    this.polygons = [
+    this.triangles = [
       ...this.tops,
       ...this.bottoms,
       ...this.sides.flatMap(elem => elem),
@@ -557,7 +759,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     // TODO: If only updating elevation, don't update the entire group of polygons.
     const changeKeys = new Set(Object.keys(foundry.utils.flattenObject(changed)));
     if ( !this.CHANGE_KEYS.some(key => changeKeys.has(key)) ) return;
-    region[MODULE_ID][AbstractPolygonTrianglesID].updateRegionPolygons();
+    region[MODULE_ID][AbstractPolygonTrianglesID].update();
   }
 
   combineRegionShapes() {

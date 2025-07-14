@@ -165,7 +165,7 @@ export class Camera {
     const zFar = maxCornerDistance;
 
     if ( this.perspectiveType === "perspective" ) {
-      const maxAngle = maximumViewAngle(this.cameraPosition, targetToken);
+      const maxAngle = maximumViewAngle(this.cameraPosition, targetToken) || 0;
       const fov = Math.min(maxAngle, 2.5) + 0.02; // Math.toDegrees(2.5) ~ 143º. Keep well under 180º.
       // console.debug(`Camera|${targetToken.name}`, { maxAngle, fov })
 

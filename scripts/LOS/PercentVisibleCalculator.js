@@ -26,6 +26,7 @@ export class PercentVisibleCalculatorAbstract {
     },
     useLitTargetShape: false,
     senseType: "sight",
+    sourceType: "lighting", // If calculating lit target area, which source type is detected by the sense type as "lighting" the target. (sound, light)
     debug: false,
     largeTarget: false,
   };
