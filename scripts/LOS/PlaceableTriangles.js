@@ -356,11 +356,11 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
 
   updateAlphaQuad() {
     const tile = this.placeable;
-    const quad = this.quad3d
+    const quad = this.alphaQuad3d
     const alphaShape = tile.evPixelCache.getThresholdCanvasBoundingBox(CONFIG[MODULE_ID].alphaThreshold || 0.75);
     const elevZ = tile.elevationZ;
 
-    // Ignore polygon alpha shapes b/c will test alpha position above.
+    // Ignore polygon alpha shapes b/c will test alpha position separately.
     let bounds = tile.bounds;
     if ( alphaShape instanceof PIXI.Rectangle && !alphaShape.equals(bounds) ) bounds = alphaShape;
     quad.points[0].set(bounds.left, bounds.top, elevZ);

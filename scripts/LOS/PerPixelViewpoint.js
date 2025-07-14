@@ -157,6 +157,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
     this.counts[RED] += 1;
 
+    // TODO: Is it necessary to implement perspective correct interpolation?
+    // See https://webglfundamentals.org/webgl/lessons/webgl-3d-perspective-correct-texturemapping.html
     if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
       const origTri = containingTri._original;
       containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
