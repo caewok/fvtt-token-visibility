@@ -106,6 +106,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     */
 
     this.countTargetPixels();
+    // return this._viewableTargetArea();
   }
 
   _totalTargetArea() { return this.targetArea; }
@@ -113,6 +114,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
   _viewableTargetArea() {
     const targetArea = this.targetArea;
     return (targetArea - this.obscuredArea) / targetArea;
+  }
+
+  _percentUnobscured() {
+    return this._viewableTargetArea();
   }
 
 
@@ -123,7 +128,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
   countTargetPixels() {
     const scale = this.scale;
     this.counts.fill(0);
-    const ndcTris = this.transformTargetToNDC(scale);
+    const ndcTris = CONFIG[MODULE_ID].perPixelQuickInterpolation ? this.transformTargetToNDC() : this.transformTargetToNDC2();
     const viewerObstacles = this.locateViewerObstacles();
     let srcs = [];
     let srcObstacles = [];
@@ -131,8 +136,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       srcs = canvas[this.config.sourceType].placeables;
       srcObstacles = this.locateSourceObstacles();
     }
-    for ( let x = -scale; x < scale; x += 1 ) {
-      for ( let y = -scale; y < scale; y += 1 ) {
+    for ( let x = 0; x < scale; x += 1 ) {
+      for ( let y = 0; y < scale; y += 1 ) {
         this._testPixelOcclusion(x, y, ndcTris, viewerObstacles, srcs, srcObstacles);
       }
     }
@@ -151,8 +156,17 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
     this.counts[RED] += 1;
-    const origTri = containingTri._original;
-    containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
+
+    if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
+      const origTri = containingTri._original;
+      containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
+    } else {
+      // Or use the matrix to convert back to 2d space.
+      // Need to determine where the grid point hits the containing triangle on the z axis.
+      const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+      const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(this.#gridPoint.x, this.#gridPoint.y, gridZ), this.#fragmentPoint);
+    }
 
     // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
     // Is it occluded from the camera/viewer?
@@ -163,7 +177,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     }
 
     // Fragment brightness for each source.
-    if ( this.config.useLitTargetShape ) this._testPixelBrightness(origTri, srcs, srcObstacles);
+    if ( this.config.useLitTargetShape ) this._testPixelBrightness(containingTri._original, srcs, srcObstacles);
   }
 
   #srcOrigin = new Point3d();
@@ -255,18 +269,63 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     });
   }
 
+  #modelProjectionMatrix = CONFIG.GeometryLib.MatrixFlat.identity(4);
 
-  transformTargetToNDC(scale = this.scale) {
+  #modelProjectionScaleMatrix = CONFIG.GeometryLib.MatrixFlat.identity(4);
+
+  #invModelProjectionScaleMatrix = CONFIG.GeometryLib.MatrixFlat.identity(4);
+
+  #tmpScalingMatrix = CONFIG.GeometryLib.MatrixFlat.identity(4);
+
+  #scalingM = new CONFIG.GeometryLib.MatrixFlat([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 0.5, 0,
+    0, 0, 0.5, 1 ], 4, 4);
+
+  /**
+   * Scale an ndc point (between {-1,-1,-1} and {1,1,1}) to be within a window from 0 --> scale.
+   * See
+   *  https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluProject.xml
+   *  https://registry.khronos.org/OpenGL-Refpages/gl2.1/xhtml/gluUnProject.xml
+   */
+  get scalingM() {
+    // Scale to 0 --> this.scale.
+    // Here, view[0] = 0 and view[1] = 0. view[2] === view[3] === scale.
+    const A = this.scale * 0.5; // B === A.
+    // const C = A + view[0] = A
+    // const D = B + view[1] = B = A;
+    this.#scalingM.setIndex(0, 0, A);
+    this.#scalingM.setIndex(1, 1, A); // B
+    this.#scalingM.setIndex(3, 0, A); // C
+    this.#scalingM.setIndex(3, 1, A); // D
+
+    // Rest is already set in #scalingM.
+    return this.#scalingM;
+
+    /*
+    Where view is [x, y, width, height] of the viewport.
+
+    A = view[2] * 0.5
+    B = view[3] * 0.5
+    C = A + view[0]
+    D = B + view[1]
+
+    [ A, 0, 0, 0 ]
+    [ 0, B, 0, 0 ]
+    [ 0, 0, 0.5, 0 ]
+    [ C, D, 0.5, 1]
+    */
+  }
+
+  transformTargetToNDC2() {
+    const { camera, target } =  this;
     const triangleType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTriangles" : "triangles";
-    const targetTris = this.target[MODULE_ID][AbstractPolygonTrianglesID][triangleType].filter(poly => poly.isFacing(this.viewpoint));
-    const { lookAtMatrix, perspectiveMatrix } = this.camera;
-    const trisTransformed = targetTris.map(poly => {
-      poly = poly.transform(lookAtMatrix).clipZ();
-      poly.transform(perspectiveMatrix, poly);
-      return poly;
-    }).filter(tri => tri.isValid());
+    const targetTris = target[MODULE_ID][AbstractPolygonTrianglesID][triangleType].filter(poly => poly.isFacing(this.viewpoint));
 
-    // Transform the triangles so they fit between -1 and 1.
+    camera.lookAtMatrix.multiply4x4(camera.perspectiveMatrix, this.#modelProjectionMatrix);
+    const trisTransformed = targetTris.map(tri => tri.transform(this.#modelProjectionMatrix))
+
     let xMinMax = { };
     let yMinMax = { };
     trisTransformed.forEach(tri => {
@@ -276,25 +335,94 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
     const xScale = Math.min(-1 / xMinMax.min, 1 / xMinMax.max);
     const yScale = Math.min(-1 / yMinMax.min, 1 / yMinMax.max);
+    const scaleXY = Math.min(xScale, yScale);
 
-    // Scale up to -50 to 50 so that we can easily get approximately 100 x 100 pixels.
-    // Avoids where the frustum does not adequately capture the target.
-    // trisScaled = trisTransformed.map(tri => tri.multiplyScalar(scale))
-    // Ensure the scale is the same in x and y.
-    const scaleXY = Math.min(xScale, yScale) * scale;
-    // const x = this.scale * scale;
-    // const y = this.scale * scale;
-    const scaleOpts = { x: scaleXY, y: scaleXY, z: 1 };
-    const trisScaled = trisTransformed.map(tri => tri.scale(scaleOpts));
-    trisScaled.forEach((tri, idx) => {
-      tri._original = targetTris[idx]
-      tri._baryData = BaryTriangleData.fromTriangle3d(tri);
-      tri._baryPoint = new BarycentricPoint();
+    CONFIG.GeometryLib.MatrixFlat.scale(scaleXY, scaleXY, 1, this.#tmpScalingMatrix);
+
+    // Scale to a view window between 0 and this.scale.
+    // Determine the inverse.
+    this.#tmpScalingMatrix.multiply4x4(this.scalingM, this.#tmpScalingMatrix);
+    this.#modelProjectionMatrix.multiply4x4(this.#tmpScalingMatrix, this.#modelProjectionScaleMatrix)
+    this.#modelProjectionScaleMatrix.invert(this.#invModelProjectionScaleMatrix);
+
+    return targetTris.map((tri, idx) => {
+      const out = tri.transform(this.#modelProjectionScaleMatrix)
+
+      // For later use in interpolation.
+      out._original = targetTris[idx];
+      out._baryData = BaryTriangleData.fromTriangle3d(out);
+      out._baryPoint = new BarycentricPoint();
+      return out;
+    });
+  }
+
+
+  transformTargetToNDC() {
+    const triangleType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTriangles" : "triangles";
+    const targetTris = this.target[MODULE_ID][AbstractPolygonTrianglesID][triangleType].filter(poly => poly.isFacing(this.viewpoint));
+
+    // Old version (with change to scaling approach)
+    const { lookAtMatrix, perspectiveMatrix } = this.camera;
+    let trisTransformed = targetTris.map(poly => {
+      poly = poly.transform(lookAtMatrix).clipZ();
+      poly.transform(perspectiveMatrix, poly);
+      return poly;
+    }).filter(tri => tri.isValid());
+
+    let xMinMax = { };
+    let yMinMax = { };
+    trisTransformed.forEach(tri => {
+      xMinMax = Math.minMax(...Object.values(xMinMax), tri.a.x, tri.b.x, tri.c.x);
+      yMinMax = Math.minMax(...Object.values(yMinMax), tri.a.y, tri.b.y, tri.c.y);
     });
 
-    // TODO: Filter trisScaled by z? If z unscaled, between z = 0 and z = 1?
+    const xScale = Math.min(-1 / xMinMax.min, 1 / xMinMax.max);
+    const yScale = Math.min(-1 / yMinMax.min, 1 / yMinMax.max);
+    const scaleXY = Math.min(xScale, yScale) * this.scale * 0.5;
 
+    // Move from { -scale/2, scale/2 } to {0, scale}
+    const translateM = CONFIG.GeometryLib.MatrixFlat.translation(this.scale * 0.5, this.scale * 0.5, 0);
+    const scaleM = CONFIG.GeometryLib.MatrixFlat.scale(scaleXY, scaleXY, 1);
+    const stM = scaleM.multiply4x4(translateM);
+    const trisScaled = trisTransformed.map(tri => tri.transform(stM));
+    trisScaled.forEach((tri, idx) => {
+      tri._original = targetTris[idx];
+      tri._baryData = BaryTriangleData.fromTriangle3d(tri);
+      tri._baryPoint = new BarycentricPoint();
+    })
     return trisScaled;
+
+    // trisScaled.forEach(tri => console.log(tri.a, tri.b, tri.c))
+    // trisTransformed.map(tri => tri.transform(this.#tmpScalingMatrix)).forEach(tri => console.log(tri.a, tri.b, tri.c))
+    // targetTris.map(tri => tri.transform(this.#modelProjectionScaleMatrix)).forEach(tri => console.log(tri.a, tri.b, tri.c))
+    // targetTris.map(tri => tri.transform(this.#modelProjectionScaleMatrix)).map(tri => tri.transform(this.#invModelProjectionScaleMatrix)).forEach(tri => console.log(tri.a, tri.b, tri.c))
+
+
+    // targetTris.map(tri => tri.transform(this.#modelProjectionMatrix)).forEach(tri => console.log(tri.a, tri.b, tri.c))
+    // trisTransformed.forEach(tri => console.log(tri.a, tri.b, tri.c))
+
+    // targetTris.map(tri => tri.transform(this.#modelProjectionScaleMatrix)).forEach(tri => console.log(tri.a, tri.b, tri.c))
+    // trisScaled.forEach(tri => console.log(tri.a, tri.b, tri.c))
+
+    // targetTris.map(tri => tri.transform(this.#modelProjectionScaleMatrix)).map(tri => tri.transform(this.#invModelProjectionScaleMatrix)).forEach(tri => console.log(tri.a, tri.b, tri.c))
+    // targetTris.forEach(tri => console.log(tri.a, tri.b, tri.c))
+
+    // trisScaled.map(tri => tri.transform(this.#invModelProjectionScaleMatrix)).forEach(tri => console.log(tri.a, tri.b, tri.c))
+    // targetTris.forEach(tri => console.log(tri.a, tri.b, tri.c))
+
+
+    // Scale the target triangles, which were already in NDC space.
+    // TODO: Filter trisScaled by z? If z unscaled, between z = 0 and z = 1?
+//     return trisTransformed.map((tri, idx) => {
+//       const out = tri.transform(this.#tmpScalingMatrix);
+//
+//       // For later use in interpolation.
+//       out._original = targetTris[idx];
+//       out._baryData = BaryTriangleData.fromTriangle3d(tri);
+//       out._baryPoint = new BarycentricPoint();
+//       return out;
+//     });
+
   }
 
 
@@ -451,8 +579,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   /* ----- NOTE: Pixel Indexing ----- */
 
-  static setPixel(pixels, x, y, scale, arr) {
-    const offset = this.pixelIndex(x + scale, y + scale, scale * 2);
+  static setPixel(pixels, x, y, width, arr) {
+    const offset = this.pixelIndex(x, y, width);
     pixels.set(arr, offset);
   }
 
@@ -480,13 +608,12 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     return "0x" + this.componentToHex(r) + this.componentToHex(g) + this.componentToHex(b);
   }
 
-  static drawPixels(pixels, scale) {
-    const width = scale * 2;
+  static drawPixels(pixels, width) {
     for ( let i = 0; i < pixels.length; i += 4 ) {
       const px = pixels.subarray(i, i + 3);
       const color = parseInt(this.rgbToHex(px[0], px[1], px[2]), 16);
       const coords = this.pixelCoordinates(i, width);
-      CONFIG.GeometryLib.Draw.point({ x: coords.x - scale, y: coords.y - scale }, { radius: 1, color })
+      CONFIG.GeometryLib.Draw.point({ x: coords.x, y: coords.y }, { radius: 1, color })
     }
   }
 
@@ -505,7 +632,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   // ----- NOTE: Debugging ----- //
 
-  get pixelsLength() { return ((this.scale * 2) ** 2) * 4; } // 4 channels: rgba
+  get pixelsLength() { return (this.scale ** 2) * 4; } // 4 channels: rgba
 
   pixels = new Uint8Array(this.pixelsLength);
 
@@ -519,7 +646,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
     const scale = this.scale;
     this.counts.fill(0);
-    const ndcTris = this.transformTargetToNDC(scale);
+    const ndcTris = CONFIG[MODULE_ID].perPixelQuickInterpolation ? this.transformTargetToNDC() : this.transformTargetToNDC2();
     const viewerObstacles = this.locateViewerObstacles();
     let srcs = [];
     let srcObstacles = [];
@@ -528,8 +655,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       srcObstacles = this.locateSourceObstacles();
     }
 
-    for ( let x = -scale; x < scale; x += 1 ) {
-      for ( let y = -scale; y < scale; y += 1 ) {
+    for ( let x = 0; x < scale; x += 1 ) {
+      for ( let y = 0; y < scale; y += 1 ) {
         this._testPixelOcclusionDebug(x, y, ndcTris, viewerObstacles, srcs, srcObstacles);
 
         this.#fragmentColor.multiplyScalar(255, this.#fragmentColor);
@@ -540,6 +667,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   _testPixelOcclusionDebug(x, y, ndcTris, viewerObstacles, srcs, srcObstacles) {
     this.#fragmentColor.set(0, 0, 0);
+
     this.#gridPoint.set(x, y);
     const containingTri = this._locateFragmentTriangle(ndcTris, this.#gridPoint);
     if ( !containingTri ) return;
@@ -548,12 +676,17 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     this.containingTris.add(containingTri);
     this.counts[RED] += 1;
 
-    // if ( containingTri === this.containingTris.first() ) { this.#fragmentColor.y = 1; }
-    // return;
-    // if ( containingTri !== this.containingTris.first() ) return;
+    if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
+      const origTri = containingTri._original;
+      containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
+    } else {
+      // Or use the matrix to convert back to 2d space.
+      // Need to determine where the grid point hits the containing triangle on the z axis.
+      const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+      const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(this.#gridPoint.x, this.#gridPoint.y, gridZ), this.#fragmentPoint);
+    }
 
-    const origTri = containingTri._original;
-    containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
 
     /*
     const midZ = (Math.max(origTri.a.z, origTri.b.z, origTri.c.z) - Math.min(origTri.a.z, origTri.b.z, origTri.c.z)) / 2;
@@ -575,8 +708,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     }
 
     // Fragment brightness for each source.
-    if ( this.config.useLitTargetShape ) this._testPixelBrightnessDebug(origTri, srcs, srcObstacles);
-
+    if ( this.config.useLitTargetShape ) this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
   }
 
   #lightDirection = new Point3d();
@@ -663,7 +795,9 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   #debugSprite;
 
-  #verifyDebugContainer(container, draw, scale = this.scale) {
+  #verifyDebugContainer(container, draw, width = this.scale) {
+    draw.g.position.set(-width * 0.5, -width * 0.5);
+
     // Set up container if necessary.
     if ( this.#debugTexture && this.#debugTexture.destroyed ) {
       this.#debugTexture = undefined;
@@ -682,15 +816,15 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       this.pixels = new Uint8Array(this.pixelsLength);
     }
 
-    this.#debugTexture ??= PIXI.Texture.fromBuffer(this.pixels, scale * 2, scale * 2);
+    this.#debugTexture ??= PIXI.Texture.fromBuffer(this.pixels, width, width);
     if ( !this.#debugSprite ) {
       this.#debugSprite = new PIXI.Sprite(this.#debugTexture);
       container.addChild(this.#debugSprite);
 
       // Rotate the sprite to match expected view.
-      // this.#debugSprite.anchor.set(0.5);
+      this.#debugSprite.anchor.set(0.5);
       // this.#debugSprite.rotation = Math.PI / 2; // 90º
-      this.#debugSprite.position.set(-scale , -scale);
+      // this.#debugSprite.position.set(-scale , -scale);
 
       container.sortableChildren = true;
       draw.g.zIndex = 10;
@@ -705,8 +839,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     draw ??= new CONFIG.GeometryLib.Draw();
 
     const oldScale = this._scale;
-    const scale = this._scale = Math.floor(width / 2);
-    this.#verifyDebugContainer(container, draw, scale);
+    this._scale = width;
+    this.#verifyDebugContainer(container, draw, width);
 
     // Reset as needed.
     this.viewer = viewer;
@@ -739,6 +873,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       if ( !this.#debugTexture.destroyed ) this.#debugTexture.destroy();
       this.#debugTexture = undefined;
     }
+
     super.destroy();
   }
 }
@@ -758,8 +893,8 @@ export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPI
     const dim = calc.counts[DIM] / area;
     const dark = calc.counts[DARK] / area;
 
-    const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
-    visibleTextElem.innerHTML += ` | ${(bright * 100).toFixed(0)}% bright | ${(dim * 100).toFixed(0)}% dim | ${(dark * 100).toFixed(0)}% dark`;
+    const footer2 = this.popout.element[0].getElementsByTagName("p")[1];
+    footer2.innerHTML = `${(bright * 100).toFixed(0)}% bright | ${(dim * 100).toFixed(0)}% dim | ${(dark * 100).toFixed(0)}% dark`;
   }
 }
 
