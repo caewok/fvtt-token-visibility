@@ -33,7 +33,7 @@ export class TargetLightingTest {
   viewpoint = new CONFIG.GeometryLib.threeD.Point3d();
 
   _config = {
-    pointsPerFace: 7,
+    pointsPerFace: 9,
     sourceType: "lighting",
     senseType: "sight",
     blocking: {
