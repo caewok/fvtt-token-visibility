@@ -253,20 +253,18 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
   }
 
   locateViewerObstacles() {
-    const { senseType, blocking: blockingOpts } = this.config;
-    const viewerObstacles = AbstractViewpoint.findBlockingObjects(this.viewpoint, this.target, { senseType, blockingOpts });
-    viewerObstacles.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(viewerObstacles.walls, senseType);
-    viewerObstacles.proximateWalls = AbstractViewpoint.pullOutTerrainWalls(viewerObstacles.walls, senseType);
+    const viewerObstacles = ObstacleOcclusionTest.findBlockingObjects(this.viewpoint, this.target, this.config);
+    viewerObstacles.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(viewerObstacles.walls, this.config.senseType);
+    viewerObstacles.proximateWalls = ObstacleOcclusionTest.pullOutTerrainWalls(viewerObstacles.walls, this.config.senseType);
     return viewerObstacles;
   }
 
   locateSourceObstacles(srcs) {
-    const { senseType, sourceType, blocking: blockingOpts } = this.config;
-    srcs ??= canvas[sourceType].placeables;
+    srcs ??= canvas[this.config.sourceType].placeables;
     return srcs.map(src => {
-      const obstacles = AbstractViewpoint.findBlockingObjects(Point3d.fromPointSource(src), this.target, { senseType, blockingOpts });
-      obstacles.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(obstacles.walls, senseType);
-      obstacles.proximateWalls = AbstractViewpoint.pullOutTerrainWalls(obstacles.walls, senseType);
+      const obstacles = ObstacleOcclusionTest.findBlockingObjects(Point3d.fromPointSource(src), this.target, this.config);
+      obstacles.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(obstacles.walls, this.config.senseType);
+      obstacles.proximateWalls = ObstacleOcclusionTest.pullOutTerrainWalls(obstacles.walls, this.config.senseType);
       return obstacles;
     });
   }

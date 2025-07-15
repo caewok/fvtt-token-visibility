@@ -8,8 +8,15 @@ game,
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
+
+/*
+Points algorithm also can use area and threshold.
+Number of points tested is the total area; points without collision represent % viewable area.
+
+*/
 
 
 /**
@@ -137,15 +144,15 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   filterPotentiallyBlockingPolygons(viewer, viewerLocation, target) {
     this.polygons.length = 0;
     this.terrainPolygons.length = 0;
-    const { tiles, tokens, walls, regions } = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
-    const terrainWalls = AbstractViewpoint.pullOutTerrainWalls(walls, this.config.senseType);
+    const { tiles, tokens, walls, regions } = ObstacleOcclusionTest.findBlockingObjects(viewerLocation, target,
+      { viewer, senseType: this.config.senseType, blocking: this.config.blocking });
+    const terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(walls, this.config.senseType);
     for ( const terrainWall of terrainWalls ) {
-      const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(terrainWall, viewerLocation);
+      const polygons = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(terrainWall, viewerLocation);
       this.terrainPolygons.push(...polygons);
     }
     for ( const placeable of [...tiles, ...tokens, ...walls, ...regions] ) {
-      const polygons = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
+      const polygons = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
       this.polygons.push(...polygons);
     }
   }

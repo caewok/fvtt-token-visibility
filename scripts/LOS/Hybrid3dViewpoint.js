@@ -10,8 +10,8 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { GeometricViewpoint, PercentVisibleCalculatorGeometric } from "./GeometricViewpoint.js";
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
+import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 // Debug
 export class Hybrid3dViewpoint extends GeometricViewpoint {
@@ -19,7 +19,7 @@ export class Hybrid3dViewpoint extends GeometricViewpoint {
 }
 
 export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeometric {
-  static get viewpointClass() { return HybridViewpoint; }
+  static get viewpointClass() { return Hybrid3dViewpoint; }
 
   /** @type {PercentVisibleCalculatorAbstract} */
   tileCalc = CONFIG[MODULE_ID].sightCalculators.webGL2;
@@ -27,8 +27,8 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
   #blockingTiles = new Set();
 
   blockingTiles(viewerLocation, target) {
-    const visionTri = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
-    return AbstractViewpoint.filterTilesByVisionTriangle(visionTri, { senseType: this.config.senseType });
+    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(viewerLocation, target);
+    return ObstacleOcclusionTest.filterTilesByVisionTriangle(visionTri, { senseType: this.config.senseType });
   }
 
   _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {

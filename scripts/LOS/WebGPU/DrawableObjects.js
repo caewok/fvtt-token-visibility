@@ -5,7 +5,7 @@ CONST,
 "use strict";
 
 import { log } from "../util.js";
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { WebGPUDevice, WebGPUShader } from "./WebGPU.js";
 import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
@@ -1023,7 +1023,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     if ( !blocking.walls ) return;
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
-    const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    const walls = ObstacleOcclusionTest.filterWallsByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const wall of walls ) {
       if ( !(this.placeableTracker.hasPlaceable(wall) && this.constructor.includeWall(wall)) ) continue;
       if ( !this.includeEdge(wall.edge) ) continue;
@@ -1217,7 +1217,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+      const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
       for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries()) {
         const token = this.placeableTracker.getPlaceableFromId(id);
@@ -1284,7 +1284,7 @@ export class DrawableHexTokenInstances extends DrawableTokenInstances {
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+      const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens })
       for ( const [idx, token] of this._unconstrainedTokenIndices.entries() ) {
         // Only tokens within the viewable area.
@@ -1444,7 +1444,7 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
       return;
     }
 
-    const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle)
+    const tiles = ObstacleOcclusionTest.filterTilesByVisionTriangle(visionTriangle)
     const tileIds = tiles.map(tile => tile.id);
     for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {
       const drawable = this.drawables.get(id);
@@ -1536,7 +1536,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+      const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
         { viewer, target, blockingTokensOpts: blocking.tokens });
       const tokenIds = tokens.map(token => token.id);
       for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {

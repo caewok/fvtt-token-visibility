@@ -300,15 +300,19 @@ get bounds() {
   to2dPolygon(omitAxis = "z") {
     if ( omitAxis === "z" ) return new PIXI.Polygon(this.points); // PIXI.Polygon ignores "z" attribute.
 
+    const [x, y] = omitAxis === "x" ? ["y", "z"] : ["x", "z"];
+    return new PIXI.Polygon(this.points.map(pt3d => { return { x: pt3d[x], y: pt3d[y] } }));
+    /*
     const n = this.points.length;
     const points = Array(n * 2);
-    const [x, y] = omitAxis === "x" ? ["y", "z"] : ["x", "z"];
+
     for ( let i = 0; i < n; i += 1 ) {
       const pt = this.points[i];
       points[i * 2] = pt[x];
       points[i * 2 + 1] = pt[y];
     }
     return new PIXI.Polygon(points);
+    */
   }
 
   /**
@@ -320,6 +324,23 @@ get bounds() {
       const invZ = 1 / pt.z;
       return [pt.x * invZ, pt.y * invZ];
     }));
+  }
+
+  toPlanarPolygon() {
+    return new PIXI.Polygon(this.planarPoints);
+  }
+
+  static fromPlanarPolygon(poly2d, plane) {
+    const invM2d = plane.conversion2dMatrixInverse;
+    const ln = poly2d.points.length;
+    const pts3d = new Array(Math.floor(ln / 2));
+    for ( let i = 0, j = 0; i < ln; i += 2, j += 1 ) {
+      const x = poly2d.points[i];
+      const y = poly2d.points[i + 1];
+      const pt3d = invM2d.multiplyPoint(CONFIG.GeometryLib.threeD.Point3d._tmp.set(x, y, 0));
+      pts3d[j] = pt3d;
+    }
+    return this.from3dPoints(pts3d);
   }
 
   /**
@@ -524,7 +545,7 @@ get bounds() {
 
     // If the plane is not vertical, can do a simple projection onto the x/y plane as a 2d polygon.
     if ( plane.normal.z ) {
-      const poly2d = new PIXI.Polygon(this.points.map(pt3d => { return { x: pt3d.x, y: pt3d.y } }));
+      const poly2d = to2dPolygon();
       return poly2d.contains(ix.x, ix.y) ? ix : null;
     }
 
@@ -641,11 +662,11 @@ get bounds() {
     const ixs = poly2d.lineIntersections(a, b);
     ixs.sort((a, b) => a.t0 - b.t0);
     const from2dM = this.plane.conversion2dMatrixInverse;
-    ixs.map(ix => from2dM.multiplyPoint3d(CONFIG.GeometryLib.threeD.Point3d._tmp.set(ix.x, ix.y, 0)));
-    if ( ixs.length === 1 ) return ixs[0];
+    const pts3d = ixs.map(ix => from2dM.multiplyPoint3d(CONFIG.GeometryLib.threeD.Point3d._tmp.set(ix.x, ix.y, 0)));
+    if ( pts3d.length === 1 ) return ixs[0];
     const segments = [];
     let currSegment = { A: null, B: null };
-    ixs.forEach(ix => {
+    pts3d.forEach(ix => {
       if ( !currSegment.A ) { currSegment.A = ix; return; }
       currSegment.B = ix;
       segments.push(currSegment);

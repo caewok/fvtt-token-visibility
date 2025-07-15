@@ -50,7 +50,6 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.constructor.gpuCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
 
-    const gl = this.gl;
     this._initializeFramebuffer();
   }
 

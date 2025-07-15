@@ -108,3 +108,50 @@ Con:
 Raymarch, but from each light perspective separately. Sample from the cubemap instead of
 testing for X light intersections.
 
+
+
+Current benchmarks:
+
+This is the End (487 walls, no tiles)
+points: 0.43 ms
+geometric: 1.59 ms
+perPixel: 14.09 ms
+webGL2: 9.9 ms
+
+Test Edges (w/ tiles)
+points: 1.6 ms
+geometric: 3.79 ms
+perPixel: 61.96 ms
+webGL2: 35.61 ms
+
+If we had 5 lights hitting any given token, then could need:
+5 x 3 faces = 15 renders
+
+This is the End
+points: ??
+geometric per face: 1.59 + 1.59*15 = 9.54 ms
+perPixel: 14.09 ms
+webGL2 w/ BVH: > 9.9 ms
+webGL2 w/ cubemap: 9.9ms + 9.9 * 15 = 158.4 ms
+webGL2 w/ Raymarching: ??
+
+Test Edges (w/ tiles)
+ points: ??
+geometric per face: 3.79 + 3.79*15 = 60.84 ms
+perPixel: 14.09 ms
+webGL2 w/ BVH: > 35.61 ms
+webGL2 w/ cubemap: 35.61ms + 35.61 * 15 = 213.66 ms
+webGL2 w/ Raymarching: ??
+
+--> Probably not worth pursuing cubemaps given that tokens move a lot.
+A given token moving would require:
+- Redraw cubemaps: 213.66 ms
+- Test each viewing token: 35.61ms * number of Tokens
+--> If 10 tokens, at 569 ms
+
+Versus BVH:
+- Test each token. So can take up to 56.9 ms per token before cubemaps is better.
+  Nearly double the time.
+
+
+

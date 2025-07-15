@@ -20,6 +20,7 @@ import { TileTracker } from "./placeable_tracking/TileTracker.js";
 import { TokenTracker } from "./placeable_tracking/TokenTracker.js";
 import { Polygon3d, Triangle3d, Quad3d, Polygons3d } from "./geometry/Polygon3d.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
@@ -42,6 +43,8 @@ const SENSE_TYPES = {};
 CONST.WALL_RESTRICTION_TYPES.forEach(type => SENSE_TYPES[type] = Symbol(type));
 
 export const AbstractPolygonTrianglesID = "geometry";
+
+const tmpIx = new Point3d();
 
 /**
  * Stores 1+ prototype triangles and corresponding transformed triangles to represent
@@ -116,6 +119,27 @@ class AbstractPolygonTriangles {
 
   update() { }
 
+  /* ----- NOTE: Intersection ----- */
+
+  /**
+   * Determine where a ray hits this object's triangles.
+   * Stops at the first hit for a triangle facing the correct direction.
+   * Ignores intersections behind the ray.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @param {number} [cutoff=1]   Ignore hits further along the ray from this (treat ray as segment)
+   * @returns {number|null} The distance along the ray
+   */
+  rayIntersection(rayOrigin, rayDirection, cutoff = 1) {
+    for ( const tri of this.triangles ) {
+      if ( tri.isFacing(rayOrigin) ) {
+        const t = CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
+        if ( t !== null && t.between(0, cutoff, false) ) return t;
+      }
+    }
+    return null;
+  }
+
   /* ----- NOTE: Debug ----- */
 
   draw(placeable, opts) { this.triangles.forEach(tri => tri.draw(opts)); }
@@ -173,6 +197,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
   }
 
   static UPDATE_KEYS = new Set();
+
 
   /* ----- NOTE: Debug ----- */
 
@@ -257,6 +282,23 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
     quad.points[3].set(...wall.edge.b, topZ);
     quad.clearCache();
   }
+
+  /* ----- NOTE: Intersection ----- */
+
+  /**
+   * Determine where a ray hits this object's triangles.
+   * Stops at the first hit for a triangle facing the correct direction.
+   * Ignores intersections behind the ray.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @param {number} [cutoff=1]   Ignore hits further along the ray from this (treat ray as segment)
+   * @returns {number|null} The distance along the ray
+   */
+  rayIntersection(rayOrigin, rayDirection, cutoff = 1) {
+    const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
+    if ( t === null || !t.between(0, cutoff, false) ) return null;
+    return t;
+  }
 }
 
 export class DirectionalWallTriangles extends WallTriangles {
@@ -327,6 +369,45 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
 
   alphaQuad3d = new Quad3d(); // Only if tile is not rotated.
 
+  /* ----- NOTE: Intersection ----- */
+
+  /**
+   * Determine where a ray hits this object's triangles.
+   * Stops at the first hit for a triangle facing the correct direction.
+   * Ignores intersections behind the ray.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @param {number} [cutoff=1]   Ignore hits further along the ray from this (treat ray as segment)
+   * @returns {number|null} The distance along the ray
+   */
+  rayIntersection(rayOrigin, rayDirection, cutoff = 1) {
+    const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
+    if ( t === null || !t.between(0, cutoff, false) ) return null;
+    return t;
+  }
+
+  rayIntersectionAlpha(rayOrigin, rayDirection, cutoff = 1) {
+    const t = this.alphaQuad3d.intersectionT(rayOrigin, rayDirection);
+    if ( t === null || !t.between(0, cutoff, false) ) return null;
+
+    // Threshold test at the intersection point.
+    const threshold = CONFIG[MODULE_ID].alphaThreshold || 0.75;
+    const pxThreshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
+    rayOrigin.add(rayDirection.multiplyScalar(t, tmpIx), tmpIx);
+    const px = tile.evPixelCache.pixelAtCanvas(tmpIx.x, tmpIx.y);
+    if ( px > pxThreshold ) return t;
+
+    return t;
+  }
+
+  alphaThresholdTest(rayOrigin, rayDirection, t) {
+    const threshold = CONFIG[MODULE_ID].alphaThreshold || 0.75;
+    const pxThreshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
+    rayOrigin.add(rayDirection.multiplyScalar(t, tmpIx), tmpIx);
+    return tile.evPixelCache.pixelAtCanvas(tmpIx.x, tmpIx.y) > pxThreshold;
+  }
+
+  /* ----- NOTE: Updating ----- */
 
   update() {
     super.update();
@@ -686,6 +767,48 @@ export class RegionTriangles extends AbstractPolygonTriangles {
   // shapesPoly = new WeakMap();
 
   shapesSides = new WeakMap();
+
+  /* ----- NOTE: Intersection ----- */
+
+  /**
+   * Determine where a ray hits this object's triangles.
+   * Stops at the first hit for a triangle facing the correct direction.
+   * Ignores intersections behind the ray.
+   * @param {Point3d} rayOrigin
+   * @param {Point3d} rayDirection
+   * @param {number} [cutoff=1]   Ignore hits further along the ray from this (treat ray as segment)
+   * @returns {number|null} The distance along the ray
+   */
+  rayIntersection(rayOrigin, rayDirection, cutoff = 1) {
+    const region = this.placeable;
+    const { topZ, bottomZ, rampFloor } = regionElevation(region);
+    const testTop = rayOrigin > (rampFloor ?? topZ) && rayDirection.z < 0; // Ray above region top, moving down.
+    const testBottom = rayOrigin < bottomZ && rayDirection.z > 0; // Ray below region bottom, moving up.
+    const ixTB = testTop ? this.topPlane.rayIntersection(rayOrigin, rayDirection)
+      : testBottom ? this.bottomPlane.rayIntersection(rayOrigin, rayDirection)
+        : null;
+
+    let containsTB = 0;
+    for ( const shape of region.shapes ) {
+      // If the point is contained by more shapes than holes, it must intersect a non-hole.
+      // Example: Rect contains ellipse hole that contains circle. If in circle, than +2 - 1 = 1. If in ellipses, +1 -1 = 0.
+      if ( ixTB && handler.shapesPixi.get(shape).contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));
+
+      // Construct sides and test. Sides of a hole still block, so can treat all shapes equally.
+      // A side is a vertical quad; basically a wall.
+      // Check if facing.
+      for ( const quad of this.shapesSides.get(shape) ) {
+        if ( !quad.isFacing(rayOrigin) ) continue;
+        const t = quad.intersectionT(rayOrigin, rayDirection);
+        if ( t !== null && t.between(0, 1, false) ) return t;
+      }
+    }
+    if ( containsTB > 0 ) return ixTB;
+    return null;
+  }
+
+
+  /* ----- Note: Updating ----- */
 
   update() {
     super.update();

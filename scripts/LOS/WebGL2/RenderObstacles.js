@@ -91,28 +91,24 @@ export class RenderObstaclesWebGL2 {
     // Walls: Need normal, directional, terrain, terrain directional
     // Normal
     obj = new DrawableWallWebGL2(this);
-    obj.senseType = this.senseType;
     obj.directional = false;
     obj.limitedWall = false;
     this.drawableObjects.push(obj);
 
     // Terrain
     obj = new DrawableWallWebGL2(this);
-    obj.senseType = this.senseType;
     obj.directional = false;
     obj.limitedWall = true;
     this.drawableObjects.push(obj);
 
     // Directional
     obj = new DrawableWallWebGL2(this);
-    obj.senseType = this.senseType;
     obj.directional = true;
     obj.limitedWall = false;
     this.drawableObjects.push(obj);
 
     // Terrain && Directional
     obj = new DrawableWallWebGL2(this);
-    obj.senseType = this.senseType;
     obj.directional = true;
     obj.limitedWall = true;
     this.drawableObjects.push(obj);

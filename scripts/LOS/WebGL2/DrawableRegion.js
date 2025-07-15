@@ -4,7 +4,7 @@
 "use strict";
 
 import { DrawableObjectsWebGL2Abstract, DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import {
   GeometryRegion,
   GeometryPolygonRegionShape,
@@ -179,9 +179,9 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
   }
 
   updatePlaceableBuffer(region) {
-    const id = `Region.${region.id}`;
+    const regionId = `Region.${region.id}`;
     for ( const id of this.geoms.keys() ) {
-      if ( id.startsWith(id) ) this._updateAttributeBuffersForId(id);
+      if ( id.startsWith(regionId) ) this._updateAttributeBuffersForId(id);
     }
   }
 }
@@ -272,7 +272,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     this.instanceSet.clear();
     for ( const drawable of Object.values(this.drawables) ) drawable.instanceSet.clear();
 
-    const regions = AbstractViewpoint.filterRegionsByVisionTriangle(visionTriangle);
+    const regions = ObstacleOcclusionTest.filterRegionsByVisionTriangle(visionTriangle);
 
     // For each region, determine which shapes are within the vision triangle.
     // Add the id of each shape group to its respective drawable.

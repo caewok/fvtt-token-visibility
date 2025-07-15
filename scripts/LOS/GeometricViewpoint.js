@@ -11,6 +11,7 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
 import { Camera } from "./Camera.js";
 import { Polygons3d } from "./geometry/Polygon3d.js";
@@ -97,9 +98,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     };
     */
 
-    this.blockingObjects = AbstractViewpoint.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.config.senseType, blockingOpts: this.config.blocking });
-    this.blockingObjects.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(this.blockingObjects.walls, this.config.senseType);
+    this.blockingObjects = ObstacleOcclusionTest.findBlockingObjects(viewerLocation, target,
+      { viewer, senseType: this.config.senseType, blocking: this.config.blocking });
+    this.blockingObjects.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(this.blockingObjects.walls, this.config.senseType);
 
     const res = this._obscuredArea();
     this.targetArea = res.targetArea;
@@ -287,7 +288,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
-    const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(object, this.viewpoint);
+    const polys = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(object, this.viewpoint);
     return this._applyPerspective(polys, lookAtM, perspectiveM);
   }
 
@@ -364,9 +365,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const colors = Draw.COLORS;
 
     // Locate obstacles behind the target.
-    const visionTriangle = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
+    const visionTriangle = ObstacleOcclusionTest.visionTriangle.rebuild(viewerLocation, target);
     const backgroundTiles = visionTriangle.findBackgroundTiles();
-    const backgroundWalls = visionTriangle.findBackgroundWalls();
+    // const backgroundWalls = visionTriangle.findBackgroundWalls();
 
     // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
     // Simpler:
@@ -391,7 +392,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     ];
 
     const backgroundTestFn = (placeable, color, fill) => {
-      const polys = AbstractViewpoint.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
+      const polys = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
       polys.forEach(poly => {
         const ixs = [];
         for ( const dir of dirs ) {

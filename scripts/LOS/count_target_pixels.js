@@ -28,10 +28,10 @@ Can we do token visibility testing entirely in JS but mimic WebGL?
 */
 
 import { MODULE_ID } from "../const.js";
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { regionElevation } from "./util.js";
+import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 /**
  * Test if a barycentric coordinate is within its defined triangle.
@@ -347,7 +347,7 @@ const pt3d = new Point3d();
  * @param {Token} target
  * @returns {OcclusionCount}
  */
-export function countTargetPixels(camera, target, { calculateLitPortions = false, senseType = "sight", sourceType = "lighting", blockingOpts = {}, scale = 50, tokensFn = 1, debug = false } = {}) {
+export function countTargetPixels(camera, target, { calculateLitPortions = false, senseType = "sight", sourceType = "lighting", blocking = {}, scale = 50, tokensFn = 1, debug = false } = {}) {
   const viewpoint = camera.cameraPosition;
 
   tokensOccludeFn = tokensFn === 1 ? tokensOcclude : tokensOcclude2;
@@ -408,14 +408,14 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
   const srcs = calculateLitPortions ? canvas[sourceType].placeables : [];
 
   // Determine what obstacles are within the various triangles.
-  const viewerObstacles = AbstractViewpoint.findBlockingObjects(viewpoint, target, { senseType, blockingOpts });
-  viewerObstacles.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(viewerObstacles.walls, senseType);
-  viewerObstacles.proximateWalls = AbstractViewpoint.pullOutTerrainWalls(viewerObstacles.walls, senseType);
+  const viewerObstacles = ObstacleOcclusionTest.findBlockingObjects(viewpoint, target, { senseType, blocking });
+  viewerObstacles.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(viewerObstacles.walls, senseType);
+  viewerObstacles.proximateWalls = ObstacleOcclusionTest.pullOutTerrainWalls(viewerObstacles.walls, senseType);
 
   const srcObstacles = srcs.map(src => {
-    const obstacles = AbstractViewpoint.findBlockingObjects(Point3d.fromPointSource(src), target, { senseType, blockingOpts });
-    obstacles.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(obstacles.walls, senseType);
-    obstacles.proximateWalls = AbstractViewpoint.pullOutTerrainWalls(obstacles.walls, senseType);
+    const obstacles = ObstacleOcclusionTest.findBlockingObjects(Point3d.fromPointSource(src), target, { senseType, blocking });
+    obstacles.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(obstacles.walls, senseType);
+    obstacles.proximateWalls = ObstacleOcclusionTest.pullOutTerrainWalls(obstacles.walls, senseType);
     return obstacles;
   });
 

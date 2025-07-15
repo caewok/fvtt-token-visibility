@@ -20,6 +20,8 @@ import { getObjectProperty } from "./LOS/util.js";
 import * as bench from "./benchmark.js";
 
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
+import { TargetLightingTest } from "./LOS/TargetLightingTest.js";
 import { VisionTriangle } from "./LOS/VisionTriangle.js";
 
 import {
@@ -45,8 +47,8 @@ import {
   vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
 // import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 // import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
-import { wgsl } from "./LOS/wgsl-preprocessor.js";
-import { AsyncQueue } from "./LOS/AsyncQueue.js";
+// import { wgsl } from "./LOS/wgsl-preprocessor.js";
+// import { AsyncQueue } from "./LOS/AsyncQueue.js";
 
 
 import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
@@ -410,6 +412,8 @@ Hooks.once("init", function() {
 
 
     AbstractViewpoint,
+    ObstacleOcclusionTest,
+    TargetLightingTest,
 
     countTargetPixels,
 

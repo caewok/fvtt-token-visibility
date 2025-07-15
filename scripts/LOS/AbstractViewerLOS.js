@@ -3,7 +3,8 @@ canvas,
 CONFIG,
 foundry,
 LimitedAnglePolygon,
-Ray
+Ray,
+Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -149,7 +150,7 @@ export class AbstractViewerLOS {
    * @param {number} [opts.threshold]                         Percentage used to test for LOS (above this passes)
    * @param {object} [...cfg]                                 Passed to a newly-constructed calculator if none provided.
    */
-  constructor(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...cfg } = {}) {
+  constructor(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, ...cfg } = {}) {
     this.#viewer = viewer;
 
     if ( typeof numViewpoints !== "undefined" ) this.#config.numViewpoints = numViewpoints;
