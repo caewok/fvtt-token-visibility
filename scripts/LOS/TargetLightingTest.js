@@ -26,6 +26,8 @@ const DARK = 0;
  */
 export class TargetLightingTest {
 
+  static LIGHT_LEVELS = { BRIGHT, DIM, DARK };
+
   target;
 
   viewpoint = new CONFIG.GeometryLib.threeD.Point3d();
@@ -46,7 +48,7 @@ export class TargetLightingTest {
     },
   };
 
-  get config() { return this.config; }
+  get config() { return this._config; }
 
   set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true}); }
 
@@ -79,7 +81,7 @@ export class TargetLightingTest {
     const bright = c[BRIGHT];
     const dim = c[DIM];
     const dark = c[DARK];
-    const denom = 1 / dim + dark;
+    const denom = 1 / (dim + dark);
     return {
       bright: bright * denom,
       dim: dim * denom,
@@ -105,7 +107,7 @@ export class TargetLightingTest {
 
       // Setup the occlusion tester so the faster internal method can be used.
       tester ??= this.occlusionTesters.get(src);
-      tester._initialize(this.rayOrigin, this.target);
+      tester._initialize(this.viewpoint, this.target);
     }
     this.counts.fill(0);
   }
