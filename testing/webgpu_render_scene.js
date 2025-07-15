@@ -446,6 +446,12 @@ CONFIG.tokenvisibility.useRenderTexture = true
 // CONFIG.tokenvisibility.filterInstances = false;
 
 N = 10;
+for ( const [type, calc] of calcs ) {
+  await QBenchmarkLoopFn(N, percentFn, type, calc);
+}
+
+
+
 await QBenchmarkLoopFn(N, percentFn, "Points", calcPoints);
 await QBenchmarkLoopFn(N, percentFn, "Geometric", calcGeometric);
 await QBenchmarkLoopFn(N, percentFn, "WebGL2", calcWebGL2);

@@ -1,0 +1,74 @@
+Determining the hit object in raymarching
+In raymarching, the scene is typically defined by a single signed distance function (SDF) that returns the shortest distance to any object in the scene from a given point. When a ray successfully marches to the surface (i.e., the SDF returns a very small positive value), you've hit the surface of some object, but not necessarily a specific one.
+To determine which specific object was hit, you need to modify the SDF to also return an identifier for the object that contributed the closest distance. Here's a common approach:
+Modify the SDF function: Instead of returning only the distance, your combined SDF will return both the distance to the closest surface and an ID associated with that surface. This might involve creating a struct or using a vec2 to store both the distance and the ID.
+Combine individual object SDFs with IDs: When combining multiple SDFs to create your scene, you'll need to also combine their IDs. Here's how it generally works for common boolean operations:
+Union (combining shapes): Use the minimum of the distances and the ID corresponding to that minimum distance. For example, if sdf1 returns (dist1, id1) and sdf2 returns (dist2, id2), the union function would return (min(dist1, dist2), id1) if dist1 < dist2, and (min(dist1, dist2), id2) otherwise.
+Intersection: Use the maximum of the distances and the ID corresponding to that maximum distance.
+Subtraction: Invert the distance of the subtracted shape and then perform an intersection. The ID of the primary shape is typically returned if the subtraction is successful.
+Return the object ID from the raymarching loop: Once the raymarching loop converges (the distance returned by the combined SDF is very small), return the object ID associated with that final distance. This ID can then be used in the fragment shader to apply specific colors, textures, or other properties to the hit object.
+
+struct SDFResult {
+    float distance;
+    int objectID;
+};
+
+// SDF for a sphere
+SDFResult sdSphere(vec3 p, float radius, int id) {
+    return SDFResult(length(p) - radius, id);
+}
+
+// Combine two SDFResults, returning the closest distance and its ID
+SDFResult combineSDFs(SDFResult res1, SDFResult res2) {
+    if (res1.distance < res2.distance) {
+        return res1;
+    } else {
+        return res2;
+    }
+}
+
+SDFResult map(vec3 p) {
+    SDFResult sphere1 = sdSphere(p - vec3(-0.5, 0.0, 0.0), 0.3, 1); // Object ID 1
+    SDFResult sphere2 = sdSphere(p - vec3(0.5, 0.0, 0.0), 0.4, 2);  // Object ID 2
+    return combineSDFs(sphere1, sphere2);
+}
+
+// Raymarching function (simplified)
+SDFResult raymarch(vec3 ro, vec3 rd) {
+    float totalDistance = 0.0;
+    int hitObjectID = -1; // Default to no hit
+
+    for (int i = 0; i < MAX_STEPS; ++i) {
+        vec3 p = ro + rd * totalDistance;
+        SDFResult res = map(p);
+
+        if (res.distance < SURFACE_THRESHOLD) {
+            hitObjectID = res.objectID;
+            break;
+        }
+
+        totalDistance += res.distance;
+        if (totalDistance > MAX_RAY_DISTANCE) {
+            break;
+        }
+    }
+    return SDFResult(totalDistance, hitObjectID);
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    // ... setup ray origin and direction ...
+
+    SDFResult hitInfo = raymarch(rayOrigin, rayDirection);
+
+    if (hitInfo.objectID != -1) {
+        // Apply color based on the hit object ID
+        if (hitInfo.objectID == 1) {
+            fragColor = vec4(1.0, 0.0, 0.0, 1.0); // Red for object 1
+        } else if (hitInfo.objectID == 2) {
+            fragColor = vec4(0.0, 0.0, 1.0, 1.0); // Blue for object 2
+        }
+    } else {
+        // Background color
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+}

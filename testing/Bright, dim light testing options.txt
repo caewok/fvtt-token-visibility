@@ -1,0 +1,110 @@
+Options for detecting bright/dim/dark lighting/sound on target token:
+
+1. Points
+Test separately using X points on the token.
+
+Pro:
+• Simple, fast.
+• Can increase resolution by testing multiple points.
+• Can choose points on the token 3d surface to improve accuracy.
+• Can choose points for the facing sides to improve accuracy.
+• Use the 3d token bounds or a sphere instead of the exact token shape for simplicity, speed.
+
+Con:
+• Inexact.
+• Not great with tiles.
+
+2. Per light render using Geometry
+Using either the 3d token bounds or the exact token shape, use the geometric method
+to draw the bright/dim/dark portions of each token face from point of view of each light.
+
+Must convert each face to the different perspective views.
+--> Convert polygons to worldview and then to distinct camera view.
+
+e.g.
+Light 1: Convert token face(s) to light view; render; convert results back.
+Light 2: Convert faces to light view; render; convert results back.
+Light 3: Convert faces to light view; render; convert results back.
+--> Now combine all 3 for each relevant face.
+--> Then render from viewer, using the results of each face.
+
+Pro:
+• Geometry method is fast
+• Can ignore unseen faces
+• Can store face once created until token moves or scene objects change
+• Exact
+• No webGL
+
+Con:
+• Tokens move a lot, so storing the lit information not as useful
+• Per light x per face rendering.
+• Complex conversions and polygon combinations
+• Performance?
+
+3. BVH
+Put all scene objects into a bvh. Probably using triangles.
+When rendering target, test for light occlusion (and viewer occlusion) using the bvh.
+Likely pass through lighting information as uniforms, and limit to X nearest lights.
+
+Need a data texture for:
+1. Walls
+2. Tiles
+3. Regions (this one is difficult unless storing only triangles)
+4. Tokens (incl custom tokens, but that could get large)
+
+Tiles: Limited number of textures can be used. Or use a texture array or combine multiple texture to one.
+
+Pro:
+• Accuracy.
+• Handles occlusion from viewer and lights using same BVH.
+• Only one render required.
+• Can skip lights if occluded view or a bright light found.
+
+Con:
+• Data textures (at least 4).
+• BVH is complex.
+• Limits on handling tile exclusion. Alternative: Convert tiles to triangles as with geometric.
+• Limits for number of lights to test.
+• Performance takes a hit if many lights to test. Intersection test required.
+• Probably need to make everything triangles for bvh, which will increase data required to pass through.
+
+
+4. Per light render using cubemap templates (lightbox)
+
+Render lighting separately as distinct views, like in #2. But store in render textures, combine
+RTs into a cubemap.
+
+Then when rendering the target, sample from the cubemap.
+
+Pro:
+• Can store face once created until token moves or scene objects change.
+• Can render unlimited number of textures.
+• Uses existing rendering approach, with vertices/indices.
+
+Con:
+• Tokens move a lot, so storing the lit information not as useful
+• Per light x per face rendering.
+• Conversion to cubemap could be quite complex, particularly when combining render for each light.
+
+5. Raymarching
+Store information about scene object positions but use sdfs to construct.
+Use intersection information to determine tile UVs and transparency.
+Likely pass through lighting information as uniforms, and limit to X nearest lights.
+
+Pro:
+• Accuracy.
+• SDF is relatively straightforward and the shapes can be defined explicitly w/o triangles.
+• May be useful for elevated shadow lighting.
+• Much less data needed compared to the triangles of #3 (bvh) or #4 (cube maps).
+• Can skip lights if occluded view or a bright light found..
+
+Con:
+• Textures remain complicated.
+• Performance takes a hit if many lights to test.
+• Performance may suffer given number of unique objects that must be combined for a scene.
+  Essentially rendering the entire scene at every march step, for every fragment.
+
+6. Combine Raymarching with #4 (cube templates)
+Raymarch, but from each light perspective separately. Sample from the cubemap instead of
+testing for X light intersections.
+
