@@ -146,6 +146,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 
 
   initializeCalculations() {
+    // Don't use light testing or occlusion testers, so can skip the parent initializeCalculations.
     this.renderObstacles.prerender();
   }
 

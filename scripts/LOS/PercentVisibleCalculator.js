@@ -182,7 +182,38 @@ export class PercentVisibleCalculatorAbstract {
 
   counts = new Float32Array(this.constructor.COUNT_LABELS.length);
 
-  initializeCalculations() { return; }
+  initializeCalculations() {
+    this.initializeLightTesting();
+    this.initializeOcclusionTesters();
+  }
+
+  initializeOcclusionTesting() {
+    this.occlusionTester._initialize(this.viewpoint, this.target);
+    if ( this.occlusionTesters ) {
+      for ( const src of canvas[this.config.sourceType].placeables ) {
+        let tester;
+        if ( !this.occlusionTesters.has(src) ) {
+          tester = new ObstacleOcclusionTest();
+          tester.config = this.config; // Link so changes to config are reflected in the tester.
+          this.occlusionTesters.set(src, tester);
+        }
+
+        // Setup the occlusion tester so the faster internal method can be used.
+        tester ??= this.occlusionTesters.get(src);
+        tester._initialize(this.viewpoint, this.target);
+      }
+    }
+  }
+
+  _testLightingForPoint;
+
+  initializeLightTesting() {
+    this._testLightingForPoint = () => null; // Default: ignore.
+    if ( this.config.testLighting ) {
+      if ( this.config.sourceType === "lighting" ) this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
+      else if ( this.config.sourceType === "sound" ) this._testLightingForPoint = this._testSoundOcclusionForPoint.bind(this);
+    }
+  }
 
   calculate() {
     this.counts.fill(0);
@@ -238,6 +269,72 @@ export class PercentVisibleCalculatorAbstract {
       dim: dim / targetPoints.length,
       bright: bright / targetPoints.length,
     }
+  }
+
+  #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
+
+  _testLightingOcclusionForPoint(targetPoint, debugObject = {}, face) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const srcOrigin = Point3d._tmp;
+    let isBright = false;
+    let isDim = false;
+    for ( const src of canvas.lighting.placeables ) {
+      if ( !src.lightSource.active ) continue;
+
+      Point3d.fromPointSource(src, srcOrigin);
+      if ( face && !face.isFacing(sourceOrigin) ) continue; // On opposite side of the triangle from the camera.
+
+      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
+      if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
+
+      // If blocked, not bright or dim.
+      // TODO: Don't test tokens for blocking the light or set a config option somewhere.
+      // Probably means not syncing the configs for the occlusion testers.
+      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
+
+      // TODO: handle light/sound attenuation from threshold walls.
+      isBright ||= (dist2 <= (src.brightRadius ** 2));
+      isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
+      if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
+    }
+
+    debugObject.isDim = isDim;
+    debugObject.isBright = isBright;
+    this.counts[BRIGHT] += isBright;
+    this.counts[DIM] += isDim;
+    this.counts[DARK] += !(isDim || isBright);
+    return { isBright, isDim };
+  }
+
+  _testSoundOcclusionForPoint(targetPoint, debugObject = {}, face) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const srcOrigin = Point3d._tmp;
+    let isDim = false;
+    for ( const src of canvas.sound.placeables ) {
+      if ( !src.source.active ) continue;
+
+      Point3d.fromPointSource(src, srcOrigin);
+      if ( face && !face.isFacing(sourceOrigin) ) continue; // On opposite side of the triangle from the camera.
+
+      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
+      if ( dist2 > (src.radius ** 2) ) continue; // Not within source dim radius.
+
+      // If blocked, not bright or dim.
+      // TODO: Don't test tokens for blocking the light or set a config option somewhere.
+      // Probably means not syncing the configs for the occlusion testers.
+      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
+
+      // TODO: handle light/sound attenuation from threshold walls.
+      isDim = true;
+      break;
+    }
+
+    debugObject.isDim = isDim;
+    this.counts[DIM] += isDim;
+    this.counts[DARK] += !isDim;
+    return { isDim };
   }
 
   destroy() { return; }

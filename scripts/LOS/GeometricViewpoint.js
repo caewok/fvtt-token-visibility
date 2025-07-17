@@ -69,9 +69,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   counts = new Float32Array(5);
 
   initializeCalculations() {
+    super.initializeCalculations();
     this._initializeCamera();
-    this._initializeOcclusionTesters();
-    this._initializeLightTesting();
 
     // Can build the obstacles now, as they will not change even if target shape does.
     this._constructPerspectiveObstaclePolygons();
@@ -82,37 +81,12 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this._constructPerspectiveTargetPolygons();
     this._constructTargetPath();
     this._calculateObscuredArea();
-
-
   }
 
   _initializeCamera() {
     this.camera.cameraPosition = this.viewpoint;
     this.camera.targetPosition = this.targetLocation;
     this.camera.setTargetTokenFrustum(this.target);
-  }
-
-  _initializeLightTesting() {
-    const litMethod = CONFIG[MODULE_ID].litToken;
-    if ( this.config.testLighting
-      && litMethod === CONFIG[MODULE_ID].litTokenOptions.OCCLUSION ) this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
-    else this._testLightingForPoint = () => null; // Ignore
-  }
-
-  _initializeOcclusionTesters() {
-    this.occlusionTester._initialize(this.viewpoint, this.target);
-    for ( const src of canvas[this.config.sourceType].placeables ) {
-      let tester;
-      if ( !this.occlusionTesters.has(src) ) {
-        tester = new ObstacleOcclusionTest();
-        tester.config = this.config; // Link so changes to config are reflected in the tester.
-        this.occlusionTesters.set(src, tester);
-      }
-
-      // Setup the occlusion tester so the faster internal method can be used.
-      tester ??= this.occlusionTesters.get(src);
-      tester._initialize(this.viewpoint, this.target);
-    }
   }
 
   targetPaths;

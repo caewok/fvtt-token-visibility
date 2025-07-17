@@ -83,9 +83,8 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   get largeTargetArea() { return this.counts[TOTAL]; }
 
   initializeCalculations() {
+    super.initializeCalculations();
     this.debugPoints.length = 0;
-    this._initializeLightTesting();
-    this._initializeOcclusionTesters();
   }
 
   _calculate() {
@@ -128,36 +127,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     this.counts.set(tmpCounts);
   }
 
-  _initializeLightTesting() {
-    if ( this.config.testLighting ) {
-      this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
-    } else this._testLightingForPoint = () => null; // Ignore
-
-//     const litMethod = CONFIG[MODULE_ID].litToken;
-//     if ( this.config.testLighting && litMethod ) {
-//       const method = litMethod ===  CONFIG[MODULE_ID].litTokenOptions.CONSTRAIN
-//         ? "_testLightingContainmentForPoint" : "_testLightingOcclusionForPoint";
-//       this._testLightingForPoint = this[method].bind(this);
-//     } else this._testLightingForPoint = () => null; // Ignore
-  }
-
-  _initializeOcclusionTesters() {
-    this.occlusionTester._initialize(this.viewpoint, this.target);
-    for ( const src of canvas[this.config.sourceType].placeables ) {
-      let tester;
-      if ( !this.occlusionTesters.has(src) ) {
-        tester = new ObstacleOcclusionTest();
-        tester.config = this.config; // Link so changes to config are reflected in the tester.
-        this.occlusionTesters.set(src, tester);
-      }
-
-      // Setup the occlusion tester so the faster internal method can be used.
-      tester ??= this.occlusionTesters.get(src);
-      tester._initialize(this.viewpoint, this.target);
-    }
-  }
-
-
   /* ----- NOTE: Target points ----- */
 
 
@@ -195,8 +164,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
   }
 
-  _testLightingForPoint;
-
   /**
    * Use the target's lit shape to determine if the point is lit.
    */
@@ -216,36 +183,9 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 //     this.counts[DARK] += !(isDim || isBright);
 //   }
 
-  _testLightingOcclusionForPoint(targetPoint, debugObject = {}) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const srcOrigin = Point3d._tmp;
 
-    let isBright = false;
-    let isDim = false;
-    for ( const src of canvas[this.config.sourceType].placeables ) {
-      Point3d.fromPointSource(src, srcOrigin);
-      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
-      if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
-
-      // If blocked, not bright or dim.
-      // TODO: Don't test tokens for blocking the light or set a config option somewhere.
-      // Probably means not syncing the configs for the occlusion testers.
-      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
-      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
-
-      // TODO: handle light/sound attenuation from threshold walls.
-      isBright ||= (dist2 <= (src.brightRadius ** 2));
-      isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
-      if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
-    }
-
-    debugObject.isDim = isDim;
-    debugObject.isBright = isBright;
-    this.counts[BRIGHT] += isBright;
-    this.counts[DIM] += isDim;
-    this.counts[DARK] += !(isDim || isBright);
-  }
 }
+
 
 export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
   static viewpointClass = PointsViewpoint;

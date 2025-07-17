@@ -138,7 +138,7 @@ export class AbstractViewpoint {
    * @returns {boolean} True if some blocking placeable within the vision triangle.
    *
    */
-  hasPotentialObstacles() {
+  hasPotentialObstaclesfromViewpoint(viewpoint = this.viewpoint) {
     // TODO: Cache blocking objects and pass through to calc? Cache visionTriangle?
     const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(this.viewpoint, this.target);
     const opts = {
@@ -155,6 +155,62 @@ export class AbstractViewpoint {
       || ObstacleOcclusionTest.findBlockingRegions(visionTri, opts).size ) return true;
     return false;
   }
+
+  /**
+   * Test if the viewpoint is within 1+ bright lights.
+   * To be within, there must be no obstacles within vision triangle and light shape fully contains target.
+   * (Could do a similar dimRadius test but less relevant b/c would still need to calculate bright light.)
+   * @returns {undefined|boolean} True if definitely within bright light.
+   *   False if not. Undefined if obstacles present or target not fully within triangle shape.
+   */
+  fullyWithinBrightLight() {
+    if ( canvas.environment.globalLightSource.active ) return true;
+    for ( const src of canvas.lighting.placeables ) {
+      if ( !src.lightSource.active ) continue;
+
+      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
+      if ( dist2 > (src.brightRadius ** 2) ) continue; // Not within bright dim radius.
+
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( this.hasPotentialObstaclesfromViewpoint(src) ) continue;
+
+
+      return true;
+    }
+    return false;
+  }
+
+  fullyWithinSound() {
+    bounds ??= CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBounds : this.target.tokenBorder;
+    if ( this.target.constrainedTokenBorder.equals(this.target.sound))
+
+
+    for ( const src of canvas.sound.placeables ) {
+      if ( !src.source.active ) continue;
+
+      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
+      if ( dist2 > (src.radius ** 2) ) continue; // Not within bright dim radius.
+
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( this.hasPotentialObstaclesfromViewpoint(src) ) continue;
+
+
+
+      return true;
+
+    }
+  }
+
+  withinDimLight() {
+    if ( canvas.environment.globalLightSource.active ) return true;
+    for ( const src of canvas[this.config.sourceType].placeables ) {
+
+    }
+
+
+  }
+
+
 
   /**
    * @param {Token} token

@@ -18,7 +18,6 @@ import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js"
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { BarycentricPoint, BaryTriangleData } from "./geometry/Barycentric.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -26,9 +25,9 @@ import { Draw } from "../geometry/Draw.js";
 // NOTE: Temporary objects
 const TOTAL = 0;
 const OBSCURED = 1;
-const BRIGHT = 2;
-const DIM = 3;
-const DARK = 4;
+// const BRIGHT = 2;
+// const DIM = 3;
+// const DARK = 4;
 
 /**
  * An eye belong to a specific viewer.
@@ -66,9 +65,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   get scale() { return this._scale || CONFIG[MODULE_ID].perPixelScale; }
 
   initializeCalculations() {
+    super.initializeCalculations();
     this._initializeCamera();
-    this._initializeOcclusionTesters();
-    this._initializeLightTesting();
   }
 
   _calculate() {
@@ -79,29 +77,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     this.camera.cameraPosition = this.viewpoint;
     this.camera.targetPosition = this.targetLocation;
     this.camera.setTargetTokenFrustum(this.target);
-  }
-
-  _initializeLightTesting() {
-    const litMethod = CONFIG[MODULE_ID].litToken;
-    if ( this.config.testLighting
-      && litMethod === CONFIG[MODULE_ID].litTokenOptions.OCCLUSION ) this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
-    else this._testLightingForPoint = () => null; // Ignore
-  }
-
-  _initializeOcclusionTesters() {
-    this.occlusionTester._initialize(this.viewpoint, this.target);
-    for ( const src of canvas[this.config.sourceType].placeables ) {
-      let tester;
-      if ( !this.occlusionTesters.has(src) ) {
-        tester = new ObstacleOcclusionTest();
-        tester.config = this.config; // Link so changes to config are reflected in the tester.
-        this.occlusionTesters.set(src, tester);
-      }
-
-      // Setup the occlusion tester so the faster internal method can be used.
-      tester ??= this.occlusionTesters.get(src);
-      tester._initialize(this.viewpoint, this.target);
-    }
   }
 
   _generateTargetFaces() {
@@ -138,7 +113,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
   #rayDirection = new Point3d();
 
-  _testPixelOcclusion(x, y, ndcTris, srcs = []) {
+  _testPixelOcclusion(x, y, ndcTris) {
     this.#gridPoint.set(x, y);
     const containingTri = this._locateFragmentTriangle(ndcTris, this.#gridPoint);
     if ( !containingTri ) return;
@@ -166,40 +141,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     this.counts[OBSCURED] += isOccluded;
 
     // Fragment brightness for each source.
-    if ( !isOccluded ) this._testPixelBrightness(containingTri._original, srcs);
-  }
-
-  #sourceOrigin = new CONFIG.GeometryLib.threeD.Point3d();
-
-  _testPixelBrightness(origTri, srcs) {
-    const srcOrigin = this.#sourceOrigin;
-    const rayDirection = this.#rayDirection;
-
-    let isBright = false;
-    let isDim = false;
-    for ( let i = 0, iMax = srcs.length; i < iMax; i += 1 ) {
-      const src = srcs[i];
-      Point3d.fromPointSource(src, srcOrigin);
-      if ( !origTri.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
-
-      // Are we within the light radius?
-      const dist2 = Point3d.distanceSquaredBetween(this.#fragmentPoint, srcOrigin);
-      if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
-
-      // If blocked, then not bright or dim.
-      // NOTE: Don't normalize so the wall test can use 0 < t < 1.
-      this.#fragmentPoint.subtract(srcOrigin, rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
-      if ( this.occlusionTesters.get(src)._rayIsOccluded(rayDirection) ) continue;
-
-      // TODO: handle light/sound attenuation from threshold walls.
-      isBright ||= (dist2 <= (src.brightRadius ** 2));
-      isDim = true; // Already tested distance above.
-      // isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
-      if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
-    }
-    this.counts[BRIGHT] += isBright;
-    this.counts[DIM] += isDim;
-    this.counts[DARK] += !(isBright || isDim);
+    if ( !isOccluded ) this._testLightingForPoint(this.#fragmentPoint, {}, containingTri._original, );
   }
 
   /**
@@ -464,14 +406,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     const scale = this.scale;
     this.counts.fill(0);
     const ndcTris = CONFIG[MODULE_ID].perPixelQuickInterpolation ? this.transformTargetToNDC() : this.transformTargetToNDC2();
-    let srcs = [];
-    if ( CONFIG[MODULE_ID].perPixelDebugLit  ) { // Always use litTarget for debug.
-      srcs = canvas[this.config.sourceType].placeables;
-    }
 
     for ( let x = 0; x < scale; x += 1 ) {
       for ( let y = 0; y < scale; y += 1 ) {
-        this._testPixelOcclusionDebug(x, y, ndcTris, srcs);
+        this._testPixelOcclusionDebug(x, y, ndcTris);
 
         this.#fragmentColor.multiplyScalar(255, this.#fragmentColor);
         this.constructor.setPixel(this.pixels, x, y, scale, [...this.#fragmentColor, 255]);
@@ -479,7 +417,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     }
   }
 
-  _testPixelOcclusionDebug(x, y, ndcTris, srcs) {
+  _testPixelOcclusionDebug(x, y, ndcTris) {
     this.#fragmentColor.set(0, 0, 0);
 
     this.#gridPoint.set(x, y);
@@ -523,22 +461,26 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     }
 
     // Fragment brightness for each source. (For debug, always run.)
-    if ( CONFIG[MODULE_ID].perPixelDebugLit ) this._testPixelBrightnessDebug(containingTri._original, srcs);
+    if ( CONFIG[MODULE_ID].perPixelDebugLit ) {
+      const { isBright, isDim } = this._testLightingForPoint(this.#fragmentPoint, {}, containingTri._original);
+      this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
+    }
     // this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
   }
 
-  #lightDirection = new Point3d();
-
-  #reflectedLightColor = new Point3d();
-
-  #specularLightColor = new Point3d();
-
-  #ambientLightColor = new Point3d(0.2, 0.2, 0.2);
-
-  #viewDirection = new Point3d();
+//   #lightDirection = new Point3d();
+//
+//   #reflectedLightColor = new Point3d();
+//
+//   #specularLightColor = new Point3d();
+//
+//   #ambientLightColor = new Point3d(0.2, 0.2, 0.2);
+//
+//   #viewDirection = new Point3d();
 
   shininess = 100;
 
+/*
   _testPixelBrightnessDebug(origTri, srcs) {
     const srcOrigin = this.#sourceOrigin;
     const rayDirection = this.#rayDirection;
@@ -600,7 +542,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     this.counts[DARK] += !(isBright || isDim);
 
     this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
-
+    }
+*/
     // Multiply the various light strengths by the fragment color and add
     /*
     this.#ambientLightColor.multiply(this.#fragmentColor, this.#ambientLightColor);
@@ -611,7 +554,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       .add(this.#reflectedLightColor, this.#fragmentColor)
       .add(this.#specularLightColor, this.#fragmentColor);
     */
-  }
 
 
   #debugTexture;
