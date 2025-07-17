@@ -20,8 +20,6 @@ export class ObstacleOcclusionTest {
 
   rayOrigin = new CONFIG.GeometryLib.threeD.Point3d();
 
-  rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
-
   obstacles = {};
 
   config = {
@@ -53,8 +51,7 @@ export class ObstacleOcclusionTest {
   // Can use this method if the target point (rayDirection) is still within the target bounds.
   // Obstacles are filtered based on the vision triangle from origin to the target bounds.
   _rayIsOccluded(rayDirection) {
-    this.rayDirection.copyFrom(rayDirection)
-    return this.obstacleTester(this.rayOrigin, this.rayDirection);
+    return this.obstacleTester(this.rayOrigin, rayDirection);
   }
 
   findObstacles() {
