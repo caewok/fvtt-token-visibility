@@ -1,7 +1,64 @@
 Options for detecting bright/dim/dark lighting/sound on target token:
 
+litTokenBorder
+--> Use dim and bright versions of litTokenBorder
+--> take the dim shape of each light and intersect with the bright radius
+
+Algorithms:
+• Points: Test if lit token shape contains points Equivalent to Foundry version of w/in light border
+• Pixel sampled: Use lit token shape for target
+• Per pixel: Use lit token shape for target
+• Geometry: Use lit token shape for target
+• webGL: Use lit token shape for target
+
+For each algorithm, can run repeatedly to determine difference between:
+- unconstrained or constrained
+- bright constrained
+- dim constrained
+
+
+Points occlusion testing
+--> For 1+ points that can be seen from the viewer, test if occluded from light.
+
+Algorithms:
+• Points: For selected point, test occlusion from viewer and light
+• Pixel sampled: For each sampled pixel, test occlusion from viewer and light
+• Per pixel: For each pixel, test occlusion from viewer and light
+• Geometry: Take the final perspective shapes, transform back to world coordinates, then test.
+  --> per pixel testing: sample the pixels of the transformed shape.
+  --> area testing: "face-melting" by taking view from each light,
+      cutting out the obstacles of the facing target faces,
+      then taking the remainder to measure area from viewpoint. Separately for dim, bright, none.
+      Could even cache the cut-out target faces
+• webGL: n/a; fall back on lit token shape? Or pixel sampled if fast? Could do per-pixel from the returned pixelCache, but would be slow.
+
+
+Algorithm-specific testing
+--> Use an exact approach specific to the algorithm
+• Points: N/A. Use the Points occlusion approach, which would be "exact" for this algorithm
+• Pixel sampled: N/A. Use the Points occlusion approach
+• Per pixel: N/A. Use the Points occlusion approach
+• Geometry: Take the final perspective shapes, transform back to world coordinates, then test.
+   --> geometry testing: change view to light; run geometry test again.
+• webGL: BVH or Raymarching
+
+
+Algorithms:
+• Points: Select points w/in 2d (or 3d) token to test
+• Pixel sampled: Select points on visible token faces. No perspective mapping; stay in 3d model space.
+• Per pixel: Perspective mapping, mimic webGL. Convert pixel back to world space to test lighting.
+• Geometry: Perspective mapping, but use Clipper to get exact obscured geometry. Transform geometry back to world space to test lighting.
+• webGL: Render target and obstacles. Test lighting within webGL by passing light uniforms and obstacle maps
+  --> Can avoid passing all obstacles by passing only those within the light view
+  --> Could render repeatedly, once per light. See #7 or #8
+
+---------------
+
+
+
+
 1. Points
-Test separately using X points on the token.
+Test separately using X points on the token. Random or (possibly better) use grid based on bounds
 
 Pro:
 • Simple, fast.
@@ -108,6 +165,37 @@ Con:
 Raymarch, but from each light perspective separately. Sample from the cubemap instead of
 testing for X light intersections.
 
+7. webGL with multiple renders using vertices/indices
+Render target normally with obstacles using vertices/indices. Render to RT.
+For each light,
+  B. render each obstacle from view of light and compare to the RT. Mark RT accordingly.
+
+Would require knowing the translation to/from world space for each pixel in the original render.
+Which we do, b/c it is the modelview matrix.
+Ideally, we would use B. Would need to:
+ - Render initial target and obstacles from viewer perspective.
+ - Render obstacles and target from light perspective.
+   - At each fragment, determine the approximate pixel location of the original render.
+   - Pull the RT at that location and update
+   - So it is rerendering the RT
+Probably doesn't work using webGL as would need to render a quad to rerender the RT.
+But already rendering a different viewpoint (from the light).
+
+Could we render each target face and transform it so it fits squarely within an RT?
+Then we are back at something like a cubemap, pulling from it when rendering the target from the viewer viewpoint
+Trick is we need to render using some sort of perspective, but then undo that perspective.
+
+
+8. webGL with multiple renders and data textures
+Render target normally with obstacles using vertices/indices. Render to RT.
+For each light:
+  - re-render the target shape.
+  - pass all obstacles for the given light as data textures; for each fragment, test intersection
+  - pull from the original target render and modify with the intersection test.
+
+Works better than doing all at once where we don't really need to test that many obstacles.
+Avoids importing the world scene but does require a lot of data texture modification and uploading
+Probably faster to load everything all at once and use BVH
 
 
 Current benchmarks:
