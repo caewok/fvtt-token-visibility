@@ -26,17 +26,17 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
 
   #blockingTiles = new Set();
 
-  blockingTiles(viewerLocation, target) {
-    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(viewerLocation, target);
+  blockingTiles(viewpoint, target) {
+    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(viewpoint, target);
     return ObstacleOcclusionTest.filterTilesByVisionTriangle(visionTri, { senseType: this.config.senseType });
   }
 
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this.#blockingTiles = this.blockingTiles(viewerLocation, target);
+  _calculatePercentVisible(viewer, target, viewpoint, targetLocation) {
+    this.#blockingTiles = this.blockingTiles(viewpoint, target);
     if ( this.#blockingTiles.size ) {
-      return this.tileCalc._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+      return this.tileCalc._calculatePercentVisible(viewer, target, viewpoint, targetLocation);
     } else {
-      return super._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+      return super._calculatePercentVisible(viewer, target, viewpoint, targetLocation);
     }
   }
 

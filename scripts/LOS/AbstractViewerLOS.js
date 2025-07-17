@@ -44,7 +44,7 @@ import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
  * @property {BlockingConfig} blocking                    Do various canvas objects block?
  * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
  * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
- * @property {boolean} useLitTargetShape            Should the illuminated target shape be used?
+ * @property {boolean} testLighting            Should the illuminated target shape be used?
  * @property {boolean} debug                              Trigger debug drawings and logging
  */
 
@@ -300,9 +300,9 @@ export class AbstractViewerLOS {
     return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target);
   }
 
-  get useLitTargetShape() { return this.calculator.config.useLitTargetShape; }
+  get testLighting() { return this.calculator.config.testLighting; }
 
-  set useLitTargetShape(useLitTargetShape) { this.calculator.config = { useLitTargetShape }; }
+  set testLighting(testLighting) { this.calculator.config = { testLighting }; }
 
   get visibleTargetShape() {
     if ( !this.target ) return undefined;
@@ -331,7 +331,7 @@ export class AbstractViewerLOS {
     if ( viewer.vision && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return 0;
 
     // Target is not lit.
-    if ( this.useLitTargetShape ) {
+    if ( this.testLighting ) {
       const shape = this.visibleTargetShape;
       // const shape = target.constrainedTokenBorder;
       if ( !shape ) return 0;
@@ -572,9 +572,9 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
   }
 
   #calculateCacheKey() {
-    // Drop useLitTargetShape b/c we are tracking that separately.
+    // Drop testLighting b/c we are tracking that separately.
     const calcConfig = { ...this.calculator.config };
-    delete calcConfig.useLitTargetShape;
+    delete calcConfig.testLighting;
 
     // Combine all remaining settings into string.
     return JSON.stringify({
@@ -587,7 +587,7 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
 
   validateCache(target) {
     // If the settings have changed, wipe the cache.
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
+    const cacheType = this.calculator.config.testLighting ? "litTarget" : "unlitTarget";
     const cacheKey = this.#calculateCacheKey();
     if ( this.#cacheKeys[cacheType] !== cacheKey ) {
       // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name} cache key changed\n\t${this.#cacheKeys[cacheType]}\n\t${cacheKey}`);
@@ -620,17 +620,17 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
   }
 
   setCacheValue(target, value) {
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
+    const cacheType = this.calculator.config.testLighting ? "litTarget" : "unlitTarget";
     this.#cachedPercentVisible[cacheType].set(target, value);
   }
 
   getCachedValue(target) {
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
+    const cacheType = this.calculator.config.testLighting ? "litTarget" : "unlitTarget";
     return this.#cachedPercentVisible[cacheType].get(target);
   }
 
   hasCachedValue(target) {
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
+    const cacheType = this.calculator.config.testLighting ? "litTarget" : "unlitTarget";
     return this.#cachedPercentVisible[cacheType].has(target);
   }
 

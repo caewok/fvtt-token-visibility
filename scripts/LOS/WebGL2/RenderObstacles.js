@@ -174,7 +174,7 @@ export class RenderObstaclesWebGL2 {
       }
     },
     debug: false,
-    useLitTargetShape: false,
+    testLighting: false,
   }
 
   get config() { return this._config; }
@@ -302,7 +302,7 @@ export class RenderObstaclesWebGL2 {
   prerender() {
     for ( const drawableObj of this.drawableObjects ) drawableObj.prerender();
 
-    if ( this.config.useLitTargetShape ) this.drawableLitToken.prerender();
+    if ( this.config.testLighting ) this.drawableLitToken.prerender();
     // this.drawableConstrainedToken.prerender();
   }
 
@@ -331,7 +331,7 @@ export class RenderObstaclesWebGL2 {
     // this.gl.flush();
   }
 
-  renderTarget(viewerLocation, target, { targetLocation, frame, useLitTargetShape = false, clear = true, useStencil = false } = {}) {
+  renderTarget(viewerLocation, target, { targetLocation, frame, testLighting = false, clear = true, useStencil = false } = {}) {
     this._setCamera(viewerLocation, target, { targetLocation });
 
     const gl = this.gl;
@@ -369,7 +369,7 @@ export class RenderObstaclesWebGL2 {
     }
 
     this._setMaterial("target");
-    this.drawableTokens.renderTarget(target, useLitTargetShape);
+    this.drawableTokens.renderTarget(target, testLighting);
     // this.gl.flush();
   }
 

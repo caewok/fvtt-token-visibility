@@ -90,13 +90,13 @@ export class AbstractViewpoint {
 
   /** @override */
   _percentVisible() {
-    const { calculator, viewer, target, viewpoint: viewerLocation, targetLocation } = this;
-    return calculator.percentVisible(viewer, target, { viewerLocation, targetLocation });
+    const { calculator, viewer, target, viewpoint: viewpoint, targetLocation } = this;
+    return calculator.percentVisible(viewer, target, { viewpoint, targetLocation });
   }
 
   async _percentVisibleAsync() {
-    const { calculator, viewer, target, viewpoint: viewerLocation, targetLocation } = this;
-    return calculator.percentVisibleAsync(viewer, target, { viewerLocation, targetLocation });
+    const { calculator, viewer, target, viewpoint: viewpoint, targetLocation } = this;
+    return calculator.percentVisibleAsync(viewer, target, { viewpoint, targetLocation });
   }
 
   /**
@@ -110,6 +110,10 @@ export class AbstractViewpoint {
     // If directly overlapping.
     if ( target.bounds.contains(this.viewpoint) ) return 1;
 
+    // If testing lighting, is it lit at all?
+    // TODO: Is it possible for litTokenBorder to fail but still be lit?
+    if ( !this.passesSimpleLitTest ) return 0;
+
     // Treat the scene background as fully blocking, so basement tokens don't pop-up unexpectedly.
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
     if ( (this.viewpoint.z > backgroundElevation && target.topZ < backgroundElevation)
@@ -118,6 +122,13 @@ export class AbstractViewpoint {
     if ( !this.hasPotentialObstacles(target) ) return 1;
 
     return undefined;
+  }
+
+  passesSimpleLitTest() {
+    if ( !this.config.testLighting ) return true;
+    if ( !CONFIG[MODULE_ID].litTokenOption ) return true;
+    if ( !this.target.litTokenBorder ) return false;
+    return true;
   }
 
   // ----- NOTE: Collision tests ----- //

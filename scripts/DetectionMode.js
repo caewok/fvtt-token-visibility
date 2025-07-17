@@ -45,7 +45,7 @@ PATCHES.BASIC.WRAPS = { testVisibility };
  * Mixed wrap DetectionMode.prototype._testLOS
  * Handle different types of LOS visibility tests.
  */
-function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape = false } = {}) {
+function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = false } = {}) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
@@ -72,14 +72,14 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
 
 //   const viewer = visionSource.object;
 //   console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
-//      { useLitTargetShape, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
+//      { testLighting, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
 //   console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
 
   // Configure the line-of-sight calculator.
 
   const losCalc = viewer[MODULE_ID]?.losCalc;
   if ( !losCalc ) return wrapped(visionSource, mode, target, test);
-  losCalc.useLitTargetShape = useLitTargetShape;
+  losCalc.testLighting = testLighting;
 
   const senseType = visionSource.constructor.sourceType;
   if ( senseType !== "sight" ) {
