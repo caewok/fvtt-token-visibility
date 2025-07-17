@@ -532,12 +532,12 @@ get bounds() {
    * @param {Point3d} rayDirection
    * @returns {Point3d|null}
    */
-  intersection(rayOrigin, rayDirection) {
+  intersection(rayOrigin, rayDirection, minT = 0) {
     // First get the plane intersection.
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const plane = this.plane;
     const t = plane.rayIntersection(rayOrigin, rayDirection);
-    if ( t === null || t < 0 ) return null;
+    if ( t === null || t < minT ) return null;
     if ( t.almostEqual(0) ) return rayOrigin;
 
     const ix = new Point3d();
@@ -831,9 +831,9 @@ export class Triangle3d extends Polygon3d {
     return CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, this.a, this.b, this.c);
   }
 
-  intersection(rayOrigin, rayDirection) {
+  intersection(rayOrigin, rayDirection, minT = 0) {
     const t = this.intersectionT(rayOrigin, rayDirection);
-    if ( t === null || t < 0 ) return null;
+    if ( t === null || t < minT ) return null;
     if ( t.almostEqual(0) ) return rayOrigin;
     const ix = new CONFIG.GeometryLib.threeD.Point3d();
     return rayOrigin.add(rayDirection.multiplyScalar(t, ix), ix);
@@ -1260,11 +1260,11 @@ export class Polygons3d extends Polygon3d {
    * @param {Point3d} rayDirection
    * @returns {Point3d|null}
    */
-  intersection(rayOrigin, rayDirection) {
+  intersection(rayOrigin, rayDirection, minT) {
     let ixNum = 0;
     let ix;
     for ( const poly of this.polygons ) {
-      const polyIx = poly.intersection(rayOrigin, rayDirection);
+      const polyIx = poly.intersection(rayOrigin, rayDirection, minT);
       if ( polyIx ) {
         ix = polyIx;
         ixNum += (poly.isHole ? -1 : 1);
