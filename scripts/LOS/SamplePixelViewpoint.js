@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -16,18 +15,20 @@ import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js"
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
-// NOTE: Temporary objects
-const TOTAL = 0;
-const OBSCURED = 1;
-const BRIGHT = 2;
-const DIM = 3;
-const DARK = 4;
 
 /* Sample pixel viewpoint
 Instead of transforming to perspective coordinates, keep everything in model space.
 More like visibility testing using an orthographic view. Faces further away count more than
 they would with perspective view, but hopefully much faster.
 */
+
+const {
+  TOTAL,
+  OBSCURED,
+//   BRIGHT,
+//   DIM,
+//   DARK,
+} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
 
 
 /**
@@ -60,8 +61,6 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
   occlusionTesters = new WeakMap();
 
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
-
-  #sourceOrigin = new CONFIG.GeometryLib.threeD.Point3d();
 
   _calculate() {
     const faces = this._generateTargetFaces(); // Not in initialization b/c may vary depending on _tokenShapeType
@@ -198,7 +197,6 @@ export class DebugVisibilityViewerSamplePixel extends DebugVisibilityViewerArea3
     footer2.innerHTML = `${(bright * 100).toFixed(0)}% bright | ${(dim * 100).toFixed(0)}% dim | ${(dark * 100).toFixed(0)}% dark`;
   }
 }
-
 
 /*
 PercentVisibleCalculatorPerPixel = api.calcs.perPixel

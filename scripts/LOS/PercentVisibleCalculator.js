@@ -19,21 +19,14 @@ Calculate percent visibility for a token viewer looking at a target token.
 
 */
 
-const TOTAL = 0;
-const OBSCURED = 1;
-const BRIGHT = 2;
-const DIM = 3;
-const DARK = 4;
-
-
 export class PercentVisibleCalculatorAbstract {
 
   static COUNT_LABELS = {
-    TOTAL,
-    OBSCURED,
-    BRIGHT,
-    DIM,
-    DARK,
+    TOTAL: 0,
+    OBSCURED: 1,
+    BRIGHT: 2,
+    DIM: 3,
+    DARK: 4,
   };
 
   static defaultConfiguration = {
@@ -282,7 +275,7 @@ export class PercentVisibleCalculatorAbstract {
       if ( !src.lightSource.active ) continue;
 
       Point3d.fromPointSource(src, srcOrigin);
-      if ( face && !face.isFacing(sourceOrigin) ) continue; // On opposite side of the triangle from the camera.
+      if ( face && !face.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
 
       const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
       if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
@@ -315,7 +308,7 @@ export class PercentVisibleCalculatorAbstract {
       if ( !src.source.active ) continue;
 
       Point3d.fromPointSource(src, srcOrigin);
-      if ( face && !face.isFacing(sourceOrigin) ) continue; // On opposite side of the triangle from the camera.
+      if ( face && !face.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
 
       const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
       if ( dist2 > (src.radius ** 2) ) continue; // Not within source dim radius.
@@ -339,3 +332,11 @@ export class PercentVisibleCalculatorAbstract {
 
   destroy() { return; }
 }
+
+const {
+  TOTAL,
+  OBSCURED,
+  BRIGHT,
+  DIM,
+  DARK,
+} = PercentVisibleCalculatorAbstract.COUNT_LABELS;

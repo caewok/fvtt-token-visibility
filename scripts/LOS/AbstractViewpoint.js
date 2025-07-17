@@ -21,6 +21,12 @@ import { insetPoints } from "./util.js";
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
+// const TOTAL = 0;
+// const OBSCURED = 1;
+// const BRIGHT = 2;
+// const DIM = 3;
+// const DARK = 4;
+
 /**
  * An eye belong to a specific viewer.
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
@@ -71,32 +77,28 @@ export class AbstractViewpoint {
 
   get config() { return this.viewerLOS.calculator.config; }
 
-  /**
-   * Determine percentage of the token visible using the class methodology.
-   * @param {Token} target
-   * @returns {number}
-   */
-  percentVisible() {
-    const percent = this.simpleVisibilityTest() ?? this._percentVisible();
-    // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
-    return percent;
+  // ----- NOTE: Visibility Percentages ----- //
+
+  get percentVisible() { return this.calculator.percentVisible; }
+
+  get percentUnobscured() { return this.calculator.percentUnobscured; }
+
+  get percentVisibleBright() { return this.calculator.percentVisibleBright; }
+
+  get percentVisibleDim() { return this.calculator.percentVisibleDim; }
+
+  get visibility() { return [this.calculator.percentUnobscured, this.calculator.percentVisibleDim, this.calculator.percentVisibleBright]; }
+
+  calculate() {
+    this.calculator.counts.fill(0)
+    if ( this.passesSimpleVisibilityTest() ) return;
+    this.calculator.calculate();
   }
 
-  async percentVisibleAsync() {
-    const percent = this.simpleVisibilityTest() ?? (await this._percentVisible());
-    // if ( this.viewerLOS.config.debug ) console.debug(`\t${Math.round(percent * 100 * 10)/10}%\t@viewpoint ${this.viewpoint.toString()}`)
-    return percent;
-  }
-
-  /** @override */
-  _percentVisible() {
-    const { calculator, viewer, target, viewpoint: viewpoint, targetLocation } = this;
-    return calculator.percentVisible(viewer, target, { viewpoint, targetLocation });
-  }
-
-  async _percentVisibleAsync() {
-    const { calculator, viewer, target, viewpoint: viewpoint, targetLocation } = this;
-    return calculator.percentVisibleAsync(viewer, target, { viewpoint, targetLocation });
+  targetOverlapsViewpoint() {
+    const bounds = this.config.constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
+    if ( !bounds.contains(this.viewpoint) ) return false;
+    return this.viewpoint.between(this.target.bottomZ, this.target.topZ);
   }
 
   /**
@@ -104,31 +106,19 @@ export class AbstractViewpoint {
    * @param {Token} target
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
-  simpleVisibilityTest() {
-    const target = this.target;
-
-    // If directly overlapping.
-    if ( target.bounds.contains(this.viewpoint) ) return 1;
-
-    // If testing lighting, is it lit at all?
-    // TODO: Is it possible for litTokenBorder to fail but still be lit?
-    if ( !this.passesSimpleLitTest ) return 0;
-
+  passesSimpleVisibilityTest() {
     // Treat the scene background as fully blocking, so basement tokens don't pop-up unexpectedly.
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
     if ( (this.viewpoint.z > backgroundElevation && target.topZ < backgroundElevation)
-      || (this.viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return 0;
+      || (this.viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return true;
 
-    if ( !this.hasPotentialObstacles(target) ) return 1;
+    // Force tokens within the viewpoint to be visible and lit.
+    if ( this.targetOverlapsViewpoint ) {
+      this.calculator.counts.set([1, 0, 1, 1, 0]);
+      return true;
+    }
 
-    return undefined;
-  }
-
-  passesSimpleLitTest() {
-    if ( !this.config.testLighting ) return true;
-    if ( !CONFIG[MODULE_ID].litTokenOption ) return true;
-    if ( !this.target.litTokenBorder ) return false;
-    return true;
+    return false;
   }
 
   // ----- NOTE: Collision tests ----- //
@@ -139,14 +129,13 @@ export class AbstractViewpoint {
    *
    */
   hasPotentialObstaclesfromViewpoint(viewpoint = this.viewpoint) {
-    // TODO: Cache blocking objects and pass through to calc? Cache visionTriangle?
-    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(this.viewpoint, this.target);
     const opts = {
       senseType: this.config.senseType,
       viewer: this.viewer,
       target: this.target,
       blocking: this.config.blocking,
     };
+    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(viewpoint, target);
     const walls = ObstacleOcclusionTest.findBlockingWalls(visionTri, opts);
     if ( walls.size > 1 ) return true; // 2+ walls or 2+ terrain walls present.
     if ( walls.size && !walls.first().edge.isLimited(opts.senseType) ) return true; // Single non-limited wall present.
@@ -155,62 +144,6 @@ export class AbstractViewpoint {
       || ObstacleOcclusionTest.findBlockingRegions(visionTri, opts).size ) return true;
     return false;
   }
-
-  /**
-   * Test if the viewpoint is within 1+ bright lights.
-   * To be within, there must be no obstacles within vision triangle and light shape fully contains target.
-   * (Could do a similar dimRadius test but less relevant b/c would still need to calculate bright light.)
-   * @returns {undefined|boolean} True if definitely within bright light.
-   *   False if not. Undefined if obstacles present or target not fully within triangle shape.
-   */
-  fullyWithinBrightLight() {
-    if ( canvas.environment.globalLightSource.active ) return true;
-    for ( const src of canvas.lighting.placeables ) {
-      if ( !src.lightSource.active ) continue;
-
-      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
-      if ( dist2 > (src.brightRadius ** 2) ) continue; // Not within bright dim radius.
-
-      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
-      if ( this.hasPotentialObstaclesfromViewpoint(src) ) continue;
-
-
-      return true;
-    }
-    return false;
-  }
-
-  fullyWithinSound() {
-    bounds ??= CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBounds : this.target.tokenBorder;
-    if ( this.target.constrainedTokenBorder.equals(this.target.sound))
-
-
-    for ( const src of canvas.sound.placeables ) {
-      if ( !src.source.active ) continue;
-
-      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
-      if ( dist2 > (src.radius ** 2) ) continue; // Not within bright dim radius.
-
-      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
-      if ( this.hasPotentialObstaclesfromViewpoint(src) ) continue;
-
-
-
-      return true;
-
-    }
-  }
-
-  withinDimLight() {
-    if ( canvas.environment.globalLightSource.active ) return true;
-    for ( const src of canvas[this.config.sourceType].placeables ) {
-
-    }
-
-
-  }
-
-
 
   /**
    * @param {Token} token

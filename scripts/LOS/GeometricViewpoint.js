@@ -23,11 +23,13 @@ import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
-const TOTAL = 0;
-const OBSCURED = 1;
-// const BRIGHT = 2;
-// const DIM = 3;
-// const DARK = 4;
+const {
+  TOTAL,
+  OBSCURED,
+//   BRIGHT,
+//   DIM,
+//   DARK,
+} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
 
 
 /**

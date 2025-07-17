@@ -10,7 +10,6 @@ import { MODULE_ID } from "../const.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
 
@@ -25,6 +24,13 @@ Dim and bright lighting test options:
 */
 
 
+const {
+  TOTAL,
+  OBSCURED,
+  DIM,
+//   BRIGHT,
+//   DARK,
+} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
 
 
 /**
@@ -34,7 +40,6 @@ Dim and bright lighting test options:
  */
 export class PointsViewpoint extends AbstractViewpoint {
   static get calcClass() { return PercentVisibleCalculatorPoints; }
-
 
   _drawDebugPoints(debugDraw, { width = 1 } = {}) {
     const Draw = CONFIG.GeometryLib.Draw;
@@ -47,12 +52,6 @@ export class PointsViewpoint extends AbstractViewpoint {
     }
   }
 }
-
-const TOTAL = 0;
-const OBSCURED = 1;
-const BRIGHT = 2;
-const DIM = 3;
-const DARK = 4;
 
 /**
  * Handle points algorithm.

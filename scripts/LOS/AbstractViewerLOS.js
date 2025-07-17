@@ -69,6 +69,9 @@ import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
  * @property {number} viewpointOffset                         Offset each viewpoint from border
  * @property {number} threshold                               Percent needed to be seen for LOS
  */
+
+
+
 export class AbstractViewerLOS {
   /** @type {enum<string>} */
   static POINT_TYPES = {
@@ -304,21 +307,38 @@ export class AbstractViewerLOS {
 
   set testLighting(testLighting) { this.calculator.config = { testLighting }; }
 
-  get visibleTargetShape() {
-    if ( !this.target ) return undefined;
-    return this.calculator.getVisibleTargetShape(this.target);
+  // ----- NOTE: Visibility testing ----- //
+
+  static VISIBILITY_LABELS = {
+    UNOBSCURED: 0,
+    DIM: 1,
+    BRIGHT: 2,
+  };
+
+  visibility = new Float32Array();
+
+  get hasLOS() {
+    const value = this.config.testLighting ? this.visibility[UNOBSCURED] : this.visibility[DIM];
+    return value > this.threshold;
   }
 
-  // ----- NOTE: Visibility testing ----- //
+  get percentVisible() {
+    return this.config.testLighting ? this.visibility[UNOBSCURED] : this.visibility[DIM];
+  }
+
+  get percentVisibleDim() { return this.visibility[DIM]; }
+
+  get percentVisibleBright() { return this.visibility[BRIGHT]; }
+
+  get percentUnobscured() { return this.visibility[UNOBSCURED]; }
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
    * @param {Token} [target]
-   * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
+   * @returns {1|0|01} 1.0 for visible; -1 if unknown
    */
-  simpleVisibilityTest(target) {
-    if ( target ) this.target = target; // Important so the viewpoints know the target.
-    target = this.target;
+  simpleVisibilityTest() {
+    const target = this.target;
     const viewer = this.viewer;
 
     // To avoid obvious errors.
@@ -330,113 +350,111 @@ export class AbstractViewerLOS {
     // Target is not within the limited angle vision of the viewer.
     if ( viewer.vision && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return 0;
 
-    // Target is not lit.
-    if ( this.testLighting ) {
-      const shape = this.visibleTargetShape;
-      // const shape = target.constrainedTokenBorder;
-      if ( !shape ) return 0;
-    };
+    return -1;
+  }
 
-    // If all viewpoints are blocked, return 0; if any unblocked, return 1.
-    let blocked = true;
-    for ( const vp of this.viewpoints ) {
-      const thisVP = vp.simpleVisibilityTest();
-      if ( thisVP === 1 ) return 1;
-      blocked &&= (thisVP === 0);
+  /**
+   * Test if the viewpoint is within 1+ bright lights.
+   * To be within, there must be no obstacles within vision triangle and light shape fully contains target.
+   * @returns {undefined|boolean} True if definitely within bright light.
+   *   False if not. Undefined if obstacles present or target not fully within triangle shape.
+   */
+  fullyWithinBrightLight() {
+    if ( canvas.environment.globalLightSource.active ) return true;
+    if ( !canvas.lighting.placeables.length ) return false;
+    if ( !this.target.constrainedTokenBorder.equals(this.target.brightLitTokenBorder) ) return false;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const targetCenter = Point3d.fromTokenCenter(this.target);
+    const srcOrigin = new Point3d();
+
+    let unknown = false;
+    for ( const src of canvas.lighting.placeables ) {
+      if ( !src.lightSource.active ) continue;
+
+      Point3d.fromPointSource(src, srcOrigin);
+      const dist2 = Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
+      if ( dist2 > (src.brightRadius ** 2) ) continue; // Not within bright radius.
+
+      unknown ||= true;
+
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, src) ) continue;
+
+      return true;
     }
-    return blocked ? 0 : undefined;
+    return unknown ? undefined : false;
   }
 
-  // NOTE: Only top-level methods should use (and set) target.
-  /**
-   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * @param {Token} [target]             Token to look at
-   * @param {object} [opts]              Options passed to percentVisible
-   * @param {number} [opts.threshold]    Percentage to be met to be considered visible
-   * @param {}
-   * @returns {boolean}
-   */
-  hasLOS(target) {
-    // NOTE: target set using percentVisible; just pass through here.
-    const percent = this.percentVisible(target); // Percent visible will reset the cache.
-    const hasLOS = !percent.almostEqual(0)
-      && (percent > this.threshold || percent.almostEqual(this.threshold));
-    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
-    return hasLOS;
-  }
+  fullyWithinSound() {
+    if ( !this.target.constrainedTokenBorder.equals(this.target.soundTokenBorder) ) return false;
+    if ( !canvas.sounds.placeables.length ) return false;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const targetCenter = Point3d.fromTokenCenter(this.target);
+    const srcOrigin = new Point3d();
 
-  /**
-   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * Asynchronous version.
-   * @param {Token} [target]             Token to look at
-   * @param {object} [opts]              Options passed to percentVisible
-   * @param {number} [opts.threshold]    Percentage to be met to be considered visible
-   * @param {}
-   * @returns {boolean}
-   */
-  async hasLOSAsync(target) {
-    const percent = await this.percentVisibleAsync(target); // Percent visible will reset the cache.
-    const hasLOS = !percent.almostEqual(0)
-      && (percent > this.threshold || percent.almostEqual(this.threshold));
-    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
-    return hasLOS;
-  }
+    let unknown = false;
+    for ( const src of canvas.sound.placeables ) {
+      if ( !src.source.active ) continue;
 
-  /**
-   * Determine percentage of the token visible using the class methodology.
-   * @param {Token} [target]            Token to look at
-   * @param {object} [opts]             Options passed to _percentVisible
-   * @returns {number}
-   */
-  percentVisible(target) {
-    if ( !this.viewer ) return 0;
-    if ( target ) this.target = target;
+      Point3d.fromPointSource(src, srcOrigin);
+      const dist2 = CONFIG.GeometryLib.threeD.Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
+      if ( dist2 > (src.radius ** 2) ) continue; // Not within bright dim radius.
 
-    const percent = this.simpleVisibilityTest() ?? this._percentVisible();
-    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
-    return percent;
-  }
+      unknown ||= true;
 
-  /**
-   * Determine percentage of the token visible using the class methodology.
-   * Asynchronous version.
-   * @param {Token} [target]            Token to look at
-   * @returns {number}
-   */
-  async percentVisibleAsync(target) {
-    if ( !this.viewer ) return 0;
-    if ( target ) this.target = target;
-    const percent = this.simpleVisibilityTest() ?? (await this._percentVisibleAsync());
-    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
-    return percent;
-  }
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, src) ) continue;
 
-  /**
-   * Requests the percent visible from each viewpoint and returns the maximum percent visible.
-   * @returns {number}
-   */
-  _percentVisible() {
-    let max = 0;
-    for ( const vp of this.viewpoints ) {
-      max = Math.max(max, vp.percentVisible());
-      if ( max >= this.threshold ) return max;
+      return true;
     }
-    return max;
+    return unknown ? undefined : false;
   }
 
-  /**
-   * Requests the percent visible from each viewpoint and returns the maximum percent visible.
-   * Asynchronous version.
-   * @param {object} [opts]
-   * @returns {number}
-   */
-  async _percentVisibleAsync() {
-    let max = 0;
-    for ( const vp of this.viewpoints ) {
-      max = Math.max(max, (await vp.percentVisibleAsync()));
-      if ( max >= this.threshold ) return max;
+  calculate() {
+    this.visibility.fill(0);
+    const simpleTest = this.simpleVisibilityTest();
+    if ( ~simpleTest ) {
+      this.visibility.fill(simpleTest);
+      return;
     }
-    return max;
+
+    // If not lit, we still want to test occlusion but can skip lighting test.
+    // If lit and no obstacle from the viewer or light, can assume it is fully visible.
+    // TODO: Move this to the calculator?
+    const oldTestLightingConfig = this.config.testLighting;
+    if ( this.config.testLighting ) {
+      const withinSource = this.config.sourceType === "lighting"
+        ? this.fullyWithinBrightLight() : this.fullyWithinSound();
+      if ( withinSource === true ) {
+        this.visibility[BRIGHT] = 1;
+        this.visibility[DIM] = 1;
+        if ( !this.hasPotentialObstaclesfromViewpoint() ) {
+          // Within a bright light with no obstacles and no obstacles occluding the viewer.
+          this.visibility[UNOBSCURED] = 1;
+          return;
+        }
+      }
+      if ( withinSource === false ) {
+        this.visibility[BRIGHT] = 0;
+        this.visibility[DIM] = 0;
+        this.config.testLighting = false;
+      }
+    }
+
+    let max = -1;
+    let bestVP;
+    for ( const vp of this.viewpoints ) {
+      vp.calculate();
+      const newValue = vp.percentVisible; // NOTE: Will be either unobscured or dim, depending on this.config.testLighting
+      if ( newValue > max ) {
+        max = newValue;
+        bestVP = vp;
+      }
+      if ( max > this.threshold ) break;
+    }
+    if ( this.config.testLighting ) this.visibility.set(bestVP.visibility);
+    else this.visibility[UNOBSCURED] = bestVP.percentVisibleUnobscured;
+    this.config = { testLighting: oldTestLightingConfig };
   }
 
   /**
@@ -523,18 +541,15 @@ export class AbstractViewerLOS {
   /**
    * For debugging.
    * Draw the constrained token border and visible shape, if any.
-   * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawVisibleTokenBorder(draw) {
-    const { blue, yellow } = CONFIG.GeometryLib.Draw.COLORS;
-    let color = blue;
+    const color = CONFIG.GeometryLib.Draw.COLORS.blue;
 
-    // Fill in the constrained border on canvas
-    if ( this.target ) draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
-
-    // Separately fill in the visible target shape
-    if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color: yellow });
-    // console.log("Drawing visible token border.")
+    // Fill in the target border on canvas
+    if ( this.target ) {
+      const border = CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
+      draw.shape(border, { color, fill: color, fillAlpha: 0.2});
+    }
   }
 }
 
@@ -660,3 +675,5 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     return out;
   }
 }
+
+const { UNOBSCURED, DIM, BRIGHT } = AbstractViewerLOS.VISIBILITY_LABELS;

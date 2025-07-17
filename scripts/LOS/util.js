@@ -418,7 +418,7 @@ export function targetWithinLimitedAngleVision(visionSource, targetShape) {
 
   // TODO: Would it be more performant to assign an angle to each target point?
   // Or maybe just check orientation of ray to each point?
-  const edges = this.visibleTargetShape.toPolygon().iterateEdges();
+  const edges = targetShape.toPolygon().iterateEdges();
   for ( const edge of edges ) {
     if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return 2;
     if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return 2;

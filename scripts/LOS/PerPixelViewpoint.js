@@ -22,12 +22,14 @@ import { BarycentricPoint, BaryTriangleData } from "./geometry/Barycentric.js";
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
-// NOTE: Temporary objects
-const TOTAL = 0;
-const OBSCURED = 1;
-// const BRIGHT = 2;
-// const DIM = 3;
-// const DARK = 4;
+const {
+  TOTAL,
+  OBSCURED,
+//   BRIGHT,
+//   DIM,
+//   DARK,
+} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
+
 
 /**
  * An eye belong to a specific viewer.
@@ -663,7 +665,6 @@ export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPI
     footer2.innerHTML = `${(bright * 100).toFixed(0)}% bright | ${(dim * 100).toFixed(0)}% dim | ${(dark * 100).toFixed(0)}% dark`;
   }
 }
-
 
 /*
 PercentVisibleCalculatorPerPixel = api.calcs.perPixel
