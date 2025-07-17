@@ -182,7 +182,7 @@ Hooks.once("init", function() {
       IGNORE: 0,
       CONSTRAIN: 1,
       OCCLUSION: 2,
-    }
+    },
 
     perPixelScale: 50,
 
@@ -190,7 +190,7 @@ Hooks.once("init", function() {
 
     perPixelDebugLit: true,
 
-    samplePixelNumberSamples: 4 ** 2; // Use power of two to keep same width/height points.
+    samplePixelNumberSamples: 4 ** 2, // Use power of two to keep same width/height points.
 
 
     /** @type {string} */

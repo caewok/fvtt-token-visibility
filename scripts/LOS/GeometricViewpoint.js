@@ -1,4 +1,5 @@
 /* globals
+canvas,
 ClipperLib,
 CONFIG,
 */
@@ -15,13 +16,19 @@ import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
 import { Camera } from "./Camera.js";
 import { Polygons3d } from "./geometry/Polygon3d.js";
-import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
-import { NULL_SET } from "./util.js";
 
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
+
+const TOTAL = 0;
+const OBSCURED = 1;
+// const BRIGHT = 2;
+// const DIM = 3;
+// const DARK = 4;
+
 
 /**
  * An eye belong to a specific viewer.
@@ -41,7 +48,7 @@ export class GeometricViewpoint extends AbstractViewpoint {
   }
 }
 
-export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalculatorAbstract {
+export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
   static get viewpointClass() { return GeometricViewpoint; }
 
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
@@ -59,58 +66,85 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    */
   static SCALING_FACTOR = 100;
 
-  viewer;
+  counts = new Float32Array(5);
 
-  target;
+  initializeCalculations() {
+    this._initializeCamera();
+    this._initializeOcclusionTesters();
+    this._initializeLightTesting();
 
-  viewpoint;
+    // Can build the obstacles now, as they will not change even if target shape does.
+    this._constructPerspectiveObstaclePolygons();
+    this._constructObstaclePaths();
+  }
 
-  targetLocation;
+  _calculate() {
+    this._constructPerspectiveTargetPolygons();
+    this._constructTargetPath();
+    this._calculateObscuredArea();
 
-  targetArea = 0;
-
-  obscuredArea = 0;
-
-
-  blockingObjects = {
-    tiles: NULL_SET,
-    tokens: NULL_SET,
-    walls: NULL_SET,
-    terrainWalls: NULL_SET,
-    regions: NULL_SET,
-  };
-
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this.viewer = viewer;
-    this.target = target;
-    this.viewpoint = viewerLocation;
-    this.targetLocation = targetLocation;
-
-    this.camera.cameraPosition = viewerLocation;
-    this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustum(target);
-    /*
-    this.camera.perspectiveParameters = {
-      fov: Math.toRadians(90),
-      aspect: 1,
-      zNear: 1,
-      zFar: Infinity,
-    };
-    */
-
-    this.blockingObjects = ObstacleOcclusionTest.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.config.senseType, blocking: this.config.blocking });
-    this.blockingObjects.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(this.blockingObjects.walls, this.config.senseType);
-
-    const res = this._obscuredArea();
-    this.targetArea = res.targetArea;
-    this.obscuredArea = res.obscuredArea;
 
   }
 
-  _totalTargetArea() { return this.targetArea; }
+  _initializeCamera() {
+    this.camera.cameraPosition = this.viewpoint;
+    this.camera.targetPosition = this.targetLocation;
+    this.camera.setTargetTokenFrustum(this.target);
+  }
 
-  _viewableTargetArea() { return this.obscuredArea; }
+  _initializeLightTesting() {
+    const litMethod = CONFIG[MODULE_ID].litToken;
+    if ( this.config.testLighting
+      && litMethod === CONFIG[MODULE_ID].litTokenOptions.OCCLUSION ) this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
+    else this._testLightingForPoint = () => null; // Ignore
+  }
+
+  _initializeOcclusionTesters() {
+    this.occlusionTester._initialize(this.viewpoint, this.target);
+    for ( const src of canvas[this.config.sourceType].placeables ) {
+      let tester;
+      if ( !this.occlusionTesters.has(src) ) {
+        tester = new ObstacleOcclusionTest();
+        tester.config = this.config; // Link so changes to config are reflected in the tester.
+        this.occlusionTesters.set(src, tester);
+      }
+
+      // Setup the occlusion tester so the faster internal method can be used.
+      tester ??= this.occlusionTesters.get(src);
+      tester._initialize(this.viewpoint, this.target);
+    }
+  }
+
+  targetPaths;
+
+  blockingPaths;
+
+  blockingTerrainPaths;
+
+  _constructTargetPath() {
+    // Once perspective-transformed, the token array of polygons are on the same plane, with z ~ 1.
+    // Can combine to Polygons3d.
+    const scalingFactor = this.constructor.SCALING_FACTOR;
+    const targetPolys3d = Polygons3d.from3dPolygons(this.targetPolys);
+    this.targetPaths = targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor })
+  }
+
+  /**
+   *  Construct 2d perspective projection of each blocking points object.
+   */
+  _constructObstaclePaths() {
+    // Use Clipper to calculate area of the polygon shapes.
+    this.blockingTerrainPaths = this._combineTerrainPolys(this.blockingTerrainPolys);
+    this.blockingPaths = this._combineObstaclePolys();
+    if ( this.blockingTerrainPaths && !this.blockingTerrainPaths.area.almostEqual(0) ) {
+      if ( !this.blockingPaths ) {
+        this.blockingPaths = this.blockingTerrainPaths.combine();
+        console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
+      }
+      else this.blockingPaths = this.blockingPaths.add(this.blockingTerrainPaths).combine();
+    }
+  }
+
 
   /**
    * Construct 2d perspective projection of each blocking points object.
@@ -122,46 +156,24 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    *   sidePolys: The sides of the target, in 2d perspective.
    *   obscuredSides: The unobscured portions of the sidePolys
    */
-  _obscuredArea() {
-    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
-    if ( !(walls.size || tokens.size || tiles.size || terrainWalls.size || regions.size) ) return { targetArea: 1, obscuredArea: 0 };
-
-    // Construct polygons representing the perspective view of the target and blocking objects.
-    const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
-
-    // Once perspective-transformed, the token array of polygons are on the same plane, with z ~ 1.
-    // Can combine to Polygons3d.
-    const targetPolys3d = Polygons3d.from3dPolygons(targetPolys);
-
-    // Use Clipper to calculate area of the polygon shapes.
-    const scalingFactor = this.constructor.SCALING_FACTOR;
-    const targetPaths = targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor })
-    const blockingTerrainPaths = this._combineTerrainPolys(blockingTerrainPolys);
-    let blockingPaths = this._combineObstaclePolys(blockingPolys);
-    if ( blockingTerrainPaths && !blockingTerrainPaths.area.almostEqual(0) ) {
-      if ( !blockingPaths ) {
-        blockingPaths = blockingTerrainPaths.combine();
-        console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
-      }
-      else blockingPaths = blockingPaths.add(blockingTerrainPaths).combine();
-    }
-
-    if ( !targetPaths ) {
+  _calculateObscuredArea() {
+    if ( !this.targetPaths ) {
       console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
-      return { targetArea: 1, obscuredArea: 1 };
+      this.counts[TOTAL] = 1;
+      this.counts[OBSCURED] = 1;
     }
 
     // Construct the obscured shape by taking the difference between the target polygons and
     // the blocking polygons.
-    const targetArea = Math.abs(targetPaths.area);
-    if ( targetArea.almostEqual(0) ) return { targetArea, obscuredArea: 0 };
-
-    if ( !blockingPaths ) {
+    this.counts[OBSCURED] = 0;
+    this.counts[TOTAL] = Math.abs(this.targetPaths.area);
+    if ( this.targetArea.almostEqual(0) ) return;
+    if ( !this.blockingPaths ) {
       console.warn(`${this.constructor.name}|_obscuredArea|No blockingPaths for ${this.viewer.name} --> ${this.target.name}`);
-      return { targetArea, obscuredArea: 0 };
+      return;
     }
-    const diff = blockingPaths.diffPaths(targetPaths); // TODO: Correct order?
-    return { targetArea, obscuredArea: Math.abs(diff.area) };
+    const diff = this.blockingPaths.diffPaths(this.targetPaths); // TODO: Correct order?
+    this.counts[OBSCURED] = Math.abs(diff.area);
   }
 
   /**
@@ -169,7 +181,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    * Union each in turn.
    * @param {Polygon3d|Polygons3d} blockingPolys
    */
-  _combineObstaclePolys(blockingPolys) {
+  _combineObstaclePolys() {
+    const blockingPolys = this.blockingPolys;
+
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const n = blockingPolys.length;
@@ -221,7 +235,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    * @param {Polygon3d} blockingTerrainPolys
    * @returns {ClipperPaths}
    */
-  _combineTerrainPolys(blockingTerrainPolys) {
+  _combineTerrainPolys() {
+    const blockingTerrainPolys = this.blockingTerrainPolys;
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const blockingTerrainPaths = new CONFIG[MODULE_ID].ClipperPaths()
 
@@ -246,45 +261,44 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
   /**
    * Construct polygons that are used to form the 2d perspective.
    */
-  _constructPerspectivePolygons() {
-    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
+  targetPolys = [];
 
-    // Construct polygons representing the perspective view of the target and blocking objects.
+  blockingPolys = [];
+
+  blockingTerrainPolys = [];
+
+  _constructPerspectiveTargetPolygons() {
     const viewpoint = this.viewpoint
-    const lookAtM = this.camera.lookAtMatrix;
-    const perspectiveM = this.camera.perspectiveMatrix;
     const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
-    const targetPolys = this._applyPerspective(facingPolys, lookAtM, perspectiveM);
+    this.targetPolys = this._applyPerspective(facingPolys, this.camera.lookAtMatrix, this.camera.perspectiveMatrix);
 
     // Test if the transformed polys are all getting clipped.
-    const txPolys = facingPolys.map(poly => poly.transform(lookAtM));
+    const txPolys = facingPolys.map(poly => poly.transform(this.camera.lookAtMatrix));
     if ( txPolys.every(poly => poly.iteratePoints({close: false}).every(pt => pt.z > 0)) ) {
       console.warn(`_applyPerspective|All target z values are positive for ${this.viewer.name} --> ${this.target.name}`);
     }
+  }
 
-    const blockingPolys = [...walls, ...tiles, ...tokens, ...regions].flatMap(obj =>
+  _constructPerspectiveObstaclePolygons() {
+    // Construct polygons representing the perspective view of the blocking objects.
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
+    this.blockingPolys = [...walls, ...tiles, ...tokens, ...regions].flatMap(obj =>
       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-
-    const blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
+    this.blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
        this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-
-    return { targetPolys, blockingPolys, blockingTerrainPolys };
   }
 
   /**
    * Construct target polygons.
    */
-  _targetPolygons(useLitTargetShape = this.config.useLitTargetShape) {
-    const target = this.target;
-
-    // Prefer the constrained token triangles whenever possible.
-    if ( !useLitTargetShape ) return target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
-
-    const shape = target.litTokenBorder; // Don't trigger until needed.
-    if ( !shape || shape.equals(target.constrainedTokenBorder)
-      || shape.equals(target.tokenBorder) ) return target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
-
-    return target[MODULE_ID][AbstractPolygonTrianglesID].litTriangles;
+  _targetPolygons() {
+    const litMethod = CONFIG[MODULE_ID].litToken;
+    if ( this.config.testLighting
+      && litMethod === CONFIG[MODULE_ID].litTokenOptions.CONSTRAIN ) return this.target[MODULE_ID][AbstractPolygonTrianglesID].litTriangles;
+    if ( CONFIG[MODULE_ID].constrainTokens ) return this.target[MODULE_ID][AbstractPolygonTrianglesID].constrainedTriangles;
+    return this.target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
@@ -304,23 +318,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
       .filter(poly => poly.isValid());
   }
 
-  /** @type {AbstractPolygonTriangles[]} */
-  static get grid3dShape() { return Grid3dTriangles.trianglesForGridShape(); }
-
-  /**
-   * Area of a basic grid square to use for the area estimate when dealing with large tokens.
-   * @returns {number}
-   */
-  _gridShapeArea() {
-    const lookAtM = this.camera.lookAtMatrix;
-    const perspectiveM = this.camera.perspectiveMatrix;
-    const gridPolys = this._gridPolys = this._gridPolygons(lookAtM, perspectiveM);
-    const gridPolys3d = Polygons3d.from3dPolygons(gridPolys);
-    const gridPaths = gridPolys3d.toClipperPaths({ scalingFactor: this.constructor.SCALING_FACTOR });
-    gridPaths.combine().clean();
-    return gridPaths.area;
-  }
-
   /**
    * Constrained target area, counting both lit and unlit portions of the target.
    * Used to determine the total area (denominator) when useLitTarget config is set.
@@ -331,7 +328,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
 
-    // Set useLitTargetShape false so constrained border is used.
+    // Set testLighting false so constrained border is used.
     const facingPolys = this._targetPolygons(false).filter(poly => poly.isFacing(viewpoint));
     const targetPolys = this._applyPerspective(facingPolys, lookAtM, perspectiveM);
     const targetPaths = targetPolys.toClipperPaths({ scalingFactor: this.constructor.SCALING_FACTOR });
@@ -355,17 +352,17 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(viewer, target, viewerLocation, targetLocation, { draw, width = 100, height = 100 } = {}) {
+  _draw3dDebug(viewer, target, viewpoint, targetLocation, { draw, width = 100, height = 100 } = {}) {
     draw ??= new CONFIG.GeometryLib.Draw();
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
 
     // Recalculate the 3d objects
-    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+    this._calculatePercentVisible(viewer, target, viewpoint, targetLocation);
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this._constructPerspectivePolygons();
     const colors = Draw.COLORS;
 
     // Locate obstacles behind the target.
-    const visionTriangle = ObstacleOcclusionTest.visionTriangle.rebuild(viewerLocation, target);
+    const visionTriangle = ObstacleOcclusionTest.visionTriangle.rebuild(viewpoint, target);
     const backgroundTiles = visionTriangle.findBackgroundTiles();
     // const backgroundWalls = visionTriangle.findBackgroundWalls();
 
@@ -386,24 +383,24 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleRenderCalcu
     const c3d = new Point3d(c.x, c.y, targetLocation.z);
 
     const dirs = [
-      b3d.subtract(viewerLocation).normalize(),
-      c3d.subtract(viewerLocation).normalize(),
-      targetLocation.subtract(viewerLocation).normalize(),
+      b3d.subtract(viewpoint).normalize(),
+      c3d.subtract(viewpoint).normalize(),
+      targetLocation.subtract(viewpoint).normalize(),
     ];
 
     const backgroundTestFn = (placeable, color, fill) => {
-      const polys = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
+      const polys = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(placeable, viewpoint);
       polys.forEach(poly => {
         const ixs = [];
         for ( const dir of dirs ) {
-          const ix = poly.intersection(viewerLocation, dir);
+          const ix = poly.intersection(viewpoint, dir);
           if ( ix ) ixs.push(ix);
         }
         if ( !ixs.length ) ixs.push(poly.centroid);
 
         const dist2 = ixs.reduce((acc, curr) => {
           if ( !curr ) return acc;
-          return Math.min(acc, Point3d.distanceSquaredBetween(viewerLocation, curr));
+          return Math.min(acc, Point3d.distanceSquaredBetween(viewpoint, curr));
         }, Number.POSITIVE_INFINITY);
         poly = poly
           .transform(lookAtM)

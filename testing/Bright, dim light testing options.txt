@@ -52,10 +52,32 @@ Algorithms:
   --> Can avoid passing all obstacles by passing only those within the light view
   --> Could render repeatedly, once per light. See #7 or #8
 
----------------
+------------------
+Grid shape area
+
+Goal: large token is visible if an equivalent of 1 grid space worth of "token" is visible.
+
+Ex: Grid square 100 x 100.
+Large token that takes up 4 squares. Viewed head on
+•-•-•
+| | |
+•-•-•
+| | |
+•-•-•
+
+Total area: 200 x 200 = 40_000
+Grid area: 100 x 100 = 10_000
+So 1/4.
+
+To a rough approximation, can calculate large target area by dividing the area by width * height.
+Token 2 x 3 = 6.
+Total area 200 x 300 = 60_000
+Grid area: 10_000
 
 
 
+
+------------------
 
 1. Points
 Test separately using X points on the token. Random or (possibly better) use grid based on bounds

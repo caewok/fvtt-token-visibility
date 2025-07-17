@@ -6,6 +6,8 @@ game,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../const.js";
+
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
@@ -16,7 +18,13 @@ import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
 Points algorithm also can use area and threshold.
 Number of points tested is the total area; points without collision represent % viewable area.
 
+Dim and bright lighting test options:
+1. Point is within litTokenBorder
+2. Point not obscured from light and within light radius
+
 */
+
+
 
 
 /**
@@ -40,6 +48,12 @@ export class PointsViewpoint extends AbstractViewpoint {
   }
 }
 
+const TOTAL = 0;
+const OBSCURED = 1;
+const BRIGHT = 2;
+const DIM = 3;
+const DARK = 4;
+
 /**
  * Handle points algorithm.
  */
@@ -57,166 +71,179 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   /** @type {Points3d[][]} */
   targetPoints = [];
 
-  _calculatePercentVisible(viewer, target, viewerLocation, _targetLocation) {
-    this.viewpoint = viewerLocation;
-    this.filterPotentiallyBlockingPolygons(viewer, viewerLocation, target);
+  counts = new Uint8Array(this.constructor.COUNT_LABELS.length);
+
+  // Use separate lighting occlusion testers b/c it will change viewpoints a lot.
+  /** @type {WeakMap<PointSource, ObstacleOcclusionTest>} */
+  occlusionTesters = new WeakMap();
+
+  #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
+
+  // Points handles large target slightly differently. See _testLargeTarget.
+  get largeTargetArea() { return this.counts[TOTAL]; }
+
+  initializeCalculations() {
+    this.debugPoints.length = 0;
+    this._initializeLightTesting();
+    this._initializeOcclusionTesters();
   }
 
-  _percentUnobscured(viewer, target, viewerLocation, _targetLocation) {
-    const targetPoints = this.constructTargetPoints(target);
-    return (1 - this._testTargetPoints(targetPoints, viewerLocation, this.getVisibleTargetShape(target)));
+  _calculate() {
+    if ( this.config.largeTarget ) this._testLargeTarget();
+    else {
+      const targetPoints = this.constructTargetPoints();
+      this._testPointToPoints(targetPoints);
+    }
   }
+
+  _testLargeTarget() {
+    // Construct points for each target subshape, defined by grid spaces under the target.
+    const target = this.target;
+    const targetShapes = CONFIG[MODULE_ID].constrainTokens
+      ? this.constructor.constrainedGridShapesUnderToken(target): this.constructor.gridShapesUnderToken(target);
+    if ( !targetShapes.length ) {
+      console.warn(`${MODULE_ID}|${this.constructor.name}|Target shapes for large target not working.`);
+      const targetPoints = this.constructTargetPoints(this.target);
+      this._testPointToPoints(targetPoints);
+      return;
+    }
+
+    const tmpCounts = new Uint8Array(this.constructor.COUNT_LABELS.length);
+    let currentPercent = 0;
+    for ( const targetShape of targetShapes ) {
+      const targetPoints = this.constructTargetPoints(targetShape);
+      this._testPointToPoints(targetPoints);
+
+      // If no lighting, look for maximum percent unoccluded,
+      // If lighting, look for maximum percent dim.
+      // Keeping in mind that denominator (number of target points) could change between iterations.
+      const numerator = this.config.testLighting ? this.counts[DIM] : (this.counts[TOTAL] - this.counts[OBSCURED]);
+      const newPercent = numerator / this.counts[TOTAL];
+      if ( newPercent > currentPercent ) {
+        tmpCounts.set(this.counts);
+        currentPercent = newPercent;
+      }
+      if ( newPercent >= 1 ) break;
+    }
+    this.counts.set(tmpCounts);
+  }
+
+  _initializeLightTesting() {
+    if ( this.config.testLighting ) {
+      this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
+    } else this._testLightingForPoint = () => null; // Ignore
+
+//     const litMethod = CONFIG[MODULE_ID].litToken;
+//     if ( this.config.testLighting && litMethod ) {
+//       const method = litMethod ===  CONFIG[MODULE_ID].litTokenOptions.CONSTRAIN
+//         ? "_testLightingContainmentForPoint" : "_testLightingOcclusionForPoint";
+//       this._testLightingForPoint = this[method].bind(this);
+//     } else this._testLightingForPoint = () => null; // Ignore
+  }
+
+  _initializeOcclusionTesters() {
+    this.occlusionTester._initialize(this.viewpoint, this.target);
+    for ( const src of canvas[this.config.sourceType].placeables ) {
+      let tester;
+      if ( !this.occlusionTesters.has(src) ) {
+        tester = new ObstacleOcclusionTest();
+        tester.config = this.config; // Link so changes to config are reflected in the tester.
+        this.occlusionTesters.set(src, tester);
+      }
+
+      // Setup the occlusion tester so the faster internal method can be used.
+      tester ??= this.occlusionTesters.get(src);
+      tester._initialize(this.viewpoint, this.target);
+    }
+  }
+
 
   /* ----- NOTE: Target points ----- */
 
-  /**
-   * Sets configuration to the current settings.
-   * @param {ViewpointConfig} [cfg]
-   * @returns {ViewpointConfig}
-   */
-//   initializeConfig(cfg = {}) {
-//     // Configs specific to the Points algorithm.
-//     const POINT_OPTIONS = Settings.KEYS.LOS.TARGET.POINT_OPTIONS;
-//     cfg.pointAlgorithm ??= Settings.get(POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER;
-//     cfg.targetInset ??= Settings.get(POINT_OPTIONS.INSET) ?? 0.75;
-//     cfg.points3d ??= Settings.get(POINT_OPTIONS.POINTS3D) ?? false;
-//     cfg.largeTarget ??= Settings.get(Settings.KEYS.LOS.TARGET.LARGE);
-//     cfg.useLitTargetShape ??= true;
-//
-//     // Blocking canvas objects.
-//     cfg.blocking ??= {};
-//     cfg.blocking.walls ??= true;
-//     cfg.blocking.tiles ??= true;
-//
-//     // Blocking tokens.
-//     cfg.blocking.tokens ??= {};
-//     cfg.blocking.tokens.dead ??= Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK);
-//     cfg.blocking.tokens.live ??= Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK);
-//     cfg.blocking.tokens.prone ??= Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK);
-//
-//     return cfg;
-//   }
 
-  /*
-   * Similar to _constructViewerPoints but with a complication:
-   * - Large target. When set, points are constructed per grid space covered by the token.
-   * @param {Token} target
-   * @returns {Points3d[][]}
-   */
-  constructTargetPoints(target) {
-    const { pointAlgorithm, targetInset, points3d, largeTarget } = this.config;
+  constructTargetPoints(tokenShape) {
+    const target = this.target;
+    const { pointAlgorithm, targetInset, points3d } = this.config;
     const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
-
-    if ( largeTarget ) {
-      // Construct points for each target subshape, defined by grid spaces under the target.
-      const targetShapes = PointsViewpoint.constrainedGridShapesUnderToken(target);
-
-      // Issue #8: possible for targetShapes to be undefined or not an array??
-      if ( targetShapes && targetShapes.length ) {
-        const targetPointsArray = targetShapes.map(targetShape => {
-          cfg.tokenShape = targetShape;
-          const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
-          if ( points3d ) return PointsViewpoint.elevatePoints(target, targetPoints);
-          return targetPoints;
-        });
-        return targetPointsArray;
-      }
-    }
-
-    // Construct points under this constrained token border.
-    cfg.tokenShape = target.constrainedTokenBorder; // Note: not the lit border.
+    cfg.tokenShape = tokenShape ?? (CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder);
     const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
-    if ( points3d ) return [PointsViewpoint.elevatePoints(target, targetPoints)];
-    return [targetPoints];
+    return points3d ? PointsViewpoint.elevatePoints(target, targetPoints) : targetPoints;
   }
 
-  /* ----- NOTE: Collision testing ----- */
 
-  /** @param {Polygon3d[]} */
-  polygons = [];
-
-  /** @param {Polygon3d[]} */
-  terrainPolygons = [];
-
-  /**
-   * Filter the polygons that might block the viewer from the target.
-   */
-  filterPotentiallyBlockingPolygons(viewer, viewerLocation, target) {
-    this.polygons.length = 0;
-    this.terrainPolygons.length = 0;
-    const { tiles, tokens, walls, regions } = ObstacleOcclusionTest.findBlockingObjects(viewerLocation, target,
-      { viewer, senseType: this.config.senseType, blocking: this.config.blocking });
-    const terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(walls, this.config.senseType);
-    for ( const terrainWall of terrainWalls ) {
-      const polygons = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(terrainWall, viewerLocation);
-      this.terrainPolygons.push(...polygons);
-    }
-    for ( const placeable of [...tiles, ...tokens, ...walls, ...regions] ) {
-      const polygons = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(placeable, viewerLocation);
-      this.polygons.push(...polygons);
-    }
-  }
 
   /* ----- NOTE: Visibility testing ----- */
 
 
-  /**
-   * Test an array of token points against an array of target points.
-   * Each tokenPoint will be tested against every array of targetPoints.
-   * @param {Point3d[][]} targetPointsArray   Array of array of target points to test.
-   * @returns {number} Minimum percent blocked for the token points
-   */
-  _testTargetPoints(targetPointsArray, viewpoint, visibleTargetShape) {
-    let minBlocked = 1;
-    if ( this.config.debug ) this.debugPoints.length = 0;
-    for ( const targetPoints of targetPointsArray ) {
-      const percentBlocked = this._testPointToPoints(targetPoints, viewpoint, visibleTargetShape);
-
-      // We can escape early if this is completely visible.
-      if ( !percentBlocked ) return 0;
-      minBlocked = Math.min(minBlocked, percentBlocked);
-    }
-    return minBlocked;
-  }
-
   debugPoints = [];
 
-  /**
-   * Helper that tests collisions between a given point and a target points.
-   * @param {Point3d} tokenPoint        Point on the token to use.
-   * @param {Point3d[]} targetPoints    Array of points on the target to test
-   * @returns {number} Percent points blocked
-   */
-  _testPointToPoints(targetPoints, viewpoint, visibleTargetShape) {
-    let numPointsBlocked = 0;
-    const ln = targetPoints.length;
-    // const debugDraw = this.config.debugDraw;
-    let debugPoints = [];
-    if ( this.config.debug ) this.debugPoints.push(debugPoints);
-    for ( let i = 0; i < ln; i += 1 ) {
+  _testPointToPoints(targetPoints) {
+    this.counts.fill(0);
+    const numPoints = targetPoints.length;
+    this.counts[TOTAL] = numPoints;
+    const debugPoints = Array(numPoints);
+    this.debugPoints.push(debugPoints);
+    for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
-      if ( visibleTargetShape && !visibleTargetShape.contains(targetPoint.x, targetPoint.y) ) continue;
+      this.viewpoint.subtract(targetPoint, this.#rayDirection);
+      const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
+      this.counts[OBSCURED] += isOccluded;
 
-      // For the intersection test, 0 can be treated as no intersection b/c we don't need
-      // intersections at the origin.
-      // Note: cannot use Point3d._tmp with intersection.
-      // TODO: Does intersection return t values if the intersection is outside the viewpoint --> target?
-      let nCollisions = 0;
-      let hasCollision = this.polygons.some(tri => tri.intersection(viewpoint, targetPoint.subtract(viewpoint)))
-        || this.terrainPolygons.some(tri => {
-        nCollisions += Boolean(tri.intersection(viewpoint, targetPoint.subtract(viewpoint)));
-        return nCollisions >= 2;
-      });
-      numPointsBlocked += hasCollision;
-
-      if ( this.config.debug ) {
-        debugPoints.push({ A: viewpoint, B: targetPoint, hasCollision });
-//         const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
-//         debugDraw.segment({ A: viewpoint, B: targetPoint }, { alpha: 0.5, width: 1, color });
-//         console.log(`Drawing segment ${viewpoint.x},${viewpoint.y} -> ${targetPoint.x},${targetPoint.y} with color ${color}.`);
-      }
+      const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded, isDim: null, isBright: null };
+      debugPoints[i] = debugObject;
+      if ( !isOccluded ) this._testLightingForPoint(targetPoint, debugObject);
     }
-    return numPointsBlocked / ln;
+  }
+
+  _testLightingForPoint;
+
+  /**
+   * Use the target's lit shape to determine if the point is lit.
+   */
+//   _testLightingContainmentForPoint(targetPoint, debugObject = {}) {
+//     // TODO: Add option to test sound sources by switching this.config.sourceType.
+//     // Requires new border calcs: soundTokenBorder
+//
+//     const isDim = this.target.litTokenBorder
+//       ? this.target.litTokenBorder.contains(targetPoint.x, targetPoint.y) : false;
+//     const isBright = isDim
+//       && (this.target.brightLitTokenBorder
+//         ? this.target.brightLitTokenBorder.contains(targetPoint.x, targetPoint.y) : false);
+//     debugObject.isDim = isDim;
+//     debugObject.isBright = isBright;
+//     this.counts[BRIGHT] += isBright;
+//     this.counts[DIM] += isDim;
+//     this.counts[DARK] += !(isDim || isBright);
+//   }
+
+  _testLightingOcclusionForPoint(targetPoint, debugObject = {}) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const srcOrigin = Point3d._tmp;
+
+    let isBright = false;
+    let isDim = false;
+    for ( const src of canvas[this.config.sourceType].placeables ) {
+      Point3d.fromPointSource(src, srcOrigin);
+      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
+      if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
+
+      // If blocked, not bright or dim.
+      // TODO: Don't test tokens for blocking the light or set a config option somewhere.
+      // Probably means not syncing the configs for the occlusion testers.
+      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
+
+      // TODO: handle light/sound attenuation from threshold walls.
+      isBright ||= (dist2 <= (src.brightRadius ** 2));
+      isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
+      if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
+    }
+
+    debugObject.isDim = isDim;
+    debugObject.isBright = isBright;
+    this.counts[BRIGHT] += isBright;
+    this.counts[DIM] += isDim;
+    this.counts[DARK] += !(isDim || isBright);
   }
 }
 

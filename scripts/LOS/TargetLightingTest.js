@@ -14,9 +14,9 @@ import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 
 // NOTE: Temporary objects
-const BRIGHT = 2;
+const BRIGHT = 0;
 const DIM = 1;
-const DARK = 0;
+const DARK = 2;
 
 /**
  * Spot test how much a given target is lit.
@@ -146,7 +146,6 @@ export class TargetLightingTest {
       if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
 
       // If blocked, then not bright or dim.
-      // TODO: Need to be able to construct an obstaclesOcclude function on the fly. Use function construction?
       pt.subtract(srcOrigin, rayDirection); // NOTE: Don't normalize so the wall test can use 0 < t < 1.
       if ( this.occlusionTesters.get(src)._rayIsOccluded(rayDirection) ) continue;
 
