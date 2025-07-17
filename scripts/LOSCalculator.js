@@ -55,7 +55,7 @@ function CalculatorConfig() {
     blocking: BlockingConfig(),
     largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false,
     debug: false,
-    useLitTargetShape: false,
+    testLighting: false,
     senseType: "sight",
 
     // Points algorithm

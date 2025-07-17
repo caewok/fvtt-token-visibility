@@ -170,16 +170,27 @@ Hooks.once("init", function() {
     constrainTokens: false,
 
     /**
-     * Whether to use special token shapes to represent partially lit tokens.
-     * This approximates what portion of the token is lit by 1+ lights.
+     * How to calculate the extent to which a token is lit by lighting or sounds.
+     * Used in Foundry's visibility test.
+     * 0: Ignore
+     * 1: Constrain the target token shape to only that portion of the shape within the lights' polygons.
+     * 2: Test occlusion between selected points or pixels and lights in the scene.
      */
-    litTokens: false,
+    litToken: 1,
+
+    litTokenOptions: {
+      IGNORE: 0,
+      CONSTRAIN: 1,
+      OCCLUSION: 2,
+    }
 
     perPixelScale: 50,
 
     perPixelQuickInterpolation: false,
 
     perPixelDebugLit: true,
+
+    samplePixelNumberSamples: 4 ** 2; // Use power of two to keep same width/height points.
 
 
     /** @type {string} */
