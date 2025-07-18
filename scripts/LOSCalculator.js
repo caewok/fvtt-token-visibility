@@ -89,8 +89,7 @@ export function buildLOSCalculator() {
   if ( !CONFIG[MODULE_ID].losCalculators[viewpointClassName] ) {
     const viewpointClass = AbstractViewerLOS.VIEWPOINT_CLASSES[viewpointClassName];
     const calcClass = viewpointClass.calcClass;
-    const calcConfig = CalculatorConfig(type);
-    CONFIG[MODULE_ID].losCalculators[viewpointClassName] = new calcClass(CalculatorConfig(type));
+    CONFIG[MODULE_ID].losCalculators[viewpointClassName] = new calcClass(CalculatorConfig());
     CONFIG[MODULE_ID].losCalculators[viewpointClassName].initialize();  // Async
   }
   return CONFIG[MODULE_ID].losCalculators[viewpointClassName];

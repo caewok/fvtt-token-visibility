@@ -92,6 +92,7 @@ export class AbstractViewpoint {
   calculate() {
     this.calculator.counts.fill(0)
     if ( this.passesSimpleVisibilityTest() ) return;
+    this.calculator.viewpoint = this.viewpoint;
     this.calculator.calculate();
   }
 
@@ -115,7 +116,7 @@ export class AbstractViewpoint {
       || (this.viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return true;
 
     // Force tokens within the viewpoint to be visible and lit.
-    if ( this.targetOverlapsViewpoint ) {
+    if ( this.targetOverlapsViewpoint() ) {
       this.calculator.counts.set([1, 0, 1, 1, 0]);
       return true;
     }
@@ -131,11 +132,12 @@ export class AbstractViewpoint {
    *
    */
   hasPotentialObstaclesfromViewpoint(viewpoint = this.viewpoint) {
+    const { viewer, target, config } = this;
     const opts = {
-      senseType: this.config.senseType,
-      viewer: this.viewer,
-      target: this.target,
-      blocking: this.config.blocking,
+      senseType: config.senseType,
+      viewer,
+      target,
+      blocking: config.blocking,
     };
     const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(viewpoint, target);
     const walls = ObstacleOcclusionTest.findBlockingWalls(visionTri, opts);

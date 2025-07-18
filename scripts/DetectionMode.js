@@ -70,6 +70,9 @@ function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = fa
   losCalc.setConfigForDetectionMode(this);
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
+  losCalc.target = target;
+  losCalc.testLighting = true;
+  losCalc.calculate(); // TODO: Can remove if caching.
   hasLOS = testLighting ? losCalc.hasLOSDim : losCalc.hasLOSUnobscured;
   test.los.set(visionSource, hasLOS);
   // losCalc.setConfigForDetectionMode(); // Reset to basic DM?

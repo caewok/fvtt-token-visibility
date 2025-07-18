@@ -22,7 +22,7 @@ export class ObstacleOcclusionTest {
 
   obstacles = {};
 
-  config = {
+  _config = {
     senseType: "sight",
     blocking: {
       walls: true,
@@ -35,6 +35,8 @@ export class ObstacleOcclusionTest {
       }
     },
   };
+
+  get config() { return structuredClone(this._config); }
 
   _initialize(rayOrigin, target) {
     this.rayOrigin.copyFrom(rayOrigin);
@@ -85,13 +87,13 @@ export class ObstacleOcclusionTest {
   }
 
   wallsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.walls.some(wall => wall.rayIntersection(rayOrigin, rayDirection) !== null);
+    return this.obstacles.walls.some(wall => wall[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection) !== null);
   }
 
   terrainWallsOcclude(rayOrigin, rayDirection) {
     let limitedOcclusion = 0;
     for ( const wall of this.obstacles.terrainWalls ) {
-      if ( wall.rayIntersection(rayOrigin, rayDirection) === null ) continue;
+      if ( wall[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection) === null ) continue;
       if ( limitedOcclusion++ ) return true;
     }
     return false;
@@ -101,29 +103,29 @@ export class ObstacleOcclusionTest {
     for ( const wall of this.obstacles.proximateWalls ) {
       // If the proximity threshold is met, this edge excluded from perception calculations.
       if ( wall.edge.applyThreshold(this.config.senseType, rayOrigin) ) continue;
-      if ( wall.rayIntersection(rayOrigin, rayDirection) !== null ) return true;
+      if ( wall[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection) !== null ) return true;
     }
     return false;
   }
 
   tilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => tile.rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tiles.some(tile => tile[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
   }
 
   alphaTilesOcclude(rayOrigin, rayDirection) {
     return this.obstacles.tiles.some(tile => {
-      const t = tile.rayIntersectionAlpha(rayOrigin, rayDirection);
+      const t = tile[MODULE_ID][AbstractPolygonTrianglesID].rayIntersectionAlpha(rayOrigin, rayDirection);
       if ( t === null ) return false;
-      return tile.alphaThresholdTest(rayOrigin, rayDirection, t);
+      return tile[MODULE_ID][AbstractPolygonTrianglesID].alphaThresholdTest(rayOrigin, rayDirection, t);
     });
   }
 
   tokensOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tokens.some(token => token.rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tokens.some(token => token[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
   }
 
   regionsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.regions.some(region => region.rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.regions.some(region => region[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
   }
 
   // ----- NOTE: Static collision tests ----- //

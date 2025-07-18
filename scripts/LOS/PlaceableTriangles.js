@@ -391,20 +391,18 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     if ( t === null || !t.between(0, cutoff, false) ) return null;
 
     // Threshold test at the intersection point.
-    const threshold = CONFIG[MODULE_ID].alphaThreshold || 0.75;
-    const pxThreshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
+    const pxThreshold = 255 * (CONFIG[MODULE_ID].alphaThreshold || 0.75);
     rayOrigin.add(rayDirection.multiplyScalar(t, tmpIx), tmpIx);
-    const px = tile.evPixelCache.pixelAtCanvas(tmpIx.x, tmpIx.y);
+    const px = this.placeable.evPixelCache.pixelAtCanvas(tmpIx.x, tmpIx.y);
     if ( px > pxThreshold ) return t;
 
     return t;
   }
 
   alphaThresholdTest(rayOrigin, rayDirection, t) {
-    const threshold = CONFIG[MODULE_ID].alphaThreshold || 0.75;
-    const pxThreshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
+    const pxThreshold = 255 * (CONFIG[MODULE_ID].alphaThreshold || 0.75);
     rayOrigin.add(rayDirection.multiplyScalar(t, tmpIx), tmpIx);
-    return tile.evPixelCache.pixelAtCanvas(tmpIx.x, tmpIx.y) > pxThreshold;
+    return this.placeable.evPixelCache.pixelAtCanvas(tmpIx.x, tmpIx.y) > pxThreshold;
   }
 
   /* ----- NOTE: Updating ----- */
@@ -792,7 +790,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     for ( const shape of region.shapes ) {
       // If the point is contained by more shapes than holes, it must intersect a non-hole.
       // Example: Rect contains ellipse hole that contains circle. If in circle, than +2 - 1 = 1. If in ellipses, +1 -1 = 0.
-      if ( ixTB && handler.shapesPixi.get(shape).contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));
+      if ( ixTB && this.shapesPixi.get(shape).contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));
 
       // Construct sides and test. Sides of a hole still block, so can treat all shapes equally.
       // A side is a vertical quad; basically a wall.
@@ -800,7 +798,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
       for ( const quad of this.shapesSides.get(shape) ) {
         if ( !quad.isFacing(rayOrigin) ) continue;
         const t = quad.intersectionT(rayOrigin, rayDirection);
-        if ( t !== null && t.between(0, 1, false) ) return t;
+        if ( t !== null && t.between(0, cutoff, false) ) return t;
       }
     }
     if ( containsTB > 0 ) return ixTB;

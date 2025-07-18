@@ -60,7 +60,7 @@ export class PercentVisibleCalculatorAbstract {
   set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true}) }
 
   async initialize() {
-    this.occlusionTester.config = this._config; // Sync the configs.
+    this.occlusionTester._config = this._config; // Sync the configs.
   }
 
 
@@ -173,11 +173,11 @@ export class PercentVisibleCalculatorAbstract {
 
   get targetShape() { return this.target[this._tokenShapeType]; }
 
-  counts = new Float32Array(this.constructor.COUNT_LABELS.length);
+  counts = new Float32Array(Object.keys(this.constructor.COUNT_LABELS).length);
 
   initializeCalculations() {
     this.initializeLightTesting();
-    this.initializeOcclusionTesters();
+    this.initializeOcclusionTesting();
   }
 
   initializeOcclusionTesting() {
@@ -187,7 +187,7 @@ export class PercentVisibleCalculatorAbstract {
         let tester;
         if ( !this.occlusionTesters.has(src) ) {
           tester = new ObstacleOcclusionTest();
-          tester.config = this.config; // Link so changes to config are reflected in the tester.
+          tester._config = this._config; // Link so changes to config are reflected in the tester.
           this.occlusionTesters.set(src, tester);
         }
 

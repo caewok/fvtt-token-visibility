@@ -70,7 +70,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   /** @type {Points3d[][]} */
   targetPoints = [];
 
-  counts = new Uint8Array(this.constructor.COUNT_LABELS.length);
+  counts = new Uint8Array(Object.keys(this.constructor.COUNT_LABELS).length);
 
   // Use separate lighting occlusion testers b/c it will change viewpoints a lot.
   /** @type {WeakMap<PointSource, ObstacleOcclusionTest>} */

@@ -210,15 +210,19 @@ export class AbstractViewerLOS {
   /** @type {ViewerLOSConfig} */
   #config = { ...this.constructor.defaultConfiguration };
 
-  get config() { return structuredClone(this._config); }
+  get config() { return structuredClone(this.#config); }
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true}) }
+  set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true}) }
 
   get viewpointOffset() { return this.#config.viewpointOffset; }
 
   get threshold() { return this.#config.threshold; }
 
   set threshold(value) { this.#config.threshold = value; }
+
+  get testLighting() { return this.calculator.config.testLighting; }
+
+  set testLighting(testLighting) { this.calculator.config = { testLighting }; }
 
   /**
    * @typedef {object} DetectionModeConfig
@@ -389,16 +393,16 @@ export class AbstractViewerLOS {
 
   _clearVisibilityArrays() { Object.values(this.visibility).forEach(arr => arr.fill(0)); }
 
-  get hasLOSDim() { return this.percentDim >= this.threshold; }
+  get hasLOSDim() { return this.percentVisibleDim >= this.threshold; }
 
-  get hasLOSBright() { return this.percentBright >= this.threshold; }
+  get hasLOSBright() { return this.percentVisibleBright >= this.threshold; }
 
   get hasLOSUnobscured() { return this.percentUnobscured >= this.threshold; }
 
   get hasLOS() { return this.percentVisible >= this.threshold; }
 
   get percentVisible() {
-    return this.config.testLighting ? this.percentUnobscured : this.percentVisibileDim;
+    return this.testLighting ? this.percentUnobscured : this.percentVisibleDim;
   }
 
   /**
@@ -446,7 +450,8 @@ export class AbstractViewerLOS {
   fullyWithinBrightLight() {
     if ( canvas.environment.globalLightSource.active ) return true;
     if ( !canvas.lighting.placeables.length ) return false;
-    if ( !this.target.constrainedTokenBorder.equals(this.target.brightLitTokenBorder) ) return false;
+    if ( !this.target.brightLitTokenBorder ) return false;
+    if ( !this.target.constrainedTokenBorder.equals(this.target.brightLitTokenBorder) ) return undefined;
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const targetCenter = Point3d.fromTokenCenter(this.target);
     const srcOrigin = new Point3d();
@@ -462,7 +467,34 @@ export class AbstractViewerLOS {
       unknown ||= true;
 
       // TODO: Could use the occlusionTester if it were definitely initialized for this source.
-      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, src) ) continue;
+      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, srcOrigin) ) continue;
+
+      return true;
+    }
+    return unknown ? undefined : false;
+  }
+
+  fullyWithinDimLight() {
+    if ( canvas.environment.globalLightSource.active ) return true;
+    if ( !canvas.lighting.placeables.length ) return false;
+    if ( !this.target.litTokenBorder ) return false;
+    if ( !this.target.constrainedTokenBorder.equals(this.target.litTokenBorder) ) return undefined;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const targetCenter = Point3d.fromTokenCenter(this.target);
+    const srcOrigin = new Point3d();
+
+    let unknown = false;
+    for ( const src of canvas.lighting.placeables ) {
+      if ( !src.lightSource.active ) continue;
+
+      Point3d.fromPointSource(src, srcOrigin);
+      const dist2 = Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
+      if ( dist2 > (src.dim ** 2) ) continue; // Not within bright radius.
+
+      unknown ||= true;
+
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, srcOrigin) ) continue;
 
       return true;
     }
@@ -502,37 +534,51 @@ export class AbstractViewerLOS {
       return;
     }
 
-    // If not lit, we still want to test occlusion but can skip lighting test.
-    // If lit and no obstacle from the viewer or light, can assume it is fully visible.
-    // TODO: Move this to the calculator?
-    const oldTestLighting = this.config.testLighting;
-    if ( this.config.testLighting ) {
-      const withinSource = this.config.sourceType === "lighting"
-        ? this.fullyWithinBrightLight() : this.fullyWithinSound();
-      if ( withinSource === true ) {
-        this.visibility.bright.fill(1);
-        this.visibility.dim.fill(1);
-        if ( !this.hasPotentialObstaclesfromViewpoint() ) {
-          // Within a bright light with no obstacles and no obstacles occluding the viewer.
-          this.visibility.unobscured.fill(1);
-          return;
-        }
-      }
-      if ( withinSource === false ) this.config.testLighting = false; // Dim, bright already set to 0.
-    }
+    this._configureCalculator();
+    const oldTestLighting = this.testLighting;
+    const testLighting = this.testLighting = oldTestLighting && this.simpleLightingTest(); // Only run test if actually testing lighting.
 
     // Test each viewpoint until unobscured is 1.
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
     for ( let i = 0, iMax = this.viewpoints.length; i < iMax; i += 1 ) {
       const vp = this.viewpoints[i];
+      vp.calculate();
       this.visibility.unobscured[i] = vp.percentUnobscured;
-      if ( this.config.testLighting ) {
+      if ( testLighting ) {
         this.visibility.dim[i] = vp.percentDim;
         this.visibility.bright[i] = vp.percentBright;
         if ( this.visibility.unobscured[i] === 1 && this.visibility.dim[i] === 1 ) break;
       } else if ( this.visibility.unobscured[i] === 1 ) break;
     }
-    this.config = { testLighting: oldTestLighting };
+    this.testLighting = oldTestLighting;
+  }
+
+  simpleLightingTest() {
+    if ( !this.testLighting ) return false;
+    const sourceType = this.calculator.config.sourceType;
+    const withinSource = sourceType === "lighting" ? this.fullyWithinBrightLight() : this.fullyWithinSound();
+    if ( withinSource === true ) {
+      this.visibility.bright.fill(1);
+      this.visibility.dim.fill(1);
+      return false;
+    } else if ( withinSource === false ) {
+      if ( sourceType === "sounds" ) return false; // dim: 0; bright is n/a
+      const withinDimSource = this.fullyWithinDimLight();
+      if ( withinDimSource === true ) {
+        this.visibility.dim.fill(1); // bright: 0
+        return false;
+      } else if ( withinDimSource === false ) return false; // bright: 0, dim: 0
+    }
+    return true;
+  }
+
+
+  // Must be done before calling calc.calculate or vp.calculate.
+  // Calculator not guaranteed to remain in same state between runs.
+  _configureCalculator() {
+    this.calculator.viewer = this.viewer;
+    this.calculator.target = this.target;
+    this.calculator.targetLocation = this.targetLocation;
   }
 
   /**
@@ -761,23 +807,25 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     return this.#cache.has(target);
   }
 
-  calculate() {
-    super.calculate();
-    this.setCache();
+  calculate(force = false) {
+    if ( force || !this.updateFromCache() ) {
+      super.calculate();
+      this.setCache();
+    }
   }
 
   get percentVisibleDim() {
-    if ( !this.updateFromCache() ) this.calculate();
+    if ( !this.updateFromCache() ) this.calculate(true);
     return super.percentVisibleDim;
   }
 
   get percentVisibleBright() {
-    if ( !this.updateFromCache() ) this.calculate();
+    if ( !this.updateFromCache() ) this.calculate(true);
     return super.percentVisibleBright;
   }
 
   get percentUnobscured() {
-    if ( !this.updateFromCache() ) this.calculate();
+    if ( !this.updateFromCache() ) this.calculate(true);
     return super.percentUnobscured;
   }
 }
