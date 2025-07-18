@@ -418,7 +418,7 @@ export function targetWithinLimitedAngleVision(visionSource, targetShape) {
 
   // TODO: Would it be more performant to assign an angle to each target point?
   // Or maybe just check orientation of ray to each point?
-  const edges = this.visibleTargetShape.toPolygon().iterateEdges();
+  const edges = targetShape.toPolygon().iterateEdges();
   for ( const edge of edges ) {
     if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return 2;
     if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return 2;
@@ -654,6 +654,20 @@ export function getFlagFast(doc, scope, key) {
   return doc.flags?.[scope]?.[key];
 }
 
+/**
+ * Clamp a number between two values, allowing numbers very close to the min or max.
+ * For example, clamp(0, 1, 1e-06) would clamp -.00001 to 0.
+ * @param {number} num
+ * @param {number} min
+ * @param {number} max
+ * @param {number} [epsilon=1e-08]
+ * @returns {number}
+ */
+export function approximateClamp(num, min, max, epsilon = 1e-08) {
+  if ( num.almostEqual(min, epsilon) ) return min;
+  if ( num.almostEqual(max, epsilon) ) return max;
+  return Math.clamp(num, min, max);
+}
 
 /**
  * Map mean to link arbitrary ids to index integers.

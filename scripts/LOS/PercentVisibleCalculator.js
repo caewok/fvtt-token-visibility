@@ -1,9 +1,17 @@
 /* globals
+canvas,
 CONFIG,
 foundry,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
+
+import { MODULE_ID } from "../const.js";
+import { approximateClamp } from "./util.js";
+import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
+import { Settings } from "../settings.js";
+import { AbstractViewpoint } from "./AbstractViewpoint.js";
 
 /* Percent visible calculator
 
@@ -12,6 +20,14 @@ Calculate percent visibility for a token viewer looking at a target token.
 */
 
 export class PercentVisibleCalculatorAbstract {
+
+  static COUNT_LABELS = {
+    TOTAL: 0,
+    OBSCURED: 1,
+    BRIGHT: 2,
+    DIM: 3,
+    DARK: 4,
+  };
 
   static defaultConfiguration = {
     blocking: {
@@ -24,7 +40,7 @@ export class PercentVisibleCalculatorAbstract {
         prone: true,
       }
     },
-    useLitTargetShape: false,
+    testLighting: false,
     senseType: "sight",
     sourceType: "lighting", // If calculating lit target area, which source type is detected by the sense type as "lighting" the target. (sound, light)
     debug: false,
@@ -39,188 +55,288 @@ export class PercentVisibleCalculatorAbstract {
 
   _config = {};
 
-  get config() { return { ...this._config }; }
+  get config() { return structuredClone(this._config); }
 
   set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true}) }
 
-  async initialize() { return; }
-
-  getVisibleTargetShape(target) {
-    return this.config.useLitTargetShape ? target.litTokenBorder : target.constrainedTokenBorder;
+  async initialize() {
+    this.occlusionTester._config = this._config; // Sync the configs.
   }
 
-  static cachedPercentVisible = new WeakMap();
+
+  // ----- NOTE: Area calculation ----- //
+
+  // Following all use the metric of the given algorithm.
+  // For example, points would use the number of totalt points as the "targetArea".
+
+  /**
+   * Area of the target assuming nothing obscures it. Used as the denominator for percentage calcs.
+   * @type {number}
+   */
+  get totalTargetArea() { return this.counts[TOTAL]; }
+
+  /**
+   * Area of a single grid square (or target sized 1/1). Used as the denominator for percentage calcs
+   * when large token option is enabled.
+   * @type {number}
+   */
+  get largeTargetArea() {
+    const { width, height } = this.target.document;
+    return this.counts[TOTAL] / (width * height);
+  }
+
+  /**
+   * Area of the target accounting for large target area config.
+   * @type {number}
+   */
+  get targetArea() {
+    if ( this.config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
+    return this.totalTargetArea;
+  }
+
+  /**
+   * Area of the target not obscured by obstacles.
+   * Target area should equal this with blocking turned off.
+   * @type {number}
+   */
+  get unobscuredArea() { return this.counts[TOTAL] - this.counts[OBSCURED]; }
+
+  /**
+   * Area of the target that is not obscured from the viewer and under dim light.
+   * To get total dim, run the algorithm with blocking disabled.
+   * @type {number}
+   */
+  get dimArea() { return this.counts[DIM]; }
+
+  /**
+   * Area of the target that is not obscured from the viewer and under bright light.
+   * To get total bright, run the algorithm with blocking disabled.
+   * @type {number}
+   */
+  get brightArea() { return this.counts[BRIGHT]; }
+
+  /**
+   * Area of the target that is not obscured from the viewer and under no (e.g., dark) light.
+   * To get total dark, run the algorithm with blocking disabled.
+   * @type {number}
+   */
+  get darkArea() { return this.counts[DARK]; }
+
+  // Percentages: Various rounding errors can cause target to peek through; round when close to 0, 1.
+
+  /**
+   * Percent of the target that is visible and illuminated by bright light.
+   * @type {number}
+   */
+  get percentVisibleBright() { return approximateClamp(this.brightArea / this.targetArea, 0, 1, 1e-02); }
+
+  /**
+   * Percent of the target that is visible and illuminated by dim light *only*.
+   * @type {number}
+   */
+  get percentVisibleDim() { return approximateClamp(this.dimArea / this.targetArea, 0, 1, 1e-02); }
+
+  /**
+   * Percent of the target that is visible.
+   * If testLighting config set, percent under some light (bright or dim). Otherwise, percent unobscured.
+   * @type {number}
+   */
+  get percentVisible() {
+   return this.config.testLighting
+     ? this.percentVisibleDim
+     : this.percentUnobscured;
+  }
+
+  /**
+   * Percent of the target that is visible, ignoring lighting.
+   * Should equal percentVisible with config.useLitToken set to false.
+   * @type {number}
+   */
+  get percentUnobscured() { return approximateClamp(this.unobscuredArea / this.largeTargetArea, 0, 1, 1e-02);  }
+
 
   // ----- NOTE: Visibility testing ----- //
 
-  /**
-   * Determine percent visible based on 3d view or return cached value.
-   * @param {Token} viewer                  Token representing the camera/sight
-   * @param {Token} target                  What the viewer is looking at
-   * @param {object} [opts]
-   * @param {Point3d} [opts.viewerLocation]   Where the camera is located
-   * @param {Point3d} [opts.targetLocation]   Where the camera is looking to in 3d space
-   * @returns {number}
-   */
-  percentVisible(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
-    if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
+  occlusionTester = new ObstacleOcclusionTest();
 
+  viewer;
+
+  target;
+
+  get targetBorder() { return CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
+
+  viewpoint = new CONFIG.GeometryLib.threeD.Point3d();
+
+  targetLocation = new CONFIG.GeometryLib.threeD.Point3d();
+
+  _tokenShapeType = "tokenBorder"; // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
+
+  get targetShape() { return this.target[this._tokenShapeType]; }
+
+  counts = new Float32Array(Object.keys(this.constructor.COUNT_LABELS).length);
+
+  initializeCalculations() {
+    this.initializeLightTesting();
+    this.initializeOcclusionTesting();
+  }
+
+  initializeOcclusionTesting() {
+    this.occlusionTester._initialize(this.viewpoint, this.target);
+    if ( this.occlusionTesters ) {
+      for ( const src of canvas[this.config.sourceType].placeables ) {
+        let tester;
+        if ( !this.occlusionTesters.has(src) ) {
+          tester = new ObstacleOcclusionTest();
+          tester._config = this._config; // Link so changes to config are reflected in the tester.
+          this.occlusionTesters.set(src, tester);
+        }
+
+        // Setup the occlusion tester so the faster internal method can be used.
+        tester ??= this.occlusionTesters.get(src);
+        tester._initialize(this.viewpoint, this.target);
+      }
+    }
+  }
+
+  _testLightingForPoint;
+
+  initializeLightTesting() {
+    this._testLightingForPoint = () => null; // Default: ignore.
+    if ( this.config.testLighting ) {
+      if ( this.config.sourceType === "lighting" ) this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
+      else if ( this.config.sourceType === "sounds" ) this._testLightingForPoint = this._testSoundOcclusionForPoint.bind(this);
+    }
+  }
+
+  calculate() {
+    this.counts.fill(0);
+    this._tokenShapeType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
+    this.initializeCalculations();
+
+    if ( this.config.testLighting && CONFIG[MODULE_ID].litToken === CONFIG[MODULE_ID].litTokenOptions.CONSTRAIN ) {
+      // Calculate without lighting, then with lit (dim) border, then with lit (bright) border
+      const tmpCounts = new this.counts.constructor(this.counts.length);
+      this.config = { testLighting: false };
+
+      this._calculate();
+      tmpCounts[TOTAL] = this.counts[TOTAL];
+      tmpCounts[OBSCURED] = this.counts[OBSCURED];
+
+      this._tokenShapeType = "litTokenBorder";
+      this._calculate();
+      tmpCounts[DIM] = this.counts[OBSCURED];
+
+      this._tokenShapeType = "brightLitTokenBorder";
+      this._calculate();
+      tmpCounts[BRIGHT] = this.counts[OBSCURED];
+
+      this.counts.set(tmpCounts);
+      this.config = { testLighting: true };
+      return;
+    }
+    this._calculate();
+  }
+
+  // async calculate(); // TODO: Implement if necessary; mimic calculate method but with await this._calculate.
+
+  foundryLitTokenTest() {
+    const cfg = {
+      tokenShape: this.targetBorder,
+      pointAlgorithm: Settings.KEYS.POINT_TYPES.NINE,
+      inset: .25,
+      viewpoint: this.viewpoint
+    };
+    const targetPoints = AbstractViewpoint.constructTokenPoints(this.target, cfg);
+
+    let dim = 0;
+    let bright = 0;
+    for ( const pt of targetPoints ) {
+      for ( const src of canvas[this.config.sourceType].placeables ) {
+        if ( src.lightSource.shape.contains(pt.x, pt.y) ) {
+          dim += 1;
+          if ( PIXI.Point.distanceSquaredBetween(pt, src.lightSource) < (src.brightRadius ** 2)) bright += 1;
+        }
+      }
+    }
+    return {
+      dim: dim / targetPoints.length,
+      bright: bright / targetPoints.length,
+    }
+  }
+
+  #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
+
+  _testLightingOcclusionForPoint(targetPoint, debugObject = {}, face) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    viewerLocation ??= Point3d.fromTokenCenter(viewer);
-    targetLocation ??= Point3d.fromTokenCenter(target);
+    const srcOrigin = Point3d._tmp;
+    let isBright = false;
+    let isDim = false;
+    for ( const src of canvas.lighting.placeables ) {
+      if ( !src.lightSource.active ) continue;
 
-    this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
-    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+      Point3d.fromPointSource(src, srcOrigin);
+      if ( face && !face.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
+
+      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
+      if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
+
+      // If blocked, not bright or dim.
+      // TODO: Don't test tokens for blocking the light or set a config option somewhere.
+      // Probably means not syncing the configs for the occlusion testers.
+      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
+
+      // TODO: handle light/sound attenuation from threshold walls.
+      isBright ||= (dist2 <= (src.brightRadius ** 2));
+      isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
+      if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
+    }
+
+    debugObject.isDim = isDim;
+    debugObject.isBright = isBright;
+    this.counts[BRIGHT] += isBright;
+    this.counts[DIM] += isDim;
+    this.counts[DARK] += !(isDim || isBright);
+    return { isBright, isDim };
   }
 
-  async percentVisibleAsync(viewer, target, { viewerLocation, targetLocation, ..._opts } = {}) {
-    if ( !this.getVisibleTargetShape(target) ) return 0; // Target is not lit.
-
+  _testSoundOcclusionForPoint(targetPoint, debugObject = {}, face) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    viewerLocation ??= Point3d.fromTokenCenter(viewer);
-    targetLocation ??= Point3d.fromTokenCenter(target);
+    const srcOrigin = Point3d._tmp;
+    let isDim = false;
+    for ( const src of canvas.sounds.placeables ) {
+      if ( !src.source.active ) continue;
 
-    await this._calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation);
-    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
-  }
+      Point3d.fromPointSource(src, srcOrigin);
+      if ( face && !face.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
 
-  /**
-   * Do any preparatory calculations for determining the percent visible.
-   * @param {Token} viewer                  Token representing the camera/sight
-   * @param {Token} target                  What the viewer is looking at
-   * @param {Point3d} viewerLocation        Where the camera is located
-   * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
-   * @override
-   */
-  _calculatePercentVisible(_viewer, _target, _viewerLocation, _targetLocation) { return; }
+      const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
+      if ( dist2 > (src.radius ** 2) ) continue; // Not within source dim radius.
 
-  async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
-    return this._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
-  }
+      // If blocked, not bright or dim.
+      // TODO: Don't test tokens for blocking the light or set a config option somewhere.
+      // Probably means not syncing the configs for the occlusion testers.
+      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
 
-  /**
-   * Determine the percent unobscured view.
-   * @param {Token} viewer                  Token representing the camera/sight
-   * @param {Token} target                  What the viewer is looking at
-   * @param {Point3d} viewerLocation        Where the camera is located
-   * @param {Point3d} targetLocation        Where the camera is looking to in 3d space
-   * @returns {number}
-   * @override
-   */
-  _percentUnobscured(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
+      // TODO: handle light/sound attenuation from threshold walls.
+      isDim = true;
+      break;
+    }
 
-  async _percentUnobscuredAsync(viewer, target, viewerLocation, targetLocation) {
-    return this._percentUnobscured(viewer, target, viewerLocation, targetLocation);
+    debugObject.isDim = isDim;
+    this.counts[DIM] += isDim;
+    this.counts[DARK] += !isDim;
+    return { isDim };
   }
 
   destroy() { return; }
-
 }
 
-/**
- * Handles classes that use RenderObstacles to draw a 3d view of the scene from the viewer perspective.
- */
-export class PercentVisibleRenderCalculatorAbstract extends PercentVisibleCalculatorAbstract {
-  /**
-   * Determine the percent unobscured view.
-   * @returns {number}
-   * @override
-   */
-  _percentUnobscured(viewer, target, viewerLocation, targetLocation) {
-    // Calculate the denominator for percent seen: the target area without obstacles.
-    // - Large target: 100% viewable if area equal to one grid square is viewable.
-    // - Lit target: Unlit portions of the target are treated as obscured.
-    let totalArea;
-    if ( this.config.useLitTargetShape
-      && target.litTokenBorder
-      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) totalArea = this._constrainedTargetArea(viewer, target, viewerLocation, targetLocation);
-    else totalArea = this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
-    if ( this.config.largeTarget ) totalArea = Math.min(totalArea, this._gridShapeArea(viewer, target, viewerLocation, targetLocation))
-    if ( !totalArea ) {
-      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0 for ${viewer.name}, ${viewer.id} --> ${target.name}, ${target.id}.`);
-      return 0;
-    }
-    const viewableArea = this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
-    const percentSeen = viewableArea / totalArea;
-
-    // Round the percent seen so that near-zero areas are 0.
-    // Because of trimming walls near the vision triangle, a small amount of token area can poke through
-    if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
-    return Math.clamp(percentSeen, 0, 1);
-  }
-
-  async _percentUnobscuredAsync(viewer, target, viewerLocation, targetLocation) {
-    // Calculate the denominator for percent seen: the target area without obstacles.
-    // - Large target: 100% viewable if area equal to one grid square is viewable.
-    // - Lit target: Unlit portions of the target are treated as obscured.
-    // TODO: Use promises for each and Promise.allSettled?
-    let totalArea;
-    if ( this.config.useLitTargetShape
-      && target.litTokenBorder
-      && !target.litTokenBorder.equals(target.constrainedTokenBorder) ) {
-
-      totalArea = await this._constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation);
-    }
-    else totalArea = await this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
-    if ( this.config.largeTarget ) totalArea = Math.min(totalArea, (await this._gridShapeArea(viewer, target, viewerLocation, targetLocation)))
-    if ( !totalArea ) {
-      console.error(`${this.constructor.name}|_percentUnobscured total area should not be 0 for ${viewer.name}, ${viewer.id} --> ${target.name}, ${target.id}.`);
-      return 0;
-    }
-    const viewableArea = await this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
-    const percentSeen = viewableArea / totalArea;
-
-    // Round the percent seen so that near-zero areas are 0.
-    // Because of trimming walls near the vision triangle, a small amount of token area can poke through
-    if ( percentSeen.almostEqual(0, 1e-02) ) return 0;
-    return Math.clamp(percentSeen, 0, 1);
-  }
-
-
-  /**
-   * Grid shape area centered on the target as seen from the viewer location.
-   * Used to determine the minimum area needed (denominator) for the largeTarget option.
-   * Called after _calculatePercentVisible.
-   * @returns {number}
-   */
-  _gridShapeArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
-
-  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    return this._gridShapeArea(viewer, target, viewerLocation, targetLocation);
-  }
-
-  /**
-   * Constrained target area, counting both lit and unlit portions of the target.
-   * Used to determine the total area (denominator) when useLitTarget config is set.
-   * Called after _calculatePercentVisible.
-   * @returns {number}
-   */
-  _constrainedTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
-
-  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    return this._constrainedTargetArea(viewer, target, viewerLocation, targetLocation);
-  }
-
-  /**
-   * How much of the target area is viewable, considering obstacles.
-   * Called after _calculatePercentVisible.
-   * @returns {number}
-   */
-  _viewableTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
-
-  async _viewableTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    return this._viewableTargetArea(viewer, target, viewerLocation, targetLocation);
-  }
-
-  /**
-   * The target area as seen from the viewer location, ignoring all obstacles.
-   * Called after _calculatePercentVisible.
-   * @param {Token} target    For convenience, the target token
-   * @returns {number}
-   */
-  _totalTargetArea(_viewer, _target, _viewerLocation, _targetLocation) { return 0; }
-
-  async _totalTargetAreaAsync (viewer, target, viewerLocation, targetLocation) {
-    return this._totalTargetArea(viewer, target, viewerLocation, targetLocation);
-  }
-}
+const {
+  TOTAL,
+  OBSCURED,
+  BRIGHT,
+  DIM,
+  DARK,
+} = PercentVisibleCalculatorAbstract.COUNT_LABELS;

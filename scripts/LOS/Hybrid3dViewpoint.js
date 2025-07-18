@@ -10,8 +10,8 @@ import { Settings } from "../settings.js";
 
 // LOS folder
 import { GeometricViewpoint, PercentVisibleCalculatorGeometric } from "./GeometricViewpoint.js";
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
+import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 // Debug
 export class Hybrid3dViewpoint extends GeometricViewpoint {
@@ -19,24 +19,24 @@ export class Hybrid3dViewpoint extends GeometricViewpoint {
 }
 
 export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeometric {
-  static get viewpointClass() { return HybridViewpoint; }
+  static get viewpointClass() { return Hybrid3dViewpoint; }
 
   /** @type {PercentVisibleCalculatorAbstract} */
   tileCalc = CONFIG[MODULE_ID].sightCalculators.webGL2;
 
   #blockingTiles = new Set();
 
-  blockingTiles(viewerLocation, target) {
-    const visionTri = AbstractViewpoint.visionTriangle.rebuild(viewerLocation, target);
-    return AbstractViewpoint.filterTilesByVisionTriangle(visionTri, { senseType: this.config.senseType });
+  blockingTiles(viewpoint, target) {
+    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(viewpoint, target);
+    return ObstacleOcclusionTest.filterTilesByVisionTriangle(visionTri, { senseType: this.config.senseType });
   }
 
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this.#blockingTiles = this.blockingTiles(viewerLocation, target);
+  _calculatePercentVisible(viewer, target, viewpoint, targetLocation) {
+    this.#blockingTiles = this.blockingTiles(viewpoint, target);
     if ( this.#blockingTiles.size ) {
-      return this.tileCalc._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+      return this.tileCalc._calculatePercentVisible(viewer, target, viewpoint, targetLocation);
     } else {
-      return super._calculatePercentVisible(viewer, target, viewerLocation, targetLocation);
+      return super._calculatePercentVisible(viewer, target, viewpoint, targetLocation);
     }
   }
 

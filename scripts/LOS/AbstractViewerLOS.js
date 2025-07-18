@@ -1,9 +1,11 @@
 /* globals
 canvas,
 CONFIG,
+DetectionMode,
 foundry,
 LimitedAnglePolygon,
-Ray
+Ray,
+Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -43,7 +45,7 @@ import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
  * @property {BlockingConfig} blocking                    Do various canvas objects block?
  * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
  * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
- * @property {boolean} useLitTargetShape            Should the illuminated target shape be used?
+ * @property {boolean} testLighting            Should the illuminated target shape be used?
  * @property {boolean} debug                              Trigger debug drawings and logging
  */
 
@@ -68,6 +70,30 @@ import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
  * @property {number} viewpointOffset                         Offset each viewpoint from border
  * @property {number} threshold                               Percent needed to be seen for LOS
  */
+
+/** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
+const DM_SENSE_TYPES = {
+  [DetectionMode.DETECTION_TYPES.SIGHT]: "sight",
+  [DetectionMode.DETECTION_TYPES.SOUND]: "sound",
+  [DetectionMode.DETECTION_TYPES.MOVE]: "move",
+  [DetectionMode.DETECTION_TYPES.OTHER]: "light",
+  "sight": DetectionMode.DETECTION_TYPES.SIGHT,
+  "sound": DetectionMode.DETECTION_TYPES.SOUND,
+  "move": DetectionMode.DETECTION_TYPES.MOVE,
+  "light": DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
+}
+
+/** @type {Object<"lighting"|"sounds"|DetectionMode.DETECTION_TYPES>} */
+const DM_SOURCE_TYPES = {
+  "lighting": DetectionMode.DETECTION_TYPES.SIGHT,
+  "sounds": DetectionMode.DETECTION_TYPES.SOUND,
+  [DetectionMode.DETECTION_TYPES.SIGHT]: "lighting",
+  [DetectionMode.DETECTION_TYPES.SOUND]: "sounds",
+  [DetectionMode.DETECTION_TYPES.MOVE]: "lighting",
+  [DetectionMode.DETECTION_TYPES.OTHER]: "lighting",
+};
+
+
 export class AbstractViewerLOS {
   /** @type {enum<string>} */
   static POINT_TYPES = {
@@ -149,7 +175,7 @@ export class AbstractViewerLOS {
    * @param {number} [opts.threshold]                         Percentage used to test for LOS (above this passes)
    * @param {object} [...cfg]                                 Passed to a newly-constructed calculator if none provided.
    */
-  constructor(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, threshold, ...cfg } = {}) {
+  constructor(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, ...cfg } = {}) {
     this.#viewer = viewer;
 
     if ( typeof numViewpoints !== "undefined" ) this.#config.numViewpoints = numViewpoints;
@@ -176,6 +202,7 @@ export class AbstractViewerLOS {
 
   static defaultConfiguration = {
     // Viewpoint configuration
+    angle: true, // If constrained by the viewer vision angle
     viewpointOffset: 0,
     threshold: 0.75, // Percent used for LOS
   }
@@ -183,13 +210,57 @@ export class AbstractViewerLOS {
   /** @type {ViewerLOSConfig} */
   #config = { ...this.constructor.defaultConfiguration };
 
-  get config() { return { ...this.#config }; }
+  get config() { return structuredClone(this.#config); }
+
+  set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true}) }
 
   get viewpointOffset() { return this.#config.viewpointOffset; }
 
   get threshold() { return this.#config.threshold; }
 
   set threshold(value) { this.#config.threshold = value; }
+
+  get testLighting() { return this.calculator.config.testLighting; }
+
+  set testLighting(testLighting) { this.calculator.config = { testLighting }; }
+
+  /**
+   * @typedef {object} DetectionModeConfig
+   * Detection mode settings relevant to the viewer LOS and calculator.
+   * @prop {boolean} walls                          Do walls block?
+   * @prop {DetectionMode.DETECTION_TYPES} type     Detection type
+   * @prop {number} angle                           Is the viewer limited by its viewing angle?
+   */
+
+  // Used for caching
+  /** @type {DetectionModeConfig} */
+  get detectionModeConfig() {
+    const calcConfig = this.calculator.config;
+    return {
+      walls: calcConfig.blocking.walls,
+      type: DM_SENSE_TYPES[calcConfig.senseType],
+      angle: this.config.angle,
+    }
+  }
+
+  /**
+   * Set this LOS configuration to match a detection mode's settings.
+   * See CONFIG.Canvas.detectionModes (and CONFIG.Canvas.visionModes)
+   * @param {DetectionMode} dm
+   */
+  setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight) {
+    const calcConfig = {
+      blocking: {
+        walls: dm.walls,
+        tiles: dm.walls,
+        regions: dm.walls,
+      },
+      senseType: DM_SENSE_TYPES[dm.type],
+      sourceType: DM_SOURCE_TYPES[dm.type],
+    };
+    this.config = { angle: dm.angle };
+    this.calculator.config = calcConfig;
+  }
 
   // ----- NOTE: Calculator ----- //
 
@@ -274,6 +345,7 @@ export class AbstractViewerLOS {
       inset: viewpointOffset
     }).map(pt => new cl(this, pt));
     this.#config.viewpointOffset = viewpointOffset;
+    this.#updateVisibilityArrays();
   }
 
   // ----- NOTE: Target ---- //
@@ -299,25 +371,62 @@ export class AbstractViewerLOS {
     return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target);
   }
 
-  get useLitTargetShape() { return this.calculator.config.useLitTargetShape; }
+  // ----- NOTE: Visibility testing ----- //
 
-  set useLitTargetShape(useLitTargetShape) { this.calculator.config = { useLitTargetShape }; }
+  static VISIBILITY_LABELS = {
+    UNOBSCURED: 0,
+    DIM: 1,
+    BRIGHT: 2,
+  };
 
-  get visibleTargetShape() {
-    if ( !this.target ) return undefined;
-    return this.calculator.getVisibleTargetShape(this.target);
+  visibility = {
+    unobscured: new Float32Array(1),
+    dim: new Float32Array(1),
+    bright: new Float32Array(1),
+  };
+
+  #updateVisibilityArrays() {
+    const n = this.viewpoints.length || 1;
+    if ( this.visibility.unobscured.length === n ) return;
+    for ( const key of Object.keys(this.visibility) ) this.visibility[key] = new Float32Array(n);
   }
 
-  // ----- NOTE: Visibility testing ----- //
+  _clearVisibilityArrays() { Object.values(this.visibility).forEach(arr => arr.fill(0)); }
+
+  get hasLOSDim() { return this.percentVisibleDim >= this.threshold; }
+
+  get hasLOSBright() { return this.percentVisibleBright >= this.threshold; }
+
+  get hasLOSUnobscured() { return this.percentUnobscured >= this.threshold; }
+
+  get hasLOS() { return this.percentVisible >= this.threshold; }
+
+  get percentVisible() {
+    return this.testLighting ? this.percentUnobscured : this.percentVisibleDim;
+  }
+
+  /**
+   * Maximum visible dim lit over the viewpoints.
+   */
+  get percentVisibleDim() { return Math.max(...this.visibility.dim); }
+
+  /**
+   * Maximum visible bright lit over the viewpoints.
+   */
+  get percentVisibleBright() { return Math.max(...this.visibility.bright); }
+
+  /**
+   * Maximum visible unobscured over the viewpoints.
+   */
+  get percentUnobscured() { return Math.max(...this.visibility.unobscured); }
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
    * @param {Token} [target]
-   * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
+   * @returns {1|0|01} 1.0 for visible; -1 if unknown
    */
-  simpleVisibilityTest(target) {
-    if ( target ) this.target = target; // Important so the viewpoints know the target.
-    target = this.target;
+  simpleVisibilityTest() {
+    const target = this.target;
     const viewer = this.viewer;
 
     // To avoid obvious errors.
@@ -327,115 +436,149 @@ export class AbstractViewerLOS {
     if ( tokensOverlap(viewer, target) ) return 1;
 
     // Target is not within the limited angle vision of the viewer.
-    if ( viewer.vision && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return 0;
+    if ( viewer.vision && this.config.angle && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return 0;
 
-    // Target is not lit.
-    if ( this.useLitTargetShape ) {
-      const shape = this.visibleTargetShape;
-      // const shape = target.constrainedTokenBorder;
-      if ( !shape ) return 0;
-    };
+    return -1;
+  }
 
-    // If all viewpoints are blocked, return 0; if any unblocked, return 1.
-    let blocked = true;
-    for ( const vp of this.viewpoints ) {
-      const thisVP = vp.simpleVisibilityTest();
-      if ( thisVP === 1 ) return 1;
-      blocked &&= (thisVP === 0);
+  /**
+   * Test if the viewpoint is within 1+ bright lights.
+   * To be within, there must be no obstacles within vision triangle and light shape fully contains target.
+   * @returns {undefined|boolean} True if definitely within bright light.
+   *   False if not. Undefined if obstacles present or target not fully within triangle shape.
+   */
+  fullyWithinBrightLight() {
+    if ( canvas.environment.globalLightSource.active ) return true;
+    if ( !canvas.lighting.placeables.length ) return false;
+    if ( !this.target.brightLitTokenBorder ) return false;
+    if ( !this.target.constrainedTokenBorder.equals(this.target.brightLitTokenBorder) ) return undefined;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const targetCenter = Point3d.fromTokenCenter(this.target);
+    const srcOrigin = new Point3d();
+
+    let unknown = false;
+    for ( const src of canvas.lighting.placeables ) {
+      if ( !src.lightSource.active ) continue;
+
+      Point3d.fromPointSource(src, srcOrigin);
+      const dist2 = Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
+      if ( dist2 > (src.brightRadius ** 2) ) continue; // Not within bright radius.
+
+      unknown ||= true;
+
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, srcOrigin) ) continue;
+
+      return true;
     }
-    return blocked ? 0 : undefined;
+    return unknown ? undefined : false;
   }
 
-  // NOTE: Only top-level methods should use (and set) target.
-  /**
-   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * @param {Token} [target]             Token to look at
-   * @param {object} [opts]              Options passed to percentVisible
-   * @param {number} [opts.threshold]    Percentage to be met to be considered visible
-   * @param {}
-   * @returns {boolean}
-   */
-  hasLOS(target) {
-    // NOTE: target set using percentVisible; just pass through here.
-    const percent = this.percentVisible(target); // Percent visible will reset the cache.
-    const hasLOS = !percent.almostEqual(0)
-      && (percent > this.threshold || percent.almostEqual(this.threshold));
-    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
-    return hasLOS;
-  }
+  fullyWithinDimLight() {
+    if ( canvas.environment.globalLightSource.active ) return true;
+    if ( !canvas.lighting.placeables.length ) return false;
+    if ( !this.target.litTokenBorder ) return false;
+    if ( !this.target.constrainedTokenBorder.equals(this.target.litTokenBorder) ) return undefined;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const targetCenter = Point3d.fromTokenCenter(this.target);
+    const srcOrigin = new Point3d();
 
-  /**
-   * Determine whether a viewer has line-of-sight to a target based on meeting a threshold.
-   * Asynchronous version.
-   * @param {Token} [target]             Token to look at
-   * @param {object} [opts]              Options passed to percentVisible
-   * @param {number} [opts.threshold]    Percentage to be met to be considered visible
-   * @param {}
-   * @returns {boolean}
-   */
-  async hasLOSAsync(target) {
-    const percent = await this.percentVisibleAsync(target); // Percent visible will reset the cache.
-    const hasLOS = !percent.almostEqual(0)
-      && (percent > this.threshold || percent.almostEqual(this.threshold));
-    // if ( this.config.debug ) console.debug(`\t👀${this.viewer.name} --> 🎯${target.name} ${hasLOS ? "has" : "no"} LOS.`);
-    return hasLOS;
-  }
+    let unknown = false;
+    for ( const src of canvas.lighting.placeables ) {
+      if ( !src.lightSource.active ) continue;
 
-  /**
-   * Determine percentage of the token visible using the class methodology.
-   * @param {Token} [target]            Token to look at
-   * @param {object} [opts]             Options passed to _percentVisible
-   * @returns {number}
-   */
-  percentVisible(target) {
-    if ( !this.viewer ) return 0;
-    if ( target ) this.target = target;
+      Point3d.fromPointSource(src, srcOrigin);
+      const dist2 = Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
+      if ( dist2 > (src.dim ** 2) ) continue; // Not within bright radius.
 
-    const percent = this.simpleVisibilityTest() ?? this._percentVisible();
-    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
-    return percent;
-  }
+      unknown ||= true;
 
-  /**
-   * Determine percentage of the token visible using the class methodology.
-   * Asynchronous version.
-   * @param {Token} [target]            Token to look at
-   * @returns {number}
-   */
-  async percentVisibleAsync(target) {
-    if ( !this.viewer ) return 0;
-    if ( target ) this.target = target;
-    const percent = this.simpleVisibilityTest() ?? (await this._percentVisibleAsync());
-    // if ( this.config.debug ) console.debug(`👀${this.viewer.name} --> 🎯${target.name}\t${Math.round(percent * 100 * 10)/10}%`);
-    return percent;
-  }
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, srcOrigin) ) continue;
 
-  /**
-   * Requests the percent visible from each viewpoint and returns the maximum percent visible.
-   * @returns {number}
-   */
-  _percentVisible() {
-    let max = 0;
-    for ( const vp of this.viewpoints ) {
-      max = Math.max(max, vp.percentVisible());
-      if ( max >= this.threshold ) return max;
+      return true;
     }
-    return max;
+    return unknown ? undefined : false;
   }
 
-  /**
-   * Requests the percent visible from each viewpoint and returns the maximum percent visible.
-   * Asynchronous version.
-   * @param {object} [opts]
-   * @returns {number}
-   */
-  async _percentVisibleAsync() {
-    let max = 0;
-    for ( const vp of this.viewpoints ) {
-      max = Math.max(max, (await vp.percentVisibleAsync()));
-      if ( max >= this.threshold ) return max;
+  fullyWithinSound() {
+    if ( !this.target.constrainedTokenBorder.equals(this.target.soundTokenBorder) ) return false;
+    if ( !canvas.sounds.placeables.length ) return false;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const targetCenter = Point3d.fromTokenCenter(this.target);
+    const srcOrigin = new Point3d();
+
+    let unknown = false;
+    for ( const src of canvas.sound.placeables ) {
+      if ( !src.source.active ) continue;
+
+      Point3d.fromPointSource(src, srcOrigin);
+      const dist2 = CONFIG.GeometryLib.threeD.Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
+      if ( dist2 > (src.radius ** 2) ) continue; // Not within bright dim radius.
+
+      unknown ||= true;
+
+      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
+      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, src) ) continue;
+
+      return true;
     }
-    return max;
+    return unknown ? undefined : false;
+  }
+
+  calculate() {
+    this._clearVisibilityArrays();
+    const simpleTest = this.simpleVisibilityTest();
+    if ( ~simpleTest ) {
+      this.visibility.fill(simpleTest);
+      return;
+    }
+
+    this._configureCalculator();
+    const oldTestLighting = this.testLighting;
+    const testLighting = this.testLighting = oldTestLighting && this.simpleLightingTest(); // Only run test if actually testing lighting.
+
+    // Test each viewpoint until unobscured is 1.
+    // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
+    for ( let i = 0, iMax = this.viewpoints.length; i < iMax; i += 1 ) {
+      const vp = this.viewpoints[i];
+      vp.calculate();
+      this.visibility.unobscured[i] = vp.percentUnobscured;
+      if ( testLighting ) {
+        this.visibility.dim[i] = vp.percentDim;
+        this.visibility.bright[i] = vp.percentBright;
+        if ( this.visibility.unobscured[i] === 1 && this.visibility.dim[i] === 1 ) break;
+      } else if ( this.visibility.unobscured[i] === 1 ) break;
+    }
+    this.testLighting = oldTestLighting;
+  }
+
+  simpleLightingTest() {
+    if ( !this.testLighting ) return false;
+    const sourceType = this.calculator.config.sourceType;
+    const withinSource = sourceType === "lighting" ? this.fullyWithinBrightLight() : this.fullyWithinSound();
+    if ( withinSource === true ) {
+      this.visibility.bright.fill(1);
+      this.visibility.dim.fill(1);
+      return false;
+    } else if ( withinSource === false ) {
+      if ( sourceType === "sounds" ) return false; // dim: 0; bright is n/a
+      const withinDimSource = this.fullyWithinDimLight();
+      if ( withinDimSource === true ) {
+        this.visibility.dim.fill(1); // bright: 0
+        return false;
+      } else if ( withinDimSource === false ) return false; // bright: 0, dim: 0
+    }
+    return true;
+  }
+
+
+  // Must be done before calling calc.calculate or vp.calculate.
+  // Calculator not guaranteed to remain in same state between runs.
+  _configureCalculator() {
+    this.calculator.viewer = this.viewer;
+    this.calculator.target = this.target;
+    this.calculator.targetLocation = this.targetLocation;
   }
 
   /**
@@ -522,33 +665,27 @@ export class AbstractViewerLOS {
   /**
    * For debugging.
    * Draw the constrained token border and visible shape, if any.
-   * @param {boolean} hasLOS    Is there line-of-sight to this target?
    */
   _drawVisibleTokenBorder(draw) {
-    const { blue, yellow } = CONFIG.GeometryLib.Draw.COLORS;
-    let color = blue;
+    const color = CONFIG.GeometryLib.Draw.COLORS.blue;
 
-    // Fill in the constrained border on canvas
-    if ( this.target ) draw.shape(this.target.constrainedTokenBorder, { color, fill: color, fillAlpha: 0.2});
-
-    // Separately fill in the visible target shape
-    if ( this.visibleTargetShape ) draw.shape(this.visibleTargetShape, { color: yellow });
-    // console.log("Drawing visible token border.")
+    // Fill in the target border on canvas
+    if ( this.target ) {
+      const border = CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
+      draw.shape(border, { color, fill: color, fillAlpha: 0.2});
+    }
   }
 }
 
 export class CachedAbstractViewerLOS extends AbstractViewerLOS {
 
-  #cachedPercentVisible = {
-    litTarget: new WeakMap(), /** @type {WeakMap<Token, number>} */
-    unlitTarget: new WeakMap(), /** @type {WeakMap<Token, number>} */
-  };
+  /** @type {WeakMap<Token, Float32Array(3)>} */
+  #cache = new WeakMap();
+
 
   // Keyed to the current settings to detect settings changes.
-  #cacheKeys = {
-    litTarget: "", /** @type {string} */
-    unlitTarget: "", /** @type {string} */
-  };
+  /** @type {string} */
+  #cacheKey = ""
 
   constructor(...args) {
     super(...args);
@@ -564,16 +701,18 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
   /** @type {TokenUpdateTracker} */
   tokenTracker;
 
+  /** @type {RegionUpdateTracker} */
+  regionTracker;
+
   initializeTrackers() {
     this.wallTracker = new DocumentUpdateTracker("Wall", DocumentUpdateTracker.LOS_ATTRIBUTES.Wall);
     this.tileTracker = new DocumentUpdateTracker("Tile", DocumentUpdateTracker.LOS_ATTRIBUTES.Tile);
+    this.regionTracker = new DocumentUpdateTracker("Region", DocumentUpdateTracker.LOS_ATTRIBUTES.Region);
     this.tokenTracker = new TokenUpdateTracker(TokenUpdateTracker.LOS_ATTRIBUTES, TokenUpdateTracker.LOS_FLAGS);
   }
 
   #calculateCacheKey() {
-    // Drop useLitTargetShape b/c we are tracking that separately.
     const calcConfig = { ...this.calculator.config };
-    delete calcConfig.useLitTargetShape;
 
     // Combine all remaining settings into string.
     return JSON.stringify({
@@ -584,14 +723,19 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     });
   }
 
-  validateCache(target) {
+  /**
+   * Compare the cached setting to the current ones. Invalidate if not the same.
+   * Also check if the scene or target has changed. Invalidate accordingly.
+   * @param {Token} [target]
+   */
+  validateCache() {
+    const target = this.target;
     // If the settings have changed, wipe the cache.
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
     const cacheKey = this.#calculateCacheKey();
-    if ( this.#cacheKeys[cacheType] !== cacheKey ) {
+    if ( this.#cacheKey !== cacheKey ) {
       // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name} cache key changed\n\t${this.#cacheKeys[cacheType]}\n\t${cacheKey}`);
-      this.#cacheKeys[cacheType] = cacheKey;
-      this.#cachedPercentVisible[cacheType] = new WeakMap();
+      this.#cacheKey = cacheKey;
+      this.#cache = new WeakMap();
       return;
     }
 
@@ -603,59 +747,87 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     let clearTarget = false;
     if ( this.wallTracker.logUpdate() ) clearAll = true;
     if ( this.tileTracker.logUpdate() ) clearAll = true;
+    if ( this.regionTracker.logUpdate() ) clearAll = true;
     if ( this.tokenTracker.logUpdate(this.viewer) ) clearViewer = true;
     if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
 
-    // Clear all variations (Only one tracker to handle both lit and unlit, so clear both.)
     // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name}`, { clearAll, clearViewer, clearTarget });
-    if ( clearAll || clearViewer ) {
-      this.#cachedPercentVisible.litTarget = new WeakMap();
-      this.#cachedPercentVisible.unlitTarget = new WeakMap();
-    }
-    else if ( clearTarget ) {
-      this.#cachedPercentVisible.litTarget.delete(target);
-      this.#cachedPercentVisible.unlitTarget.delete(target);
-    }
+    if ( clearAll || clearViewer ) this.#cache = new WeakMap();
+    else if ( clearTarget ) this.#cache.delete(target);
   }
 
-  setCacheValue(target, value) {
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
-    this.#cachedPercentVisible[cacheType].set(target, value);
+  /**
+   * Store within a target's cache different detection mode results.
+   * Run the calculation for each as needed.
+   */
+  get cacheCategory() { return JSON.stringify(this.detectionModeConfig); }
+
+  /**
+   * Copy the current visibility values to the cache.
+   * @param {Token} [target]
+   */
+  setCache() {
+    const target = this.target;
+    const cacheCategory = this.cacheCategory;
+    const cachedObj = this.#cache.get(target) ?? {};
+    let cachedVis = cachedObj[cacheCategory];
+
+    // Keep the existing typed arrays if they exist and are the correct length.
+    if ( !cachedVis
+      || cachedVis.unobscured.length !== this.visibility.unobscured.length ) cachedVis = structuredClone(this.visibility);
+    Object.keys(this.visibility).forEach(key => cachedVis[key].set(this.visibility[key]));
+    cachedObj[cacheCategory] = cachedVis;
+    this.#cache.set(target, cachedObj);
   }
 
-  getCachedValue(target) {
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
-    return this.#cachedPercentVisible[cacheType].get(target);
+  /**
+   * Set this object's visibility values to the cached values.
+   * Note that this does not affect this object's current calculator values.
+   * @param {Token} [target]
+   * @returns {boolean} True if cached update was used; false otherwise.
+   */
+  updateFromCache() {
+    const target = this.target;
+    this.validateCache(target);
+    const cacheCategory = this.cacheCategory;
+    const cachedVis = this.#cache.get(target)?.[cacheCategory];
+    if ( !cachedVis || cachedVis.unobscured.length !== this.visibility.unobscured.length ) return false;
+    Object.keys(this.visibility).forEach(key => this.visibility[key].set(cachedVis[key]));
+    return true;
   }
 
+  /**
+   * Does a cached value for this target exist? Does not check if the cached value is still the correct length,
+   * although in theory it should be---otherwise the cache should have been invalidated.
+   * @param {Token} [target]
+   * @returns {boolean}
+   */
   hasCachedValue(target) {
-    const cacheType = this.calculator.config.useLitTargetShape ? "litTarget" : "unlitTarget";
-    return this.#cachedPercentVisible[cacheType].has(target);
+    target ??= this.target;
+    return this.#cache.has(target);
   }
 
-  percentVisible(target) {
-    if ( !CONFIG[MODULE_ID].useCaching ) return super.percentVisible(target);
-
-    if ( !this.viewer ) return 0;
-    this.validateCache(target);
-    if ( this.hasCachedValue(target) ) {
-      // console.debug(`${this.constructor.name}|Returning cached value ${this.getCachedValue(target)} for ${this.viewer.name} --> ${this.target.name}`);
-      return this.getCachedValue(target)
+  calculate(force = false) {
+    if ( force || !this.updateFromCache() ) {
+      super.calculate();
+      this.setCache();
     }
-    const out = super.percentVisible(target);
-    this.setCacheValue(target, out);
-    // console.debug(`${this.constructor.name}|Caching value ${out} for ${this.viewer.name} --> ${this.target.name}`);
-    return out;
   }
 
-  async percentVisibleAsync(target) {
-    if ( !CONFIG[MODULE_ID].useCaching ) return super.percentVisibleAsync(target);
+  get percentVisibleDim() {
+    if ( !this.updateFromCache() ) this.calculate(true);
+    return super.percentVisibleDim;
+  }
 
-    if ( !this.viewer ) return 0;
-    this.validateCache(target);
-    if ( this.hasCachedValue(target) ) return this.getCachedValue(target);
-    const out = await super.percentVisibleAsync(target);
-    this.setCacheValue(target, out);
-    return out;
+  get percentVisibleBright() {
+    if ( !this.updateFromCache() ) this.calculate(true);
+    return super.percentVisibleBright;
+  }
+
+  get percentUnobscured() {
+    if ( !this.updateFromCache() ) this.calculate(true);
+    return super.percentUnobscured;
   }
 }
+
+// const { UNOBSCURED, DIM, BRIGHT } = AbstractViewerLOS.VISIBILITY_LABELS;

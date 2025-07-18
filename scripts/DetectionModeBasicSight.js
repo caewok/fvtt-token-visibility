@@ -81,10 +81,10 @@ function _testPoint(wrapped, visionSource, mode, target, test) {
 
   // If within range, counts if any portion of the token is visible.
   if ( this._testRange(visionSource, mode, target, test)
-    && this._testLOS(visionSource, mode, target, test, { useLitTargetShape: false }) ) return true;
+    && this._testLOS(visionSource, mode, target, test, { testLighting: false }) ) return true;
 
   // Outside of vision range, token is visible if the lit portions are visible.
-  return this._testLOS(visionSource, mode, target, test, { useLitTargetShape: true });
+  return this._testLOS(visionSource, mode, target, test, { testLighting: true });
 }
 
 

@@ -55,8 +55,9 @@ function CalculatorConfig() {
     blocking: BlockingConfig(),
     largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false,
     debug: false,
-    useLitTargetShape: false,
+    testLighting: true,
     senseType: "sight",
+    sourceType: "lighting",
 
     // Points algorithm
     pointAlgorithm: Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER ?? false,
@@ -85,13 +86,13 @@ function LOSViewerConfig() {
 export function buildLOSCalculator() {
   let viewpointClassName = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
   viewpointClassName = viewpointClassName.replace("los-algorithm-", "");
-  if ( !CONFIG[MODULE_ID].sightCalculators[viewpointClassName] ) {
+  if ( !CONFIG[MODULE_ID].losCalculators[viewpointClassName] ) {
     const viewpointClass = AbstractViewerLOS.VIEWPOINT_CLASSES[viewpointClassName];
     const calcClass = viewpointClass.calcClass;
-    CONFIG[MODULE_ID].sightCalculators[viewpointClassName] = new calcClass(CalculatorConfig());
-    CONFIG[MODULE_ID].sightCalculators[viewpointClassName].initialize();  // Async
+    CONFIG[MODULE_ID].losCalculators[viewpointClassName] = new calcClass(CalculatorConfig());
+    CONFIG[MODULE_ID].losCalculators[viewpointClassName].initialize();  // Async
   }
-  return CONFIG[MODULE_ID].sightCalculators[viewpointClassName];
+  return CONFIG[MODULE_ID].losCalculators[viewpointClassName];
 }
 
 /**
@@ -116,7 +117,7 @@ export function buildCustomLOSCalculator({ viewpointClass, ...calcCfg } = {}) {
  */
 export function buildLOSViewer(viewer) {
   const calculator = buildLOSCalculator();
-  return new CachedAbstractViewerLOS(viewer, { calculator, ...LOSViewerConfig() });
+  return new AbstractViewerLOS(viewer, { calculator, ...LOSViewerConfig() });
 }
 
 /**
@@ -137,7 +138,7 @@ export function buildCustomLOSViewer(viewer, { calculator, viewpointClass, numVi
   if ( typeof viewpointOffset !== "undefined" ) losConfig.viewpointOffset = viewpointOffset;
   if ( typeof threshold !== "undefined" ) losConfig.threshold = threshold;
 
-  return new CachedAbstractViewerLOS(viewer, { ...losConfig, ...calcConfig});
+  return new AbstractViewerLOS(viewer, { ...losConfig, ...calcConfig});
 }
 
 /**

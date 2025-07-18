@@ -1,4 +1,5 @@
 /* globals
+CONFIG,
 Token
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -45,7 +46,7 @@ PATCHES.BASIC.WRAPS = { testVisibility };
  * Mixed wrap DetectionMode.prototype._testLOS
  * Handle different types of LOS visibility tests.
  */
-function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape = false } = {}) {
+function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = false } = {}) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
@@ -57,42 +58,24 @@ function _testLOS(wrapped, visionSource, mode, target, test, { useLitTargetShape
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
 
-  // TODO: Is this addressed by the AltLOS algorithms?
-  // Check if limited angle interferes with view of this target.
-  //   if ( this.angle && visionSource.data.angle < 360 ) {
-  //     if ( !this._testAngle(visionSource, mode, target, test) ) {
-  //       test.los.set(visionSource, false);
-  //       return false;
-  //     }
-  //
-  //     // Limit the visible shape to vision angle.
-  //     visibleTargetShape ??= target.constrainedTokenBorder;
-  //     visibleTargetShape = constrainByVisionAngle(visibleTargetShape, visionSource);
-  //   }
 
 //   const viewer = visionSource.object;
 //   console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
-//      { useLitTargetShape, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
+//      { testLighting, x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
 //   console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
 
   // Configure the line-of-sight calculator.
-
   const losCalc = viewer[MODULE_ID]?.losCalc;
   if ( !losCalc ) return wrapped(visionSource, mode, target, test);
-  losCalc.useLitTargetShape = useLitTargetShape;
-
-  const senseType = visionSource.constructor.sourceType;
-  if ( senseType !== "sight" ) {
-    console.debug(`${MODULE_ID}|_testLOS|visionSource type is ${senseType}`);
-    losCalc.calculator.config = { senseType };
-  }
+  losCalc.setConfigForDetectionMode(this);
 
   // Test whether this vision source has line-of-sight to the target, cache, and return.
-  hasLOS = losCalc.hasLOS(target);
+  losCalc.target = target;
+  losCalc.testLighting = true;
+  losCalc.calculate(); // TODO: Can remove if caching.
+  hasLOS = testLighting ? losCalc.hasLOSDim : losCalc.hasLOSUnobscured;
   test.los.set(visionSource, hasLOS);
-
-  if ( senseType !== "sight" ) losCalc.calculator.config = { senseType: "sight" }; // Reset.
-
+  // losCalc.setConfigForDetectionMode(); // Reset to basic DM?
   return hasLOS;
 }
 

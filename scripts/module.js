@@ -20,6 +20,8 @@ import { getObjectProperty } from "./LOS/util.js";
 import * as bench from "./benchmark.js";
 
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
+import { TargetLightingTest } from "./LOS/TargetLightingTest.js";
 import { VisionTriangle } from "./LOS/VisionTriangle.js";
 
 import {
@@ -45,8 +47,8 @@ import {
   vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
 // import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
 // import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
-import { wgsl } from "./LOS/wgsl-preprocessor.js";
-import { AsyncQueue } from "./LOS/AsyncQueue.js";
+// import { wgsl } from "./LOS/wgsl-preprocessor.js";
+// import { AsyncQueue } from "./LOS/AsyncQueue.js";
 
 
 import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
@@ -76,6 +78,9 @@ import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } fro
 import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/PerPixelViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
+import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/SamplePixelViewpoint.js"
+
+
 // import {
 //   PercentVisibleCalculatorWebGPU,
 //   PercentVisibleCalculatorWebGPUAsync,
@@ -168,16 +173,27 @@ Hooks.once("init", function() {
     constrainTokens: false,
 
     /**
-     * Whether to use special token shapes to represent partially lit tokens.
-     * This approximates what portion of the token is lit by 1+ lights.
+     * How to calculate the extent to which a token is lit by lighting or sounds.
+     * Used in Foundry's visibility test.
+     * 0: Ignore
+     * 1: Constrain the target token shape to only that portion of the shape within the lights' polygons.
+     * 2: Test occlusion between selected points or pixels and lights in the scene.
      */
-    litTokens: false,
+    litToken: 1,
+
+    litTokenOptions: {
+      IGNORE: 0,
+      CONSTRAIN: 1,
+      OCCLUSION: 2,
+    },
 
     perPixelScale: 50,
 
     perPixelQuickInterpolation: false,
 
     perPixelDebugLit: true,
+
+    samplePixelNumberSamples: 4 ** 2, // Use power of two to keep same width/height points.
 
 
     /** @type {string} */
@@ -236,17 +252,18 @@ Hooks.once("init", function() {
      * Created and initialized at canvasReady hook
      * Each calculator can calculate visibility based on viewer, target, and optional viewer/target locations.
      */
-    sightCalculatorClasses: {
+    calculatorClasses: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webgl2: PercentVisibleCalculatorWebGL2,
       // webgpu: PercentVisibleCalculatorWebGPU,
       // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
-      hybrid: PercentVisibleCalculatorHybrid,
+      // hybrid: PercentVisibleCalculatorHybrid,
       "per-pixel": PercentVisibleCalculatorPerPixel,
+      "sample-pixel": PercentVisibleCalculatorSamplePixel,
     },
 
-    sightCalculators: {
+    losCalculators: {
       points: null,
       geometric: null,
       webgl2: null,
@@ -254,6 +271,7 @@ Hooks.once("init", function() {
       // "webgpu-async": null,
       hybrid: null,
       "per-pixel": null,
+      "sample-pixel": null,
     },
 
     /**
@@ -410,6 +428,8 @@ Hooks.once("init", function() {
 
 
     AbstractViewpoint,
+    ObstacleOcclusionTest,
+    TargetLightingTest,
 
     countTargetPixels,
 
@@ -453,7 +473,7 @@ function tokenIsDead(token) {
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
-  CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
+  // CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
 });
 
 Hooks.once("ready", function() {
@@ -465,28 +485,32 @@ Hooks.once("ready", function() {
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
 
-  // Create default calculators used by all the tokens.
-  const basicCalcs = [
-    "points",
-    "geometric",
-    "webgl2",
-    "hybrid",
-    "per-pixel",
-  ];
-//   const webGPUCalcs = [
-//     "webgpu",
-//     "webgpu-async",
+//   // Create default calculators used by all the tokens.
+//   const basicCalcs = [
+//     "points",
+//     "geometric",
+//     "webgl2",
+//     "hybrid",
+//     "per-pixel",
+//     "sample-pixel",
 //   ];
-  const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
-  const calcClasses = CONFIG[MODULE_ID].sightCalculatorClasses;
-  Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
-
-  // Must create after settings are registered.
-  for ( const calcName of basicCalcs ) {
-    const cl = calcClasses[calcName];
-    const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
-    calc.initialize(); // Async.
-  }
+// //   const webGPUCalcs = [
+// //     "webgpu",
+// //     "webgpu-async",
+// //   ];
+//   const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
+//   const hearingCalcs = CONFIG[MODULE_ID].hearingCalculators;
+//   const calcClasses = CONFIG[MODULE_ID].calculatorClasses;
+//   Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
+//
+//   // Must create after settings are registered.
+//   for ( const calcName of basicCalcs ) {
+//     const cl = calcClasses[calcName];
+//     const sightCalc = sightCalcs[calcName] = new cl({ senseType: "sight", sourceType: "lighting" });
+//     const hearingCalc = hearingCalcs[calcName] = new cl({ senseType: "sight", sourceType: "sounds" });
+//     sightCalc.initialize(); // Async
+//     hearingCalc.initialize(); // Async
+//   }
 
 //   WebGPUDevice.getDevice().then(device => {
 //     if ( !device ) {
@@ -498,13 +522,17 @@ Hooks.on("canvasReady", function() {
 //       }
 //       sightCalcs.webGPU = sightCalcs.webGL2;
 //       sightCalcs.webGPUAsync = sightCalcs.webGL2;
+//       soundCalcs.webGPU = soundCalcs.webGL2;
+//       hearingCalcs.webGPUAsync = soundCalcs.webGL2;
 //
 //     } else {
 //       CONFIG[MODULE_ID].webGPUDevice = device;
 //       for ( const calcName of webGPUCalcs ) {
 //         const cl = calcClasses[calcName];
-//         const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
-//         calc.initialize(); // Async.
+//         const sightCalc = sightCalcs[calcName] = new cl({ senseType: "sight", sourceType: "lighting" });
+//         const hearingCalc = hearingCalcs[calcName] = new cl({ senseType: "sight", sourceType: "sounds" });
+//         sightCalc.initialize(); // Async
+//         hearingCalc.initialize(); // Async
 //       }
 //     }
 //

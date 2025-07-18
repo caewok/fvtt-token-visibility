@@ -14,23 +14,22 @@ import { Settings } from "../settings.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { Camera } from "./Camera.js";
-import { PercentVisibleRenderCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { BarycentricPoint, BaryTriangleData } from "./geometry/Barycentric.js";
-import { regionElevation } from "./util.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
-// NOTE: Temporary objects
-const RED = 0;
-const OCCLUDED = 1;
-const BRIGHT = 2;
-const DIM = 3;
-const DARK = 4;
+const {
+  TOTAL,
+  OBSCURED,
+//   BRIGHT,
+//   DIM,
+//   DARK,
+} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
 
-const tmpIx = new Point3d();
 
 /**
  * An eye belong to a specific viewer.
@@ -50,7 +49,7 @@ export class PerPixelViewpoint extends AbstractViewpoint {
   }
 }
 
-export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalculatorAbstract {
+export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAbstract {
   static get viewpointClass() { return PerPixelViewpoint; }
 
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
@@ -63,63 +62,32 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
   });
 
-  static OCCLUSION_TYPES = {
-    RED: 0,
-    OCCLUDED :1,
-    BRIGHT: 2,
-    DIM: 3,
-    DARK: 4,
-  };
-
-  viewer;
-
-  target;
-
-  viewpoint;
-
-  targetLocation;
-
-  get targetArea() { return this.counts[RED]; }
-
-  get obscuredArea() { return this.counts[OCCLUDED]; }
-
   _scale = 0; // Allow override of scale
 
   get scale() { return this._scale || CONFIG[MODULE_ID].perPixelScale; }
 
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    this.viewer = viewer;
-    this.target = target;
-    this.viewpoint = viewerLocation;
-    this.targetLocation = targetLocation;
+  initializeCalculations() {
+    super.initializeCalculations();
+    this._initializeCamera();
+  }
 
-    this.camera.cameraPosition = viewerLocation;
-    this.camera.targetPosition = targetLocation;
-    this.camera.setTargetTokenFrustum(target);
-    /*
-    this.camera.perspectiveParameters = {
-      fov: Math.toRadians(90),
-      aspect: 1,
-      zNear: 1,
-      zFar: Infinity,
-    };
-    */
-
+  _calculate() {
     this.countTargetPixels();
-    // return this._viewableTargetArea();
   }
 
-  _totalTargetArea() { return this.targetArea; }
-
-  _viewableTargetArea() {
-    const targetArea = this.targetArea;
-    return (targetArea - this.obscuredArea) / targetArea;
+  _initializeCamera() {
+    this.camera.cameraPosition = this.viewpoint;
+    this.camera.targetPosition = this.targetLocation;
+    this.camera.setTargetTokenFrustum(this.target);
   }
 
-  _percentUnobscured() {
-    return this._viewableTargetArea();
+  _generateTargetFaces() {
+    const litMethod = CONFIG[MODULE_ID].litToken;
+    if ( this.config.testLighting
+      && litMethod === CONFIG[MODULE_ID].litTokenOptions.CONSTRAIN ) return this.target[MODULE_ID][AbstractPolygonTrianglesID].litTriangles;
+    if ( CONFIG[MODULE_ID].constrainTokens ) return this.target[MODULE_ID][AbstractPolygonTrianglesID].constrainedTriangles;
+    return this.target[MODULE_ID][AbstractPolygonTrianglesID].triangles;
   }
-
 
   /* ----- NOTE: Pixel testing ----- */
 
@@ -127,18 +95,16 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   countTargetPixels() {
     const scale = this.scale;
-    this.counts.fill(0);
     const ndcTris = CONFIG[MODULE_ID].perPixelQuickInterpolation ? this.transformTargetToNDC() : this.transformTargetToNDC2();
-    const viewerObstacles = this.locateViewerObstacles();
     let srcs = [];
     let srcObstacles = [];
-    if ( this.config.useLitTargetShape ) {
+    if ( this.config.testLighting ) {
       srcs = canvas[this.config.sourceType].placeables;
       srcObstacles = this.locateSourceObstacles();
     }
     for ( let x = 0; x < scale; x += 1 ) {
       for ( let y = 0; y < scale; y += 1 ) {
-        this._testPixelOcclusion(x, y, ndcTris, viewerObstacles, srcs, srcObstacles);
+        this._testPixelOcclusion(x, y, ndcTris, srcs, srcObstacles);
       }
     }
   }
@@ -149,13 +115,13 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
   #rayDirection = new Point3d();
 
-  _testPixelOcclusion(x, y, ndcTris, viewerObstacles = [], srcs = [], srcObstacles = []) {
+  _testPixelOcclusion(x, y, ndcTris) {
     this.#gridPoint.set(x, y);
     const containingTri = this._locateFragmentTriangle(ndcTris, this.#gridPoint);
     if ( !containingTri ) return;
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
-    this.counts[RED] += 1;
+    this.counts[TOTAL] += 1;
 
     // TODO: Is it necessary to implement perspective correct interpolation?
     // See https://webglfundamentals.org/webgl/lessons/webgl-3d-perspective-correct-texturemapping.html
@@ -173,45 +139,11 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
     // Is it occluded from the camera/viewer?
     this.#fragmentPoint.subtract(this.viewpoint, this.#rayDirection);
-    if ( this.obstaclesOcclude(this.viewpoint, this.#rayDirection, viewerObstacles, this.config.senseType) ) {
-      this.counts[OCCLUDED] += 1;
-      return;
-    }
+    const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
+    this.counts[OBSCURED] += isOccluded;
 
     // Fragment brightness for each source.
-    if ( this.config.useLitTargetShape ) this._testPixelBrightness(containingTri._original, srcs, srcObstacles);
-  }
-
-  #srcOrigin = new Point3d();
-
-  _testPixelBrightness(origTri, srcs, srcObstacles) {
-    const srcOrigin = this.#srcOrigin;
-    const rayDirection = this.#rayDirection;
-    const senseType = this.config.senseType;
-
-    let isBright = false;
-    let isDim = false;
-    const side = origTri.plane.whichSide(this.viewpoint);
-    for ( let i = 0, iMax = srcs.length; i < iMax; i += 1 ) {
-      const src = srcs[i];
-      const obstacles = srcObstacles[i];
-      Point3d.fromPointSource(src, srcOrigin);
-      if ( (side * origTri.plane.whichSide(srcOrigin)) < 0 ) continue; // On opposite side of the triangle from the camera.
-      const dist2 = Point3d.distanceSquaredBetween(this.#fragmentPoint, srcOrigin);
-      if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
-
-      // If blocked, then not bright or dim.
-      this.#fragmentPoint.subtract(srcOrigin, rayDirection); // NOTE: Don't normalize so the wall test can use 0 < t < 1.
-      if ( this.obstaclesOcclude(srcOrigin, rayDirection, obstacles, senseType) ) continue;
-
-      // TODO: handle light/sound attenuation from threshold walls.
-      isBright ||= (dist2 <= (src.brightRadius ** 2));
-      isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
-      if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
-    }
-    this.counts[BRIGHT] += isBright;
-    this.counts[DIM] += isDim;
-    this.counts[DARK] += !(isBright || isDim);
+    if ( !isOccluded ) this._testLightingForPoint(this.#fragmentPoint, {}, containingTri._original, );
   }
 
   /**
@@ -250,25 +182,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       }
     }
     return containingTris[0];
-  }
-
-  locateViewerObstacles() {
-    const { senseType, blocking: blockingOpts } = this.config;
-    const viewerObstacles = AbstractViewpoint.findBlockingObjects(this.viewpoint, this.target, { senseType, blockingOpts });
-    viewerObstacles.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(viewerObstacles.walls, senseType);
-    viewerObstacles.proximateWalls = AbstractViewpoint.pullOutTerrainWalls(viewerObstacles.walls, senseType);
-    return viewerObstacles;
-  }
-
-  locateSourceObstacles(srcs) {
-    const { senseType, sourceType, blocking: blockingOpts } = this.config;
-    srcs ??= canvas[sourceType].placeables;
-    return srcs.map(src => {
-      const obstacles = AbstractViewpoint.findBlockingObjects(Point3d.fromPointSource(src), this.target, { senseType, blockingOpts });
-      obstacles.terrainWalls = AbstractViewpoint.pullOutTerrainWalls(obstacles.walls, senseType);
-      obstacles.proximateWalls = AbstractViewpoint.pullOutTerrainWalls(obstacles.walls, senseType);
-      return obstacles;
-    });
   }
 
   #modelProjectionMatrix = CONFIG.GeometryLib.MatrixFlat.identity(4);
@@ -321,9 +234,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
   }
 
   transformTargetToNDC2() {
-    const { camera, target } =  this;
-    const triangleType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTriangles" : "triangles";
-    const targetTris = target[MODULE_ID][AbstractPolygonTrianglesID][triangleType].filter(poly => poly.isFacing(this.viewpoint));
+    const camera = this.camera;
+    const targetTris = this._generateTargetFaces().filter(poly => poly.isFacing(this.viewpoint));
 
     camera.lookAtMatrix.multiply4x4(camera.perspectiveMatrix, this.#modelProjectionMatrix);
     const trisTransformed = targetTris.map(tri => tri.transform(this.#modelProjectionMatrix))
@@ -360,8 +272,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
 
   transformTargetToNDC() {
-    const triangleType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTriangles" : "triangles";
-    const targetTris = this.target[MODULE_ID][AbstractPolygonTrianglesID][triangleType].filter(poly => poly.isFacing(this.viewpoint));
+    const targetTris = this._generateTargetFaces().filter(poly => poly.isFacing(this.viewpoint));
 
     // Old version (with change to scaling approach)
     const { lookAtMatrix, perspectiveMatrix } = this.camera;
@@ -426,158 +337,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 //     });
 
   }
-
-
-  /* ----- NOTE: Placeable occlusion testing ---- */
-
-  // TODO: Build a function that returns a function that varies based on which tests to run.
-  // Customize tilesOcclude and tokensOcclude for CONFIGs (alpha, constrained)
-  obstaclesOcclude(rayOrigin, rayDirection, obstacles, senseType) {
-    return this.wallsOcclude(rayOrigin, rayDirection, obstacles.walls, senseType)
-      || this.terrainWallsOcclude(rayOrigin, rayDirection, obstacles.terrainWalls, senseType)
-      || this.proximateWallsOcclude(rayOrigin, rayDirection, obstacles.proximateWalls, senseType)
-      || this.tilesOccludeAlpha(rayOrigin, rayDirection, obstacles.tiles, senseType)
-      || this.tokensOcclude(rayOrigin, rayDirection, obstacles.tokens, senseType)
-      || this.regionsOcclude(rayOrigin, rayDirection, obstacles.regions, senseType);
-  }
-
-  // TODO: In PlaceableTriangles.js, handle points and cached updating
-  // - Quad points for walls and tiles (incl. alpha texture points)
-  // - Cache and clear triangles and points on placeable update.
-  wallsOcclude(rayOrigin, rayDirection, walls) {
-    for ( const wall of walls ) {
-      /* Handled elsewhere
-      if ( wall.document[senseType] === types.NONE
-        || wall.isOpen
-        || (wall.document.dir && wall.edge.orientPoint(rayOrigin) !== wall.document.dir) ) continue;
-      */
-
-      /*
-      const [tri0, tri1] = wall.tokenvisibility.geometry.triangles;
-      const t = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri0.a, tri0.b, tri0.c)
-        ?? Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri1.a, tri1.b, tri1.c);
-      */
-      const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
-      const t = quad.intersectionT(rayOrigin, rayDirection);
-      if ( t !== null && t.between(0, 1, false) ) return true;
-    }
-    return false;
-  }
-
-  terrainWallsOcclude(rayOrigin, rayDirection, walls) {
-    let limitedOcclusion = 0;
-    for ( const wall of walls ) {
-      /* Handled elsewhere
-      if ( wall.document[senseType] === types.NONE
-        || wall.isOpen
-        || (wall.document.dir && wall.edge.orientPoint(rayOrigin) !== wall.document.dir) ) continue;
-      */
-
-      /*
-      const [tri0, tri1] = wall.tokenvisibility.geometry.triangles;
-      const t = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri0.a, tri0.b, tri0.c)
-        ?? Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri1.a, tri1.b, tri1.c);
-      */
-      const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
-      const t = quad.intersectionT(rayOrigin, rayDirection);
-      if ( t === null || !t.between(0, 1, false) ) continue;
-      if ( limitedOcclusion++ ) return true;
-    }
-    return false;
-  }
-
-  proximateWallsOcclude(rayOrigin, rayDirection, walls, senseType = "light") {
-    for ( const wall of walls ) {
-      if ( wall.edge.applyThreshold(senseType, rayOrigin) ) continue; // If the proximity threshold is met, this edge excluded from perception calculations.
-      /* Handled elsewhere
-      if ( wall.document[senseType] === types.NONE
-        || wall.isOpen
-        || (wall.document.dir && wall.edge.orientPoint(rayOrigin) !== wall.document.dir) ) continue;
-      */
-
-      /*
-      const [tri0, tri1] = wall.tokenvisibility.geometry.triangles;
-      const t = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri0.a, tri0.b, tri0.c)
-        ?? Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri1.a, tri1.b, tri1.c);
-      */
-      const quad = wall[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
-      const t = quad.intersectionT(rayOrigin, rayDirection);
-      if ( t === null || !t.between(0, 1, false) ) continue;
-    }
-    return false;
-  }
-
-  tilesOcclude(rayOrigin, rayDirection, tiles) {
-    for ( const tile of tiles ) {
-      const quad = tile[MODULE_ID][AbstractPolygonTrianglesID].quad3d;
-      const t = quad.intersectionT(rayOrigin, rayDirection);
-      if ( t === null || !t.between(0, 1, false) ) continue;
-      return true;
-    }
-    return false;
-  }
-
-  tilesOccludeAlpha(rayOrigin, rayDirection, tiles) {
-    if ( !CONFIG[MODULE_ID].alphaThreshold ) return this.tilesOcclude(rayOrigin, rayDirection, tiles);
-    const pxThreshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
-
-    for ( const tile of tiles ) {
-      const quad = tile[MODULE_ID][AbstractPolygonTrianglesID].alphaQuad3d;
-      const t = quad.intersectionT(rayOrigin, rayDirection);
-      if ( t === null || !t.between(0, 1, false) ) continue;
-
-      // Check if the intersection is transparent.
-      rayOrigin.add(rayDirection.multiplyScalar(t, tmpIx), tmpIx);
-      const px = tile.evPixelCache.pixelAtCanvas(tmpIx.x, tmpIx.y);
-      if ( px > pxThreshold ) return true;
-    }
-    return false;
-  }
-
-  tokensOcclude(rayOrigin, rayDirection, tokens) {
-    // TODO: Would it be more performant to split out rectangular tokens and test quads separately? Or all non-custom tokens?
-    //       Could test top/bottom only as needed.
-    for ( const token of tokens ) {
-      for ( const tri of token[MODULE_ID][AbstractPolygonTrianglesID].triangles ) {
-        if ( tri.isFacing(rayOrigin) ) {
-          const t = CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
-          if ( t !== null && t.between(0, 1, false) ) return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  regionsOcclude(rayOrigin, rayDirection, regions) {
-    for ( const region of regions ) {
-      const handler = region[MODULE_ID][AbstractPolygonTrianglesID];
-      const { topZ, bottomZ, rampFloor } = regionElevation(region);
-      const testTop = rayOrigin > (rampFloor ?? topZ) && rayDirection.z < 0; // Ray above region top, moving down.
-      const testBottom = rayOrigin < bottomZ && rayDirection.z > 0; // Ray below region bottom, moving up.
-      const ixTB = testTop ? handler.topPlane.rayIntersection(rayOrigin, rayDirection)
-        : testBottom ? handler.bottomPlane.rayIntersection(rayOrigin, rayDirection)
-          : null;
-
-      let containsTB = 0;
-      for ( const shape of region.shapes ) {
-        // If the point is contained by more shapes than holes, it must intersect a non-hole.
-        // Example: Rect contains ellipse hole that contains circle. If in circle, than +2 - 1 = 1. If in ellipses, +1 -1 = 0.
-        if ( ixTB && handler.shapesPixi.get(shape).contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));
-
-        // Construct sides and test. Sides of a hole still block, so can treat all shapes equally.
-        // A side is a vertical quad; basically a wall.
-        // Check if facing.
-        for ( const quad of handler.shapesSides.get(shape) ) {
-          if ( !quad.isFacing(rayOrigin) ) continue;
-          const t = quad.intersectionT(rayOrigin, rayDirection);
-          if ( t !== null && t.between(0, 1, false) ) return true;
-        }
-      }
-      if ( containsTB > 0 ) return true;
-    }
-    return false;
-  }
-
 
   /* ----- NOTE: Pixel Indexing ----- */
 
@@ -649,17 +408,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     const scale = this.scale;
     this.counts.fill(0);
     const ndcTris = CONFIG[MODULE_ID].perPixelQuickInterpolation ? this.transformTargetToNDC() : this.transformTargetToNDC2();
-    const viewerObstacles = this.locateViewerObstacles();
-    let srcs = [];
-    let srcObstacles = [];
-    if ( CONFIG[MODULE_ID].perPixelDebugLit  ) { // Always use litTarget for debug.
-      srcs = canvas[this.config.sourceType].placeables;
-      srcObstacles = this.locateSourceObstacles();
-    }
 
     for ( let x = 0; x < scale; x += 1 ) {
       for ( let y = 0; y < scale; y += 1 ) {
-        this._testPixelOcclusionDebug(x, y, ndcTris, viewerObstacles, srcs, srcObstacles);
+        this._testPixelOcclusionDebug(x, y, ndcTris);
 
         this.#fragmentColor.multiplyScalar(255, this.#fragmentColor);
         this.constructor.setPixel(this.pixels, x, y, scale, [...this.#fragmentColor, 255]);
@@ -667,7 +419,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     }
   }
 
-  _testPixelOcclusionDebug(x, y, ndcTris, viewerObstacles, srcs, srcObstacles) {
+  _testPixelOcclusionDebug(x, y, ndcTris) {
     this.#fragmentColor.set(0, 0, 0);
 
     this.#gridPoint.set(x, y);
@@ -676,7 +428,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
     this.containingTris.add(containingTri);
-    this.counts[RED] += 1;
+    this.counts[TOTAL] += 1;
 
     if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
       const origTri = containingTri._original;
@@ -702,56 +454,61 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
     // Is it occluded from the camera/viewer?
     this.#fragmentPoint.subtract(this.viewpoint, this.#rayDirection);
-    if ( this.obstaclesOcclude(this.viewpoint, this.#rayDirection, viewerObstacles, this.config.senseType) ) {
-      this.counts[OCCLUDED] += 1;
+    const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
+    if ( isOccluded ) {
+      this.counts[OBSCURED] += 1;
       this.#fragmentColor.z = 1; // Blue.
       this.#fragmentColor.x = 0; // Remove red.
       return;
     }
 
     // Fragment brightness for each source. (For debug, always run.)
-    if ( CONFIG[MODULE_ID].perPixelDebugLit ) this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
+    if ( CONFIG[MODULE_ID].perPixelDebugLit ) {
+      const { isBright, isDim } = this._testLightingForPoint(this.#fragmentPoint, {}, containingTri._original);
+      this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
+    }
     // this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
   }
 
-  #lightDirection = new Point3d();
-
-  #reflectedLightColor = new Point3d();
-
-  #specularLightColor = new Point3d();
-
-  #ambientLightColor = new Point3d(0.2, 0.2, 0.2);
-
-  #viewDirection = new Point3d();
+//   #lightDirection = new Point3d();
+//
+//   #reflectedLightColor = new Point3d();
+//
+//   #specularLightColor = new Point3d();
+//
+//   #ambientLightColor = new Point3d(0.2, 0.2, 0.2);
+//
+//   #viewDirection = new Point3d();
 
   shininess = 100;
 
-  _testPixelBrightnessDebug(origTri, srcs, srcObstacles) {
-    const srcOrigin = this.#srcOrigin;
+/*
+  _testPixelBrightnessDebug(origTri, srcs) {
+    const srcOrigin = this.#sourceOrigin;
     const rayDirection = this.#rayDirection;
-    const senseType = this.config.senseType;
     this.#reflectedLightColor.set(0, 0, 0);
     this.#specularLightColor.set(0, 0, 0);
-    this.viewpoint.subtract(this.#fragmentPoint, this.#viewDirection); // Should be just the reverse of #rayDirection.
+    this.#fragmentPoint.subtract(this.viewpoint, this.#viewDirection); // Should be just the reverse of #rayDirection.
 
     let isBright = false;
     let isDim = false;
-    const side = origTri.plane.whichSide(this.viewpoint);
     for ( let i = 0, iMax = srcs.length; i < iMax; i += 1 ) {
       const src = srcs[i];
-      const obstacles = srcObstacles[i];
       Point3d.fromPointSource(src, srcOrigin);
-      if ( (side * origTri.plane.whichSide(srcOrigin)) < 0 ) continue; // On opposite side of the triangle from the camera.
+      if ( !origTri.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
+
+      // Are we within the light radius?
       const dist2 = Point3d.distanceSquaredBetween(this.#fragmentPoint, srcOrigin);
       if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
 
       // If blocked, then not bright or dim.
       this.#fragmentPoint.subtract(srcOrigin, rayDirection); // NOTE: Don't normalize so the wall test can use 0 < t < 1.
-      if ( this.obstaclesOcclude(srcOrigin, rayDirection, obstacles, senseType) ) continue;
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(rayDirection) ) continue;
 
       // TODO: handle light/sound attenuation from threshold walls.
       isBright ||= (dist2 <= (src.brightRadius ** 2));
-      isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
+      isDim = true; // Already tested distance above.
+      // isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
 
       // Don't break so we can add in color contributions from each light source to display in debugging.
       // if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
@@ -765,7 +522,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       const srcReflectedColor = Point3d._tmp2;
       const N = origTri.plane.normal.multiplyScalar(-1, Point3d._tmp3);
 
-      srcOrigin.subtract(this.#fragmentPoint, this.#lightDirection).normalize(this.#lightDirection);
+      this.#fragmentPoint.subtract(srcOrigin, this.#lightDirection).normalize(this.#lightDirection);
       const lightStrength = Math.max(N.dot(this.#lightDirection), 0) * (isDim ? 0.5 : 1.0);
       lightColor.set(...src.lightSource.colorRGB);
       lightColor.multiplyScalar(lightStrength, srcReflectedColor);
@@ -787,7 +544,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     this.counts[DARK] += !(isBright || isDim);
 
     this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
-
+    }
+*/
     // Multiply the various light strengths by the fragment color and add
     /*
     this.#ambientLightColor.multiply(this.#fragmentColor, this.#ambientLightColor);
@@ -798,7 +556,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
       .add(this.#reflectedLightColor, this.#fragmentColor)
       .add(this.#specularLightColor, this.#fragmentColor);
     */
-  }
 
 
   #debugTexture;
@@ -845,7 +602,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(viewer, target, viewerLocation, targetLocation, { draw, container, width = 100 } = {}) {
+  _draw3dDebug(viewer, target, viewpoint, targetLocation, { draw, container, width = 100 } = {}) {
     draw ??= new CONFIG.GeometryLib.Draw();
 
     // Store the original scale
@@ -856,10 +613,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleRenderCalcul
     // Reset as needed.
     this.viewer = viewer;
     this.target = target;
-    this.viewpoint = viewerLocation;
+    this.viewpoint = viewpoint;
     this.targetLocation = targetLocation;
 
-    this.camera.cameraPosition = viewerLocation;
+    this.camera.cameraPosition = viewpoint;
     this.camera.targetPosition = targetLocation;
     this.camera.setTargetTokenFrustum(target);
 
@@ -908,7 +665,6 @@ export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPI
     footer2.innerHTML = `${(bright * 100).toFixed(0)}% bright | ${(dim * 100).toFixed(0)}% dim | ${(dark * 100).toFixed(0)}% dark`;
   }
 }
-
 
 /*
 PercentVisibleCalculatorPerPixel = api.calcs.perPixel

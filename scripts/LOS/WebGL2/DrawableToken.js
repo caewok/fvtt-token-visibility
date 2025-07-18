@@ -7,7 +7,7 @@ CONFIG,
 
 import { DrawableObjectsInstancingWebGL2Abstract, DrawableObjectsWebGL2Abstract } from "./DrawableObjects.js";
 import { MODULE_ID, OTHER_MODULES, FLAGS } from "../../const.js";
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { GeometryToken, GeometryConstrainedToken, GeometryCustomToken, GeometryLitToken, GeometrySquareGrid, GeometryHexToken, GeometryConstrainedCustomToken, GeometryLitCustomToken } from "../geometry/GeometryToken.js";
 import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
 import { Hex3dVertices } from "../geometry/BasicVertices.js";
@@ -147,7 +147,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( !(blocking.tokens.dead || blocking.tokens.live) ) return;
 
     // Limit to tokens within the vision triangle.
-    const tokens = AbstractViewpoint.filterTokensByVisionTriangle(visionTriangle,
+    const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
       { viewer, target, blockingTokensOpts: blocking.tokens });
     for ( const token of tokens ) {
       if ( !(this.placeableTracker.hasPlaceable(token)) ) continue;
@@ -161,9 +161,9 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     for ( const drawable of this.drawablesArray ) drawable.render();
   }
 
-  renderTarget(target, useLitTargetShape = false) {
+  renderTarget(target, testLighting = false) {
     if ( !(this.placeableTracker.hasPlaceable(target)) ) return;
-    if ( useLitTargetShape && this.constructor.drawLit(target) ) this.drawables.lit.renderTarget(target);
+    if ( testLighting && this.constructor.drawLit(target) ) this.drawables.lit.renderTarget(target);
     if ( this.constructor.drawConstrained(target) ) this.drawables.constrained.renderTarget(target);
     else if ( this.drawCustom(target) ) this.drawables.get(target.sourceId).renderTarget(target);
     else this.drawables.instanced.renderTarget(target);

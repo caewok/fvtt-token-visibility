@@ -16,7 +16,7 @@ import { MODULE_ID } from "../../const.js";
 // LOS folder
 import { AbstractViewpoint } from "../AbstractViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "../WebGL2/WebGL2Viewpoint.js";
-import { PercentVisibleRenderCalculatorAbstract }  from "../PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract }  from "../PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
 
 /**
@@ -50,12 +50,11 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this.constructor.gpuCanvas ??= new OffscreenCanvas(this.constructor.WIDTH, this.constructor.HEIGHT);
     this.gpuCtx = this.constructor.gpuCanvas.getContext("webgpu");
 
-    const gl = this.gl;
     this._initializeFramebuffer();
   }
 
   async initialize() {
-    PercentVisibleRenderCalculatorAbstract.prototype.initialize.call(this);
+    PercentVisibleCalculatorAbstract.prototype.initialize.call(this);
     this.device ??= CONFIG[MODULE_ID].webGPUDevice ?? (await WebGPUDevice.getDevice());
     this.gpuCtx.configure({
       device: this.device,
@@ -72,30 +71,30 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
     this._initializeFramebuffer();
   }
 
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
-    const useLitTargetShape = this.config.useLitTargetShape;
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
+  _calculatePercentVisible(viewer, target, viewpoint, targetLocation) {
+    const testLighting = this.config.testLighting;
+    this.renderObstacles.render(viewpoint, target, { viewer, targetLocation, testLighting });
     const res = this._countRedPixels();
     this._redPixels = res.red;
     this._redBlockedPixels = res.redBlocked;
   }
 
-  async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
-    const useLitTargetShape = this.config.useLitTargetShape;
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
+  async _calculatePercentVisibleAsync(viewer, target, viewpoint, targetLocation) {
+    const testLighting = this.config.testLighting;
+    this.renderObstacles.render(viewpoint, target, { viewer, targetLocation, testLighting });
     const res = await this._countRedPixelsAsync();
     this._redPixels = res.red;
     this._redBlockedPixels = res.redBlocked;
   }
 
-  _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderGridShape(viewer, target, viewerLocation, targetLocation);
+  _gridShapeArea(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderGridShape(viewer, target, viewpoint, targetLocation);
     const res = this._countRedPixels();
     return res.red;
   }
 
-  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderGridShape(viewer, target, viewerLocation, targetLocation);
+  async _gridShapeAreaAsync(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderGridShape(viewer, target, viewpoint, targetLocation);
     const res = await this._countRedPixelsAsync();
     return res.red;
   }
@@ -106,15 +105,15 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
    * Called after _calculatePercentVisible.
    * @returns {number}
    */
-  _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderTarget(viewer, target, viewerLocation, targetLocation);
+  _constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderTarget(viewer, target, viewpoint, targetLocation);
     const res = this._countRedPixels();
     return res.red;
   }
 
 
-  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderTarget(viewer, target, viewerLocation, targetLocation);
+  async _constrainedTargetAreaAsync(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderTarget(viewer, target, viewpoint, targetLocation);
     const res = await this._countRedPixelsAsync();
     return res.red;
   }
@@ -175,7 +174,7 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
   destroy() { this.renderObstacles.destroy(); }
 }
 
-export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCalculatorAbstract {
+export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculatorAbstract {
   static viewpointClass = WebGPUViewpointAsync;
 
   /** @type {number} */
@@ -229,16 +228,16 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
 
   _totalTargetArea() { return this.#redPixels; }
 
-  _calculatePercentVisible(viewer, target, viewerLocation, targetLocation) {
+  _calculatePercentVisible(viewer, target, viewpoint, targetLocation) {
 //     console.debug('First render - initial state:', {
 //       viewer: viewer?.id,
 //       target: target?.id,
-//       viewerLocation,
+//       viewpoint,
 //       targetLocation
 //     });
 
-    const useLitTargetShape = this.config.useLitTargetShape;
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
+    const testLighting = this.config.testLighting;
+    this.renderObstacles.render(viewpoint, target, { viewer, targetLocation, testLighting });
 //     console.debug('Render completed');
 
     const res = this.sumPixels.computeSync(this.renderObstacles.renderTexture);
@@ -255,34 +254,34 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleRenderCal
 //     });
   }
 
-  async _calculatePercentVisibleAsync(viewer, target, viewerLocation, targetLocation) {
-    const useLitTargetShape = this.config.useLitTargetShape;
-    this.renderObstacles.render(viewerLocation, target, { viewer, targetLocation, useLitTargetShape });
+  async _calculatePercentVisibleAsync(viewer, target, viewpoint, targetLocation) {
+    const testLighting = this.config.testLighting;
+    this.renderObstacles.render(viewpoint, target, { viewer, targetLocation, testLighting });
     const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
     this.#redPixels = res.red;
     this.#redBlockedPixels = res.redBlocked;
   }
 
-  _gridShapeArea(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+  _gridShapeArea(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderGridShape(viewpoint, target, { viewer, targetLocation });
     const res = this.sumPixels.computeSync(this.renderObstacles.renderTexture);
     return res.red;
   }
 
-  async _gridShapeAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderGridShape(viewerLocation, target, { viewer, targetLocation });
+  async _gridShapeAreaAsync(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderGridShape(viewpoint, target, { viewer, targetLocation });
     const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
     return res.red;
   }
 
-  _constrainedTargetArea(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
+  _constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderTarget(viewpoint, target, { viewer, targetLocation });
     const res = this.sumPixels.computeSync(this.renderObstacles.renderTexture);
     return res.red;
   }
 
-  async _constrainedTargetAreaAsync(viewer, target, viewerLocation, targetLocation) {
-    this.renderObstacles.renderTarget(viewerLocation, target, { viewer, targetLocation });
+  async _constrainedTargetAreaAsync(viewer, target, viewpoint, targetLocation) {
+    this.renderObstacles.renderTarget(viewpoint, target, { viewer, targetLocation });
     const res = await this.sumPixels.compute(this.renderObstacles.renderTexture);
     return res.red;
   }
@@ -328,10 +327,10 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
     // Render once for each viewpoint.
     const frames = DebugVisibilityViewerWebGL2.prototype._canvasDimensionsForViewpoints.call(this);
     for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
-      const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
+      const { viewer, target, viewpoint: viewpoint, targetLocation } = this.viewerLOS.viewpoints[i];
       const frame = frames[i];
       const clear = i === 0;
-      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+      this.renderer.render(viewpoint, target, { viewer, targetLocation, frame, clear });
     }
   }
 
@@ -365,7 +364,7 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
   }
 
   async initialize() {
-    await PercentVisibleRenderCalculatorAbstract.prototype.initialize();
+    await PercentVisibleCalculatorAbstract.prototype.initialize();
     await this.renderer.initialize();
   }
 
@@ -384,10 +383,10 @@ export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithP
     // Render once for each viewpoint.
     const frames = DebugVisibilityViewerWebGL2.prototype._canvasDimensionsForViewpoints.call(this);
     for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
-      const { viewer, target, viewpoint: viewerLocation, targetLocation } = this.viewerLOS.viewpoints[i];
+      const { viewer, target, viewpoint: viewpoint, targetLocation } = this.viewerLOS.viewpoints[i];
       const frame = frames[i];
       const clear = i === 0;
-      this.renderer.render(viewerLocation, target, { viewer, targetLocation, frame, clear });
+      this.renderer.render(viewpoint, target, { viewer, targetLocation, frame, clear });
     }
   }
 

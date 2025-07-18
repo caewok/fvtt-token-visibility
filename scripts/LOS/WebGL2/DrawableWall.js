@@ -5,7 +5,7 @@
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { GeometryWall } from "../geometry/GeometryWall.js";
 import { WallTracker } from "../placeable_tracking/WallTracker.js";
 
@@ -26,8 +26,6 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     if ( this.initialized ) console.error("Cannot set directional value after initialization.");
     else this.#directional = value;
   }
-
-  senseType = "sight";
 
   limitedWall = false;
 
@@ -56,8 +54,7 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     // Limit to walls within the vision triangle
     // Drop open doors.
     const opts = { senseType: this.senseType };
-    const walls = AbstractViewpoint.filterWallsByVisionTriangle(visionTriangle, opts);
-    const ph = this.placeableTracker;
+    const walls = ObstacleOcclusionTest.filterWallsByVisionTriangle(visionTriangle, opts);
     for ( const wall of walls ) {
       if ( !this.placeableTracker.hasPlaceable(wall) ) continue;
       if ( WallTracker.isTerrain(wall, opts) ^ this.limitedWall ) continue;

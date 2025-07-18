@@ -211,7 +211,7 @@ export class RenderObstacles {
       }
     },
     debug: false,
-    useLitTargetShape: false,
+    testLighting: false,
     largeTarget: false,
   }
 
@@ -254,7 +254,7 @@ export class RenderObstacles {
     this.drawableGridShape.postrender();
   }
 
-  renderTarget(viewerLocation, target, { frame, useLitTargetShape = false } = {}) {
+  renderTarget(viewerLocation, target, { frame, testLighting = false } = {}) {
     // log(`${this.constructor.name}|renderTarget|Rendering ${target.name}, ${target.id}`);
     const device = this.device;
 
@@ -270,7 +270,7 @@ export class RenderObstacles {
     // FYI, cannot set clearValue of the attachment to null.
     const renderPassDesc = this.renderPassDescriptor;
 
-    const targetDrawable = useLitTargetShape
+    const targetDrawable = testLighting
       && target.litTokenBorder
       && !target.litTokenBorder.equals(target.constrainedTokenBorder) ? this.drawableLitToken : this.drawableConstrainedToken;
 
@@ -288,9 +288,9 @@ export class RenderObstacles {
     // log(`${this.constructor.name}|renderTarget|Finished rendering ${target.name}, ${target.id}`);
   }
 
-  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, useLitTargetShape = false } = {}) {
+  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, testLighting = false } = {}) {
     // log(`${this.constructor.name}|render|Begin rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
-    const opts = { viewer, target, blocking: this.config.blocking, useLitTargetShape: this.config.useLitTargetShape };
+    const opts = { viewer, target, blocking: this.config.blocking, testLighting: this.config.testLighting };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
     const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
@@ -313,7 +313,7 @@ export class RenderObstacles {
       renderPassDesc.colorAttachments[0].loadOp = "load";
     }
 
-    const useLit = useLitTargetShape
+    const useLit = testLighting
       && target.litTokenBorder
       && !target.litTokenBorder.equals(target.constrainedTokenBorder);
     const targetDrawable = useLit ? this.drawableLitToken : this.drawableConstrainedToken;

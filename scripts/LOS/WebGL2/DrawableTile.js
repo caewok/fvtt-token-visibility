@@ -4,7 +4,7 @@
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { GeometryTile } from "../geometry/GeometryTile.js";
 import {
   TileTracker,
@@ -134,7 +134,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     if ( !blocking.tiles ) return;
 
     // Limit to tiles within the vision triangle
-    const tiles = AbstractViewpoint.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    const tiles = ObstacleOcclusionTest.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
     for ( const tile of tiles ) {
       if ( !this.placeableTracker.hasPlaceable(tile) ) continue;
       const idx = this._indexForPlaceable(tile);
