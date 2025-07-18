@@ -204,7 +204,7 @@ export class PercentVisibleCalculatorAbstract {
     this._testLightingForPoint = () => null; // Default: ignore.
     if ( this.config.testLighting ) {
       if ( this.config.sourceType === "lighting" ) this._testLightingForPoint = this._testLightingOcclusionForPoint.bind(this);
-      else if ( this.config.sourceType === "sound" ) this._testLightingForPoint = this._testSoundOcclusionForPoint.bind(this);
+      else if ( this.config.sourceType === "sounds" ) this._testLightingForPoint = this._testSoundOcclusionForPoint.bind(this);
     }
   }
 
@@ -304,7 +304,7 @@ export class PercentVisibleCalculatorAbstract {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const srcOrigin = Point3d._tmp;
     let isDim = false;
-    for ( const src of canvas.sound.placeables ) {
+    for ( const src of canvas.sounds.placeables ) {
       if ( !src.source.active ) continue;
 
       Point3d.fromPointSource(src, srcOrigin);

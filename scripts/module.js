@@ -78,6 +78,9 @@ import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } fro
 import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/PerPixelViewpoint.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
+import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/SamplePixelViewpoint.js"
+
+
 // import {
 //   PercentVisibleCalculatorWebGPU,
 //   PercentVisibleCalculatorWebGPUAsync,
@@ -249,17 +252,18 @@ Hooks.once("init", function() {
      * Created and initialized at canvasReady hook
      * Each calculator can calculate visibility based on viewer, target, and optional viewer/target locations.
      */
-    sightCalculatorClasses: {
+    calculatorClasses: {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webgl2: PercentVisibleCalculatorWebGL2,
       // webgpu: PercentVisibleCalculatorWebGPU,
       // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
-      hybrid: PercentVisibleCalculatorHybrid,
+      // hybrid: PercentVisibleCalculatorHybrid,
       "per-pixel": PercentVisibleCalculatorPerPixel,
+      "sample-pixel": PercentVisibleCalculatorSamplePixel,
     },
 
-    sightCalculators: {
+    losCalculators: {
       points: null,
       geometric: null,
       webgl2: null,
@@ -267,6 +271,7 @@ Hooks.once("init", function() {
       // "webgpu-async": null,
       hybrid: null,
       "per-pixel": null,
+      "sample-pixel": null,
     },
 
     /**
@@ -480,28 +485,32 @@ Hooks.once("ready", function() {
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
 
-  // Create default calculators used by all the tokens.
-  const basicCalcs = [
-    "points",
-    "geometric",
-    "webgl2",
-    "hybrid",
-    "per-pixel",
-  ];
-//   const webGPUCalcs = [
-//     "webgpu",
-//     "webgpu-async",
+//   // Create default calculators used by all the tokens.
+//   const basicCalcs = [
+//     "points",
+//     "geometric",
+//     "webgl2",
+//     "hybrid",
+//     "per-pixel",
+//     "sample-pixel",
 //   ];
-  const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
-  const calcClasses = CONFIG[MODULE_ID].sightCalculatorClasses;
-  Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
-
-  // Must create after settings are registered.
-  for ( const calcName of basicCalcs ) {
-    const cl = calcClasses[calcName];
-    const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
-    calc.initialize(); // Async.
-  }
+// //   const webGPUCalcs = [
+// //     "webgpu",
+// //     "webgpu-async",
+// //   ];
+//   const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
+//   const hearingCalcs = CONFIG[MODULE_ID].hearingCalculators;
+//   const calcClasses = CONFIG[MODULE_ID].calculatorClasses;
+//   Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
+//
+//   // Must create after settings are registered.
+//   for ( const calcName of basicCalcs ) {
+//     const cl = calcClasses[calcName];
+//     const sightCalc = sightCalcs[calcName] = new cl({ senseType: "sight", sourceType: "lighting" });
+//     const hearingCalc = hearingCalcs[calcName] = new cl({ senseType: "sight", sourceType: "sounds" });
+//     sightCalc.initialize(); // Async
+//     hearingCalc.initialize(); // Async
+//   }
 
 //   WebGPUDevice.getDevice().then(device => {
 //     if ( !device ) {
@@ -513,13 +522,17 @@ Hooks.on("canvasReady", function() {
 //       }
 //       sightCalcs.webGPU = sightCalcs.webGL2;
 //       sightCalcs.webGPUAsync = sightCalcs.webGL2;
+//       soundCalcs.webGPU = soundCalcs.webGL2;
+//       hearingCalcs.webGPUAsync = soundCalcs.webGL2;
 //
 //     } else {
 //       CONFIG[MODULE_ID].webGPUDevice = device;
 //       for ( const calcName of webGPUCalcs ) {
 //         const cl = calcClasses[calcName];
-//         const calc = sightCalcs[calcName] = new cl({ senseType: "sight" });
-//         calc.initialize(); // Async.
+//         const sightCalc = sightCalcs[calcName] = new cl({ senseType: "sight", sourceType: "lighting" });
+//         const hearingCalc = hearingCalcs[calcName] = new cl({ senseType: "sight", sourceType: "sounds" });
+//         sightCalc.initialize(); // Async
+//         hearingCalc.initialize(); // Async
 //       }
 //     }
 //
