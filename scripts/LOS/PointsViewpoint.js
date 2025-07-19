@@ -43,11 +43,12 @@ export class PointsViewpoint extends AbstractViewpoint {
 
   _drawDebugPoints(debugDraw, { width = 1 } = {}) {
     const Draw = CONFIG.GeometryLib.Draw;
+    const colors = Draw.COLORS;
     for ( const debugPoints of this.calculator.debugPoints ) {
       for ( const debugPoint of debugPoints) {
-        const { A, B, hasCollision } = debugPoint;
-        const color = hasCollision ? Draw.COLORS.red : Draw.COLORS.green;
-        debugDraw.segment({ A, B }, { alpha: 0.5, width, color });
+        const color = debugPoint.isOccluded ? colors.red : colors.green;
+        const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
+        debugDraw.segment(debugPoint, { alpha, width, color });
       }
     }
   }
@@ -163,6 +164,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
   }
 
+
   /**
    * Use the target's lit shape to determine if the point is lit.
    */
@@ -204,11 +206,12 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
         if ( viewer === target ) continue;
         this.viewerLOS.target = target;
 
-        if ( this.viewerLOS.simpleVisibilityTest(target) ) continue;
+        // if ( this.viewerLOS.simpleVisibilityTest(target) ) continue;
 
         // Draw each set of points separately.
         this.viewerLOS.viewpoints.forEach(vp => {
-          const percentVisible = vp.percentVisible();
+          vp.calculate();
+          const percentVisible = vp.percentVisible;
           const width = percentVisible >= this.viewerLOS.config.threshold ? 2 : 1;
           vp._drawDebugPoints(this.debugDraw, { width });
         });

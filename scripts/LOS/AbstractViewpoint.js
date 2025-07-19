@@ -323,6 +323,7 @@ export class AbstractViewpoint {
     // this._drawLineOfSight(debugDraw);
     this._drawDetectedObjects(debugDraw);
     this._drawVisionTriangle(debugDraw);
+    this._drawVisionTriangleLightSources(debugDraw);
   }
 
   /**
@@ -339,18 +340,38 @@ export class AbstractViewpoint {
    * Draw outlines for the various objects that can be detected on the canvas.
    */
   _drawDetectedObjects(debugDraw) {
-    // if ( !this.#blockingObjects.initialized ) return;
-    const { walls, tiles, tokens } = ObstacleOcclusionTest.findBlockingObjects(this.viewpoint, this.target,
-      { viewer: this.viewer, senseType: this.config.senseType, blocking: this.config.blocking });
-    const terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(walls, this.config.senseType);
     debugDraw ??= this.viewerLOS.config.debugDraw;
     const colors = Draw.COLORS;
-
-    walls.forEach(wall => debugDraw.segment(wall, { color: colors.red }));
-    // tiles.forEach(tile => debugDraw.shape(tile.bounds, { color: colors.yellow }));
-    tiles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));
-    terrainWalls.forEach(wall => debugDraw.segment(wall, { color: colors.lightgreen }));
-    tokens.forEach(token => debugDraw.shape(token.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.2 }));
+    const OBSTACLE_COLORS = {
+      walls: colors.lightred,
+      terrainWalls: colors.lightgreen,
+      proximateWalls: colors.lightblue,
+      tiles: colors.yellow,
+      tokens: colors.orange,
+      regions: colors.red,
+    }
+    for ( const [key, obstacles] of Object.entries(this.calculator.occlusionTester.obstacles) ) {
+      const color = OBSTACLE_COLORS[key];
+      switch ( key ) {
+        case "walls":
+        case "terrainWalls":
+        case "proximateWalls":
+          obstacles.forEach(wall => debugDraw.segment(wall, { color }));
+          break;
+        case "tiles":
+          obstacles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw: debugDraw, color, fillAlpha: 0.1, fill: color })));
+          break;
+        case "tokens":
+          obstacles.forEach(token => debugDraw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
+          break;
+        case "regions":
+          obstacles.forEach(region => region.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw: debugDraw, color, fillAlpha: 0.1, fill: color})
+          ));
+          break;
+      }
+    }
   }
 
   /**
@@ -361,5 +382,26 @@ export class AbstractViewpoint {
     debugDraw ??= this.viewerLOS.config.debugDraw;
     const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(this.viewpoint, this.target);
     visionTri.draw({ draw: debugDraw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
+  }
+
+  /**
+   * For debugging.
+   * Draw the vision triangle between light source and target.
+   */
+  _drawVisionTriangleLightSources(debugDraw) {
+    if ( canvas.environment.globalLightSource.active ) return;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const ctr = Point3d.fromTokenCenter(this.target);
+    debugDraw ??= this.viewerLOS.config.debugDraw;
+    for ( const src of canvas[this.config.sourceType].placeables ) {
+      const srcOrigin = Point3d.fromPointSource(src);
+      const dist2 = Point3d.distanceSquaredBetween(ctr, srcOrigin);
+      const isBright = src.brightRadius && (src.brightRadius ** 2) < dist2;
+      const isDim = (src.radius ** 2) < dist2;
+      if ( !(isDim || isBright) ) continue;
+      const fillAlpha = isBright ? 0.5 : 0.25;
+      const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(srcOrigin, this.target);
+      visionTri.draw({ draw: debugDraw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
+    }
   }
 }

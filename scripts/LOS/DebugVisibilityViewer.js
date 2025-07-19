@@ -30,6 +30,7 @@ export class DebugVisibilityViewerAbstract {
 
   constructor(config = {}) {
     config.debug = true;
+    config.testLighting = true;
     config.viewpointClass = this.constructor.viewpointClass;
     this.viewerLOS = new AbstractViewerLOS(undefined, config);
   }
@@ -75,11 +76,14 @@ export class DebugVisibilityViewerAbstract {
     if ( !(this.viewer && this.target ) ) return;
 
     // First draw the basic debugging graphics for the canvas.
+    this.viewerLOS.viewer = this.viewer;
+    this.viewerLOS.target = this.target;
+    this.viewerLOS.calculate();
     this._drawCanvasDebug();
 
     // Then determine the percent visible using the algorithm and
     // update debug view specific to that algorithm.
-    const percentVisible = this.percentVisible();
+    const percentVisible = this.viewerLOS.percentVisible;
     this.updateDebugForPercentVisible(percentVisible);
   }
 
@@ -506,6 +510,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     }
 
     this.viewerLOS.viewpoints.forEach((vp, idx) => {
+      vp.calculate();
       const draw = this.getPopoutDraw(idx);
       const c = this.getPopoutContainer(idx);
       vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
