@@ -2,6 +2,7 @@
 canvas,
 CONFIG,
 game,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -41,16 +42,44 @@ const {
 export class PointsViewpoint extends AbstractViewpoint {
   static get calcClass() { return PercentVisibleCalculatorPoints; }
 
-  _drawDebugPoints(debugDraw, { width = 1 } = {}) {
+  /** @type {PIXI.Graphics} */
+  #debugGraphics;
+
+  get debugGraphics() {
+    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = new PIXI.Graphics();
+    return this.#debugGraphics;
+  }
+
+  /** @type {Draw} */
+  #debugDraw;
+
+  get debugDraw() {
     const Draw = CONFIG.GeometryLib.Draw;
-    const colors = Draw.COLORS;
-    for ( const debugPoints of this.calculator.debugPoints ) {
-      for ( const debugPoint of debugPoints) {
-        const color = debugPoint.isOccluded ? colors.red : colors.green;
-        const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
-        debugDraw.segment(debugPoint, { alpha, width, color });
-      }
+    if ( !this.#debugDraw
+      || !this.#debugGraphics
+      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
+    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
+  }
+
+  _drawCanvasDebug(debugDraw) {
+    super._drawCanvasDebug(debugDraw);
+    this._drawDebugPoints(debugDraw);
+  }
+
+  _drawDebugPoints(draw) {
+    const colors = CONFIG.GeometryLib.Draw.COLORS;
+    const width =  this.percentVisible > this.viewerLOS.threshold ? 2 : 1;
+    for ( const debugPoint of this.calculator.debugPoints ) {
+      const color = debugPoint.isOccluded ? colors.red : colors.green;
+      const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
+      draw.segment(debugPoint, { alpha, width, color });
     }
+  }
+
+  destroy() {
+    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
+    this.#debugGraphics = undefined;
+    super.destroy();
   }
 }
 
@@ -82,12 +111,8 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   // Points handles large target slightly differently. See _testLargeTarget.
   get largeTargetArea() { return this.counts[TOTAL]; }
 
-  initializeCalculations() {
-    super.initializeCalculations();
-    this.debugPoints.length = 0;
-  }
-
   _calculate() {
+    this.debugPoints.length = 0;
     if ( this.config.largeTarget ) this._testLargeTarget();
     else {
       const targetPoints = this.constructTargetPoints();
@@ -98,11 +123,10 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   _testLargeTarget() {
     // Construct points for each target subshape, defined by grid spaces under the target.
     const target = this.target;
-    const targetShapes = CONFIG[MODULE_ID].constrainTokens
-      ? this.constructor.constrainedGridShapesUnderToken(target): this.constructor.gridShapesUnderToken(target);
+    const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.tokenShape);
     if ( !targetShapes.length ) {
       console.warn(`${MODULE_ID}|${this.constructor.name}|Target shapes for large target not working.`);
-      const targetPoints = this.constructTargetPoints(this.target);
+      const targetPoints = this.constructTargetPoints();
       this._testPointToPoints(targetPoints);
       return;
     }
@@ -134,7 +158,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const target = this.target;
     const { pointAlgorithm, targetInset, points3d } = this.config;
     const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
-    cfg.tokenShape = tokenShape ?? (CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder);
+    cfg.tokenShape = tokenShape ?? this.tokenShape
     const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
     return points3d ? PointsViewpoint.elevatePoints(target, targetPoints) : targetPoints;
   }
@@ -150,11 +174,10 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     this.counts.fill(0);
     const numPoints = targetPoints.length;
     this.counts[TOTAL] = numPoints;
-    const debugPoints = Array(numPoints);
-    this.debugPoints.push(debugPoints);
+    const debugPoints = this.debugPoints;
     for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
-      this.viewpoint.subtract(targetPoint, this.#rayDirection);
+      targetPoint.subtract(this.viewpoint, this.#rayDirection);
       const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
       this.counts[OBSCURED] += isOccluded;
 
@@ -196,28 +219,6 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
 
   /** @type {Token[]} */
   get targets() { return game.user.targets.values(); }
-
-  updateDebugForPercentVisible(_percentVisible) {
-    // Calculate points and pull the debug data.
-    for ( const viewer of this.viewers) {
-      this.viewerLOS.viewer = viewer;
-
-      for ( const target of this.targets) {
-        if ( viewer === target ) continue;
-        this.viewerLOS.target = target;
-
-        // if ( this.viewerLOS.simpleVisibilityTest(target) ) continue;
-
-        // Draw each set of points separately.
-        this.viewerLOS.viewpoints.forEach(vp => {
-          vp.calculate();
-          const percentVisible = vp.percentVisible;
-          const width = percentVisible >= this.viewerLOS.config.threshold ? 2 : 1;
-          vp._drawDebugPoints(this.debugDraw, { width });
-        });
-      }
-    }
-  }
 
   /**
    * Triggered whenever a token is refreshed.

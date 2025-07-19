@@ -77,6 +77,11 @@ export class AbstractViewpoint {
 
   get config() { return this.viewerLOS.calculator.config; }
 
+  get debug() { return this.viewerLOS.debug; }
+
+  set debug(value) { this.viewerLOS.debug = value; }
+
+
   // ----- NOTE: Visibility Percentages ----- //
 
   get percentVisible() { return this.calculator.percentVisible; }
@@ -94,6 +99,7 @@ export class AbstractViewpoint {
     if ( this.passesSimpleVisibilityTest() ) return;
     this.calculator.viewpoint = this.viewpoint;
     this.calculator.calculate();
+    if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
   }
 
   targetOverlapsViewpoint() {
@@ -266,16 +272,15 @@ export class AbstractViewpoint {
    * @param {Token} token
    * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
    */
-  static constrainedGridShapesUnderToken(token) {
+  static constrainedGridShapesUnderToken(token, tokenShape) {
     const gridShapes = this.gridShapesUnderToken(token);
-    const constrained = token.constrainedTokenBorder;
 
     // Token unconstrained by walls.
-    if ( constrained instanceof PIXI.Rectangle ) return gridShapes;
+    if ( token.tokenBorder.equals(tokenShape) ) return gridShapes;
 
     // For each gridShape, intersect against the constrained shape
     const constrainedGridShapes = [];
-    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([constrained]);
+    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([tokenShape]);
     for ( let gridShape of gridShapes ) {
       if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
 
@@ -320,27 +325,24 @@ export class AbstractViewpoint {
    * @param {Draw} draw
    */
   _drawCanvasDebug(debugDraw) {
-    // this._drawLineOfSight(debugDraw);
+    this._drawLineOfSight(debugDraw);
     this._drawDetectedObjects(debugDraw);
     this._drawVisionTriangle(debugDraw);
-    this._drawVisionTriangleLightSources(debugDraw);
   }
 
   /**
    * For debugging.
    * Draw the line of sight from token to target.
    */
-  _drawLineOfSight(debugDraw) {
-    debugDraw ??= this.viewerLOS.config.debugDraw;
-    debugDraw.segment({ A: this.viewpoint, B: this.targetLocation });
+  _drawLineOfSight(draw) {
+    draw.segment({ A: this.viewpoint, B: this.targetLocation });
   }
 
   /**
    * For debugging.
    * Draw outlines for the various objects that can be detected on the canvas.
    */
-  _drawDetectedObjects(debugDraw) {
-    debugDraw ??= this.viewerLOS.config.debugDraw;
+  _drawDetectedObjects(draw) {
     const colors = Draw.COLORS;
     const OBSTACLE_COLORS = {
       walls: colors.lightred,
@@ -356,18 +358,18 @@ export class AbstractViewpoint {
         case "walls":
         case "terrainWalls":
         case "proximateWalls":
-          obstacles.forEach(wall => debugDraw.segment(wall, { color }));
+          obstacles.forEach(wall => draw.segment(wall, { color }));
           break;
         case "tiles":
           obstacles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri =>
-            tri.draw2d({ draw: debugDraw, color, fillAlpha: 0.1, fill: color })));
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color })));
           break;
         case "tokens":
-          obstacles.forEach(token => debugDraw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
+          obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
           break;
         case "regions":
           obstacles.forEach(region => region.tokenvisibility.geometry.triangles.forEach(tri =>
-            tri.draw2d({ draw: debugDraw, color, fillAlpha: 0.1, fill: color})
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color})
           ));
           break;
       }
@@ -378,30 +380,8 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw the vision triangle between viewer point and target.
    */
-  _drawVisionTriangle(debugDraw) {
-    debugDraw ??= this.viewerLOS.config.debugDraw;
+  _drawVisionTriangle(draw) {
     const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(this.viewpoint, this.target);
-    visionTri.draw({ draw: debugDraw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
-  }
-
-  /**
-   * For debugging.
-   * Draw the vision triangle between light source and target.
-   */
-  _drawVisionTriangleLightSources(debugDraw) {
-    if ( canvas.environment.globalLightSource.active ) return;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const ctr = Point3d.fromTokenCenter(this.target);
-    debugDraw ??= this.viewerLOS.config.debugDraw;
-    for ( const src of canvas[this.config.sourceType].placeables ) {
-      const srcOrigin = Point3d.fromPointSource(src);
-      const dist2 = Point3d.distanceSquaredBetween(ctr, srcOrigin);
-      const isBright = src.brightRadius && (src.brightRadius ** 2) < dist2;
-      const isDim = (src.radius ** 2) < dist2;
-      if ( !(isDim || isBright) ) continue;
-      const fillAlpha = isBright ? 0.5 : 0.25;
-      const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(srcOrigin, this.target);
-      visionTri.draw({ draw: debugDraw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
-    }
+    visionTri.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 }

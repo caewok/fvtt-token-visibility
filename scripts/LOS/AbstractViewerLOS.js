@@ -4,6 +4,7 @@ CONFIG,
 DetectionMode,
 foundry,
 LimitedAnglePolygon,
+PIXI,
 Ray,
 Token,
 */
@@ -15,6 +16,7 @@ import { MODULE_ID } from "../const.js";
 // LOS folder
 import { tokensOverlap } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
+import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 // Viewpoint algorithms.
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
@@ -224,6 +226,10 @@ export class AbstractViewerLOS {
 
   set testLighting(testLighting) { this.calculator.config = { testLighting }; }
 
+  get debug() { return this.calculator.config.debug; }
+
+  set debug(debug) { this.calculator.config = { debug }; }
+
   /**
    * @typedef {object} DetectionModeConfig
    * Detection mode settings relevant to the viewer LOS and calculator.
@@ -335,6 +341,8 @@ export class AbstractViewerLOS {
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints({ numViewpoints, viewpointOffset } = {}) {
+    this.viewpoints.forEach(vp => vp.destroy());
+
     numViewpoints ||= this.viewpoints.length || 1;
     viewpointOffset ??= this.viewpointOffset;
     const cl = this.viewpointClass;
@@ -530,7 +538,7 @@ export class AbstractViewerLOS {
     this._clearVisibilityArrays();
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
-      this.visibility.fill(simpleTest);
+      Object.values(this.visibility).forEach(arr => arr.fill(simpleTest));
       return;
     }
 
@@ -545,8 +553,8 @@ export class AbstractViewerLOS {
       vp.calculate();
       this.visibility.unobscured[i] = vp.percentUnobscured;
       if ( testLighting ) {
-        this.visibility.dim[i] = vp.percentDim;
-        this.visibility.bright[i] = vp.percentBright;
+        this.visibility.dim[i] = vp.percentVisibleDim;
+        this.visibility.bright[i] = vp.percentVisibleBright;
         if ( this.visibility.unobscured[i] === 1 && this.visibility.dim[i] === 1 ) break;
       } else if ( this.visibility.unobscured[i] === 1 ) break;
     }
@@ -648,18 +656,82 @@ export class AbstractViewerLOS {
 
   /* ----- NOTE: Debug ----- */
 
-//   clearDebug() {
-//     if ( !this.config.debugDraw ) return;
-//     this.config.debugDraw.clear();
-//   }
+  /**
+   * Container to hold all canvas graphics.
+   */
+  #canvasDebugContainer;
+
+  get canvasDebugContainer() {
+    if ( !this.#canvasDebugContainer || this.#canvasDebugContainer.destroyed ) this._initializeCanvasDebugGraphics();
+    return this.#canvasDebugContainer;
+  }
+
+  /**
+   * Container to hold all viewpoint canvas graphics. Children indexed to match vp indexes.
+   */
+  #viewpointDebugContainer;
+
+  _destroyCanvasDebugGraphics() {
+    const c = this.#canvasDebugContainer;
+    if ( c && !c.destroyed ) c.destroy({ children: true });
+    this.#canvasDebugContainer = undefined;
+  }
+
+  _destroyViewpointDebugGraphics() {
+    const c = this.#viewpointDebugContainer;
+    if ( this.#canvasDebugContainer ) this.#canvasDebugContainer.removeChild(c);
+    if ( c && !c.destroyed ) c.destroy({ children: true });
+    this.#viewpointDebugContainer = undefined;
+  }
+
+  _initializeCanvasDebugGraphics() {
+    this._destroyCanvasDebugGraphics();
+    this.#canvasDebugContainer = new PIXI.Container();
+    this.#canvasDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
+    this.#canvasDebugContainer.addChild(new PIXI.Graphics());
+  }
+
+  _initializeViewpointDebugGraphics() {
+    this._destroyViewpointDebugGraphics();
+    this.#viewpointDebugContainer = new PIXI.Container();
+    this.#viewpointDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
+    this.canvasDebugContainer.addChild(this.#viewpointDebugContainer);
+    const Draw = CONFIG.GeometryLib.Draw;
+    this.viewpoints.forEach(vp => {
+      const g = new PIXI.Graphics();
+      g.eventMode = "passive"; // Allow targeting, selection to pass through.
+      this.#viewpointDebugContainer.addChild(g);
+      this._debugViewpointDraw.set(vp, new Draw(g));
+    });
+  }
+
+  #debugCanvasDraw;
+
+  get debugCanvasDraw() {
+    const Draw = CONFIG.GeometryLib.Draw;
+    if ( this.#debugCanvasDraw && !this.#debugCanvasDraw.g.destroyed ) return this.#debugCanvasDraw;
+    this.#debugCanvasDraw = new Draw(this.canvasDebugContainer.children[0]);
+    return this.#debugCanvasDraw;
+  }
+
+  _debugViewpointDraw = new WeakMap();
+
+  debugDrawForViewpoint(vp) {
+    if ( !this._debugViewpointDraw.has(vp) ) this._initializeViewpointDebugGraphics();
+    return this._debugViewpointDraw.get(vp);
+  }
+
 
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
    */
-  _drawCanvasDebug(draw) {
-    this._drawVisibleTokenBorder(draw);
-    this.viewpoints.forEach(vp => vp._drawCanvasDebug(draw));
+  _drawCanvasDebug() {
+    const canvasDraw = this.debugCanvasDraw;
+    canvasDraw.clearDrawings();
+    this._drawVisibleTokenBorder(canvasDraw);
+    this._drawVisionTriangleLightSources(canvasDraw);
+    this.viewpoints.forEach(vp => this.debugDrawForViewpoint(vp).clearDrawings());
   }
 
   /**
@@ -673,6 +745,26 @@ export class AbstractViewerLOS {
     if ( this.target ) {
       const border = CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
       draw.shape(border, { color, fill: color, fillAlpha: 0.2});
+    }
+  }
+
+  /**
+   * For debugging.
+   * Draw the vision triangle between light source and target.
+   */
+  _drawVisionTriangleLightSources(draw) {
+    if ( canvas.environment.globalLightSource.active ) return;
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const ctr = Point3d.fromTokenCenter(this.target);
+    for ( const src of canvas[this.calculator.config.sourceType].placeables ) {
+      const srcOrigin = Point3d.fromPointSource(src);
+      const dist2 = Point3d.distanceSquaredBetween(ctr, srcOrigin);
+      const isBright = src.brightRadius && (src.brightRadius ** 2) < dist2;
+      const isDim = (src.radius ** 2) < dist2;
+      if ( !(isDim || isBright) ) continue;
+      const fillAlpha = isBright ? 0.3 : 0.1;
+      const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(srcOrigin, this.target);
+      visionTri.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
     }
   }
 }

@@ -212,29 +212,27 @@ export class PercentVisibleCalculatorAbstract {
     this.counts.fill(0);
     this._tokenShapeType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
     this.initializeCalculations();
+    this._calculate();
 
     if ( this.config.testLighting && CONFIG[MODULE_ID].litToken === CONFIG[MODULE_ID].litTokenOptions.CONSTRAIN ) {
       // Calculate without lighting, then with lit (dim) border, then with lit (bright) border
+      const oldDebug = this.config.debug;
+      this.config = { testLighting: false, debug: false };
       const tmpCounts = new this.counts.constructor(this.counts.length);
-      this.config = { testLighting: false };
-
-      this._calculate();
       tmpCounts[TOTAL] = this.counts[TOTAL];
       tmpCounts[OBSCURED] = this.counts[OBSCURED];
 
       this._tokenShapeType = "litTokenBorder";
       this._calculate();
-      tmpCounts[DIM] = this.counts[OBSCURED];
+      tmpCounts[DIM] = this.counts[TOTAL] - this.counts[OBSCURED];
 
       this._tokenShapeType = "brightLitTokenBorder";
       this._calculate();
-      tmpCounts[BRIGHT] = this.counts[OBSCURED];
+      tmpCounts[BRIGHT] = this.counts[TOTAL] - this.counts[OBSCURED];
 
       this.counts.set(tmpCounts);
-      this.config = { testLighting: true };
-      return;
+      this.config = { testLighting: true, debug: oldDebug };
     }
-    this._calculate();
   }
 
   // async calculate(); // TODO: Implement if necessary; mimic calculate method but with await this._calculate.
@@ -266,7 +264,7 @@ export class PercentVisibleCalculatorAbstract {
 
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
-  _testLightingOcclusionForPoint(targetPoint, debugObject = {}, face) {
+  _testLightingOcclusionForPoint(targetPoint, debugObject = {}) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const srcOrigin = Point3d._tmp;
     let isBright = false;
@@ -275,7 +273,7 @@ export class PercentVisibleCalculatorAbstract {
       if ( !src.lightSource.active ) continue;
 
       Point3d.fromPointSource(src, srcOrigin);
-      if ( face && !face.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
+      // if ( face && !face.isFacing(srcOrigin) ) continue; // On opposite side of the triangle from the camera.
 
       const dist2 = Point3d.distanceSquaredBetween(targetPoint, srcOrigin);
       if ( dist2 > (src.dimRadius ** 2) ) continue; // Not within source dim radius.
@@ -283,7 +281,7 @@ export class PercentVisibleCalculatorAbstract {
       // If blocked, not bright or dim.
       // TODO: Don't test tokens for blocking the light or set a config option somewhere.
       // Probably means not syncing the configs for the occlusion testers.
-      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      targetPoint.subtract(srcOrigin, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
       if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
 
       // TODO: handle light/sound attenuation from threshold walls.
@@ -316,7 +314,7 @@ export class PercentVisibleCalculatorAbstract {
       // If blocked, not bright or dim.
       // TODO: Don't test tokens for blocking the light or set a config option somewhere.
       // Probably means not syncing the configs for the occlusion testers.
-      srcOrigin.subtract(targetPoint, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      targetPoint.subtract(srcOrigin, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
       if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
 
       // TODO: handle light/sound attenuation from threshold walls.
