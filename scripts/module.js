@@ -484,6 +484,7 @@ Hooks.once("ready", function() {
 
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
+  if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
 
 //   // Create default calculators used by all the tokens.
 //   const basicCalcs = [

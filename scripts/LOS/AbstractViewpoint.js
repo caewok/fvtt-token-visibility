@@ -77,6 +77,11 @@ export class AbstractViewpoint {
 
   get config() { return this.viewerLOS.calculator.config; }
 
+  get debug() { return this.viewerLOS.debug; }
+
+  set debug(value) { this.viewerLOS.debug = value; }
+
+
   // ----- NOTE: Visibility Percentages ----- //
 
   get percentVisible() { return this.calculator.percentVisible; }
@@ -94,6 +99,7 @@ export class AbstractViewpoint {
     if ( this.passesSimpleVisibilityTest() ) return;
     this.calculator.viewpoint = this.viewpoint;
     this.calculator.calculate();
+    if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
   }
 
   targetOverlapsViewpoint() {
@@ -266,16 +272,15 @@ export class AbstractViewpoint {
    * @param {Token} token
    * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
    */
-  static constrainedGridShapesUnderToken(token) {
+  static constrainedGridShapesUnderToken(token, tokenShape) {
     const gridShapes = this.gridShapesUnderToken(token);
-    const constrained = token.constrainedTokenBorder;
 
     // Token unconstrained by walls.
-    if ( constrained instanceof PIXI.Rectangle ) return gridShapes;
+    if ( token.tokenBorder.equals(tokenShape) ) return gridShapes;
 
     // For each gridShape, intersect against the constrained shape
     const constrainedGridShapes = [];
-    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([constrained]);
+    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([tokenShape]);
     for ( let gridShape of gridShapes ) {
       if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
 
@@ -320,7 +325,7 @@ export class AbstractViewpoint {
    * @param {Draw} draw
    */
   _drawCanvasDebug(debugDraw) {
-    // this._drawLineOfSight(debugDraw);
+    this._drawLineOfSight(debugDraw);
     this._drawDetectedObjects(debugDraw);
     this._drawVisionTriangle(debugDraw);
   }
@@ -329,37 +334,54 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw the line of sight from token to target.
    */
-  _drawLineOfSight(debugDraw) {
-    debugDraw ??= this.viewerLOS.config.debugDraw;
-    debugDraw.segment({ A: this.viewpoint, B: this.targetLocation });
+  _drawLineOfSight(draw) {
+    draw.segment({ A: this.viewpoint, B: this.targetLocation });
   }
 
   /**
    * For debugging.
    * Draw outlines for the various objects that can be detected on the canvas.
    */
-  _drawDetectedObjects(debugDraw) {
-    // if ( !this.#blockingObjects.initialized ) return;
-    const { walls, tiles, tokens } = ObstacleOcclusionTest.findBlockingObjects(this.viewpoint, this.target,
-      { viewer: this.viewer, senseType: this.config.senseType, blocking: this.config.blocking });
-    const terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(walls, this.config.senseType);
-    debugDraw ??= this.viewerLOS.config.debugDraw;
+  _drawDetectedObjects(draw) {
     const colors = Draw.COLORS;
-
-    walls.forEach(wall => debugDraw.segment(wall, { color: colors.red }));
-    // tiles.forEach(tile => debugDraw.shape(tile.bounds, { color: colors.yellow }));
-    tiles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri => tri.draw2d({ draw: debugDraw, color: Draw.COLORS.yellow, fillAlpha: 0.1, fill: Draw.COLORS.yellow })));
-    terrainWalls.forEach(wall => debugDraw.segment(wall, { color: colors.lightgreen }));
-    tokens.forEach(token => debugDraw.shape(token.constrainedTokenBorder, { color: colors.orange, fillAlpha: 0.2 }));
+    const OBSTACLE_COLORS = {
+      walls: colors.lightred,
+      terrainWalls: colors.lightgreen,
+      proximateWalls: colors.lightblue,
+      tiles: colors.yellow,
+      tokens: colors.orange,
+      regions: colors.red,
+    }
+    for ( const [key, obstacles] of Object.entries(this.calculator.occlusionTester.obstacles) ) {
+      const color = OBSTACLE_COLORS[key];
+      switch ( key ) {
+        case "walls":
+        case "terrainWalls":
+        case "proximateWalls":
+          obstacles.forEach(wall => draw.segment(wall, { color }));
+          break;
+        case "tiles":
+          obstacles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color })));
+          break;
+        case "tokens":
+          obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
+          break;
+        case "regions":
+          obstacles.forEach(region => region.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color})
+          ));
+          break;
+      }
+    }
   }
 
   /**
    * For debugging.
    * Draw the vision triangle between viewer point and target.
    */
-  _drawVisionTriangle(debugDraw) {
-    debugDraw ??= this.viewerLOS.config.debugDraw;
+  _drawVisionTriangle(draw) {
     const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(this.viewpoint, this.target);
-    visionTri.draw({ draw: debugDraw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
+    visionTri.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 }

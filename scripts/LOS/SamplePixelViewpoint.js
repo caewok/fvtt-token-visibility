@@ -99,7 +99,7 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
 
       const debugObject = { A: this.viewpoint, B: pt, isOccluded, isDim: null, isBright: null };
       this.debugPoints.push(debugObject);
-      if ( !isOccluded ) this._testLightingForPoint(pt, debugObject, face);
+      if ( !isOccluded ) this._testLightingForPoint(pt, debugObject);
     }
   }
 

@@ -143,7 +143,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     this.counts[OBSCURED] += isOccluded;
 
     // Fragment brightness for each source.
-    if ( !isOccluded ) this._testLightingForPoint(this.#fragmentPoint, {}, containingTri._original, );
+    if ( !isOccluded ) this._testLightingForPoint(this.#fragmentPoint);
   }
 
   /**
@@ -464,7 +464,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
     // Fragment brightness for each source. (For debug, always run.)
     if ( CONFIG[MODULE_ID].perPixelDebugLit ) {
-      const { isBright, isDim } = this._testLightingForPoint(this.#fragmentPoint, {}, containingTri._original);
+      const { isBright, isDim } = this._testLightingForPoint(this.#fragmentPoint);
       this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
     }
     // this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);

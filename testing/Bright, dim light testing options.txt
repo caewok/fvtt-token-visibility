@@ -1,3 +1,30 @@
+Bright/dim/dark light on target token should be handled using distance to face only.
+Because the lighting counts as bright/dim whenever within the light radius (or sphere).
+Lighting does not depend on facing the light --- i.e., backlit tokens are still in bright or dim light.
+
+So two approaches:
+1. litTokenBorder
+2. Distance to pixels
+
+
+1. Lit Token Border (can test 3d distance, but not 100% 3d)
+For each algorithm, can run repeatedly to determine difference between:
+- unconstrained or constrained
+- bright constrained
+- dim constrained
+
+TODO: Can we construct a 3d lit token border based on light sphere?
+Probably not, as it would be nearly impossible to know how to cut up the token polygon.
+
+2. Unoccluded (strict) 3d distance.
+For each pixel on face:
+- If within radius and
+- Unoccluded view of light but ignore facing.
+
+
+--------
+
+
 Options for detecting bright/dim/dark lighting/sound on target token:
 
 litTokenBorder

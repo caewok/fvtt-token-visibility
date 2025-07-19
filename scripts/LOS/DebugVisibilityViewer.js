@@ -29,14 +29,16 @@ export class DebugVisibilityViewerAbstract {
   viewerLOS;
 
   constructor(config = {}) {
-    config.debug = true;
+    config.testLighting = true;
     config.viewpointClass = this.constructor.viewpointClass;
     this.viewerLOS = new AbstractViewerLOS(undefined, config);
+    this.viewerLOS.debug = true;
   }
 
   async initialize() {
     this.registerHooks();
-    return this.viewerLOS.initialize();
+    await this.viewerLOS.initialize();
+    this._initializeDebugGraphics();
   }
 
   /** @type {Token} */
@@ -75,11 +77,14 @@ export class DebugVisibilityViewerAbstract {
     if ( !(this.viewer && this.target ) ) return;
 
     // First draw the basic debugging graphics for the canvas.
+    this.viewerLOS.viewer = this.viewer;
+    this.viewerLOS.target = this.target;
     this._drawCanvasDebug();
+    this.viewerLOS.calculate();
 
     // Then determine the percent visible using the algorithm and
     // update debug view specific to that algorithm.
-    const percentVisible = this.percentVisible();
+    const percentVisible = this.viewerLOS.percentVisible;
     this.updateDebugForPercentVisible(percentVisible);
   }
 
@@ -168,47 +173,36 @@ export class DebugVisibilityViewerAbstract {
   destroy() {
     this.clearDebug();
     this.deregisterHooks();
-    canvas.tokens.removeChild(this.#debugGraphics);
-    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
+    canvas.tokens.removeChild(this.#debugContainer);
+    if ( this.#debugContainer && !this.#debugContainer.destroyed ) this.#debugContainer.destroy();
     this.viewerLOS.calculator.destroy();
     this.viewerLOS.destroy();
   }
 
   /* ----- Canvas graphics ----- */
 
-  /** @type {PIXI.Graphics} */
-  #debugGraphics;
+  /** @type {PIXI.Container} */
+  #debugContainer;
 
-  get debugGraphics() {
-    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = this._initializeDebugGraphics();
-    return this.#debugGraphics;
-  }
-
-  /** @type {Draw} */
-  #debugDraw;
-
-  get debugDraw() {
-    const Draw = CONFIG.GeometryLib.Draw;
-    if ( !this.#debugDraw
-      || !this.#debugGraphics
-      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
-    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
+  get debugContainer() {
+    if ( !this.#debugContainer || this.#debugContainer.destroyed ) this._initializeDebugGraphics();
+    return this.#debugContainer;
   }
 
   _initializeDebugGraphics() {
-    const g = new PIXI.Graphics();
-    g.eventMode = "passive"; // Allow targeting, selection to pass through.
-    canvas.tokens.addChild(g);
-    return g;
-  }
-
-  clearDebug() {
-    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.clear();
+    this.#debugContainer = new PIXI.Container;
+    this.#debugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
+    canvas.tokens.addChild(this.#debugContainer);
+    this.#debugContainer.addChild(this.viewerLOS.canvasDebugContainer);
   }
 
   /* ----- NOTE: Debug ----- */
 
-  _drawCanvasDebug() { this.viewerLOS._drawCanvasDebug(this.debugDraw); }
+  _drawCanvasDebug() { this.viewerLOS._drawCanvasDebug(); }
+
+
+  clearDebug() { return; }
+
 }
 
 
@@ -506,6 +500,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     }
 
     this.viewerLOS.viewpoints.forEach((vp, idx) => {
+      vp.calculate();
       const draw = this.getPopoutDraw(idx);
       const c = this.getPopoutContainer(idx);
       vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
