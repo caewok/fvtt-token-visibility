@@ -21,6 +21,15 @@ For each pixel on face:
 - If within radius and
 - Unoccluded view of light but ignore facing.
 
+Can accomplish by either directly testing pixels or by constructing faces.
+- webGL faces
+- geometric faces that can then be used as the token shape.
+
+--> Make percentVisible calculator more generic by measuring visibility of any 3d shape.
+--> Pass array of Polygon3d shapes to measure.
+--> Optionally ignore face direction.
+
+
 
 --------
 
