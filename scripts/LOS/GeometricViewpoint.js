@@ -15,7 +15,6 @@ import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
 import { Camera } from "./Camera.js";
-import { Polygons3d } from "./geometry/Polygon3d.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 
@@ -101,7 +100,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Once perspective-transformed, the token array of polygons are on the same plane, with z ~ 1.
     // Can combine to Polygons3d.
     const scalingFactor = this.constructor.SCALING_FACTOR;
-    const targetPolys3d = Polygons3d.from3dPolygons(this.targetPolys);
+    const targetPolys3d = CONFIG.GeometryLib.threeD.Polygons3d.from3dPolygons(this.targetPolys);
     this.targetPaths = targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor })
   }
 
@@ -172,7 +171,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const simplePolys = [];
     const complexPolys = [];
     blockingPolys.forEach(poly => {
-      const arr = (poly instanceof Polygons3d) ? complexPolys : simplePolys;
+      const arr = (poly instanceof CONFIG.GeometryLib.threeD.Polygons3d) ? complexPolys : simplePolys;
       arr.push(poly);
     });
     const nSimple = simplePolys.length;
@@ -338,9 +337,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const colors = Draw.COLORS;
 
     // Locate obstacles behind the target.
-    const visionTriangle = ObstacleOcclusionTest.visionTriangle.rebuild(viewpoint, target);
-    const backgroundTiles = visionTriangle.findBackgroundTiles();
-    // const backgroundWalls = visionTriangle.findBackgroundWalls();
+    const frustum = ObstacleOcclusionTest.frustum.rebuild(viewpoint, target);
+    const backgroundTiles = frustum.findBackgroundTiles();
+    // const backgroundWalls = frustum.findBackgroundWalls();
 
     // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
     // Simpler:
@@ -354,7 +353,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const perspectiveM = this.camera.perspectiveMatrix;
 
     const backgroundPolys = [];
-    const { b, c } = visionTriangle;
+    const { b, c } = frustum;
     const b3d = new Point3d(b.x, b.y, targetLocation.z);
     const c3d = new Point3d(c.x, c.y, targetLocation.z);
 

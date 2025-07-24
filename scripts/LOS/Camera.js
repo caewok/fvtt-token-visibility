@@ -120,21 +120,29 @@ export class Camera {
     this.perspectiveType = perspectiveType;
   }
 
+  // bounds3d is { x: {min, max}, y: { min, max}, z: {min, max} }
+  setTokenFrustumForBounds3d(bounds3d) {
+    const rect2d = new PIXI.Rectangle(bounds3d.x.min, bounds3d.y.min, bounds3d.x.max - bounds3d.x.min, bounds3d.y.max - bounds3d.y.min);
+    this.setFrustrumForPolygon2d(rect2d.toPolygon(), bounds3d.z.max, bounds3d.z.min);
+  }
+
+  setTargetTokenFrustum(targetToken) {
+    this.setFrustumForPolygon2d(targetToken.tokenBorder.toPolygon(), targetToken.topZ, targetToken.bottomZ);
+  }
+
   /**
    * Set the field of view and zFar for a target token, to maximize the space the token
    * takes up in the frame.
    * @param {Token} targetToken
    */
-  setTargetTokenFrustum(targetToken) {
+  setFrustumForPolygon2d(poly2d, topZ = 0, bottomZ = 0) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const ctr = Point3d.fromTokenCenter(targetToken);
-    this.targetPosition = ctr;
+    const zHeight = topZ - bottomZ;
+
 
     // Assume axis-aligned cube.
-    const targetWidth = targetToken.document.width * canvas.dimensions.size;
-    const targetHeight = targetToken.document.height * canvas.dimensions.size;
-    const targetZHeight = targetToken.topZ - targetToken.bottomZ;
-    const halfSize = Math.max(targetWidth, targetHeight, targetZHeight) * 0.5; // From cube center to furthest face.
+    const bounds2d = poly2d.getBounds();
+    const halfSize = Math.max(bounds2d.width, bounds2d.height, zHeight) * 0.5; // From cube center to furthest face.
     // const diagSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(halfSize, 2)); // From center to corner in 2d.
     // const diag3dSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(diagSize, 2)); // From center to corner in 3d.
 
@@ -156,7 +164,9 @@ export class Camera {
     // Worst case is the camera is aligned along a cube diagonal, so must add on the full
     // diagonal distance to reach a back corner. In 3d, could be (rarely) the full 3d diagonal.
     // E.g., looking directly down at a corner so the camera viewline runs through two opposite corners.
-    const distToTarget = Point3d.distanceBetween(this.cameraPosition, this.targetPosition)
+    const ctr = bounds2d.center;
+    const ctr3d = new Point3d(ctr.x, ctr.y, bottomZ + zHeight);
+    const distToTarget = Point3d.distanceBetween(this.cameraPosition, ctr3d)
     const diag3dSize = Math.SQRT3 * halfSize;
     const maxCornerDistance = distToTarget + diag3dSize;
 
@@ -165,7 +175,7 @@ export class Camera {
     const zFar = maxCornerDistance;
 
     if ( this.perspectiveType === "perspective" ) {
-      const maxAngle = maximumViewAngle(this.cameraPosition, targetToken) || 0;
+      const maxAngle = maximumViewAngle(this.cameraPosition, poly2d, topZ, bottomZ) || 0;
       const fov = Math.min(maxAngle, 2.5) + 0.02; // Math.toDegrees(2.5) ~ 143º. Keep well under 180º.
       // console.debug(`Camera|${targetToken.name}`, { maxAngle, fov })
 
@@ -183,15 +193,15 @@ export class Camera {
     // Convert to camera space and set max.
     // See https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
     const minWorld = new Point3d(
-      targetToken.document.x,
-      targetToken.document.y,
-      targetToken.bottomZ,
+      bounds2d.x,
+      bounds2d.y,
+      bottomZ,
     );
     minWorld.multiplyScalar(0.99, minWorld);
     const maxWorld = new Point3d(
-      (targetToken.document.x + targetWidth),
-      (targetToken.document.y + targetHeight),
-      targetToken.topZ,
+      bounds2d.right,
+      bounds2d.bottom,
+      topZ,
     );
     maxWorld.multiplyScalar(1.01, maxWorld);
     const minCamera = this.lookAtMatrix.multiplyPoint3d(minWorld);
@@ -326,33 +336,37 @@ export class Camera {
 }
 
 /**
- * Determine the maximum angle from a viewpoint to a token border.
+ * Determine the maximum angle from a viewpoint to a box border.
  * @param {Point3d} viewpoint
- * @param {Token} targetToken
- *
+ * @param {PIXI.Polygon} poly2d   The 2d top-down representation of the shape
+ * @param {number} topZ           Top elevation
+ * @param {number} bottomZ        Bottom elevation
  * @returns {number} Angle in radians.
  */
-function maximumViewAngle(viewpoint, targetToken) {
+function maximumViewAngle(viewpoint, poly2d, topZ = 0, bottomZ = 0) {
   const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-  const ctr = Point3d.fromTokenCenter(targetToken);
+  const ctr2d = poly2d.center;
+  const ctr3d = new Point3d(ctr2d.x, ctr2d.y, bottomZ + ((topZ - bottomZ) / 2));
+  // const ctr = Point3d.fromTokenCenter(targetToken);
 
   // 2d x-y dimensions.
-  const tokenBorder = targetToken.tokenBorder;
-  const vps = tokenBorder.viewablePoints(viewpoint, { outermostOnly: true });
+  // const tokenBorder = targetToken.tokenBorder;
+  // topZ = token.topZ
+  // bottomZ = token.bottomZ
+  const vps = poly2d.viewablePoints(viewpoint, { outermostOnly: true });
   if ( !vps ) return Math.PI;
 
   // Two angles, on either side of the center line.
   const b = viewpoint.to2d();
-  const c = ctr.to2d()
-  const angle0 = PIXI.Point.angleBetween(vps[0], b, c);
-  const angle1 = PIXI.Point.angleBetween(vps[1], b, c);
+  const angle0 = PIXI.Point.angleBetween(vps[0], b, ctr2d);
+  const angle1 = PIXI.Point.angleBetween(vps[1], b, ctr2d);
 
   // Height.
   // Using cutaway.
   /*
-  const cutawayPoly = CutawayPolygon.cutawayBasicShape(tokenBorder, b, c, {
-    topElevationFn: () => targetToken.topZ,
-     bottomElevationFn: () => targetToken.bottomZ
+  const cutawayPoly = CutawayPolygon.cutawayBasicShape(poly2d, b, c, {
+    topElevationFn: () => topZ,
+     bottomElevationFn: () => bottomZ
   })[0];
   const cutawayCameraPosition = cutawayPoly._to2d(viewpoint)
   const cutawayVPs = cutawayPoly.viewablePoints(cutawayCameraPosition, { outermostOnly: true })
@@ -368,8 +382,8 @@ function maximumViewAngle(viewpoint, targetToken) {
   let ix = tokenBorder.segmentIntersections(viewpoint, ctr)[0]; // Only 1 b/c measuring from poly center.
   if ( !ix ) return Math.PI;
 
-  const heightVPS = [new Point3d(ix.x, ix.y, targetToken.topZ), new Point3d(ix.x, ix.y, targetToken.bottomZ)];
-  const heightAngle0 = Point3d.angleBetween(heightVPS[0], viewpoint, ctr);
-  const heightAngle1 = Point3d.angleBetween(heightVPS[1], viewpoint, ctr);
+  const heightVPS = [new Point3d(ix.x, ix.y, topZ), new Point3d(ix.x, ix.y, bottomZ)];
+  const heightAngle0 = Point3d.angleBetween(heightVPS[0], viewpoint, ctr3d);
+  const heightAngle1 = Point3d.angleBetween(heightVPS[1], viewpoint, ctr3d);
   return Math.max(angle0, angle1, heightAngle0, heightAngle1) * 2;
 }

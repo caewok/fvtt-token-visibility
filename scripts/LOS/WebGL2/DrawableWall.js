@@ -42,10 +42,10 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
    */
-  filterObjects(visionTriangle, { blocking = {} } = {}) {
+  filterObjects(frustum, { blocking = {} } = {}) {
     const instanceSet = this.instanceSet;
     instanceSet.clear();
     blocking.walls ??= true;
@@ -54,7 +54,7 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     // Limit to walls within the vision triangle
     // Drop open doors.
     const opts = { senseType: this.senseType };
-    const walls = ObstacleOcclusionTest.filterWallsByVisionTriangle(visionTriangle, opts);
+    const walls = ObstacleOcclusionTest.filterWallsByFrustum(frustum, opts);
     for ( const wall of walls ) {
       if ( !this.placeableTracker.hasPlaceable(wall) ) continue;
       if ( WallTracker.isTerrain(wall, opts) ^ this.limitedWall ) continue;

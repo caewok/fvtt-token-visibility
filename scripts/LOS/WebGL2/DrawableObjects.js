@@ -521,13 +521,13 @@ export class DrawableObjectsWebGL2Abstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * Camera (viewer/target) are set by the renderer and will not change between now and render.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(_visionTriangle, _opts) {
+  filterObjects(_frustum, _opts) {
     this.instanceSet.clear();
     this.placeableTracker.placeables.forEach(p => {
       const idx = this._indexForPlaceable(p);

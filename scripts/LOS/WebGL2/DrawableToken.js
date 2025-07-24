@@ -131,13 +131,13 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * Camera (viewer/target) are set by the renderer and will not change between now and render.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { viewer, target, blocking } = {}) {
+  filterObjects(frustum, { viewer, target, blocking } = {}) {
     for ( const drawable of this.drawablesArray ) drawable.instanceSet.clear();
 
     blocking.tokens ??= {};
@@ -147,7 +147,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( !(blocking.tokens.dead || blocking.tokens.live) ) return;
 
     // Limit to tokens within the vision triangle.
-    const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
+    const tokens = ObstacleOcclusionTest.filterTokensByFrustum(frustum,
       { viewer, target, blockingTokensOpts: blocking.tokens });
     for ( const token of tokens ) {
       if ( !(this.placeableTracker.hasPlaceable(token)) ) continue;
@@ -238,8 +238,8 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
     for ( const drawable of this.drawables.values() ) await drawable.initialize();
   }
 
-  filterObjects(visionTriangle, opts) {
-    super.filterObjects(visionTriangle, opts);
+  filterObjects(frustum, opts) {
+    super.filterObjects(frustum, opts);
     this.drawables.forEach(drawable => drawable.filterObjects());
   }
 

@@ -9,7 +9,6 @@ PIXI,
 "use strict";
 
 import { combineTypedArrays } from "../util.js";
-import { Triangle3d } from "./Polygon3d.js";
 
 const N = -0.5
 const S = 0.5;
@@ -316,7 +315,7 @@ export class BasicVertices {
       const a = CONFIG.GeometryLib.threeD.Point3d._tmp1.set(vertices[idx1], vertices[idx1+1], vertices[idx1+2]);
       const b = CONFIG.GeometryLib.threeD.Point3d._tmp2.set(vertices[idx2], vertices[idx2+1], vertices[idx2+2]);
       const c = CONFIG.GeometryLib.threeD.Point3d._tmp3.set(vertices[idx3], vertices[idx3+1], vertices[idx3+2]);
-      triangles[j++] = Triangle3d.from3Points(a, b, c);
+      triangles[j++] = CONFIG.GeometryLib.threeD.Triangle3d.from3Points(a, b, c);
     }
     return triangles;
   }

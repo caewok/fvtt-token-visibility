@@ -22,7 +22,7 @@ import * as bench from "./benchmark.js";
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
 import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
 import { TargetLightingTest } from "./LOS/TargetLightingTest.js";
-import { VisionTriangle } from "./LOS/VisionTriangle.js";
+import { Frustum } from "./LOS/Frustum.js";
 
 import {
   buildLOSCalculator,
@@ -36,7 +36,6 @@ import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "
 
 import * as range from "./visibility_range.js";
 
-import { Polygon3d, Triangle3d, Quad3d, Polygons3d } from "./LOS/geometry/Polygon3d.js";
 
 // import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/Camera.js";
@@ -79,6 +78,7 @@ import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from 
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/SamplePixelViewpoint.js"
+import { GeometricFaceCalculator } from "./LOS/GeometricFaceCalculator.js";
 
 
 // import {
@@ -328,11 +328,6 @@ Hooks.once("init", function() {
     DocumentUpdateTracker, TokenUpdateTracker,
 
     geometry: {
-      Polygon3d,
-      Triangle3d,
-      Polygons3d,
-      Quad3d,
-
       HorizontalQuadVertices,
       VerticalQuadVertices,
       Rectangle3dVertices,
@@ -357,7 +352,7 @@ Hooks.once("init", function() {
 
       OBJParser,
 
-      VisionTriangle,
+      Frustum,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,
@@ -430,6 +425,7 @@ Hooks.once("init", function() {
     AbstractViewpoint,
     ObstacleOcclusionTest,
     TargetLightingTest,
+    GeometricFaceCalculator,
 
     countTargetPixels,
 

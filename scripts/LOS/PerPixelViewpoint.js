@@ -17,7 +17,6 @@ import { Camera } from "./Camera.js";
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { BarycentricPoint, BaryTriangleData } from "./geometry/Barycentric.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -159,7 +158,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
     // Take the closest z.
     const containingTris = ndcTris.filter(tri => {
-      BarycentricPoint.fromTriangleData(gridPoint, tri._baryData, tri._baryPoint);
+      GEOMETRY_CONFIG.threeD.BarycentricPoint.fromTriangleData(gridPoint, tri._baryData, tri._baryPoint);
       return tri._baryPoint.isInsideTriangle();
     });
 
@@ -171,7 +170,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     if ( containingTris.length > 1 ) {
       const tri0 = containingTris[0];
       let containingPt = tri0._baryPoint.interpolatePoint(tri0.a, tri0.b, tri0.c);
-      let newPt = new BarycentricPoint();
+      let newPt = new CONFIG.GeometryLib.threeD.BarycentricPoint();
       for ( let i = 1, iMax = containingTris.length; i < iMax; i += 1 ) {
         const tri = containingTris[i];
         tri._baryPoint.interpolatePoint(tri._baryPoint, tri.a, tri.b, tri.c, newPt);
@@ -264,8 +263,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
       // For later use in interpolation.
       out._original = targetTris[idx];
-      out._baryData = BaryTriangleData.fromTriangle3d(out);
-      out._baryPoint = new BarycentricPoint();
+      out._baryData = CONFIG.GeometryLib.threeD.BaryTriangleData.fromTriangle3d(out);
+      out._baryPoint = new CONFIG.GeometryLib.threeD.BarycentricPoint();
       return out;
     });
   }
@@ -300,8 +299,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     const trisScaled = trisTransformed.map(tri => tri.transform(stM));
     trisScaled.forEach((tri, idx) => {
       tri._original = targetTris[idx];
-      tri._baryData = BaryTriangleData.fromTriangle3d(tri);
-      tri._baryPoint = new BarycentricPoint();
+      tri._baryData = CONFIG.GeometryLib.threeD.BaryTriangleData.fromTriangle3d(tri);
+      tri._baryPoint = new CONFIG.GeometryLib.threeD.BarycentricPoint();
     })
     return trisScaled;
 

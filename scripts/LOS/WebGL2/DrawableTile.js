@@ -120,21 +120,21 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { blocking = {} } = {}) {
+  filterObjects(frustum, { blocking = {} } = {}) {
     const instanceSet = this.instanceSet;
     instanceSet.clear();
     blocking.tiles ??= true;
     if ( !blocking.tiles ) return;
 
     // Limit to tiles within the vision triangle
-    const tiles = ObstacleOcclusionTest.filterTilesByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    const tiles = ObstacleOcclusionTest.filterTilesByFrustum(frustum, { senseType: this.senseType });
     for ( const tile of tiles ) {
       if ( !this.placeableTracker.hasPlaceable(tile) ) continue;
       const idx = this._indexForPlaceable(tile);

@@ -13,7 +13,7 @@ import { MODULE_ID } from "../const.js";
 import { Settings } from "../settings.js";
 
 // LOS folder
-import { VisionTriangle } from "./VisionTriangle.js";
+import { Frustum } from "./Frustum.js";
 import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { insetPoints } from "./util.js";
@@ -34,8 +34,8 @@ import { Draw } from "../geometry/Draw.js";
 export class AbstractViewpoint {
   static calcClass;
 
-  /** @type {VisionTriangle} */
-  static visionTriangle = new VisionTriangle();
+  /** @type {Frustum} */
+  static frustum = new Frustum();
 
   /** @type {ViewerLOS} */
   viewerLOS;
@@ -145,13 +145,13 @@ export class AbstractViewpoint {
       target,
       blocking: config.blocking,
     };
-    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(viewpoint, target);
-    const walls = ObstacleOcclusionTest.findBlockingWalls(visionTri, opts);
+    const frustum = ObstacleOcclusionTest.frustum.rebuild(viewpoint, target);
+    const walls = ObstacleOcclusionTest.findBlockingWalls(frustum, opts);
     if ( walls.size > 1 ) return true; // 2+ walls or 2+ terrain walls present.
     if ( walls.size && !walls.first().edge.isLimited(opts.senseType) ) return true; // Single non-limited wall present.
-    if ( ObstacleOcclusionTest.findBlockingTiles(visionTri, opts).size
-      || ObstacleOcclusionTest.findBlockingTokens(visionTri, opts).size
-      || ObstacleOcclusionTest.findBlockingRegions(visionTri, opts).size ) return true;
+    if ( ObstacleOcclusionTest.findBlockingTiles(frustum, opts).size
+      || ObstacleOcclusionTest.findBlockingTokens(frustum, opts).size
+      || ObstacleOcclusionTest.findBlockingRegions(frustum, opts).size ) return true;
     return false;
   }
 
@@ -327,7 +327,7 @@ export class AbstractViewpoint {
   _drawCanvasDebug(debugDraw) {
     this._drawLineOfSight(debugDraw);
     this._drawDetectedObjects(debugDraw);
-    this._drawVisionTriangle(debugDraw);
+    this._drawFrustum(debugDraw);
   }
 
   /**
@@ -380,8 +380,8 @@ export class AbstractViewpoint {
    * For debugging.
    * Draw the vision triangle between viewer point and target.
    */
-  _drawVisionTriangle(draw) {
-    const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(this.viewpoint, this.target);
-    visionTri.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
+  _drawFrustum(draw) {
+    const frustum = ObstacleOcclusionTest.frustum.rebuild(this.viewpoint, this.target);
+    frustum.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 }

@@ -10,7 +10,7 @@ import { MODULE_ID } from "../../const.js";
 import { log } from "../util.js";
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { VisionTriangle } from "../VisionTriangle.js";
+import { Frustum } from "../Frustum.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
   DrawableTokenInstances,
@@ -107,8 +107,8 @@ export class RenderObstacles {
   /** @type {MaterialTracker} */
   materials;
 
-  /** @type {VisionTriangle} */
-  visionTriangle = new VisionTriangle();
+  /** @type {Frustum} */
+  frustum = new Frustum();
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   #senseType = "sight";
@@ -293,8 +293,8 @@ export class RenderObstacles {
     const opts = { viewer, target, blocking: this.config.blocking, testLighting: this.config.testLighting };
     const device = this.device;
     this._setCamera(viewerLocation, target, { viewer, targetLocation });
-    const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
-    this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
+    const frustum = this.frustum.rebuild(viewerLocation, target);
+    this.drawableObstacles.forEach(drawable => drawable.filterObjects(frustum, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();

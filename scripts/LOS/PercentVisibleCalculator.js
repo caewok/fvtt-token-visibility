@@ -41,7 +41,7 @@ export class PercentVisibleCalculatorAbstract {
       }
     },
     testLighting: false,
-    senseType: "sight",
+    senseType: "sight",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
     sourceType: "lighting", // If calculating lit target area, which source type is detected by the sense type as "lighting" the target. (sound, light)
     debug: false,
     largeTarget: false,

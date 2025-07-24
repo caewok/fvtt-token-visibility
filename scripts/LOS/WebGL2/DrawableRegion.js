@@ -68,10 +68,10 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
   }
 
-  _filterShapesForRegion(visionTriangle, region, _opts) {
+  _filterShapesForRegion(frustum, region, _opts) {
     if ( region[TERRAIN_MAPPER].isRamp ) return; // Handled by polygons.
 
-    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByVisionTriangle.
+    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByFrustum.
     // And this.placeableTracker.placeables has the region.
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
     const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
@@ -79,7 +79,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
       const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
       for ( const shape of shapeGroup.shapes ) {
         if ( shape.data.hole ) continue; // Ignore holes.
-        if ( visionTriangle.containsRegionShape(shape) ) {
+        if ( frustum.containsRegionShape(shape) ) {
           const idx = this.trackers.model.facetIdMap.get(id);
           this.instanceSet.add(idx);
           break;
@@ -135,8 +135,8 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
 
   _initializeGeoms(_opts) { return; }
 
-  _filterShapesForRegion(visionTriangle, region, _opts) {
-    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByVisionTriangle.
+  _filterShapesForRegion(frustum, region, _opts) {
+    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByFrustum.
     // And this.placeableTracker.placeables has the region.
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region); // circle, ellipse, rectangle, polygon, combined
     const groupTypes = ["polygon", "combined"];
@@ -148,7 +148,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
         if ( !this.trackers.vi.indices.facetIdMap.has(id) ) continue;
         for ( const shape of shapeGroup.shapes ) {
           if ( shape.data.hole ) continue; // Ignore holes.
-          if ( visionTriangle.containsRegionShape(shape) ) {
+          if ( frustum.containsRegionShape(shape) ) {
             const idx = this.trackers.vi.indices.facetIdMap.get(id);
             this.instanceSet.add(idx);
             break;
@@ -262,23 +262,23 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * Camera (viewer/target) are set by the renderer and will not change between now and render.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, opts) {
+  filterObjects(frustum, opts) {
     this.instanceSet.clear();
     for ( const drawable of Object.values(this.drawables) ) drawable.instanceSet.clear();
 
-    const regions = ObstacleOcclusionTest.filterRegionsByVisionTriangle(visionTriangle);
+    const regions = ObstacleOcclusionTest.filterRegionsByFrustum(frustum);
 
     // For each region, determine which shapes are within the vision triangle.
     // Add the id of each shape group to its respective drawable.
     for ( const region of regions ) {
       if ( !this.placeableTracker.hasPlaceable(region) ) continue;
-      for ( const drawable of Object.values(this.drawables) ) drawable._filterShapesForRegion(visionTriangle, region, opts);
+      for ( const drawable of Object.values(this.drawables) ) drawable._filterShapesForRegion(frustum, region, opts);
     }
   }
 
