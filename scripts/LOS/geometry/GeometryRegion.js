@@ -408,6 +408,7 @@ export class GeometryEllipseRegionShape extends RegionShapeMixin(GeometryInstanc
   get density() { return this.type; }
 
   constructor({ radius, density, ...opts } = {}) {
+    if ( opts.placeable ) radius ??= Math.max(opts.placeable.data.radiusX || 0, opts.placeable.data.radiusY || 0, opts.placeable.data.radius || 0);
     if ( !(radius || density) ) console.error("GeometryEllipseRegionShape requires a radius or density", { radius, density });
     density ??= GeometryEllipseRegionShape.instanceDensityForRadius(radius); // Cannot use "this" yet.
     opts.type = density;
@@ -512,6 +513,8 @@ const REGION_SHAPE_CLASSES = {
   polygon: GeometryPolygonRegionShape,
   rectangle: GeometryRectangleRegionShape,
 }
+
+
 
 
 

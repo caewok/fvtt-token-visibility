@@ -15,6 +15,11 @@ import { initializePatching, PATCHER } from "./patching.js";
 import { Patcher, HookPatch, MethodPatch, LibWrapperPatch } from "./Patcher.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { getObjectProperty } from "./LOS/util.js";
+import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
+import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
+import { TokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
+import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
+
 
 // For API
 import * as bench from "./benchmark.js";
@@ -110,7 +115,7 @@ import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.j
 import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
-import * as MarchingSquares from "./marchingsquares-esm.js";
+import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -481,6 +486,17 @@ Hooks.once("ready", function() {
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
+
+  // Register the placeable geometry.
+  WallGeometryTracker.registerPlaceableHooks();
+  TileGeometryTracker.registerPlaceableHooks();
+  TokenGeometryTracker.registerPlaceableHooks();
+  RegionGeometryTracker.registerPlaceableHooks();
+
+  WallGeometryTracker.registerExistingPlaceables();
+  TileGeometryTracker.registerExistingPlaceables();
+  TokenGeometryTracker.registerExistingPlaceables();
+  RegionGeometryTracker.registerExistingPlaceables();
 
 //   // Create default calculators used by all the tokens.
 //   const basicCalcs = [

@@ -21,22 +21,22 @@ import { TokenTracker } from "./placeable_tracking/TokenTracker.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
-import * as MarchingSquares from "../marchingsquares-esm.js";
+import * as MarchingSquares from "./marchingsquares-esm.js";
 
 /**
 Store triangles representing Foundry object shapes.
 */
-Hooks.on("canvasReady", function() {
-  console.debug(`${MODULE_ID}|PlaceableTriangles|canvasReady`);
-  WallTriangles.registerExistingPlaceables();
-  TileTriangles.registerExistingPlaceables();
-  TokenTriangles.registerExistingPlaceables();
-  RegionTriangles.registerExistingPlaceables();
-  WallTriangles.registerPlaceableHooks();
-  TileTriangles.registerPlaceableHooks();
-  TokenTriangles.registerPlaceableHooks();
-  RegionTriangles.registerPlaceableHooks();
-});
+// Hooks.on("canvasReady", function() {
+//   console.debug(`${MODULE_ID}|PlaceableTriangles|canvasReady`);
+//   WallTriangles.registerExistingPlaceables();
+//   TileTriangles.registerExistingPlaceables();
+//   TokenTriangles.registerExistingPlaceables();
+//   RegionTriangles.registerExistingPlaceables();
+//   WallTriangles.registerPlaceableHooks();
+//   TileTriangles.registerPlaceableHooks();
+//   TokenTriangles.registerPlaceableHooks();
+//   RegionTriangles.registerPlaceableHooks();
+// });
 
 const SENSE_TYPES = {};
 CONST.WALL_RESTRICTION_TYPES.forEach(type => SENSE_TYPES[type] = Symbol(type));
