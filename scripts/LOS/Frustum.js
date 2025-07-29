@@ -9,9 +9,9 @@ PIXI
 
 import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { AbstractPolygonTrianglesID } from "./placeable_tracking/PlaceableGeometryTracker.js";
 import { Triangle3d, Quad3d } from "../geometry/3d/Polygon3d.js";
 import { AABB3d } from "../geometry/AABB.js";
-import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 
 // Temporary points
 const pt3d_0 = new Point3d();
@@ -306,12 +306,9 @@ export class Frustum {
     if ( edge.direction
       && (edge.orientPoint(this.viewpoint) === edge.direction) ) return false;
 
-    const geometry = edge.object?.[MODULE_ID][AbstractPolygonTrianglesID];
-    if ( !geometry ) {
-      console.warn(`${this.constructor.name}|containsEdge|${edge.id} does not have a geometry object.`, edge);
-      return false;
-    }
-    if ( !geometry.aabb.overlaps(this.aabb) ) return false;
+    const geometry = this.#geometryWithinAABB(edge.object);
+    if ( !geometry ) return false;
+
     return this.convexPolygon3dOverlapsBounds(geometry.quad3d);
   }
 
@@ -324,24 +321,18 @@ export class Frustum {
     // Only overhead tiles count for blocking vision
     if ( tile.elevationE < tile.document.parent?.foregroundElevation ) return false;
 
-    const geometry = tile[MODULE_ID]?.[AbstractPolygonTrianglesID];
+    const geometry = this.#geometryWithinAABB(tile);
     if ( !geometry ) return false;
-    if ( !geometry.aabb.overlaps(this.aabb) ) return false;
 
     const quad3d = CONFIG[MODULE_ID].alphaThreshold ? geometry.alphaQuad3d : geometry.quad3d;
     return this.convexPolygon3dOverlapsBounds(quad3d);
   }
 
   containsToken(token) {
-    const geometry = token[MODULE_ID]?.[AbstractPolygonTrianglesID];
-    if ( !geometry ) {
-      console.warn(`${this.constructor.name}|containsToken|${token.id} does not have a geometry object.`, token);
-      return false;
-    }
+    const geometry = this.#geometryWithinAABB(token);
+    if ( !geometry ) return false;
 
     // Only test AABB for tokens, as the token shape generally closely matches the box.
-    if ( !geometry.aabb.overlapsAABB(this.aabb) ) return false;
-    if ( !this.overlapsAABB(geometry.aabb) ) return false;
     return true;
   }
 
@@ -353,20 +344,33 @@ export class Frustum {
     // For each region shape, use the ideal version to test b/c circles and ellipses can be tested faster than polys.
     // Ignore holes (some shape with holes may get included but rather be over-inclusive here)
     // Yes or no, regardless of how many shapes of a region are in the vision triangle.
-    const geometry = region[MODULE_ID]?.[AbstractPolygonTrianglesID];
-    if ( !geometry ) {
-      console.warn(`${this.constructor.name}|containsRegion|${region.id} does not have a geometry object.`, region);
-      return false;
-    }
+    const geometry = this.#geometryWithinAABB(region);
+    if ( !geometry ) return false;
+
     for ( const shape of region.shapes ) {
-      const shapeAABB = geometry.aabbMap.get(shape);
-      if ( shapeAABB
-        && this.aabb.overlapsAABB(shapeAABB)
-        && this.overlapsAABB(shapeAABB) ) return true;
-      // TODO: Is it worth testing against the frustrum directly for any region shapes?
+      if ( shape.data.hole ) continue;
+      const shapeGeometry = this.#geometryWithinAABB(shape);
+      if ( shapeGeometry ) return true; // TODO: Is it worth testing against the frustrum directly for any region shapes?
     }
     return false;
   }
+
+  /**
+   * @param {PlaceableObject}
+   * @returns {PlaceableGeometryTracker|false}
+   */
+  #geometryWithinAABB(placeable) {
+    const geometry = placeable[MODULE_ID]?.[AbstractPolygonTrianglesID];
+    if ( !geometry ) {
+      console.warn(`${this.constructor.name}|geometryWithinAABB|${placeable.id} does not have a geometry object.`, placeable);
+      return false;
+    }
+    if ( !this.aabb.overlapsAABB(geometry.aabb) ) return false;
+    if ( !this.overlapsAABB(geometry.aabb) ) return false;
+    return geometry;
+  }
+
+
 
   /**
    * Test if an elevation range might be within the frustum, as determined by the AABB.

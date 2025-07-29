@@ -323,7 +323,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
 
   _updateAABB() {
     const { topZ, bottomZ } = this.constructor.regionElevationZ(this.region);
-    this.constructor.fnAABB(this.shapePIXI, topZ, bottomZ, this.aabb);
+    this.constructor.fnAABB(this.shapePIXI, this.aabb, { maxZ: topZ, minZ: bottomZ });
   }
 
   shapePIXI;

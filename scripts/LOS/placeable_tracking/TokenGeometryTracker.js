@@ -109,7 +109,7 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
     this.bottom.setZ(bottomZ);
 
     // Now build the sides from the top face.
-    this.sides = this.top.buildTopSides({ bottomZ });
+    this.sides = this.top.buildTopSides(bottomZ);
   }
 
   _updateTriangles() {
