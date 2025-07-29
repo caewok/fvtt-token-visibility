@@ -7,6 +7,8 @@ drawFn = (placeable, color) => {
   const geometry = placeable.tokenvisibility.geometry;
   geometry.aabb.draw2d({ color });
   geometry.top.draw2d({ color, fill, fillAlpha })
+  // geometry.modelMatrix?.print()
+  // geometry.sides.forEach(side => side.draw2d({ color, fill, fillAlpha }))
 }
 color = Draw.COLORS.red
 canvas.tokens.placeables.forEach(token => drawFn(token, color))
@@ -24,52 +26,6 @@ canvas.regions.placeables.forEach((region, color) => {
   region.shapes.forEach(shape => drawFn(shape, color))
 })
 
-canvas.tokens.placeables.forEach(token => {
-  const geometry = token.tokenvisibility.geometry;
-  geometry.modelMatrix.print()
-})
 
 
-canvas.tiles.placeables.forEach(tile => {
-  const geometry = tile.tokenvisibility.geometry;
-  geometry.modelMatrix.print()
-})
 
-
-canvas.walls.placeables.forEach(wall => {
-  const geometry = wall.tokenvisibility.geometry;
-  geometry.modelMatrix.print()
-})
-
-
-canvas.regions.placeables.forEach(region => {
-  region.shapes.forEach(shape => {
-    const geometry = shape.tokenvisibility.geometry;
-    geometry.modelMatrix.print()
-  })
-})
-
-canvas.tokens.placeables.forEach(token => {
-  const geometry = token.tokenvisibility.geometry;
-  geometry.top.draw2d({ color: Draw.COLORS.red, fill: Draw.COLORS.red, fillAlpha: 0.5  })
-})
-
-
-canvas.tiles.placeables.forEach(tile => {
-  const geometry = tile.tokenvisibility.geometry;
-  geometry.top.draw2d({ color: Draw.COLORS.orange })
-})
-
-
-canvas.walls.placeables.forEach(wall => {
-  const geometry = wall.tokenvisibility.geometry;
-  geometry.top.draw2d({ color: Draw.COLORS.blue })
-})
-
-
-canvas.regions.placeables.forEach(region => {
-  region.shapes.forEach(shape => {
-    const geometry = shape.tokenvisibility.geometry;
-    geometry.top.draw2d({ color: Draw.COLORS.green })
-  })
-})

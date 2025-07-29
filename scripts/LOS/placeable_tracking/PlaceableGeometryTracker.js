@@ -151,8 +151,9 @@ export class AbstractPlaceableGeometryTracker {
    * @param {PlaceableObject} object    The object instance being destroyed
    */
   static _onPlaceableDestroy(placeable) {
-    if ( !placeable ) return;
-    placeable[MODULE_ID][AbstractPolygonTrianglesID].destroy();
+    const geometry = placeable?.[MODULE_ID]?.[AbstractPolygonTrianglesID];
+    if ( !geometry ) return;
+    geometry.destroy();
   }
 
   /* ----- NOTE: Constructor ----- */
@@ -253,7 +254,7 @@ export const matricesMixin = function(Base) {
     static _sourceIdForPlaceableDocument(placeableD) { return placeableD.id; }
 
     destroy() {
-      this.modelMatrixTracker.deleteFacet(this.sourceId);
+      this.constructor.modelMatrixTracker.deleteFacet(this.sourceId);
     }
   }
   return PlaceableMatrices;
