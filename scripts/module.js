@@ -119,6 +119,8 @@ import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
 
 // Other self-executing hooks
 import "./changelog.js";
+import "./geometry/tests/AABB.test.js";
+
 // import "./LOS/WebGPU/webgpu-map-sync.js";
 
 Hooks.once("init", function() {

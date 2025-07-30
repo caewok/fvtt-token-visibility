@@ -51,11 +51,7 @@ export class Frustum {
     const zMinMax = Math.minMax(viewpoint.z, this.top.b.z, this.bottom.b.z);
     this.aabb.min.set(xMinMax.min, yMinMax.min, zMinMax.min);
     this.aabb.max.set(xMinMax.max, yMinMax.max, zMinMax.max);
-
-    this.bounds2d.x = xMinMax.min;
-    this.bounds2d.y = yMinMax.min;
-    this.bounds2d.width = xMinMax.max - xMinMax.min;
-    this.bounds2d.height = yMinMax.max - yMinMax.min;
+    this.aabb.toPIXIRectangle(this.bounds2d);
   }
 
   /**
@@ -65,30 +61,18 @@ export class Frustum {
    * If viewing head-on (only two key points), the portion of the target between
    * viewer and target center (typically, a rectangle) is added on to the triangle.
    * @param {PIXI.Point|Point3d} viewpoint
-   * @param {Token} target
-   * @param {PIXI.Polygon|PIXI.Rectangle} targetBorder
-   * @returns {Frustum}
-   */
-  static buildFromTarget(viewpoint, target, targetBorder, infiniteDistance) {
-    const border2d = targetBorder ?? (CONFIG[MODULE_ID].constrainTokens ? target.constrainedTokenBorder : target.tokenBorder);
-    return this.build(viewpoint, border2d, target.topZ, target.bottomZ, infiniteDistance);
-  }
-
-  static rebuildFromTarget(viewpoint, target, targetBorder, infiniteDistance) {
-    const border2d = targetBorder ?? (CONFIG[MODULE_ID].constrainTokens ? target.constrainedTokenBorder : target.tokenBorder);
-    return this.rebuild(viewpoint, border2d, target.topZ, target.bottomZ, infiniteDistance);
-  }
-
-  /**
-   * @param {PIXI.Point|Point3d} viewpoint
    * @param {PIXI.Polygon|PIXI.Rectangle} border2d
    * @param {number} [topZ=0]
    * @param {number} [bottomZ=topZ]
    * @returns {Frustum}
    */
-  static build(viewpoint, border2d, topZ = 0, bottomZ = topZ, infiniteDistance = false) {
+  static build(opts = {}) {
     const out = new this();
-    return out.rebuild({ viewpoint, border2d, topZ, bottomZ, infiniteDistance });
+    if ( !(opts.border2d || opts.target) ) {
+      console.warn("Frustum|One of border2d or target shold be provided.", opts);
+      return out;
+    }
+    return out.rebuild(opts);
   }
 
   /**
@@ -117,8 +101,7 @@ export class Frustum {
 
         // Extend the triangle rays from viewpoint so they intersect the perpendicular line from the center.
         const dir = viewpoint.to2d().subtract(center, pt3d_0);
-        const perpDir = pt3d_1.set(-dir.y, dir.x);
-        const perpPt = center.add(perpDir, perpDir); // Project along the perpDir.
+        const perpPt = pt3d_1.set(center.x - dir.y, center.y + dir.x); // Project along the perpDir: center + perpDir
         b = foundry.utils.lineLineIntersection(viewpoint, k0, center, perpPt);
         c = foundry.utils.lineLineIntersection(viewpoint, k1, center, perpPt);
         if ( !(b && c) ) {
@@ -135,14 +118,21 @@ export class Frustum {
     return { b, c };
   }
 
-  rebuild({ viewpoint, border2d, topZ, bottomZ, infiniteDistance } = {}) {
+  rebuild({ viewpoint, target, border2d, topZ, bottomZ, infiniteDistance } = {}) {
+    if ( target ) {
+      border2d = (CONFIG[MODULE_ID].constrainTokens ? target.constrainedTokenBorder : target.tokenBorder);
+      topZ ??= target.topZ;
+      bottomZ ??= target.bottomZ;
+    }
+
+    // Use existing properties if undefined.
     viewpoint ??= this.viewpoint;
     topZ ??= this.top.b.z;
     bottomZ ??= this.bottom.b.z;
     let b;
     let c;
     if ( border2d ) {
-      const res = this.computeTriangle(viewpoint, border2d, topZ, bottomZ)
+      const res = this.constructor.computeTriangle(viewpoint, border2d, topZ, bottomZ)
       b = res.b;
       c = res.c;
     } else {
@@ -309,7 +299,7 @@ export class Frustum {
     const geometry = this.#geometryWithinAABB(edge.object);
     if ( !geometry ) return false;
 
-    return this.convexPolygon3dOverlapsBounds(geometry.quad3d);
+    return this.aabb.overlapsConvexPolygon3d(geometry.quad3d);
   }
 
   containsWall(wall) { return this.containsEdge(wall.edge); }
@@ -324,8 +314,7 @@ export class Frustum {
     const geometry = this.#geometryWithinAABB(tile);
     if ( !geometry ) return false;
 
-    const quad3d = CONFIG[MODULE_ID].alphaThreshold ? geometry.alphaQuad3d : geometry.quad3d;
-    return this.convexPolygon3dOverlapsBounds(quad3d);
+    return this.aabb.overlapsConvexPolygon3d(geometry.quad3d);
   }
 
   containsToken(token) {

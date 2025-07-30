@@ -763,7 +763,7 @@ export class AbstractViewerLOS {
       const isDim = (src.radius ** 2) < dist2;
       if ( !(isDim || isBright) ) continue;
       const fillAlpha = isBright ? 0.3 : 0.1;
-      const frustum = ObstacleOcclusionTest.frustum.rebuild(srcOrigin, this.target);
+      const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint: srcOrigin, target: this.target });
       frustum.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
     }
   }

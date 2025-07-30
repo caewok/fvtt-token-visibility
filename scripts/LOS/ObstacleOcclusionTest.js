@@ -66,14 +66,11 @@ export class ObstacleOcclusionTest {
   obstacleTester;
 
   constructObstacleTester() {
-    // Wouldn't really need this but for the tile alpha test. Obstacle found should follow the blocking config.
+    // Obstacle found should follow the blocking config.
     const blocking = this.config.blocking;
     const fnNames = [];
     if ( blocking.walls ) fnNames.push("wallsOcclude", "terrainWallsOcclude", "proximateWallsOcclude");
-    if ( blocking.tiles ) {
-      if ( CONFIG[MODULE_ID].alphaThreshold ) fnNames.push("alphaTilesOcclude");
-      else fnNames.push("tilesOcclude");
-    }
+    if ( blocking.tiles ) fnNames.push("tilesOcclude");
     if ( blocking.tokens.dead || blocking.tokens.live || blocking.tokens.prone ) fnNames.push("tokensOcclude");
     if ( blocking.regions ) fnNames.push("regionsOcclude");
     this.obstacleTester = this.#occlusionTester(fnNames);
@@ -112,14 +109,6 @@ export class ObstacleOcclusionTest {
     return this.obstacles.tiles.some(tile => tile[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
   }
 
-  alphaTilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => {
-      const t = tile[MODULE_ID][AbstractPolygonTrianglesID].rayIntersectionAlpha(rayOrigin, rayDirection);
-      if ( t === null ) return false;
-      return tile[MODULE_ID][AbstractPolygonTrianglesID].alphaThresholdTest(rayOrigin, rayDirection, t);
-    });
-  }
-
   tokensOcclude(rayOrigin, rayDirection) {
     return this.obstacles.tokens.some(token => token[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
   }
@@ -144,7 +133,7 @@ export class ObstacleOcclusionTest {
    *   - @property {Set<Region>} regions
    */
   static findBlockingObjects(viewpoint, target, opts = {}) {
-    const frustum = this.frustum.rebuild(viewpoint, target);
+    const frustum = this.frustum.rebuild({ viewpoint, target });
     opts.blocking ??= {};
     opts.senseType ??= "sight";
     opts.target ??= target;
@@ -308,8 +297,8 @@ export class ObstacleOcclusionTest {
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const polys = placeable[MODULE_ID][AbstractPolygonTrianglesID].triangles;
-    return polys.filter(poly => poly.isFacing(viewpoint));
+    const geometry = placeable[MODULE_ID][AbstractPolygonTrianglesID];
+    return geometry.iterateFaces().filter(poly => poly.isFacing(viewpoint));
   }
 
 }

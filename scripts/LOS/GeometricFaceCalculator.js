@@ -1,5 +1,4 @@
 /* globals
-ClipperLib,
 CONFIG,
 foundry,
 */
@@ -56,7 +55,7 @@ export class GeometricFaceCalculator {
   /** @type {Camera} */
   camera = new Camera({
     glType: "webGL2",
-    perspectiveType: "orthogonal",
+    perspectiveType: "perspective", // Would prefer orthogonal
     up: new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1),
     mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
   });
@@ -67,11 +66,21 @@ export class GeometricFaceCalculator {
 
   set viewpoint(value) {
     this.#viewpoint.copyFrom(value);
-    this.occlusionTester._initialize(this.#viewpoint);
     this.camera.cameraPosition = this.#viewpoint;
+    if ( this.#target ) this.occlusionTester._initialize(this.#viewpoint, this.#target);
   }
 
   #targetLocation = new CONFIG.GeometryLib.threeD.Point3d();
+
+  #target;
+
+  get target() { return this.#target; }
+
+  set target(value) {
+    this.#target = value;
+    this.targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.#target);
+    this.occlusionTester._initialize(this.#viewpoint, this.#target);
+  }
 
   get targetLocation() { return this.#targetLocation; }
 
@@ -80,109 +89,135 @@ export class GeometricFaceCalculator {
     this.camera.targetPostion = this.#targetLocation;
   }
 
+  clear() {
+    this.#target = undefined;
+  }
+
   occlusionTester = new ObstacleOcclusionTest();
 
   /**
    * Determine the geometric shape remaining after viewing from the viewpoint.
    */
   calculate(polys3d) {
+    this._precalculate(polys3d);
+
+    // In NDC space, the obstacles and the target polygons are on the same x/y plane.
+    // (z values still distinguish their placement in 3d space)
+    // For each target polygon, cut out the shadows of the obstacles in NDC space (on x/y plane).
+    // Get the resulting NDC polygons and convert back.
+    return this._calculateAllTargetPolygonsObstruction();
+  }
+
+  _precalculate(polys3d) {
     // Set the camera frustum to include all the shapes.
-    // TODO: Could set camera frustrum based on a center point or a target and then
-    // could initialize camera and obstacles only once; calculate the target paths using _calculate.
-    const bounds3d = CONFIG.GeometryLib.threeD.Polygons3d.combine3dBoundsForPolys(polys3d);
-    this.camera.setTokenFrustumForBounds3d(bounds3d);
+    const bounds3d = CONFIG.GeometryLib.threeD.AABB3d.union(...polys3d.map(poly3d => poly3d.aabb));
+    this.camera.setFrustumForAABB3d(bounds3d);
 
     this._constructPerspectiveObstaclePolygons();
     this._constructObstaclePaths();
 
     this._constructPerspectiveTargetPolygons(polys3d);
-    this._constructTargetPath();
-    return this.targetPaths.diffPaths(this.blockingPaths);
   }
 
-  targetPaths;
+  _calculateAllTargetPolygonsObstruction(polys3d) {
+    // In NDC space, the obstacles and the target polygons are on the same x/y plane.
+    // (z values still distinguish their placement in 3d space)
+    // For each target polygon, cut out the shadows of the obstacles in NDC space (on x/y plane).
+    // Get the resulting NDC polygons and convert back.
+    const out = Array(polys3d.length);
+    let i = 0;
+    const invModelM = this.camera.inverseModelMatrix;
+    for ( const originalPoly3d of polys3d ) {
+      const isFacing = originalPoly3d.isFacing(this.viewpoint);
+      const ndcPolys = this._calculateTargetPolyObstruction(this.perspectivePolygons.targets[i]);
+      const newPolys3d = ndcPolys.map(poly => {
+        const newPoly = poly.transform(invModelM);
+        newPoly.plane = originalPoly3d.plane;
+        return newPoly;
+      });
+      out[i++] = { originalPoly3d, newPolys3d, isFacing, ndcPolys };
+    }
+    return out;
+  }
+
+  _calculateTargetPolyObstruction(perspectivePoly3d) {
+    if ( !this.blockingPaths ) return [perspectivePoly3d];
+
+    // Construct the shapes representing the 2d difference between the polygon and the obstacles.
+    const { Triangle3d, Quad3d, Polygon3d, Point3d } = CONFIG.GeometryLib.threeD;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+    const scalingFactor = this.constructor.SCALING_FACTOR;
+    const poly2d = perspectivePoly3d.toPolygon2d();
+    // const path = ClipperPaths.fromPolygons([poly2d], { scalingFactor });
+    // const unobscuredPath = this.blockingPaths.diffPaths(path);
+    const unobscuredPath = this.blockingPaths.diffPolygon(poly2d);
+    if ( unobscuredPath.area.almostEqual(0) ) return [];
+
+    // Need to determine for each point of the 2d unobscured polygons where it intersects the poly3d plane.
+    // Shoot a ray from the point toward the plane (away from the view)
+    const unobscuredPolys = unobscuredPath.clean().toPolygons();
+    const polys = unobscuredPolys.map(unobscuredPoly => {
+      const pts = [...unobscuredPoly.iteratePoints({ close: false })].map(pt2d => {
+        const rayOrigin = Point3d._tmp1.set(pt2d.x, pt2d.y, 1);
+        const rayDirection = Point3d._tmp2.set(0, 0, -1);
+        const t = perspectivePoly3d.plane.rayIntersection(rayOrigin, rayDirection);
+        if ( t === null ) {
+          console.error("_calculateTargetPolyObstruction|ix not found", {poly3d, unobscuredPoly, pt2d});
+          return null;
+        }
+        const ix = new Point3d();
+        return rayOrigin.add(rayDirection.multiplyScalar(t, ix), ix);
+      }).filter(pt => Boolean(pt)); // Filter out nulls. TODO: Can this be skipped?
+
+      let out;
+      switch ( pts.length ) {
+        case 3: out = Triangle3d.from3Points(...pts); break;
+        case 4: out = Quad3d.from4Points(...pts); break;
+        default: out = Polygon3d.from3dPoints(pts);
+      }
+      out.plane = perspectivePoly3d.plane;
+      return out;
+    });
+    return polys;
+  }
+
+
+
 
   blockingPaths;
-
-  blockingTerrainPaths;
-
-  _constructTargetPath() {
-    // Once perspective-transformed, the token array of polygons are on the same plane, with z ~ 1.
-    // Can combine to Polygons3d.
-    const scalingFactor = this.constructor.SCALING_FACTOR;
-    const targetPolys3d = CONFIG.GeometryLib.threeD.Polygons3d.from3dPolygons(this.targetPolys);
-    this.targetPaths = targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor })
-  }
-
 
   /**
    *  Construct 2d perspective projection of each blocking points object.
    */
   _constructObstaclePaths() {
     // Use Clipper to calculate area of the polygon shapes.
-    this.blockingTerrainPaths = this._combineTerrainPolys(this.blockingTerrainPolys);
+    const blockingTerrainPaths = this._combineTerrainPolys();
     this.blockingPaths = this._combineObstaclePolys();
-    if ( this.blockingTerrainPaths && !this.blockingTerrainPaths.area.almostEqual(0) ) {
-      if ( !this.blockingPaths ) {
-        this.blockingPaths = this.blockingTerrainPaths.combine();
-        console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
-      }
-      else this.blockingPaths = this.blockingPaths.add(this.blockingTerrainPaths).combine();
+    if ( blockingTerrainPaths ) {
+      this.blockingPaths = this.blockingPaths ? this.blockingPaths.add(blockingTerrainPaths).combine()
+        : blockingTerrainPaths.combine();
     }
   }
 
   /**
-   * Each blocking polygon is either a Polygon3d or a Polygons3d.
+   * Each blocking polygon a Polygon3d
    * Union each in turn.
-   * @param {Polygon3d|Polygons3d} blockingPolys
+   * @returns {ClipperPaths|null}
    */
   _combineObstaclePolys() {
-    const blockingPolys = this.blockingPolys;
-
+    // TODO: Trim proximate walls? Or already adequately dealt with by the ObstacleOcclusionTest?
+    // TODO: Pull out tokens as distinct; possibly only reduce light instead of blocking?
+    const blockingPolys = Object.values(this.perspectivePolygons.obstacles).flatMap(obj => obj);
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const n = blockingPolys.length;
-    if ( !n ) return new ClipperPaths(undefined, { scalingFactor });
+    if ( !n ) return null;
 
     const opts = { omitAxis: "z", scalingFactor };
     if ( n === 1 ) return blockingPolys[0].toClipperPaths(opts);
-
-    // All the simple polygons can be unioned as one.
-    const simplePolys = [];
-    const complexPolys = [];
-    blockingPolys.forEach(poly => {
-      const arr = (poly instanceof CONFIG.GeometryLib.threeD.Polygons3d) ? complexPolys : simplePolys;
-      arr.push(poly);
-    });
-    const nSimple = simplePolys.length;
-    const nComplex = complexPolys.length;
-
-    let solution;
-    let i = 0;
-    if ( !nSimple ) {
-      // Must be at least one polygon here.
-      i += 1;
-      solution = ClipperPaths.clip(
-      blockingPolys[0].toClipperPaths(opts),
-      blockingPolys[1].toClipperPaths(opts),
-      { clipType: ClipperLib.ClipType.ctUnion,
-        subjFillType: ClipperLib.PolyFillType.pftPositive,
-        clipFillType: ClipperLib.PolyFillType.pftPositive
-      });
-    }
-    else if ( nSimple === 1 ) solution = simplePolys[0].toClipperPaths(opts);
-    else solution = ClipperPaths.joinPaths(simplePolys.map(poly => poly.toClipperPaths(opts)));
-
-    for ( ; i < nComplex; i += 1 ) {
-     solution = ClipperPaths.clip(
-      solution,
-      complexPolys[i].toClipperPaths(opts),
-      { clipType: ClipperLib.ClipType.ctUnion,
-        subjFillType: ClipperLib.PolyFillType.pftPositive,
-        clipFillType: ClipperLib.PolyFillType.pftPositive
-      });
-    }
-    return solution;
+    const out = ClipperPaths.joinPaths(blockingPolys.map(poly => poly.toClipperPaths(opts)));
+    if ( out.area.almostEqual(0) ) return null;
+    return out;
   }
 
   /**
@@ -191,14 +226,15 @@ export class GeometricFaceCalculator {
    * @returns {ClipperPaths}
    */
   _combineTerrainPolys() {
-    const blockingTerrainPolys = this.blockingTerrainPolys;
+    const blockingTerrainPolys = this.perspectivePolygons.obstacles.terrainWalls;
+    const nBlockingPolys = blockingTerrainPolys.length;
+    if ( nBlockingPolys < 2 ) return null; // A single terrain wall does not block.
+
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const blockingTerrainPaths = new CONFIG[MODULE_ID].ClipperPaths()
 
     // The intersection of each two terrain polygons forms a blocking path.
     // Only need to test each combination once.
-    const nBlockingPolys = blockingTerrainPolys.length;
-    if ( nBlockingPolys < 2 ) return null;
     for ( let i = 0; i < nBlockingPolys; i += 1 ) {
       const iPath = blockingTerrainPolys[i].toClipperPaths({ omitAxis: "z", scalingFactor });
       for ( let j = i + 1; j < nBlockingPolys; j += 1 ) {
@@ -209,21 +245,29 @@ export class GeometricFaceCalculator {
       }
     }
     if ( !blockingTerrainPaths.paths.length ) return null;
-    return blockingTerrainPaths.combine();
+    const out = blockingTerrainPaths.combine();
+    if ( out.area.almostEqual(0) ) return null;
+    return out;
   }
 
 
   /**
    * Construct polygons that are used to form the 2d perspective.
    */
-  targetPolys = [];
-
-  blockingPolys = [];
-
-  blockingTerrainPolys = [];
+  perspectivePolygons = {
+    obstacles:  {
+      walls: [],
+      terrainWalls: [],
+      proximateWalls: [],
+      regions: [],
+      tiles: [],
+      tokens: [],
+    },
+    targets: [],
+  }
 
   _constructPerspectiveTargetPolygons(polys3d) {
-    this.targetPolys = this._applyPerspective(polys3d, this.camera.lookAtMatrix, this.camera.perspectiveMatrix);
+    this.perspectivePolygons.targets = this._applyPerspective(polys3d, this.camera.lookAtMatrix, this.camera.perspectiveMatrix);
 
     // Test if the transformed polys are all getting clipped.
     const txPolys = polys3d.map(poly => poly.transform(this.camera.lookAtMatrix));
@@ -236,11 +280,13 @@ export class GeometricFaceCalculator {
     // Construct polygons representing the perspective view of the blocking objects.
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    const { walls, tokens, tiles, terrainWalls, regions } = this.blockingObjects;
-    this.blockingPolys = [...walls, ...tiles, ...tokens, ...regions].flatMap(obj =>
-      this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-    this.blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
-       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    const perspectivePolygons = this.perspectivePolygons.obstacles;
+    for ( const [key, arr] of Object.entries(this.occlusionTester.obstacles) ) {
+      perspectivePolygons[key].length = 0;
+      for ( const obj of arr ) {
+        perspectivePolygons[key].push(...this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+      }
+    }
   }
 
   _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
@@ -259,39 +305,59 @@ export class GeometricFaceCalculator {
       })
       .filter(poly => poly.isValid());
   }
-
-  /**
-   * @type {Point3d} center
-   * @type {number} radius
-   * @type {Polygon3d} poly3d
-   * @returns {boolean}
-   */
-  static sphereIntersectsPolygon(center, radius, poly3d) {
-    if ( poly3d.points.length < 3) {
-      console.error("sphereIntersectsPolygon|Polygon must have at least 3 vertices.", poly3d);
-      return false;
-    }
-
-    const distanceToPlane = poly3d.plane.distanceToPoint(center);
-    if ( Math.abs(distanceToPlane) > sphere.radius ) return false;
-
-  }
 }
 
 /** Testing
 l = canvas.lighting.placeables[0]
 
+Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
-api = game.modules.get("tokenvisibility").api
+MODULE_ID = "tokenvisibility"
+AbstractPolygonTrianglesID = "geometry"
+api = game.modules.get(MODULE_ID).api
+Camera = api.geometry.Camera
+ObstacleOcclusionTest = api.ObstacleOcclusionTest
 GeometricFaceCalculator = api.GeometricFaceCalculator
-faces = _token.tokenvisibility.geometry.triangles
 
 faceCalc = new GeometricFaceCalculator()
-await faceCalc.initialize()
+faceCalc.initialize()
 faceCalc.viewpoint = Point3d.fromPointSource(l)
 
+faceCalc.perspectivePolygons.obstacles.walls.forEach(poly => poly.draw2d)
+target = _token
+faceCalc.target = target;
+frustum = faceCalc.occlusionTester.constructor.frustum
+frustum.draw2d()
 
 
+
+// polys3d = target[MODULE_ID].geometry.sides.filter(side => side.isFacing(faceCalc.viewpoint))
+polys3d = [...target[MODULE_ID].geometry.iterateFaces()]
+bounds3d = CONFIG.GeometryLib.threeD.AABB3d.union(...polys3d.map(poly3d => poly3d.aabb));
+
+faceCalc.camera.perspectiveType = "perspective" // Perspective is better b/c ortho does not capture as much of the obstacle blocking the target.
+// faceCalc.camera.perspectiveType = "orthogonal"
+// faceCalc.camera.setFrustumForAABB3d(bounds3d);
+// faceCalc._constructPerspectiveObstaclePolygons();
+// faceCalc._constructPerspectiveTargetPolygons(polys3d)
+
+faceCalc._precalculate(polys3d)
+
+targetFaces = faceCalc.perspectivePolygons.targets.map(poly => poly.multiplyScalar(100))
+wallPoly = faceCalc.perspectivePolygons.obstacles.walls[0].multiplyScalar(100)
+targetFaces.forEach(face => face.draw2d({ color: Draw.COLORS.red }))
+wallPoly.draw2d({ color: Draw.COLORS.blue })
+
+// res = faceCalc.calculate(polys3d)
+faceCalc._precalculate(polys3d)
+res = faceCalc._calculateAllTargetPolygonsObstruction(polys3d)
+
+omitAxis = "z"
+res.forEach(obj => {
+  obj.ndcPolys.forEach(poly => poly.multiplyScalar(100).draw2d({ omitAxis }));
+  obj.originalPoly3d.draw2d({ omitAxis, color: Draw.COLORS.orange })
+  obj.newPolys3d.forEach(poly => poly.draw2d({ omitAxis, color: Draw.COLORS.red }))
+})
 
 */
 

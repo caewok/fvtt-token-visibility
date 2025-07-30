@@ -220,7 +220,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     for ( const shape of this.region.shapes ) {
       const t = shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
-      if ( t !== null && t.almostBetween(minT, maxT) ) return t;
+      if ( t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return t;
     }
     return null;
   }
@@ -374,11 +374,11 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     if ( !this.isHole ) {
       const t = this.top.intersectionT(rayOrigin, rayDirection);
-      if ( t !== null && t.almostBetween(minT, maxT) ) return t;
+      if ( t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return t;
     }
     for ( const side of this.sides() ) {
       const t = side.intersectionT(rayOrigin, rayDirection);
-      if ( t !== null && t.almostBetween(minT, maxT) ) return t;
+      if ( t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return t;
     }
     return null;
   }

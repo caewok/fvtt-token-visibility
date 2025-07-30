@@ -10,6 +10,8 @@ drawFn = (placeable, color) => {
   // geometry.modelMatrix?.print()
   // geometry.sides.forEach(side => side.draw2d({ color, fill, fillAlpha }))
 }
+
+Draw.clearDrawings()
 color = Draw.COLORS.red
 canvas.tokens.placeables.forEach(token => drawFn(token, color))
 

@@ -337,7 +337,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const colors = Draw.COLORS;
 
     // Locate obstacles behind the target.
-    const frustum = ObstacleOcclusionTest.frustum.rebuild(viewpoint, target);
+    const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint, target });
     const backgroundTiles = frustum.findBackgroundTiles();
     // const backgroundWalls = frustum.findBackgroundWalls();
 

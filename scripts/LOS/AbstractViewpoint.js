@@ -145,7 +145,7 @@ export class AbstractViewpoint {
       target,
       blocking: config.blocking,
     };
-    const frustum = ObstacleOcclusionTest.frustum.rebuild(viewpoint, target);
+    const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint, target });
     const walls = ObstacleOcclusionTest.findBlockingWalls(frustum, opts);
     if ( walls.size > 1 ) return true; // 2+ walls or 2+ terrain walls present.
     if ( walls.size && !walls.first().edge.isLimited(opts.senseType) ) return true; // Single non-limited wall present.
@@ -381,7 +381,8 @@ export class AbstractViewpoint {
    * Draw the vision triangle between viewer point and target.
    */
   _drawFrustum(draw) {
-    const frustum = ObstacleOcclusionTest.frustum.rebuild(this.viewpoint, this.target);
-    frustum.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
+    const { viewpoint, target } = this;
+    const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint, target });
+    frustum.draw2d({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 }

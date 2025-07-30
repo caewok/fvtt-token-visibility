@@ -246,7 +246,7 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
-    if ( t === null || !t.almostBetween(minT, maxT) ) return null;
+    if ( t === null || !CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return null;
     if ( !this.alphaThreshold ) return t;
 
     // Threshold test at the intersection point.

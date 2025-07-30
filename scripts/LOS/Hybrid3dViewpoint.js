@@ -27,7 +27,7 @@ export class PercentVisibleCalculatorHybrid extends PercentVisibleCalculatorGeom
   #blockingTiles = new Set();
 
   blockingTiles(viewpoint, target) {
-    const frustum = ObstacleOcclusionTest.frustum.rebuild(viewpoint, target);
+    const frustum = ObstacleOcclusionTest.frustum.rebuild({viewpoint, target });
     return ObstacleOcclusionTest.filterTilesByFrustum(frustum, { senseType: this.config.senseType });
   }
 

@@ -116,7 +116,7 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
-    return (t !== null && t.almostBetween(minT, maxT)) ? t : null;
+    return (t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT)) ? t : null;
   }
 
   #updateFace(quad) {

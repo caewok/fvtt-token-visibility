@@ -373,10 +373,10 @@ export class RenderObstaclesWebGL2 {
     // this.gl.flush();
   }
 
-  renderObstacles(viewerLocation, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
+  renderObstacles(viewpoint, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
     // Filter the obstacles to only those within view.
     const opts = { viewer, target, blocking: this.config.blocking };
-    const frustum = this.frustum.rebuild(viewerLocation, target);
+    const frustum = this.frustum.rebuild({ viewpoint, target });
     this.drawableObstacles.forEach(drawable => drawable.filterObjects(frustum, opts));
     this.drawableTerrain.forEach(drawable => drawable.filterObjects(frustum, opts));
 
@@ -384,7 +384,7 @@ export class RenderObstaclesWebGL2 {
     const hasTerrain = this.drawableTerrain.some(drawable => drawable.numObjectsToDraw);
     if ( !(hasObstacles || hasTerrain) ) return;
 
-    this._setCamera(viewerLocation, target, { targetLocation });
+    this._setCamera(viewpoint, target, { targetLocation });
 
     const gl = this.gl;
     const webGL2 = this.webGL2;
@@ -414,7 +414,7 @@ export class RenderObstaclesWebGL2 {
       if ( colorCoded ) webGL2.setColorMask(WebGL2.blueAlphaMask);
       else webGL2.setColorMask(WebGL2.noColorMask); // Either red from target, blue
 
-      // this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, frustum, viewerLocation);
+      // this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, frustum, viewpoint);
 
       webGL2.setDepthTest(true);
       this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, frustum));
