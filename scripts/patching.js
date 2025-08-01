@@ -1,11 +1,9 @@
 /* globals
-canvas
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { Patcher } from "./Patcher.js";
-import { OTHER_MODULES, MODULE_ID } from "./const.js";
 
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";

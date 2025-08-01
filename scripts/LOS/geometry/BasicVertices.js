@@ -55,12 +55,13 @@ export class BasicVertices {
    * @returns {Float32Array} The vertices, modified in place
    */
   static transformVertexPositions(vertices, M, stride = this.NUM_VERTEX_ELEMENTS) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const pt = CONFIG.GeometryLib.threeD.Point3d.tmp;
     for ( let i = 0, iMax = vertices.length; i < iMax; i += stride ) {
-      const pt = Point3d._tmp1.set(vertices[i], vertices[i+1], vertices[i+2]);
+      pt.set(vertices[i], vertices[i+1], vertices[i+2]);
       M.multiplyPoint3d(pt, pt);
       vertices.set([...pt], i);
     }
+    pt.relase();
     return vertices;
   }
 
@@ -307,16 +308,21 @@ export class BasicVertices {
     const offset = 3 + (addNormals * 3) + (addUVs * 2);
 
     const triangles = Array(indices.length / 3 );
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const a = Point3d.tmp;
+    const b = Point3d.tmp;
+    const c = Point3d.tmp;
     for ( let i = 0, j = 0, iMax = indices.length; i < iMax;) {
       const idx1 = indices[i++] * offset;
       const idx2 = indices[i++] * offset;
       const idx3 = indices[i++] * offset;
 
-      const a = CONFIG.GeometryLib.threeD.Point3d._tmp1.set(vertices[idx1], vertices[idx1+1], vertices[idx1+2]);
-      const b = CONFIG.GeometryLib.threeD.Point3d._tmp2.set(vertices[idx2], vertices[idx2+1], vertices[idx2+2]);
-      const c = CONFIG.GeometryLib.threeD.Point3d._tmp3.set(vertices[idx3], vertices[idx3+1], vertices[idx3+2]);
+      a.set(vertices[idx1], vertices[idx1+1], vertices[idx1+2]);
+      b.set(vertices[idx2], vertices[idx2+1], vertices[idx2+2]);
+      c.set(vertices[idx3], vertices[idx3+1], vertices[idx3+2]);
       triangles[j++] = CONFIG.GeometryLib.threeD.Triangle3d.from3Points(a, b, c);
     }
+    Point3d.release(a, b, c);
     return triangles;
   }
 }
@@ -448,18 +454,22 @@ export class VerticalQuadVertices extends BasicVertices {
   static calculateVertices(a, b, { type = "double", topZ = T, bottomZ = B } = {}) {
     type = this.DIRECTIONS[type];
 
-    const unitA = PIXI.Point._tmp1.set(-0.5, 0);
-    const unitB = PIXI.Point._tmp2.set(0.5, 0)
+    const unitA = PIXI.Point.tmp.set(-0.5, 0);
+    const unitB = PIXI.Point.tmp.set(0.5, 0)
     a ??= unitA
     b ??= unitB
     if ( unitA.equals(a)
       && unitB.equals(b)
       && topZ === T
-      && bottomZ === B ) return this.vertices[type];
+      && bottomZ === B ) {
+      PIXI.Point.release(a, b);
+      return this.vertices[type];
+    }
 
     // Convert unit edge to match this edge.
     const M = this.transformMatrixFromSegment(a, b, { topZ, bottomZ });
     const vertices = new Float32Array(this.vertices[type]); // Clone vertices before transform.
+    PIXI.Point.release(a, b);
     return this.transformVertexPositions(vertices, M);
   }
 
@@ -889,12 +899,14 @@ Ex: 6 points, 6 outer edges.
     if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
 
     // Some temporary points.
-    const a = new Point3d();
-    const b = new Point3d();
-    const c = new Point3d();
-    const d = new Point3d();
+    const a = Point3d.tmp;
+    const b = Point3d.tmp;
+    const c = Point3d.tmp;
+    const d = Point3d.tmp;
     const triPts = [a, b, c, d];
-    const n = new Point3d();
+    const n = Point3d.tmp;
+    const deltaAB = Point3d.tmp;
+    const deltaAC = Point3d.tmp;
 
     /* Looking at a side face
     a  b     uv: 0,0    1,0
@@ -931,8 +943,8 @@ Ex: 6 points, 6 outer edges.
       d.set(B.x, B.y, bottomZ);
 
       // Calculate the normal
-      const deltaAB = b.subtract(a, Point3d._tmp2);
-      const deltaAC = c.subtract(a, Point3d._tmp3);
+      b.subtract(a, deltaAB);
+      c.subtract(a, deltaAC);
       deltaAB.cross(deltaAC, n).normalize(n);
 
       // Define each vertex.
@@ -953,6 +965,7 @@ Ex: 6 points, 6 outer edges.
       sides.set(vs[1], j); j += vertexOffset;
       sides.set(vs[2], j); j += vertexOffset;
     }
+    Point3d.release(a, b, c, d, n, deltaAB, deltaAC);
     return sides;
   }
 }

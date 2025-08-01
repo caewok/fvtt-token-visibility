@@ -108,15 +108,11 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     }
   }
 
-  #gridPoint = new PIXI.Point();
-
-  #fragmentPoint = new Point3d();
-
-  #rayDirection = new Point3d();
-
   _testPixelOcclusion(x, y, ndcTris) {
-    this.#gridPoint.set(x, y);
-    const containingTri = this._locateFragmentTriangle(ndcTris, this.#gridPoint);
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const fragmentPoint = Point3d.tmp;
+    const gridPoint = PIXI.Point.tmp.set(x, y);
+    const containingTri = this._locateFragmentTriangle(ndcTris, gridPoint);
     if ( !containingTri ) return;
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
@@ -126,23 +122,28 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     // See https://webglfundamentals.org/webgl/lessons/webgl-3d-perspective-correct-texturemapping.html
     if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
       const origTri = containingTri._original;
-      containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
+      containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, fragmentPoint);
     } else {
       // Or use the matrix to convert back to 2d space.
       // Need to determine where the grid point hits the containing triangle on the z axis.
       const Point3d = CONFIG.GeometryLib.threeD.Point3d;
       const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
-      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(this.#gridPoint.x, this.#gridPoint.y, gridZ), this.#fragmentPoint);
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(gridPoint.x, gridPoint.y, gridZ), fragmentPoint);
     }
 
     // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
     // Is it occluded from the camera/viewer?
-    this.#fragmentPoint.subtract(this.viewpoint, this.#rayDirection);
-    const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
+    const rayDirection = Point3d.tmp;
+    fragmentPoint.subtract(this.viewpoint, rayDirection);
+    const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
     this.counts[OBSCURED] += isOccluded;
 
     // Fragment brightness for each source.
-    if ( !isOccluded ) this._testLightingForPoint(this.#fragmentPoint);
+    if ( !isOccluded ) this._testLightingForPoint(fragmentPoint);
+
+    rayDirection.release();
+    gridPoint.release();
+    fragmentPoint.release();
   }
 
   /**
@@ -419,10 +420,13 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   }
 
   _testPixelOcclusionDebug(x, y, ndcTris) {
+    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const gridPoint = PIXI.Point.tmp.set(x, y);
+    const fragmentPoint = Point3d.tmp;
+
     this.#fragmentColor.set(0, 0, 0);
 
-    this.#gridPoint.set(x, y);
-    const containingTri = this._locateFragmentTriangle(ndcTris, this.#gridPoint);
+    const containingTri = this._locateFragmentTriangle(ndcTris, gridPoint);
     if ( !containingTri ) return;
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
@@ -431,42 +435,42 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
     if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
       const origTri = containingTri._original;
-      containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, this.#fragmentPoint);
+      containingTri._baryPoint.interpolatePoint(origTri.a, origTri.b, origTri.c, fragmentPoint);
     } else {
       // Or use the matrix to convert back to 2d space.
       // Need to determine where the grid point hits the containing triangle on the z axis.
       const Point3d = CONFIG.GeometryLib.threeD.Point3d;
       const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
-      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(this.#gridPoint.x, this.#gridPoint.y, gridZ), this.#fragmentPoint);
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(gridPoint.x,gridPoint.y, gridZ), fragmentPoint);
     }
-
-
-    /*
-    const midZ = (Math.max(origTri.a.z, origTri.b.z, origTri.c.z) - Math.min(origTri.a.z, origTri.b.z, origTri.c.z)) / 2;
-    if ( this.#fragmentPoint.z > midZ ) this.#fragmentColor.y = 1;
-    else this.#fragmentColor.x = 1;
-    return;
-    */
 
     this.#fragmentColor.x = 1;
 
     // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
     // Is it occluded from the camera/viewer?
-    this.#fragmentPoint.subtract(this.viewpoint, this.#rayDirection);
-    const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
+    const rayDirection = Point3d.tmp;
+    fragmentPoint.subtract(this.viewpoint, rayDirection);
+    const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
     if ( isOccluded ) {
       this.counts[OBSCURED] += 1;
       this.#fragmentColor.z = 1; // Blue.
       this.#fragmentColor.x = 0; // Remove red.
+      rayDirection.release();
+      gridPoint.release();
+      fragmentPoint.release();
       return;
     }
 
     // Fragment brightness for each source. (For debug, always run.)
     if ( CONFIG[MODULE_ID].perPixelDebugLit ) {
-      const { isBright, isDim } = this._testLightingForPoint(this.#fragmentPoint);
+      const { isBright, isDim } = this._testLightingForPoint(fragmentPoint);
       this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
     }
     // this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
+
+    rayDirection.release();
+    gridPoint.release();
+    fragmentPoint.release();
   }
 
 //   #lightDirection = new Point3d();

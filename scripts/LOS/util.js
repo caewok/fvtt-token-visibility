@@ -14,7 +14,7 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
- * The class removes the add method.
+ * The class simply removes the add method.
  */
 class NullSet extends Set {
   add(value) {

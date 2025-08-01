@@ -251,8 +251,10 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
 
     // Threshold test at the intersection point.
     const pxThreshold = 255 * this.alphaThreshold;
-    rayOrigin.add(rayDirection.multiplyScalar(t, tmpPt3d_0), tmpPt3d_0);
-    const px = this.tile.evPixelCache.pixelAtCanvas(tmpPt3d_0.x, tmpPt3d_0.y);
+    const projPt = CONFIG.GeometryLib.threeD.Point3d.tmp;
+    rayOrigin.add(rayDirection.multiplyScalar(t, projPt), projPt);
+    const px = this.tile.evPixelCache.pixelAtCanvas(projPt.x, projPt.y);
+    projPt.release();
     return (px > pxThreshold) ? t : null;
   }
 
@@ -289,8 +291,11 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const out = new Point3d();
     const { x, y, width, height, elevation } = this.tileDimensions(tile);
-    const TL = Point3d._tmp2.set(x, y, elevation);
-    const BR = TL.add(out.set(width, height, 0), out);
-    return TL.add(BR, out).multiplyScalar(0.5, out)
+    const dims = Point3d.tmp.set(width, height, 0);
+    const TL = Point3d.tmp.set(x, y, elevation);
+    const BR = TL.add(dims, Point3d.tmp);
+    TL.add(BR, out).multiplyScalar(0.5, out);
+    Point3d.release(dims, TL, BR);
+    return out;
   }
 }

@@ -1,5 +1,4 @@
 /* globals
-canvas,
 ClipperLib,
 CONFIG,
 */

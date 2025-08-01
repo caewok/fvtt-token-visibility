@@ -145,8 +145,6 @@ export class GeometricFaceCalculator {
 
     // Construct the shapes representing the 2d difference between the polygon and the obstacles.
     const { Triangle3d, Quad3d, Polygon3d, Point3d } = CONFIG.GeometryLib.threeD;
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
-    const scalingFactor = this.constructor.SCALING_FACTOR;
     const poly2d = perspectivePoly3d.toPolygon2d();
     // const path = ClipperPaths.fromPolygons([poly2d], { scalingFactor });
     // const unobscuredPath = this.blockingPaths.diffPaths(path);
@@ -156,13 +154,14 @@ export class GeometricFaceCalculator {
     // Need to determine for each point of the 2d unobscured polygons where it intersects the poly3d plane.
     // Shoot a ray from the point toward the plane (away from the view)
     const unobscuredPolys = unobscuredPath.clean().toPolygons();
+    const rayOrigin = Point3d.tmp;
+    const rayDirection = Point3d.tmp.set(0, 0, -1);
     const polys = unobscuredPolys.map(unobscuredPoly => {
       const pts = [...unobscuredPoly.iteratePoints({ close: false })].map(pt2d => {
-        const rayOrigin = Point3d._tmp1.set(pt2d.x, pt2d.y, 1);
-        const rayDirection = Point3d._tmp2.set(0, 0, -1);
+        rayOrigin.set(pt2d.x, pt2d.y, 1);
         const t = perspectivePoly3d.plane.rayIntersection(rayOrigin, rayDirection);
         if ( t === null ) {
-          console.error("_calculateTargetPolyObstruction|ix not found", {poly3d, unobscuredPoly, pt2d});
+          console.error("_calculateTargetPolyObstruction|ix not found", { perspectivePoly3d, unobscuredPoly, pt2d });
           return null;
         }
         const ix = new Point3d();
@@ -178,6 +177,7 @@ export class GeometricFaceCalculator {
       out.plane = perspectivePoly3d.plane;
       return out;
     });
+    Point3d.release(rayOrigin, rayDirection);
     return polys;
   }
 

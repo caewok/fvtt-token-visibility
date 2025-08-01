@@ -112,7 +112,7 @@ export class TargetLightingTest {
     this.counts.fill(0);
   }
 
-  calculateFromViewpoint(viewpoint, target, { targetPolys, config, testPts } = {}) {
+  calculateFromViewpoint(viewpoint, target, { targetPolys, config } = {}) {
     this.viewpoint.copyFrom(viewpoint);
     this.target = target;
     if ( config ) this.config = config;
@@ -171,7 +171,10 @@ export class TargetLightingTest {
     const pts = new Array(numPoints);
     for ( let i = 0; i < numPoints; i += 1 ) pts[i] = this.constructor.generatePointInPolygon2d(poly2d, bounds);
     const invMat2d = face.plane.conversion2dMatrixInverse;
-    return pts.map(pt => invMat2d.multiplyPoint3d(Point3d._tmp.set(pt.x, pt.y, 0)));
+    const tmpPt = Point3d.tmp;
+    const out = pts.map(pt => invMat2d.multiplyPoint3d(tmpPt.set(pt.x, pt.y, 0)));
+    tmpPt.release();
+    return out;
   }
 
   static generatePointInPolygon2d(poly2d, bounds) {

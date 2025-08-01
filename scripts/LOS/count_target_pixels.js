@@ -117,7 +117,10 @@ function baryFromTriangleData(p, triData, outPoint) {
  * @returns {float|PIXI.Point|Point3d}
  */
 function interpolateBarycentricValue(bary, a, b, c) {
-  return bary.dot(CONFIG.GeometryLib.threeD.Point3d._tmp3.set(a, b, c));
+  const other = CONFIG.GeometryLib.threeD.Point3d.tmp.set(a, b, c);
+  const out = bary.dot(other);
+  other.release();
+  return out;
 }
 
 /**

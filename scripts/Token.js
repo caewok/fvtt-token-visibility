@@ -1,15 +1,14 @@
 /* globals
-Actor,
-canvas,
-CONFIG
-game
+foundry,
+game,
+Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 // Patches for the Token class
 
 import { MODULE_ID } from "./const.js";
-import { buildLOSViewer, buildCustomLOSViewer } from "./LOSCalculator.js";
+import { buildLOSViewer } from "./LOSCalculator.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
