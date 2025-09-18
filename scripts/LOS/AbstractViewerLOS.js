@@ -730,7 +730,7 @@ export class AbstractViewerLOS {
     const canvasDraw = this.debugCanvasDraw;
     canvasDraw.clearDrawings();
     this._drawVisibleTokenBorder(canvasDraw);
-    this._drawVisionTriangleLightSources(canvasDraw);
+    this._drawFrustumLightSources(canvasDraw);
     this.viewpoints.forEach(vp => this.debugDrawForViewpoint(vp).clearDrawings());
   }
 
@@ -752,7 +752,7 @@ export class AbstractViewerLOS {
    * For debugging.
    * Draw the vision triangle between light source and target.
    */
-  _drawVisionTriangleLightSources(draw) {
+  _drawFrustumLightSources(draw) {
     if ( canvas.environment.globalLightSource.active ) return;
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const ctr = Point3d.fromTokenCenter(this.target);
@@ -763,8 +763,8 @@ export class AbstractViewerLOS {
       const isDim = (src.radius ** 2) < dist2;
       if ( !(isDim || isBright) ) continue;
       const fillAlpha = isBright ? 0.3 : 0.1;
-      const visionTri = ObstacleOcclusionTest.visionTriangle.rebuild(srcOrigin, this.target);
-      visionTri.draw({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
+      const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint: srcOrigin, target: this.target });
+      frustum.draw2d({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
     }
   }
 }

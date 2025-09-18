@@ -13,9 +13,6 @@ import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
 
-// Patches for the Setting class
-export const PATCHES = {};
-PATCHES.BASIC = {};
 
 // ----- NOTE: Hooks ----- //
 

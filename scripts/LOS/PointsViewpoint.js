@@ -122,7 +122,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   _testLargeTarget() {
     // Construct points for each target subshape, defined by grid spaces under the target.
-    const target = this.target;
     const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.tokenShape);
     if ( !targetShapes.length ) {
       console.warn(`${MODULE_ID}|${this.constructor.name}|Target shapes for large target not working.`);

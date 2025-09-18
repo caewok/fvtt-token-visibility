@@ -41,7 +41,7 @@ export class PercentVisibleCalculatorAbstract {
       }
     },
     testLighting: false,
-    senseType: "sight",
+    senseType: "sight",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
     sourceType: "lighting", // If calculating lit target area, which source type is detected by the sense type as "lighting" the target. (sound, light)
     debug: false,
     largeTarget: false,
@@ -262,11 +262,10 @@ export class PercentVisibleCalculatorAbstract {
     }
   }
 
-  #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
-
   _testLightingOcclusionForPoint(targetPoint, debugObject = {}) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const srcOrigin = Point3d._tmp;
+    const srcOrigin = Point3d.tmp;
+    const rayDirection = Point3d.tmp;
     let isBright = false;
     let isDim = false;
     for ( const src of canvas.lighting.placeables ) {
@@ -281,14 +280,15 @@ export class PercentVisibleCalculatorAbstract {
       // If blocked, not bright or dim.
       // TODO: Don't test tokens for blocking the light or set a config option somewhere.
       // Probably means not syncing the configs for the occlusion testers.
-      targetPoint.subtract(srcOrigin, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
-      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
+      targetPoint.subtract(srcOrigin, rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(rayDirection) ) continue;
 
       // TODO: handle light/sound attenuation from threshold walls.
       isBright ||= (dist2 <= (src.brightRadius ** 2));
       isDim ||= isBright || (dist2 <= (src.dimRadius ** 2));
       if ( isBright ) break; // Once we know a fragment is bright, we should know the rest.
     }
+    Point3d.release(srcOrigin, rayDirection);
 
     debugObject.isDim = isDim;
     debugObject.isBright = isBright;
@@ -300,7 +300,8 @@ export class PercentVisibleCalculatorAbstract {
 
   _testSoundOcclusionForPoint(targetPoint, debugObject = {}, face) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const srcOrigin = Point3d._tmp;
+    const srcOrigin = Point3d.tmp;
+    const rayDirection = Point3d.tmp;
     let isDim = false;
     for ( const src of canvas.sounds.placeables ) {
       if ( !src.source.active ) continue;
@@ -314,13 +315,14 @@ export class PercentVisibleCalculatorAbstract {
       // If blocked, not bright or dim.
       // TODO: Don't test tokens for blocking the light or set a config option somewhere.
       // Probably means not syncing the configs for the occlusion testers.
-      targetPoint.subtract(srcOrigin, this.#rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
-      if ( this.occlusionTesters.get(src)._rayIsOccluded(this.#rayDirection) ) continue;
+      targetPoint.subtract(srcOrigin, rayDirection); // NOTE: Modifies rayDirection, so only use after the viewer ray has been tested.
+      if ( this.occlusionTesters.get(src)._rayIsOccluded(rayDirection) ) continue;
 
       // TODO: handle light/sound attenuation from threshold walls.
       isDim = true;
       break;
     }
+    Point3d.release(srcOrigin, rayDirection);
 
     debugObject.isDim = isDim;
     this.counts[DIM] += isDim;

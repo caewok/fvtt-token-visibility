@@ -1,17 +1,15 @@
 /* globals
-canvas
 */
 "use strict";
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
 import { Patcher } from "./Patcher.js";
-import { OTHER_MODULES, MODULE_ID } from "./const.js";
 
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
-import { PATCHES as PATCHES_Setting } from "./settings.js";
+import { PATCHES as PATCHES_Settings } from "./ModuleSettingsAbstract.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 
@@ -23,7 +21,7 @@ const PATCHES = {
   CanvasVisibility: PATCHES_CanvasVisibility,
   DetectionMode: PATCHES_DetectionMode,
   DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
-  Setting: PATCHES_Setting,
+  ClientSettings: PATCHES_Settings,
   SettingsConfig: PATCHES_SettingsConfig,
   Token: PATCHES_Token,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,

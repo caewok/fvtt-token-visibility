@@ -475,12 +475,14 @@ export class GeometryDesc {
     if ( poly.isClockwise ^ flip ) poly.reverseOrientation();
 
     // Some temporary points.
-    const a = new Point3d();
-    const b = new Point3d();
-    const c = new Point3d();
-    const d = new Point3d();
+    const a = Point3d.tmp;
+    const b = Point3d.tmp;
+    const c = Point3d.tmp;
+    const d = Point3d.tmp;
     const triPts = [a, b, c, d];
-    const n = new Point3d();
+    const n = Point3d.tmp;
+    const deltaAB = Point3d.tmp;
+    const deltaAC = Point3d.tmp;
 
     /* Looking at a side face
     a  b     uv: 0,0    1,0
@@ -524,8 +526,8 @@ export class GeometryDesc {
       d.set(B.x, B.y, bottomZ);
 
       // Calculate the normal
-      const deltaAB = b.subtract(a, Point3d._tmp2);
-      const deltaAC = c.subtract(a, Point3d._tmp3);
+      b.subtract(a, deltaAB);
+      c.subtract(a, deltaAC);
       deltaAB.cross(deltaAC, n).normalize(n);
 
       // Indices go b, a, c, d, b, c.
@@ -544,6 +546,7 @@ export class GeometryDesc {
         j += 8;
       }
     }
+    Point3d.release(a, b, c, d, n, deltaAB, deltaAC);
     return { indices, vertices, numVertices };
   }
 }

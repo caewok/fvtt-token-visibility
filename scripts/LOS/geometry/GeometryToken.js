@@ -11,7 +11,6 @@ import { GeometryInstanced, GeometryNonInstanced } from "./GeometryDesc.js";
 import { Rectangle3dVertices, Polygon3dVertices, Hex3dVertices, BasicVertices } from "./BasicVertices.js";
 import { OBJParser } from "./OBJParser.js";
 import { TriangleSplitter } from "./TriangleSplitter.js";
-import { Triangle3d } from "./Polygon3d.js";
 import { OTHER_MODULES, FLAGS } from "../../const.js";
 
 const tmpRect = new PIXI.Rectangle();
@@ -206,7 +205,7 @@ export class GeometryConstrainedCustomToken extends GeometryCustomToken {
     } else this.isConstrained = true;
 
     // Convert to triangles, which will be later constrained by the constrained border.
-    let tris = Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
+    let tris = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
 
     // TODO: Need to ensure the edges are A --> B where CW faces in toward the filled polygon.
     const edgeDiffFn = token.tokenBorder instanceof PIXI.Rectangle ? diffRectanglePolygonEdges : diffPolygonEdges;
@@ -217,7 +216,7 @@ export class GeometryConstrainedCustomToken extends GeometryCustomToken {
       const splitter = TriangleSplitter.from2dPoints(edge.A, edge.B, true);
       tris = splitter.splitFromTriangles3d(tris);
     }
-    const vs = Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
+    const vs = CONFIG.GeometryLib.threeD.Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
     return BasicVertices.condenseVertexData(vs, { stride: this.stride });
   }
 }
@@ -249,7 +248,7 @@ export class GeometryLitCustomToken extends GeometryCustomToken {
     } else this.isLit = true;
 
     // Convert to triangles, which will be later constrained by the constrained border.
-    let tris = Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
+    let tris = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
 
     // TODO: Need to ensure the edges are A --> B where CW faces in toward the filled polygon.
     const edgeDiffFn = token.tokenBorder instanceof PIXI.Rectangle ? diffRectanglePolygonEdges : diffPolygonEdges;
@@ -260,7 +259,7 @@ export class GeometryLitCustomToken extends GeometryCustomToken {
       const splitter = TriangleSplitter.from2dPoints(edge.A, edge.B, true);
       tris = splitter.splitFromTriangles3d(tris);
     }
-    const vs = Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
+    const vs = CONFIG.GeometryLib.threeD.Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
     return BasicVertices.condenseVertexData(vs, { stride: this.stride });
   }
 

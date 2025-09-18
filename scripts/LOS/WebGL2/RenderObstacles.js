@@ -8,7 +8,7 @@ PIXI,
 
 import { WebGL2 } from "./WebGL2.js";
 import { Camera } from "../Camera.js";
-import { VisionTriangle } from "../VisionTriangle.js";
+import { Frustum } from "../Frustum.js";
 import { DrawableWallWebGL2 } from "./DrawableWall.js";
 import {
   DrawableTileWebGL2,
@@ -47,8 +47,8 @@ export class RenderObstaclesWebGL2 {
   /** @type {DrawableObjectsAbstract} */
   drawableGridShape;
 
-  /** @type {VisionTriangle} */
-  visionTriangle = new VisionTriangle();
+  /** @type {Frustum} */
+  frustum = new Frustum();
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
@@ -373,18 +373,18 @@ export class RenderObstaclesWebGL2 {
     // this.gl.flush();
   }
 
-  renderObstacles(viewerLocation, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
+  renderObstacles(viewpoint, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
     // Filter the obstacles to only those within view.
     const opts = { viewer, target, blocking: this.config.blocking };
-    const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
-    this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
-    this.drawableTerrain.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
+    const frustum = this.frustum.rebuild({ viewpoint, target });
+    this.drawableObstacles.forEach(drawable => drawable.filterObjects(frustum, opts));
+    this.drawableTerrain.forEach(drawable => drawable.filterObjects(frustum, opts));
 
     const hasObstacles = this.drawableObstacles.some(drawable => drawable.numObjectsToDraw);
     const hasTerrain = this.drawableTerrain.some(drawable => drawable.numObjectsToDraw);
     if ( !(hasObstacles || hasTerrain) ) return;
 
-    this._setCamera(viewerLocation, target, { targetLocation });
+    this._setCamera(viewpoint, target, { targetLocation });
 
     const gl = this.gl;
     const webGL2 = this.webGL2;
@@ -414,10 +414,10 @@ export class RenderObstaclesWebGL2 {
       if ( colorCoded ) webGL2.setColorMask(WebGL2.blueAlphaMask);
       else webGL2.setColorMask(WebGL2.noColorMask); // Either red from target, blue
 
-      // this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, visionTriangle, viewerLocation);
+      // this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, frustum, viewpoint);
 
       webGL2.setDepthTest(true);
-      this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
+      this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, frustum));
     }
 
     // Draw green limited (terrain) walls.
@@ -434,15 +434,15 @@ export class RenderObstaclesWebGL2 {
       const dstAlpha = colorCoded ? gl.ZERO : gl.ONE_MINUS_SRC_ALPHA;
       gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 
-      // this._renderConstrainingWalls(this.drawableTerrainWalls, target, viewer, visionTriangle, viewerLocation);
-      this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, visionTriangle));
+      // this._renderConstrainingWalls(this.drawableTerrainWalls, target, viewer, frustum, viewerLocation);
+      this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, frustum));
     }
     // this.gl.flush();
   }
 
   // Draw walls that intersect the target border and are in front of the target border.
   // This is an alternative to drawing separate constrained tokens.
-  _renderConstrainingWalls(drawables, target, viewer, visionTriangle, viewerLocation) {
+  _renderConstrainingWalls(drawables, target, viewer, frustum, viewerLocation) {
     for ( const drawable of drawables ) {
       // Draw only the intersecting walls that are in front of the center of the token from this camera view.
       const intersectingWalls = [];
@@ -458,7 +458,7 @@ export class RenderObstaclesWebGL2 {
       const oldSet = new Set([...drawable.instanceSet]);
       drawable.instanceSet.clear();
       intersectingIndexes.forEach(idx => drawable.instanceSet.add(idx));
-      drawable.render(target, viewer, visionTriangle);
+      drawable.render(target, viewer, frustum);
 
       // Keep only the non-intersecting instances.
       drawable.instanceSet = oldSet.difference(drawable.instanceSet);

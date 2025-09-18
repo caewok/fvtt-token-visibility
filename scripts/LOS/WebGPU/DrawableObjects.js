@@ -312,13 +312,13 @@ class DrawableObjectsAbstract {
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(_visionTriangle, _opts) {}
+  filterObjects(_frustum, _opts) {}
 
   /**
    * Called after pass has begun for this render object.
@@ -1008,13 +1008,13 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { blocking = {} } = {}) {
+  filterObjects(frustum, { blocking = {} } = {}) {
     // Default to zero objects to draw.
     this.drawables.forEach(drawable => drawable.instanceSet.clear());
 
@@ -1023,7 +1023,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
     if ( !blocking.walls ) return;
 
     // Put each edge in one of four drawable sets if viewable; skip otherwise.
-    const walls = ObstacleOcclusionTest.filterWallsByVisionTriangle(visionTriangle, { senseType: this.senseType });
+    const walls = ObstacleOcclusionTest.filterWallsByFrustum(frustum, { senseType: this.senseType });
     for ( const wall of walls ) {
       if ( !(this.placeableTracker.hasPlaceable(wall) && this.constructor.includeWall(wall)) ) continue;
       if ( !this.includeEdge(wall.edge) ) continue;
@@ -1047,7 +1047,7 @@ export class DrawableWallInstances extends DrawableObjectRBCulledInstancesAbstra
       const key = this.edgeDrawableKey(edge);
       this.drawables.get(key).instanceSet.add(idx);
     }
-    super.filterObjects(visionTriangle);
+    super.filterObjects(frustum);
   }
 
   includeEdge(_edge) { return true; }
@@ -1199,13 +1199,13 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+  filterObjects(frustum, { viewer, target, blocking = {} } = {}) {
     blocking.tokens ??= {};
     blocking.tokens.dead ??= true;
     blocking.tokens.live ??= true;
@@ -1217,7 +1217,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
+      const tokens = ObstacleOcclusionTest.filterTokensByFrustum(frustum,
         { viewer, target, blockingTokensOpts: blocking.tokens });
       for ( const [id, idx] of this.placeableTracker.instanceIndexFromId.entries()) {
         const token = this.placeableTracker.getPlaceableFromId(id);
@@ -1229,7 +1229,7 @@ export class DrawableTokenInstances extends DrawableObjectRBCulledInstancesAbstr
         }
       }
     }
-    super.filterObjects(visionTriangle);
+    super.filterObjects(frustum);
   }
 }
 
@@ -1267,13 +1267,13 @@ export class DrawableHexTokenInstances extends DrawableTokenInstances {
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+  filterObjects(frustum, { viewer, target, blocking = {} } = {}) {
     blocking.tokens ??= {};
     blocking.tokens.dead ??= true;
     blocking.tokens.live ??= true;
@@ -1284,7 +1284,7 @@ export class DrawableHexTokenInstances extends DrawableTokenInstances {
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
+      const tokens = ObstacleOcclusionTest.filterTokensByFrustum(frustum,
         { viewer, target, blockingTokensOpts: blocking.tokens })
       for ( const [idx, token] of this._unconstrainedTokenIndices.entries() ) {
         // Only tokens within the viewable area.
@@ -1298,7 +1298,7 @@ export class DrawableHexTokenInstances extends DrawableTokenInstances {
         drawable.instanceSet.add(idx);
       }
     }
-    super.filterObjects(visionTriangle);
+    super.filterObjects(frustum);
   }
 
   #hexKeyForToken(token) { return `obstacle_${token.document.width}x${token.document.height}_${token.document.hexagonalShape}`; }
@@ -1430,13 +1430,13 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { blocking = {} } = {}) {
+  filterObjects(frustum, { blocking = {} } = {}) {
     // Filter non-viewable tiles.
     blocking.tiles ??= true;
     if ( !blocking.tiles ) {
@@ -1444,13 +1444,13 @@ export class DrawableTileInstances extends DrawableObjectInstancesAbstract {
       return;
     }
 
-    const tiles = ObstacleOcclusionTest.filterTilesByVisionTriangle(visionTriangle)
+    const tiles = ObstacleOcclusionTest.filterTilesByFrustum(frustum)
     const tileIds = tiles.map(tile => tile.id);
     for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {
       const drawable = this.drawables.get(id);
       drawable.numInstances = Boolean(tileIds.has(tile));
     }
-    super.filterObjects(visionTriangle);
+    super.filterObjects(frustum);
   }
 
   _renderDrawable(renderPass, drawable) {
@@ -1522,13 +1522,13 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
   /**
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
-   * @param {VisionTriangle} visionTriangle     Triangle shape used to represent the viewable area
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]
    * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
    */
-  filterObjects(visionTriangle, { viewer, target, blocking = {} } = {}) {
+  filterObjects(frustum, { viewer, target, blocking = {} } = {}) {
     blocking.tokens ??= {};
     blocking.tokens.dead ??= true;
     blocking.tokens.live ??= true;
@@ -1536,7 +1536,7 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
 
     if ( blocking.tokens.dead || blocking.tokens.live ) {
       // Add in all viewable tokens.
-      const tokens = ObstacleOcclusionTest.filterTokensByVisionTriangle(visionTriangle,
+      const tokens = ObstacleOcclusionTest.filterTokensByFrustum(frustum,
         { viewer, target, blockingTokensOpts: blocking.tokens });
       const tokenIds = tokens.map(token => token.id);
       for ( const id of this.placeableTracker.instanceIndexFromId.keys() ) {

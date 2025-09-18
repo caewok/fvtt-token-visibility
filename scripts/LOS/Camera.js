@@ -1,12 +1,14 @@
 /* globals
-canvas,
 CONFIG,
-PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { MODULE_ID } from "../const.js";
+import { AbstractPolygonTrianglesID } from "./placeable_tracking/PlaceableGeometryTracker.js";
+
+const pt3d_0 = new Point3d();
 
 export class Camera {
 
@@ -67,6 +69,8 @@ export class Camera {
   #dirty = {
     perspective: true,
     lookAt: true,
+    model: true,
+    inverse: true,
   };
 
   /** @type {function} */
@@ -77,6 +81,8 @@ export class Camera {
   #perspectiveType = "perspective";
 
   #glType = "webGPU";
+
+  get glType() { return this.#glType; }
 
   get perspectiveType() { return this.#perspectiveType; }
 
@@ -90,7 +96,29 @@ export class Camera {
     const fnName = `${this.#perspectiveType}${this.#glType === "webGPU" ? "ZO" : ""}`;
     this.#perspectiveFn = CONFIG.GeometryLib.MatrixFloat32[fnName];
     this.#internalParams = value === "orthogonal" ? this.#orthogonalParameters : this.#perspectiveParameters;
-    this.#dirty.perspective = true;
+    this.#dirty.perspective ||= true;
+    this.#dirty.model ||= true;
+    this.#dirty.inverse ||= true;
+  }
+
+  #modelMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4);
+
+  #inverseModelMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4);
+
+  get modelMatrix() {
+    if ( this.#dirty.model ) {
+      this.lookAtMatrix.multiply4x4(this.perspectiveMatrix, this.#modelMatrix);
+      this.#dirty.model = false;
+    }
+    return this.#modelMatrix;
+  }
+
+  get inverseModelMatrix() {
+    if ( this.#dirty.inverse ) {
+      this.modelMatrix.invert(this.#inverseModelMatrix);
+      this.#dirty.inverse = false;
+    }
+    return this.#inverseModelMatrix;
   }
 
   /**
@@ -120,90 +148,96 @@ export class Camera {
     this.perspectiveType = perspectiveType;
   }
 
-  /**
-   * Set the field of view and zFar for a target token, to maximize the space the token
-   * takes up in the frame.
-   * @param {Token} targetToken
-   */
   setTargetTokenFrustum(targetToken) {
+    const geometry = targetToken[MODULE_ID][AbstractPolygonTrianglesID];
+    const aabb3d = geometry.aabb;
+    this.setFrustumForAABB3d(aabb3d);
+  }
+
+  /**
+   * Set the field of view and zFar for a given axis-aligned bounding box, ensuring it is viewable and
+   * takes up the entire frame. The target location for the camera will be set to the bounding box center;
+   * Use _setPerspectiveFrustumForAABB3d or _setOrthogonalFrustumForAABB3d to override.
+   * @param {AABB3d} aabb3d       The bounding box; will be cloned to ensure a finite bounding box
+   * @returns {object} The frustum parameters for convenience; also set internally.
+   */
+  setFrustumForAABB3d(aabb3d) {
+    aabb3d = aabb3d.toFinite();
+    const boxCenter = aabb3d.getCenter(pt3d_0);
+    this.targetLocation = boxCenter;
+    return this.perspectiveType === "perspective"
+      ? this._setPerspectiveFrustumForAABB3d(aabb3d, boxCenter) : this._setOrthogonalFrustumForAABB3d(aabb3d);
+  }
+
+  /**
+   * Set the parameters for the perspective frustum given an axis-aligned bounding box,
+   * such that the box is fully contained with in the view and takes up the view completely.
+   * @param {AABB3d} aabb3d           Bounding box; must use finite coordinates
+   * @param {Point3d} [boxCenter]     Box center; typically the targetLocation should be set to this
+   * @returns {object} Parameters, for convenience; also set internally.
+   */
+  _setPerspectiveFrustumForAABB3d(aabb3d, boxCenter) {
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const ctr = Point3d.fromTokenCenter(targetToken);
-    this.targetPosition = ctr;
+    boxCenter ??= aabb3d.getCenter(pt3d_0);
 
-    // Assume axis-aligned cube.
-    const targetWidth = targetToken.document.width * canvas.dimensions.size;
-    const targetHeight = targetToken.document.height * canvas.dimensions.size;
-    const targetZHeight = targetToken.topZ - targetToken.bottomZ;
-    const halfSize = Math.max(targetWidth, targetHeight, targetZHeight) * 0.5; // From cube center to furthest face.
-    // const diagSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(halfSize, 2)); // From center to corner in 2d.
-    // const diag3dSize = Math.sqrt(Math.pow(halfSize, 2) + Math.pow(diagSize, 2)); // From center to corner in 3d.
+    // Calculate the radius of a sphere that encloses the bounding box.
+    // This is the distance from the center to one of the corners (e.g., the max corner).
+    const boxRadius = Point3d.distanceBetween(aabb3d.max, boxCenter);
+    const cameraDist = Point3d.distanceBetween(this.cameraPosition, boxCenter);
 
-    /* Simplify
-    diagSize = Math.sqrt(h**2 + h**2)
-             = Math.sqrt(2 * (h**2))
-             = Math.sqrt(2) * h
-             = Math.SQRT2 * h
-    diag3dSize = Math.sqrt(h**2 + Math.sqrt(h**2 + h**2)**2)
-                = Math.sqrt(h**2 + h**2 + h**2)
-                = Math.sqrt(3*(h**2))
-                = Math.sqrt(3) * h
-                = Math.SQRT3 * h
-    */
+    // Distance from the viewpoint to the farthest point on the bounding sphere.
+    // Ignore zNear, which would be Math.max(0.01, cameraDist - boxRadius) if only concerned with rendering the box.
+    const zFar = cameraDist + boxRadius;
 
+    // Calculate the Field of View (FOV).
+    // Use trigonometry: the sine of half the FOV angle is the ratio of the
+    // sphere's radius to the distance from the camera to the sphere's center.
+    // sin(fov/2) = rad ius / distance
+    // fov = 2 * asin(radius / distan
+    // If the camera is inside the bounding sphere, the FOV would need to be 180 degrees
+    // to see the whole sphere. Handle as a special case.
+    const fov = cameraDist <= boxRadius ? Math.PI
+      : 2 * Math.asin(boxRadius / cameraDist); // Radians
 
+    this.perspectiveParameters = { fov, zFar };
+    return this.perspectiveParameters;
+  }
 
-    // Furthest corner of the cube from the camera.
-    // Worst case is the camera is aligned along a cube diagonal, so must add on the full
-    // diagonal distance to reach a back corner. In 3d, could be (rarely) the full 3d diagonal.
-    // E.g., looking directly down at a corner so the camera viewline runs through two opposite corners.
-    const distToTarget = Point3d.distanceBetween(this.cameraPosition, this.targetPosition)
-    const diag3dSize = Math.SQRT3 * halfSize;
-    const maxCornerDistance = distToTarget + diag3dSize;
-
-    // zFar needs to be at least the distance to the farthest corner.
-    // const zFar = Infinity;
-    const zFar = maxCornerDistance;
-
-    if ( this.perspectiveType === "perspective" ) {
-      const maxAngle = maximumViewAngle(this.cameraPosition, targetToken) || 0;
-      const fov = Math.min(maxAngle, 2.5) + 0.02; // Math.toDegrees(2.5) ~ 143º. Keep well under 180º.
-      // console.debug(`Camera|${targetToken.name}`, { maxAngle, fov })
-
-      // Calculate field-of-view.
-      // Worst case: In 2d top-down, the cube diagonals form the furthest point.
-      // tan(fov/2) = opposite/adjacent = (cube.size/2) / distance
-      // const diagSize = Math.SQRT2 * halfSize;
-      // const fov = 2 * Math.atan(diagSize / (distToTarget - diagSize)); // Measure from front of token to ensure sufficiently large viewing angle.
-      this.perspectiveParameters = { fov, zFar };
-      return;
+  /**
+   * Set the parameters for the orthogonal frustum given an axis-aligned bounding box,
+   * such that the box is fully contained with in the view and takes up the view completely.
+   * @param {AABB3d} aabb3d     Bounding box; must use finite coordinates
+   * @returns {object} Parameters, for convenience; also set internally.
+   */
+  _setOrthogonalFrustumForAABB3d(aabb3d) {
+    // Project the box corners onto the camera's local axes.
+    // Determine the minimum and maximum for each coordinate in the camera view.
+    const lookAtM = this.lookAtMatrix;
+    const iter = aabb3d.iterateVertices();
+    const p0 = lookAtM.multiplyPoint3d(iter.next().value);
+    let xMinMax = Math.minMax(p0.x);
+    let yMinMax = Math.minMax(p0.y);
+    let zMinMax = Math.minMax(p0.z);
+    for ( const pt of iter ) {
+      const txPt = lookAtM.multiplyPoint3d(pt);
+      xMinMax = Math.minMax(xMinMax.min, xMinMax.max, txPt.x);
+      yMinMax = Math.minMax(yMinMax.min, yMinMax.max, txPt.y);
+      zMinMax = Math.minMax(zMinMax.min, zMinMax.max, txPt.z);
     }
 
-    // Calculate orthogonal parameters.
-    // Take the bounding box of the target token.
-    // Convert to camera space and set max.
-    // See https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix/orthographic-projection-matrix.html
-    const minWorld = new Point3d(
-      targetToken.document.x,
-      targetToken.document.y,
-      targetToken.bottomZ,
-    );
-    minWorld.multiplyScalar(0.99, minWorld);
-    const maxWorld = new Point3d(
-      (targetToken.document.x + targetWidth),
-      (targetToken.document.y + targetHeight),
-      targetToken.topZ,
-    );
-    maxWorld.multiplyScalar(1.01, maxWorld);
-    const minCamera = this.lookAtMatrix.multiplyPoint3d(minWorld);
-    const maxCamera = this.lookAtMatrix.multiplyPoint3d(maxWorld);
-    const max = Math.max(minCamera.x, minCamera.y, maxCamera.x, maxCamera.y)
+    // The min/max projected values define the clipping planes.
+    // The values are negated for the near/far planes because they represent
+    // distances along the negative view direction in some conventions (like OpenGL).
+    // However, for constructing a projection matrix, we typically need the distances
+    // along the forward vector, so we keep them as they are.
     this.orthogonalParameters = {
-      left: -max,
-      right: max,
-      top: max,
-      bottom: -max,
-      far: zFar,
-    }
+      left: xMinMax.min,
+      right: xMinMax.max,
+      top: yMinMax.max,
+      bottom: yMinMax.min,
+      far: zMinMax.max,
+      // Near would be zMinMax.min but we also want obstacles in view, so it should be left to something small, like 1.
+    };
   }
 
 
@@ -251,6 +285,8 @@ export class Camera {
       this.#perspectiveParameters[key] = value;
     }
     this.#dirty.perspective ||= true;
+    this.#dirty.model ||= true;
+    this.#dirty.inverse ||= true;
   }
 
   #orthogonalParameters = {
@@ -272,6 +308,8 @@ export class Camera {
       this.#orthogonalParameters[key] = value;
     }
     this.#dirty.perspective ||= true;
+    this.#dirty.model ||= true;
+    this.#dirty.inverse ||= true;
   }
 
   /** @type {Float32Array|mat4} */
@@ -323,53 +361,37 @@ export class Camera {
     this.#positions.target.copyPartial(value);
     this.#dirty.lookAt ||= true;
   }
-}
 
-/**
- * Determine the maximum angle from a viewpoint to a token border.
- * @param {Point3d} viewpoint
- * @param {Token} targetToken
- *
- * @returns {number} Angle in radians.
- */
-function maximumViewAngle(viewpoint, targetToken) {
-  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-  const ctr = Point3d.fromTokenCenter(targetToken);
+  // ----- NOTE: Debug ----- //
 
-  // 2d x-y dimensions.
-  const tokenBorder = targetToken.tokenBorder;
-  const vps = tokenBorder.viewablePoints(viewpoint, { outermostOnly: true });
-  if ( !vps ) return Math.PI;
+  invertFrustum() {
+    const M = this.lookAtMatrix.multiply4x4(this.perspectiveMatrix);
+    const Minv = M.invert();
+    const minCoord = this.glType === "webGPU" ? 0 : -1;
 
-  // Two angles, on either side of the center line.
-  const b = viewpoint.to2d();
-  const c = ctr.to2d()
-  const angle0 = PIXI.Point.angleBetween(vps[0], b, c);
-  const angle1 = PIXI.Point.angleBetween(vps[1], b, c);
+    const Quad3d = CONFIG.GeometryLib.threeD.Quad3d;
+    const front = [new Point3d(1, minCoord, 0),  new Point3d(minCoord, minCoord, 0), new Point3d(minCoord, 1, 0), new Point3d(1, 1, 0)];
+    const back = [new Point3d(1, minCoord, -1),  new Point3d(minCoord, minCoord, -1), new Point3d(minCoord, 1, -1), new Point3d(1, 1, -1)];
 
-  // Height.
-  // Using cutaway.
-  /*
-  const cutawayPoly = CutawayPolygon.cutawayBasicShape(tokenBorder, b, c, {
-    topElevationFn: () => targetToken.topZ,
-     bottomElevationFn: () => targetToken.bottomZ
-  })[0];
-  const cutawayCameraPosition = cutawayPoly._to2d(viewpoint)
-  const cutawayVPs = cutawayPoly.viewablePoints(cutawayCameraPosition, { outermostOnly: true })
-  cutawayVPs[0].x = Math.sqrt(cutawayVPs[0].x);
-  cutawayVPs[1].x = Math.sqrt(cutawayVPs[1].x);
-  const cutawayC = cutawayPoly._to2d(ctr);
-  cutawayC.x = Math.sqrt(cutawayC.x)
-  const heightAngle0 = PIXI.Point.angleBetween(cutawayVPs[0], cutawayCameraPosition, cutawayC);
-  const heightAngle1 = PIXI.Point.angleBetween(cutawayVPs[1], cutawayCameraPosition, cutawayC);
-  */
+    // back TL, TR, front TR, TL
+    const top = [back[0], back[1], front[1], front[0]];
 
-  // Using border intersection and 3d angle.
-  let ix = tokenBorder.segmentIntersections(viewpoint, ctr)[0]; // Only 1 b/c measuring from poly center.
-  if ( !ix ) return Math.PI;
+    // front BR, BL, back BL, BR
+    const bottom = [front[2], front[3], back[3], back[2]];
 
-  const heightVPS = [new Point3d(ix.x, ix.y, targetToken.topZ), new Point3d(ix.x, ix.y, targetToken.bottomZ)];
-  const heightAngle0 = Point3d.angleBetween(heightVPS[0], viewpoint, ctr);
-  const heightAngle1 = Point3d.angleBetween(heightVPS[1], viewpoint, ctr);
-  return Math.max(angle0, angle1, heightAngle0, heightAngle1) * 2;
+    // If this were used for something other than debug, would be more efficient to
+    // invert the vertices and share them among the quads.
+
+    return {
+      front: Quad3d.from4Points(...front.map(pt => Minv.multiplyPoint3d(pt))),
+      back: Quad3d.from4Points(...back.map(pt => Minv.multiplyPoint3d(pt))),
+      top: Quad3d.from4Points(...top.map(pt => Minv.multiplyPoint3d(pt))),
+      bottom: Quad3d.from4Points(...bottom.map(pt => Minv.multiplyPoint3d(pt))),
+    };
+  }
+
+  drawCanvasFrustum2d(opts) {
+    const sides = this.invertFrustum();
+    Object.values(sides).forEach(side => side.draw2d(opts));
+  }
 }

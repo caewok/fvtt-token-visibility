@@ -15,6 +15,11 @@ import { initializePatching, PATCHER } from "./patching.js";
 import { Patcher, HookPatch, MethodPatch, LibWrapperPatch } from "./Patcher.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { getObjectProperty } from "./LOS/util.js";
+import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
+import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
+import { TokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
+import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
+
 
 // For API
 import * as bench from "./benchmark.js";
@@ -22,7 +27,7 @@ import * as bench from "./benchmark.js";
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
 import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
 import { TargetLightingTest } from "./LOS/TargetLightingTest.js";
-import { VisionTriangle } from "./LOS/VisionTriangle.js";
+import { Frustum } from "./LOS/Frustum.js";
 
 import {
   buildLOSCalculator,
@@ -36,7 +41,6 @@ import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "
 
 import * as range from "./visibility_range.js";
 
-import { Polygon3d, Triangle3d, Quad3d, Polygons3d } from "./LOS/geometry/Polygon3d.js";
 
 // import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/Camera.js";
@@ -79,6 +83,7 @@ import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from 
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/SamplePixelViewpoint.js"
+import { GeometricFaceCalculator } from "./LOS/GeometricFaceCalculator.js";
 
 
 // import {
@@ -110,10 +115,12 @@ import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.j
 import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
-import * as MarchingSquares from "./marchingsquares-esm.js";
+import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
 
 // Other self-executing hooks
 import "./changelog.js";
+import "./geometry/tests/AABB.test.js";
+
 // import "./LOS/WebGPU/webgpu-map-sync.js";
 
 Hooks.once("init", function() {
@@ -328,11 +335,6 @@ Hooks.once("init", function() {
     DocumentUpdateTracker, TokenUpdateTracker,
 
     geometry: {
-      Polygon3d,
-      Triangle3d,
-      Polygons3d,
-      Quad3d,
-
       HorizontalQuadVertices,
       VerticalQuadVertices,
       Rectangle3dVertices,
@@ -357,7 +359,7 @@ Hooks.once("init", function() {
 
       OBJParser,
 
-      VisionTriangle,
+      Frustum,
     },
 
     OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,
@@ -430,6 +432,7 @@ Hooks.once("init", function() {
     AbstractViewpoint,
     ObstacleOcclusionTest,
     TargetLightingTest,
+    GeometricFaceCalculator,
 
     countTargetPixels,
 
@@ -485,6 +488,17 @@ Hooks.once("ready", function() {
 Hooks.on("canvasReady", function() {
   console.debug(`${MODULE_ID}|canvasReady`);
   if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
+
+  // Register the placeable geometry.
+  WallGeometryTracker.registerPlaceableHooks();
+  TileGeometryTracker.registerPlaceableHooks();
+  TokenGeometryTracker.registerPlaceableHooks();
+  RegionGeometryTracker.registerPlaceableHooks();
+
+  WallGeometryTracker.registerExistingPlaceables();
+  TileGeometryTracker.registerExistingPlaceables();
+  TokenGeometryTracker.registerExistingPlaceables();
+  RegionGeometryTracker.registerExistingPlaceables();
 
 //   // Create default calculators used by all the tokens.
 //   const basicCalcs = [

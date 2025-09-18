@@ -117,7 +117,10 @@ function baryFromTriangleData(p, triData, outPoint) {
  * @returns {float|PIXI.Point|Point3d}
  */
 function interpolateBarycentricValue(bary, a, b, c) {
-  return bary.dot(CONFIG.GeometryLib.threeD.Point3d._tmp3.set(a, b, c));
+  const other = CONFIG.GeometryLib.threeD.Point3d.tmp.set(a, b, c);
+  const out = bary.dot(other);
+  other.release();
+  return out;
 }
 
 /**
@@ -719,7 +722,7 @@ AbstractPolygonTrianglesID = "geometry"
 Draw = CONFIG.GeometryLib.Draw
 api = game.modules.get("tokenvisibility").api
 countTargetPixels = api.countTargetPixels
-let { Polygon3d, Triangle3d, GeometryToken, BasicVertices, Camera, VisionTriangle } = api.geometry
+let { Polygon3d, Triangle3d, GeometryToken, BasicVertices, Camera, Frustum } = api.geometry
 AbstractViewpoint = api.AbstractViewpoint
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;

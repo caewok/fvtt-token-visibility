@@ -10,7 +10,7 @@ import { MODULE_ID } from "../../const.js";
 import { log } from "../util.js";
 import { WebGPUDevice } from "./WebGPU.js";
 import { Camera } from "./Camera.js";
-import { VisionTriangle } from "../VisionTriangle.js";
+import { Frustum } from "../Frustum.js";
 import { MaterialsTracker } from "./MaterialsTracker.js";
 import {
   DrawableTokenInstances,
@@ -107,8 +107,8 @@ export class RenderObstacles {
   /** @type {MaterialTracker} */
   materials;
 
-  /** @type {VisionTriangle} */
-  visionTriangle = new VisionTriangle();
+  /** @type {Frustum} */
+  frustum = new Frustum();
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   #senseType = "sight";
@@ -288,13 +288,13 @@ export class RenderObstacles {
     // log(`${this.constructor.name}|renderTarget|Finished rendering ${target.name}, ${target.id}`);
   }
 
-  render(viewerLocation, target, { viewer, targetLocation, frame, clear = true, testLighting = false } = {}) {
-    // log(`${this.constructor.name}|render|Begin rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+  render(viewpoint, target, { viewer, targetLocation, frame, clear = true, testLighting = false } = {}) {
+    // log(`${this.constructor.name}|render|Begin rendering ${target.name}, ${target.id} from ${viewpoint} -> ${targetLocation}`);
     const opts = { viewer, target, blocking: this.config.blocking, testLighting: this.config.testLighting };
     const device = this.device;
-    this._setCamera(viewerLocation, target, { viewer, targetLocation });
-    const visionTriangle = this.visionTriangle.rebuild(viewerLocation, target);
-    this.drawableObstacles.forEach(drawable => drawable.filterObjects(visionTriangle, opts));
+    this._setCamera(viewpoint, target, { viewer, targetLocation });
+    const frustum = this.frustum.rebuild({ viewpoint, target });
+    this.drawableObstacles.forEach(drawable => drawable.filterObjects(frustum, opts));
 
     // Must set the canvas context immediately prior to render.
     const view = this.#context ? this.#context.getCurrentTexture().createView() : this.renderTexture.createView();
@@ -330,11 +330,11 @@ export class RenderObstacles {
     // Render first so full red of target is recorded.
     // (Could be either constrained or not constrained.)
     // Don't use instancing to render b/c that gets too complicated with the possible lit or constrained targets.
-    // log(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    // log(`${this.constructor.name}|render|Rendering target ${target.name}, ${target.id} from ${viewpoint} -> ${targetLocation}`);
     targetDrawable.renderTarget(renderPass, target);
 
     // Render the obstacles
-    // log(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    // log(`${this.constructor.name}|render|Rendering obstacles blocking ${target.name}, ${target.id} from ${viewpoint} -> ${targetLocation}`);
     for ( const drawableObj of this.drawableObstacles ) drawableObj.render(renderPass, opts);
 
     // TODO: Do we need to render terrains last?
@@ -344,7 +344,7 @@ export class RenderObstacles {
     if ( useLit ) targetDrawable.postrender();
 
     if ( !clear ) renderPassDesc.colorAttachments[0].loadOp = loadOp; // Reset to default value.
-    // log(`${this.constructor.name}|render|Finished rendering ${target.name}, ${target.id} from ${viewerLocation} -> ${targetLocation}`);
+    // log(`${this.constructor.name}|render|Finished rendering ${target.name}, ${target.id} from ${viewpoint} -> ${targetLocation}`);
 
   }
 

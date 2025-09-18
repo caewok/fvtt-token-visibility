@@ -8,7 +8,7 @@ Wall,
 
 // Base folder
 import { MODULE_ID, OTHER_MODULES } from "../const.js";
-import { VisionTriangle } from "./VisionTriangle.js";
+import { Frustum } from "./Frustum.js";
 import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import {
   NULL_SET,
@@ -66,14 +66,11 @@ export class ObstacleOcclusionTest {
   obstacleTester;
 
   constructObstacleTester() {
-    // Wouldn't really need this but for the tile alpha test. Obstacle found should follow the blocking config.
+    // Obstacle found should follow the blocking config.
     const blocking = this.config.blocking;
     const fnNames = [];
     if ( blocking.walls ) fnNames.push("wallsOcclude", "terrainWallsOcclude", "proximateWallsOcclude");
-    if ( blocking.tiles ) {
-      if ( CONFIG[MODULE_ID].alphaThreshold ) fnNames.push("alphaTilesOcclude");
-      else fnNames.push("tilesOcclude");
-    }
+    if ( blocking.tiles ) fnNames.push("tilesOcclude");
     if ( blocking.tokens.dead || blocking.tokens.live || blocking.tokens.prone ) fnNames.push("tokensOcclude");
     if ( blocking.regions ) fnNames.push("regionsOcclude");
     this.obstacleTester = this.#occlusionTester(fnNames);
@@ -112,14 +109,6 @@ export class ObstacleOcclusionTest {
     return this.obstacles.tiles.some(tile => tile[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
   }
 
-  alphaTilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => {
-      const t = tile[MODULE_ID][AbstractPolygonTrianglesID].rayIntersectionAlpha(rayOrigin, rayDirection);
-      if ( t === null ) return false;
-      return tile[MODULE_ID][AbstractPolygonTrianglesID].alphaThresholdTest(rayOrigin, rayDirection, t);
-    });
-  }
-
   tokensOcclude(rayOrigin, rayDirection) {
     return this.obstacles.tokens.some(token => token[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
   }
@@ -130,8 +119,8 @@ export class ObstacleOcclusionTest {
 
   // ----- NOTE: Static collision tests ----- //
 
-  /** @type {VisionTriangle} */
-  static visionTriangle = new VisionTriangle();
+  /** @type {Frustum} */
+  static frustum = new Frustum();
 
   /**
    * Filter relevant objects in the scene using the vision triangle.
@@ -144,15 +133,15 @@ export class ObstacleOcclusionTest {
    *   - @property {Set<Region>} regions
    */
   static findBlockingObjects(viewpoint, target, opts = {}) {
-    const visionTri = this.visionTriangle.rebuild(viewpoint, target);
+    const frustum = this.frustum.rebuild({ viewpoint, target });
     opts.blocking ??= {};
     opts.senseType ??= "sight";
     opts.target ??= target;
     return {
-      walls: this.findBlockingWalls(visionTri, opts),
-      tiles: this.findBlockingTiles(visionTri, opts),
-      tokens: this.findBlockingTokens(visionTri, opts),
-      regions: this.findBlockingRegions(visionTri, opts),
+      walls: this.findBlockingWalls(frustum, opts),
+      tiles: this.findBlockingTiles(frustum, opts),
+      tokens: this.findBlockingTokens(frustum, opts),
+      regions: this.findBlockingRegions(frustum, opts),
     }
   }
 
@@ -192,29 +181,29 @@ export class ObstacleOcclusionTest {
     return proximateWalls;
   }
 
-  static findBlockingWalls(visionTri, { senseType = "sight", blocking = {} } = {}) {
+  static findBlockingWalls(frustum, { senseType = "sight", blocking = {} } = {}) {
     blocking.walls ??= true;
     if ( !blocking.walls ) return NULL_SET;
-    return this.filterWallsByVisionTriangle(visionTri, { senseType });
+    return this.filterWallsByFrustum(frustum, { senseType });
   }
 
-  static findBlockingTiles(visionTri, { senseType = "sight", blocking = {} } = {}) {
+  static findBlockingTiles(frustum, { senseType = "sight", blocking = {} } = {}) {
     blocking.tiles ??= true;
-    return blocking.tiles ?  this.filterTilesByVisionTriangle(visionTri, { senseType }) : NULL_SET;
+    return blocking.tiles ?  this.filterTilesByFrustum(frustum, { senseType }) : NULL_SET;
   }
 
-  static findBlockingTokens(visionTri, { viewer, target, blocking = {} } = {}) {
+  static findBlockingTokens(frustum, { viewer, target, blocking = {} } = {}) {
     blocking.tokens ??= {};
     blocking.tokens.live ??= true;
     blocking.tokens.dead ??= true;
     return ( blocking.tokens.live || blocking.tokens.dead )
-      ? this.filterTokensByVisionTriangle(visionTri, { viewer, target, blockingTokensOpts: blocking.tokens })
+      ? this.filterTokensByFrustum(frustum, { viewer, target, blockingTokensOpts: blocking.tokens })
       : NULL_SET;
   }
 
-  static findBlockingRegions(visionTri, { senseType = "sight", blocking = {} } = {}) {
+  static findBlockingRegions(frustum, { senseType = "sight", blocking = {} } = {}) {
     blocking.regions ??= true;
-    return blocking.regions ? this.filterRegionsByVisionTriangle(visionTri, { senseType }) : NULL_SET;
+    return blocking.regions ? this.filterRegionsByFrustum(frustum, { senseType }) : NULL_SET;
   }
 
   /**
@@ -222,14 +211,14 @@ export class ObstacleOcclusionTest {
    * target (or other two points). Only considers 2d top-down view.
    * @returns {Set<Region>}
    */
-  static filterRegionsByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+  static filterRegionsByFrustum(frustum, { senseType = "sight" } = {}) {
     if ( !CONFIG[MODULE_ID].regionsBlock ) return NULL_SET;
 
-    const regions = visionTri.findRegions();
+    const regions = frustum.findRegions();
     const TM = OTHER_MODULES.TERRAIN_MAPPER;
 
     if ( !TM.ACTIVE ) return regions;
-    return visionTri.findRegions().filter(r => {
+    return frustum.findRegions().filter(r => {
       const senseTypes = new Set(getFlagFast(r.document, TM.KEY, TM.FLAGS.REGION.WALL_RESTRICTIONS) || []);
       if ( senseType === "move" && senseTypes.has("cover") ) return true; // Treat all move restrictions as physical cover; same as with walls.
       return senseTypes.has(senseType);
@@ -241,16 +230,16 @@ export class ObstacleOcclusionTest {
    * target (or other two points). Only considers 2d top-down view.
    * @returns {Set<Wall>}
    */
-  static filterWallsByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+  static filterWallsByFrustum(frustum, { senseType = "sight" } = {}) {
     // Ignore walls that are not blocking for the type.
     // Ignore walls with open doors.
-    return visionTri.findWalls().filter(w => w.document[senseType] && !w.isOpen);
+    return frustum.findWalls().filter(w => w.document[senseType] && !w.isOpen);
   }
 
-  static filterEdgesByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
+  static filterEdgesByFrustum(frustum, { senseType = "sight" } = {}) {
     // Ignore edges that are not blocking for the type.
     // Ignore edges that are walls with open doors.
-    return visionTri.findEdges().filter(e => e[senseType] && !(e.object instanceof Wall && e.object.isOpen));
+    return frustum.findEdges().filter(e => e[senseType] && !(e.object instanceof Wall && e.object.isOpen));
   }
 
   /**
@@ -258,8 +247,8 @@ export class ObstacleOcclusionTest {
    * target (or other two points). Only considers 2d top-down view.
    * @returns {Set<Tile>}
    */
-  static filterTilesByVisionTriangle(visionTri, { senseType = "sight" } = {}) {
-    const tiles = visionTri.findTiles();
+  static filterTilesByFrustum(frustum, { senseType = "sight" } = {}) {
+    const tiles = frustum.findTiles();
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
     const LEVELS = OTHER_MODULES.LEVELS;
@@ -276,12 +265,12 @@ export class ObstacleOcclusionTest {
    * token under the viewer point.
    * @returns {Set<Token>}
    */
-  static filterTokensByVisionTriangle(visionTri, {
+  static filterTokensByFrustum(frustum, {
     viewer,
     target,
     blockingTokensOpts }) {
 
-    let tokens = visionTri.findTokens();
+    let tokens = frustum.findTokens();
 
     // Filter out the viewer and target from the token set.
     // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
@@ -308,8 +297,8 @@ export class ObstacleOcclusionTest {
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const polys = placeable[MODULE_ID][AbstractPolygonTrianglesID].triangles;
-    return polys.filter(poly => poly.isFacing(viewpoint));
+    const geometry = placeable[MODULE_ID][AbstractPolygonTrianglesID];
+    return geometry.iterateFaces().filter(poly => poly.isFacing(viewpoint));
   }
 
 }
