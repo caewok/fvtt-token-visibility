@@ -113,7 +113,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   }
 
   _updateAABB() {
-    const newAABB = CONFIG.GeometryLib.threeD.AABB3d.union(...this.region.shapes.map(shape =>
+    const newAABB = CONFIG.GeometryLib.threeD.AABB3d.union(this.region.shapes.map(shape =>
       shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID].aabb));
     newAABB.clone(this.aabb);
   }
