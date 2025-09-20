@@ -116,6 +116,7 @@ import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
+import { BitSet } from "./LOS/BitSet/bitset.mjs";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -443,6 +444,7 @@ Hooks.once("init", function() {
     },
 
     MarchingSquares,
+    BitSet,
 
     PATCHER,
     Patcher, HookPatch, MethodPatch, LibWrapperPatch
