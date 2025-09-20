@@ -11,8 +11,9 @@ import { MODULE_ID } from "../const.js";
 
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
+import { BitSet } from "./BitSet/bitset.mjs";
 
 /*
 Points algorithm also can use area and threshold.
@@ -82,6 +83,31 @@ export class PointsViewpoint extends AbstractViewpoint {
     super.destroy();
   }
 }
+
+
+export class PercentVisiblePointsResult extends PercentVisibleResult {
+
+  constructor({ numPoints, ...opts } = {}) {
+    super(opts);
+    numPoints ??= 1;
+    this.config = { numPoints };
+    this.data = BitSet.empty(numPoints);
+  }
+
+  get totalTargetArea() { return this.config.numPoints; }
+
+  // Handled by the calculator, which combines multiple results.
+  get largeTargetArea() { return this.totalTargetArea; }
+
+  get visibleArea() { return this.data.cardinality; }
+
+  blendMaximums(result) {
+    const out = this.clone();
+    out.data = this.data.or(result.data);
+    return out;
+  }
+}
+
 
 /**
  * Handle points algorithm.
@@ -233,3 +259,12 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
     this.render();
   }
 }
+
+/* Testing
+api = game.modules.get("tokenvisibility").api
+BitSet = api.BitSet
+bs = BitSet.Empty(27)
+
+
+
+*/
