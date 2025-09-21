@@ -83,28 +83,28 @@ export class AbstractViewpoint {
 
 
   // ----- NOTE: Visibility Percentages ----- //
+  _percentVisible;
+  
+  get percentVisible() { 
+    if ( typeof this._percentVisible === "undefined" ) this._percentVisible = this.calculator.percentVisible;
+    return this._percentVisible;
+  }
 
-  get percentVisible() { return this.calculator.percentVisible; }
-
-  get percentUnobscured() { return this.calculator.percentUnobscured; }
-
-  get percentVisibleBright() { return this.calculator.percentVisibleBright; }
-
-  get percentVisibleDim() { return this.calculator.percentVisibleDim; }
-
-  get visibility() { return [this.calculator.percentUnobscured, this.calculator.percentVisibleDim, this.calculator.percentVisibleBright]; }
 
   calculate() {
-    this.calculator.counts.fill(0)
-    if ( this.passesSimpleVisibilityTest() ) return;
+    this._percentVisible = undefined;
+    if ( this.passesSimpleVisibilityTest() ) {
+      this._percentVisible = 1;
+      return;
+    }
     this.calculator.viewpoint = this.viewpoint;
     this.calculator.calculate();
     if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
   }
 
   targetOverlapsViewpoint() {
-    const bounds = this.config.constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
-    if ( !bounds.contains(this.viewpoint) ) return false;
+    const bounds = this.calculator.targetShape;   
+    if ( !bounds.contains(this.viewpoint.x, this.viewpoint.y) ) return false;
     return this.viewpoint.between(this.target.bottomZ, this.target.topZ);
   }
 
@@ -120,14 +120,7 @@ export class AbstractViewpoint {
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
     if ( (this.viewpoint.z > backgroundElevation && target.topZ < backgroundElevation)
       || (this.viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return true;
-
-    // Force tokens within the viewpoint to be visible and lit.
-    if ( this.targetOverlapsViewpoint() ) {
-      this.calculator.counts.set([1, 0, 1, 1, 0]);
-      return true;
-    }
-
-    return false;
+    return this.targetOverlapsViewpoint();
   }
 
   // ----- NOTE: Collision tests ----- //

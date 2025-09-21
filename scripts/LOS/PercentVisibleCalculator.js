@@ -176,6 +176,11 @@ export class PercentVisibleCalculatorAbstract {
   targetLocation = new CONFIG.GeometryLib.threeD.Point3d();
 
   get targetShape() { return this.target[this.config.tokenShapeType]; }
+  
+  get percentVisible() {
+    if ( !this.lastResult ) this.calculate();
+    return this.lastResult.percentVisible;
+  }
 
   static LIGHTING_TEST_TYPES = {
     DARK: 0,
@@ -268,39 +273,6 @@ export class PercentVisibleCalculatorAbstract {
 
   // async calculate(); // TODO: Implement if necessary; mimic calculate method but with await this._calculate.
 
-  foundryLitTokenTest() {
-    const cfg = {
-      tokenShape: this.targetBorder,
-      pointAlgorithm: Settings.KEYS.POINT_TYPES.NINE,
-      inset: .25,
-      viewpoint: this.viewpoint
-    };
-    const targetPoints = AbstractViewpoint.constructTokenPoints(this.target, cfg);
-
-    let dim = 0;
-    let bright = 0;
-    for ( const pt of targetPoints ) {
-      for ( const src of canvas[this.config.sourceType].placeables ) {
-        if ( src.lightSource.shape.contains(pt.x, pt.y) ) {
-          dim += 1;
-          if ( PIXI.Point.distanceSquaredBetween(pt, src.lightSource) < (src.brightRadius ** 2)) bright += 1;
-        }
-      }
-    }
-    return {
-      dim: dim / targetPoints.length,
-      bright: bright / targetPoints.length,
-    }
-  }
-
-
   destroy() { return; }
 }
 
-const {
-  TOTAL,
-  OBSCURED,
-  BRIGHT,
-  DIM,
-  DARK,
-} = PercentVisibleCalculatorAbstract.COUNT_LABELS;

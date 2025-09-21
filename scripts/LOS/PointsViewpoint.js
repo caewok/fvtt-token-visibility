@@ -26,15 +26,6 @@ Dim and bright lighting test options:
 */
 
 
-const {
-  TOTAL,
-  OBSCURED,
-  DIM,
-//   BRIGHT,
-//   DARK,
-} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
-
-
 /**
  * An eye belong to a specific viewer.
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
@@ -152,7 +143,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     if ( !targetShapes.length ) {
       console.warn(`${MODULE_ID}|${this.constructor.name}|Target shapes for large target not working.`);
       const targetPoints = this.constructTargetPoints();
-      this._testPointToPoints(targetPoints);
+      this.lastResult = this._testPointToPoints(targetPoints);
       return;
     }
 
@@ -160,25 +151,21 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     let currentPercent = 0;
     for ( const targetShape of targetShapes ) {
       const targetPoints = this.constructTargetPoints(targetShape);
-      this._testPointToPoints(targetPoints);
-
-      // If no lighting, look for maximum percent unoccluded,
-      // If lighting, look for maximum percent dim.
-      // Keeping in mind that denominator (number of target points) could change between iterations.
-      const numerator = this.config.testLighting ? this.counts[DIM] : (this.counts[TOTAL] - this.counts[OBSCURED]);
-      const newPercent = numerator / this.counts[TOTAL];
-      if ( newPercent > currentPercent ) {
-        tmpCounts.set(this.counts);
-        currentPercent = newPercent;
-      }
-      if ( newPercent >= 1 ) break;
+      const result = this._testPointToPoints(targetPoints);
+      this.lastResult = PercentVisiblePointsResult.max(this.lastResult, result);
+      
+      // If we have hit 100%, we are done.
+      if ( this.lastResult.percentVisible >= 1 ) break;
     }
-    this.counts.set(tmpCounts);
   }
 
   /* ----- NOTE: Target points ----- */
 
-
+  /**
+   * Build a set of 3d points on a given token shape, dependent on settings and shape.
+   * @param {PIXI.Polygon} tokenShape
+   * @returns {Point3d[]}
+   */
   constructTargetPoints(tokenShape) {
     const target = this.target;
     const { pointAlgorithm, targetInset, points3d } = this.config;
@@ -188,51 +175,31 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     return points3d ? PointsViewpoint.elevatePoints(target, targetPoints) : targetPoints;
   }
 
-
-
   /* ----- NOTE: Visibility testing ----- */
-
 
   debugPoints = [];
 
+  /**
+   * Test which target points are occluded and return the result.
+   * @param {Point3d[]}
+   * @returns {PercentVisiblePointsResult}
+   */
   _testPointToPoints(targetPoints) {
-    this.counts.fill(0);
+    const result = this.lastResult.clone();
+    result.data.clear();
+    
     const numPoints = targetPoints.length;
-    this.counts[TOTAL] = numPoints;
     const debugPoints = this.debugPoints;
     for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
       targetPoint.subtract(this.viewpoint, this.#rayDirection);
       const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
-      this.counts[OBSCURED] += isOccluded;
-
-      const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded, isDim: null, isBright: null };
+      result.data.set(i, isOccluded);
+      const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded };
       debugPoints[i] = debugObject;
-      if ( !isOccluded ) this._testLightingForPoint(targetPoint, debugObject);
     }
+    return result;
   }
-
-
-  /**
-   * Use the target's lit shape to determine if the point is lit.
-   */
-//   _testLightingContainmentForPoint(targetPoint, debugObject = {}) {
-//     // TODO: Add option to test sound sources by switching this.config.sourceType.
-//     // Requires new border calcs: soundTokenBorder
-//
-//     const isDim = this.target.litTokenBorder
-//       ? this.target.litTokenBorder.contains(targetPoint.x, targetPoint.y) : false;
-//     const isBright = isDim
-//       && (this.target.brightLitTokenBorder
-//         ? this.target.brightLitTokenBorder.contains(targetPoint.x, targetPoint.y) : false);
-//     debugObject.isDim = isDim;
-//     debugObject.isBright = isBright;
-//     this.counts[BRIGHT] += isBright;
-//     this.counts[DIM] += isDim;
-//     this.counts[DARK] += !(isDim || isBright);
-//   }
-
-
 }
 
 
