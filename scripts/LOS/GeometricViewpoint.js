@@ -21,14 +21,26 @@ import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
-const {
-  TOTAL,
-  OBSCURED,
-//   BRIGHT,
-//   DIM,
-//   DARK,
-} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
 
+export class PercentVisiblePointsResult extends PercentVisibleResult {
+  
+  targetPaths;
+  
+  blockingPaths;
+
+  get totalTargetArea() { return this.config.numPoints; }
+
+  // Handled by the calculator, which combines multiple results.
+  get largeTargetArea() { return this.totalTargetArea; }
+
+  get visibleArea() { return this.data.cardinality; }
+
+  blendMaximums(result) {
+    const out = this.clone();
+    out.data = this.data.or(result.data);
+    return out;
+  }
+}
 
 /**
  * An eye belong to a specific viewer.
