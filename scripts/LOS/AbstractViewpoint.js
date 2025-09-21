@@ -84,12 +84,13 @@ export class AbstractViewpoint {
 
   // ----- NOTE: Visibility Percentages ----- //
   _percentVisible;
-  
-  get percentVisible() { 
-    if ( typeof this._percentVisible === "undefined" ) this._percentVisible = this.calculator.percentVisible;
+
+  lastResult;
+
+  get percentVisible() {
+    if ( typeof this._percentVisible === "undefined" ) this._percentVisible = this.lastResult.percentVisible;
     return this._percentVisible;
   }
-
 
   calculate() {
     this._percentVisible = undefined;
@@ -98,12 +99,12 @@ export class AbstractViewpoint {
       return;
     }
     this.calculator.viewpoint = this.viewpoint;
-    this.calculator.calculate();
+    this.lastResult = this.calculator.calculate().clone();
     if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
   }
 
   targetOverlapsViewpoint() {
-    const bounds = this.calculator.targetShape;   
+    const bounds = this.calculator.targetShape;
     if ( !bounds.contains(this.viewpoint.x, this.viewpoint.y) ) return false;
     return this.viewpoint.between(this.target.bottomZ, this.target.topZ);
   }

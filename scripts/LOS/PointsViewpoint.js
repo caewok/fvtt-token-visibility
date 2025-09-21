@@ -81,8 +81,8 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
   constructor({ numPoints, ...opts } = {}) {
     super(opts);
     numPoints ??= 1;
-    this.config = { numPoints };
-    this.data = BitSet.empty(numPoints);
+    this._config.numPoints = numPoints;
+    this.data = BitSet.Empty(numPoints);
   }
 
   get totalTargetArea() { return this.config.numPoints; }
@@ -90,7 +90,7 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() { return this.data.cardinality; }
+  get visibleArea() { return this.data.cardinality(); }
 
   blendMaximums(result) {
     const out = this.clone();
@@ -117,43 +117,21 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   /** @type {Points3d[][]} */
   targetPoints = [];
 
-  counts = new Uint8Array(Object.keys(this.constructor.COUNT_LABELS).length);
-
-  // Use separate lighting occlusion testers b/c it will change viewpoints a lot.
-  /** @type {WeakMap<PointSource, ObstacleOcclusionTest>} */
-  occlusionTesters = new WeakMap();
-
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
-  // Points handles large target slightly differently. See _testLargeTarget.
-  get largeTargetArea() { return this.counts[TOTAL]; }
-
   _calculate() {
-    this.debugPoints.length = 0;
-    if ( this.config.largeTarget ) this._testLargeTarget();
-    else {
-      const targetPoints = this.constructTargetPoints();
-      this._testPointToPoints(targetPoints);
-    }
-  }
+    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
+      ? this.constructor.constrainedGridShapesUnderToken(this.tokenShape) : [this.targetShape];
+    if ( !targetShapes.length ) targetShapes.push(this.targetShape);
 
-  _testLargeTarget() {
-    // Construct points for each target subshape, defined by grid spaces under the target.
-    const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.tokenShape);
-    if ( !targetShapes.length ) {
-      console.warn(`${MODULE_ID}|${this.constructor.name}|Target shapes for large target not working.`);
-      const targetPoints = this.constructTargetPoints();
-      this.lastResult = this._testPointToPoints(targetPoints);
-      return;
-    }
-
-    const tmpCounts = new Uint8Array(this.constructor.COUNT_LABELS.length);
-    let currentPercent = 0;
-    for ( const targetShape of targetShapes ) {
-      const targetPoints = this.constructTargetPoints(targetShape);
+    const targetPointsForShapes = targetShapes.map(shape => this.constructTargetPoints(shape));
+    const numPoints = targetPointsForShapes.reduce((acc, curr) => curr.length + acc, 0);
+    this.lastResult = new PercentVisiblePointsResult({ numPoints, ...this });
+    for ( let i = 0, iMax = targetShapes.length; i < iMax; i += 1 ) {
+      const targetPoints = targetPointsForShapes[i];
       const result = this._testPointToPoints(targetPoints);
       this.lastResult = PercentVisiblePointsResult.max(this.lastResult, result);
-      
+
       // If we have hit 100%, we are done.
       if ( this.lastResult.percentVisible >= 1 ) break;
     }
@@ -187,14 +165,15 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   _testPointToPoints(targetPoints) {
     const result = this.lastResult.clone();
     result.data.clear();
-    
+
+    const dist2 = this.config.radius ** 2;
     const numPoints = targetPoints.length;
     const debugPoints = this.debugPoints;
     for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
       targetPoint.subtract(this.viewpoint, this.#rayDirection);
       const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
-      result.data.set(i, isOccluded);
+      result.data.set(i, !isOccluded);
       const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded };
       debugPoints[i] = debugObject;
     }
@@ -227,11 +206,28 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
   }
 }
 
-/* Testing
+/*
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw
 api = game.modules.get("tokenvisibility").api
-BitSet = api.BitSet
-bs = BitSet.Empty(27)
+PercentVisibleCalculatorPoints = api.calcs.points
+zanna = canvas.tokens.placeables.find(t => t.name === "Zanna")
+randal = canvas.tokens.placeables.find(t => t.name === "Randal")
+
+calc = new PercentVisibleCalculatorPoints()
+calc.viewer = randal
+calc.target = zanna
+calc.viewpoint.copyFrom(Point3d.fromTokenCenter(calc.viewer))
+calc.targetLocation.copyFrom(Point3d.fromTokenCenter(calc.target))
+
+await calc.initialize()
+res = calc.calculate()
+
+debugViewer = api.buildDebugViewer(api.debugViewers.points)
+await debugViewer.initialize();
+debugViewer.render();
 
 
 
 */
+

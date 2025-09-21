@@ -26,7 +26,6 @@ import * as bench from "./benchmark.js";
 
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
 import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
-import { TargetLightingTest } from "./LOS/TargetLightingTest.js";
 import { Frustum } from "./LOS/Frustum.js";
 
 import {
@@ -432,7 +431,6 @@ Hooks.once("init", function() {
 
     AbstractViewpoint,
     ObstacleOcclusionTest,
-    TargetLightingTest,
     GeometricFaceCalculator,
 
     countTargetPixels,

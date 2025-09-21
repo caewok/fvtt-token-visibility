@@ -349,7 +349,6 @@ export class AbstractViewerLOS {
       inset: viewpointOffset
     }).map(pt => new cl(this, pt));
     this.#config.viewpointOffset = viewpointOffset;
-    this.#updateVisibilityArrays();
   }
 
   // ----- NOTE: Target ---- //
@@ -378,11 +377,11 @@ export class AbstractViewerLOS {
   // ----- NOTE: Visibility testing ----- //
 
   get hasLOS() { return this.percentVisible >= this.threshold; }
-  
+
   _percentVisible;
 
   get percentVisible() {
-    this._percentVisible ??= this.lastResult.percentVisible;
+    if ( typeof this._percentVisible === "undefined" ) this.calculate();
     return this._percentVisible;
   }
 
@@ -407,7 +406,7 @@ export class AbstractViewerLOS {
 
     return -1;
   }
-  
+
   lastResult;
 
   calculate() {
@@ -419,24 +418,17 @@ export class AbstractViewerLOS {
     }
 
     this._configureCalculator();
-    const oldTestLighting = this.testLighting;
-    const testLighting = this.testLighting = oldTestLighting && this.simpleLightingTest(); // Only run test if actually testing lighting.
 
     // Test each viewpoint until unobscured is 1.
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
-    let vp = this.viewpoints[0];
-    vp.calculate();
-    this.lastResult = vp.lastResult;
-    
-    for ( let i = 1, iMax = this.viewpoints.length; i < iMax; i += 1 ) {
-      vp = this.viewpoints[i].calculate();
+    for ( const vp of this.viewpoints ) {
       vp.calculate();
-      this.lastResult = this.lastResult.constructor.max(this.lastResult, vp.lastResult);
-      if ( this.lastResult.percentVisible >= 1 ) break;
+      this._percentVisible = Math.max(this._percentVisible, vp.percentVisible);
+      if ( this._percentVisible >= 1 ) break;
     }
   }
 
- 
+
 
   // Must be done before calling calc.calculate or vp.calculate.
   // Calculator not guaranteed to remain in same state between runs.
@@ -613,7 +605,7 @@ export class AbstractViewerLOS {
     if ( canvas.environment.globalLightSource.active ) return;
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const ctr = Point3d.fromTokenCenter(this.target);
-    for ( const src of canvas[this.calculator.config.sourceType].placeables ) {
+    for ( const src of canvas.lighting.placeables ) {
       const srcOrigin = Point3d.fromPointSource(src);
       const dist2 = Point3d.distanceSquaredBetween(ctr, srcOrigin);
       const isBright = src.brightRadius && (src.brightRadius ** 2) < dist2;
@@ -735,7 +727,7 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     const cacheCategory = this.cacheCategory;
     const cachedVis = this.#cache.get(target)?.[cacheCategory];
     if ( typeof cachedVis === "undefined" ) return false;
-    this._percentVisible = cachedVis;    
+    this._percentVisible = cachedVis;
     return true;
   }
 

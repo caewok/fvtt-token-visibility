@@ -21,14 +21,6 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
-const {
-  TOTAL,
-  OBSCURED,
-//   BRIGHT,
-//   DIM,
-//   DARK,
-} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
-
 
 /**
  * An eye belong to a specific viewer.
@@ -116,7 +108,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     if ( !containingTri ) return;
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
-    this.counts[TOTAL] += 1;
+    // this.counts[TOTAL] += 1;
 
     // TODO: Is it necessary to implement perspective correct interpolation?
     // See https://webglfundamentals.org/webgl/lessons/webgl-3d-perspective-correct-texturemapping.html
@@ -136,7 +128,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     const rayDirection = Point3d.tmp;
     fragmentPoint.subtract(this.viewpoint, rayDirection);
     const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
-    this.counts[OBSCURED] += isOccluded;
+    // this.counts[OBSCURED] += isOccluded;
 
     // Fragment brightness for each source.
     if ( !isOccluded ) this._testLightingForPoint(fragmentPoint);
@@ -159,7 +151,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
     // Take the closest z.
     const containingTris = ndcTris.filter(tri => {
-      GEOMETRY_CONFIG.threeD.BarycentricPoint.fromTriangleData(gridPoint, tri._baryData, tri._baryPoint);
+      CONFIG.GeometryLib.threeD.BarycentricPoint.fromTriangleData(gridPoint, tri._baryData, tri._baryPoint);
       return tri._baryPoint.isInsideTriangle();
     });
 
@@ -431,7 +423,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
     this.containingTris.add(containingTri);
-    this.counts[TOTAL] += 1;
+    // this.counts[TOTAL] += 1;
 
     if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
       const origTri = containingTri._original;
@@ -452,7 +444,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     fragmentPoint.subtract(this.viewpoint, rayDirection);
     const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
     if ( isOccluded ) {
-      this.counts[OBSCURED] += 1;
+      // this.counts[OBSCURED] += 1;
       this.#fragmentColor.z = 1; // Blue.
       this.#fragmentColor.x = 0; // Remove red.
       rayDirection.release();

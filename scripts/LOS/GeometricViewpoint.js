@@ -14,7 +14,7 @@ import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { AbstractPolygonTrianglesID, Grid3dTriangles } from "./PlaceableTriangles.js";
 import { Camera } from "./Camera.js";
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 
 
@@ -22,23 +22,26 @@ import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { Draw } from "../geometry/Draw.js";
 
 
-export class PercentVisiblePointsResult extends PercentVisibleResult {
-  
-  targetPaths;
-  
-  blockingPaths;
+export class PercentVisibleGeometricResult extends PercentVisibleResult {
 
-  get totalTargetArea() { return this.config.numPoints; }
+  targetPaths;
+
+  blockingPaths;
+s
+  get totalTargetArea() { return this.targetPaths ? this.targetPaths.area : 1; }
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() { return this.data.cardinality; }
+  get visibleArea() {
+    if ( !this.targetPaths || !this.targetPaths.area ) return 0;
+    const diff = this.blockingPaths.diffPaths(this.targetPaths);
+    return diff.area;
+  }
 
   blendMaximums(result) {
-    const out = this.clone();
-    out.data = this.data.or(result.data);
-    return out;
+    console.error("blendMaximums not yet implemented.");
+    return this;
   }
 }
 
@@ -101,10 +104,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.camera.setTargetTokenFrustum(this.target);
   }
 
-  targetPaths;
-
-  blockingPaths;
-
   blockingTerrainPaths;
 
   _constructTargetPath() {
@@ -112,7 +111,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Can combine to Polygons3d.
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const targetPolys3d = CONFIG.GeometryLib.threeD.Polygons3d.from3dPolygons(this.targetPolys);
-    this.targetPaths = targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor })
+    this.lastResult.targetPaths = targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor })
   }
 
   /**
@@ -121,46 +120,18 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _constructObstaclePaths() {
     // Use Clipper to calculate area of the polygon shapes.
     this.blockingTerrainPaths = this._combineTerrainPolys(this.blockingTerrainPolys);
-    this.blockingPaths = this._combineObstaclePolys();
+    this.lastResult.blockingPaths = this._combineObstaclePolys();
     if ( this.blockingTerrainPaths && !this.blockingTerrainPaths.area.almostEqual(0) ) {
       if ( !this.blockingPaths ) {
-        this.blockingPaths = this.blockingTerrainPaths.combine();
+        this.lastResult.blockingPaths= this.blockingTerrainPaths.combine();
         console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
       }
-      else this.blockingPaths = this.blockingPaths.add(this.blockingTerrainPaths).combine();
+      else this.lastResult.blockingPaths = this.lastResult.blockingPaths.add(this.blockingTerrainPaths).combine();
     }
   }
 
 
-  /**
-   * Construct 2d perspective projection of each blocking points object.
-   * Combine them into a single array of blocking polygons.
-   * For each visible side of the target, build the 2d perspective polygon for that side.
-   * Take the difference between that side and the blocking polygons to determine the
-   * visible portion of that side.
-   * @returns {object} { obscuredSides: PIXI.Polygon[], sidePolys: PIXI.Polygon[]}
-   *   sidePolys: The sides of the target, in 2d perspective.
-   *   obscuredSides: The unobscured portions of the sidePolys
-   */
-  _calculateObscuredArea() {
-    if ( !this.targetPaths ) {
-      console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
-      this.counts[TOTAL] = 1;
-      this.counts[OBSCURED] = 1;
-    }
 
-    // Construct the obscured shape by taking the difference between the target polygons and
-    // the blocking polygons.
-    this.counts[OBSCURED] = 0;
-    this.counts[TOTAL] = Math.abs(this.targetPaths.area);
-    if ( this.targetArea.almostEqual(0) ) return;
-    if ( !this.blockingPaths ) {
-      console.warn(`${this.constructor.name}|_obscuredArea|No blockingPaths for ${this.viewer.name} --> ${this.target.name}`);
-      return;
-    }
-    const diff = this.blockingPaths.diffPaths(this.targetPaths); // TODO: Correct order?
-    this.counts[OBSCURED] = Math.abs(diff.area);
-  }
 
   /**
    * Each blocking polygon is either a Polygon3d or a Polygons3d.
@@ -302,24 +273,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
         return poly;
       })
       .filter(poly => poly.isValid());
-  }
-
-  /**
-   * Constrained target area, counting both lit and unlit portions of the target.
-   * Used to determine the total area (denominator) when useLitTarget config is set.
-   * @returns {number}
-   */
-  _constrainedTargetArea() {
-    const viewpoint = this.viewpoint
-    const lookAtM = this.camera.lookAtMatrix;
-    const perspectiveM = this.camera.perspectiveMatrix;
-
-    // Set testLighting false so constrained border is used.
-    const facingPolys = this._targetPolygons(false).filter(poly => poly.isFacing(viewpoint));
-    const targetPolys = this._applyPerspective(facingPolys, lookAtM, perspectiveM);
-    const targetPaths = targetPolys.toClipperPaths({ scalingFactor: this.constructor.SCALING_FACTOR });
-    targetPaths.combine().clean();
-    return targetPaths.area;
   }
 
   _gridPolygons(lookAtM, perspectiveM) {

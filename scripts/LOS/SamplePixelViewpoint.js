@@ -22,13 +22,8 @@ More like visibility testing using an orthographic view. Faces further away coun
 they would with perspective view, but hopefully much faster.
 */
 
-const {
-  TOTAL,
-  OBSCURED,
-//   BRIGHT,
-//   DIM,
-//   DARK,
-} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
+
+
 
 
 /**
@@ -56,9 +51,6 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
 
 
   occlusionTester = new ObstacleOcclusionTest();
-
-  /** @type {WeakMap<PointSource, ObstacleOcclusionTest>} */
-  occlusionTesters = new WeakMap();
 
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
@@ -92,10 +84,10 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
     for ( const pt of pts ) {
       const ix = face.intersection(pt, axisNormal, Number.NEGATIVE_INFINITY); // Set t to -∞ so it intersects either direction.
       if ( ix === null ) continue;
-      this.counts[TOTAL] += 1;
+      // this.counts[TOTAL] += 1;
       pt.subtract(this.viewpoint, this.#rayDirection);
       const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
-      this.counts[OBSCURED] += isOccluded
+      // this.counts[OBSCURED] += isOccluded
 
       const debugObject = { A: this.viewpoint, B: pt, isOccluded, isDim: null, isBright: null };
       this.debugPoints.push(debugObject);

@@ -19,12 +19,6 @@ import { PercentVisibleCalculatorAbstract } from "../PercentVisibleCalculator.js
 import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
 import { checkFramebufferStatus } from "../util.js";
 
-const TOTAL = 0;
-const OBSCURED = 1;
-// const BRIGHT = 2;
-// const DIM = 3;
-// const DARK = 4;
-
 /**
  * An eye belong to a specific viewer.
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
@@ -169,8 +163,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
       this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false });
       res = this.redPixelCounter[type]();
     }
-    this.counts[TOTAL] = res.red;
-    this.counts[OBSCURED] = res.redBlocked;
+    // this.counts[TOTAL] = res.red;
+    // this.counts[OBSCURED] = res.redBlocked;
   }
 
 //   async _calculate() {

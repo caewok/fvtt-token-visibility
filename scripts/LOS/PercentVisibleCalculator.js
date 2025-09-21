@@ -2,7 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -10,8 +9,6 @@ PIXI,
 import { MODULE_ID } from "../const.js";
 import { approximateClamp } from "./util.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
-import { Settings } from "../settings.js";
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 
@@ -137,8 +134,7 @@ export class PercentVisibleCalculatorAbstract {
         prone: true,
       }
     },
-    tokenShapeType = "tokenBorder"; // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
-    radius: Number.POSITIVE_INFINITY,
+    tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
     senseType: "sight",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
     debug: false,
     largeTarget: false,
@@ -146,7 +142,7 @@ export class PercentVisibleCalculatorAbstract {
 
   constructor(cfg = {}) {
     // Set default configuration first and then override with passed-through values.
-    this.config = this.constructor.defaultConfiguration;
+    this._config = structuredClone(this.constructor.defaultConfiguration);
     this.config = cfg;
   }
 
@@ -176,7 +172,7 @@ export class PercentVisibleCalculatorAbstract {
   targetLocation = new CONFIG.GeometryLib.threeD.Point3d();
 
   get targetShape() { return this.target[this.config.tokenShapeType]; }
-  
+
   get percentVisible() {
     if ( !this.lastResult ) this.calculate();
     return this.lastResult.percentVisible;
@@ -202,31 +198,18 @@ export class PercentVisibleCalculatorAbstract {
 
   initializeCalculations() {
     this.lastResult = new this.constructor.resultClass(this);
-    lastResult.config = this._config; // Can skip the clone getter here.
+    this.lastResult.config = this._config; // Can skip the clone getter here.
     this.initializeOcclusionTesting();
   }
 
   initializeOcclusionTesting() {
     this.occlusionTester._initialize(this.viewpoint, this.target);
-    if ( this.occlusionTesters ) {
-      for ( const src of canvas[this.config.sourceType].placeables ) {
-        let tester;
-        if ( !this.occlusionTesters.has(src) ) {
-          tester = new ObstacleOcclusionTest();
-          tester._config = this._config; // Link so changes to config are reflected in the tester.
-          this.occlusionTesters.set(src, tester);
-        }
-
-        // Setup the occlusion tester so the faster internal method can be used.
-        tester ??= this.occlusionTesters.get(src);
-        tester._initialize(this.viewpoint, this.target);
-      }
-    }
   }
 
   calculate() {
     this.initializeCalculations();
     this._calculate();
+    return this.lastResult;
   }
 
   /**
@@ -234,9 +217,6 @@ export class PercentVisibleCalculatorAbstract {
    * in darkness, dim, or bright light based on threshold settings.
    */
   calculateLightingTypeForTarget() {
-    const dimThreshold = 0.5; // At least 50% of target area is in dim or bright light.
-    const brightThreshold = 0.5; // At least 50% of target area is in bright light.
-
     const oldConfig = this.config;
     const oldViewer = this.viewer;
     const oldViewpoint = this.viewpoint.clone();
