@@ -18,14 +18,9 @@ import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { insetPoints } from "./util.js";
 
-// Debug
+// Geometry
+import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
-
-// const TOTAL = 0;
-// const OBSCURED = 1;
-// const BRIGHT = 2;
-// const DIM = 3;
-// const DARK = 4;
 
 /**
  * An eye belong to a specific viewer.
@@ -59,7 +54,7 @@ export class AbstractViewpoint {
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
 
   /** @type {Point3d} */
-  get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.viewerLOS.target); }
+  get targetLocation() { return this.viewerLOS.targetLocation; }
 
   /** @type {Token} */
   get viewer() { return this.viewerLOS.viewer};
@@ -98,8 +93,8 @@ export class AbstractViewpoint {
       this._percentVisible = 1;
       return;
     }
-    this.calculator.viewpoint = this.viewpoint;
-    this.lastResult = this.calculator.calculate().clone();
+    this.calculator.calculate(this);
+    this.lastResult = this.calculator.lastResult.clone();
     if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
   }
 
@@ -159,7 +154,6 @@ export class AbstractViewpoint {
    * @returns {Point3d[]}
    */
   static constructTokenPoints(token, { tokenShape, pointAlgorithm, inset, viewpoint } = {}) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const TYPES = Settings.KEYS.POINT_TYPES;
     const center = Point3d.fromTokenCenter(token);
 
@@ -239,7 +233,6 @@ export class AbstractViewpoint {
    * @returns {Point3d[]} Array of corner points.
    */
   static getCorners(tokenShape, elevation) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     if ( tokenShape instanceof PIXI.Rectangle ) {
       // Token unconstrained by walls.
       // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
@@ -377,6 +370,6 @@ export class AbstractViewpoint {
   _drawFrustum(draw) {
     const { viewpoint, target } = this;
     const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint, target });
-    frustum.draw2d({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
+    frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 }

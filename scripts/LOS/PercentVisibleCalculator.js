@@ -18,15 +18,9 @@ import { Point3d } from "../geometry/3d/Point3d.js";
  * Can combine 2+ results.
  */
 export class PercentVisibleResult {
-  viewer;
-
   target;
 
-  viewerLocation = new Point3d();
-
-  targetLocation = new Point3d();
-
-  data;
+  data = {};
 
   _config = {
     largeTarget: false,
@@ -36,16 +30,19 @@ export class PercentVisibleResult {
 
   set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
 
-  constructor({ viewer, target, viewerLocation, targetLocation  } = {}) {
-    this.viewer = viewer;
+  constructor(target, opts = {}) {
     this.target = target;
-    if ( viewerLocation ) this.viewerLocation.copyFrom(viewerLocation);
-    if ( targetLocation ) this.targetLocation.copyFrom(targetLocation);
+    this.config = opts;
+  }
+
+  static fromCalculator(calc, opts = {}) {
+    opts.largeTarget ??= calc.config.largeTarget;
+    return new this(calc.target, opts );
   }
 
   clone() {
-    const out = new this.constructor(this);
-    out.config = this.config;
+    const out = new this.constructor(this.target, this.config);
+    Object.assign(out.data, this.data);
     return out;
   }
 
@@ -95,7 +92,13 @@ export class PercentVisibleResult {
     return approximateClamp(this.visibleArea / this.targetArea, 0, 1, 1e-02);
   }
 
-  blendMaximums(_result) {}
+  /**
+   * Blend this result with another result, taking the maximum values at each test location.
+   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMaximize(other) { return this.clone(); }
 
   static max(...results) {
     let out = results[0];
@@ -167,9 +170,9 @@ export class PercentVisibleCalculatorAbstract {
 
   get targetBorder() { return CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
 
-  viewpoint = new CONFIG.GeometryLib.threeD.Point3d();
+  viewpoint = new Point3d();
 
-  targetLocation = new CONFIG.GeometryLib.threeD.Point3d();
+  targetLocation = new Point3d();
 
   get targetShape() { return this.target[this.config.tokenShapeType]; }
 
@@ -196,9 +199,15 @@ export class PercentVisibleCalculatorAbstract {
   /** @type {PercentVisibleResult} */
   lastResult;
 
+  initializeView({ viewer, target, viewpoint, targetLocation } = {}) {
+    if ( viewer ) this.viewer = viewer;
+    if ( target ) this.target = target;
+    if ( viewpoint ) this.viewpoint.copyFrom(viewpoint);
+    if ( targetLocation ) this.targetLocation.copyFrom(targetLocation);
+  }
+
   initializeCalculations() {
-    this.lastResult = new this.constructor.resultClass(this);
-    this.lastResult.config = this._config; // Can skip the clone getter here.
+    this.lastResult = this.constructor.resultClass.fromCalculator(this);
     this.initializeOcclusionTesting();
   }
 
@@ -206,7 +215,8 @@ export class PercentVisibleCalculatorAbstract {
     this.occlusionTester._initialize(this.viewpoint, this.target);
   }
 
-  calculate() {
+  calculate(viewOpts) {
+    this.initializeView(viewOpts);
     this.initializeCalculations();
     this._calculate();
     return this.lastResult;

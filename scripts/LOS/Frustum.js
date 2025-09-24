@@ -9,7 +9,7 @@ PIXI
 
 import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { AbstractPolygonTrianglesID } from "./placeable_tracking/PlaceableGeometryTracker.js";
+import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
 import { Triangle3d, Quad3d } from "../geometry/3d/Polygon3d.js";
 import { AABB3d } from "../geometry/AABB.js";
 
@@ -349,7 +349,7 @@ export class Frustum {
    * @returns {PlaceableGeometryTracker|false}
    */
   #geometryWithinAABB(placeable) {
-    const geometry = placeable[MODULE_ID]?.[AbstractPolygonTrianglesID];
+    const geometry = placeable[MODULE_ID]?.[AbstractPlaceableTrackerID];
     if ( !geometry ) {
       console.warn(`${this.constructor.name}|geometryWithinAABB|${placeable.id} does not have a geometry object.`, placeable);
       return false;

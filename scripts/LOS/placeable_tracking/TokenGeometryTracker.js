@@ -7,9 +7,20 @@ PIXI,
 "use strict";
 
 import { MODULE_ID } from "../../const.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryHexToken } from "../geometry/GeometryToken.js";
+import {
+  GeometryToken,
+  GeometryConstrainedToken,
+  GeometryHexToken,
+  GeometryLitToken,
+  GeometryBrightLitToken } from "../geometry/GeometryToken.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
+
+import { Polygon3d, Quad3d } from "../../geometry/3d/Polygon3d.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { AABB3d } from "../../geometry/AABB.js";
+import { almostBetween } from "../../geometry/util.js";
 
 /* WallGeometry
 Placeable geometry stored in wall placeables.
@@ -59,20 +70,20 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
 
   calculateTranslationMatrix() {
     // Move from center of token.
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.token);
-    CONFIG.GeometryLib.MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
+    const ctr = Point3d.fromTokenCenter(this.token);
+    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
     return this.matrices.translation;
   }
 
   calculateScaleMatrix() {
     const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
-    CONFIG.GeometryLib.MatrixFloat32.scale(width, height, zHeight, this.matrices.scale);
+    MatrixFloat32.scale(width, height, zHeight, this.matrices.scale);
     return this.matrices.scale;
   }
 
   _updateAABB() {
     // Ignore constrained for purposes of AABB.
-    CONFIG.GeometryLib.threeD.AABB3d.fromToken(this.token, this.aabb);
+    AABB3d.fromToken(this.token, this.aabb);
   }
 
   constrainedGeom;
@@ -83,40 +94,42 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
     else this.constrainedGeom = null;
   }
 
-  top = new CONFIG.GeometryLib.threeD.Quad3d();
-
-  get quad3d() { return this.top; }
-
-  _updateFaces() {
-    const { token, constrainTokens } = this;
-    const { topZ, bottomZ } = this.token;
-    const border2d = constrainTokens ? token.constrainedTokenBorder : token.tokenBorder;
-
-    if ( border2d instanceof PIXI.Polygon ) {
-      const Polygon3d = CONFIG.GeometryLib.threeD.Polygon3d;
-      if ( !(this.top instanceof Polygon3d) ) this.top = new Polygon3d();
-      Polygon3d.fromPolygon(border2d, topZ, this.top);
-    } else { // PIXI.Rectangle
-      const Quad3d = CONFIG.GeometryLib.threeD.Quad3d;
-      if ( !(this.top instanceof Quad3d) ) this.top = new Quad3d();
-      Quad3d.fromRectangle(border2d, topZ, this.top);
-    }
-
-    this.top.clearCache();
-    if ( !this.bottom || !(this.bottom instanceof this.top.constructor) ) this.bottom = new this.top.constructor();
-    this.top.clone(this.bottom);
-    this.bottom.reverseOrientation();
-    this.bottom.setZ(bottomZ);
-
-    // Now build the sides from the top face.
-    this.sides = this.top.buildTopSides(bottomZ);
+  faces = {
+    top: new CONFIG.GeometryLib.threeD.Quad3d(),
+    bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
+    sides: [],
   }
 
-  _updateTriangles() {
-    if ( this.constrainTokens && this.token.isConstrainedTokenBorder ) {
-      const geom = new GeometryConstrainedToken({ placeable: this.token });
-      this.triangles = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(geom.vertices, geom.indices);
-    } else super._updateTriangles();
+  get quad3d() { return this.faces.top; }
+
+  _updateFaces() {
+    const border2d = this.constrainTokens ? this.token.constrainedTokenBorder : this.token.tokenBorder;
+    return this._updateFacesForBorder(border2d);
+  }
+
+  _updateFacesForBorder(border2d) {
+    const faces = this.faces;
+    const { topZ, bottomZ } = this.token;
+
+    if ( border2d instanceof PIXI.Polygon ) {
+      if ( !(faces.top instanceof Polygon3d) ) faces.top = new Polygon3d();
+      Polygon3d.fromPolygon(border2d, topZ, faces.top);
+    } else if ( border2d instanceof PIXI.Rectangle ){ // PIXI.Rectangle
+      if ( !(faces.top instanceof Quad3d) ) faces.top = new Quad3d();
+      Quad3d.fromRectangle(border2d, topZ, faces.top);
+    } else {
+      if ( !(faces.top instanceof Polygon3d) ) faces.top = new Polygon3d();
+      Polygon3d.fromPolygon(border2d.toPolygon(), topZ, faces.top);
+    }
+
+    faces.top.clearCache();
+    if ( !faces.bottom || !(faces.bottom instanceof faces.top.constructor) ) faces.bottom = new faces.top.constructor();
+    faces.top.clone(faces.bottom);
+    faces.bottom.reverseOrientation();
+    faces.bottom.setZ(bottomZ);
+
+    // Now build the sides from the top face.
+    faces.sides = faces.top.buildTopSides(bottomZ);
   }
 
   /**
@@ -130,7 +143,7 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
-    return (t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT)) ? t : null;
+    return (t !== null && almostBetween(t, minT, maxT)) ? t : null;
   }
 
   /**
@@ -153,5 +166,87 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
       height: height * canvas.dimensions.size * .99,
       zHeight: zHeight * .99,
     };
+  }
+}
+
+export class LitTokenGeometryTracker extends TokenGeometryTracker {
+  static ID = "litGeometry";
+
+  static HOOKS = {
+    drawToken: "_onPlaceableDraw",
+    refreshToken: "_onPlaceableRefresh",
+    destroyToken: "_onPlaceableDestroy",
+
+    createAmbientLight: "_onLightingUpdate",
+    updateAmbientLight: "_onLightingUpdate",
+    removeAmbientLight: "_onLightingUpdate",
+  };
+
+  static _onLightingUpdate() {
+    canvas.tokens.forEach(t => {
+      const geom = t[MODULE_ID][this.ID];
+      if ( !geom ) return;
+      geom._updateFaces();
+    });
+  }
+
+  /** @type {GeometryDesc} */
+  static geomClass = GeometryLitToken;
+
+  /** @type {number[]} */
+  static _hooks = [];
+
+  static modelMatrixTracker = new FixedLengthTrackingBuffer( { facetLengths: 16, numFacets: 0, type: Float32Array });
+
+  _updateFaces() {
+    const border2d = this.token.litTokenBorder;
+    if ( !border2d ) {
+      this.faces.top = null;
+      this.faces.bottom = null;
+      this.faces.sides.length = 0;
+      return;
+    }
+    return this._updateFacesForBorder(border2d);
+  }
+}
+
+export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
+  static ID = "brightLitGeometry";
+
+  static HOOKS = {
+    drawToken: "_onPlaceableDraw",
+    refreshToken: "_onPlaceableRefresh",
+    destroyToken: "_onPlaceableDestroy",
+
+    createAmbientLight: "_onLightingUpdate",
+    updateAmbientLight: "_onLightingUpdate",
+    removeAmbientLight: "_onLightingUpdate",
+  };
+
+  static _onLightingUpdate() {
+    canvas.tokens.forEach(t => {
+      const geom = t[MODULE_ID][this.ID];
+      if ( !geom ) return;
+      geom._updateFaces();
+    });
+  }
+
+  /** @type {GeometryDesc} */
+  static geomClass = GeometryBrightLitToken;
+
+  /** @type {number[]} */
+  static _hooks = [];
+
+  static modelMatrixTracker = new FixedLengthTrackingBuffer( { facetLengths: 16, numFacets: 0, type: Float32Array });
+
+  _updateFaces() {
+    const border2d = this.token.brightLitTokenBorder;
+    if ( !border2d ) {
+      this.faces.top = null;
+      this.faces.bottom = null;
+      this.faces.sides.length = 0;
+      return;
+    }
+    return this._updateFacesForBorder(border2d);
   }
 }

@@ -9,7 +9,7 @@ import { MODULE_ID } from "./const.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Draw } from "./geometry/Draw.js";
 import { SETTINGS, Settings } from "./settings.js";
-import { targetWithinLimitedAngleVision } from "./LOS/util.js";
+import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
 // import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 // Patches for the DetectionMode class
@@ -144,7 +144,7 @@ function _testAngle(wrapped, visionSource, mode, target, test) {
 
   // If completely outside the angle, we can return false.
   // Otherwise, handled in visible Token
-  return targetWithinLimitedAngleVision(visionSource, target);
+  return AbstractViewerLOS.targetWithinLimitedAngleVision(visionSource, target);
 }
 
 PATCHES.BASIC.MIXES = { _testLOS, _testRange, _testAngle };

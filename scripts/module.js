@@ -17,7 +17,10 @@ import { Settings, SETTINGS } from "./settings.js";
 import { getObjectProperty } from "./LOS/util.js";
 import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
 import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
-import { TokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
+import {
+  TokenGeometryTracker,
+  LitTokenGeometryTracker,
+  BrightLitTokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
 import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
 
 
@@ -493,12 +496,18 @@ Hooks.on("canvasReady", function() {
   WallGeometryTracker.registerPlaceableHooks();
   TileGeometryTracker.registerPlaceableHooks();
   TokenGeometryTracker.registerPlaceableHooks();
+  LitTokenGeometryTracker.registerPlaceableHooks();
+  BrightLitTokenGeometryTracker.registerPlaceableHooks();
   RegionGeometryTracker.registerPlaceableHooks();
 
   WallGeometryTracker.registerExistingPlaceables();
   TileGeometryTracker.registerExistingPlaceables();
   TokenGeometryTracker.registerExistingPlaceables();
+  LitTokenGeometryTracker.registerExistingPlaceables();
+  BrightLitTokenGeometryTracker.registerExistingPlaceables();
   RegionGeometryTracker.registerExistingPlaceables();
+
+
 
 //   // Create default calculators used by all the tokens.
 //   const basicCalcs = [

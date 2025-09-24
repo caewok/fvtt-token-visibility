@@ -7,8 +7,6 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
-
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
@@ -78,23 +76,38 @@ export class PointsViewpoint extends AbstractViewpoint {
 
 export class PercentVisiblePointsResult extends PercentVisibleResult {
 
-  constructor({ numPoints, ...opts } = {}) {
-    super(opts);
-    numPoints ??= 1;
-    this._config.numPoints = numPoints;
-    this.data = BitSet.Empty(numPoints);
+  _config = {
+    ...this._config,
+    numPoints: 1,
+  };
+
+  data = new BitSet();
+
+  constructor(target, opts) {
+    super(target, opts);
+    this.data = BitSet.Empty(this._config.numPoints);
   }
 
-  get totalTargetArea() { return this.config.numPoints; }
+  static fromCalculator(calc, opts) {
+    return super.fromCalculator(calc, opts);
+  }
+
+  get totalTargetArea() { return this._config.numPoints; }
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
   get visibleArea() { return this.data.cardinality(); }
 
-  blendMaximums(result) {
-    const out = this.clone();
-    out.data = this.data.or(result.data);
+  /**
+   * Blend this result with another result, taking the maximum values at each test location.
+   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMaximize(other) {
+    const out = new this.constructor(this.target, this.config);
+    out.data = this.data.or(other.data);
     return out;
   }
 }
@@ -104,8 +117,11 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
  * Handle points algorithm.
  */
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
+  static resultClass = PercentVisiblePointsResult;
 
-  static get viewpointClass() { return PointsViewpoint; }
+  static viewpointClass = PointsViewpoint;
+
+  // static get viewpointClass() { return PointsViewpoint; }
 
   static defaultConfiguration = {
     ...PercentVisibleCalculatorAbstract.defaultConfiguration,
@@ -126,7 +142,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
     const targetPointsForShapes = targetShapes.map(shape => this.constructTargetPoints(shape));
     const numPoints = targetPointsForShapes.reduce((acc, curr) => curr.length + acc, 0);
-    this.lastResult = new PercentVisiblePointsResult({ numPoints, ...this });
+    this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints });
     for ( let i = 0, iMax = targetShapes.length; i < iMax; i += 1 ) {
       const targetPoints = targetPointsForShapes[i];
       const result = this._testPointToPoints(targetPoints);
@@ -171,8 +187,8 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const debugPoints = this.debugPoints;
     for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
-      targetPoint.subtract(this.viewpoint, this.#rayDirection);
-      const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
+      const isOccluded = Point3d.distanceSquaredBetween(this.viewpoint, targetPoint) > dist2
+        || this.occlusionTester._rayIsOccluded(targetPoint.subtract(this.viewpoint, this.#rayDirection));
       result.data.set(i, !isOccluded);
       const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded };
       debugPoints[i] = debugObject;

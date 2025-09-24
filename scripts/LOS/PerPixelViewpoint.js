@@ -120,7 +120,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       // Need to determine where the grid point hits the containing triangle on the z axis.
       const Point3d = CONFIG.GeometryLib.threeD.Point3d;
       const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
-      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(gridPoint.x, gridPoint.y, gridZ), fragmentPoint);
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d.tmp.set(gridPoint.x, gridPoint.y, gridZ), fragmentPoint);
     }
 
     // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
@@ -433,7 +433,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       // Need to determine where the grid point hits the containing triangle on the z axis.
       const Point3d = CONFIG.GeometryLib.threeD.Point3d;
       const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
-      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(gridPoint.x,gridPoint.y, gridZ), fragmentPoint);
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d.tmp.set(gridPoint.x,gridPoint.y, gridZ), fragmentPoint);
     }
 
     this.#fragmentColor.x = 1;
@@ -513,9 +513,9 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       // See https://stackoverflow.com/questions/30594511/webgl-fragment-shader-for-multiple-light-sources
 
       // Reflected light from this source.
-      const lightColor = Point3d._tmp1;
-      const srcReflectedColor = Point3d._tmp2;
-      const N = origTri.plane.normal.multiplyScalar(-1, Point3d._tmp3);
+      const lightColor = Point3d.tmp;
+      const srcReflectedColor = Point3d.tmp;
+      const N = origTri.plane.normal.multiplyScalar(-1, Point3d.tmp);
 
       this.#fragmentPoint.subtract(srcOrigin, this.#lightDirection).normalize(this.#lightDirection);
       const lightStrength = Math.max(N.dot(this.#lightDirection), 0) * (isDim ? 0.5 : 1.0);
@@ -525,8 +525,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
       // Specular from this source.
       if ( lightStrength ) {
-        const srcSpecularColor = Point3d._tmp2;
-        const halfVector = Point3d._tmp3;
+        const srcSpecularColor = Point3d.tmp;
+        const halfVector = Point3d.tmp;
 
         this.#lightDirection.add(this.#viewDirection, halfVector).normalize(halfVector);
         const specularStrength = Math.pow(N.dot(halfVector), this.shininess);

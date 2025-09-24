@@ -52,6 +52,8 @@ Two conceptualizations of dark/dim/bright:
 - Viewer might have ability, like darkvision, that switches which border should be used.
 
 
+--> Handle combining multiple viewpoints by allowing results to be additively (maximum) joined.
+
 
 
 Viewer --> object

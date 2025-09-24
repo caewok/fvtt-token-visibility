@@ -10,8 +10,11 @@ import { MODULE_ID, OTHER_MODULES } from "../../const.js";
 import { GeometryRegion, GeometryCircleRegionShape, GeometryEllipseRegionShape, GeometryRectangleRegionShape, GeometryPolygonRegionShape } from "../geometry/GeometryRegion.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { regionElevation, convertRegionShapeToPIXI } from "../util.js";
-import { Circle3d, Ellipse3d, Quad3d, Polygon3d } from "../../geometry/3d/Polygon3d.js";
+import { Circle3d, Ellipse3d, Quad3d, Polygon3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
 import { AABB3d } from "../../geometry/AABB.js";
+import { almostBetween } from "../../geometry/util.js";
+import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
 /* RegionGeometry
@@ -73,32 +76,28 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   }
 
   /** @type {Polygons3d} */
-  top = new CONFIG.GeometryLib.threeD.Polygons3d();
+  faces = {
+    top: new Polygons3d(),
+    bottom: new Polygons3d(),
+    multiTops: [], // Could use Polygons3d except if ramps used with ramp per shape.
+    multiBottoms: [], // Could use Polygons3d except if ramps used with ramp per shape.
+    sides: [],
+  };
 
-  bottom = new CONFIG.GeometryLib.threeD.Polygons3d();
-
-  /** @{Polygon3d[]} */ // Could use Polygons3d except if ramps used with ramp per shape.
-  tops = [];
-
-  /** @type {Polygon3d[]} */
-  bottoms = [];
-
-  /** @type {Polygon3d[]} */
-  sides = [];
 
   *iterateFaces() {
     if ( this.hasMultiPlaneRamp ) {
-      for ( const top of this.tops ) yield top;
-      for ( const bottom of this.bottoms ) yield bottom;
-      for ( const side of this.sides ) yield side;
+      for ( const top of this.faces.multiTops ) yield top;
+      for ( const bottom of this.faces.multiBottoms ) yield bottom;
+      for ( const side of this.faces.sides ) yield side;
     } else return super.iterateFaces();
   }
 
   initialize() {
     this.region.shapes.forEach(shape => {
       shape[MODULE_ID] ??= {};
-      shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
-      shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID].initialize();
+      shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
+      shape[MODULE_ID][this.constructor.ID].initialize();
     });
     super.initialize();
   }
@@ -106,15 +105,15 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   update() {
     this.region.shapes.forEach(shape => {
       shape[MODULE_ID] ??= {};
-      shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
-      shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID].update();
+      shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
+      shape[MODULE_ID][this.constructor.ID].update();
     });
     super.update();
   }
 
   _updateAABB() {
-    const newAABB = CONFIG.GeometryLib.threeD.AABB3d.union(this.region.shapes.map(shape =>
-      shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID].aabb));
+    const newAABB = AABB3d.union(this.region.shapes.map(shape =>
+      shape[MODULE_ID][this.constructor.ID].aabb));
     newAABB.clone(this.aabb);
   }
 
@@ -131,42 +130,40 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
     const region = this.placeable;
 
     // Clear prior data.
-    this.top.polygons.length = 0;
-    this.bottom.polygons.length = 0;
-    this.tops.length = 0;
-    this.bottoms.length = 0;
-    this.sides.length = 0;
+    const { top, bottom, multiTops, multiBottoms, sides } = this.faces;
+    const topArr = this.hasMultiPlaneRamp ? multiTops : top.polygons;
+    const bottomArr = this.hasMultiPlaneRamp ? multiBottoms : bottom.polygons;
+    topArr.length = 0;
+    bottomArr.length = 0;
+    multiTops.length = 0;
+    multiBottoms.length = 0;
+    sides.length = 0;
     if ( !region.shapes.length ) return;
-
-    const topArr = this.hasMultiPlaneRamp ? this.tops : this.top.polygons;
-    const bottomArr = this.hasMultiPlaneRamp ? this.bottoms : this.bottom.polygons;
 
     const { topZ, bottomZ } = regionElevation(region);
     const uniqueShapes = this.combineRegionShapes();
-    const nUnique = uniqueShapes.length;
-    this.tops.length = this.bottoms.length = this.sides.length = nUnique;
     for ( const shapeGroup of uniqueShapes ) {
       if ( shapeGroup.length === 1 ) {
-        const geometry = shapeGroup[0][MODULE_ID][this.constructor.AbstractPolygonTrianglesID];
+        const geometry = shapeGroup[0][MODULE_ID][this.constructor.ID];
         if ( geometry.isHole ) continue;
         topArr.push(geometry.top)
         bottomArr.push(geometry.bottom);
-        this.sides.push(...geometry.sides);
+        sides.push(...geometry.sides);
 
       } else {
         // Combine and convert to Polygon3d.
-        const paths = shapeGroup.map(shape => shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID].toClipperPaths());
+        const paths = shapeGroup.map(shape => shape[MODULE_ID][this.constructor.ID].toClipperPaths());
         const combinedPaths = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
 
         const path = combinedPaths.combine();
-        const polys = CONFIG.GeometryLib.threeD.Polygons3d.fromClipperPaths(path, topZ);
+        const polys = Polygons3d.fromClipperPaths(path, topZ);
         const t = polys;
         const b = polys.clone();
         b.setZ(bottomZ); // topZ already set above.
         b.reverseOrientation();
 
         // Build all the side polys.
-        this.sides.push(...t.buildTopSides(bottomZ))
+        sides.push(...t.buildTopSides(bottomZ))
       }
     }
 
@@ -189,12 +186,12 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         if ( usedShapes.has(j) ) continue;
         const other = region.shapes[j];
-        const otherGeometry = other[MODULE_ID][this.constructor.AbstractPolygonTrianglesID];
+        const otherGeometry = other[MODULE_ID][this.constructor.ID];
         const otherPIXI = otherGeometry.shapePIXI;
 
         // Any overlap counts.
         for ( const shape of shapeGroup ) {
-          const shapeGeometry = shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID];
+          const shapeGeometry = shape[MODULE_ID][this.constructor.ID];
           const shapePIXI = shapeGeometry.shapePIXI;
           if ( shapePIXI.overlaps(otherPIXI) ) {
             shapeGroup.push(other);
@@ -219,8 +216,8 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     for ( const shape of this.region.shapes ) {
-      const t = shape[MODULE_ID][this.constructor.AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
-      if ( t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return t;
+      const t = shape[MODULE_ID][this.constructor.ID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
+      if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }
     return null;
   }
@@ -287,8 +284,8 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
   // Shape type should not change.
   initialize() {
     this.shapePIXI = convertRegionShapeToPIXI(this.shape).clone();
-    this.top = new this.constructor.polygonClass();
-    this.bottom = new this.constructor.polygonClass();
+    this.faces.top = new this.constructor.polygonClass();
+    this.faces.bottom = new this.constructor.polygonClass();
     super.initialize();
   }
 
@@ -297,7 +294,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
     const zHeight = topZ - bottomZ;
     const z = topZ - (zHeight * 0.5);
     const { x, y } = this.shape.data;
-    CONFIG.GeometryLib.MatrixFloat32.translation(x, y, z, this.matrices.translation);
+    MatrixFloat32.translation(x, y, z, this.matrices.translation);
     return this.matrices.translation;
   }
 
@@ -309,7 +306,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
     const zHeight = topZ - bottomZ;
     const z = topZ - (zHeight * 0.5);
     const { x, y } = this._xyScale();
-    CONFIG.GeometryLib.MatrixFloat32.scale(x, y, z, this.matrices.scale);
+    MatrixFloat32.scale(x, y, z, this.matrices.scale);
     return this.matrices.scale;
   }
 
@@ -331,14 +328,14 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
   // TODO: Handle ramps.
   _updateFaces() {
     const { topZ, bottomZ } = this.constructor.regionElevationZ(this.region);
-    this.constructor.faceFn(this.shapePIXI, topZ, this.top);
-    if ( this.isHole ^ this.top.isClockwise ) this.top.reverseOrientation();
-    this.top.clone(this.bottom);
-    this.bottom.setZ(bottomZ);
-    this.bottom.reverseOrientation();
+    this.constructor.faceFn(this.shapePIXI, topZ, this.faces.top);
+    if ( this.isHole ^ this.faces.top.isClockwise ) this.faces.top.reverseOrientation();
+    this.faces.top.clone(this.faces.bottom);
+    this.faces.bottom.setZ(bottomZ);
+    this.faces.bottom.reverseOrientation();
 
     // Build sides from the edges.
-    this.sides = this.top.buildTopSides(bottomZ);
+    this.sides = this.faces.top.buildTopSides(bottomZ);
   }
 
   static regionElevationZ(region) {
@@ -373,12 +370,12 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     if ( !this.isHole ) {
-      const t = this.top.intersectionT(rayOrigin, rayDirection);
-      if ( t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return t;
+      const t = this.faces.top.intersectionT(rayOrigin, rayDirection);
+      if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }
     for ( const side of this.sides() ) {
       const t = side.intersectionT(rayOrigin, rayDirection);
-      if ( t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return t;
+      if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }
     return null;
   }

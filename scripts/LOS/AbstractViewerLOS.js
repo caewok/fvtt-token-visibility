@@ -370,9 +370,7 @@ export class AbstractViewerLOS {
   }
 
   /** @type {Point3d} */
-  get targetCenter() {
-    return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target);
-  }
+  get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target); }
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -407,35 +405,23 @@ export class AbstractViewerLOS {
     return -1;
   }
 
-  lastResult;
 
   calculate() {
-    this._percentVisible = undefined;
+    this._percentVisible = 0;
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
       this._percentVisible = simpleTest;
       return;
     }
 
-    this._configureCalculator();
-
     // Test each viewpoint until unobscured is 1.
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
+    this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
       vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, vp.percentVisible);
       if ( this._percentVisible >= 1 ) break;
     }
-  }
-
-
-
-  // Must be done before calling calc.calculate or vp.calculate.
-  // Calculator not guaranteed to remain in same state between runs.
-  _configureCalculator() {
-    this.calculator.viewer = this.viewer;
-    this.calculator.target = this.target;
-    this.calculator.targetLocation = this.targetLocation;
   }
 
   /**

@@ -5,14 +5,15 @@ CONFIG,
 "use strict";
 
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { MODULE_ID } from "../const.js";
-import { AbstractPolygonTrianglesID } from "./placeable_tracking/PlaceableGeometryTracker.js";
+import { Quad3d } from "../geometry/3d/Polygon3d.js";
+import { MatrixFloat32 } from "../geometry/MatrixFlat.js";
 
-const pt3d_0 = new Point3d();
+import { MODULE_ID } from "../const.js";
+import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
 
 export class Camera {
 
-  static UP = new Point3d(0, 0, 1); // Cannot use CONFIG.GeometryLib.threeD.Point3d in static defs.
+  static UP = new Point3d(0, 0, 1); // Cannot use Point3d in static defs.
 
   static MIRRORM_DIAG = new Point3d(-1, 1, 1);
 
@@ -52,18 +53,18 @@ export class Camera {
 
   /** @type {object<Float32Array(16)|mat4>} */
   #M = {
-    perspective: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 0, 16), 4, 4),
-    lookAt: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
+    perspective: new MatrixFloat32(new Float32Array(this.#arrayBuffer, 0, 16), 4, 4),
+    lookAt: new MatrixFloat32(new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
   };
 
   /** @type {Float32Array(32)} */
   #arrayView = new Float32Array(this.#arrayBuffer, 0, 32);
 
   /** @type {MatrixFloat32<4,4>} */
-  #cameraM = CONFIG.GeometryLib.MatrixFloat32.empty(4, 4);
+  #cameraM = MatrixFloat32.empty(4, 4);
 
   /** @type {MatrixFloat32<4,4>} */
-  mirrorM = CONFIG.GeometryLib.MatrixFloat32.identity(4, 4);
+  mirrorM = MatrixFloat32.identity(4, 4);
 
   /** @type {boolean} */
   #dirty = {
@@ -74,7 +75,7 @@ export class Camera {
   };
 
   /** @type {function} */
-  #perspectiveFn = CONFIG.GeometryLib.MatrixFloat32.perspectiveZO;
+  #perspectiveFn = MatrixFloat32.perspectiveZO;
 
   UP = new Point3d();
 
@@ -94,16 +95,16 @@ export class Camera {
 
     // Update the relevant internal parameters.
     const fnName = `${this.#perspectiveType}${this.#glType === "webGPU" ? "ZO" : ""}`;
-    this.#perspectiveFn = CONFIG.GeometryLib.MatrixFloat32[fnName];
+    this.#perspectiveFn = MatrixFloat32[fnName];
     this.#internalParams = value === "orthogonal" ? this.#orthogonalParameters : this.#perspectiveParameters;
     this.#dirty.perspective ||= true;
     this.#dirty.model ||= true;
     this.#dirty.inverse ||= true;
   }
 
-  #modelMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4);
+  #modelMatrix = MatrixFloat32.identity(4);
 
-  #inverseModelMatrix = CONFIG.GeometryLib.MatrixFloat32.identity(4);
+  #inverseModelMatrix = MatrixFloat32.identity(4);
 
   get modelMatrix() {
     if ( this.#dirty.model ) {
@@ -149,7 +150,7 @@ export class Camera {
   }
 
   setTargetTokenFrustum(targetToken) {
-    const geometry = targetToken[MODULE_ID][AbstractPolygonTrianglesID];
+    const geometry = targetToken[MODULE_ID][AbstractPlaceableTrackerID];
     const aabb3d = geometry.aabb;
     this.setFrustumForAABB3d(aabb3d);
   }
@@ -163,10 +164,13 @@ export class Camera {
    */
   setFrustumForAABB3d(aabb3d) {
     aabb3d = aabb3d.toFinite();
-    const boxCenter = aabb3d.getCenter(pt3d_0);
-    this.targetLocation = boxCenter;
-    return this.perspectiveType === "perspective"
+    const boxCenter = aabb3d.center;
+    this.targetPosition = boxCenter;
+    const out = this.perspectiveType === "perspective"
       ? this._setPerspectiveFrustumForAABB3d(aabb3d, boxCenter) : this._setOrthogonalFrustumForAABB3d(aabb3d);
+    boxCenter.release();
+    aabb3d.release();
+    return out;
   }
 
   /**
@@ -177,8 +181,6 @@ export class Camera {
    * @returns {object} Parameters, for convenience; also set internally.
    */
   _setPerspectiveFrustumForAABB3d(aabb3d, boxCenter) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    boxCenter ??= aabb3d.getCenter(pt3d_0);
 
     // Calculate the radius of a sphere that encloses the bounding box.
     // This is the distance from the center to one of the corners (e.g., the max corner).
@@ -218,11 +220,14 @@ export class Camera {
     let xMinMax = Math.minMax(p0.x);
     let yMinMax = Math.minMax(p0.y);
     let zMinMax = Math.minMax(p0.z);
+    p0.release();
     for ( const pt of iter ) {
       const txPt = lookAtM.multiplyPoint3d(pt);
       xMinMax = Math.minMax(xMinMax.min, xMinMax.max, txPt.x);
       yMinMax = Math.minMax(yMinMax.min, yMinMax.max, txPt.y);
       zMinMax = Math.minMax(zMinMax.min, zMinMax.max, txPt.z);
+      txPt.release();
+      pt.release();
     }
 
     // The min/max projected values define the clipping planes.
@@ -264,7 +269,7 @@ export class Camera {
     if ( this.#dirty.perspective ) {
       // mat4.perspective or perspectiveZO?
       // const { fov, aspect, zNear, zFar } = this.#perspectiveParameters;
-      // CONFIG.GeometryLib.MatrixFloat32.perspectiveZO(fov, aspect, zNear, zFar, this.#M.perspective);
+      // MatrixFloat32.perspectiveZO(fov, aspect, zNear, zFar, this.#M.perspective);
       this.#perspectiveFn(...Object.values(this.#internalParams), this.#M.perspective);
 
       // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
@@ -315,7 +320,7 @@ export class Camera {
   /** @type {Float32Array|mat4} */
   get lookAtMatrix() {
     if ( this.#dirty.lookAt ) {
-      CONFIG.GeometryLib.MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
+      MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
       this.#dirty.lookAt = false;
     }
     return this.#M.lookAt;
@@ -342,8 +347,8 @@ export class Camera {
 
   /** @type {Float32Array(3)|vec3} */
   #positions = {
-    camera: new CONFIG.GeometryLib.threeD.Point3d(),
-    target: new CONFIG.GeometryLib.threeD.Point3d()
+    camera: new Point3d(),
+    target: new Point3d()
   };
 
   get cameraPosition() { return this.#positions.camera; }
@@ -369,9 +374,18 @@ export class Camera {
     const Minv = M.invert();
     const minCoord = this.glType === "webGPU" ? 0 : -1;
 
-    const Quad3d = CONFIG.GeometryLib.threeD.Quad3d;
-    const front = [new Point3d(1, minCoord, 0),  new Point3d(minCoord, minCoord, 0), new Point3d(minCoord, 1, 0), new Point3d(1, 1, 0)];
-    const back = [new Point3d(1, minCoord, -1),  new Point3d(minCoord, minCoord, -1), new Point3d(minCoord, 1, -1), new Point3d(1, 1, -1)];
+    const front = [
+      Point3d.tmp.set(1, minCoord, 0),
+      Point3d.tmp.set(minCoord, minCoord, 0),
+      Point3d.tmp.set(minCoord, 1, 0),
+      Point3d.tmp.set(1, 1, 0)
+    ];
+    const back = [
+      Point3d.tmp.set(1, minCoord, -1),
+      Point3d.tmp.set(minCoord, minCoord, -1),
+      Point3d.tmp.set(minCoord, 1, -1),
+      Point3d.tmp.set(1, 1, -1)
+    ];
 
     // back TL, TR, front TR, TL
     const top = [back[0], back[1], front[1], front[0]];
@@ -382,12 +396,15 @@ export class Camera {
     // If this were used for something other than debug, would be more efficient to
     // invert the vertices and share them among the quads.
 
-    return {
+    const out = {
       front: Quad3d.from4Points(...front.map(pt => Minv.multiplyPoint3d(pt))),
       back: Quad3d.from4Points(...back.map(pt => Minv.multiplyPoint3d(pt))),
       top: Quad3d.from4Points(...top.map(pt => Minv.multiplyPoint3d(pt))),
       bottom: Quad3d.from4Points(...bottom.map(pt => Minv.multiplyPoint3d(pt))),
     };
+    front.forEach(pt => pt.release());
+    back.forEach(pt => pt.release());
+    return out;
   }
 
   drawCanvasFrustum2d(opts) {
