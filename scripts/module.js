@@ -17,7 +17,10 @@ import { Settings, SETTINGS } from "./settings.js";
 import { getObjectProperty } from "./LOS/util.js";
 import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
 import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
-import { TokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
+import {
+  TokenGeometryTracker,
+  LitTokenGeometryTracker,
+  BrightLitTokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
 import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
 
 
@@ -26,7 +29,6 @@ import * as bench from "./benchmark.js";
 
 import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
 import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
-import { TargetLightingTest } from "./LOS/TargetLightingTest.js";
 import { Frustum } from "./LOS/Frustum.js";
 
 import {
@@ -116,6 +118,7 @@ import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
+import { BitSet } from "./LOS/BitSet/bitset.mjs";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -431,7 +434,6 @@ Hooks.once("init", function() {
 
     AbstractViewpoint,
     ObstacleOcclusionTest,
-    TargetLightingTest,
     GeometricFaceCalculator,
 
     countTargetPixels,
@@ -443,6 +445,7 @@ Hooks.once("init", function() {
     },
 
     MarchingSquares,
+    BitSet,
 
     PATCHER,
     Patcher, HookPatch, MethodPatch, LibWrapperPatch
@@ -493,12 +496,18 @@ Hooks.on("canvasReady", function() {
   WallGeometryTracker.registerPlaceableHooks();
   TileGeometryTracker.registerPlaceableHooks();
   TokenGeometryTracker.registerPlaceableHooks();
+  LitTokenGeometryTracker.registerPlaceableHooks();
+  BrightLitTokenGeometryTracker.registerPlaceableHooks();
   RegionGeometryTracker.registerPlaceableHooks();
 
   WallGeometryTracker.registerExistingPlaceables();
   TileGeometryTracker.registerExistingPlaceables();
   TokenGeometryTracker.registerExistingPlaceables();
+  LitTokenGeometryTracker.registerExistingPlaceables();
+  BrightLitTokenGeometryTracker.registerExistingPlaceables();
   RegionGeometryTracker.registerExistingPlaceables();
+
+
 
 //   // Create default calculators used by all the tokens.
 //   const basicCalcs = [

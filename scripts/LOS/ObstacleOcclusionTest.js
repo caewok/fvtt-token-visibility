@@ -9,7 +9,7 @@ Wall,
 // Base folder
 import { MODULE_ID, OTHER_MODULES } from "../const.js";
 import { Frustum } from "./Frustum.js";
-import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
+import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
 import {
   NULL_SET,
   tokensOverlap,
@@ -59,8 +59,9 @@ export class ObstacleOcclusionTest {
   findObstacles() {
     const senseType = this.config.senseType;
     this.obstacles = this.constructor.findBlockingObjects(this.rayOrigin, this.target, this.config);
-    this.obstacles.terrainWalls = this.constructor.pullOutTerrainWalls(this.obstacles.walls, senseType);
-    this.obstacles.proximateWalls = this.constructor.pullOutTerrainWalls(this.obstacles.walls, senseType);
+    this.obstacles.terrainWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
+    this.obstacles.proximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
+    this.obstacles.reverseProximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
   }
 
   obstacleTester;
@@ -84,37 +85,37 @@ export class ObstacleOcclusionTest {
   }
 
   wallsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.walls.some(wall => wall[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection) !== null);
+    return this.obstacles.walls.some(wall => wall[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection) !== null);
   }
 
   terrainWallsOcclude(rayOrigin, rayDirection) {
     let limitedOcclusion = 0;
     for ( const wall of this.obstacles.terrainWalls ) {
-      if ( wall[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection) === null ) continue;
+      if ( wall[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection) === null ) continue;
       if ( limitedOcclusion++ ) return true;
     }
     return false;
   }
 
   proximateWallsOcclude(rayOrigin, rayDirection) {
-    for ( const wall of this.obstacles.proximateWalls ) {
+    for ( const wall of [...this.obstacles.proximateWalls, ...this.obstacles.reverseProximateWalls] ) {
       // If the proximity threshold is met, this edge excluded from perception calculations.
       if ( wall.edge.applyThreshold(this.config.senseType, rayOrigin) ) continue;
-      if ( wall[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection) !== null ) return true;
+      if ( wall[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection) !== null ) return true;
     }
     return false;
   }
 
   tilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => tile[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tiles.some(tile => tile[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection));
   }
 
   tokensOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tokens.some(token => token[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tokens.some(token => token[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection));
   }
 
   regionsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.regions.some(region => region[MODULE_ID][AbstractPolygonTrianglesID].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.regions.some(region => region[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection));
   }
 
   // ----- NOTE: Static collision tests ----- //
@@ -147,38 +148,21 @@ export class ObstacleOcclusionTest {
 
   /**
    * Pull out terrain walls from a set of walls.
-   * @param {Set<Wall>} walls       Set of walls to divide
+   * @param {Set<Wall>} walls               Set of walls to divide
+   * @param {CONST.WALL_SENSE_TYPES}        What type of wall to pull out
    * @param {string} [senseType="sight"]    Restriction type to test
    * @returns {Set<Wall>}  Modifies walls set *in place* and returns terrain walls.
    */
-  static pullOutTerrainWalls(walls, senseType = "sight") {
+  static pullOutWalls(walls, wallType = CONST.WALL_SENSE_TYPES.LIMITED, senseType = "sight") {
     if ( !walls.size ) return NULL_SET;
-    const terrainWalls = new Set();
-    walls.forEach(w => {
-      if ( w.document[senseType] === CONST.WALL_SENSE_TYPES.LIMITED ) {
+    const wallSubset = new Set();
+    walls
+      .filter(w => w.document[senseType] === wallType)
+      .forEach(w => {
         walls.delete(w);
-        terrainWalls.add(w);
-      }
-    });
-    return terrainWalls;
-  }
-
-  /**
-   * Pull out threshold walls from a set of walls. Both proximate and reverse.
-   * @param {Set<Wall>} walls       Set of walls to divide
-   * @param {string} [senseType="sight"]    Restriction type to test
-   * @returns {Set<Wall>}  Modifies walls set *in place* and returns proximate/reverse walls.
-   */
-  static pullOutProximateWalls(walls, senseType = "sight") {
-    if ( !walls.size ) return NULL_SET;
-    const proximateWalls = new Set();
-    walls.forEach(w => {
-      if ( w.document[senseType] >= CONST.WALL_SENSE_TYPES.PROXIMATE ) {
-        walls.delete(w);
-        proximateWalls.add(w);
-      }
-    });
-    return proximateWalls;
+        wallSubset.add(w);
+      });
+    return wallSubset;
   }
 
   static findBlockingWalls(frustum, { senseType = "sight", blocking = {} } = {}) {
@@ -297,8 +281,8 @@ export class ObstacleOcclusionTest {
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const geometry = placeable[MODULE_ID][AbstractPolygonTrianglesID];
-    return geometry.iterateFaces().filter(poly => poly.isFacing(viewpoint));
+    const geometry = placeable[MODULE_ID][AbstractPlaceableTrackerID];
+    return [...geometry.iterateFaces()].filter(poly => poly.isFacing(viewpoint));
   }
 
 }

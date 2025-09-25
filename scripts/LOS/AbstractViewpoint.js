@@ -18,14 +18,9 @@ import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { insetPoints } from "./util.js";
 
-// Debug
+// Geometry
+import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
-
-// const TOTAL = 0;
-// const OBSCURED = 1;
-// const BRIGHT = 2;
-// const DIM = 3;
-// const DARK = 4;
 
 /**
  * An eye belong to a specific viewer.
@@ -59,7 +54,7 @@ export class AbstractViewpoint {
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
 
   /** @type {Point3d} */
-  get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.viewerLOS.target); }
+  get targetLocation() { return this.viewerLOS.targetLocation; }
 
   /** @type {Token} */
   get viewer() { return this.viewerLOS.viewer};
@@ -83,28 +78,29 @@ export class AbstractViewpoint {
 
 
   // ----- NOTE: Visibility Percentages ----- //
+  _percentVisible;
 
-  get percentVisible() { return this.calculator.percentVisible; }
+  lastResult;
 
-  get percentUnobscured() { return this.calculator.percentUnobscured; }
-
-  get percentVisibleBright() { return this.calculator.percentVisibleBright; }
-
-  get percentVisibleDim() { return this.calculator.percentVisibleDim; }
-
-  get visibility() { return [this.calculator.percentUnobscured, this.calculator.percentVisibleDim, this.calculator.percentVisibleBright]; }
+  get percentVisible() {
+    if ( typeof this._percentVisible === "undefined" ) this._percentVisible = this.lastResult.percentVisible;
+    return this._percentVisible;
+  }
 
   calculate() {
-    this.calculator.counts.fill(0)
-    if ( this.passesSimpleVisibilityTest() ) return;
-    this.calculator.viewpoint = this.viewpoint;
-    this.calculator.calculate();
+    this._percentVisible = undefined;
+    if ( this.passesSimpleVisibilityTest() ) {
+      this._percentVisible = 1;
+      return;
+    }
+    this.calculator.calculate(this);
+    this.lastResult = this.calculator.lastResult.clone();
     if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
   }
 
   targetOverlapsViewpoint() {
-    const bounds = this.config.constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
-    if ( !bounds.contains(this.viewpoint) ) return false;
+    const bounds = this.calculator.targetShape;
+    if ( !bounds.contains(this.viewpoint.x, this.viewpoint.y) ) return false;
     return this.viewpoint.between(this.target.bottomZ, this.target.topZ);
   }
 
@@ -120,14 +116,7 @@ export class AbstractViewpoint {
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
     if ( (this.viewpoint.z > backgroundElevation && target.topZ < backgroundElevation)
       || (this.viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return true;
-
-    // Force tokens within the viewpoint to be visible and lit.
-    if ( this.targetOverlapsViewpoint() ) {
-      this.calculator.counts.set([1, 0, 1, 1, 0]);
-      return true;
-    }
-
-    return false;
+    return this.targetOverlapsViewpoint();
   }
 
   // ----- NOTE: Collision tests ----- //
@@ -165,7 +154,6 @@ export class AbstractViewpoint {
    * @returns {Point3d[]}
    */
   static constructTokenPoints(token, { tokenShape, pointAlgorithm, inset, viewpoint } = {}) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const TYPES = Settings.KEYS.POINT_TYPES;
     const center = Point3d.fromTokenCenter(token);
 
@@ -245,7 +233,6 @@ export class AbstractViewpoint {
    * @returns {Point3d[]} Array of corner points.
    */
   static getCorners(tokenShape, elevation) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     if ( tokenShape instanceof PIXI.Rectangle ) {
       // Token unconstrained by walls.
       // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
@@ -383,6 +370,6 @@ export class AbstractViewpoint {
   _drawFrustum(draw) {
     const { viewpoint, target } = this;
     const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint, target });
-    frustum.draw2d({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
+    frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 }
