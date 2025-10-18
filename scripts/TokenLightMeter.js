@@ -110,6 +110,9 @@ export class TokenLightMeter {
   set viewpoint(value) { this.calc.viewpoint.copyFrom(value); }
   
   constructor(token, { numPoints = 20 } = {}) {
+    token[MODULE_ID] ??= {};
+    token[MODULE_ID][this.constructor.ID] = this;
+  
     this.token = token;
     this.numPoints = numPoints;
     

@@ -30,9 +30,9 @@ export class ATVTokenHandler {
   viewer;
  
   constructor(token) {
-    this.viewer = token;
     token[MODULE_ID] ??= {};
     token[MODULE_ID][this.constructor.ID] = this;
+    this.viewer = token;
   }
   
   get losCalc() { return this.viewer[MODULE_ID].losCalc; }
