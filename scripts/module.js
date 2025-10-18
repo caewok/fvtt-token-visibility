@@ -86,6 +86,7 @@ import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./L
 import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
 import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/SamplePixelViewpoint.js"
 import { GeometricFaceCalculator } from "./LOS/GeometricFaceCalculator.js";
+import { TokenLightMeter } from "./TokenLightMeter.js";
 
 
 // import {
@@ -238,8 +239,19 @@ Hooks.once("init", function() {
      * @type {number}
      */
     renderTextureSize: 128,
-
-
+    
+    /**
+     * Number of points to measure in one dimension for light type calculation.
+     * Will be used for all 3 dimensions. E.g., 3 --> 3x3x3 in a cube, or 18 points total.
+     * @type {number}
+     */
+    lightMeasurementNumPoints: 5,
+    
+    /**
+     * When enabled, will treat circular token shapes as spheres. Otherwise, uses a cylinder.
+     * @type {boolean}
+     */
+    useTokenSphere: false,
 
     useCaching: false,
 
@@ -322,6 +334,27 @@ Hooks.once("init", function() {
      * @type {boolean}
      */
     regionsBlock: true,
+    
+    /**
+     * What percentage of bright points on a token sphere are required to be considered in bright light?
+     * @type {number}  Between 0 and 1
+     */
+    brightCutoff: 0.25,
+    
+    /**
+     * What percentage of dim points on a token sphere are required to be considered in dim light?
+     * @type {number}  Between 0 and 1
+     */
+    dimCutoff: 0.25,
+    
+    /**
+     * For points on the other side of the token from the light, how should they be lit assuming
+     * no other obstruction than the target token? 
+     * For example, DIM would mean that points on the dark side of the token would have maximum
+     * dim light even if the token was within the radius of a bright light.
+     * @type {CONST.LIGHTING_LEVELS}
+     */
+    lightMeterObscureType: CONST.LIGHTING_LEVELS.DIM,
 
     debug: true,
   };
@@ -384,6 +417,8 @@ Hooks.once("init", function() {
     buildLOSViewer,
     buildCustomLOSViewer,
     buildDebugViewer,
+    
+    TokenLightMeter,
 
     debugViewers: {
       points: DebugVisibilityViewerPoints,
