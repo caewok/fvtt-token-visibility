@@ -88,10 +88,6 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
     this.data = BitSet.Empty(this._config.numPoints);
   }
 
-  static fromCalculator(calc, opts) {
-    return super.fromCalculator(calc, opts);
-  }
-
   get totalTargetArea() { return this._config.numPoints; }
 
   // Handled by the calculator, which combines multiple results.
@@ -128,6 +124,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     pointAlgorithm: "points-center",
     targetInset: 0.75,
     points3d: false,
+    radius: Number.POSITIVE_INFINITY,
   }
 
   /** @type {Points3d[][]} */
@@ -141,16 +138,21 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     if ( !targetShapes.length ) targetShapes.push(this.targetShape);
 
     const targetPointsForShapes = targetShapes.map(shape => this.constructTargetPoints(shape));
-    const numPoints = targetPointsForShapes.reduce((acc, curr) => curr.length + acc, 0);
+    return this._calculateForPoints(targetPointsForShapes);
+  }
+  
+  _calculateForPoints(points) {
+    const numPoints = points.reduce((acc, curr) => Math.max(acc, curr.length), 0);
     this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints });
-    for ( let i = 0, iMax = targetShapes.length; i < iMax; i += 1 ) {
-      const targetPoints = targetPointsForShapes[i];
+    for ( let i = 0, iMax = points.length; i < iMax; i += 1 ) {
+      const targetPoints = points[i];
       const result = this._testPointToPoints(targetPoints);
       this.lastResult = PercentVisiblePointsResult.max(this.lastResult, result);
 
       // If we have hit 100%, we are done.
       if ( this.lastResult.percentVisible >= 1 ) break;
     }
+    return this.lastResult;
   }
 
   /* ----- NOTE: Target points ----- */
@@ -179,6 +181,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @returns {PercentVisiblePointsResult}
    */
   _testPointToPoints(targetPoints) {
+    this.occlusionTester._initialize(this.viewpoint, this.target);  
     const result = this.lastResult.clone();
     result.data.clear();
 
@@ -236,7 +239,6 @@ calc.target = zanna
 calc.viewpoint.copyFrom(Point3d.fromTokenCenter(calc.viewer))
 calc.targetLocation.copyFrom(Point3d.fromTokenCenter(calc.target))
 
-await calc.initialize()
 res = calc.calculate()
 
 debugViewer = api.buildDebugViewer(api.debugViewers.points)

@@ -320,7 +320,6 @@ ObstacleOcclusionTest = api.ObstacleOcclusionTest
 GeometricFaceCalculator = api.GeometricFaceCalculator
 
 faceCalc = new GeometricFaceCalculator()
-faceCalc.initialize()
 faceCalc.viewpoint = Point3d.fromPointSource(l)
 
 faceCalc.perspectivePolygons.obstacles.walls.forEach(poly => poly.draw2d)

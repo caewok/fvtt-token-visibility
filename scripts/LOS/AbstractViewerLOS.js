@@ -198,8 +198,6 @@ export class AbstractViewerLOS {
     if ( this.#viewer ) this.initializeViewpoints({ numViewpoints, viewpointOffset });
   }
 
-  async initialize() { return this.calculator.initialize(); }
-
   // ----- NOTE: Configuration ---- //
 
   static defaultConfiguration = {

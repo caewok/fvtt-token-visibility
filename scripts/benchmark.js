@@ -280,7 +280,7 @@ async function runLOSTest(n, viewers, targets, { algorithm, nPoints, large = fal
 
   const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, { viewpointClass: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
   const promises = [];
-  calcs.forEach(calc => promises.push(calc.initialize()));
+  calcs.forEach(calc => promises.push(calc?.initialize()));
   await Promise.allSettled(promises);
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
@@ -318,7 +318,7 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints,
 
   const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, { viewpointClass: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
   const promises = [];
-  calcs.forEach(calc => promises.push(calc.initialize()));
+  calcs.forEach(calc => promises.push(calc?.initialize()));
   await Promise.allSettled(promises);
 
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);

@@ -147,6 +147,7 @@ export class PercentVisibleCalculatorAbstract {
     // Set default configuration first and then override with passed-through values.
     this._config = structuredClone(this.constructor.defaultConfiguration);
     this.config = cfg;
+    this.occlusionTester._config = this._config; // Sync the configs.
   }
 
   _config = {};
@@ -154,10 +155,6 @@ export class PercentVisibleCalculatorAbstract {
   get config() { return structuredClone(this._config); }
 
   set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
-
-  async initialize() {
-    this.occlusionTester._config = this._config; // Sync the configs.
-  }
 
 
   // ----- NOTE: Visibility testing ----- //
@@ -200,8 +197,15 @@ export class PercentVisibleCalculatorAbstract {
   lastResult;
 
   initializeView({ viewer, target, viewpoint, targetLocation } = {}) {
-    if ( viewer ) this.viewer = viewer;
-    if ( target ) this.target = target;
+    if ( viewer ) {
+      this.viewer = viewer;
+      const method = viewer instanceof Token ? "fromTokenCenter" : "fromPointSource";
+      Point3d[method](viewer, this.viewpoint);
+    } 
+    if ( target ) {
+      this.target = target;
+      Point3d.fromTokenCenter(target, this.targetLocation);
+    }
     if ( viewpoint ) this.viewpoint.copyFrom(viewpoint);
     if ( targetLocation ) this.targetLocation.copyFrom(targetLocation);
   }
@@ -247,18 +251,24 @@ export class PercentVisibleCalculatorAbstract {
       largeTarget: false,
     }
     this.setLightingTest(this.constructor.LIGHTING_TEST_TYPES.NONE);
-    let result = new this.constructor.resultClass(this);
+    let dimResult = new this.constructor.resultClass(this);
+    let brightResult = new this.constructor.resultClass(this);
     for ( const src of canvas.lighting.placeables ) {
       this.viewer = src;
       this.viewerLocation.copyFrom(Point3d.fromPointSource(src));
+      this.config = { radius: src.radius };
       this.calculate();
-      result = result.blendMaximums(this.lastResult);
+      dimResult = dimResult.blendMaximums(this.lastResult);
+      
+      this.config = { radius: src.brightRadius };
+      this.calculate()
+      brightResult = brightResult.blendMaximums(this.lastResult);
     }
 
     this.config = oldConfig;
     this.viewer = oldViewer;
     this.viewpoint.copyFrom(oldViewpoint);
-    return result;
+    return { dim: dimResult, bright: brightResult };
   }
 
   // async calculate(); // TODO: Implement if necessary; mimic calculate method but with await this._calculate.

@@ -1,15 +1,11 @@
 /* globals
-CONFIG,
-Token
+Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { rangeTestPointsForToken } from "./visibility_range.js";
-import { Draw } from "./geometry/Draw.js";
-import { SETTINGS, Settings } from "./settings.js";
-import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
+import { ATVTokenHandlerID } from "./TokenHandler.js";
 // import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 // Patches for the DetectionMode class
@@ -46,18 +42,17 @@ PATCHES.BASIC.WRAPS = { testVisibility };
  * Mixed wrap DetectionMode.prototype._testLOS
  * Handle different types of LOS visibility tests.
  */
-function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = false } = {}) {
+function _testLOS(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
-
-  // Only apply this test to token viewers.
-  const viewer = visionSource.object;
-  if ( !viewer || !(viewer instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
   // Check the cached value; return if there.
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
-
+  
+  // Only apply this test to token viewers.
+  const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
+  if ( !atv ) return wrapped(visionSource, mode, target, test);
 
 //   const viewer = visionSource.object;
 //   console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
@@ -65,17 +60,9 @@ function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = fa
 //   console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
 
   // Configure the line-of-sight calculator.
-  const losCalc = viewer[MODULE_ID]?.losCalc;
-  if ( !losCalc ) return wrapped(visionSource, mode, target, test);
-  losCalc.setConfigForDetectionMode(this);
-
-  // Test whether this vision source has line-of-sight to the target, cache, and return.
-  losCalc.target = target;
-  losCalc.testLighting = true;
-  losCalc.calculate(); // TODO: Can remove if caching.
-  hasLOS = testLighting ? losCalc.hasLOSDim : losCalc.hasLOSUnobscured;
+  atv.setConfigForDetectionMode(this);
+  hasLOS = atv.hasLOSToToken(target);
   test.los.set(visionSource, hasLOS);
-  // losCalc.setConfigForDetectionMode(); // Reset to basic DM?
   return hasLOS;
 }
 
@@ -91,42 +78,9 @@ function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = fa
 function _testRange(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
-
-  // Empty; not in range
-  // See https://github.com/foundryvtt/foundryvtt/issues/8505
-  if ( mode.range <= 0 ) return false;
-
-  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-  const testPoints = rangeTestPointsForToken(target);
-  const visionOrigin = Point3d.fromPointSource(visionSource);
-  const radius = visionSource.object.getLightRadius(mode.range);
-  const radius2 = radius * radius;
-
-  // Duplicate below so that the if test does not need to be inside the loop.
-  if ( Settings.get(SETTINGS.DEBUG.RANGE) ) {
-    const draw = new Draw(Settings.DEBUG_RANGE);
-
-    // Sort the unique elevations and draw largest radius for bottom.
-    const elevationSet = new Set(testPoints.map(pt => pt.z));
-    const elevationArr = [...elevationSet];
-    elevationArr.sort((a, b) => a - b);
-
-    // Color all the points red or green.
-    // Need to draw test points from lowest to highest elevation.
-    testPoints.sort((a, b) => a.z - b.z);
-    testPoints.forEach(pt => {
-      const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
-      const inRange = dist2 <= radius2;
-      const radius = elevationArr.length < 2 ? 3
-        : [7, 5, 3][elevationArr.findIndex(elem => elem === pt.z)] ?? 3;
-      draw.point(pt, { alpha: 1, radius, color: inRange ? Draw.COLORS.green : Draw.COLORS.red });
-    })
-  }
-
-  return testPoints.some(pt => {
-    const dist2 = Point3d.distanceSquaredBetween(pt, visionOrigin);
-    return dist2 <= radius2;
-  });
+  const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
+  if ( !atv ) return wrapped(visionSource, mode, target, test);
+  return atv.tokenWithinVisibleRange(target, mode.range);
 }
 
 /**
@@ -142,9 +96,9 @@ function _testAngle(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
 
-  // If completely outside the angle, we can return false.
-  // Otherwise, handled in visible Token
-  return AbstractViewerLOS.targetWithinLimitedAngleVision(visionSource, target);
+  const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
+  if ( !atv ) return wrapped(visionSource, mode, target, test);
+  return atv.tokenWithinLimitedAngleVision(target);
 }
 
 PATCHES.BASIC.MIXES = { _testLOS, _testRange, _testAngle };

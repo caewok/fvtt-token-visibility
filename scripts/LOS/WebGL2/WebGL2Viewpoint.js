@@ -27,22 +27,17 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   data = {
     blocked: null,
     target: null,
+    blockedCount: null,
+    targetCount: null,
   };
 
-
-  _targetCount;
-
-  _blockedCount;
-
   get totalTargetArea() {
-    return this._targetCount || this.data.target.cardinality() || 0;
+    return this.data.targetCount || this.data.target.cardinality() || 0;
   }
 
   get blockedArea() {
-    const blockedCount = this._blockedCount ?? this.data.blocked.cardinality || 0;
+    return this.data.blockedCount ?? (this.data.blocked.cardinality() || 0);
   }
-
-
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
@@ -50,7 +45,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   get visibleArea() {
     const targetArea = this.targetArea;
     if ( !targetArea ) return 0;
-    return almostBetween(this.targetArea - this.blockedArea, 0, 1);
+    return almostBetween(targetArea - this.blockedArea, 0, 1);
   }
 
   /**
@@ -61,11 +56,10 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
    */
   blendMaximize(other) {
     // The target area could change, given the different views.
-    // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+    // Combine the visible target paths.    
     const out = new this.constructor(this.target, this.config);
-    out.targetPaths = ClipperPaths.combine([this.data.targetPaths, other.data.targetPaths]);
-    out.visibleTargetPaths = ClipperPaths.combine([this.data.visibleTargetPaths, other.data.visibleTargetPaths]);
+    out.data.target = this.data.target.or(other.data.target);
+    out.data.blocked = this.data.target.and(other.data.target);
     return out;
   }
 }
@@ -80,6 +74,8 @@ export class WebGL2Viewpoint extends AbstractViewpoint {
 }
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
+  static resultClass = PercentVisibleWebGL2Result;
+  
   static get viewpointClass() { return WebGL2Viewpoint; }
 
   static defaultConfiguration = {
@@ -216,13 +212,12 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     }
 
     if ( pixelCounterType.startsWith("map") ) {
-
+      this.lastResult.data.blocked = res.redBlocked;
+      this.lastResult.data.target = res.red;
     } else {
-
+      this.lastResult.data.blockedCount = res.redBlocked;
+      this.lastResult.data.targetCount = res.red
     }
-
-    // this.counts[TOTAL] = res.red;
-    // this.counts[OBSCURED] = res.redBlocked;
   }
 
 //   async _calculate() {
@@ -297,12 +292,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 //     }
 //     return res.red;
 //   }
-
-  _viewableTargetArea(_viewer, _target, _viewpoint, _targetLocation) {
-    return this._redPixels - this._redBlockedPixels;
-  }
-
-  _totalTargetArea(_viewer, _target, _viewpoint, _targetLocation) { return this._redPixels; }
 
   destroy() {
     super.destroy();

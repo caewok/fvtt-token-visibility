@@ -33,11 +33,8 @@ export class DebugVisibilityViewerAbstract {
     config.viewpointClass = this.constructor.viewpointClass;
     this.viewerLOS = new AbstractViewerLOS(undefined, config);
     this.viewerLOS.debug = true;
-  }
-
-  async initialize() {
+    
     this.registerHooks();
-    await this.viewerLOS.initialize();
     this._initializeDebugGraphics();
   }
 

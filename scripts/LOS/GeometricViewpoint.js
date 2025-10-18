@@ -50,8 +50,8 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     const out = new this.constructor(this.target, this.config);
-    out.targetPaths = ClipperPaths.combine([this.data.targetPaths, other.data.targetPaths]);
-    out.visibleTargetPaths = ClipperPaths.combine([this.data.visibleTargetPaths, other.data.visibleTargetPaths]);
+    out.data.targetPaths = ClipperPaths.combine([this.data.targetPaths, other.data.targetPaths]);
+    out.data.visibleTargetPaths = ClipperPaths.combine([this.data.visibleTargetPaths, other.data.visibleTargetPaths]);
     return out;
   }
 }
@@ -430,7 +430,6 @@ buildDebugViewer = api.buildDebugViewer
 
 calc = new api.calcs.geometric();
 
-await calc.initialize()
 calc.initializeView({ viewer: randal, target: zanna, viewpoint: Point3d.fromTokenCenter(randal), targetLocation: Point3d.fromTokenCenter(zanna) })
 calc.calculate()
 calc.percentVisible

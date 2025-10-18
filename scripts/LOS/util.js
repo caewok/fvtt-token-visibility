@@ -516,7 +516,7 @@ export function regionElevation(region) {
   let bottomZ = region.bottomZ;
   if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
   if ( !(bottomZ && isFinite(bottomZ)) ) bottomZ = -1e06;
-  const rampFloor = tm.isRamp ? gridUnitsToPixels(tm.rampFloor) : null;
+  const rampFloor = (OTHER_MODULES.TERRAIN_MAPPER.ACTIVE && tm.isRamp) ? gridUnitsToPixels(tm.rampFloor) : null;
   return { topZ, bottomZ, rampFloor };
 }
 
@@ -728,3 +728,5 @@ export class IndexWeakMap extends WeakMap {
     }
   }
 }
+
+export function isOdd(n) { return (n & 1) === 1; }

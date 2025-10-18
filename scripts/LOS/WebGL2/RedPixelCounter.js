@@ -8,7 +8,7 @@ import * as twgl from "./twgl-full.js";
 import { MODULE_ID } from "../../const.js";
 import { readPixelsAsync, getBufferSubDataAsync } from "./read_pixels_async.js";
 import { WebGL2 } from "./WebGL2.js";
-import { BitSet } from "./BitSet/bitset.mjs";
+import { BitSet } from "../BitSet/bitset.mjs";
 
 
 /**
