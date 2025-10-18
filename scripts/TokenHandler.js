@@ -12,7 +12,7 @@ import { Draw } from "./geometry/Draw.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
 
 
-export const ATVTokenHandlerID = "handler";
+export const ATVTokenHandlerID = "visibility";
 
 export class ATVTokenHandler {
 

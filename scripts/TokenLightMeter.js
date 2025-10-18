@@ -55,7 +55,12 @@ Equivalently, test a^2 + b^2 > c^2 (vs < or =)
  - Disperse light based on intensities
 */
 
+export const ATVTokenLightMeterID = "lightMeter";
+
 export class TokenLightMeter {
+
+  /** @type {string} */
+  static ID = ATVTokenLightMeterID;
 
   /** @type {Token} */
   token;
