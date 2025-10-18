@@ -84,11 +84,13 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     CONFIG.GeometryLib.threeD.AABB3d.fromTileAlpha(this.tile, this.alphaThreshold, this.aabb);
   }
 
-  top = new CONFIG.GeometryLib.threeD.Quad3d();
+  faces = {
+    top: new CONFIG.GeometryLib.threeD.Quad3d(),
+    bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
+    sides: [],
+  }
 
-  bottom = new CONFIG.GeometryLib.threeD.Quad3d();
-
-  get quad3d() { return this.top; }
+  get quad3d() { return this.faces.top; }
 
   /** @type {object<Polygons3d[]>} */
   alphaThresholdPolygons = {
@@ -113,18 +115,18 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
 
     if ( alphaShape instanceof PIXI.Polygon ) {
       const Polygon3d = CONFIG.GeometryLib.threeD.Polygon3d;
-      if ( !(this.top instanceof Polygon3d) ) this.top = new Polygon3d();
-      Polygon3d.fromPolygon(alphaShape, elevZ, this.top);
+      if ( !(this.faces.top instanceof Polygon3d) ) this.faces.top = new Polygon3d();
+      Polygon3d.fromPolygon(alphaShape, elevZ, this.faces.top);
     } else { // PIXI.Rectangle
       const Quad3d = CONFIG.GeometryLib.threeD.Quad3d;
-      if ( !(this.top instanceof Quad3d) ) this.top = new Quad3d();
-      Quad3d.fromRectangle(alphaShape, elevZ, this.top);
+      if ( !(this.faces.top instanceof Quad3d) ) this.faces.top = new Quad3d();
+      Quad3d.fromRectangle(alphaShape, elevZ, this.faces.top);
     }
 
-    this.top.clearCache();
-    if ( !this.bottom || !(this.bottom instanceof this.top.constructor) ) this.bottom = new this.top.constructor();
-    this.top.clone(this.bottom);
-    this.bottom.reverseOrientation();
+    this.faces.top.clearCache();
+    if ( !this.faces.bottom || !(this.faces.bottom instanceof this.faces.top.constructor) ) this.faces.bottom = new this.faces.top.constructor();
+    this.faces.top.clone(this.faces.bottom);
+    this.faces.bottom.reverseOrientation();
   }
 
 

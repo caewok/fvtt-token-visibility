@@ -7,12 +7,11 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
-
 // LOS folder
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
+import { BitSet } from "./BitSet/bitset.mjs";
 
 /*
 Points algorithm also can use area and threshold.
@@ -23,15 +22,6 @@ Dim and bright lighting test options:
 2. Point not obscured from light and within light radius
 
 */
-
-
-const {
-  TOTAL,
-  OBSCURED,
-  DIM,
-//   BRIGHT,
-//   DARK,
-} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
 
 
 /**
@@ -83,76 +73,95 @@ export class PointsViewpoint extends AbstractViewpoint {
   }
 }
 
+
+export class PercentVisiblePointsResult extends PercentVisibleResult {
+
+  _config = {
+    ...this._config,
+    numPoints: 1,
+  };
+
+  data = new BitSet();
+
+  constructor(target, opts) {
+    super(target, opts);
+    this.data = BitSet.Empty(this._config.numPoints);
+  }
+
+  get totalTargetArea() { return this._config.numPoints; }
+
+  // Handled by the calculator, which combines multiple results.
+  get largeTargetArea() { return this.totalTargetArea; }
+
+  get visibleArea() { return this.data.cardinality(); }
+
+  /**
+   * Blend this result with another result, taking the maximum values at each test location.
+   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMaximize(other) {
+    const out = new this.constructor(this.target, this.config);
+    out.data = this.data.or(other.data);
+    return out;
+  }
+}
+
+
 /**
  * Handle points algorithm.
  */
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
+  static resultClass = PercentVisiblePointsResult;
 
-  static get viewpointClass() { return PointsViewpoint; }
+  static viewpointClass = PointsViewpoint;
+
+  // static get viewpointClass() { return PointsViewpoint; }
 
   static defaultConfiguration = {
     ...PercentVisibleCalculatorAbstract.defaultConfiguration,
     pointAlgorithm: "points-center",
     targetInset: 0.75,
     points3d: false,
+    radius: Number.POSITIVE_INFINITY,
   }
 
   /** @type {Points3d[][]} */
   targetPoints = [];
 
-  counts = new Uint8Array(Object.keys(this.constructor.COUNT_LABELS).length);
-
-  // Use separate lighting occlusion testers b/c it will change viewpoints a lot.
-  /** @type {WeakMap<PointSource, ObstacleOcclusionTest>} */
-  occlusionTesters = new WeakMap();
-
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
-  // Points handles large target slightly differently. See _testLargeTarget.
-  get largeTargetArea() { return this.counts[TOTAL]; }
-
   _calculate() {
-    this.debugPoints.length = 0;
-    if ( this.config.largeTarget ) this._testLargeTarget();
-    else {
-      const targetPoints = this.constructTargetPoints();
-      this._testPointToPoints(targetPoints);
-    }
+    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
+      ? this.constructor.constrainedGridShapesUnderToken(this.tokenShape) : [this.targetShape];
+    if ( !targetShapes.length ) targetShapes.push(this.targetShape);
+
+    const targetPointsForShapes = targetShapes.map(shape => this.constructTargetPoints(shape));
+    return this._calculateForPoints(targetPointsForShapes);
   }
+  
+  _calculateForPoints(points) {
+    const numPoints = points.reduce((acc, curr) => Math.max(acc, curr.length), 0);
+    this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints });
+    for ( let i = 0, iMax = points.length; i < iMax; i += 1 ) {
+      const targetPoints = points[i];
+      const result = this._testPointToPoints(targetPoints);
+      this.lastResult = PercentVisiblePointsResult.max(this.lastResult, result);
 
-  _testLargeTarget() {
-    // Construct points for each target subshape, defined by grid spaces under the target.
-    const targetShapes = this.constructor.constrainedGridShapesUnderToken(this.tokenShape);
-    if ( !targetShapes.length ) {
-      console.warn(`${MODULE_ID}|${this.constructor.name}|Target shapes for large target not working.`);
-      const targetPoints = this.constructTargetPoints();
-      this._testPointToPoints(targetPoints);
-      return;
+      // If we have hit 100%, we are done.
+      if ( this.lastResult.percentVisible >= 1 ) break;
     }
-
-    const tmpCounts = new Uint8Array(this.constructor.COUNT_LABELS.length);
-    let currentPercent = 0;
-    for ( const targetShape of targetShapes ) {
-      const targetPoints = this.constructTargetPoints(targetShape);
-      this._testPointToPoints(targetPoints);
-
-      // If no lighting, look for maximum percent unoccluded,
-      // If lighting, look for maximum percent dim.
-      // Keeping in mind that denominator (number of target points) could change between iterations.
-      const numerator = this.config.testLighting ? this.counts[DIM] : (this.counts[TOTAL] - this.counts[OBSCURED]);
-      const newPercent = numerator / this.counts[TOTAL];
-      if ( newPercent > currentPercent ) {
-        tmpCounts.set(this.counts);
-        currentPercent = newPercent;
-      }
-      if ( newPercent >= 1 ) break;
-    }
-    this.counts.set(tmpCounts);
+    return this.lastResult;
   }
 
   /* ----- NOTE: Target points ----- */
 
-
+  /**
+   * Build a set of 3d points on a given token shape, dependent on settings and shape.
+   * @param {PIXI.Polygon} tokenShape
+   * @returns {Point3d[]}
+   */
   constructTargetPoints(tokenShape) {
     const target = this.target;
     const { pointAlgorithm, targetInset, points3d } = this.config;
@@ -162,51 +171,33 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     return points3d ? PointsViewpoint.elevatePoints(target, targetPoints) : targetPoints;
   }
 
-
-
   /* ----- NOTE: Visibility testing ----- */
-
 
   debugPoints = [];
 
+  /**
+   * Test which target points are occluded and return the result.
+   * @param {Point3d[]}
+   * @returns {PercentVisiblePointsResult}
+   */
   _testPointToPoints(targetPoints) {
-    this.counts.fill(0);
+    this.occlusionTester._initialize(this.viewpoint, this.target);  
+    const result = this.lastResult.clone();
+    result.data.clear();
+
+    const dist2 = this.config.radius ** 2;
     const numPoints = targetPoints.length;
-    this.counts[TOTAL] = numPoints;
     const debugPoints = this.debugPoints;
     for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
-      targetPoint.subtract(this.viewpoint, this.#rayDirection);
-      const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
-      this.counts[OBSCURED] += isOccluded;
-
-      const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded, isDim: null, isBright: null };
+      const isOccluded = Point3d.distanceSquaredBetween(this.viewpoint, targetPoint) > dist2
+        || this.occlusionTester._rayIsOccluded(targetPoint.subtract(this.viewpoint, this.#rayDirection));
+      result.data.set(i, !isOccluded);
+      const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded };
       debugPoints[i] = debugObject;
-      if ( !isOccluded ) this._testLightingForPoint(targetPoint, debugObject);
     }
+    return result;
   }
-
-
-  /**
-   * Use the target's lit shape to determine if the point is lit.
-   */
-//   _testLightingContainmentForPoint(targetPoint, debugObject = {}) {
-//     // TODO: Add option to test sound sources by switching this.config.sourceType.
-//     // Requires new border calcs: soundTokenBorder
-//
-//     const isDim = this.target.litTokenBorder
-//       ? this.target.litTokenBorder.contains(targetPoint.x, targetPoint.y) : false;
-//     const isBright = isDim
-//       && (this.target.brightLitTokenBorder
-//         ? this.target.brightLitTokenBorder.contains(targetPoint.x, targetPoint.y) : false);
-//     debugObject.isDim = isDim;
-//     debugObject.isBright = isBright;
-//     this.counts[BRIGHT] += isBright;
-//     this.counts[DIM] += isDim;
-//     this.counts[DARK] += !(isDim || isBright);
-//   }
-
-
 }
 
 
@@ -233,3 +224,28 @@ export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
     this.render();
   }
 }
+
+/*
+Point3d = CONFIG.GeometryLib.threeD.Point3d
+Draw = CONFIG.GeometryLib.Draw
+api = game.modules.get("tokenvisibility").api
+PercentVisibleCalculatorPoints = api.calcs.points
+zanna = canvas.tokens.placeables.find(t => t.name === "Zanna")
+randal = canvas.tokens.placeables.find(t => t.name === "Randal")
+
+calc = new PercentVisibleCalculatorPoints()
+calc.viewer = randal
+calc.target = zanna
+calc.viewpoint.copyFrom(Point3d.fromTokenCenter(calc.viewer))
+calc.targetLocation.copyFrom(Point3d.fromTokenCenter(calc.target))
+
+res = calc.calculate()
+
+debugViewer = api.buildDebugViewer(api.debugViewers.points)
+await debugViewer.initialize();
+debugViewer.render();
+
+
+
+*/
+

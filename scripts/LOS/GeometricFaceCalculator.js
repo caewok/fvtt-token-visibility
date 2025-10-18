@@ -313,14 +313,13 @@ l = canvas.lighting.placeables[0]
 Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 MODULE_ID = "tokenvisibility"
-AbstractPolygonTrianglesID = "geometry"
+AbstractPolygonTrianglesID = "triangles"
 api = game.modules.get(MODULE_ID).api
 Camera = api.geometry.Camera
 ObstacleOcclusionTest = api.ObstacleOcclusionTest
 GeometricFaceCalculator = api.GeometricFaceCalculator
 
 faceCalc = new GeometricFaceCalculator()
-faceCalc.initialize()
 faceCalc.viewpoint = Point3d.fromPointSource(l)
 
 faceCalc.perspectivePolygons.obstacles.walls.forEach(poly => poly.draw2d)

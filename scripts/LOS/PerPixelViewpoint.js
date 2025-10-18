@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 PIXI,
 */
@@ -14,20 +13,52 @@ import { Settings } from "../settings.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { Camera } from "./Camera.js";
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { BitSet } from "./BitSet/bitset.mjs";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
 
-const {
-  TOTAL,
-  OBSCURED,
-//   BRIGHT,
-//   DIM,
-//   DARK,
-} = PercentVisibleCalculatorAbstract.COUNT_LABELS;
+export class PercentVisiblePerPixelResult extends PercentVisibleResult {
+
+  _config = {
+    ...this._config,
+    numPoints: 1,
+  };
+
+  data = new BitSet();
+
+  constructor(target, opts) {
+    super(target, opts);
+    this.data = BitSet.Empty(this._config.numPoints);
+  }
+
+  static fromCalculator(calc, opts) {
+    opts.numPoints = calc.scale ** 2;
+    return super.fromCalculator(calc, opts);
+  }
+
+  get totalTargetArea() { return this._config.numPoints; }
+
+  // Handled by the calculator, which combines multiple results.
+  get largeTargetArea() { return this.totalTargetArea; }
+
+  get visibleArea() { return this.data.cardinality(); }
+
+  /**
+   * Blend this result with another result, taking the maximum values at each test location.
+   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMaximize(other) {
+    const out = new this.constructor(this.target, this.config);
+    out.data = this.data.or(other.data);
+    return out;
+  }
+}
 
 
 /**
@@ -49,6 +80,8 @@ export class PerPixelViewpoint extends AbstractViewpoint {
 }
 
 export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAbstract {
+  static resultClass = PercentVisiblePerPixelResult;
+  
   static get viewpointClass() { return PerPixelViewpoint; }
 
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
@@ -97,13 +130,16 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     const ndcTris = CONFIG[MODULE_ID].perPixelQuickInterpolation ? this.transformTargetToNDC() : this.transformTargetToNDC2();
     let srcs = [];
     let srcObstacles = [];
-    if ( this.config.testLighting ) {
-      srcs = canvas[this.config.sourceType].placeables;
-      srcObstacles = this.locateSourceObstacles();
-    }
+//     if ( this.config.testLighting ) {
+//       srcs = canvas[this.config.sourceType].placeables;
+//       srcObstacles = this.locateSourceObstacles();
+//     }
+    
+    let i = 0;
     for ( let x = 0; x < scale; x += 1 ) {
       for ( let y = 0; y < scale; y += 1 ) {
-        this._testPixelOcclusion(x, y, ndcTris, srcs, srcObstacles);
+        const isOccluded = this._testPixelOcclusion(x, y, ndcTris, srcs, srcObstacles);
+        this.lastResult.data.set(i++, !isOccluded);
       }
     }
   }
@@ -113,10 +149,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     const fragmentPoint = Point3d.tmp;
     const gridPoint = PIXI.Point.tmp.set(x, y);
     const containingTri = this._locateFragmentTriangle(ndcTris, gridPoint);
-    if ( !containingTri ) return;
+    if ( !containingTri ) return false;
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
-    this.counts[TOTAL] += 1;
+    // this.counts[TOTAL] += 1;
 
     // TODO: Is it necessary to implement perspective correct interpolation?
     // See https://webglfundamentals.org/webgl/lessons/webgl-3d-perspective-correct-texturemapping.html
@@ -128,7 +164,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       // Need to determine where the grid point hits the containing triangle on the z axis.
       const Point3d = CONFIG.GeometryLib.threeD.Point3d;
       const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
-      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(gridPoint.x, gridPoint.y, gridZ), fragmentPoint);
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d.tmp.set(gridPoint.x, gridPoint.y, gridZ), fragmentPoint);
     }
 
     // Now we have a 3d point, compare to the viewpoint and lighting viewpoints to determine occlusion and bright/dim/dark
@@ -136,14 +172,16 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     const rayDirection = Point3d.tmp;
     fragmentPoint.subtract(this.viewpoint, rayDirection);
     const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
-    this.counts[OBSCURED] += isOccluded;
+    // this.counts[OBSCURED] += isOccluded;
 
     // Fragment brightness for each source.
-    if ( !isOccluded ) this._testLightingForPoint(fragmentPoint);
+    // if ( !isOccluded ) this._testLightingForPoint(fragmentPoint);
 
     rayDirection.release();
     gridPoint.release();
     fragmentPoint.release();
+    
+    return isOccluded;
   }
 
   /**
@@ -159,7 +197,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     // Simple shapes should have a single facing triangle but it is possible for there to be more than 1 at a given point.
     // Take the closest z.
     const containingTris = ndcTris.filter(tri => {
-      GEOMETRY_CONFIG.threeD.BarycentricPoint.fromTriangleData(gridPoint, tri._baryData, tri._baryPoint);
+      CONFIG.GeometryLib.threeD.BarycentricPoint.fromTriangleData(gridPoint, tri._baryData, tri._baryPoint);
       return tri._baryPoint.isInsideTriangle();
     });
 
@@ -431,7 +469,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
     // Determine where the fragment lies in 3d canvas space. Interpolate from the original triangle.
     this.containingTris.add(containingTri);
-    this.counts[TOTAL] += 1;
+    // this.counts[TOTAL] += 1;
 
     if ( CONFIG[MODULE_ID].perPixelQuickInterpolation ) {
       const origTri = containingTri._original;
@@ -441,7 +479,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       // Need to determine where the grid point hits the containing triangle on the z axis.
       const Point3d = CONFIG.GeometryLib.threeD.Point3d;
       const gridZ = containingTri._baryPoint.interpolateNumber(containingTri.a.z, containingTri.b.z, containingTri.c.z)
-      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d._tmp1.set(gridPoint.x,gridPoint.y, gridZ), fragmentPoint);
+      this.#invModelProjectionScaleMatrix.multiplyPoint3d(Point3d.tmp.set(gridPoint.x,gridPoint.y, gridZ), fragmentPoint);
     }
 
     this.#fragmentColor.x = 1;
@@ -450,22 +488,22 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     // Is it occluded from the camera/viewer?
     const rayDirection = Point3d.tmp;
     fragmentPoint.subtract(this.viewpoint, rayDirection);
-    const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
-    if ( isOccluded ) {
-      this.counts[OBSCURED] += 1;
-      this.#fragmentColor.z = 1; // Blue.
-      this.#fragmentColor.x = 0; // Remove red.
-      rayDirection.release();
-      gridPoint.release();
-      fragmentPoint.release();
-      return;
-    }
+//    const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
+//     if ( isOccluded ) {
+//       // this.counts[OBSCURED] += 1;
+//       this.#fragmentColor.z = 1; // Blue.
+//       this.#fragmentColor.x = 0; // Remove red.
+//       rayDirection.release();
+//       gridPoint.release();
+//       fragmentPoint.release();
+//       return;
+//     }
 
     // Fragment brightness for each source. (For debug, always run.)
-    if ( CONFIG[MODULE_ID].perPixelDebugLit ) {
-      const { isBright, isDim } = this._testLightingForPoint(fragmentPoint);
-      this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
-    }
+//     if ( CONFIG[MODULE_ID].perPixelDebugLit ) {
+//       const { isBright, isDim } = this._testLightingForPoint(fragmentPoint);
+//       this.#fragmentColor.x = isBright ? 1 : isDim ? 0.75 : 0.25;
+//     }
     // this._testPixelBrightnessDebug(containingTri._original, srcs, srcObstacles);
 
     rayDirection.release();
@@ -521,9 +559,9 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       // See https://stackoverflow.com/questions/30594511/webgl-fragment-shader-for-multiple-light-sources
 
       // Reflected light from this source.
-      const lightColor = Point3d._tmp1;
-      const srcReflectedColor = Point3d._tmp2;
-      const N = origTri.plane.normal.multiplyScalar(-1, Point3d._tmp3);
+      const lightColor = Point3d.tmp;
+      const srcReflectedColor = Point3d.tmp;
+      const N = origTri.plane.normal.multiplyScalar(-1, Point3d.tmp);
 
       this.#fragmentPoint.subtract(srcOrigin, this.#lightDirection).normalize(this.#lightDirection);
       const lightStrength = Math.max(N.dot(this.#lightDirection), 0) * (isDim ? 0.5 : 1.0);
@@ -533,8 +571,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
       // Specular from this source.
       if ( lightStrength ) {
-        const srcSpecularColor = Point3d._tmp2;
-        const halfVector = Point3d._tmp3;
+        const srcSpecularColor = Point3d.tmp;
+        const halfVector = Point3d.tmp;
 
         this.#lightDirection.add(this.#viewDirection, halfVector).normalize(halfVector);
         const specularStrength = Math.pow(N.dot(halfVector), this.shininess);

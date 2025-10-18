@@ -16,16 +16,15 @@ import { Settings } from "../settings.js";
 import { Frustum } from "./Frustum.js";
 import { squaresUnderToken, hexesUnderToken } from "./shapes_under_token.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
-import { insetPoints } from "./util.js";
+import { insetPoints, isOdd } from "./util.js";
 
-// Debug
+// Geometry
+import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
-
-// const TOTAL = 0;
-// const OBSCURED = 1;
-// const BRIGHT = 2;
-// const DIM = 3;
-// const DARK = 4;
+import { ElevatedPoint } from "../geometry/3d/ElevatedPoint.js";
+import { Sphere } from "../geometry/3d/Sphere.js";
+import { Polygon3d, Quad3d } from "../geometry/3d/Polygon3d.js";
+import { AABB2d } from "../geometry/AABB.js";
 
 /**
  * An eye belong to a specific viewer.
@@ -59,7 +58,7 @@ export class AbstractViewpoint {
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
 
   /** @type {Point3d} */
-  get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.viewerLOS.target); }
+  get targetLocation() { return this.viewerLOS.targetLocation; }
 
   /** @type {Token} */
   get viewer() { return this.viewerLOS.viewer};
@@ -83,28 +82,29 @@ export class AbstractViewpoint {
 
 
   // ----- NOTE: Visibility Percentages ----- //
+  _percentVisible;
 
-  get percentVisible() { return this.calculator.percentVisible; }
+  lastResult;
 
-  get percentUnobscured() { return this.calculator.percentUnobscured; }
-
-  get percentVisibleBright() { return this.calculator.percentVisibleBright; }
-
-  get percentVisibleDim() { return this.calculator.percentVisibleDim; }
-
-  get visibility() { return [this.calculator.percentUnobscured, this.calculator.percentVisibleDim, this.calculator.percentVisibleBright]; }
+  get percentVisible() {
+    if ( typeof this._percentVisible === "undefined" ) this._percentVisible = this.lastResult.percentVisible;
+    return this._percentVisible;
+  }
 
   calculate() {
-    this.calculator.counts.fill(0)
-    if ( this.passesSimpleVisibilityTest() ) return;
-    this.calculator.viewpoint = this.viewpoint;
-    this.calculator.calculate();
+    this._percentVisible = undefined;
+    if ( this.passesSimpleVisibilityTest() ) {
+      this._percentVisible = 1;
+      return;
+    }
+    this.calculator.calculate(this);
+    this.lastResult = this.calculator.lastResult.clone();
     if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
   }
 
   targetOverlapsViewpoint() {
-    const bounds = this.config.constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
-    if ( !bounds.contains(this.viewpoint) ) return false;
+    const bounds = this.calculator.targetShape;
+    if ( !bounds.contains(this.viewpoint.x, this.viewpoint.y) ) return false;
     return this.viewpoint.between(this.target.bottomZ, this.target.topZ);
   }
 
@@ -120,14 +120,7 @@ export class AbstractViewpoint {
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
     if ( (this.viewpoint.z > backgroundElevation && target.topZ < backgroundElevation)
       || (this.viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return true;
-
-    // Force tokens within the viewpoint to be visible and lit.
-    if ( this.targetOverlapsViewpoint() ) {
-      this.calculator.counts.set([1, 0, 1, 1, 0]);
-      return true;
-    }
-
-    return false;
+    return this.targetOverlapsViewpoint();
   }
 
   // ----- NOTE: Collision tests ----- //
@@ -154,8 +147,110 @@ export class AbstractViewpoint {
       || ObstacleOcclusionTest.findBlockingRegions(frustum, opts).size ) return true;
     return false;
   }
+  
+  /**
+   * Build a set number of points for a token in each dimension.
+   * Only keeps points within the constrained token. 
+   * @param {Token} token
+   * @param {number} numPoints
+   * @returns {Point3d[]}
+   */
+  static construct3dTokenPoints(token, numPoints = 1) {
+    const center = ElevatedPoint.fromTokenCenter(token);
+    
+    
+    // Take the constrained token shape so only points within are used.
+    const tokenShape = token.constrainedTokenBorder;
+    let token3d;
+    if ( tokenShape instanceof PIXI.Circle ) {
+      if ( CONFIG[MODULE_ID].useTokenSphere ) {
+        const r = Math.max(token.topZ - token.bottomZ, tokenShape.radius);
+      token3d = Sphere.fromCenterPoint(center, r);
+      return this.construct3dTokenSpherePoints()
+      }
+    
+      // TODO: Ellipsoid shape so z can be different?
+      const r = Math.max(token.topZ - token.bottomZ, tokenShape.radius);
+      token3d = Sphere.fromCenterPoint(center, r);
+    } else if ( tokenShape instanceof PIXI.Rectangle ) {
+      token3d = Quad3d.fromRectangle(tokenShape);
+    } else token3d = Polygon3d.fromPolygon(tokenShape, center.elevation);
+    const aabb = token3d.aabb;
+     
+    // If odd numPoints, include center line. 
+    if ( isOdd(numPoints) ) {
+      numPoints -= 1;
+        
+      
+      
+      
+    }
+    
+    
+    // Create lines based on percentage of min/max in each dimension.
+  }
+  
+  /*
+  ElevatedPoint = CONFIG.GeometryLib.threeD.ElevatedPoint
+  AABB2d = CONFIG.GeometryLib.AABB2d
+  Sphere = CONFIG.GeometryLib.threeD.Sphere
+  AABB3d = CONFIG.GeometryLib.threeD.AABB3d
+  
+  */
+  
+  /**
+   * Return grid of points contained within the token sphere.
+   */
+  static construct3dTokenSpherePoints(token, numPoints = 1) {
+    const center = ElevatedPoint.fromTokenCenter(token);
+    const tokenBorder = token.tokenBorder;
+    const aabbToken = AABB3d.fromToken(token);
+    const delta = aabbToken.max.subtract(aabbToken.min);
+    const r = Math.max(...delta);
+    delta.release();
+    aabbToken.release();
+    const tokenSphere = Sphere.fromCenterPoint(center, r);
+    const aabb = tokenSphere;
+    
+    const xs = divideNumberRange(aabb.min.x, aabb.max.x, numPoints);
+    const ys = divideNumberRange(aabb.min.y, aabb.max.y, numPoints);
+    const zs = divideNumberRange(aabb.min.z, aabb.max.z, numPoints);
+    
+    const out = [];
+    for ( const z of zs ) {
+      for ( const x of xs ) {
+        // Intersect the sphere with a line at x value.
+        const ixs = tokenSphere.lineIntersections(Point3d.tmp.set(x, aabb.min.y, z), Point3d.tmp.set(x, aabb.max.y, z));
+        if ( !ixs.length ) continue;
+        if ( ixs.length === 1 ) { out.push(Point3d.tmp(x, ixs.y, z)); continue; }
+        const iMin = ys.findIndex(elem => elem > ixs[0].y);
+        const iMax = ys.findIndex(elem => elem > ixs[1].y) - 1;
+        if ( !~iMin || !~iMax ) continue;
+        for ( const y of ys.slice(iMin, iMax) ) out.push(Point3d.tmp(x, y, z));
+      }
+      
+			for ( const y of ys ) {
+				// Intersect the sphere with a line at x value.
+        const ixs = tokenSphere.lineIntersections(Point3d.tmp.set(aabb.min.x, y, z), Point3d.tmp.set(aabb.max.x, y, z));
+        if ( !ixs.length ) continue;
+        if ( ixs.length === 1 ) { out.push(Point3d.tmp(ixs.x, y, z)); continue; }
+        const iMin = xs.findIndex(elem => elem > ixs[0].x);
+        const iMax = xs.findIndex(elem => elem > ixs[1].x) - 1;
+        if ( !~iMin || !~iMax ) continue;
+        for ( const x of xs.slice(iMin, iMax) ) out.push(Point3d.tmp(x, y, z));
+			}
+    }
+    aabb.release();
+ 
+    return out;
+  }
+
+  static contruct3dTokenSphereFacePoints(token, numPoints = 1) {
+    
+  }
 
   /**
+   * Build points for a given token. 
    * @param {Token} token
    * @param {object} [opts]
    * @param {PIXI.Polygon|PIXI.Rectangle} [opts.tokenShape]
@@ -165,7 +260,6 @@ export class AbstractViewpoint {
    * @returns {Point3d[]}
    */
   static constructTokenPoints(token, { tokenShape, pointAlgorithm, inset, viewpoint } = {}) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const TYPES = Settings.KEYS.POINT_TYPES;
     const center = Point3d.fromTokenCenter(token);
 
@@ -245,7 +339,6 @@ export class AbstractViewpoint {
    * @returns {Point3d[]} Array of corner points.
    */
   static getCorners(tokenShape, elevation) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     if ( tokenShape instanceof PIXI.Rectangle ) {
       // Token unconstrained by walls.
       // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
@@ -258,7 +351,7 @@ export class AbstractViewpoint {
         new Point3d(tokenShape.right, tokenShape.bottom, elevation),
         new Point3d(tokenShape.left, tokenShape.bottom, elevation)
       ];
-    }
+    } else if ( !(tokenShape instanceof PIXI.Polygon) ) tokenShape = tokenShape.toPolygon();
 
     // Constrained is polygon. Only use corners of polygon
     // Scale down polygon to avoid adjacent walls.
@@ -383,6 +476,29 @@ export class AbstractViewpoint {
   _drawFrustum(draw) {
     const { viewpoint, target } = this;
     const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint, target });
-    frustum.draw2d({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.gray, fillAlpha: 0.1 });
+    frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
   }
+}
+
+/**
+ * Divide range of numbers evenly, returning numPoints points 
+ * evenly spaced between a min and max. 
+ * @param {number} a
+ * @param {number} b
+ * @param {number} numPoints
+ * @returns {number[]}
+ *
+ * @example
+ * 1, 2
+ * 2 points: .333, .666
+ * 3 points: .25, .5, .75
+ * 4 points: .2, .4, .6, .8
+ */
+function divideNumberRange(a, b, numPoints = 1) {
+  if ( numPoints <= 0 ) return [];
+
+  const out = Array(numPoints);
+  const mult = 1 / (numPoints + 1);
+  for ( let i = 0, j = mult; i < numPoints; i += 1, j += mult ) out[i] = a + j;
+  return out;  
 }

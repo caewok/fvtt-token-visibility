@@ -37,6 +37,24 @@ Harder, but matches with geometry for viewer/sight algorithm.
 So each algorithm should return the bright/dim/none object and allow combining.
 
 
+Two conceptualizations of dark/dim/bright:
+1. The token is in dark/dim/bright light, w/r/t itself.
+- Use point test or area test to determine percentage dark/dim/bright compared to threshold.
+- Uses entire constrained token border
+- Can be marked with AE.
+
+2. The token is in dark/dim/bright light w/r/t another viewer.
+- Must meet visibility threshold for given token border.
+  - Constrained: If met, token is visible in darkness.
+  - litTokenBorder: If met, token is visible in dim light.
+  - brightLitTokenBorder: If met, token is visible in bright light.
+- Can be marked with AE that changes based on viewer token selected.
+- Viewer might have ability, like darkvision, that switches which border should be used.
+
+
+--> Handle combining multiple viewpoints by allowing results to be additively (maximum) joined.
+
+
 
 Viewer --> object
 

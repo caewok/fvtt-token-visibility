@@ -198,8 +198,6 @@ export class AbstractViewerLOS {
     if ( this.#viewer ) this.initializeViewpoints({ numViewpoints, viewpointOffset });
   }
 
-  async initialize() { return this.calculator.initialize(); }
-
   // ----- NOTE: Configuration ---- //
 
   static defaultConfiguration = {
@@ -221,10 +219,6 @@ export class AbstractViewerLOS {
   get threshold() { return this.#config.threshold; }
 
   set threshold(value) { this.#config.threshold = value; }
-
-  get testLighting() { return this.calculator.config.testLighting; }
-
-  set testLighting(testLighting) { this.calculator.config = { testLighting }; }
 
   get debug() { return this.calculator.config.debug; }
 
@@ -353,7 +347,6 @@ export class AbstractViewerLOS {
       inset: viewpointOffset
     }).map(pt => new cl(this, pt));
     this.#config.viewpointOffset = viewpointOffset;
-    this.#updateVisibilityArrays();
   }
 
   // ----- NOTE: Target ---- //
@@ -375,58 +368,19 @@ export class AbstractViewerLOS {
   }
 
   /** @type {Point3d} */
-  get targetCenter() {
-    return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target);
-  }
+  get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target); }
 
   // ----- NOTE: Visibility testing ----- //
 
-  static VISIBILITY_LABELS = {
-    UNOBSCURED: 0,
-    DIM: 1,
-    BRIGHT: 2,
-  };
-
-  visibility = {
-    unobscured: new Float32Array(1),
-    dim: new Float32Array(1),
-    bright: new Float32Array(1),
-  };
-
-  #updateVisibilityArrays() {
-    const n = this.viewpoints.length || 1;
-    if ( this.visibility.unobscured.length === n ) return;
-    for ( const key of Object.keys(this.visibility) ) this.visibility[key] = new Float32Array(n);
-  }
-
-  _clearVisibilityArrays() { Object.values(this.visibility).forEach(arr => arr.fill(0)); }
-
-  get hasLOSDim() { return this.percentVisibleDim >= this.threshold; }
-
-  get hasLOSBright() { return this.percentVisibleBright >= this.threshold; }
-
-  get hasLOSUnobscured() { return this.percentUnobscured >= this.threshold; }
-
   get hasLOS() { return this.percentVisible >= this.threshold; }
 
+  _percentVisible;
+
   get percentVisible() {
-    return this.testLighting ? this.percentUnobscured : this.percentVisibleDim;
+    if ( typeof this._percentVisible === "undefined" ) this.calculate();
+    return this._percentVisible;
   }
 
-  /**
-   * Maximum visible dim lit over the viewpoints.
-   */
-  get percentVisibleDim() { return Math.max(...this.visibility.dim); }
-
-  /**
-   * Maximum visible bright lit over the viewpoints.
-   */
-  get percentVisibleBright() { return Math.max(...this.visibility.bright); }
-
-  /**
-   * Maximum visible unobscured over the viewpoints.
-   */
-  get percentUnobscured() { return Math.max(...this.visibility.unobscured); }
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
@@ -449,144 +403,23 @@ export class AbstractViewerLOS {
     return -1;
   }
 
-  /**
-   * Test if the viewpoint is within 1+ bright lights.
-   * To be within, there must be no obstacles within vision triangle and light shape fully contains target.
-   * @returns {undefined|boolean} True if definitely within bright light.
-   *   False if not. Undefined if obstacles present or target not fully within triangle shape.
-   */
-  fullyWithinBrightLight() {
-    if ( canvas.environment.globalLightSource.active ) return true;
-    if ( !canvas.lighting.placeables.length ) return false;
-    if ( !this.target.brightLitTokenBorder ) return false;
-    if ( !this.target.constrainedTokenBorder.equals(this.target.brightLitTokenBorder) ) return undefined;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const targetCenter = Point3d.fromTokenCenter(this.target);
-    const srcOrigin = new Point3d();
-
-    let unknown = false;
-    for ( const src of canvas.lighting.placeables ) {
-      if ( !src.lightSource.active ) continue;
-
-      Point3d.fromPointSource(src, srcOrigin);
-      const dist2 = Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
-      if ( dist2 > (src.brightRadius ** 2) ) continue; // Not within bright radius.
-
-      unknown ||= true;
-
-      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
-      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, srcOrigin) ) continue;
-
-      return true;
-    }
-    return unknown ? undefined : false;
-  }
-
-  fullyWithinDimLight() {
-    if ( canvas.environment.globalLightSource.active ) return true;
-    if ( !canvas.lighting.placeables.length ) return false;
-    if ( !this.target.litTokenBorder ) return false;
-    if ( !this.target.constrainedTokenBorder.equals(this.target.litTokenBorder) ) return undefined;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const targetCenter = Point3d.fromTokenCenter(this.target);
-    const srcOrigin = new Point3d();
-
-    let unknown = false;
-    for ( const src of canvas.lighting.placeables ) {
-      if ( !src.lightSource.active ) continue;
-
-      Point3d.fromPointSource(src, srcOrigin);
-      const dist2 = Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
-      if ( dist2 > (src.dim ** 2) ) continue; // Not within bright radius.
-
-      unknown ||= true;
-
-      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
-      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, srcOrigin) ) continue;
-
-      return true;
-    }
-    return unknown ? undefined : false;
-  }
-
-  fullyWithinSound() {
-    if ( !this.target.constrainedTokenBorder.equals(this.target.soundTokenBorder) ) return false;
-    if ( !canvas.sounds.placeables.length ) return false;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-    const targetCenter = Point3d.fromTokenCenter(this.target);
-    const srcOrigin = new Point3d();
-
-    let unknown = false;
-    for ( const src of canvas.sound.placeables ) {
-      if ( !src.source.active ) continue;
-
-      Point3d.fromPointSource(src, srcOrigin);
-      const dist2 = CONFIG.GeometryLib.threeD.Point3d.distanceSquaredBetween(targetCenter, srcOrigin);
-      if ( dist2 > (src.radius ** 2) ) continue; // Not within bright dim radius.
-
-      unknown ||= true;
-
-      // TODO: Could use the occlusionTester if it were definitely initialized for this source.
-      if ( AbstractViewpoint.prototype.hasPotentialObstaclesfromViewpoint.call(this, src) ) continue;
-
-      return true;
-    }
-    return unknown ? undefined : false;
-  }
 
   calculate() {
-    this._clearVisibilityArrays();
+    this._percentVisible = 0;
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
-      Object.values(this.visibility).forEach(arr => arr.fill(simpleTest));
+      this._percentVisible = simpleTest;
       return;
     }
 
-    this._configureCalculator();
-    const oldTestLighting = this.testLighting;
-    const testLighting = this.testLighting = oldTestLighting && this.simpleLightingTest(); // Only run test if actually testing lighting.
-
     // Test each viewpoint until unobscured is 1.
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
-    for ( let i = 0, iMax = this.viewpoints.length; i < iMax; i += 1 ) {
-      const vp = this.viewpoints[i];
+    this.calculator.initializeView(this);
+    for ( const vp of this.viewpoints ) {
       vp.calculate();
-      this.visibility.unobscured[i] = vp.percentUnobscured;
-      if ( testLighting ) {
-        this.visibility.dim[i] = vp.percentVisibleDim;
-        this.visibility.bright[i] = vp.percentVisibleBright;
-        if ( this.visibility.unobscured[i] === 1 && this.visibility.dim[i] === 1 ) break;
-      } else if ( this.visibility.unobscured[i] === 1 ) break;
+      this._percentVisible = Math.max(this._percentVisible, vp.percentVisible);
+      if ( this._percentVisible >= 1 ) break;
     }
-    this.testLighting = oldTestLighting;
-  }
-
-  simpleLightingTest() {
-    if ( !this.testLighting ) return false;
-    const sourceType = this.calculator.config.sourceType;
-    const withinSource = sourceType === "lighting" ? this.fullyWithinBrightLight() : this.fullyWithinSound();
-    if ( withinSource === true ) {
-      this.visibility.bright.fill(1);
-      this.visibility.dim.fill(1);
-      return false;
-    } else if ( withinSource === false ) {
-      if ( sourceType === "sounds" ) return false; // dim: 0; bright is n/a
-      const withinDimSource = this.fullyWithinDimLight();
-      if ( withinDimSource === true ) {
-        this.visibility.dim.fill(1); // bright: 0
-        return false;
-      } else if ( withinDimSource === false ) return false; // bright: 0, dim: 0
-    }
-    return true;
-  }
-
-
-  // Must be done before calling calc.calculate or vp.calculate.
-  // Calculator not guaranteed to remain in same state between runs.
-  _configureCalculator() {
-    this.calculator.viewer = this.viewer;
-    this.calculator.target = this.target;
-    this.calculator.targetLocation = this.targetLocation;
   }
 
   /**
@@ -756,7 +589,7 @@ export class AbstractViewerLOS {
     if ( canvas.environment.globalLightSource.active ) return;
     const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const ctr = Point3d.fromTokenCenter(this.target);
-    for ( const src of canvas[this.calculator.config.sourceType].placeables ) {
+    for ( const src of canvas.lighting.placeables ) {
       const srcOrigin = Point3d.fromPointSource(src);
       const dist2 = Point3d.distanceSquaredBetween(ctr, srcOrigin);
       const isBright = src.brightRadius && (src.brightRadius ** 2) < dist2;
@@ -862,13 +695,7 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     const target = this.target;
     const cacheCategory = this.cacheCategory;
     const cachedObj = this.#cache.get(target) ?? {};
-    let cachedVis = cachedObj[cacheCategory];
-
-    // Keep the existing typed arrays if they exist and are the correct length.
-    if ( !cachedVis
-      || cachedVis.unobscured.length !== this.visibility.unobscured.length ) cachedVis = structuredClone(this.visibility);
-    Object.keys(this.visibility).forEach(key => cachedVis[key].set(this.visibility[key]));
-    cachedObj[cacheCategory] = cachedVis;
+    cachedObj[cacheCategory] = this.percentVisible;
     this.#cache.set(target, cachedObj);
   }
 
@@ -883,8 +710,8 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     this.validateCache(target);
     const cacheCategory = this.cacheCategory;
     const cachedVis = this.#cache.get(target)?.[cacheCategory];
-    if ( !cachedVis || cachedVis.unobscured.length !== this.visibility.unobscured.length ) return false;
-    Object.keys(this.visibility).forEach(key => this.visibility[key].set(cachedVis[key]));
+    if ( typeof cachedVis === "undefined" ) return false;
+    this._percentVisible = cachedVis;
     return true;
   }
 
@@ -906,20 +733,6 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     }
   }
 
-  get percentVisibleDim() {
-    if ( !this.updateFromCache() ) this.calculate(true);
-    return super.percentVisibleDim;
-  }
-
-  get percentVisibleBright() {
-    if ( !this.updateFromCache() ) this.calculate(true);
-    return super.percentVisibleBright;
-  }
-
-  get percentUnobscured() {
-    if ( !this.updateFromCache() ) this.calculate(true);
-    return super.percentUnobscured;
-  }
 }
 
 // const { UNOBSCURED, DIM, BRIGHT } = AbstractViewerLOS.VISIBILITY_LABELS;

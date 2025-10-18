@@ -84,6 +84,31 @@ export class GeometryLitToken extends GeometryToken {
   }
 }
 
+export class GeometryBrightLitToken extends GeometryToken {
+
+  get vertices() { return this.modelVertices; }
+
+  get indices() { return this.modelIndices; }
+
+  // No static vertices per se but can use GeometryToken when not lit.
+  _calculateModel(vertices, indices) {
+    const token = this.token;
+    if ( !token ) return super._calculateModel(vertices, indices);
+    const { brightLitTokenBorder, tokenBorder } = token;
+    if ( !brightLitTokenBorder || !brightLitTokenBorder.equals(tokenBorder) ) return GeometryNonInstanced.prototype._calculateModel.call(this, vertices);
+    this.transformMatrix = this.calculateTransformMatrix(token);
+    return super._calculateModel(vertices, indices);
+  }
+
+  _calculateModelVertices(_vertices) {
+    const token = this.token;
+    if ( !token ) return;
+    const { brightLitTokenBorder, topZ, bottomZ } = this.placeable;
+    const border = brightLitTokenBorder || this.placeable.constrainedTokenBorder;
+    return Polygon3dVertices.calculateVertices(border.toPolygon(), { topZ, bottomZ });
+  }
+}
+
 export class GeometrySquareGrid extends GeometryToken {
 
   calculateTransformMatrix(token) {

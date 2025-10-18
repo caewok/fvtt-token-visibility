@@ -11,7 +11,7 @@ Region,
 
 import { MODULE_ID, OTHER_MODULES } from "../const.js";
 import { Polygon3dVertices } from "./geometry/BasicVertices.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid } from "./geometry/GeometryToken.js";
+import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometryBrightLitToken, GeometrySquareGrid } from "./geometry/GeometryToken.js";
 import { GeometryWall } from "./geometry/GeometryWall.js";
 import { GeometryTile } from "./geometry/GeometryTile.js";
 import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
@@ -41,7 +41,7 @@ Store triangles representing Foundry object shapes.
 const SENSE_TYPES = {};
 CONST.WALL_RESTRICTION_TYPES.forEach(type => SENSE_TYPES[type] = Symbol(type));
 
-export const AbstractPolygonTrianglesID = "geometry";
+export const AbstractPolygonTrianglesID = "triangles";
 
 const tmpIx = new Point3d();
 
@@ -670,9 +670,11 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
 
   /* ----- NOTE: Constructor ----- */
 
+  constrainedTriangles = [];
+
   litTriangles = [];
 
-  constrainedTriangles = [];
+  brightLitTriangles = [];
 
   updateConstrainedTriangles() {
     const token = this.placeable;
@@ -688,10 +690,19 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
     this.litTriangles = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
+  updateBrightLitTriangles() {
+    const token = this.placeable;
+    if ( !token.brightLitTokenBorder ) this.litTriangles.length = 0;
+
+    const geom = new GeometryLitToken({ placeable: token });
+    this.brightLitTriangles = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(geom.vertices, geom.indices);
+  }
+
   update() {
     super.update();
     this.updateConstrainedTriangles();
     this.updateLitTriangles();
+    this.updateBrightLitTriangles();
   }
 
   static registerExistingPlaceables() {

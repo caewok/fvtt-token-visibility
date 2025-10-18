@@ -91,17 +91,21 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     if ( this.geom.type !== type ) this.geom = new this.constructor.geomClass({ type });
   }
 
-  top = new CONFIG.GeometryLib.threeD.Quad3d();
+  faces = {
+    top: new CONFIG.GeometryLib.threeD.Quad3d(),
+    bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
+    sides: [],
+  }
 
-  get quad3d() { return this.top; }
+  get quad3d() { return this.faces.top; }
 
   _updateFaces() {
-    this.#updateFace(this.top);
-    if ( this.constructor.isDirectional(this.edge) ) this.bottom = undefined;
+    this.#updateFace(this.faces.top);
+    if ( this.constructor.isDirectional(this.edge) ) this.faces.bottom = undefined;
     else {
-      this.bottom ??= new CONFIG.GeometryLib.threeD.Quad3d();
-      this.top.clone(this.bottom);
-      this.bottom.reverseOrientation();
+      this.faces.bottom ??= new CONFIG.GeometryLib.threeD.Quad3d();
+      this.faces.top.clone(this.faces.bottom);
+      this.faces.bottom.reverseOrientation();
     }
   }
 

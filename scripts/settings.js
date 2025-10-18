@@ -137,11 +137,10 @@ export class Settings extends ModuleSettingsAbstract {
     return this.#debugViewers.get(sym);
   }
 
-  static async initializeDebugViewer(type) {
+  static initializeDebugViewer(type) {
     type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
     const sym = ALG_SYMBOLS[type];
     const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type));
-    await debugViewer.initialize();
     debugViewer.render();
     this.#debugViewers.set(sym, debugViewer);
   }

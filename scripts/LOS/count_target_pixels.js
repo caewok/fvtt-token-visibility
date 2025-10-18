@@ -412,13 +412,15 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
 
   // Determine what obstacles are within the various triangles.
   const viewerObstacles = ObstacleOcclusionTest.findBlockingObjects(viewpoint, target, { senseType, blocking });
-  viewerObstacles.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(viewerObstacles.walls, senseType);
-  viewerObstacles.proximateWalls = ObstacleOcclusionTest.pullOutTerrainWalls(viewerObstacles.walls, senseType);
+  viewerObstacles.terrainWalls = ObstacleOcclusionTest.pullOutWalls(viewerObstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
+  viewerObstacles.proximateWalls = ObstacleOcclusionTest.pullOutWalls(viewerObstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
+  viewerObstacles.reverseProximateWalls = ObstacleOcclusionTest.pullOutWalls(viewerObstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
 
   const srcObstacles = srcs.map(src => {
     const obstacles = ObstacleOcclusionTest.findBlockingObjects(Point3d.fromPointSource(src), target, { senseType, blocking });
-    obstacles.terrainWalls = ObstacleOcclusionTest.pullOutTerrainWalls(obstacles.walls, senseType);
-    obstacles.proximateWalls = ObstacleOcclusionTest.pullOutTerrainWalls(obstacles.walls, senseType);
+    obstacles.terrainWalls = ObstacleOcclusionTest.pullOutWalls(obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
+    obstacles.proximateWalls = ObstacleOcclusionTest.pullOutWalls(obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
+    obstacles.reverseProximateWalls = ObstacleOcclusionTest.pullOutWalls(obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
     return obstacles;
   });
 
@@ -718,7 +720,7 @@ await QBenchmarkLoopFn(N, countObject2, "countObject2")
 
 /* Testing
 MODULE_ID = "tokenvisibility"
-AbstractPolygonTrianglesID = "geometry"
+AbstractPolygonTrianglesID = "triangles"
 Draw = CONFIG.GeometryLib.Draw
 api = game.modules.get("tokenvisibility").api
 countTargetPixels = api.countTargetPixels
