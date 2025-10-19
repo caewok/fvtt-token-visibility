@@ -78,9 +78,10 @@ export class BitSet {
 					const num = parseInt(val.slice(a > 0 ? a : 0, b), base);
 					if ( isNaN(num) ) throw SyntaxError('Invalid param');
 					this.data.push(num | 0);
+					if ( a <= 0 ) break;
 					a -= len;
 					b -= len;
-				} while ( a > 0 );
+				} while ( true );
 				break;
 			}
 	

@@ -25,27 +25,7 @@ describe('BitSet', function () {
     var bs = new BitSet(-1);
     assert.equal(bs.toString(2), '11111111111111111111111111111111');
   }); 
-});
-
-
-}); // quench.registerBatch
-}); // Hooks.on
-
-/*
-describe('BitSet', function () {
-
-  it('should Construct', function () {
-
-    var bs = new BitSet(19219);
-    assert.equal(bs.toString(10), '19219');
-
-    var bs = new BitSet;
-    assert.equal(bs.toString(32), '0');
-
-    var bs = new BitSet(-1);
-    assert.equal(bs.toString(2), '11111111111111111111111111111111');
-  });
-
+  
   it('should set an individual bit', function () {
     var bs = new BitSet();
     bs.set(31);
@@ -55,12 +35,12 @@ describe('BitSet', function () {
   it('should find first set', function () {
     var bs = new BitSet();
     bs.set(31);
-    assert.equal(bs.msb(), 31);
+    assert.equal(bs.msb, 31);
   });
 
   it('should not be able to find first set in an empty bitset', function () {
     var bs = new BitSet();
-    assert.equal(bs.msb(), Infinity);
+    assert.equal(bs.msb, Infinity);
   });
 
   it('should unset a bit', function () {
@@ -193,13 +173,13 @@ describe('BitSet', function () {
   it('should Cardinality', function () {
 
     var bs = new BitSet('1000000000000000000001101');
-    assert.equal(bs.cardinality(), 4);
+    assert.equal(bs.cardinality, 4);
   });
 
   it('should msbit', function () {
 
     var bs = new BitSet('1000000000000000000001101');
-    assert.equal(bs.msb(), '1000000000000000000001101'.length - 1);
+    assert.equal(bs.msb, '1000000000000000000001101'.length - 1);
   });
 
   it('should msbit set', function () {
@@ -210,7 +190,7 @@ describe('BitSet', function () {
       .set(100)
       .set(333);
 
-    assert.equal(bs.msb(), 333);
+    assert.equal(bs.msb, 333);
   });
 
   it('should slice negated', function () {
@@ -257,7 +237,7 @@ describe('BitSet', function () {
   it('should msbit should work negative numbers', function () {
     var flipped = new BitSet().not();
 
-    assert.equal(flipped.msb(), Infinity);
+    assert.equal(flipped.msb, Infinity);
   });
 
   it('should ntzit', function () {
@@ -286,32 +266,32 @@ describe('BitSet', function () {
     bs = bs.set(33, 0); // And reset
     assert.equal(bs.toString(), '10000000000000000010001');
 
-    assert.equal(bs.msb(), 22);
+    assert.equal(bs.msb, 22);
 
     bs = bs.set(330, 1);
 
-    assert.equal(bs.msb(), 330); // Thus, msb is on 330
+    assert.equal(bs.msb, 330); // Thus, msb is on 330
   });
 
   it('should lsbit', function () {
 
     assert.equal(
-      new BitSet('10000000000110001000000000').lsb(),
+      new BitSet('10000000000110001000000000').lsb,
       9
     );
 
     assert.equal(
-      new BitSet('00000000000000000000000000').lsb(),
+      new BitSet('00000000000000000000000000').lsb,
       0
     );
 
     assert.equal(
-      new BitSet('10000000000000000000000000').lsb(),
+      new BitSet('10000000000000000000000000').lsb,
       25
     );
 
     assert.equal(
-      new BitSet('10000000100000000000000000000000000000000000').lsb(),
+      new BitSet('10000000100000000000000000000000000000000000').lsb,
       35
     );
   });
@@ -326,8 +306,8 @@ describe('BitSet', function () {
 
     bsa = bsa.and(bsb);
 
-    assert.equal(bsa.cardinality(), 0);
-    assert.equal(bsb.cardinality(), 1);
+    assert.equal(bsa.cardinality, 0);
+    assert.equal(bsb.cardinality, 1);
 
     assert.equal(bsa.get(0), 0);
     assert.equal(bsb.get(0), 0);
@@ -355,8 +335,8 @@ describe('BitSet', function () {
 
     bsa = bsa.or(bsb);
 
-    assert.equal(bsa.cardinality(), 2);
-    assert.equal(bsb.cardinality(), 1);
+    assert.equal(bsa.cardinality, 2);
+    assert.equal(bsb.cardinality, 1);
 
     assert.equal(bsa.get(0), 1);
     assert.equal(bsb.get(0), 0);
@@ -724,7 +704,7 @@ describe('BitSet', function () {
     bsb = bsb.set(1);
     bsa = bsa.xor(bsb);
 
-    assert.equal(bsa.cardinality(), 2);
+    assert.equal(bsa.cardinality, 2);
     assert.equal(bsa.get(0), 1);
     assert.equal(bsa.get(32), 1);
 
@@ -760,7 +740,7 @@ describe('BitSet', function () {
     x = x.not();
     x.set(8, 1);
 
-    assert.equal(x.cardinality(), 4);
+    assert.equal(x.cardinality, 4);
     assert.deepEqual(x.data, [272, 1, 2, 0, 0, 0, 0, 0, 0, 0]);
     assert.deepEqual(x.toArray(), [4, 8, 32, 65]);
   });
@@ -873,5 +853,9 @@ describe('BitSet', function () {
     }
     assert.equal(str, val);
   });
-});
-*/
+}); // describe
+
+
+}); // quench.registerBatch
+}); // Hooks.on
+
