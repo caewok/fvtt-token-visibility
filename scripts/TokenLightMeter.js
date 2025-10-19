@@ -85,13 +85,13 @@ export class TokenLightMeter {
     this.tokenPoints.length = 0;
     this.unitPoints.forEach(pt => pt.release());
     this.unitPoints = Sphere.pointsLattice(n);
-    this.data.bright = BitSet.Empty(n);
-    this.data.dim = BitSet.Empty(n);
+    this.data.bright = BitSet.empty(n);
+    this.data.dim = BitSet.empty(n);
   }
   
-  get percentBright() { return this.data.bright.cardinality() / this.numPoints; }
+  get percentBright() { return this.data.bright.cardinality / this.numPoints; }
   
-  get percentDim() { return this.data.dim.cardinality() / this.numPoints; }
+  get percentDim() { return this.data.dim.cardinality / this.numPoints; }
 
   /**
    * Determine whether the token is in bright/dim/dark light.
@@ -144,8 +144,8 @@ export class TokenLightMeter {
    */
   updateLights(lights) {
     lights ??= canvas.lighting.placeables;
-    this.data.dim = BitSet.Empty(this.numPoints);
-    this.data.bright = BitSet.Empty(this.numPoints);
+    this.data.dim = BitSet.empty(this.numPoints);
+    this.data.bright = BitSet.empty(this.numPoints);
     this.calc.initializeView({ target: this.token });
     let viewable;
     const { UNLIT, DIM, BRIGHT } = CONST.LIGHTING_LEVELS
@@ -246,7 +246,7 @@ export class TokenLightMeter {
   _viewableSphereIndices(viewpoint) {
     viewpoint ??= this.viewpoint;
     const center = Point3d.fromTokenCenter(this.token);
-    const visible = BitSet.Empty(this.numPoints);
+    const visible = BitSet.empty(this.numPoints);
     this.tokenPoints.forEach((pt, idx) => {
       const a2 = Point3d.distanceSquaredBetween(center, pt);
       const b2 = Point3d.distanceSquaredBetween(center, viewpoint);

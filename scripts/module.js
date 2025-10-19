@@ -119,13 +119,16 @@ import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
-import { BitSet } from "./LOS/BitSet/bitset.mjs";
+import { BitSet } from "./LOS/BitSet/BitSet.js";
 
 // Other self-executing hooks
 import "./changelog.js";
 import "./geometry/tests/AABB.test.js";
+import "../tests/BitSet.test.js";
 
 // import "./LOS/WebGPU/webgpu-map-sync.js";
+
+
 
 Hooks.once("init", function() {
   // Load bitmap font
