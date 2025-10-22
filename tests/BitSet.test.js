@@ -145,20 +145,20 @@ describe('BitSet', function () {
   it('should And', function () {
 
     var bs = new BitSet("0xff05");
-    assert.equal(bs.and("0xfe00").toString(16), 'fe00');
+    assert.equal(bs.and(new Bitset("0xfe00")).toString(16), 'fe00');
 
   });
 
   it('should Or', function () {
 
     var bs = new BitSet(256);
-    assert.equal(bs.or(512).toString(16), '300');
+    assert.equal(bs.or(new BitSet(512)).toString(16), '300');
   });
 
   it('should Xor', function () {
 
     var bs = new BitSet("1010");
-    assert.equal(bs.xor("0011").toString(2), '1001');
+    assert.equal(bs.xor(new BitSet("0011")).toString(2), '1001');
   });
 
   it('should Equals', function () {
@@ -463,7 +463,7 @@ describe('BitSet', function () {
     a = a.not();
     assert.equal(a.toString(), '...1111');
 
-    a = a.and(0xff);
+    a = a.and(new BitSet(0xff));
 
     assert.equal(a.toString(), '11111111');
   });
