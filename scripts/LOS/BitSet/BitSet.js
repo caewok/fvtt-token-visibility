@@ -321,7 +321,7 @@ export class BitSet {
    * @returns {BitSet|Object} A new BitSet object, containing a copy of the actual object
    */
   clone() {
-    const im = new this();
+    const im = new this.constructor();
     im.data = this.data.slice();
     im._msbFlag = this._msbFlag;
     return im;
@@ -479,7 +479,7 @@ export class BitSet {
    */
   not() { // invert()
     const T = this.clone();
-    const t = t.data;
+    const t = T.data;
     for ( let i = 0; i < t.length; i++ ) t[i] = ~t[i];
     T._msbFlag = ~T._msbFlag;
     return t;

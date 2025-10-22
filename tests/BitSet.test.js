@@ -19,7 +19,7 @@ describe('BitSet', function () {
     var bs = new BitSet(19219);
     assert.equal(bs.toString(10), '19219');
 
-    var bs = new BitSet;
+    var bs = new BitSet();
     assert.equal(bs.toString(32), '0');
 
     var bs = new BitSet(-1);
@@ -91,7 +91,7 @@ describe('BitSet', function () {
 
   it('should flip/clear 2', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs = bs.set(60);
 
@@ -103,7 +103,7 @@ describe('BitSet', function () {
 
   it('should flip/clear 3', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs = bs.set(60, 0); // Set size
 
@@ -117,7 +117,7 @@ describe('BitSet', function () {
 
   it('should flip/clear 4', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
     bs
       .flip(0, 62)
       .flip(29, 35);
@@ -131,12 +131,12 @@ describe('BitSet', function () {
     var bs = new BitSet(4);
 
     bs.not();
-    assert.equal(BitSet(bs.toArray()).toString(), bs.toString());
+    assert.equal((new BitSet(bs.toArray())).toString(), bs.toString());
   });
 
   it('should flip range check', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     assert.equal(bs.flip(-1, 0).toString(), '0');
     assert.equal(bs.flip(1, 0).toString(), '0');
@@ -184,7 +184,7 @@ describe('BitSet', function () {
 
   it('should msbit set', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs = bs
       .set(100)
@@ -208,7 +208,7 @@ describe('BitSet', function () {
 
   it('should setRange 2', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs = bs.setRange(0, 70);
     bs = bs.setRange(30, 45, 0);
@@ -218,7 +218,7 @@ describe('BitSet', function () {
 
   it('should setRange 3', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs = bs.setRange(2, 12, "1111001111");
 
@@ -227,7 +227,7 @@ describe('BitSet', function () {
 
   it('should setRange 1', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs = bs.setRange(3, 10);
 
@@ -253,7 +253,7 @@ describe('BitSet', function () {
 
   it('should set', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs
       .set(4, 1) // Set bit on 4th pos
@@ -356,7 +356,7 @@ describe('BitSet', function () {
 
   it('should pass setting in time', function (done) {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
     var start = Date.now();
     for (var i = 0; i < 1000000; i++) {
       bs.set(i);
@@ -375,7 +375,7 @@ describe('BitSet', function () {
 
   it('should set auto scale', function () {
 
-    var bs = new BitSet;
+    var bs = new BitSet();
 
     bs = bs.set(512);
 
@@ -470,8 +470,8 @@ describe('BitSet', function () {
 
   it('should and fuzz 00', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -484,8 +484,8 @@ describe('BitSet', function () {
 
   it('should and fuzz 01', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -498,8 +498,8 @@ describe('BitSet', function () {
 
   it('should and fuzz 10', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -512,8 +512,8 @@ describe('BitSet', function () {
 
   it('should and fuzz 11', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -526,8 +526,8 @@ describe('BitSet', function () {
 
   it('should or fuzz 00', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -540,8 +540,8 @@ describe('BitSet', function () {
 
   it('should or fuzz 01', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -554,8 +554,8 @@ describe('BitSet', function () {
 
   it('should or fuzz 10', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -568,8 +568,8 @@ describe('BitSet', function () {
 
   it('should or fuzz 11', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -582,8 +582,8 @@ describe('BitSet', function () {
 
   it('should xor fuzz 00', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -596,8 +596,8 @@ describe('BitSet', function () {
 
   it('should xor fuzz 01', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -610,8 +610,8 @@ describe('BitSet', function () {
 
   it('should xor fuzz 10', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -624,8 +624,8 @@ describe('BitSet', function () {
 
   it('should xor fuzz 11', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -638,8 +638,8 @@ describe('BitSet', function () {
 
   it('should andNot fuzz 00', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -652,8 +652,8 @@ describe('BitSet', function () {
 
   it('should andNot fuzz 01', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -666,8 +666,8 @@ describe('BitSet', function () {
 
   it('should andNot fuzz 10', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -680,8 +680,8 @@ describe('BitSet', function () {
 
   it('should andNot fuzz 11', function () {
 
-    var a = new BitSet;
-    var b = new BitSet;
+    var a = new BitSet();
+    var b = new BitSet();
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
@@ -699,7 +699,7 @@ describe('BitSet', function () {
     bsa.set(0);
     bsa.set(1);
 
-    var bsb = new BitSet;
+    var bsb = new BitSet();
     bsb.set(32);
     bsb = bsb.set(1);
     bsa = bsa.xor(bsb);
@@ -732,7 +732,7 @@ describe('BitSet', function () {
 
   it('should work with inverting', function () {
 
-    var x = new BitSet;
+    var x = new BitSet();
     x.set(4);
     x.set(32);
     x = x.not();
@@ -757,7 +757,7 @@ describe('BitSet', function () {
 
     for (var i = 0; i < 100; i++) {
 
-      var foo = BitSet();
+      var foo = new BitSet();
       var x = 0;
 
       var tmp = Math.random() * (1 << 24) | 0;
@@ -780,7 +780,7 @@ describe('BitSet', function () {
 
   it('should work with infinity strings', function () {
 
-    var x = BitSet('11').not().set(35, 0);
+    var x = (new BitSet('11')).not().set(35, 0);
 
     assert.equal(x.toString(2), '...1111011111111111111111111111111111111100');
   });
@@ -819,7 +819,7 @@ describe('BitSet', function () {
 
     var val = "1111010101111010101010101111110010101010111110101001101010101011101010101111100011111100101011";
 
-    var bs = BitSet(val);
+    var bs = new BitSet(val);
 
     var str = "";
     for (var b of bs) {
@@ -832,7 +832,7 @@ describe('BitSet', function () {
 
     var val = "0";
 
-    var bs = BitSet(val);
+    var bs = new BitSet(val);
 
     var str = "";
     for (var b of bs) {
@@ -845,7 +845,7 @@ describe('BitSet', function () {
 
     var val = "1";
 
-    var bs = BitSet(val);
+    var bs = new BitSet(val);
 
     var str = "";
     for (var b of bs) {
