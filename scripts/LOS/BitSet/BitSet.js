@@ -81,7 +81,7 @@ export class BitSet {
 					if ( a <= 0 ) break;
 					a -= len;
 					b -= len;
-				} while ( true );
+				} while ( true ); // eslint-disable-line no-constant-condition
 				break;
 			}
 	
@@ -93,7 +93,7 @@ export class BitSet {
 						if ( ndx === Infinity ) {
 							this.#msbFlag = -1;
 						} else {
-							this.#scale(ndx);
+							this._scale(ndx);
 							this.data[ndx >>> WORD_LOG] |= 1 << ndx;
 						}
 					}
@@ -102,7 +102,7 @@ export class BitSet {
 	
 				if ( Uint8Array && val instanceof Uint8Array ) {
 					const bits = 8;
-					this.#scale(val.length * bits);
+					this._scale(val.length * bits);
 					for ( let i = 0; i < val.length; i++ ) {
 						const n = val[i];
 						for ( let j = 0; j < bits; j++ ) {
@@ -150,10 +150,52 @@ export class BitSet {
    */
   set(ndx, value) {
     ndx |= 0;
-    this.#scale(ndx);
+    this._scale(ndx);
     if ( value === undefined || value ) this.data[ndx >>> WORD_LOG] |= (1 << ndx);
     else this.data[ndx >>> WORD_LOG] &= ~(1 << ndx);
     return this;
+  }
+  
+  /** ----- NOTE: Iterator ----- */
+  
+  [Symbol.iterator]() {
+
+    const d = this.data;
+    let ndx = 0;
+
+    if ( this._msbFlag === 0 ) {
+
+      // Find highest index with something meaningful
+      let highest = 0;
+      for ( let i = d.length - 1; i >= 0; i-- ) {
+        if (d[i] !== 0) {
+          highest = i;
+          break;
+        }
+      }
+
+      return {
+        next() {
+          const n = ndx >>> WORD_LOG;
+          return {
+            'done': n > highest || n === highest && (d[n] >>> ndx) === 0,
+            'value': n > highest ? 0 : (d[n] >>> ndx++) & 1
+          };
+        }
+      };
+
+    } else {
+      // Endless iterator!
+      return {
+        next() {
+          const n = ndx >>> WORD_LOG;
+          return {
+            'done': false,
+            'value': n < d.length ? (d[n] >>> ndx++) & 1 : 1,
+          };
+        }
+      };
+    }
   }
   
   /** ----- NOTE: Bit property getters ----- */
@@ -482,7 +524,7 @@ export class BitSet {
     const t = T.data;
     for ( let i = 0; i < t.length; i++ ) t[i] = ~t[i];
     T._msbFlag = ~T._msbFlag;
-    return t;
+    return T;
   }
   
   /**
@@ -506,7 +548,7 @@ export class BitSet {
     const t_ = T._msbFlag;
 
     // If this is infinite, we need all bits from P
-    if ( t_ !== 0 ) T.scale(pl * WORD_LENGTH - 1);
+    if ( t_ !== 0 ) T._scale(pl * WORD_LENGTH - 1);
     
     // Add the two bit sets.
     const tl = t.length;
@@ -580,7 +622,7 @@ export class BitSet {
     // XOR infinity
     T._msbFlag ^= value._msbFlag;
 
-    return t;
+    return T;
   }
   
   /**
@@ -599,6 +641,43 @@ export class BitSet {
     return this.and(val.clone().flip());
   }
   
+  /**
+   * Compares two BitSet objects
+   *
+   * Ex:
+   * bs1 = new BitSet(10);
+   * bs2 = new BitSet(10);
+   *
+   * bs1.equals(bs2) ? 'yes' : 'no'
+   *
+   * @param {BitSet} val A bitset object
+   * @returns {boolean} Whether the two BitSets have the same bits set (valid for indefinite sets as well)
+   */
+  equals(val) {
+    const t = this['data'];
+    const p = val['data'];
+    const t_ = this['_'];
+    const p_ = val['_'];
+    const tl = t.length - 1;
+    const pl = p.length - 1;
+
+    // Quick check for indefinite set equality.
+    if ( p_ !== t_ ) return false;
+    
+    const minLength = tl < pl ? tl : pl;
+    let i = 0;
+    for ( ; i <= minLength; i++ ) {
+      if ( t[i] !== p[i] ) return false;
+    }
+    for ( i = tl; i > pl; i-- ) {
+      if ( t[i] !== p_ ) return false;
+    }
+    for ( i = pl; i > tl; i-- ) {
+      if ( p[i] !== t_ ) return false;
+    }
+    return true;
+  }
+    
   /** -----NOTE: Methods to modify in place ----- */
 
   /**
@@ -640,11 +719,11 @@ export class BitSet {
       this.#msbFlag = ~this.#msbFlag;
 
     } else if ( to === undefined ) {
-      this.#scale(from);
+      this._scale(from);
       this.data[from >>> WORD_LOG] ^= (1 << from);
 
     } else if ( 0 <= from && from <= to ) {
-      this.#scale(to);
+      this._scale(to);
       for ( let i = from; i <= to; i++ ) this.data[i >>> WORD_LOG] ^= (1 << i);
   
     }
@@ -672,19 +751,19 @@ export class BitSet {
 
     } else if ( to === undefined ) {
       from |= 0;
-      this.#scale(from);
+      this._scale(from);
       d[from >>> WORD_LOG] &= ~(1 << from);
 
     } else if ( from <= to ) {
-      this.#scale(to);
+      this._scale(to);
       for ( let i = from; i <= to; i++ ) d[i >>> WORD_LOG] &= ~(1 << i);
   
     }
     return this;
   }
     	
-	/** ----- NOTE: Private methods ----- */
-	#scale(ndx) {	  	  
+	/** ----- NOTE: Internal methods ----- */
+	_scale(ndx) {	  	  
 		const d = this.data;
 		const len = d.length
 		const v = this._msbFlag;

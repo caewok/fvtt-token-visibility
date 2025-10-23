@@ -324,8 +324,8 @@ lm.percentDim
 lm.viewpoint = Point3d.fromTokenCenter(viewer)
 lm.calculateLightFromViewpoint()
 
-
-
+// [10] new BitSet("1010");
+// [3] new BitSet("0011")
 
 
 */

@@ -145,7 +145,7 @@ describe('BitSet', function () {
   it('should And', function () {
 
     var bs = new BitSet("0xff05");
-    assert.equal(bs.and(new Bitset("0xfe00")).toString(16), 'fe00');
+    assert.equal(bs.and(new BitSet("0xfe00")).toString(16), 'fe00');
 
   });
 
@@ -164,10 +164,10 @@ describe('BitSet', function () {
   it('should Equals', function () {
 
     var bs = new BitSet('100000000000111010101');
-    assert.equal(bs.equals("100000000000111010101"), true);
+    assert.equal(bs.equals(new BitSet("100000000000111010101")), true);
 
     var bs = new BitSet('111010101');
-    assert.equal(bs.equals("101010101"), false);
+    assert.equal(bs.equals(new BitSet("101010101")), false);
   });
 
   it('should Cardinality', function () {
@@ -242,13 +242,13 @@ describe('BitSet', function () {
 
   it('should ntzit', function () {
 
-    assert.equal(new BitSet('10000000000110001000000000').ntz(), 9);
+    assert.equal(new BitSet('10000000000110001000000000').ntz, 9);
 
-    assert.equal(new BitSet('00000000000000000000000000').ntz(), Infinity);
+    assert.equal(new BitSet('00000000000000000000000000').ntz, Infinity);
 
-    assert.equal(new BitSet('10000000000000000000000000').ntz(), 25);
+    assert.equal(new BitSet('10000000000000000000000000').ntz, 25);
 
-    assert.equal(new BitSet('10000000100000000000000000000000000000000000').ntz(), 35);
+    assert.equal(new BitSet('10000000100000000000000000000000000000000000').ntz, 35);
   });
 
   it('should set', function () {
@@ -475,8 +475,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = 0;
+    a._msbFlag = 0;
+    b._msbFlag = 0;
 
     assert.equal(a.and(b).toString(), '10000000111')
     assert.equal(b.and(a).toString(), '10000000111')
@@ -489,8 +489,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = -1;
+    a._msbFlag = 0;
+    b._msbFlag = -1;
 
     assert.equal(a.and(b).toString(), '10000000111')
     assert.equal(b.and(a).toString(), '10000000111')
@@ -503,8 +503,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = 0;
+    a._msbFlag = -1;
+    b._msbFlag = 0;
 
     assert.equal(a.and(b).toString(), '10100100000000000000000000010000000111')
     assert.equal(b.and(a).toString(), '10100100000000000000000000010000000111')
@@ -517,8 +517,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = -1;
+    a._msbFlag = -1;
+    b._msbFlag = -1;
 
     assert.equal(a.and(b).toString(), '...11110100100000000000000000000010000000111')
     assert.equal(b.and(a).toString(), '...11110100100000000000000000000010000000111')
@@ -531,8 +531,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = 0;
+    a._msbFlag = 0;
+    b._msbFlag = 0;
 
     assert.equal(a.or(b).toString(), '10100100010010101000110101011111111111')
     assert.equal(b.or(a).toString(), '10100100010010101000110101011111111111')
@@ -545,8 +545,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = -1;
+    a._msbFlag = 0;
+    b._msbFlag = -1;
 
     assert.equal(a.or(b).toString(), '...11110100100010010101000110101011111111111')
     assert.equal(b.or(a).toString(), '...11110100100010010101000110101011111111111')
@@ -559,8 +559,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = 0;
+    a._msbFlag = -1;
+    b._msbFlag = 0;
 
     assert.equal(a.or(b).toString(), '...11110100100010010101000110101011111111111')
     assert.equal(b.or(a).toString(), '...11110100100010010101000110101011111111111')
@@ -573,8 +573,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = -1;
+    a._msbFlag = -1;
+    b._msbFlag = -1;
 
     assert.equal(a.or(b).toString(), '...11110100100010010101000110101011111111111')
     assert.equal(b.or(a).toString(), '...11110100100010010101000110101011111111111')
@@ -587,8 +587,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = 0;
+    a._msbFlag = 0;
+    b._msbFlag = 0;
 
     assert.equal(a.xor(b).toString(), '10100100010010101000110101001111111000')
     assert.equal(b.xor(a).toString(), '10100100010010101000110101001111111000')
@@ -601,8 +601,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = -1;
+    a._msbFlag = 0;
+    b._msbFlag = -1;
 
     assert.equal(a.xor(b).toString(), '...11110100100010010101000110101001111111000')
     assert.equal(b.xor(a).toString(), '...11110100100010010101000110101001111111000')
@@ -615,8 +615,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = 0;
+    a._msbFlag = -1;
+    b._msbFlag = 0;
 
     assert.equal(a.xor(b).toString(), '...111101011000010010101000110101001111111000')
     assert.equal(b.xor(a).toString(), '...111101011000010010101000110101001111111000')
@@ -629,8 +629,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = -1;
+    a._msbFlag = -1;
+    b._msbFlag = -1;
 
     assert.equal(a.xor(b).toString(), '1111111111111111111111111101011000010010101000110101001111111000')
     assert.equal(b.xor(a).toString(), '1111111111111111111111111101011000010010101000110101001111111000')
@@ -643,8 +643,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = 0;
+    a._msbFlag = 0;
+    b._msbFlag = 0;
 
     assert.equal(a.andNot(b).toString(), '1100111000')
     assert.equal(b.andNot(a).toString(), '10100100010010101000110101000011000000')
@@ -657,8 +657,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = 0;
-    b._ = -1;
+    a._msbFlag = 0;
+    b._msbFlag = -1;
 
     assert.equal(a.andNot(b).toString(), '1100111000')
     assert.equal(b.andNot(a).toString(), '...11110100100010010101000110101000011000000')
@@ -671,8 +671,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = 0;
+    a._msbFlag = -1;
+    b._msbFlag = 0;
 
     assert.equal(a.andNot(b).toString(), '...111101011000000000000000000000001100111000')
     assert.equal(b.andNot(a).toString(), '10010101000110101000011000000')
@@ -685,8 +685,8 @@ describe('BitSet', function () {
 
     a.data = [0b11100111111];
     b.data = [0b10010101000110101010011000111, 0b101001];
-    a._ = -1;
-    b._ = -1;
+    a._msbFlag = -1;
+    b._msbFlag = -1;
 
     assert.equal(a.andNot(b).toString(), '1111111111111111111111111101011000000000000000000000001100111000')
     assert.equal(b.andNot(a).toString(), '10010101000110101000011000000')
@@ -741,7 +741,7 @@ describe('BitSet', function () {
     x.set(8, 1);
 
     assert.equal(x.cardinality, 4);
-    assert.deepEqual(x.data, [272, 1, 2, 0, 0, 0, 0, 0, 0, 0]);
+    assert.deepEqual(x.data, [272, 1, 2]); // Originally [272, 1, 2, 0, 0, 0, 0, 0, 0, 0] but that is if setting ten 0s to begin.
     assert.deepEqual(x.toArray(), [4, 8, 32, 65]);
   });
 
@@ -761,15 +761,15 @@ describe('BitSet', function () {
       var x = 0;
 
       var tmp = Math.random() * (1 << 24) | 0;
-      foo = foo.or(tmp);
+      foo = foo.or(new BitSet(tmp));
       x |= tmp;
 
       var tmp = Math.random() * (1 << 24) | 0;
-      foo = foo.xor(tmp);
+      foo = foo.xor(new BitSet(tmp));
       x ^= tmp;
 
       var tmp = Math.random() * (1 << 24) | 0;
-      foo = foo.and(tmp);
+      foo = foo.and(new BitSet(tmp));
       x &= tmp;
 
       // x = ~x;
