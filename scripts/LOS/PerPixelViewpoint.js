@@ -45,7 +45,7 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() { return this.data.cardinality(); }
+  get visibleArea() { return this.data.cardinality; }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.

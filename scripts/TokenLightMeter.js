@@ -231,9 +231,9 @@ export class TokenLightMeter {
     bright = bright.and(res.data);
     dim = dim.and(res.data);
     
-    const n = visible.cardinality();
-    bright = bright.cardinality() / n;
-    dim = dim.cardinality() / n;
+    const n = visible.cardinality;
+    bright = bright.cardinality / n;
+    dim = dim.cardinality / n;
     return { bright, dim };
   }
   
