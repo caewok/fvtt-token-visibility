@@ -370,7 +370,7 @@ export class BitSet {
 	 * @param {BitSet} data
 	 * @returns {BitSet}
 	 */
-	mask(data) {
+	maskBitSet(data) {
 		const arr = this.toArray();
 		const bs = new this.constructor();
 		let j = 0;
@@ -518,7 +518,7 @@ export class BitSet {
 	 * @param {*[]} arr
 	 * @returns {*[]}
 	 */
-	function filterArray(arr) {
+	maskArray(arr) {
 		const newArr = [];
 		applyConsecutively(this.toArray(), (start, length) => newArr.push(...arr.slice(start, start + length)));
 		return newArr;

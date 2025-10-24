@@ -221,12 +221,12 @@ export class TokenLightMeter {
     
     // Test the sphere points visible from the viewpoint.
     const visible = this._viewableSphereIndices(viewpoint);
-    const visTokenPoints = visible.filterArray(this.tokenPoints);
+    const visTokenPoints = visible.maskArray(this.tokenPoints);
     const res = this.calc._calculateForPoints([visTokenPoints]);
     
     // For points that are not obscured, mark bright and dim.
-    let bright = visible.mask(this.data.bright);
-    let dim = visible.mask(this.data.dim);
+    let bright = visible.maskBitSet(this.data.bright);
+    let dim = visible.maskBitSet(this.data.dim);
     bright = bright.and(res.data);
     dim = dim.and(res.data);
     
