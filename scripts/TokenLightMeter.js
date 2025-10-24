@@ -12,7 +12,6 @@ import { Sphere } from "./geometry/3d/Sphere.js";
 import { BitSet } from "./LOS/BitSet/bitset.mjs";
 import { MatrixFlat } from "./geometry/MatrixFlat.js";
 import { PercentVisibleCalculatorPoints } from "./LOS/PointsViewpoint.js";
-import { applyConsecutively } from "./LOS/util.js";
 
 /*
 Spherical approach
@@ -222,18 +221,18 @@ export class TokenLightMeter {
     
     // Test the sphere points visible from the viewpoint.
     const visible = this._viewableSphereIndices(viewpoint);
-    const visTokenPoints = filterArrayByBitSet(this.tokenPoints, visible);
+    const visTokenPoints = visible.maskArray(this.tokenPoints);
     const res = this.calc._calculateForPoints([visTokenPoints]);
     
     // For points that are not obscured, mark bright and dim.
-    let bright = maskBitSet(this.data.bright, visible);
-    let dim = maskBitSet(this.data.dim, visible);
+    let bright = visible.maskBitSet(this.data.bright);
+    let dim = visible.maskBitSet(this.data.dim);
     bright = bright.and(res.data);
     dim = dim.and(res.data);
     
-    const n = visible.cardinality();
-    bright = bright.cardinality() / n;
-    dim = dim.cardinality() / n;
+    const n = visible.cardinality;
+    bright = bright.cardinality / n;
+    dim = dim.cardinality / n;
     return { bright, dim };
   }
   
@@ -261,44 +260,9 @@ export class TokenLightMeter {
   }
 }
 
-/**
- * For a given array, return a smaller array that holds the elements specified by a bit set.
- * @param {*[]} arr
- * @param {BitSet} indices
- * @returns {*[]}
- */
-function filterArrayByBitSet(arr, indices) {
-  const newArr = [];
-  applyConsecutively(indices.toArray(), (start, length) => newArr.push(...arr.slice(start, start + length)));
-  return newArr;
-}
 
-/**
- * For a given array of indices, create a bit set from those indices.
- * Assumes each index represents a 1 in the bit set.
- * @param {number[]} indices
- * @returns {BitSet}
- */
 
-function bitSetFromArrayIndices(indices) {
-  const bs = new BitSet()
-  applyConsecutively(indices, (start, length) => bs.setRange(start, start + length - 1, 1));
-  return bs;
-}
 
-/**
- * For a given bitset, return a smaller bitset that holds only the elements specified by indices.
- * @param {BitSet} data
- * @param {BitSet} indices
- * @returns {BitSet}
- */
-function maskBitSet(data, indices) {
-  const arr = indices.toArray();
-  const bs = new BitSet();
-  let j = 0;
-  for ( const i of arr ) bs.set(j++, data.get(i));
-  return bs;
-}
 
 /* Test
 Point3d = CONFIG.GeometryLib.threeD.Point3d

@@ -853,6 +853,25 @@ describe('BitSet', function () {
     }
     assert.equal(str, val);
   });
+  
+  it('should create from array index', function() {
+    const arr = [1,3,7,11,12];
+    const bs = BitSet.fromArrayIndices(arr);
+    assert.deepEqual(bs.toArray(), arr);
+  });
+  
+  it('should mask an array', function() {
+    const arr = Array.fromRange(20);
+    const bs = new BitSet([1, 4, 9]);
+    assert.deepEqual(bs.maskArray(arr), [1, 4, 9]);
+  });
+  
+  it('should mask a bitset', function() {
+    const bs =  new BitSet("01001001110");
+    const bs2 = new BitSet("10111111011");
+    assert.equal(bs.maskBitSet(bs2).toString(), "1101"); // Last digit is 0 and is dropped.
+  })
+  
 }); // describe
 
 

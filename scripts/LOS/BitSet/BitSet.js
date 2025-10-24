@@ -352,6 +352,31 @@ export class BitSet {
 		if ( m > 0 ) t[len - 1] &= (1 << m) - 1;
 		return s;
   }
+
+	/**
+	 * For a given array of indices, create a bit set from those indices.
+	 * Assumes each index represents a 1 in the bit set.
+	 * @param {number[]} indices
+	 * @returns {BitSet}
+	 */
+  static fromArrayIndices(indices) {
+    const bs = new this()
+    applyConsecutively(indices, (start, length) => bs.setRange(start, start + length - 1, 1));
+    return bs;
+  }
+  
+	/**
+	 * For a given bitset, return a smaller bitset that holds only the elements specified by these indices.
+	 * @param {BitSet} data
+	 * @returns {BitSet}
+	 */
+	maskBitSet(data) {
+		const arr = this.toArray();
+		const bs = new this.constructor();
+		let j = 0;
+		for ( const i of arr ) bs.set(j++, data.get(i));
+		return bs;
+	}  
   
   /**
    * Clones the actual object
@@ -488,6 +513,17 @@ export class BitSet {
     }
   }
   
+  /**
+	 * For a given array, return a smaller array that holds the elements specified by this bit set.
+	 * @param {*[]} arr
+	 * @returns {*[]}
+	 */
+	maskArray(arr) {
+		const newArr = [];
+		applyConsecutively(this.toArray(), (start, length) => newArr.push(...arr.slice(start, start + length)));
+		return newArr;
+	}
+	  
   /** ----- NOTE: Bit math methods ----- */
 
   /**
@@ -808,5 +844,26 @@ function divide(arr, B) {
     arr[i] = d;
   }
   return r;
+}
+
+/**
+ * For a given numeric array or numeric set, apply a method to each consecutive group.
+ * So if 0–5, 7–9, 12, should result in 3 callbacks:
+ *  { start: 0, length: 5 }, { start: 7, length: 3 }, { start: 12, length: 1 }
+ * @param {Set<number>|number[]} arr
+ * @param {function} callback
+ *   - @param {number} start        The starting number
+ *   - @param {number} length       The length of consecutive numbers.
+ */
+function applyConsecutively(arr, callback) {
+  if ( arr instanceof Set ) arr = [...arr.values()];
+  arr.sort((a, b) => a - b);
+
+  for ( let i = 0, iMax = arr.length; i < iMax; i += 1 ) {
+    const start = arr[i];
+    let length = 1;
+    while ( arr[i + 1] === arr[i] + 1 ) { length += 1; i += 1; }
+    callback(start, length);
+  }
 }
 

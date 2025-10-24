@@ -32,11 +32,11 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   };
 
   get totalTargetArea() {
-    return this.data.targetCount || this.data.target.cardinality() || 0;
+    return this.data.targetCount || this.data.target.cardinality || 0;
   }
 
   get blockedArea() {
-    return this.data.blockedCount ?? (this.data.blocked.cardinality() || 0);
+    return this.data.blockedCount ?? (this.data.blocked.cardinality || 0);
   }
 
   // Handled by the calculator, which combines multiple results.
