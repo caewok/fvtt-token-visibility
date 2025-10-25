@@ -10,17 +10,24 @@ Wall,
 import { MODULE_ID, OTHER_MODULES } from "../const.js";
 import { Frustum } from "./Frustum.js";
 import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 import {
   NULL_SET,
   tokensOverlap,
   getFlagFast } from "./util.js";
 
 export class ObstacleOcclusionTest {
-  target;
 
-  rayOrigin = new CONFIG.GeometryLib.threeD.Point3d();
 
-  obstacles = {};
+  obstacles = {
+    tiles: NULL_SET,
+    tokens: NULL_SET,
+    regions: NULL_SET,
+    walls: NULL_SET,
+    terrainWalls: NULL_SET,
+    proximateWalls: NULL_SET,
+    reverseProximateWalls: NULL_SET,
+  };
 
   _config = {
     senseType: "sight",
@@ -37,16 +44,26 @@ export class ObstacleOcclusionTest {
   };
 
   get config() { return structuredClone(this._config); }
+  
+  /** @type {Token} */
+  target;
+  
+  /** @type {Token} */
+  viewer;
 
-  _initialize(rayOrigin, target) {
-    this.rayOrigin.copyFrom(rayOrigin);
-    this.target = target;
+  /** @type {Point3d} */
+  rayOrigin = new Point3d();
+
+  _initialize({ rayOrigin, viewer, target } = {}) {
+    if ( rayOrigin ) this.rayOrigin.copyFrom(rayOrigin);
+    if ( viewer ) this.viewer = viewer; 
+    if ( target ) this.target = target;
     this.findObstacles();
     this.constructObstacleTester();
   }
 
-  rayIsOccluded(rayOrigin, rayDirection, target) {
-    this._initialize(rayOrigin, target)
+  rayIsOccluded(rayOrigin, rayDirection, { viewer, target } = {}) {
+    this._initialize({ rayOrigin, viewer, target })
     return this._rayIsOccluded(rayDirection);
   }
 
@@ -58,7 +75,7 @@ export class ObstacleOcclusionTest {
 
   findObstacles() {
     const senseType = this.config.senseType;
-    this.obstacles = this.constructor.findBlockingObjects(this.rayOrigin, this.target, this.config);
+    this.obstacles = this.constructor.findBlockingObjects(this.rayOrigin, { target: this.target, viewer: this.viewer, ...this.config });
     this.obstacles.terrainWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
     this.obstacles.proximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
     this.obstacles.reverseProximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
@@ -133,11 +150,10 @@ export class ObstacleOcclusionTest {
    *   - @property {Set<Token>} tokens
    *   - @property {Set<Region>} regions
    */
-  static findBlockingObjects(viewpoint, target, opts = {}) {
-    const frustum = this.frustum.rebuild({ viewpoint, target });
+  static findBlockingObjects(viewpoint, opts = {}) {
+    const frustum = this.frustum.rebuild({ viewpoint, target: opts.target });
     opts.blocking ??= {};
     opts.senseType ??= "sight";
-    opts.target ??= target;
     return {
       walls: this.findBlockingWalls(frustum, opts),
       tiles: this.findBlockingTiles(frustum, opts),

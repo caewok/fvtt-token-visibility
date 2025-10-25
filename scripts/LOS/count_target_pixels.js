@@ -411,13 +411,13 @@ export function countTargetPixels(camera, target, { calculateLitPortions = false
   const srcs = calculateLitPortions ? canvas[sourceType].placeables : [];
 
   // Determine what obstacles are within the various triangles.
-  const viewerObstacles = ObstacleOcclusionTest.findBlockingObjects(viewpoint, target, { senseType, blocking });
+  const viewerObstacles = ObstacleOcclusionTest.findBlockingObjects(viewpoint, { target, senseType, blocking });
   viewerObstacles.terrainWalls = ObstacleOcclusionTest.pullOutWalls(viewerObstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
   viewerObstacles.proximateWalls = ObstacleOcclusionTest.pullOutWalls(viewerObstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
   viewerObstacles.reverseProximateWalls = ObstacleOcclusionTest.pullOutWalls(viewerObstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
 
   const srcObstacles = srcs.map(src => {
-    const obstacles = ObstacleOcclusionTest.findBlockingObjects(Point3d.fromPointSource(src), target, { senseType, blocking });
+    const obstacles = ObstacleOcclusionTest.findBlockingObjects(Point3d.fromPointSource(src), { target, senseType, blocking });
     obstacles.terrainWalls = ObstacleOcclusionTest.pullOutWalls(obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
     obstacles.proximateWalls = ObstacleOcclusionTest.pullOutWalls(obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
     obstacles.reverseProximateWalls = ObstacleOcclusionTest.pullOutWalls(obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);

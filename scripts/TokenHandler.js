@@ -28,21 +28,24 @@ export class ATVTokenHandler {
 
   /** @type {Token} */
   viewer;
+  
+  /** @type {AbstractViewerLOS} */
+  losViewer;
  
   constructor(token) {
     token[MODULE_ID] ??= {};
     token[MODULE_ID][this.constructor.ID] = this;
-    token[MODULE_ID].losCalc = buildLOSViewer(token);
+    this.losViewer = buildLOSViewer(token);
     this.viewer = token;
   }
   
-  get losCalc() { return this.viewer[MODULE_ID].losCalc; }
+  get losCalc() { return this.losViewer.losCalc; }
   
   /**
    * @param {CONFIG.Canvas.detectionModes|CONFIG.Canvas.visionModes} [detectionMode]
    */
   setConfigForDetectionMode(dm) {
-    this.losCalc.setConfigForDetectionMode(dm);
+    this.losViewer.setConfigForDetectionMode(dm);
   }
   
   /**
@@ -50,17 +53,18 @@ export class ATVTokenHandler {
    * @returns {number}
    */
   percentVisibilityToToken(target) {
-    const losCalc = this.losCalc;
-    losCalc.target = target;
-    losCalc.calculate();
-    return losCalc.hasLOS;
+    const losViewer = this.losViewer;
+    losViewer.target = target;
+    losViewer.calculate();
+    return losViewer.percentVisibility;
     
   }
   
   hasLOSToToken(target, range) {
     if ( !this.tokenWithinLimitedAngleVision(target) ) return false;
     if ( range && !this.tokenWithinVisibleRange(target, range) ) return false;
-    return this.percentVisibilityToToken(target);
+    this.percentVisibilityToToken(target);
+    return this.losViewer.hasLOS;
   }
   
   /**
