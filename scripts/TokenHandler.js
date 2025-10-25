@@ -10,7 +10,7 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
-
+import { buildLOSViewer } from "./LOSCalculator.js";
 
 export const ATVTokenHandlerID = "visibility";
 
@@ -32,6 +32,7 @@ export class ATVTokenHandler {
   constructor(token) {
     token[MODULE_ID] ??= {};
     token[MODULE_ID][this.constructor.ID] = this;
+    token[MODULE_ID].losCalc = buildLOSViewer(token);
     this.viewer = token;
   }
   
@@ -73,7 +74,7 @@ export class ATVTokenHandler {
     // range ??= 
   
 		const testPoints = rangeTestPointsForToken(target);
-		const visionOrigin = Point3d.fromPointSource(this.viewer.visionSource);
+		const visionOrigin = Point3d.fromPointSource(this.viewer.vision);
 		const radius2 = this.viewer.getLightRadius(range) ** 2;
 	
 		// Duplicate below so that the if test does not need to be inside the loop.
@@ -111,7 +112,7 @@ export class ATVTokenHandler {
    * @returns {boolean} True if within range.
    */
   tokenWithinLimitedAngleVision(target) {
-    return AbstractViewerLOS.targetWithinLimitedAngleVision(this.token.vision, target);
+    return AbstractViewerLOS.targetWithinLimitedAngleVision(this.viewer.vision, target);
   }
     
   get lightingType() {
@@ -122,7 +123,7 @@ export class ATVTokenHandler {
       pointAlgorithm: CONFIG[MODULE_ID].lightMeasurementNumPoints,
     }
   
-    const { dim, bright } = pointsCalc.calculateLightingTypeForTarget(this.token);
+    const { dim, bright } = pointsCalc.calculateLightingTypeForTarget(this.viewer);
     pointsCalc.config = oldConfig;
     
     const { TYPES } = this.constructor.LIGHTING_TYPES;

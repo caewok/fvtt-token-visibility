@@ -90,7 +90,6 @@ export function buildLOSCalculator() {
     const viewpointClass = AbstractViewerLOS.VIEWPOINT_CLASSES[viewpointClassName];
     const calcClass = viewpointClass.calcClass;
     CONFIG[MODULE_ID].losCalculators[viewpointClassName] = new calcClass(CalculatorConfig());
-    CONFIG[MODULE_ID].losCalculators[viewpointClassName].initialize();  // Async
   }
   return CONFIG[MODULE_ID].losCalculators[viewpointClassName];
 }

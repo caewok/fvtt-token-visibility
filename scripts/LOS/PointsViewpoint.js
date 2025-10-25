@@ -11,7 +11,8 @@ PIXI,
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
-import { BitSet } from "./BitSet/bitset.mjs";
+import { BitSet } from "./BitSet/BitSet.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 /*
 Points algorithm also can use area and threshold.
@@ -85,7 +86,7 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
 
   constructor(target, opts) {
     super(target, opts);
-    this.data = BitSet.Empty(this._config.numPoints);
+    this.data = BitSet.empty(this._config.numPoints);
   }
 
   get totalTargetArea() { return this._config.numPoints; }
@@ -232,6 +233,7 @@ api = game.modules.get("tokenvisibility").api
 PercentVisibleCalculatorPoints = api.calcs.points
 zanna = canvas.tokens.placeables.find(t => t.name === "Zanna")
 randal = canvas.tokens.placeables.find(t => t.name === "Randal")
+
 
 calc = new PercentVisibleCalculatorPoints()
 calc.viewer = randal

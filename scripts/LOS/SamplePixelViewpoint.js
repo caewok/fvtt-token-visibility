@@ -123,7 +123,7 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
     
     // Drop points that are not within the face.
     const trimmedPts = pts.filter(pt => face.intersection(pt, axisNormal, Number.NEGATIVE_INFINITY))
-    const bs = BitSet.Empty(trimmedPts.length);
+    const bs = BitSet.empty(trimmedPts.length);
     this.lastResult.data.set(face, bs);
     
     let i = 0;

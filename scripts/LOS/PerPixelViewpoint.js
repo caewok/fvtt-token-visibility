@@ -16,7 +16,7 @@ import { Camera } from "./Camera.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { BitSet } from "./BitSet/bitset.mjs";
+import { BitSet } from "./BitSet/BitSet.js";
 
 // Debug
 import { Draw } from "../geometry/Draw.js";
@@ -32,7 +32,7 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
 
   constructor(target, opts) {
     super(target, opts);
-    this.data = BitSet.Empty(this._config.numPoints);
+    this.data = BitSet.empty(this._config.numPoints);
   }
 
   static fromCalculator(calc, opts) {

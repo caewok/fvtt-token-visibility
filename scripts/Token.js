@@ -9,6 +9,7 @@ Token,
 
 import { MODULE_ID } from "./const.js";
 import { buildLOSViewer } from "./LOSCalculator.js";
+import { ATVTokenHandler } from "./TokenHandler.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -17,14 +18,25 @@ PATCHES.DEBUG = {};
 // ----- NOTE: Hooks ----- //
 
 /**
+ * Hook: drawToken
+ * @param {PlaceableObject} object    The object instance being drawn
+ */
+function drawToken(token) {
+  if ( !token[ATVTokenHandler.constructor.ATVTokenHandlerID] ) new ATVTokenHandler(token);
+}
+
+/**
  * Hook: destroyToken
  * @param {PlaceableObject} object    The object instance being destroyed
  */
 function destroyToken(token) {
   const losCalc = token[MODULE_ID]?.losCalc;
-  if ( !losCalc ) return;
-  losCalc.destroy();
-  token[MODULE_ID].losCalc = undefined;
+  if ( losCalc ) {
+    losCalc.destroy();
+    token[MODULE_ID].losCalc = undefined;
+  }
+  const atv = token[MODULE_ID]?.[ATVTokenHandler.constructor.ATVTokenHandlerID];
+  if ( atv ) token[MODULE_ID][ATVTokenHandler.constructor.ATVTokenHandlerID] = undefined;
 }
 
 /**
@@ -43,7 +55,7 @@ export function initializeVisionSources(sources) {
   }
 }
 
-PATCHES.BASIC.HOOKS = { destroyToken, initializeVisionSources };
+PATCHES.BASIC.HOOKS = { destroyToken, initializeVisionSources, drawToken };
 
 // ----- NOTE: Debug Hooks ----- //
 

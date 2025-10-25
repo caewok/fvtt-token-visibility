@@ -8,7 +8,7 @@ import * as twgl from "./twgl-full.js";
 import { MODULE_ID } from "../../const.js";
 import { readPixelsAsync, getBufferSubDataAsync } from "./read_pixels_async.js";
 import { WebGL2 } from "./WebGL2.js";
-import { BitSet } from "../BitSet/bitset.mjs";
+import { BitSet } from "../BitSet/BitSet.js";
 
 
 /**
@@ -450,8 +450,8 @@ export class RedPixelCounter {
   mapPixels() {
     const pixels = this.pixelBuffers.readPixelsCount;
     const nPixels = pixels.length;
-    const red = BitSet.Empty(Math.floor(nPixels / 4));
-    const redBlocked = BitSet.Empty(Math.floor(nPixels / 4));
+    const red = BitSet.empty(Math.floor(nPixels / 4));
+    const redBlocked = BitSet.empty(Math.floor(nPixels / 4));
     const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
     for ( let i = 0; i < nPixels; i += 4 ) {
       const r = pixels[i];
@@ -470,7 +470,7 @@ export class RedPixelCounter {
     const pixels = this.pixelBuffers.readPixelsCount
     const nPixels = pixels.length;
     const redBlocked = null;
-    const red = BitSet.Empty(Math.floor(nPixels / 4));
+    const red = BitSet.empty(Math.floor(nPixels / 4));
     for ( let i = 0; i < nPixels; i += 4 ) {
       const r = pixels[i];
       red.set(i, r >> 7); // Threshold of 128 given Uint8Array.
