@@ -143,7 +143,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     }
   }
 
-
   /**
    * Each blocking polygon is either a Polygon3d or a Polygons3d.
    * Union each in turn.

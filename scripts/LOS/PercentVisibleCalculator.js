@@ -2,6 +2,7 @@
 canvas,
 CONFIG,
 foundry,
+Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -11,112 +12,6 @@ import { approximateClamp } from "./util.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
-
-/**
- * Stores the result from the percent visible calculator.
- * Takes the result and can return certain characteristics, such as percent visible.
- * Can combine 2+ results.
- */
-export class PercentVisibleResult {
-  target;
-
-  data = {};
-
-  _config = {
-    largeTarget: false,
-  };
-
-  get config() { return structuredClone(this._config); }
-
-  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
-
-  constructor(target, opts = {}) {
-    this.target = target;
-    this.config = opts;
-  }
-
-  static fromCalculator(calc, opts = {}) {
-    opts.largeTarget ??= calc.config.largeTarget;
-    return new this(calc.target, opts );
-  }
-
-  clone() {
-    const out = new this.constructor(this.target, this.config);
-    Object.assign(out.data, this.data);
-    return out;
-  }
-
-
-  // ----- NOTE: "Area" calculation ----- //
-
-  /* "Area"
-   Can be number of points, area of face(s), or some other area or volume calculation.
-   Key is it must be consistent for the given algorithm.
-  */
-
-  /**
-   * Area of the target assuming nothing obscures it. Used as the denominator for percentage calcs.
-   * @type {number}
-   */
-  get totalTargetArea() {
-    const { width, height } = this.target.document;
-    return width * height;
-  }
-
-  /**
-   * Area of a single grid square (or target sized 1/1). Used as the denominator for percentage calcs
-   * when large token option is enabled.
-   * @type {number}
-   */
-  get largeTargetArea() {
-    const { width, height } = this.target.document;
-    return this.totalTargetArea / (width * height);
-  }
-
-  /**
-   * Area of the target accounting for large target area config.
-   * @type {number}
-   */
-  get targetArea() {
-    if ( this.config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
-    return this.totalTargetArea;
-  }
-
-  /**
-   * Area of the target that is visible.
-   * @type {number}
-   */
-  get visibleArea() { return this.targetArea; }
-
-  get percentVisible() {
-    return approximateClamp(this.visibleArea / this.targetArea, 0, 1, 1e-02);
-  }
-
-  /**
-   * Blend this result with another result, taking the maximum values at each test location.
-   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
-   * @param {PercentVisibleResult} other
-   * @returns {PercentVisibleResult} A new combined set.
-   */
-  blendMaximize(other) { return this.clone(); }
-
-  static max(...results) {
-    let out = results[0];
-    for ( const result of results ) {
-      if ( result.percentVisible > out.percentVisible ) out = result;
-    }
-    return out;
-  }
-
-  static min(...results) {
-    let out = results[0];
-    for ( const result of results ) {
-      if ( result.percentVisible < out.percentVisible ) out = result;
-    }
-    return out;
-  }
-
-}
 
 /* Percent visible calculator
 
@@ -219,12 +114,20 @@ export class PercentVisibleCalculatorAbstract {
     this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
   }
 
+  /**
+   * Return the visibility result for the current calculator state.
+   * Use _initializeView to set state or set individually.
+   * Also depends on config.
+   * @returns {PercentVisibleResult}
+   */
   calculate(viewOpts) {
     this.initializeView(viewOpts);
     this.initializeCalculations();
     this._calculate();
     return this.lastResult;
   }
+  
+  _calculate() { }
 
   /**
    * Using the available algorithm, test whether the target w/o/r/t other viewers is
@@ -276,3 +179,107 @@ export class PercentVisibleCalculatorAbstract {
   destroy() { return; }
 }
 
+/**
+ * Stores the result from the percent visible calculator.
+ * Takes the result and can return certain characteristics, such as percent visible.
+ * Can combine 2+ results.
+ */
+export class PercentVisibleResult {
+  target;
+
+  data = {};
+
+  _config = {
+    largeTarget: false,
+  };
+
+  get config() { return structuredClone(this._config); }
+
+  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
+
+  constructor(target, opts = {}) {
+    this.target = target;
+    this.config = opts;
+  }
+
+  static fromCalculator(calc, opts = {}) {
+    opts.largeTarget ??= calc.config.largeTarget;
+    return new this(calc.target, opts );
+  }
+
+  clone() {
+    const out = new this.constructor(this.target, this.config);
+    Object.assign(out.data, this.data);
+    return out;
+  }
+
+
+  // ----- NOTE: "Area" calculation ----- //
+
+  /* "Area"
+   Can be number of points, area of face(s), or some other area or volume calculation.
+   Key is it must be consistent for the given algorithm.
+  */
+
+  /**
+   * Area of the target assuming nothing obscures it. Used as the denominator for percentage calcs.
+   * @type {number}
+   */
+  get totalTargetArea() {
+    const { width, height } = this.target.document;
+    return width * height;
+  }
+
+  /**
+   * Area of a single grid square (or target sized 1/1). Used as the denominator for percentage calcs
+   * when large token option is enabled.
+   * @type {number}
+   */
+  get largeTargetArea() {
+    const { width, height } = this.target.document;
+    return this.totalTargetArea / (width * height);
+  }
+
+  /**
+   * Area of the target accounting for large target area config.
+   * @type {number}
+   */
+  get targetArea() {
+    if ( this.config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
+    return this.totalTargetArea;
+  }
+
+  /**
+   * Area of the target that is visible.
+   * @type {number}
+   */
+  get visibleArea() { return this.targetArea; }
+
+  get percentVisible() {
+    return approximateClamp(this.visibleArea / this.targetArea, 0, 1, 1e-02);
+  }
+
+  /**
+   * Blend this result with another result, taking the maximum values at each test location.
+   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMaximize(_other) { return this.clone(); }
+
+  static max(...results) {
+    let out = results[0];
+    for ( const result of results ) {
+      if ( result.percentVisible > out.percentVisible ) out = result;
+    }
+    return out;
+  }
+
+  static min(...results) {
+    let out = results[0];
+    for ( const result of results ) {
+      if ( result.percentVisible < out.percentVisible ) out = result;
+    }
+    return out;
+  }
+}
