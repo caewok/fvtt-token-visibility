@@ -7,7 +7,10 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../const.js";
+
 // LOS folder
+import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
@@ -168,7 +171,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const { pointAlgorithm, targetInset, points3d } = this.config;
     const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
     cfg.tokenShape = tokenShape ?? this.tokenShape
-    const targetPoints = AbstractViewpoint.constructTokenPoints(target, cfg);
+    const targetPoints = AbstractViewerLOS.constructTokenPoints(target, cfg);
     return points3d ? PointsViewpoint.elevatePoints(target, targetPoints) : targetPoints;
   }
 
@@ -199,6 +202,53 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
     return result;
   }
+  
+  /**
+   * Get polygons representing all grids under a token.
+   * If token is constrained, overlap the constrained polygon on the grid shapes.
+   * @param {Token} token
+   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   */
+  static constrainedGridShapesUnderToken(token, tokenShape) {
+    const gridShapes = this.gridShapesUnderToken(token);
+
+    // Token unconstrained by walls.
+    if ( token.tokenBorder.equals(tokenShape) ) return gridShapes;
+
+    // For each gridShape, intersect against the constrained shape
+    const constrainedGridShapes = [];
+    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([tokenShape]);
+    for ( let gridShape of gridShapes ) {
+      if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
+
+      const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
+      if ( constrainedGridShape instanceof CONFIG[MODULE_ID].ClipperPaths ) {
+        // Ignore holes.
+        const polys = constrainedGridShape.toPolygons().filter(poly => !poly.isHole && poly.points.length >= 6);
+        if ( polys.length ) constrainedGridShapes.push(...polys);
+      } else if ( constrainedGridShape instanceof PIXI.Polygon && constrainedGridShape.points.length >= 6 ) {
+        constrainedGridShapes.push(constrainedGridShape);
+      } else if ( constrainedGridShape instanceof PIXI.Rectangle ) {
+        constrainedGridShapes.push(constrainedGridShape);
+      }
+    }
+
+    return constrainedGridShapes;
+  }
+  
+    /**
+   * Get polygons representing all grids under a token.
+   * @param {Token} token
+   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   */
+  static gridShapesUnderToken(token) {
+    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) {
+      // console.error("gridShapesUnderTarget called on gridless scene!");
+      return [token.bounds];
+    }
+    return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
+  }
+
 }
 
 

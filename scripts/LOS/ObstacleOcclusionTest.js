@@ -6,15 +6,21 @@ Wall,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
-import { MODULE_ID, OTHER_MODULES } from "../const.js";
+// LOS folder
 import { Frustum } from "./Frustum.js";
-import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
 import {
   NULL_SET,
   tokensOverlap,
   getFlagFast } from "./util.js";
+
+// Base folder
+import { MODULE_ID, OTHER_MODULES } from "../const.js";
+import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
+
+// Geometry
+import { Point3d } from "../geometry/3d/Point3d.js";
+import { Draw } from "../geometry/Draw.js";
+
 
 export class ObstacleOcclusionTest {
 
@@ -53,6 +59,8 @@ export class ObstacleOcclusionTest {
 
   /** @type {Point3d} */
   rayOrigin = new Point3d();
+  
+  get viewpoint() { return this.rayOrigin; }
 
   _initialize({ rayOrigin, viewer, target } = {}) {
     if ( rayOrigin ) this.rayOrigin.copyFrom(rayOrigin);
@@ -299,6 +307,54 @@ export class ObstacleOcclusionTest {
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
     const geometry = placeable[MODULE_ID][AbstractPlaceableTrackerID];
     return [...geometry.iterateFaces()].filter(poly => poly.isFacing(viewpoint));
+  }
+  
+  /**
+   * For debugging.
+   * Draw the vision triangle between viewer point and target.
+   */
+  _drawFrustum(draw) {
+    const { viewpoint, target } = this;
+    const frustum = this.constructor.frustum.rebuild({ viewpoint, target });
+    frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
+  }
+
+  /**
+   * For debugging.
+   * Draw outlines for the various objects that can be detected on the canvas.
+   */
+  _drawDetectedObjects(draw) {
+    const colors = Draw.COLORS;
+    const OBSTACLE_COLORS = {
+      walls: colors.lightred,
+      terrainWalls: colors.lightgreen,
+      proximateWalls: colors.lightblue,
+      tiles: colors.yellow,
+      tokens: colors.orange,
+      regions: colors.red,
+    }
+    for ( const [key, obstacles] of Object.entries(this.obstacles) ) {
+      const color = OBSTACLE_COLORS[key];
+      switch ( key ) {
+        case "walls":
+        case "terrainWalls":
+        case "proximateWalls":
+          obstacles.forEach(wall => draw.segment(wall, { color }));
+          break;
+        case "tiles":
+          obstacles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color })));
+          break;
+        case "tokens":
+          obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
+          break;
+        case "regions":
+          obstacles.forEach(region => region.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color})
+          ));
+          break;
+      }
+    }
   }
 
 }

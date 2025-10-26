@@ -12,15 +12,15 @@ Token,
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 // LOS folder
-import { tokensOverlap } from "./util.js";
+import { tokensOverlap, insetPoints } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 // Viewpoint algorithms.
 import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PointsViewpoint } from "./PointsViewpoint.js";
 import { GeometricViewpoint } from "./GeometricViewpoint.js";
 import { Hybrid3dViewpoint } from "./Hybrid3dViewpoint.js";
@@ -342,7 +342,7 @@ export class AbstractViewerLOS {
     const cl = this.viewpointClass;
     let pointAlgorithm = numViewpoints;
     if ( !this.constructor.NUM_VIEWPOINTS_OPTIONS.has(pointAlgorithm) ) pointAlgorithm = this.constructor.NUM_VIEWPOINTS[numViewpoints]
-    this.viewpoints = AbstractViewpoint.constructTokenPoints(this.viewer, {
+    this.viewpoints = this.constructor.constructTokenPoints(this.viewer, {
       pointAlgorithm,
       inset: viewpointOffset
     }).map(pt => new cl(this, pt));
@@ -474,6 +474,117 @@ export class AbstractViewerLOS {
 
     return 0;
   }
+
+  /**
+   * Build points for a given token. 
+   * @param {Token} token
+   * @param {object} [opts]
+   * @param {PIXI.Polygon|PIXI.Rectangle} [opts.tokenShape]
+   * @param {POINT_TYPES} [opts.pointAlgorithm]
+   * @param {number} [opts.inset]
+   * @param {Point3d} [opts.viewpoint]
+   * @returns {Point3d[]}
+   */
+  static constructTokenPoints(token, { tokenShape, pointAlgorithm, inset, viewpoint } = {}) {
+    const TYPES = this.POINT_TYPES;
+    const center = Point3d.fromTokenCenter(token);
+
+    const tokenPoints = [];
+    if ( pointAlgorithm === TYPES.CENTER
+        || pointAlgorithm === TYPES.THREE
+        || pointAlgorithm === TYPES.FIVE
+        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(center);
+
+    if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
+
+    tokenShape ??= token.constrainedTokenBorder;
+    let cornerPoints = this.getCorners(tokenShape, center.z);
+
+    // Inset by 1 pixel or inset percentage;
+    insetPoints(cornerPoints, center, inset);
+
+    // If two points, keep only the front-facing points.
+    // For targets, keep the closest two points to the viewer point.
+    if ( pointAlgorithm === TYPES.TWO ) {
+      if ( viewpoint ) {
+        cornerPoints.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewpoint, pt));
+        cornerPoints.sort((a, b) => a._dist - b._dist);
+        cornerPoints.splice(2);
+      } else {
+        // Token rotation is 0º for due south, while Ray is 0º for due east.
+        // Token rotation is 90º for due west, while Ray is 90º for due south.
+        // Use the Ray version to divide the token into front and back.
+        const angle = Math.toRadians(token.document.rotation);
+        const dirPt = PIXI.Point.fromAngle(center, angle, 100);
+        cornerPoints = cornerPoints.filter(pt => foundry.utils.orient2dFast(center, dirPt, pt) <= 0);
+      }
+    }
+
+    if ( pointAlgorithm === TYPES.THREE ) {
+      if ( viewpoint ) {
+        tokenPoints.shift(); // Remove the center point.
+        cornerPoints.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewpoint, pt));
+        cornerPoints.sort((a, b) => a._dist - b._dist);
+
+        // If 2 of the 4 points are equidistant, we are in line with the target and can stick to the top 2.
+        const numPoints = cornerPoints[0]._dist === cornerPoints[1]._dist ? 2 : 3;
+        cornerPoints.splice(numPoints);
+      } else {
+        // Token rotation is 0º for due south, while Ray is 0º for due east.
+        // Token rotation is 90º for due west, while Ray is 90º for due south.
+        // Use the Ray version to divide the token into front and back.
+        const angle = Math.toRadians(token.document.rotation);
+        const dirPt = PIXI.Point.fromAngle(center, angle, 100);
+        cornerPoints = cornerPoints.filter(pt => foundry.utils.orient2dFast(center, dirPt, pt) <= 0);
+      }
+    }
+
+    tokenPoints.push(...cornerPoints);
+    if ( pointAlgorithm === TYPES.TWO
+      || pointAlgorithm === TYPES.THREE
+      || pointAlgorithm === TYPES.FOUR
+      || pointAlgorithm === TYPES.FIVE ) return tokenPoints;
+
+    // Add in the midpoints between corners.
+    const ln = cornerPoints.length;
+    let prevPt = cornerPoints.at(-1);
+    for ( let i = 0; i < ln; i += 1 ) {
+      // Don't need to inset b/c the corners already are.
+      const currPt = cornerPoints[i];
+      tokenPoints.push(Point3d.midPoint(prevPt, currPt));
+      prevPt = currPt;
+    }
+    return tokenPoints;
+  }
+
+  /**
+   * Helper that constructs 3d points for the points of a token shape (rectangle or polygon).
+   * Uses the elevation provided as the z-value.
+   * @param {PIXI.Polygon|PIXI.Rectangle} tokenShape
+   * @parma {number} elevation
+   * @returns {Point3d[]} Array of corner points.
+   */
+  static getCorners(tokenShape, elevation) {
+    if ( tokenShape instanceof PIXI.Rectangle ) {
+      // Token unconstrained by walls.
+      // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
+      // PIXI.Rectangle.prototype.pad modifies in place.
+      tokenShape = tokenShape.clone();
+      tokenShape.pad(-1);
+      return [
+        new Point3d(tokenShape.left, tokenShape.top, elevation),
+        new Point3d(tokenShape.right, tokenShape.top, elevation),
+        new Point3d(tokenShape.right, tokenShape.bottom, elevation),
+        new Point3d(tokenShape.left, tokenShape.bottom, elevation)
+      ];
+    } else if ( !(tokenShape instanceof PIXI.Polygon) ) tokenShape = tokenShape.toPolygon();
+
+    // Constrained is polygon. Only use corners of polygon
+    // Scale down polygon to avoid adjacent walls.
+    const padShape = tokenShape.pad(-2, { scalingFactor: 100 });
+    return [...padShape.iteratePoints({close: false})].map(pt => new Point3d(pt.x, pt.y, elevation));
+  }
+
 
   /**
    * Destroy any PIXI objects and remove hooks upon destroying.
