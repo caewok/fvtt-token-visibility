@@ -216,7 +216,7 @@ export class PercentVisibleCalculatorAbstract {
   }
 
   initializeOcclusionTesting() {
-    this.occlusionTester._initialize(this.viewpoint, this.target);
+    this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
   }
 
   calculate(viewOpts) {

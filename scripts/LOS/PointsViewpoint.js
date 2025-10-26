@@ -11,7 +11,8 @@ PIXI,
 import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
-import { BitSet } from "./BitSet/bitset.mjs";
+import { BitSet } from "./BitSet/BitSet.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 /*
 Points algorithm also can use area and threshold.
@@ -85,7 +86,7 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
 
   constructor(target, opts) {
     super(target, opts);
-    this.data = BitSet.Empty(this._config.numPoints);
+    this.data = BitSet.empty(this._config.numPoints);
   }
 
   get totalTargetArea() { return this._config.numPoints; }
@@ -181,7 +182,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @returns {PercentVisiblePointsResult}
    */
   _testPointToPoints(targetPoints) {
-    this.occlusionTester._initialize(this.viewpoint, this.target);  
+    this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });  
     const result = this.lastResult.clone();
     result.data.clear();
 
@@ -238,12 +239,15 @@ calc.viewer = randal
 calc.target = zanna
 calc.viewpoint.copyFrom(Point3d.fromTokenCenter(calc.viewer))
 calc.targetLocation.copyFrom(Point3d.fromTokenCenter(calc.target))
-
-res = calc.calculate()
+calc.calculate()
 
 debugViewer = api.buildDebugViewer(api.debugViewers.points)
 await debugViewer.initialize();
 debugViewer.render();
+
+atv = randal.tokenvisibility.visibility
+atv.percentVisibilityToToken(zanna)
+
 
 
 

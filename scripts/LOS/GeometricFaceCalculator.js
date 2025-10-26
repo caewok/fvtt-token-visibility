@@ -67,7 +67,7 @@ export class GeometricFaceCalculator {
   set viewpoint(value) {
     this.#viewpoint.copyFrom(value);
     this.camera.cameraPosition = this.#viewpoint;
-    if ( this.#target ) this.occlusionTester._initialize(this.#viewpoint, this.#target);
+    if ( this.#target ) this.occlusionTester._initialize({ rayOrigin: this.#viewpoint, viewer: this.#viewer, target: this.#target });
   }
 
   #targetLocation = new CONFIG.GeometryLib.threeD.Point3d();
@@ -75,11 +75,11 @@ export class GeometricFaceCalculator {
   #target;
 
   get target() { return this.#target; }
-
+  
   set target(value) {
     this.#target = value;
     this.targetLocation = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.#target);
-    this.occlusionTester._initialize(this.#viewpoint, this.#target);
+    this.occlusionTester._initialize({ rayOrigin: this.#viewpoint, viewer: this.#viewer, target: this.#target });
   }
 
   get targetLocation() { return this.#targetLocation; }
@@ -87,6 +87,15 @@ export class GeometricFaceCalculator {
   set targetLocation(value) {
     this.#targetLocation.copyFrom(value);
     this.camera.targetPostion = this.#targetLocation;
+  }
+  
+  #viewer;
+  
+  get viewer() { return this.#viewer; }
+  
+  set viewer(value) {
+    this.#viewer = value;
+    this.occlusionTester._initialize({ rayOrigin: this.#viewpoint, viewer: this.#viewer, target: this.#target });
   }
 
   clear() {

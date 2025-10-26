@@ -10,7 +10,7 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
 import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
-
+import { buildLOSViewer } from "./LOSCalculator.js";
 
 export const ATVTokenHandlerID = "visibility";
 
@@ -28,20 +28,24 @@ export class ATVTokenHandler {
 
   /** @type {Token} */
   viewer;
+  
+  /** @type {AbstractViewerLOS} */
+  losViewer;
  
   constructor(token) {
     token[MODULE_ID] ??= {};
     token[MODULE_ID][this.constructor.ID] = this;
+    this.losViewer = buildLOSViewer(token);
     this.viewer = token;
   }
   
-  get losCalc() { return this.viewer[MODULE_ID].losCalc; }
+  get losCalc() { return this.losViewer.losCalc; }
   
   /**
    * @param {CONFIG.Canvas.detectionModes|CONFIG.Canvas.visionModes} [detectionMode]
    */
   setConfigForDetectionMode(dm) {
-    this.losCalc.setConfigForDetectionMode(dm);
+    this.losViewer.setConfigForDetectionMode(dm);
   }
   
   /**
@@ -49,17 +53,18 @@ export class ATVTokenHandler {
    * @returns {number}
    */
   percentVisibilityToToken(target) {
-    const losCalc = this.losCalc;
-    losCalc.target = target;
-    losCalc.calculate();
-    return losCalc.hasLOS;
+    const losViewer = this.losViewer;
+    losViewer.target = target;
+    losViewer.calculate();
+    return losViewer.percentVisibility;
     
   }
   
   hasLOSToToken(target, range) {
     if ( !this.tokenWithinLimitedAngleVision(target) ) return false;
     if ( range && !this.tokenWithinVisibleRange(target, range) ) return false;
-    return this.percentVisibilityToToken(target);
+    this.percentVisibilityToToken(target);
+    return this.losViewer.hasLOS;
   }
   
   /**
@@ -73,7 +78,7 @@ export class ATVTokenHandler {
     // range ??= 
   
 		const testPoints = rangeTestPointsForToken(target);
-		const visionOrigin = Point3d.fromPointSource(this.viewer.visionSource);
+		const visionOrigin = Point3d.fromPointSource(this.viewer.vision);
 		const radius2 = this.viewer.getLightRadius(range) ** 2;
 	
 		// Duplicate below so that the if test does not need to be inside the loop.
@@ -111,7 +116,7 @@ export class ATVTokenHandler {
    * @returns {boolean} True if within range.
    */
   tokenWithinLimitedAngleVision(target) {
-    return AbstractViewerLOS.targetWithinLimitedAngleVision(this.token.vision, target);
+    return AbstractViewerLOS.targetWithinLimitedAngleVision(this.viewer.vision, target);
   }
     
   get lightingType() {
@@ -122,7 +127,7 @@ export class ATVTokenHandler {
       pointAlgorithm: CONFIG[MODULE_ID].lightMeasurementNumPoints,
     }
   
-    const { dim, bright } = pointsCalc.calculateLightingTypeForTarget(this.token);
+    const { dim, bright } = pointsCalc.calculateLightingTypeForTarget(this.viewer);
     pointsCalc.config = oldConfig;
     
     const { TYPES } = this.constructor.LIGHTING_TYPES;
