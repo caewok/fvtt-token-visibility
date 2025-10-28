@@ -21,7 +21,6 @@ import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { BitSet } from "./BitSet/BitSet.js";
 
 // Viewpoint algorithms.
-import { PercentVisibleCalculatorAbstract } from "./calculators/PercentVisibleCalculator.js";
 import { Viewpoint } from "./Viewpoint.js";
 
 // import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
@@ -52,8 +51,8 @@ import { Viewpoint } from "./Viewpoint.js";
 /**
  * @typedef {object} PointsCalculatorConfig
  * ...{CalculatorConfig}
- * @property {number} numPoints     										Number of points to use for the target
- * @property {number} targetInset                       How much to inset target points from target border
+ * @property {number} targetPointsIndex 	    					Points configuration for the target
+ * @property {number} targetInset                       Offset target points from target border
  * @property {boolean} points3d                         Whether to use 3d points
  */
 
@@ -66,8 +65,8 @@ import { Viewpoint } from "./Viewpoint.js";
 
 /**
  * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
- * @property {number} numViewpoints    												Number of viewpoints
- * @property {number} viewpointOffset                         Offset each viewpoint from border
+ * @property {number} viewpointIndex    										Points configuration for the viewer's viewpoints
+ * @property {number} viewpointInset                          Offset each viewpoint from viewer border
  * @property {number} threshold                               Percent needed to be seen for LOS
  */
 
@@ -95,16 +94,6 @@ const DM_SOURCE_TYPES = {
 
 
 export class ViewerLOS {
-  /** @type {enum<string>} */
-  static POINT_TYPES = {
-    CENTER: "points-center",
-    TWO: "points-two",
-    THREE: "points-three", //
-    FOUR: "points-four", // Five without center
-    FIVE: "points-five", // Corners + center
-    EIGHT: "points-eight", // Nine without center
-    NINE: "points-nine" // Corners, midpoints, center
-  };
   
   /**
    * Index for each of the point combinations.
@@ -131,6 +120,27 @@ export class ViewerLOS {
       BOTTOM: 8,
     }   
   };
+  
+  /**
+   * How many viewpoints for a given point index code?
+   * @param {POINT_INDICES} idx
+   * @returns {number}
+   */
+  static numViewpointsForIndex(idx) {
+    const PI = this.POINT_INDICES;
+    const bs = idx instanceof BitSet ? idx : new BitSet(idx);
+    let count = 0;
+    count += bs.get(PI.CENTER);
+    count += 2 * bs.get(PI.CORNERS.FACING); 
+    count += 2 * bs.get(PI.CORNERS.BACK);
+    count += 2 * bs.get(PI.CORNERS.MID.SIDES);
+    count += bs.get(PI.MID.FRONT);
+    count += bs.get(PI.MID.BACK);
+    
+    // There are [count] points on each level, minimum of 1 level.
+    const mult = (bs.get(PI.D3.TOP) + bs.get(PI.D3.MID) + bs.get(PI.D3.BOTTOM)) || 1;
+    return count * mult;
+  }
 
   // Simply trim "los-algorithm-" from the setting.
   static VIEWPOINT_ALGORITHM_SETTINGS = {
@@ -142,63 +152,27 @@ export class ViewerLOS {
     "los-algorithm-webgpu": "webGPU",
     "los-algorithm-webgpu-async": "webGPUAsync",
   };
-
-  static NUM_VIEWPOINTS_OPTIONS = new Set([
-    this.POINT_TYPES.CENTER,
-    this.POINT_TYPES.TWO,
-    this.POINT_TYPES.THREE,
-    this.POINT_TYPES.FOUR,
-    this.POINT_TYPES.FIVE,
-    this.POINT_TYPES.EIGHT,
-    this.POINT_TYPES.NINE,
-  ]);
-
-  /** @type {enum<string>} */
-  static NUM_VIEWPOINTS = {
-    1: this.POINT_TYPES.CENTER,
-    2: this.POINT_TYPES.TWO,
-    3: this.POINT_TYPES.THREE,
-    4: this.POINT_TYPES.FOUR,
-    5: this.POINT_TYPES.FIVE,
-    8: this.POINT_TYPES.EIGHT,
-    9: this.POINT_TYPES.NINE,
-    ...this.POINT_TYPES,
-  };
+  
+  /** @type {PercentVisibleCalculator} */
+  calculator;
 
   /**
-   * @param {Token} viewer      The token whose LOS should be tested
-   * @param {object} [opts]
-   *
-   * One of calculator or calcClass must be provided:
-   * @param {PercentVisibleCalculatorAbstract} [opts.calculator]      Calculator to use to test the viewpoints
-   *
-   * Other options:
-   * @param {number|string} [opts.numViewpoints]              Number of viewpoints or string identifying associated algorithm
-   * @param {number} [opts.viewpointOffset]                   Used to adjust the viewpoint location
-   * @param {number} [opts.threshold]                         Percentage used to test for LOS (above this passes)
-   * @param {object} [...cfg]                                 Passed to a newly-constructed calculator if none provided.
+   * @param {Token} viewer      					The token whose LOS should be tested
+   * @param {PercentVisibleCalculator} 		The visibility calculator to use.
    */
-  constructor(viewer, { calculator, calcClass, numViewpoints, viewpointOffset, ...cfg } = {}) {
+  constructor(viewer, calculator) {
     this.#viewer = viewer;
-
-    if ( typeof numViewpoints !== "undefined" ) this.#config.numViewpoints = numViewpoints;
-    if ( viewpointOffset !== "undefined" ) this.#config.viewpointOffset = viewpointOffset;
-
-    // Confirm the calculator and viewpoint class are compatible and create the calculator
-    if ( !calculator && !calcClass ) return console.error(`${this.constructor.name}|One of calculator or calcClass must be provided.`);
-    calculator ??= new calcClass(cfg);
-    this.#calculator = calculator;
-
-    // Create the viewpoints.
-    if ( this.#viewer ) this.initializeViewpoints({ numViewpoints, viewpointOffset });
+    this.calculator = calculator;
+    // Dirty variable already set for constructor.
   }
 
   // ----- NOTE: Configuration ---- //
 
   static defaultConfiguration = {
     // Viewpoint configuration
+    viewpointIndex: 1, // Center point only.
+    viewpointInset: 0,
     angle: true, // If constrained by the viewer vision angle
-    viewpointOffset: 0,
     threshold: 0.75, // Percent used for LOS
   }
 
@@ -208,12 +182,11 @@ export class ViewerLOS {
   get config() { return structuredClone(this.#config); }
 
   set config(cfg = {}) { 
-    if ( cfg.numViewpoints && cfg.numViewpoints !== this.#config.numViewpoints)
-  
-    foundry.utils.mergeObject(this.#config, cfg, { inplace: true}) 
+    this.#dirty ||= Object.hasOwn(cfg, "viewpointIndex") || Object.hasOwn(cfg, "viewpointInset");
+    foundry.utils.mergeObject(this.#config, cfg, { inplace: true}); 
   }
 
-  get viewpointOffset() { return this.#config.viewpointOffset; }
+  get viewpointInset() { return this.#config.viewpointInset; }
 
   get threshold() { return this.#config.threshold; }
 
@@ -268,24 +241,14 @@ export class ViewerLOS {
   
   get dirty() { return this.#dirty; }
   
-  set dirty(value) { 
-    this.dirty ||= value; 
-    this.calculator.dirty = value;
-  }
+  set dirty(value) { this.dirty ||= value; }
   
+  /** 
+   * Update the viewpoints.
+   */
   _clean() {
-  }
-
-  // ----- NOTE: Calculator ----- //
-
-  #calculator;
-
-  get calculator() { return this.#calculator; }
-
-  set calculator(value) {
-    if ( !(value instanceof PercentVisibleCalculatorAbstract) ) console.error("Calculator not recognized", { value });
-    this.#calculator = value;
-    this.#calculator.dirty = true;
+    this.initializeViewpoints();
+    this.#dirty = false;
   }
 
   // ----- NOTE: Viewer ----- //
@@ -307,8 +270,7 @@ export class ViewerLOS {
   set viewer(value) {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
-    this.dirty = true;
-    this.initializeViewpoints();
+    this.dirty = true; 
   }
 
   // ----- NOTE: Viewpoints ----- //
@@ -318,21 +280,13 @@ export class ViewerLOS {
   /**
    * Set up the viewpoints for this viewer.
    */
-  initializeViewpoints({ numViewpoints, viewpointOffset } = {}) {
-    numViewpoints ||= this.viewpoints.length || 1;
-    this.#config.numViewpoints = numViewpoints;
-    viewpointOffset ??= this.viewpointOffset;
-    this.#config.viewpointOffset = viewpointOffset;
-    
-    // Calculate all viewpoints for the viewer.
-    // Recreate the viewpoint class for simplicity; the class is light.
-    let pointAlgorithm = numViewpoints;
-    if ( !this.constructor.NUM_VIEWPOINTS_OPTIONS.has(pointAlgorithm) ) pointAlgorithm = this.constructor.NUM_VIEWPOINTS[numViewpoints];
+  initializeViewpoints() {
+    const numViewpoints = this.constructor.numViewpointsForIndex(this.#config.viewpointIndex);
     this.viewpoints.length = numViewpoints;
     this.constructor.constructTokenPoints(this.viewer, {
-      pointAlgorithm,
-      inset: viewpointOffset
-    }).map((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
+      pointKey: this.config.viewpointIndex,
+      inset: this.config.viewpointInset,
+    }).forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
   }
 
   // ----- NOTE: Target ---- //
@@ -349,9 +303,7 @@ export class ViewerLOS {
 
   get target() { return this.#target; }
 
-  set target(value) {
-    this.#target = value;
-  }
+  set target(value) { this.#target = value; }
 
   /** @type {Point3d} */
   get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target); }
@@ -402,10 +354,25 @@ export class ViewerLOS {
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
     this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
+      if ( this._viewpointBlockedByViewer(vp) ) continue;
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) break;
     }
+  }
+  
+  
+  /**
+   * Viewpoint blocked if it is further from the target than the center point.
+   * In other words, if it traverses too much of the viewer shape.
+   * @param {Point3d} vp
+   * @returns {boolean} True if blocked
+   */
+  _viewpointBlockedByViewer(vp) {
+    const ctr = this.center;
+    if ( vp.almostEqual(ctr) ) return false; // Center point is special; not blocked.
+    const targetCtr = Point3d.fromTokenCenter(this.target);
+    return Point3d.distanceSquaredBetween(ctr, targetCtr) < Point3d.distanceSquaredBetween(vp, targetCtr);
   }
 
   /**
@@ -481,9 +448,11 @@ export class ViewerLOS {
    * @returns {Point3d[]}
    */
   static constructTokenPoints(token, { pointKey = 1, tokenShape, inset, viewpoint } = {}) {
+    tokenShape ??= token.constrainedTokenBorder;
     const bs = pointKey instanceof BitSet ? pointKey : new BitSet(pointKey);
     const PI = this.POINT_INDICES;
     let cornerPoints;
+    const tokenPoints = [];
     
     // Center point
     const center = Point3d.fromTokenCenter(token);
@@ -550,8 +519,8 @@ export class ViewerLOS {
 		if ( viewpoint ) {
 			pts.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewpoint, pt));
 			pts.sort((a, b) => a._dist - b._dist);
-			back = cornerPoints.slice(2);
-			facing = cornerPoints.slice(0, 2);
+			back = pts.slice(2);
+			facing = pts.slice(0, 2);
 		} else {
 			// Token rotation is 0º for due south, while Ray is 0º for due east.
 			// Token rotation is 90º for due west, while Ray is 90º for due south.
