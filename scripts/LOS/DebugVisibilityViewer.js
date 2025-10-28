@@ -11,8 +11,8 @@ PIXI,
 import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
-import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
+import { ViewerLOS } from "./ViewerLOS.js";
+import { Viewpoint } from "./Viewpoint.js";
 
 /* Debug viewer
 
@@ -22,16 +22,12 @@ Calculates percentage visible for the viewer/target combo.
 
 export class DebugVisibilityViewerAbstract {
 
-  /** @type {class} */
-  static viewpointClass = AbstractViewpoint;
-
   /** @type {PercentVisibleCalculator} */
   viewerLOS;
 
   constructor(config = {}) {
     config.testLighting = true;
-    config.viewpointClass = this.constructor.viewpointClass;
-    this.viewerLOS = new AbstractViewerLOS(undefined, config);
+    this.viewerLOS = new ViewerLOS(undefined, config);
     this.viewerLOS.debug = true;
     
     this.registerHooks();

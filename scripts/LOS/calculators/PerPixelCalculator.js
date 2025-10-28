@@ -6,20 +6,19 @@ PIXI,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../const.js";
-import { Settings } from "../settings.js";
+import { MODULE_ID } from "../../const.js";
+import { Settings } from "../../settings.js";
 
 // LOS folder
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
-import { Camera } from "./Camera.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
-import { BitSet } from "./BitSet/BitSet.js";
+import { AbstractPolygonTrianglesID } from "../PlaceableTriangles.js";
+import { Camera } from "../Camera.js";
+import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
+import { BitSet } from "../BitSet/BitSet.js";
 
-// Debug
-import { Draw } from "../geometry/Draw.js";
+// Geometry
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Draw } from "../../geometry/Draw.js";
 
 export class PercentVisiblePerPixelResult extends PercentVisibleResult {
 
@@ -61,29 +60,9 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
 }
 
 
-/**
- * An eye belong to a specific viewer.
- * It defines a specific position, relative to the viewer, from which the viewpoint is used.
- * Draws lines from the viewpoint to points on the target token to determine LOS.
- */
-export class PerPixelViewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorPerPixel; }
-
-  /* ----- NOTE: Debugging methods ----- */
-  /**
-   * For debugging.
-   * Draw the 3d objects in the popout.
-   */
-  _draw3dDebug(draw, renderer, container, { width = 100, height = 100 } = {}) {
-    this.calculator._draw3dDebug(this.viewer, this.target, this.viewpoint, this.targetLocation, { draw, renderer, container, width, height });
-  }
-}
-
 export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePerPixelResult;
   
-  static get viewpointClass() { return PerPixelViewpoint; }
-
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
   /** @type {Camera} */
@@ -688,8 +667,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 }
 
 export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPIXI {
-  static viewpointClass = PerPixelViewpoint;
-
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.PER_PIXEL;
 
   updatePopoutFooter(percentVisible) {

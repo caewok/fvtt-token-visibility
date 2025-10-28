@@ -10,34 +10,32 @@ import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 
 // Geometry
 import { Draw } from "../geometry/Draw.js";
+import { Point3d } from "../geometry/3d/Point3d.js";
 
 /**
  * An eye belong to a specific viewer.
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  */
-export class AbstractViewpoint {
-  static calcClass;
-
+export class Viewpoint {
   /** @type {ViewerLOS} */
   viewerLOS;
 
   /** @type {Point3d} */
-  viewpointDiff;
+  viewpointDiff = new Point3d();
 
   /**
    * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"; handles most of the config
    * @param {Point3d} viewpoint        The location of the eye; this will be translated to be relative to the viewer
    */
   constructor(viewerLOS, viewpoint) {
-    if ( viewerLOS.calculator && !(viewerLOS.calculator instanceof this.constructor.calcClass) ) {
-      console.error(`{this.constructor.name}|Calculator must be ${this.constructor.calcClass.name}.`, this.viewerLOS.calculator);
-    }
     this.viewerLOS = viewerLOS;
-    this.viewpointDiff = viewpoint.subtract(viewerLOS.center);
+    this.viewpoint = viewpoint;
   }
-
+  
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
+  
+  set viewpoint(value) { value.subtract(this.viewerLOS.center, this.viewpointDiff); }
 
   /** @type {Point3d} */
   get targetLocation() { return this.viewerLOS.targetLocation; }
@@ -66,10 +64,8 @@ export class AbstractViewpoint {
   // ----- NOTE: Visibility Percentages ----- //
   _percentVisible;
 
-  lastResult;
-
   get percentVisible() {
-    if ( typeof this._percentVisible === "undefined" ) this._percentVisible = this.lastResult.percentVisible;
+    if ( typeof this._percentVisible === "undefined" ) this.calculate();
     return this._percentVisible;
   }
 
@@ -79,9 +75,12 @@ export class AbstractViewpoint {
       this._percentVisible = 1;
       return;
     }
-    this.calculator.calculate(this);
-    this.lastResult = this.calculator.lastResult.clone();
+    
+    this.calculator.intializeView(this);
+    const lastResult = this.calculator.calculate();
     if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
+    this._percentVisible = lastResult.percentVisible;
+    return lastResult;
   }
 
   targetOverlapsViewpoint() {
@@ -105,33 +104,11 @@ export class AbstractViewpoint {
     return this.targetOverlapsViewpoint();
   }
 
-  /**
-   * Clean up memory-intensive objects.
-   */
-  destroy() {}
-
   /* ----- NOTE: Debug ----- */
-
-  /**
-   * For debugging.
-   * Draw various debug guides on the canvas.
-   * @param {Draw} draw
-   */
+  
   _drawCanvasDebug(debugDraw) {
-    this._drawLineOfSight(debugDraw);
-    this.calculator.occlusionTester._drawDetectedObjects(debugDraw);
-    this.calculator.occlusionTester._drawFrustum(debugDraw);
+    this.calculator.intializeView(this);
+    this.calculator._drawCanvasDebug(debugDraw);
   }
-
-  /**
-   * For debugging.
-   * Draw the line of sight from token to target.
-   */
-  _drawLineOfSight(draw) {
-    draw.segment({ A: this.viewpoint, B: this.targetLocation });
-  }
-
-
-
 
 }

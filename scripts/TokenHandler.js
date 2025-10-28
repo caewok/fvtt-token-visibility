@@ -9,7 +9,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
-import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { buildLOSViewer } from "./LOSCalculator.js";
 
 export const ATVTokenHandlerID = "visibility";
@@ -29,7 +29,7 @@ export class ATVTokenHandler {
   /** @type {Token} */
   viewer;
   
-  /** @type {AbstractViewerLOS} */
+  /** @type {ViewerLOS} */
   losViewer;
  
   constructor(token) {
@@ -116,7 +116,7 @@ export class ATVTokenHandler {
    * @returns {boolean} True if within range.
    */
   tokenWithinLimitedAngleVision(target) {
-    return AbstractViewerLOS.targetWithinLimitedAngleVision(this.viewer.vision, target);
+    return ViewerLOS.targetWithinLimitedAngleVision(this.viewer.vision, target);
   }
     
   get lightingType() {

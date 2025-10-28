@@ -14,8 +14,7 @@ import * as twgl from "./twgl.js";
 import { MODULE_ID } from "../../const.js";
 
 // LOS folder
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "../PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "../calculators/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
 import { checkFramebufferStatus } from "../util.js";
 
@@ -64,20 +63,10 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   }
 }
 
-/**
- * An eye belong to a specific viewer.
- * It defines a specific position, relative to the viewer, from which the viewpoint is used.
- * Draws lines from the viewpoint to points on the target token to determine LOS.
- */
-export class WebGL2Viewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorWebGL2; }
-}
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleWebGL2Result;
   
-  static get viewpointClass() { return WebGL2Viewpoint; }
-
   static defaultConfiguration = {
     ...PercentVisibleCalculatorAbstract.defaultConfiguration,
     alphaThreshold: 0.75,
@@ -300,8 +289,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 }
 
 export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {
-  static viewpointClass = WebGL2Viewpoint;
-
   static CONTEXT_TYPE = "webgl2";
 
   /** @type {boolean} */

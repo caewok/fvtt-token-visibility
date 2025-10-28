@@ -11,7 +11,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { Sphere } from "./geometry/3d/Sphere.js";
 import { BitSet } from "./LOS/BitSet/bitset.mjs";
 import { MatrixFlat } from "./geometry/MatrixFlat.js";
-import { PercentVisibleCalculatorPoints } from "./LOS/PointsViewpoint.js";
+import { PercentVisibleCalculatorPoints } from "./LOS/calculators/PointsCalculator.js";
 
 /*
 Spherical approach

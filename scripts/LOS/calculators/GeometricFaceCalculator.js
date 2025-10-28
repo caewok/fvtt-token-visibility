@@ -5,9 +5,9 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
-import { Camera } from "./Camera.js";
+import { MODULE_ID } from "../../const.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
+import { Camera } from "../Camera.js";
 
 /* FaceCalculator
 

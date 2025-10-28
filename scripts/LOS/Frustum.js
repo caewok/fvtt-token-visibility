@@ -25,7 +25,7 @@ const pt3d_1 = new Point3d();
  */
 export class Frustum {
 
-  // Frustum is called early, as a static object for AbstractViewpoint. So it needs imported versions.
+  // Frustum is called early, as a static object for Viewpoint. So it needs imported versions.
   top = new Triangle3d();
 
   bottom = new Triangle3d();

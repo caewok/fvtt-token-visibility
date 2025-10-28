@@ -5,15 +5,14 @@ CONFIG,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../const.js";
-import { Settings } from "../settings.js";
+import { MODULE_ID } from "../../const.js";
+import { Settings } from "../../settings.js";
 
 // LOS folder
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
+import { AbstractPolygonTrianglesID } from "../PlaceableTriangles.js";
+import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 
 
 /* Sample pixel viewpoint
@@ -68,24 +67,10 @@ export class PercentVisibleSamplePixelResult extends PercentVisibleResult {
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
-export class SamplePixelViewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorSamplePixel; }
-
-  /* ----- NOTE: Debugging methods ----- */
-  /**
-   * For debugging.
-   * Draw the 3d objects in the popout.
-   */
-  _draw3dDebug(draw, renderer, container, { width = 100, height = 100 } = {}) {
-    this.calculator._draw3dDebug(this.viewer, this.target, this.viewpoint, this.targetLocation, { draw, renderer, container, width, height });
-  }
-}
 
 export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleSamplePixelResult;
   
-  static get viewpointClass() { return SamplePixelViewpoint; }
-
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
 
@@ -217,8 +202,6 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
 }
 
 export class DebugVisibilityViewerSamplePixel extends DebugVisibilityViewerArea3dPIXI {
-  static viewpointClass = SamplePixelViewpoint;
-
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.PER_PIXEL;
 
   updatePopoutFooter(percentVisible) {

@@ -725,7 +725,6 @@ Draw = CONFIG.GeometryLib.Draw
 api = game.modules.get("tokenvisibility").api
 countTargetPixels = api.countTargetPixels
 let { Polygon3d, Triangle3d, GeometryToken, BasicVertices, Camera, Frustum } = api.geometry
-AbstractViewpoint = api.AbstractViewpoint
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn;

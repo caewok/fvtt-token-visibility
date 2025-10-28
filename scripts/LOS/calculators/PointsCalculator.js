@@ -7,15 +7,16 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
+import { MODULE_ID } from "../../const.js";
 
 // LOS folder
-import { AbstractViewerLOS } from "./AbstractViewerLOS.js";
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerAbstract } from "./DebugVisibilityViewer.js";
-import { BitSet } from "./BitSet/BitSet.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
+import { ViewerLOS } from "../ViewerLOS.js";
+import { DebugVisibilityViewerAbstract } from "../DebugVisibilityViewer.js";
+import { BitSet } from "../BitSet/BitSet.js";
+
+// Geometry
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 /*
 Points algorithm also can use area and threshold.
@@ -26,57 +27,6 @@ Dim and bright lighting test options:
 2. Point not obscured from light and within light radius
 
 */
-
-
-/**
- * An eye belong to a specific viewer.
- * It defines a specific position, relative to the viewer, from which the viewpoint is used.
- * Draws lines from the viewpoint to points on the target token to determine LOS.
- */
-export class PointsViewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorPoints; }
-
-  /** @type {PIXI.Graphics} */
-  #debugGraphics;
-
-  get debugGraphics() {
-    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = new PIXI.Graphics();
-    return this.#debugGraphics;
-  }
-
-  /** @type {Draw} */
-  #debugDraw;
-
-  get debugDraw() {
-    const Draw = CONFIG.GeometryLib.Draw;
-    if ( !this.#debugDraw
-      || !this.#debugGraphics
-      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
-    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
-  }
-
-  _drawCanvasDebug(debugDraw) {
-    super._drawCanvasDebug(debugDraw);
-    this._drawDebugPoints(debugDraw);
-  }
-
-  _drawDebugPoints(draw) {
-    const colors = CONFIG.GeometryLib.Draw.COLORS;
-    const width =  this.percentVisible > this.viewerLOS.threshold ? 2 : 1;
-    for ( const debugPoint of this.calculator.debugPoints ) {
-      const color = debugPoint.isOccluded ? colors.red : colors.green;
-      const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
-      draw.segment(debugPoint, { alpha, width, color });
-    }
-  }
-
-  destroy() {
-    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
-    this.#debugGraphics = undefined;
-    super.destroy();
-  }
-}
-
 
 export class PercentVisiblePointsResult extends PercentVisibleResult {
 
@@ -112,16 +62,11 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
   }
 }
 
-
 /**
  * Handle points algorithm.
  */
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePointsResult;
-
-  static viewpointClass = PointsViewpoint;
-
-  // static get viewpointClass() { return PointsViewpoint; }
 
   static defaultConfiguration = {
     ...PercentVisibleCalculatorAbstract.defaultConfiguration,
@@ -171,7 +116,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const { pointAlgorithm, targetInset, points3d } = this.config;
     const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
     cfg.tokenShape = tokenShape ?? this.tokenShape
-    const targetPoints = AbstractViewerLOS.constructTokenPoints(target, cfg);
+    const targetPoints = ViewerLOS.constructTokenPoints(target, cfg);
     return points3d ? PointsViewpoint.elevatePoints(target, targetPoints) : targetPoints;
   }
 
@@ -248,12 +193,55 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
     return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
+  
+  // ----- NOTE: Debug ----- //
+  
+  /** @type {PIXI.Graphics} */
+  #debugGraphics;
+
+  get debugGraphics() {
+    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = new PIXI.Graphics();
+    return this.#debugGraphics;
+  }
+
+  /** @type {Draw} */
+  #debugDraw;
+
+  get debugDraw() {
+    const Draw = CONFIG.GeometryLib.Draw;
+    if ( !this.#debugDraw
+      || !this.#debugGraphics
+      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
+    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
+  }
+
+  _drawCanvasDebug(debugDraw) {
+    super._drawCanvasDebug(debugDraw);
+    this._drawDebugPoints(debugDraw);
+  }
+
+  _drawDebugPoints(draw) {
+    const colors = CONFIG.GeometryLib.Draw.COLORS;
+    // const width = this.percentVisible > this.viewerLOS.threshold ? 2 : 1;
+    for ( const debugPoint of this.debugPoints ) {
+      const color = debugPoint.isOccluded ? colors.red : colors.green;
+      const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
+      draw.segment(debugPoint, { alpha, width, color });
+    }
+  }
+
+  destroy() {
+    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
+    this.#debugGraphics = undefined;
+    super.destroy();
+  }
 
 }
 
 
+
+
 export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
-  static viewpointClass = PointsViewpoint;
 
   /** @type {Token[]} */
   get viewers() { return canvas.tokens.controlled; }

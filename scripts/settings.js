@@ -10,7 +10,7 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
 
 
@@ -37,7 +37,7 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
   SUBMENU: "submenu",
-  POINT_TYPES: AbstractViewerLOS.POINT_TYPES,
+  POINT_TYPES: ViewerLOS.POINT_TYPES,
 
   RANGE: {
     ALGORITHM: "range-algorithm",

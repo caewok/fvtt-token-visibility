@@ -18,14 +18,12 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { tokensOverlap, insetPoints } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
+import { BitSet } from "./BitSet/BitSet.js";
 
 // Viewpoint algorithms.
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
-import { PointsViewpoint } from "./PointsViewpoint.js";
-import { GeometricViewpoint } from "./GeometricViewpoint.js";
-import { Hybrid3dViewpoint } from "./Hybrid3dViewpoint.js";
-import { WebGL2Viewpoint } from "./WebGL2/WebGL2Viewpoint.js";
-import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
+import { PercentVisibleCalculatorAbstract } from "./calculators/PercentVisibleCalculator.js";
+import { Viewpoint } from "./Viewpoint.js";
+
 // import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
 /**
@@ -54,7 +52,7 @@ import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
 /**
  * @typedef {object} PointsCalculatorConfig
  * ...{CalculatorConfig}
- * @property {AbstractViewerLOS.POINT_TYPES} pointAlgorithm     String code for the point algorithm (number of points) to use
+ * @property {number} numPoints     										Number of points to use for the target
  * @property {number} targetInset                       How much to inset target points from target border
  * @property {boolean} points3d                         Whether to use 3d points
  */
@@ -68,7 +66,7 @@ import { PerPixelViewpoint } from "./PerPixelViewpoint.js";
 
 /**
  * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
- * @property {AbstractViewerLOS.POINT_TYPES} numViewpoints    String code for number of viewpoints
+ * @property {number} numViewpoints    												Number of viewpoints
  * @property {number} viewpointOffset                         Offset each viewpoint from border
  * @property {number} threshold                               Percent needed to be seen for LOS
  */
@@ -96,7 +94,7 @@ const DM_SOURCE_TYPES = {
 };
 
 
-export class AbstractViewerLOS {
+export class ViewerLOS {
   /** @type {enum<string>} */
   static POINT_TYPES = {
     CENTER: "points-center",
@@ -106,6 +104,32 @@ export class AbstractViewerLOS {
     FIVE: "points-five", // Corners + center
     EIGHT: "points-eight", // Nine without center
     NINE: "points-nine" // Corners, midpoints, center
+  };
+  
+  /**
+   * Index for each of the point combinations.
+   * For all but center, the point is ignored if the ray passes nearly entirely through the token.
+   * E.g., more than half the width/height. 
+   * @type {enum<number>} 
+   */
+  static POINT_INDICES = {
+    CENTER: 0,	    			// e.g., 00000001
+    CORNERS: {
+      FACING: 1,				  // e.g., 00000010
+      BACK: 2,					
+    },
+    MID: {
+      FACING: 3,
+      SIDES: 4,
+      BACK: 5,
+    },
+    D3: {
+      // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
+      // Otherwise, MID may be omitted.
+      TOP: 6,
+      MID: 7,
+      BOTTOM: 8,
+    }   
   };
 
   // Simply trim "los-algorithm-" from the setting.
@@ -117,28 +141,6 @@ export class AbstractViewerLOS {
     "los-algorithm-webgl2": "webGL2",
     "los-algorithm-webgpu": "webGPU",
     "los-algorithm-webgpu-async": "webGPUAsync",
-  };
-
-  /** @type {enum<class>} */
-  static get VIEWPOINT_CLASSES() { // Cannot access PointsViewpoint, others, before initialization. So use a getter.
-    return {
-      "points": PointsViewpoint,
-      "geometric": GeometricViewpoint,
-      "per-pixel": PerPixelViewpoint,
-      "hybrid": Hybrid3dViewpoint,
-      "webgl2": WebGL2Viewpoint,
-      // "webgpu": WebGPUViewpoint,
-      // "webgpu-async": WebGPUViewpointAsync,
-
-      // Cannot reliably test for class, so test for class name instead.
-      "PointsViewpoint": "points",
-      "GeometricViewpoint": "geometric",
-      "PerPixelViewpoint": "per-pixel",
-      "Hybrid3dViewpoint": "hybrid",
-      "WebGL2Viewpoint": "webgl2",
-      // "WebGPUViewpoint": "webgpu",
-      // "WebGPUViewpointAsync": "webgpu-async",
-    }
   };
 
   static NUM_VIEWPOINTS_OPTIONS = new Set([
@@ -167,9 +169,8 @@ export class AbstractViewerLOS {
    * @param {Token} viewer      The token whose LOS should be tested
    * @param {object} [opts]
    *
-   * One of calcalator or viewpointClass must be provided:
+   * One of calculator or calcClass must be provided:
    * @param {PercentVisibleCalculatorAbstract} [opts.calculator]      Calculator to use to test the viewpoints
-   * @param {VIEWPOINT_CLASSES|class} [opts.viewpointClass]           Class of the viewpoint algorithm
    *
    * Other options:
    * @param {number|string} [opts.numViewpoints]              Number of viewpoints or string identifying associated algorithm
@@ -177,21 +178,15 @@ export class AbstractViewerLOS {
    * @param {number} [opts.threshold]                         Percentage used to test for LOS (above this passes)
    * @param {object} [...cfg]                                 Passed to a newly-constructed calculator if none provided.
    */
-  constructor(viewer, { calculator, viewpointClass, numViewpoints, viewpointOffset, ...cfg } = {}) {
+  constructor(viewer, { calculator, calcClass, numViewpoints, viewpointOffset, ...cfg } = {}) {
     this.#viewer = viewer;
 
     if ( typeof numViewpoints !== "undefined" ) this.#config.numViewpoints = numViewpoints;
     if ( viewpointOffset !== "undefined" ) this.#config.viewpointOffset = viewpointOffset;
 
     // Confirm the calculator and viewpoint class are compatible and create the calculator
-    if ( !calculator && !viewpointClass ) return console.error(`${this.constructor.name}|One of calculator or viewpointClass must be provided.`);
-    viewpointClass ??= calculator.constructor.viewpointClass;
-    const viewpointClassName = this.constructor.convertViewpointClassToName(viewpointClass);
-    viewpointClass = this.constructor.VIEWPOINT_CLASSES[viewpointClassName];
-    if ( calculator && viewpointClass ) {
-      if ( calculator.constructor.viewpointClass !== viewpointClass ) return console.error(`${this.constructor.name}|Calculator and viewpoint class appear incompatible`, calculator, viewpointClass);
-    }
-    calculator ??= new viewpointClass.calcClass(cfg);
+    if ( !calculator && !calcClass ) return console.error(`${this.constructor.name}|One of calculator or calcClass must be provided.`);
+    calculator ??= new calcClass(cfg);
     this.#calculator = calculator;
 
     // Create the viewpoints.
@@ -212,7 +207,11 @@ export class AbstractViewerLOS {
 
   get config() { return structuredClone(this.#config); }
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true}) }
+  set config(cfg = {}) { 
+    if ( cfg.numViewpoints && cfg.numViewpoints !== this.#config.numViewpoints)
+  
+    foundry.utils.mergeObject(this.#config, cfg, { inplace: true}) 
+  }
 
   get viewpointOffset() { return this.#config.viewpointOffset; }
 
@@ -261,6 +260,21 @@ export class AbstractViewerLOS {
     this.config = { angle: dm.angle };
     this.calculator.config = calcConfig;
   }
+  
+  // ----- NOTE: Caching ----- //
+  
+  /** @type {boolean} */
+  #dirty = true;
+  
+  get dirty() { return this.#dirty; }
+  
+  set dirty(value) { 
+    this.dirty ||= value; 
+    this.calculator.dirty = value;
+  }
+  
+  _clean() {
+  }
 
   // ----- NOTE: Calculator ----- //
 
@@ -270,9 +284,8 @@ export class AbstractViewerLOS {
 
   set calculator(value) {
     if ( !(value instanceof PercentVisibleCalculatorAbstract) ) console.error("Calculator not recognized", { value });
-    const viewpointClass = this.viewpointClass;
     this.#calculator = value;
-    if ( viewpointClass !== this.viewpointClass ) this.initializeViewpoints();
+    this.#calculator.dirty = true;
   }
 
   // ----- NOTE: Viewer ----- //
@@ -294,59 +307,32 @@ export class AbstractViewerLOS {
   set viewer(value) {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
-    if ( value ) this.initializeViewpoints();
+    this.dirty = true;
+    this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewpoints ----- //
-  /** @type {AbstractViewpoint} */
+  /** @type {Viewpoint} */
   viewpoints = [];
-
-  get viewpointClass() { return this.#calculator.constructor.viewpointClass; }
-
-  get viewpointClassName() {
-    return this.constructor.VIEWPOINT_CLASSES[this.#calculator.constructor.viewpointClass.name];
-  }
-
-  static convertViewpointClassToName(value) {
-    if ( value.name ) value = this.VIEWPOINT_CLASSES[value.name]; // If class, check against class name. Ignored for strings.
-    value = value.replace("los-algorithm-", "");
-    if ( !this.VIEWPOINT_CLASSES[value]) return console.error(`Viewpoint class ${value} not recognized.`, { value });
-    return value;
-  }
-
-  /**
-   * If the viewpoint class is changed, creates new viewpoints with new calculators.
-   * To build viewpoints with a shared calculator, set the calculator instead.
-   * @param {VIEWPOINT_ALGORITHM_SETTINGS|VIEWPOINT_CLASSES} value    The string key, settings string, or class
-   */
-  set viewpointClass(value) {
-    // Clean up the value to be a in VIEWPOINT_CLASSES.
-    value = this.constructor.convertViewpointClassToName(value);
-
-    // Confirm if change is needed.
-    if ( this.viewpointClassName === value ) return;
-    const viewpointCl = this.constructor.VIEWPOINT_CLASSES[value];
-    const calcClass = viewpointCl.constructor.calcClass;
-    this.#calculator = new calcClass(this.#calculator.config);
-    this.initializeViewpoints();
-  }
 
   /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints({ numViewpoints, viewpointOffset } = {}) {
-    this.viewpoints.forEach(vp => vp.destroy());
-
     numViewpoints ||= this.viewpoints.length || 1;
+    this.#config.numViewpoints = numViewpoints;
     viewpointOffset ??= this.viewpointOffset;
-    const cl = this.viewpointClass;
+    this.#config.viewpointOffset = viewpointOffset;
+    
+    // Calculate all viewpoints for the viewer.
+    // Recreate the viewpoint class for simplicity; the class is light.
     let pointAlgorithm = numViewpoints;
-    if ( !this.constructor.NUM_VIEWPOINTS_OPTIONS.has(pointAlgorithm) ) pointAlgorithm = this.constructor.NUM_VIEWPOINTS[numViewpoints]
-    this.viewpoints = this.constructor.constructTokenPoints(this.viewer, {
+    if ( !this.constructor.NUM_VIEWPOINTS_OPTIONS.has(pointAlgorithm) ) pointAlgorithm = this.constructor.NUM_VIEWPOINTS[numViewpoints];
+    this.viewpoints.length = numViewpoints;
+    this.constructor.constructTokenPoints(this.viewer, {
       pointAlgorithm,
       inset: viewpointOffset
-    }).map(pt => new cl(this, pt));
-    this.#config.viewpointOffset = viewpointOffset;
+    }).map((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
   }
 
   // ----- NOTE: Target ---- //
@@ -416,8 +402,8 @@ export class AbstractViewerLOS {
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
     this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
-      vp.calculate();
-      this._percentVisible = Math.max(this._percentVisible, vp.percentVisible);
+      const res = vp.calculate();
+      this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) break;
     }
   }
@@ -477,84 +463,108 @@ export class AbstractViewerLOS {
 
   /**
    * Build points for a given token. 
+   * 1: center
+   * 2: facing corners
+   * 3: facing + center
+   * 4: corners
+   * 5: corners + center
+   * 6: facing corners, mids, center
+   * 7: 4 corners, 2 sides, facing mid
+   * 8: 4 corners, 4 mids
+   * 9: 4 corners, 4 mids, center
    * @param {Token} token
    * @param {object} [opts]
    * @param {PIXI.Polygon|PIXI.Rectangle} [opts.tokenShape]
-   * @param {POINT_TYPES} [opts.pointAlgorithm]
+   * @param {number} [opts.numPoints]
    * @param {number} [opts.inset]
    * @param {Point3d} [opts.viewpoint]
    * @returns {Point3d[]}
    */
-  static constructTokenPoints(token, { tokenShape, pointAlgorithm, inset, viewpoint } = {}) {
-    const TYPES = this.POINT_TYPES;
+  static constructTokenPoints(token, { pointKey = 1, tokenShape, inset, viewpoint } = {}) {
+    const bs = pointKey instanceof BitSet ? pointKey : new BitSet(pointKey);
+    const PI = this.POINT_INDICES;
+    let cornerPoints;
+    
+    // Center point
     const center = Point3d.fromTokenCenter(token);
-
-    const tokenPoints = [];
-    if ( pointAlgorithm === TYPES.CENTER
-        || pointAlgorithm === TYPES.THREE
-        || pointAlgorithm === TYPES.FIVE
-        || pointAlgorithm === TYPES.NINE ) tokenPoints.push(center);
-
-    if ( pointAlgorithm === TYPES.CENTER ) return tokenPoints;
-
-    tokenShape ??= token.constrainedTokenBorder;
-    let cornerPoints = this.getCorners(tokenShape, center.z);
-
-    // Inset by 1 pixel or inset percentage;
-    insetPoints(cornerPoints, center, inset);
-
+    if ( bs.get(PI.CENTER) ) tokenPoints.push(center);
+    
+    // Corners
     // If two points, keep only the front-facing points.
     // For targets, keep the closest two points to the viewer point.
-    if ( pointAlgorithm === TYPES.TWO ) {
-      if ( viewpoint ) {
-        cornerPoints.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewpoint, pt));
-        cornerPoints.sort((a, b) => a._dist - b._dist);
-        cornerPoints.splice(2);
-      } else {
-        // Token rotation is 0º for due south, while Ray is 0º for due east.
-        // Token rotation is 90º for due west, while Ray is 90º for due south.
-        // Use the Ray version to divide the token into front and back.
-        const angle = Math.toRadians(token.document.rotation);
-        const dirPt = PIXI.Point.fromAngle(center, angle, 100);
-        cornerPoints = cornerPoints.filter(pt => foundry.utils.orient2dFast(center, dirPt, pt) <= 0);
+    // TODO: Use bitmath to test for indices 1,2 at once.
+    const { topZ, bottomZ } = token;
+    const midZ = topZ - bottomZ;
+    if ( bs.get(PI.CORNERS.FACING) 
+      || bs.get(PI.CORNERS.BACK) 
+      || bs.get(PI.MID.FACING) 
+      || bs.get(PI.MID.SIDES) 
+      || bs.get(PI.MID.BACK) ) {
+          
+      // Corners
+      cornerPoints = this.getCorners(tokenShape, midZ);
+      const { facing, back } = this._facingPoints(cornerPoints, token, viewpoint);
+      insetPoints(facing, center, inset);
+      insetPoints(back, center, inset);
+      
+      if ( bs.get(PI.CORNERS.FACING) ) tokenPoints.push(...facing);
+      if ( bs.get(PI.CORNERS.BACK) ) tokenPoints.push(...back);
+      
+      // Midpoints
+      if ( bs.get(PI.MID.FACING) ) tokenPoints.push(Point3d.midPoint(facing[0], facing[1])); // Two front points form the frontside.
+      if ( bs.get(PI.MID.BACK) ) tokenPoints.push(Point3d.midPoint(back[0], back[1])); // Two back points form the backside.
+      if ( bs.get(PI.MID.SIDES) ) {
+        // The back point closest to the facing point share a side.
+        facing.forEach(pt => pt.t0 = Point3d.distanceSquaredBetween(pt, back[0]));
+        const idx = facing[1].t0 < facing[0].t0;  // idx 0 <= idx 1 ? 0; idx 1 < idx 0 ? 1.
+        tokenPoints.push(Point3d.midPoint(facing[0], back[idx]));  // 
+        tokenPoints.push(Point3d.midPOint(facing[1], back[1 - idx]));
       }
     }
-
-    if ( pointAlgorithm === TYPES.THREE ) {
-      if ( viewpoint ) {
-        tokenPoints.shift(); // Remove the center point.
-        cornerPoints.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewpoint, pt));
-        cornerPoints.sort((a, b) => a._dist - b._dist);
-
-        // If 2 of the 4 points are equidistant, we are in line with the target and can stick to the top 2.
-        const numPoints = cornerPoints[0]._dist === cornerPoints[1]._dist ? 2 : 3;
-        cornerPoints.splice(numPoints);
-      } else {
-        // Token rotation is 0º for due south, while Ray is 0º for due east.
-        // Token rotation is 90º for due west, while Ray is 90º for due south.
-        // Use the Ray version to divide the token into front and back.
-        const angle = Math.toRadians(token.document.rotation);
-        const dirPt = PIXI.Point.fromAngle(center, angle, 100);
-        cornerPoints = cornerPoints.filter(pt => foundry.utils.orient2dFast(center, dirPt, pt) <= 0);
-      }
-    }
-
-    tokenPoints.push(...cornerPoints);
-    if ( pointAlgorithm === TYPES.TWO
-      || pointAlgorithm === TYPES.THREE
-      || pointAlgorithm === TYPES.FOUR
-      || pointAlgorithm === TYPES.FIVE ) return tokenPoints;
-
-    // Add in the midpoints between corners.
-    const ln = cornerPoints.length;
-    let prevPt = cornerPoints.at(-1);
-    for ( let i = 0; i < ln; i += 1 ) {
-      // Don't need to inset b/c the corners already are.
-      const currPt = cornerPoints[i];
-      tokenPoints.push(Point3d.midPoint(prevPt, currPt));
-      prevPt = currPt;
-    }
-    return tokenPoints;
+    
+    // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
+    if ( !(bs.get(PI.D3.TOP) || bs.get(PI.D3.MID) || bs.get(PI.D3.BOTTOM)) ) return tokenPoints;
+    
+    // 3d.
+    const out = [];
+    if ( bs.get(PI.D3.MID) ) out.push(...tokenPoints);
+    if ( bs.get(PI.D3.TOP) ) out.push(...tokenPoints.map(pt => {
+      pt = pt.clone();
+      pt.z = topZ;
+      return pt;
+    }));
+    if ( bs.get(PI.D3.BOTTOM) ) out.push(...tokenPoints.map(pt => {
+      pt = pt.clone();
+      pt.z = bottomZ;
+      return pt;
+    }));
+    return out;
+  }
+  
+  /** 
+   * Determine which corner- or mid-points are facing and which are back.
+   */
+  _facingPoints(pts, token, viewpoint) {
+		let facing = [];
+		let back = [];
+		if ( viewpoint ) {
+			pts.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewpoint, pt));
+			pts.sort((a, b) => a._dist - b._dist);
+			back = cornerPoints.slice(2);
+			facing = cornerPoints.slice(0, 2);
+		} else {
+			// Token rotation is 0º for due south, while Ray is 0º for due east.
+			// Token rotation is 90º for due west, while Ray is 90º for due south.
+			// Use the Ray version to divide the token into front and back.
+			const center = Point3d.fromTokenCenter(token);
+			const angle = Math.toRadians(token.document.rotation);
+			const dirPt = PIXI.Point.fromAngle(center, angle, 100);
+			pts.forEach(pt => {
+				const arr = foundry.utils.orient2dFast(center, dirPt, pt) > 0 ? back : facing;
+				arr.push(pt);
+			});
+		}
+		return { facing, back };
   }
 
   /**
@@ -592,7 +602,6 @@ export class AbstractViewerLOS {
   destroy() {
     this.#target = undefined;
     this.#viewer = undefined;
-    this.viewpoints.forEach(vp => vp.destroy());
     this.viewpoints.length = 0;
 
     // DO NOT destroy calculator, as that depends on whether the calculator was a one-off.
@@ -713,7 +722,7 @@ export class AbstractViewerLOS {
   }
 }
 
-export class CachedAbstractViewerLOS extends AbstractViewerLOS {
+export class CachedViewerLOS extends ViewerLOS {
 
   /** @type {WeakMap<Token, Float32Array(3)>} */
   #cache = new WeakMap();
@@ -754,7 +763,7 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
     return JSON.stringify({
       ...this.config,
       ...calcConfig,
-      viewpointClassName: this.viewpointClassName,
+      calcClass: this.calculator.constructor.name,
       numViewpoints: this.viewpoints.length
     });
   }
@@ -846,4 +855,4 @@ export class CachedAbstractViewerLOS extends AbstractViewerLOS {
 
 }
 
-// const { UNOBSCURED, DIM, BRIGHT } = AbstractViewerLOS.VISIBILITY_LABELS;
+// const { UNOBSCURED, DIM, BRIGHT } = ViewerLOS.VISIBILITY_LABELS;

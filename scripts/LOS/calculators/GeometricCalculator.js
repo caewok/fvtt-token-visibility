@@ -6,19 +6,18 @@ CONFIG,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../const.js";
-import { Settings } from "../settings.js";
+import { MODULE_ID } from "../../const.js";
+import { Settings } from "../../settings.js";
 
 // LOS folder
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
-import { Camera } from "./Camera.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
-import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "./placeable_tracking/TokenGeometryTracker.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
+import { Camera } from "../Camera.js";
+import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
+import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "../placeable_tracking/TokenGeometryTracker.js";
 
 // Debug
-import { Draw } from "../geometry/Draw.js";
+import { Draw } from "../../geometry/Draw.js";
 
 
 export class PercentVisibleGeometricResult extends PercentVisibleResult {
@@ -56,30 +55,8 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
   }
 }
 
-/**
- * An eye belong to a specific viewer.
- * It defines a specific position, relative to the viewer, from which the viewpoint is used.
- * Draws lines from the viewpoint to points on the target token to determine LOS.
- */
-export class GeometricViewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorGeometric; }
-
-  /* ----- NOTE: Debugging methods ----- */
-  /**
-   * For debugging.
-   * Draw the 3d objects in the popout.
-   */
-  _draw3dDebug(draw, _renderer, _container, { width = 100, height = 100 } = {}) {
-    this.calculator._draw3dDebug(this.viewer, this.target, this.viewpoint, this.targetLocation, { draw, width, height });
-  }
-}
-
 export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleGeometricResult;
-
-  static viewpointClass = GeometricViewpoint;
-
-  // static get viewpointClass() { return GeometricViewpoint; }
 
   static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
@@ -394,8 +371,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 }
 
 export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
-  static viewpointClass = GeometricViewpoint;
-
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.GEOMETRIC;
 }
 
@@ -407,7 +382,6 @@ Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("tokenvisibility").api
 Plane = CONFIG.GeometryLib.threeD.Plane
-AbstractViewpoint = api.AbstractViewpoint
 ClipperPaths = CONFIG.GeometryLib.ClipperPaths
 Clipper2Paths = CONFIG.GeometryLib.Clipper2Paths
 

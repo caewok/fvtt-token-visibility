@@ -71,7 +71,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
   _filterShapesForRegion(frustum, region, _opts) {
     if ( region[TERRAIN_MAPPER].isRamp ) return; // Handled by polygons.
 
-    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByFrustum.
+    // Assume the region has already been filtered by Viewpoint.filterRegionsByFrustum.
     // And this.placeableTracker.placeables has the region.
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
     const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
@@ -136,7 +136,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
   _initializeGeoms(_opts) { return; }
 
   _filterShapesForRegion(frustum, region, _opts) {
-    // Assume the region has already been filtered by AbstractViewpoint.filterRegionsByFrustum.
+    // Assume the region has already been filtered by Viewpoint.filterRegionsByFrustum.
     // And this.placeableTracker.placeables has the region.
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region); // circle, ellipse, rectangle, polygon, combined
     const groupTypes = ["polygon", "combined"];
