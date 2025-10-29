@@ -10,7 +10,6 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
 
 
@@ -37,7 +36,15 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
   SUBMENU: "submenu",
-  POINT_TYPES: ViewerLOS.POINT_TYPES,
+  POINT_TYPES: {
+    CENTER: "points-center",
+    TWO: "points-two",
+    THREE: "points-three", //
+    FOUR: "points-four", // Five without center
+    FIVE: "points-five", // Corners + center
+    EIGHT: "points-eight", // Nine without center
+    NINE: "points-nine" // Corners, midpoints, center
+  },
 
   RANGE: {
     ALGORITHM: "range-algorithm",
@@ -48,7 +55,8 @@ export const SETTINGS = {
   LOS: {
     VIEWER: {
       NUM_POINTS: "los-points-viewer",
-      INSET: "los-inset-viewer"
+      POINT_INDEX: "los-points-index-viewer",
+      INSET: "los-inset-viewer",
     },
 
     TARGET: {
@@ -66,8 +74,9 @@ export const SETTINGS = {
       },
       POINT_OPTIONS: {
         NUM_POINTS: "los-points-target",
+        POINT_INDEX: "los-points-index-target",
         INSET: "los-inset-target",
-        POINTS3D: "los-points-3d"
+        POINTS3D: "los-points-3d",
       }
     }
   },
@@ -256,6 +265,32 @@ export class Settings extends ModuleSettingsAbstract {
       default: PT_TYPES.CENTER,
       tab: "losViewer",
       onChange: value => this.losSettingChange(VIEWER.NUM_POINTS, value)
+    });
+    
+    register(VIEWER.POINT_INDEX, {
+      name: "PointIndexName",
+      hint: "PointIndexHint",
+      scope: "world",
+      config: false,
+      tab: "losViewer",
+      default: "Center",
+      type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({ 
+        required: true, 
+        blank: false,
+        initial: 0,
+        choices: { 
+          0: "Center", 
+          1: "Front Corners", 
+          2: "Back Corners", 
+          3: "Front Mid", 
+          4: "Sides Mid",  
+          5: "Back Mid",
+          6: "Top Elevation",
+          7: "Middle Elevation",
+          8: "Bottom Elevation",
+        },
+      })),
+      onChange: value => { console.log("Viewer PointIndex changed", value); }
     });
 
     register(VIEWER.INSET, {
