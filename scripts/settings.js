@@ -55,7 +55,7 @@ export const SETTINGS = {
   LOS: {
     VIEWER: {
       NUM_POINTS: "los-points-viewer",
-      POINT_INDEX: "los-points-index-viewer",
+      POINTS: "los-points-options-viewer",
       INSET: "los-inset-viewer",
     },
 
@@ -74,6 +74,7 @@ export const SETTINGS = {
       },
       POINT_OPTIONS: {
         NUM_POINTS: "los-points-target",
+        POINTS: "los-points-options-target",
         POINT_INDEX: "los-points-index-target",
         INSET: "los-inset-target",
         POINTS3D: "los-points-3d",
@@ -268,8 +269,9 @@ export class Settings extends ModuleSettingsAbstract {
     });
 
     const PO = ViewerLOS.POINT_OPTIONS;
-    register(VIEWER.POINT_INDEX, {
-      name: "PointIndexName",
+    register(VIEWER.POINTS, {
+      name: localize(`${VIEWER.POINTS}.Name`),
+      hint: localize(`${VIEWER.POINTS}.Hint`),
       hint: "PointIndexHint",
       scope: "world",
       config: false,
@@ -350,6 +352,33 @@ export class Settings extends ModuleSettingsAbstract {
       tab: "losTarget",
       onChange: value => this.losSettingChange(TARGET.PERCENT, value)
     });
+
+    register(TARGET.POINT_OPTIONS.POINTS, {
+      name: localize(`${TARGET.POINT_OPTIONS.POINTS}.Name`),
+      hint: localize(`${TARGET.POINT_OPTIONS.POINTS}.Hint`),
+      scope: "world",
+      config: false,
+      tab: "losTarget",
+      default: [PO.CENTER],
+      type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({
+        required: true,
+        blank: false,
+        initial: 0,
+        choices: {
+          [PO.CENTER]: "Center",
+          [PO.CORNERS.FACING]: "Front Corners",
+          [PO.CORNERS.BACK]: "Back Corners",
+          [PO.MID.FACING]: "Front Mid",
+          [PO.MID.SIDES]: "Sides Mid",
+          [PO.MID.BACK]: "Back Mid",
+          [PO.D3.TOP]: "Top Elevation",
+          [PO.D3.MID]: "Middle Elevation",
+          [PO.D3.BOTTOM]: "Bottom Elevation",
+        },
+      })),
+      onChange: value => { console.log("Target points changed", value); }
+    });
+
 
     register(PT_OPTS.NUM_POINTS, {
       name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
