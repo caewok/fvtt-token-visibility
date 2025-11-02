@@ -2,6 +2,7 @@
 CONST,
 foundry,
 game,
+ui,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -11,6 +12,9 @@ import { MODULE_ID } from "./const.js";
 export class SettingsSubmenu extends foundry.applications.settings.SettingsConfig {
   static DEFAULT_OPTIONS = {
     id: `settings-config-submenu-${MODULE_ID}`,
+    actions: {
+      resetDefaults: SettingsSubmenu.#onResetDefaults,
+    }
   };
 
   static TABS = {};
@@ -25,8 +29,6 @@ export class SettingsSubmenu extends foundry.applications.settings.SettingsConfi
     };
 
     // Classify all menus
-    const canConfigure = game.user.can("SETTINGS_MODIFY");
-
     // Currently no need to have submenus for the submenu!
 //     for ( const menu of game.settings.menus.values() ) {
 //       if ( menu.restricted && !canConfigure ) continue;
@@ -44,12 +46,7 @@ export class SettingsSubmenu extends foundry.applications.settings.SettingsConfi
 
     // Classify all settings
     for ( const setting of game.settings.settings.values() ) {
-      // if ( !setting.config || (!canConfigure && (setting.scope === CONST.SETTING_SCOPES.WORLD)) ) continue;
-
-      if ( setting.namespace !== MODULE_ID
-        || !setting.tab
-        || (!canConfigure && (setting.scope === CONST.SETTING_SCOPES.WORLD)) ) continue;
-
+      if ( !this.constructor.includeSetting(setting) ) continue;
       const data = {
         label: setting.value,
         value: game.settings.get(setting.namespace, setting.key),
@@ -108,4 +105,26 @@ export class SettingsSubmenu extends foundry.applications.settings.SettingsConfi
 
     return categories;
   }
+
+  static includeSetting(setting) {
+    return setting.namespace === MODULE_ID
+      && setting.tab
+      && ((setting.scope !== CONST.SETTING_SCOPES.WORLD) || game.user.can("SETTINGS_MODIFY"));
+  }
+
+  static async #onResetDefaults() {
+    console.log("onResetDefaults");
+    const form = this.form;
+    for ( const [key, setting] of game.settings.settings.entries() ) {
+      if ( !this.constructor.includeSetting(setting) ) continue;
+      const input = form[key];
+      if ( !input ) continue;
+      if ( input.type === "checkbox" ) input.checked = setting.default;
+      else input.value = setting.default;
+      input.dispatchEvent(new Event("change"));
+    }
+    ui.notifications.info("SETTINGS.ResetInfo", {localize: true});
+  }
+
+
 }

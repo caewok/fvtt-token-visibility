@@ -94,18 +94,18 @@ const DM_SOURCE_TYPES = {
 
 
 export class ViewerLOS {
-  
+
   /**
    * Index for each of the point combinations.
    * For all but center, the point is ignored if the ray passes nearly entirely through the token.
-   * E.g., more than half the width/height. 
-   * @type {enum<number>} 
+   * E.g., more than half the width/height.
+   * @type {enum<number>}
    */
   static POINT_INDICES = {
     CENTER: 0,	    			// e.g., 00000001
     CORNERS: {
       FACING: 1,				  // e.g., 00000010
-      BACK: 2,					
+      BACK: 2,
     },
     MID: {
       FACING: 3,
@@ -118,9 +118,11 @@ export class ViewerLOS {
       TOP: 6,
       MID: 7,
       BOTTOM: 8,
-    }   
+    }
   };
-  
+
+  static POINT_OPTIONS = {}; // Filled in below.
+
   /**
    * How many viewpoints for a given point index code?
    * @param {POINT_INDICES} idx
@@ -131,12 +133,12 @@ export class ViewerLOS {
     const bs = idx instanceof BitSet ? idx : new BitSet(idx);
     let count = 0;
     count += bs.get(PI.CENTER);
-    count += 2 * bs.get(PI.CORNERS.FACING); 
+    count += 2 * bs.get(PI.CORNERS.FACING);
     count += 2 * bs.get(PI.CORNERS.BACK);
     count += 2 * bs.get(PI.CORNERS.MID.SIDES);
     count += bs.get(PI.MID.FRONT);
     count += bs.get(PI.MID.BACK);
-    
+
     // There are [count] points on each level, minimum of 1 level.
     const mult = (bs.get(PI.D3.TOP) + bs.get(PI.D3.MID) + bs.get(PI.D3.BOTTOM)) || 1;
     return count * mult;
@@ -152,7 +154,7 @@ export class ViewerLOS {
     "los-algorithm-webgpu": "webGPU",
     "los-algorithm-webgpu-async": "webGPUAsync",
   };
-  
+
   /** @type {PercentVisibleCalculator} */
   calculator;
 
@@ -181,9 +183,9 @@ export class ViewerLOS {
 
   get config() { return structuredClone(this.#config); }
 
-  set config(cfg = {}) { 
+  set config(cfg = {}) {
     this.#dirty ||= Object.hasOwn(cfg, "viewpointIndex") || Object.hasOwn(cfg, "viewpointInset");
-    foundry.utils.mergeObject(this.#config, cfg, { inplace: true}); 
+    foundry.utils.mergeObject(this.#config, cfg, { inplace: true});
   }
 
   get viewpointInset() { return this.#config.viewpointInset; }
@@ -233,17 +235,17 @@ export class ViewerLOS {
     this.config = { angle: dm.angle };
     this.calculator.config = calcConfig;
   }
-  
+
   // ----- NOTE: Caching ----- //
-  
+
   /** @type {boolean} */
   #dirty = true;
-  
+
   get dirty() { return this.#dirty; }
-  
+
   set dirty(value) { this.dirty ||= value; }
-  
-  /** 
+
+  /**
    * Update the viewpoints.
    */
   _clean() {
@@ -270,7 +272,7 @@ export class ViewerLOS {
   set viewer(value) {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
-    this.dirty = true; 
+    this.dirty = true;
   }
 
   // ----- NOTE: Viewpoints ----- //
@@ -360,8 +362,8 @@ export class ViewerLOS {
       if ( this._percentVisible >= 1 ) break;
     }
   }
-  
-  
+
+
   /**
    * Viewpoint blocked if it is further from the target than the center point.
    * In other words, if it traverses too much of the viewer shape.
@@ -429,7 +431,7 @@ export class ViewerLOS {
   }
 
   /**
-   * Build points for a given token. 
+   * Build points for a given token.
    * 1: center
    * 2: facing corners
    * 3: facing + center
@@ -453,32 +455,32 @@ export class ViewerLOS {
     const PI = this.POINT_INDICES;
     let cornerPoints;
     const tokenPoints = [];
-    
+
     // Center point
     const center = Point3d.fromTokenCenter(token);
     if ( bs.get(PI.CENTER) ) tokenPoints.push(center);
-    
+
     // Corners
     // If two points, keep only the front-facing points.
     // For targets, keep the closest two points to the viewer point.
     // TODO: Use bitmath to test for indices 1,2 at once.
     const { topZ, bottomZ } = token;
     const midZ = topZ - bottomZ;
-    if ( bs.get(PI.CORNERS.FACING) 
-      || bs.get(PI.CORNERS.BACK) 
-      || bs.get(PI.MID.FACING) 
-      || bs.get(PI.MID.SIDES) 
+    if ( bs.get(PI.CORNERS.FACING)
+      || bs.get(PI.CORNERS.BACK)
+      || bs.get(PI.MID.FACING)
+      || bs.get(PI.MID.SIDES)
       || bs.get(PI.MID.BACK) ) {
-          
+
       // Corners
       cornerPoints = this.getCorners(tokenShape, midZ);
       const { facing, back } = this._facingPoints(cornerPoints, token, viewpoint);
       insetPoints(facing, center, inset);
       insetPoints(back, center, inset);
-      
+
       if ( bs.get(PI.CORNERS.FACING) ) tokenPoints.push(...facing);
       if ( bs.get(PI.CORNERS.BACK) ) tokenPoints.push(...back);
-      
+
       // Midpoints
       if ( bs.get(PI.MID.FACING) ) tokenPoints.push(Point3d.midPoint(facing[0], facing[1])); // Two front points form the frontside.
       if ( bs.get(PI.MID.BACK) ) tokenPoints.push(Point3d.midPoint(back[0], back[1])); // Two back points form the backside.
@@ -486,14 +488,14 @@ export class ViewerLOS {
         // The back point closest to the facing point share a side.
         facing.forEach(pt => pt.t0 = Point3d.distanceSquaredBetween(pt, back[0]));
         const idx = facing[1].t0 < facing[0].t0;  // idx 0 <= idx 1 ? 0; idx 1 < idx 0 ? 1.
-        tokenPoints.push(Point3d.midPoint(facing[0], back[idx]));  // 
+        tokenPoints.push(Point3d.midPoint(facing[0], back[idx]));  //
         tokenPoints.push(Point3d.midPOint(facing[1], back[1 - idx]));
       }
     }
-    
+
     // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
     if ( !(bs.get(PI.D3.TOP) || bs.get(PI.D3.MID) || bs.get(PI.D3.BOTTOM)) ) return tokenPoints;
-    
+
     // 3d.
     const out = [];
     if ( bs.get(PI.D3.MID) ) out.push(...tokenPoints);
@@ -509,8 +511,8 @@ export class ViewerLOS {
     }));
     return out;
   }
-  
-  /** 
+
+  /**
    * Determine which corner- or mid-points are facing and which are back.
    */
   _facingPoints(pts, token, viewpoint) {
@@ -823,5 +825,18 @@ export class CachedViewerLOS extends ViewerLOS {
   }
 
 }
+
+/**
+ * Set the numeric bit value for object of indices, recursively.
+ */
+function setPointOptions(obj, prefix = {}) {
+  for ( const [key, index] of Object.entries(obj) ) {
+    if ( Number.isNumeric(index) ) prefix[key] = 2 ** index;
+    else prefix[key] = setPointOptions(index);
+  }
+  return prefix;
+}
+ViewerLOS.POINT_OPTIONS = setPointOptions(ViewerLOS.POINT_INDICES);
+
 
 // const { UNOBSCURED, DIM, BRIGHT } = ViewerLOS.VISIBILITY_LABELS;

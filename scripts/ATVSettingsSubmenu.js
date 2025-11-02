@@ -108,8 +108,20 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
   static DEFAULT_OPTIONS = {
     initialCategory: "losTarget",
     subtemplates: {
-      sidebarFooter: ""
-    }
+      sidebarFooter: `modules/${MODULE_ID}/templates/settings-submenu-buttons.html`,
+    },
+    actions: {
+      resetDND5e: ATVSettingsSubmenu.#onResetDND5e,
+      reset3d: ATVSettingsSubmenu.#onReset3d,
+    },
   };
+
+  static async #onResetDND5e() {
+    console.log("onResetDND5e");
+  }
+
+  static async #onReset3d() {
+    console.log("onReset3d");
+  }
 }
 

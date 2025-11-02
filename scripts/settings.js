@@ -11,7 +11,7 @@ import { MODULE_ID } from "./const.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
-
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
 // ----- NOTE: Hooks ----- //
 
@@ -239,7 +239,7 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: Boolean,
-      default: true,
+      default: false,
       tab: "range"
     });
 
@@ -249,7 +249,7 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: Boolean,
-      default: true,
+      default: false,
       tab: "range"
     });
 
@@ -267,27 +267,28 @@ export class Settings extends ModuleSettingsAbstract {
       onChange: value => this.losSettingChange(VIEWER.NUM_POINTS, value)
     });
 
+    const PO = ViewerLOS.POINT_OPTIONS;
     register(VIEWER.POINT_INDEX, {
       name: "PointIndexName",
       hint: "PointIndexHint",
       scope: "world",
       config: false,
       tab: "losViewer",
-      default: "Center",
+      default: [PO.CENTER],
       type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({
         required: true,
         blank: false,
         initial: 0,
         choices: {
-          0: "Center",
-          1: "Front Corners",
-          2: "Back Corners",
-          3: "Front Mid",
-          4: "Sides Mid",
-          5: "Back Mid",
-          6: "Top Elevation",
-          7: "Middle Elevation",
-          8: "Bottom Elevation",
+          [PO.CENTER]: "Center",
+          [PO.CORNERS.FACING]: "Front Corners",
+          [PO.CORNERS.BACK]: "Back Corners",
+          [PO.MID.FACING]: "Front Mid",
+          [PO.MID.SIDES]: "Sides Mid",
+          [PO.MID.BACK]: "Back Mid",
+          [PO.D3.TOP]: "Top Elevation",
+          [PO.D3.MID]: "Middle Elevation",
+          [PO.D3.BOTTOM]: "Bottom Elevation",
         },
       })),
       onChange: value => { console.log("Viewer PointIndex changed", value); }
@@ -317,7 +318,7 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: Boolean,
-      default: true,
+      default: false,
       tab: "losTarget",
       onChange: value => this.losSettingChange(TARGET.LARGE, value)
     });
@@ -329,7 +330,7 @@ export class Settings extends ModuleSettingsAbstract {
       config: false,
       type: String,
       choices: losChoices,
-      default: LTYPES.NINE,
+      default: LTYPES.POINTS,
       tab: "losTarget",
       onChange: value => this.losSettingChange(TARGET.ALGORITHM, value)
     });
@@ -384,7 +385,7 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: Boolean,
-      default: true,
+      default: false,
       tab: "losTarget",
       onChange: value => this.losSettingChange(PT_OPTS.POINTS3D, value)
     });
