@@ -18,7 +18,7 @@ export function currentDebugViewerClass(type) {
   const { TARGET } = KEYS.LOS;
   const debugViewers = CONFIG[MODULE_ID].debugViewerClasses;
   type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[type];  
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[type];
   return debugViewers[calcName];
 }
 
@@ -74,7 +74,7 @@ function LOSViewerConfig() {
  * @returns {PercentVisibleCalculatorAbstract}
  */
 export function buildLOSCalculator() {
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)]; 
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
   const calcs = CONFIG[MODULE_ID].losCalculators;
   calcs[calcName] ??= new CONFIG[MODULE_ID].calculatorClasses[calcName](CalculatorConfig());
   return calcs[calcName];
@@ -87,7 +87,7 @@ export function buildLOSCalculator() {
  */
 /*export function buildCustomLOSCalculator({ calcName, ...calcCfg } = {}) {
   const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)]; 
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
   return new CONFIG[MODULE_ID].calculatorClasses[calcName](calcConfig)
 }
 */
@@ -99,7 +99,8 @@ export function buildLOSCalculator() {
  */
 export function buildLOSViewer(viewer) {
   const calculator = buildLOSCalculator();
-  return new ViewerLOS(viewer, { calculator, ...LOSViewerConfig() });
+  const viewerLOS = new ViewerLOS(viewer, calculator);
+  viewerLOS.config = LOSViewerConfig();
 }
 
 /**
@@ -128,20 +129,20 @@ export function buildDebugViewer(cl, { calculator, calcName, calcClass, numViewp
 }
 
 function customizeViewer({ calculator, calcName, calcClass, numViewpoints, viewpointOffset, threshold } = {}) {
-  // Get the default configuration and add the calculator class.  
-  const losConfig = { ...LOSViewerConfig() };  
+  // Get the default configuration and add the calculator class.
+  const losConfig = { ...LOSViewerConfig() };
   if ( calcClass ) losConfig.calcClass = calcClass;
   else {
     if ( calcName ) losConfig.calcName = calcName;
     losConfig.calcClass = CONFIG[MODULE_ID].calculatorClasses[losConfig.calcName];
   }
-  
+
   // Merge object in the class creation won't work if the props are undefined as it will change the config to undefined.
   if ( typeof calculator !== "undefined" ) losConfig.calculator = calculator;
   if ( typeof numViewpoints !== "undefined" ) losConfig.numViewpoints = numViewpoints;
   if ( typeof viewpointOffset !== "undefined" ) losConfig.viewpointOffset = viewpointOffset;
-  if ( typeof threshold !== "undefined" ) losConfig.threshold = threshold;  
-  
+  if ( typeof threshold !== "undefined" ) losConfig.threshold = threshold;
+
   return losConfig;
 }
 
