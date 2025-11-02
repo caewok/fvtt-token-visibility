@@ -8,7 +8,7 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { SettingsSubmenu } from "./SettingsSubmenu.js";
+import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
 
@@ -194,7 +194,7 @@ export class Settings extends ModuleSettingsAbstract {
       name: localize(`${KEYS.SUBMENU}.Name`),
       label: localize(`${KEYS.SUBMENU}.Label`),
       icon: "fas fa-user-gear",
-      type: SettingsSubmenu,
+      type: ATVSettingsSubmenu,
       restricted: true
     });
 
@@ -266,7 +266,7 @@ export class Settings extends ModuleSettingsAbstract {
       tab: "losViewer",
       onChange: value => this.losSettingChange(VIEWER.NUM_POINTS, value)
     });
-    
+
     register(VIEWER.POINT_INDEX, {
       name: "PointIndexName",
       hint: "PointIndexHint",
@@ -274,16 +274,16 @@ export class Settings extends ModuleSettingsAbstract {
       config: false,
       tab: "losViewer",
       default: "Center",
-      type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({ 
-        required: true, 
+      type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({
+        required: true,
         blank: false,
         initial: 0,
-        choices: { 
-          0: "Center", 
-          1: "Front Corners", 
-          2: "Back Corners", 
-          3: "Front Mid", 
-          4: "Sides Mid",  
+        choices: {
+          0: "Center",
+          1: "Front Corners",
+          2: "Back Corners",
+          3: "Front Mid",
+          4: "Sides Mid",
           5: "Back Mid",
           6: "Top Elevation",
           7: "Middle Elevation",
