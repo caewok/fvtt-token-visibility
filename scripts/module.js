@@ -125,7 +125,6 @@ import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 // Other self-executing hooks
 import "./changelog.js";
 import "./geometry/tests/AABB.test.js";
-import "../tests/BitSet.test.js";
 
 // import "./LOS/WebGPU/webgpu-map-sync.js";
 
