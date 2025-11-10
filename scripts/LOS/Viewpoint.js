@@ -4,12 +4,7 @@ canvas,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// LOS folder
-import { Frustum } from "./Frustum.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
-
 // Geometry
-import { Draw } from "../geometry/Draw.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 
 /**
@@ -31,10 +26,10 @@ export class Viewpoint {
     this.viewerLOS = viewerLOS;
     this.viewpoint = viewpoint;
   }
-  
+
   /** @type {Point3d} */
   get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
-  
+
   set viewpoint(value) { value.subtract(this.viewerLOS.center, this.viewpointDiff); }
 
   /** @type {Point3d} */
@@ -62,25 +57,22 @@ export class Viewpoint {
 
 
   // ----- NOTE: Visibility Percentages ----- //
-  _percentVisible;
 
-  get percentVisible() {
-    if ( typeof this._percentVisible === "undefined" ) this.calculate();
-    return this._percentVisible;
-  }
+  /** @type {PercentVisibleResult} */
+  lastResult;
+
+  get percentVisible() { return this.lastResult?.percentVisible || 0; }
 
   calculate() {
-    this._percentVisible = undefined;
     if ( this.passesSimpleVisibilityTest() ) {
-      this._percentVisible = 1;
-      return;
+      this.lastResult ??= new this.calculator.constructor.resultClass();
+      this.lastResult.makeFullyVisible();
+    } else {
+      this.calculator.initializeView(this);
+      this.lastResult = this.calculator.calculate();
     }
-    
-    this.calculator.intializeView(this);
-    const lastResult = this.calculator.calculate();
     if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
-    this._percentVisible = lastResult.percentVisible;
-    return lastResult;
+    return this.lastResult;
   }
 
   targetOverlapsViewpoint() {
@@ -105,10 +97,9 @@ export class Viewpoint {
   }
 
   /* ----- NOTE: Debug ----- */
-  
+
   _drawCanvasDebug(debugDraw) {
-    this.calculator.intializeView(this);
+    this.calculator.initializeView(this);
     this.calculator._drawCanvasDebug(debugDraw);
   }
-
 }

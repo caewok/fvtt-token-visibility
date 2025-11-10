@@ -1,11 +1,11 @@
 {
     "tokenvisibility.name": "Alt. Token Visibility",
     "tokenvisibility.nameAbbr": "ATV",
-    "tokenvisibility.settings.points-center": "Token center only (1 point)",
+    "tokenvisibility.settings.points-center": "Token center only (1 point) ⚀",
     "tokenvisibility.settings.points-two": "Token front-facing corners (2 points)",
     "tokenvisibility.settings.points-three": "Token front-facing and center (3 points)",
-    "tokenvisibility.settings.points-four": "Token corners (4 points)",
-    "tokenvisibility.settings.points-five": "Token corners and center (5 points)",
+    "tokenvisibility.settings.points-four": "Token corners (4 points) ⚃",
+    "tokenvisibility.settings.points-five": "Token corners and center (5 points) &#9860 ⚄",
     "tokenvisibility.settings.points-eight": "Token midpoints and corners (8 points)",
     "tokenvisibility.settings.points-nine": "Token midpoints, corners, center (9 points)",
 

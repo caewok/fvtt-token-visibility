@@ -54,7 +54,6 @@ export const SETTINGS = {
 
   LOS: {
     VIEWER: {
-      NUM_POINTS: "los-points-viewer",
       POINTS: "los-points-options-viewer",
       INSET: "los-inset-viewer",
     },
@@ -73,11 +72,9 @@ export const SETTINGS = {
         WEBGPU_ASYNC: "los-algorithm-webgpu-async"
       },
       POINT_OPTIONS: {
-        NUM_POINTS: "los-points-target",
         POINTS: "los-points-options-target",
         POINT_INDEX: "los-points-index-target",
         INSET: "los-inset-target",
-        POINTS3D: "los-points-3d",
       }
     }
   },
@@ -150,7 +147,7 @@ export class Settings extends ModuleSettingsAbstract {
   static initializeDebugViewer(type) {
     type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
     const sym = ALG_SYMBOLS[type];
-    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type));
+    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type), undefined, currentCalculator());
     debugViewer.render();
     this.#debugViewers.set(sym, debugViewer);
   }
@@ -256,19 +253,7 @@ export class Settings extends ModuleSettingsAbstract {
 
     // ----- NOTE: Line-of-sight viewer tab ----- //
     const VIEWER = KEYS.LOS.VIEWER;
-    register(VIEWER.NUM_POINTS, {
-      name: localize(`${VIEWER.NUM_POINTS}.Name`),
-      hint: localize(`${VIEWER.NUM_POINTS}.Hint`),
-      scope: "world",
-      config: false,
-      type: String,
-      choices: ptChoices,
-      default: PT_TYPES.CENTER,
-      tab: "losViewer",
-      onChange: value => this.losSettingChange(VIEWER.NUM_POINTS, value)
-    });
-
-    const PO = ViewerLOS.POINT_OPTIONS;
+    const PI = ViewerLOS.POINT_INDICES;
     register(VIEWER.POINTS, {
       name: localize(`${VIEWER.POINTS}.Name`),
       hint: localize(`${VIEWER.POINTS}.Hint`),
@@ -276,21 +261,21 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       tab: "losViewer",
-      default: [PO.CENTER],
+      default: [PI.CENTER],
       type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({
         required: true,
         blank: false,
         initial: 0,
         choices: {
-          [PO.CENTER]: "Center",
-          [PO.CORNERS.FACING]: "Front Corners",
-          [PO.CORNERS.BACK]: "Back Corners",
-          [PO.MID.FACING]: "Front Mid",
-          [PO.MID.SIDES]: "Sides Mid",
-          [PO.MID.BACK]: "Back Mid",
-          [PO.D3.TOP]: "Top Elevation",
-          [PO.D3.MID]: "Middle Elevation",
-          [PO.D3.BOTTOM]: "Bottom Elevation",
+          [PI.CENTER]: "Center",
+          [PI.CORNERS.FACING]: "Front Corners",
+          [PI.CORNERS.BACK]: "Back Corners",
+          [PI.MID.FACING]: "Front Mid",
+          [PI.MID.SIDES]: "Sides Mid",
+          [PI.MID.BACK]: "Back Mid",
+          [PI.D3.TOP]: "Top Elevation",
+          [PI.D3.MID]: "Middle Elevation",
+          [PI.D3.BOTTOM]: "Bottom Elevation",
         },
       })),
       onChange: value => { console.log("Viewer PointIndex changed", value); }
@@ -359,37 +344,24 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       tab: "losTarget",
-      default: [PO.CENTER],
+      default: [PI.CENTER],
       type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({
         required: true,
         blank: false,
         initial: 0,
         choices: {
-          [PO.CENTER]: "Center",
-          [PO.CORNERS.FACING]: "Front Corners",
-          [PO.CORNERS.BACK]: "Back Corners",
-          [PO.MID.FACING]: "Front Mid",
-          [PO.MID.SIDES]: "Sides Mid",
-          [PO.MID.BACK]: "Back Mid",
-          [PO.D3.TOP]: "Top Elevation",
-          [PO.D3.MID]: "Middle Elevation",
-          [PO.D3.BOTTOM]: "Bottom Elevation",
+          [PI.CENTER]: "Center",
+          [PI.CORNERS.FACING]: "Front Corners",
+          [PI.CORNERS.BACK]: "Back Corners",
+          [PI.MID.FACING]: "Front Mid",
+          [PI.MID.SIDES]: "Sides Mid",
+          [PI.MID.BACK]: "Back Mid",
+          [PI.D3.TOP]: "Top Elevation",
+          [PI.D3.MID]: "Middle Elevation",
+          [PI.D3.BOTTOM]: "Bottom Elevation",
         },
       })),
       onChange: value => { console.log("Target points changed", value); }
-    });
-
-
-    register(PT_OPTS.NUM_POINTS, {
-      name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
-      hint: localize(`${PT_OPTS.NUM_POINTS}.Hint`),
-      scope: "world",
-      config: false,
-      type: String,
-      choices: ptChoices,
-      default: PT_TYPES.NINE,
-      tab: "losTarget",
-      onChange: value => this.losSettingChange(PT_OPTS.NUM_POINTS, value)
     });
 
     register(PT_OPTS.INSET, {
@@ -406,17 +378,6 @@ export class Settings extends ModuleSettingsAbstract {
       type: Number,
       tab: "losTarget",
       onChange: value => this.losSettingChange(PT_OPTS.INSET, value)
-    });
-
-    register(PT_OPTS.POINTS3D, {
-      name: localize(`${PT_OPTS.POINTS3D}.Name`),
-      hint: localize(`${PT_OPTS.POINTS3D}.Hint`),
-      scope: "world",
-      config: false,
-      type: Boolean,
-      default: false,
-      tab: "losTarget",
-      onChange: value => this.losSettingChange(PT_OPTS.POINTS3D, value)
     });
 
     // ----- NOTE: Other tab ----- //
@@ -588,11 +549,12 @@ export class Settings extends ModuleSettingsAbstract {
         if ( !losCalc ) return;
         losCalc.calculator = calc;
       });
-    } else if ( key === VIEWER.NUM_POINTS || key === VIEWER.INSET ) {
+    } else if ( key === VIEWER.POINTS || key === VIEWER.INSET ) {
       // Update the viewpoints for all tokens.
       const config = { [configKeyForSetting[key]]: value };
 
       canvas.tokens.placeables.forEach(token => {
+        token[MODULE_ID].visibility.losViewer.config = config;
         const losCalc = token.vision?.[MODULE_ID]?.losCalc;
         if ( !losCalc ) return;
         losCalc.initializeViewpoints(config);
@@ -624,7 +586,7 @@ const configKeyForSetting = {
   // Viewpoints.
   [SETTINGS.LOS.TARGET.ALGORITHM]: "viewpointClass",
   [SETTINGS.LOS.VIEWER.NUM_POINTS]: "numViewpoints",
-  [SETTINGS.LOS.VIEWER.INSET]: "viewpointOffset",
+  [SETTINGS.LOS.VIEWER.INSET]: "viewpointInset",
 
   // Points viewpoints.
   [SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS]: "pointAlgorithm",

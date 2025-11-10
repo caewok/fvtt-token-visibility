@@ -19,7 +19,6 @@ import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTr
 // Debug
 import { Draw } from "../../geometry/Draw.js";
 
-
 export class PercentVisibleGeometricResult extends PercentVisibleResult {
 
   data = {
@@ -28,13 +27,16 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     visibleTargetPaths: null,
   };
 
-  get totalTargetArea() { return Math.abs(this.data.targetPaths?.area || 0); }
+  get totalTargetArea() {
+    if ( !~this.type ) return 1; // Not custom, so default to target area of 1.
+    return Math.abs(this.data.targetPaths?.area || 1);
+  }
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
   get visibleArea() {
-    if ( !this.totalTargetArea ) return 0;
+    if ( !~this.type ) return this.type; // Not custom; either empty (0) or full (1).
     return Math.abs(this.data.visibleTargetPaths.area || 0);
   }
 
@@ -45,10 +47,14 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMaximize(other) {
+    let out = super.blendMaximize(other);
+    if ( out ) return out;
+
+    // Both types are custom.
     // The target area could change, given the different views.
     // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
-    const out = new this.constructor(this.target, this.config);
+    out = new this.constructor(this.target, this.config);
     out.data.targetPaths = ClipperPaths.combine([this.data.targetPaths, other.data.targetPaths]);
     out.data.visibleTargetPaths = ClipperPaths.combine([this.data.visibleTargetPaths, other.data.visibleTargetPaths]);
     return out;
@@ -57,8 +63,6 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
 
 export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleGeometricResult;
-
-  static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
   /** @type {Camera} */
   camera = new Camera({

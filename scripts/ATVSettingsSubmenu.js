@@ -39,12 +39,12 @@ export class DefaultSettings {
     const { VIEWER, TARGET } = LOS;
     return {
       // Range
-      [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+//       [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
       [RANGE.POINTS3D]: false,
       [RANGE.DISTANCE3D]: false,
 
       // LOS Viewer
-      [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
+//       [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
       // Unused: [SETTINGS.LOS.VIEWER.INSET]: 0
 
       // LOS Target
@@ -53,7 +53,7 @@ export class DefaultSettings {
       [TARGET.LARGE]: false,
 
       // LOS Point options
-      [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.NINE,
+//       [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.NINE,
       [TARGET.POINT_OPTIONS.INSET]: 0.75,
       [TARGET.POINT_OPTIONS.POINTS3D]: false
     };
@@ -64,12 +64,12 @@ export class DefaultSettings {
     const { VIEWER, TARGET } = LOS;
     return {
       // Range
-      [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+//       [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
       [RANGE.POINTS3D]: false,
       [RANGE.DISTANCE3D]: false,
 
       // LOS Viewer
-      [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
+//       [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
       [VIEWER.INSET]: 0,
 
       // LOS Target
@@ -78,7 +78,7 @@ export class DefaultSettings {
       [TARGET.LARGE]: true,
 
       // LOS Point options
-      [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
+//       [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
       [TARGET.POINT_OPTIONS.INSET]: 0,
       [TARGET.POINT_OPTIONS.POINTS3D]: false
     };
@@ -89,12 +89,12 @@ export class DefaultSettings {
     const { VIEWER, TARGET } = LOS;
     return {
       // Range
-      [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
+//       [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
       [RANGE.POINTS3D]: true,
       [RANGE.DISTANCE3D]: true,
 
       // LOS Viewer
-      [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
+//       [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
 
       // LOS Target
       [TARGET.ALGORITHM]: TARGET.TYPES.AREA3D,

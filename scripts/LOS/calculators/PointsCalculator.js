@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONFIG,
+CONST,
 game,
 PIXI,
 */
@@ -13,7 +14,8 @@ import { MODULE_ID } from "../../const.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { ViewerLOS } from "../ViewerLOS.js";
 import { DebugVisibilityViewerAbstract } from "../DebugVisibilityViewer.js";
-import { BitSet } from "../BitSet/BitSet.js";
+import { SmallBitSet } from "../SmallBitSet.js";
+import { squaresUnderToken, hexesUnderToken } from "../shapes_under_token.js";
 
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
@@ -35,12 +37,7 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
     numPoints: 1,
   };
 
-  data = new BitSet();
-
-  constructor(target, opts) {
-    super(target, opts);
-    this.data = BitSet.empty(this._config.numPoints);
-  }
+  data = new SmallBitSet();
 
   get totalTargetArea() { return this._config.numPoints; }
 
@@ -57,10 +54,28 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
    */
   blendMaximize(other) {
     const out = new this.constructor(this.target, this.config);
-    out.data = this.data.or(other.data);
+    out.data.or(this.data).or(other.data);
     return out;
   }
+
+  makeFullyVisible() {
+    this.data.fillToIndex(this._config.numPoints - 1);
+    super.makeFullyVisible();
+  }
+
+  makeFullyNotVisible() {
+    this.data.clear();
+    super.makeFullyNotVisible();
+  }
 }
+
+/**
+ * @typedef {object} PointsCalculatorConfig
+ * ...{CalculatorConfig}
+ * @property {number} [targetPointIndex=1]  	    					Points configuration for the target
+ * @property {number} [targetInset=0.75]                    Offset target points from target border
+ * @property {number} [radius=Infinity]                     Distance at which visibility stops
+ */
 
 /**
  * Handle points algorithm.
@@ -70,29 +85,37 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   static defaultConfiguration = {
     ...PercentVisibleCalculatorAbstract.defaultConfiguration,
-    pointAlgorithm: "points-center",
+    targetPointIndex: 1, // Center only
     targetInset: 0.75,
-    points3d: false,
     radius: Number.POSITIVE_INFINITY,
   }
 
   /** @type {Points3d[][]} */
   targetPoints = [];
 
+  get numPoints() { return ViewerLOS.numViewpointsForIndex(this.config.targetPointIndex); }
+
+  get config() { return super.config; } // Must call parent to avoid having no getter here.
+
+  set config(cfg = {}) {
+    if ( Object.hasOwn(cfg, "targetPointIndex")
+      && cfg.targetPointIndex instanceof SmallBitSet ) cfg.targetPointIndex = cfg.targetPointIndex.word;
+    super.config = cfg;
+  }
+
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
   _calculate() {
     const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
-      ? this.constructor.constrainedGridShapesUnderToken(this.tokenShape) : [this.targetShape];
+      ? this.constructor.constrainedGridShapesUnderToken(this.target) : [this.target.constrainedTokenBorder];
     if ( !targetShapes.length ) targetShapes.push(this.targetShape);
 
     const targetPointsForShapes = targetShapes.map(shape => this.constructTargetPoints(shape));
     return this._calculateForPoints(targetPointsForShapes);
   }
-  
+
   _calculateForPoints(points) {
-    const numPoints = points.reduce((acc, curr) => Math.max(acc, curr.length), 0);
-    this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints });
+    this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints: this.numPoints });
     for ( let i = 0, iMax = points.length; i < iMax; i += 1 ) {
       const targetPoints = points[i];
       const result = this._testPointToPoints(targetPoints);
@@ -113,11 +136,14 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    */
   constructTargetPoints(tokenShape) {
     const target = this.target;
-    const { pointAlgorithm, targetInset, points3d } = this.config;
-    const cfg = { pointAlgorithm, inset: targetInset, viewpoint: this.viewpoint };
-    cfg.tokenShape = tokenShape ?? this.tokenShape
-    const targetPoints = ViewerLOS.constructTokenPoints(target, cfg);
-    return points3d ? PointsViewpoint.elevatePoints(target, targetPoints) : targetPoints;
+    const { targetPointIndex, targetInset } = this.config;
+    const cfg = {
+      pointKey: targetPointIndex,
+      inset: targetInset,
+      viewpoint: this.viewpoint,
+      tokenShape: tokenShape ?? this.tokenShape
+    };
+    return ViewerLOS.constructTokenPoints(target, cfg);
   }
 
   /* ----- NOTE: Visibility testing ----- */
@@ -130,7 +156,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @returns {PercentVisiblePointsResult}
    */
   _testPointToPoints(targetPoints) {
-    this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });  
+    this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
     const result = this.lastResult.clone();
     result.data.clear();
 
@@ -147,7 +173,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
     return result;
   }
-  
+
   /**
    * Get polygons representing all grids under a token.
    * If token is constrained, overlap the constrained polygon on the grid shapes.
@@ -155,6 +181,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
    */
   static constrainedGridShapesUnderToken(token, tokenShape) {
+    tokenShape ??= token.constrainedTokenBorder;
     const gridShapes = this.gridShapesUnderToken(token);
 
     // Token unconstrained by walls.
@@ -180,7 +207,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
     return constrainedGridShapes;
   }
-  
+
     /**
    * Get polygons representing all grids under a token.
    * @param {Token} token
@@ -193,9 +220,9 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     }
     return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
-  
+
   // ----- NOTE: Debug ----- //
-  
+
   /** @type {PIXI.Graphics} */
   #debugGraphics;
 
@@ -226,7 +253,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     for ( const debugPoint of this.debugPoints ) {
       const color = debugPoint.isOccluded ? colors.red : colors.green;
       const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
-      draw.segment(debugPoint, { alpha, width, color });
+      draw.segment(debugPoint, { alpha, color });
     }
   }
 
@@ -286,7 +313,7 @@ debugViewer.render();
 atv = randal.tokenvisibility.visibility
 atv.percentVisibilityToToken(zanna)
 
-
+SmallBitSet = api.SmallBitSet
 
 
 */

@@ -14,7 +14,7 @@ import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./Percen
 import { AbstractPolygonTrianglesID } from "../PlaceableTriangles.js";
 import { Camera } from "../Camera.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
-import { BitSet } from "../BitSet/BitSet.js";
+import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
@@ -27,12 +27,7 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
     numPoints: 1,
   };
 
-  data = new BitSet();
-
-  constructor(target, opts) {
-    super(target, opts);
-    this.data = BitSet.empty(this._config.numPoints);
-  }
+  data = new FastBitSet();
 
   static fromCalculator(calc, opts) {
     opts.numPoints = calc.scale ** 2;
@@ -62,8 +57,6 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
 
 export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePerPixelResult;
-  
-  static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
   /** @type {Camera} */
   camera = new Camera({
@@ -113,7 +106,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 //       srcs = canvas[this.config.sourceType].placeables;
 //       srcObstacles = this.locateSourceObstacles();
 //     }
-    
+
     let i = 0;
     for ( let x = 0; x < scale; x += 1 ) {
       for ( let y = 0; y < scale; y += 1 ) {
@@ -159,7 +152,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     rayDirection.release();
     gridPoint.release();
     fragmentPoint.release();
-    
+
     return isOccluded;
   }
 

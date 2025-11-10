@@ -26,7 +26,7 @@ export class PercentVisibleSamplePixelResult extends PercentVisibleResult {
 
   data = new Map();
 
-  get totalTargetArea() { return this._config.numPoints; 
+  get totalTargetArea() { return this._config.numPoints;
     // TODO: Need to be able to get the length of a BitSet.
     let area = 0;
     for ( const bs of this.data.values() ) area += bs.length;
@@ -35,9 +35,9 @@ export class PercentVisibleSamplePixelResult extends PercentVisibleResult {
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() { 
+  get visibleArea() {
     let area = 0;
-    for ( const bs of this.data.values() ) area += bs.cardinality;  
+    for ( const bs of this.data.values() ) area += bs.cardinality;
   }
 
   /**
@@ -53,10 +53,10 @@ export class PercentVisibleSamplePixelResult extends PercentVisibleResult {
       if ( other.data.has(face) ) {
         out.data.set(face, bs.or(other.data.get(face)));
       } else out.data.set(face, bs);
-    } 
+    }
     for ( const face of other.data.keys() ) {
       if ( !out.data.has(face) ) out.data.set(face, other.data.get(face));
-    }    
+    }
     return out;
   }
 }
@@ -70,9 +70,6 @@ export class PercentVisibleSamplePixelResult extends PercentVisibleResult {
 
 export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleSamplePixelResult;
-  
-  static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
-
 
   occlusionTester = new ObstacleOcclusionTest();
 
@@ -103,14 +100,14 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
     // To sample evenly across different faces:
     // Project grid of points from a rectangular plane onto the face.
     // Use the token 3d border as the edges of the grid.
-    
+
     const { axisNormal, pts } = this._generatePointsForFace(face);
-    
+
     // Drop points that are not within the face.
     const trimmedPts = pts.filter(pt => face.intersection(pt, axisNormal, Number.NEGATIVE_INFINITY))
-    const bs = BitSet.empty(trimmedPts.length);
+    const bs = new FastBitSet();
     this.lastResult.data.set(face, bs);
-    
+
     let i = 0;
     for ( const pt of trimmedPts ) {
       pt.subtract(this.viewpoint, this.#rayDirection);
@@ -120,8 +117,8 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
 
       const debugObject = { A: this.viewpoint, B: pt, isOccluded, isDim: null, isBright: null };
       this.debugPoints.push(debugObject);
-      
-      
+
+
       // if ( !isOccluded ) this._testLightingForPoint(pt, debugObject);
     }
   }

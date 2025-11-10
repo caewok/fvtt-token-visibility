@@ -20,6 +20,13 @@ import { checkFramebufferStatus } from "../util.js";
 
 import { almostBetween } from "../../geometry/util.js";
 
+/**
+ * @typedef {object} WebGL2CalculatorConfig
+ * ...{CalculatorConfig}
+ * @property {number} alphaThreshold                    Threshold value for testing alpha of tiles
+ * @property {boolean} useInstancing                    Use instancing with webGL2
+ */
+
 
 export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 
@@ -55,7 +62,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
    */
   blendMaximize(other) {
     // The target area could change, given the different views.
-    // Combine the visible target paths.    
+    // Combine the visible target paths.
     const out = new this.constructor(this.target, this.config);
     out.data.target = this.data.target.or(other.data.target);
     out.data.blocked = this.data.target.and(other.data.target);
@@ -66,7 +73,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleWebGL2Result;
-  
+
   static defaultConfiguration = {
     ...PercentVisibleCalculatorAbstract.defaultConfiguration,
     alphaThreshold: 0.75,

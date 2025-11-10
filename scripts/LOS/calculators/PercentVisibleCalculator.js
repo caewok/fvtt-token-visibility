@@ -12,6 +12,29 @@ import { approximateClamp } from "../util.js";
 import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 
+/**
+ * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
+ * @property {boolean} dead                 Do dead tokens block?
+ * @property {boolean} live                 Do live tokens block?
+ * @property {boolean} prone                Do prone tokens block?
+ */
+
+/**
+ * @typedef {object} BlockingConfig     Whether different objects block LOS
+ * @property {boolean} walls                Do walls block?
+ * @property {boolean} tiles                Do tiles block?
+ * @property {TokenBlockingConfig} tokens   Do tokens block?
+ */
+
+/**
+ * @typedef {object} CalculatorConfig    Configuration settings passed to viewpoints
+ * @property {BlockingConfig} blocking                    Do various canvas objects block?
+ * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
+ * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
+ * @property {boolean} testLighting            Should the illuminated target shape be used?
+ * @property {boolean} debug                              Trigger debug drawings and logging
+ */
+
 
 /**
  * Stores the result from the percent visible calculator.
@@ -19,9 +42,18 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
  * Can combine 2+ results.
  */
 export class PercentVisibleResult {
+
+  static RESULT_TYPE = {
+    FULL: 1,
+    EMPTY: 0,
+    CUSTOM: -1,
+  };
+
   target;
 
   data = {};
+
+  type = this.constructor.RESULT_TYPE.CUSTOM;
 
   _config = {
     largeTarget: false,
@@ -38,15 +70,19 @@ export class PercentVisibleResult {
 
   static fromCalculator(calc, opts = {}) {
     opts.largeTarget ??= calc.config.largeTarget;
-    return new this(calc.target, opts );
+    return new this(calc.target, opts);
   }
+
+  makeFullyNotVisible() { this.type = this.constructor.RESULT_TYPE.EMPTY; return this; }
+
+  makeFullyVisible() { this.type = this.constructor.RESULT_TYPE.FULL; return this; }
 
   clone() {
     const out = new this.constructor(this.target, this.config);
-    Object.assign(out.data, this.data);
+    Object.assign(out.data, structuredClone(this.data));
+    out.type = this.type;
     return out;
   }
-
 
   // ----- NOTE: "Area" calculation ----- //
 
@@ -87,9 +123,13 @@ export class PercentVisibleResult {
    * Area of the target that is visible.
    * @type {number}
    */
-  get visibleArea() { return this.targetArea; }
+  get visibleArea() {
+    if ( !~this.type ) return this.type;
+    return this.targetArea;
+  }
 
   get percentVisible() {
+    if ( ~this.type ) return this.type;
     return approximateClamp(this.visibleArea / this.targetArea, 0, 1, 1e-02);
   }
 
@@ -99,10 +139,24 @@ export class PercentVisibleResult {
    * @param {PercentVisibleResult} other
    * @returns {PercentVisibleResult} A new combined set.
    */
-  blendMaximize(_other) { return this.clone(); }
+  blendMaximize(other) {
+    const { FULL, EMPTY } = this.constructor.RESULT_TYPE;
+
+    // If this type is full, maximize will be full.
+    if ( this.type === FULL ) return this.clone();
+
+    // If this data type is empty, maximize will be the other.
+    if ( this.type === EMPTY ) return other.clone();
+
+    // This data type is custom. Check if the other is full or empty.
+    if ( other.type === FULL ) return other.clone();
+    if ( other.type === EMPTY ) return this.clone();
+
+    return null; // Must be handled by subclass.
+  }
 
   static max(...results) {
-    let out = results[0];
+    let out = results.pop();
     for ( const result of results ) {
       if ( result.percentVisible > out.percentVisible ) out = result;
     }
@@ -110,7 +164,7 @@ export class PercentVisibleResult {
   }
 
   static min(...results) {
-    let out = results[0];
+    let out = results.pop();
     for ( const result of results ) {
       if ( result.percentVisible < out.percentVisible ) out = result;
     }
@@ -155,63 +209,63 @@ export class PercentVisibleCalculatorAbstract {
   get config() { return structuredClone(this._config); }
 
   set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
-  
+
   // ----- NOTE: Basic property getters / setters ---- //
-  
-  /** 
+
+  /**
    * Track if initialization must be redone prior to calculation.
    * @type {boolean}
    */
   #dirty = true;
-  
+
   get dirty() { return this.#dirty; }
-  
+
   set dirty(value) { this.#dirty ||= value; }
-  
+
   /** @type {Token} */
   #viewer;
-  
+
   get viewer() { return this.#viewer; }
-  
+
   set viewer(value) {
     if ( this.#viewer === value ) return;
     this.#dirty = true;
     this.#viewer = value;
-    
+
     // Default the viewpoint to the center of the token.
     const method = value instanceof Token ? "fromTokenCenter" : "fromPointSource";
     Point3d[method](value, this.#viewpoint);
   }
-  
+
   /** @type {Token} */
   #target;
-  
+
   get target() { return this.#target; }
-  
-  set target(value) { 
+
+  set target(value) {
     if ( this.#target === value ) return;
     this.#dirty = true;
     this.#target = value;
-    
+
     // Default the target location to the center of the token.
     Point3d.fromTokenCenter(value, this.targetLocation);
   }
-  
+
   /** @type {Point3d} */
   #viewpoint = new Point3d();
-  
+
   get viewpoint() { return this.#viewpoint; }
-  
+
   get rayOrigin() { return this.#viewpoint; }
-  
+
   set viewpoint(value) {
     if ( this.#viewpoint.equals(value) ) return;
     this.#dirty = true;
     this.#viewpoint.copyFrom(value);
   }
-  
+
   targetLocation = new Point3d();
-  
+
   /**
    * Utility method to set all relevant viewing characteristics at once.
    * @param {object} [opts]
@@ -226,23 +280,23 @@ export class PercentVisibleCalculatorAbstract {
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation.copyFrom(targetLocation);
   }
-  
+
   get targetBorder() { return CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
-  
+
   get targetShape() { return this.target[this.config.tokenShapeType]; }
-  
+
   _clean() {
     this.occlusionTester._initialize(this); // Params: rayOrigin, viewer, target.
     this.#dirty = false;
   }
-  
+
 
   // ----- NOTE: Visibility testing ----- //
 
   occlusionTester = new ObstacleOcclusionTest();
 
   percentVisible() { return this.calculate().percentVisible; }
-  
+
   static LIGHTING_TEST_TYPES = {
     DARK: 0,
     DIM: 1,
@@ -268,8 +322,8 @@ export class PercentVisibleCalculatorAbstract {
     if ( this.#dirty ) this._clean();
     return this._calculate();
   }
-  
-  _calculate() { 
+
+  _calculate() {
     return this.constructor.resultClass.fromCalculator(this);
   }
 
@@ -303,12 +357,12 @@ export class PercentVisibleCalculatorAbstract {
     for ( const src of canvas.lighting.placeables ) {
       this.viewer = src;
       this._clean();
-      
+
       Point3d.fromPointSource(src, this.#viewpoint);
       this.config = { radius: src.radius };
       let lastResult = this.calculate();
       dimResult = dimResult.blendMaximums(lastResult);
-      
+
       this.config = { radius: src.brightRadius };
       lastResult = this.calculate()
       brightResult = brightResult.blendMaximums(lastResult);
@@ -319,7 +373,7 @@ export class PercentVisibleCalculatorAbstract {
     this.viewpoint = oldViewpoint;
     return { dim: dimResult, bright: brightResult };
   }
-  
+
   /* ----- NOTE: Debug ----- */
 
   /**
@@ -332,13 +386,13 @@ export class PercentVisibleCalculatorAbstract {
     this.occlusionTester._drawDetectedObjects(debugDraw);
     this.occlusionTester._drawFrustum(debugDraw);
   }
-  
+
   /**
    * For debugging.
    * Draw the line of sight from token to target.
    */
-  _drawLineOfSight(draw) { draw.segment({ A: this.viewpoint, B: this.targetLocation }); }
-  
+  _drawLineOfSight(draw) { draw.segment({ A: this.viewpoint, B: this.targetLocation }, { alpha: 0.5 }); }
+
   destroy() { return; }
 }
 

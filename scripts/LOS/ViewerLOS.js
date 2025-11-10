@@ -18,57 +18,12 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { tokensOverlap, insetPoints } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
-import { BitSet } from "./BitSet/BitSet.js";
+import { SmallBitSet } from "./SmallBitSet.js";
 
 // Viewpoint algorithms.
 import { Viewpoint } from "./Viewpoint.js";
 
 // import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
-
-/**
- * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
- * @property {boolean} dead                 Do dead tokens block?
- * @property {boolean} live                 Do live tokens block?
- * @property {boolean} prone                Do prone tokens block?
- */
-
-/**
- * @typedef {object} BlockingConfig     Whether different objects block LOS
- * @property {boolean} walls                Do walls block?
- * @property {boolean} tiles                Do tiles block?
- * @property {TokenBlockingConfig} tokens   Do tokens block?
- */
-
-/**
- * @typedef {object} CalculatorConfig    Configuration settings passed to viewpoints
- * @property {BlockingConfig} blocking                    Do various canvas objects block?
- * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
- * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
- * @property {boolean} testLighting            Should the illuminated target shape be used?
- * @property {boolean} debug                              Trigger debug drawings and logging
- */
-
-/**
- * @typedef {object} PointsCalculatorConfig
- * ...{CalculatorConfig}
- * @property {number} targetPointsIndex 	    					Points configuration for the target
- * @property {number} targetInset                       Offset target points from target border
- * @property {boolean} points3d                         Whether to use 3d points
- */
-
-/**
- * @typedef {object} WebGL2CalculatorConfig
- * ...{CalculatorConfig}
- * @property {number} alphaThreshold                    Threshold value for testing alpha of tiles
- * @property {boolean} useInstancing                    Use instancing with webGL2
- */
-
-/**
- * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
- * @property {number} viewpointIndex    										Points configuration for the viewer's viewpoints
- * @property {number} viewpointInset                          Offset each viewpoint from viewer border
- * @property {number} threshold                               Percent needed to be seen for LOS
- */
 
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
@@ -82,16 +37,13 @@ const DM_SENSE_TYPES = {
   "light": DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
 }
 
-/** @type {Object<"lighting"|"sounds"|DetectionMode.DETECTION_TYPES>} */
-const DM_SOURCE_TYPES = {
-  "lighting": DetectionMode.DETECTION_TYPES.SIGHT,
-  "sounds": DetectionMode.DETECTION_TYPES.SOUND,
-  [DetectionMode.DETECTION_TYPES.SIGHT]: "lighting",
-  [DetectionMode.DETECTION_TYPES.SOUND]: "sounds",
-  [DetectionMode.DETECTION_TYPES.MOVE]: "lighting",
-  [DetectionMode.DETECTION_TYPES.OTHER]: "lighting",
-};
-
+/**
+ * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
+ * @property {number} viewpointIndex    					    Points configuration for the viewer's viewpoints
+ * @property {number} viewpointInset                  Offset each viewpoint from viewer border
+ * @property {boolean} angle                          True if constrained by viewer vision angle
+ * @property {number} threshold                       Percent needed to be seen for LOS
+ */
 
 export class ViewerLOS {
 
@@ -125,22 +77,22 @@ export class ViewerLOS {
 
   /**
    * How many viewpoints for a given point index code?
-   * @param {POINT_INDICES} idx
+   * @param {number|BitSet} idx
    * @returns {number}
    */
   static numViewpointsForIndex(idx) {
     const PI = this.POINT_INDICES;
-    const bs = idx instanceof BitSet ? idx : new BitSet(idx);
+    const bs = idx instanceof SmallBitSet ? idx : SmallBitSet.fromNumber(idx);
     let count = 0;
-    count += bs.get(PI.CENTER);
-    count += 2 * bs.get(PI.CORNERS.FACING);
-    count += 2 * bs.get(PI.CORNERS.BACK);
-    count += 2 * bs.get(PI.CORNERS.MID.SIDES);
-    count += bs.get(PI.MID.FRONT);
-    count += bs.get(PI.MID.BACK);
+    count += bs.hasIndex(PI.CENTER);
+    count += 2 * bs.hasIndex(PI.CORNERS.FACING);
+    count += 2 * bs.hasIndex(PI.CORNERS.BACK);
+    count += 2 * bs.hasIndex(PI.MID.SIDES);
+    count += bs.hasIndex(PI.MID.FACING);
+    count += bs.hasIndex(PI.MID.BACK);
 
     // There are [count] points on each level, minimum of 1 level.
-    const mult = (bs.get(PI.D3.TOP) + bs.get(PI.D3.MID) + bs.get(PI.D3.BOTTOM)) || 1;
+    const mult = (bs.hasIndex(PI.D3.TOP) + bs.hasIndex(PI.D3.MID) + bs.hasIndex(PI.D3.BOTTOM)) || 1;
     return count * mult;
   }
 
@@ -163,7 +115,7 @@ export class ViewerLOS {
    * @param {PercentVisibleCalculator} 		The visibility calculator to use.
    */
   constructor(viewer, calculator) {
-    this.#viewer = viewer;
+    this.viewer = viewer;
     this.calculator = calculator;
     // Dirty variable already set for constructor.
   }
@@ -184,6 +136,8 @@ export class ViewerLOS {
   get config() { return structuredClone(this.#config); }
 
   set config(cfg = {}) {
+    if ( Object.hasOwn(cfg, "viewpointIndex")
+      && cfg.viewpointIndex instanceof SmallBitSet ) cfg.viewpointIndex = cfg.viewpointIndex.word;
     this.#dirty ||= Object.hasOwn(cfg, "viewpointIndex") || Object.hasOwn(cfg, "viewpointInset");
     foundry.utils.mergeObject(this.#config, cfg, { inplace: true});
   }
@@ -198,43 +152,6 @@ export class ViewerLOS {
 
   set debug(debug) { this.calculator.config = { debug }; }
 
-  /**
-   * @typedef {object} DetectionModeConfig
-   * Detection mode settings relevant to the viewer LOS and calculator.
-   * @prop {boolean} walls                          Do walls block?
-   * @prop {DetectionMode.DETECTION_TYPES} type     Detection type
-   * @prop {number} angle                           Is the viewer limited by its viewing angle?
-   */
-
-  // Used for caching
-  /** @type {DetectionModeConfig} */
-  get detectionModeConfig() {
-    const calcConfig = this.calculator.config;
-    return {
-      walls: calcConfig.blocking.walls,
-      type: DM_SENSE_TYPES[calcConfig.senseType],
-      angle: this.config.angle,
-    }
-  }
-
-  /**
-   * Set this LOS configuration to match a detection mode's settings.
-   * See CONFIG.Canvas.detectionModes (and CONFIG.Canvas.visionModes)
-   * @param {DetectionMode} dm
-   */
-  setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight) {
-    const calcConfig = {
-      blocking: {
-        walls: dm.walls,
-        tiles: dm.walls,
-        regions: dm.walls,
-      },
-      senseType: DM_SENSE_TYPES[dm.type],
-      sourceType: DM_SOURCE_TYPES[dm.type],
-    };
-    this.config = { angle: dm.angle };
-    this.calculator.config = calcConfig;
-  }
 
   // ----- NOTE: Caching ----- //
 
@@ -273,18 +190,21 @@ export class ViewerLOS {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
     this.dirty = true;
+    this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewpoints ----- //
   /** @type {Viewpoint} */
   viewpoints = [];
 
+  get numViewpoints() { return this.constructor.numViewpointsForIndex(this.#config.viewpointIndex); }
+
   /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
-    const numViewpoints = this.constructor.numViewpointsForIndex(this.#config.viewpointIndex);
-    this.viewpoints.length = numViewpoints;
+    if ( !this.viewer ) return;
+    this.viewpoints.length = this.numViewpoints;
     this.constructor.constructTokenPoints(this.viewer, {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
@@ -312,7 +232,7 @@ export class ViewerLOS {
 
   // ----- NOTE: Visibility testing ----- //
 
-  get hasLOS() { return this.percentVisible >= this.threshold; }
+  get hasLOS() { return this.percentVisible > 0 && this.percentVisible >= this.threshold; } // If threshold is 0, any part counts.
 
   _percentVisible;
 
@@ -356,7 +276,7 @@ export class ViewerLOS {
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
     this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
-      if ( this._viewpointBlockedByViewer(vp) ) continue;
+      if ( this._viewpointBlockedByViewer(vp.viewpoint) ) continue;
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) break;
@@ -432,59 +352,65 @@ export class ViewerLOS {
 
   /**
    * Build points for a given token.
-   * 1: center
-   * 2: facing corners
-   * 3: facing + center
-   * 4: corners
-   * 5: corners + center
-   * 6: facing corners, mids, center
-   * 7: 4 corners, 2 sides, facing mid
-   * 8: 4 corners, 4 mids
-   * 9: 4 corners, 4 mids, center
    * @param {Token} token
    * @param {object} [opts]
    * @param {PIXI.Polygon|PIXI.Rectangle} [opts.tokenShape]
-   * @param {number} [opts.numPoints]
+   * @param {number|BitSet} [opts.pointKey]
    * @param {number} [opts.inset]
    * @param {Point3d} [opts.viewpoint]
    * @returns {Point3d[]}
    */
   static constructTokenPoints(token, { pointKey = 1, tokenShape, inset, viewpoint } = {}) {
     tokenShape ??= token.constrainedTokenBorder;
-    const bs = pointKey instanceof BitSet ? pointKey : new BitSet(pointKey);
+    const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
     const PI = this.POINT_INDICES;
-    let cornerPoints;
-    const tokenPoints = [];
-
-    // Center point
     const center = Point3d.fromTokenCenter(token);
-    if ( bs.get(PI.CENTER) ) tokenPoints.push(center);
+    let cornerPoints;
+    let facing;
+    let back;
+    const tokenPoints = [];
 
     // Corners
     // If two points, keep only the front-facing points.
     // For targets, keep the closest two points to the viewer point.
-    // TODO: Use bitmath to test for indices 1,2 at once.
     const { topZ, bottomZ } = token;
     const midZ = topZ - bottomZ;
-    if ( bs.get(PI.CORNERS.FACING)
-      || bs.get(PI.CORNERS.BACK)
-      || bs.get(PI.MID.FACING)
-      || bs.get(PI.MID.SIDES)
-      || bs.get(PI.MID.BACK) ) {
 
-      // Corners
+    // Set either all 4 corners or a subset.
+    const cornerMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.BACK]);
+    const cornerIx = bs.intersectionNew(cornerMask);
+    if ( cornerIx.equals(cornerMask) ) {
       cornerPoints = this.getCorners(tokenShape, midZ);
-      const { facing, back } = this._facingPoints(cornerPoints, token, viewpoint);
-      insetPoints(facing, center, inset);
-      insetPoints(back, center, inset);
+      tokenPoints.push(...cornerPoints);
+    } else if ( !cornerIx.isEmpty ) {
+      cornerPoints = this.getCorners(tokenShape, midZ);
+      const res = this._facingPoints(cornerPoints, token, viewpoint);
+      facing = res.facing;
+      back = res.back;
+      if ( cornerIx.hasIndex(PI.CORNERS.FACING) ) tokenPoints.push(...facing);
+      if ( cornerIx.hasIndex(PI.CORNERS.BACK) ) tokenPoints.push(...back);
+    }
 
-      if ( bs.get(PI.CORNERS.FACING) ) tokenPoints.push(...facing);
-      if ( bs.get(PI.CORNERS.BACK) ) tokenPoints.push(...back);
-
-      // Midpoints
-      if ( bs.get(PI.MID.FACING) ) tokenPoints.push(Point3d.midPoint(facing[0], facing[1])); // Two front points form the frontside.
-      if ( bs.get(PI.MID.BACK) ) tokenPoints.push(Point3d.midPoint(back[0], back[1])); // Two back points form the backside.
-      if ( bs.get(PI.MID.SIDES) ) {
+    // Set either all side points or a subset
+    const sidesMask = SmallBitSet.fromIndices([PI.MID.FACING, PI.MID.BACK, PI.MID.SIDES]);
+    const sidesIx = bs.intersectionNew(sidesMask);
+    if ( sidesIx.equals(sidesMask) ) {
+      cornerPoints ??= this.getCorners(tokenShape, midZ);
+      let a = cornerPoints.at(-1);
+      for ( const b of cornerPoints ) {
+        tokenPoints.push(Point3d.midPoint(a, b));
+        a = b;
+      }
+    } else if ( !sidesIx.isEmpty ) {
+      if ( !facing ) {
+        cornerPoints ??= this.getCorners(tokenShape, midZ);
+        const res = this._facingPoints(cornerPoints, token, viewpoint);
+        facing = res.facing;
+        back = res.back;
+      }
+      if ( sidesIx.hasIndex(PI.MID.FACING) ) tokenPoints.push(Point3d.midPoint(facing[0], facing[1])); // Two front points form the frontside.
+      if ( sidesIx.hasIndex(PI.MID.BACK) ) tokenPoints.push(Point3d.midPoint(back[0], back[1])); // Two back points form the backside.
+      if ( sidesIx.hasIndex(PI.MID.SIDES) ) {
         // The back point closest to the facing point share a side.
         facing.forEach(pt => pt.t0 = Point3d.distanceSquaredBetween(pt, back[0]));
         const idx = facing[1].t0 < facing[0].t0;  // idx 0 <= idx 1 ? 0; idx 1 < idx 0 ? 1.
@@ -492,19 +418,27 @@ export class ViewerLOS {
         tokenPoints.push(Point3d.midPOint(facing[1], back[1 - idx]));
       }
     }
+    insetPoints(tokenPoints, center, inset);
+
+    // Add center point last, b/c it is not inset. Add to first position.
+    if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(center);
+
+    // 3d
+    const d3Mask = SmallBitSet.fromIndices([PI.D3.TOP, PI.D3.MID, PI.D3.BOTTOM]);
+    const d3Ix = bs.intersectionNew(d3Mask);
 
     // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
-    if ( !(bs.get(PI.D3.TOP) || bs.get(PI.D3.MID) || bs.get(PI.D3.BOTTOM)) ) return tokenPoints;
+    if ( d3Ix.isEmpty ) return tokenPoints;
 
-    // 3d.
+    // Create top, mid, or bottom points as needed.
     const out = [];
-    if ( bs.get(PI.D3.MID) ) out.push(...tokenPoints);
-    if ( bs.get(PI.D3.TOP) ) out.push(...tokenPoints.map(pt => {
+    if ( d3Ix.hasIndex(PI.D3.MID) ) out.push(...tokenPoints);
+    if ( d3Ix.hasIndex(PI.D3.TOP) ) out.push(...tokenPoints.map(pt => {
       pt = pt.clone();
       pt.z = topZ;
       return pt;
     }));
-    if ( bs.get(PI.D3.BOTTOM) ) out.push(...tokenPoints.map(pt => {
+    if ( d3Ix.hasIndex(PI.D3.BOTTOM) ) out.push(...tokenPoints.map(pt => {
       pt = pt.clone();
       pt.z = bottomZ;
       return pt;
@@ -515,7 +449,7 @@ export class ViewerLOS {
   /**
    * Determine which corner- or mid-points are facing and which are back.
    */
-  _facingPoints(pts, token, viewpoint) {
+  static _facingPoints(pts, token, viewpoint) {
 		let facing = [];
 		let back = [];
 		if ( viewpoint ) {
@@ -773,6 +707,25 @@ export class CachedViewerLOS extends ViewerLOS {
   }
 
   /**
+   * @typedef {object} DetectionModeConfig
+   * Detection mode settings relevant to the viewer LOS and calculator.
+   * @prop {boolean} walls                          Do walls block?
+   * @prop {DetectionMode.DETECTION_TYPES} type     Detection type
+   * @prop {number} angle                           Is the viewer limited by its viewing angle?
+   */
+
+  // Used for caching
+  /** @type {DetectionModeConfig} */
+  get detectionModeConfig() {
+    const calcConfig = this.calculator.config;
+    return {
+      walls: calcConfig.blocking.walls,
+      type: DM_SENSE_TYPES[calcConfig.senseType],
+      angle: this.config.angle,
+    }
+  }
+
+  /**
    * Store within a target's cache different detection mode results.
    * Run the calculation for each as needed.
    */
@@ -829,6 +782,7 @@ export class CachedViewerLOS extends ViewerLOS {
 /**
  * Set the numeric bit value for object of indices, recursively.
  */
+/*
 function setPointOptions(obj, prefix = {}) {
   for ( const [key, index] of Object.entries(obj) ) {
     if ( Number.isNumeric(index) ) prefix[key] = 2 ** index;
@@ -837,6 +791,7 @@ function setPointOptions(obj, prefix = {}) {
   return prefix;
 }
 ViewerLOS.POINT_OPTIONS = setPointOptions(ViewerLOS.POINT_INDICES);
+*/
 
 
 // const { UNOBSCURED, DIM, BRIGHT } = ViewerLOS.VISIBILITY_LABELS;

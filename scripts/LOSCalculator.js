@@ -7,10 +7,14 @@ foundry,
 import { MODULE_ID } from "./const.js";
 import { Settings } from "./settings.js";
 import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
+import { SmallBitSet } from "./LOS/SmallBitSet.js";
+
+// ViewerLOS = CachedViewerLOS;
+
 
 export function currentCalculator() {
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
-  return CONFIG[MODULE_ID].sightCalculators[calcName];
+  return CONFIG[MODULE_ID].losCalculators[calcName];
 }
 
 export function currentDebugViewerClass(type) {
@@ -22,7 +26,11 @@ export function currentDebugViewerClass(type) {
   return debugViewers[calcName];
 }
 
+export function pointIndexForSet(s) { return SmallBitSet.fromIndices([...s]).word; }
 
+/**
+ * @returns {TokenBlockingConfig}  See PercentVisibleCalculator.js
+ */
 function TokenBlockingConfig() {
   return {
     dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true,
@@ -31,6 +39,9 @@ function TokenBlockingConfig() {
   };
 }
 
+/**
+ * @returns {BlockingConfig}  See PercentVisibleCalculator.js
+ */
 function BlockingConfig() {
   return {
     tokens: TokenBlockingConfig(),
@@ -40,6 +51,9 @@ function BlockingConfig() {
   };
 }
 
+/**
+ * @returns {CalculatorConfig|PointsCalculatorConfig}  See PercentVisibleCalculator.js and PointsCalculator.js
+ */
 function CalculatorConfig() {
   return {
     blocking: BlockingConfig(),
@@ -50,9 +64,8 @@ function CalculatorConfig() {
     sourceType: "lighting",
 
     // Points algorithm
-    pointAlgorithm: Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS) ?? Settings.KEYS.POINT_TYPES.CENTER ?? false,
     targetInset: Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75,
-    points3d: Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS3D) ?? false,
+    targetPointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS)),
 
     // WebGL2 Calc
     alphaThreshold: CONFIG[MODULE_ID].alphaThreshold,
@@ -60,12 +73,15 @@ function CalculatorConfig() {
   };
 }
 
+/**
+ * @returns {ViewerLOSConfig} See ViewerLOS.js
+ */
 function LOSViewerConfig() {
   return {
-    calcName: Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM),
-    numViewpoints: Settings.get(Settings.KEYS.LOS.VIEWER.NUM_POINTS),
-    viewpointOffset: Settings.get(Settings.KEYS.LOS.VIEWER.INSET),
+    viewpointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.VIEWER.POINTS)),
+    viewpointInset: Settings.get(Settings.KEYS.LOS.VIEWER.INSET),
     threshold: Settings.get(Settings.KEYS.LOS.TARGET.PERCENT),
+    angle: true,
   };
 }
 
@@ -83,14 +99,18 @@ export function buildLOSCalculator() {
 /**
  * Build a custom LOS calculator that uses the current settings, modified by
  * custom parameters.
+ * @param {CalculatorConfig|PointsCalculatorConfig} calcOptions
  * @returns {PercentVisibleCalculatorAbstract}
  */
-/*export function buildCustomLOSCalculator({ calcName, ...calcCfg } = {}) {
-  const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
-  return new CONFIG[MODULE_ID].calculatorClasses[calcName](calcConfig)
+export function buildCustomLOSCalculator(calcClass, calcCfg = {}) {
+  if ( !calcClass ) {
+    const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
+    calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
+  }
+  calcCfg = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
+  return new calcClass(calcCfg);
 }
-*/
+
 
 /**
  * Build an LOS viewer for this viewer that uses the current settings.
@@ -101,49 +121,36 @@ export function buildLOSViewer(viewer) {
   const calculator = buildLOSCalculator();
   const viewerLOS = new ViewerLOS(viewer, calculator);
   viewerLOS.config = LOSViewerConfig();
+  return viewerLOS;
 }
 
 /**
  * Build an LOS calculator for this viewer that uses the current settings, modified by
  * custom parameters.
- * @param {Token} viewer
- * @param {object} [config]         Custom parameters to override default settings.
+ * @param {Token} viewer                The viewing token
+ * @param {LOSCalculator} calculator    Calculator to use
+ * @param {object} [config]             Custom parameters to override default settings.
  * @returns {ViewerLOS}
  */
-export function buildCustomLOSViewer(viewer, { calculator, calcName, calcClass, numViewpoints, viewpointOffset, threshold, ...calcCfg } = {}) {
-  const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  const losConfig = customizeViewer({ calculator, calcName, calcClass, numViewpoints, viewpointOffset, threshold });
-  return new ViewerLOS(viewer, { ...losConfig, ...calcConfig});
+export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
+  const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), losCfg, { inplace: false });
+  const viewerLOS = new ViewerLOS(viewer, calculator);
+  viewerLOS.config = losConfig;
+  return viewerLOS;
 }
 
 /**
  * Build a debug viewer using the current settings.
- * @param {class} cl                Class of the viewer
- * @param {object} [config]         Custom parameters to override default settings.
+ * @param {class} cl                    Class of the viewer
+ * @param {Token} viewer                The viewing token
+ * @param {LOSCalculator} calculator    Calculator to use
+ * @param {object} [config]             Custom parameters to override default settings.
  */
-export function buildDebugViewer(cl, { calculator, calcName, calcClass, numViewpoints, viewpointOffset, threshold, ...calcCfg } = {}) {
+export function buildDebugViewer(cl, viewer, calculator, losCfg = {}) {
   cl ??= currentDebugViewerClass();
-  const calcConfig = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  const losConfig = customizeViewer({ calculator, calcName, calcClass, numViewpoints, viewpointOffset, threshold });
-  return new cl({ ...losConfig, ...calcConfig});
+  calculator ??= currentCalculator();
+  const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), losCfg, { inplace: false });
+  const viewerLOS = new ViewerLOS(viewer, calculator);
+  viewerLOS.config = losConfig;
+  return new cl(viewerLOS);
 }
-
-function customizeViewer({ calculator, calcName, calcClass, numViewpoints, viewpointOffset, threshold } = {}) {
-  // Get the default configuration and add the calculator class.
-  const losConfig = { ...LOSViewerConfig() };
-  if ( calcClass ) losConfig.calcClass = calcClass;
-  else {
-    if ( calcName ) losConfig.calcName = calcName;
-    losConfig.calcClass = CONFIG[MODULE_ID].calculatorClasses[losConfig.calcName];
-  }
-
-  // Merge object in the class creation won't work if the props are undefined as it will change the config to undefined.
-  if ( typeof calculator !== "undefined" ) losConfig.calculator = calculator;
-  if ( typeof numViewpoints !== "undefined" ) losConfig.numViewpoints = numViewpoints;
-  if ( typeof viewpointOffset !== "undefined" ) losConfig.viewpointOffset = viewpointOffset;
-  if ( typeof threshold !== "undefined" ) losConfig.threshold = threshold;
-
-  return losConfig;
-}
-
-

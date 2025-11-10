@@ -12,7 +12,6 @@ import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
 import { ViewerLOS } from "./ViewerLOS.js";
-import { Viewpoint } from "./Viewpoint.js";
 
 /* Debug viewer
 
@@ -22,56 +21,42 @@ Calculates percentage visible for the viewer/target combo.
 
 export class DebugVisibilityViewerAbstract {
 
-  /** @type {PercentVisibleCalculator} */
+  /** @type {ViewerLOS} */
   viewerLOS;
 
-  constructor(config = {}) {
-    config.testLighting = true;
-    this.viewerLOS = new ViewerLOS(undefined, config);
+  constructor(viewerLOS) {
+    this.viewerLOS = viewerLOS
     this.viewerLOS.debug = true;
-    
+
+    // Try to set viewer to the first controlled token if undefined.
+    if ( !this.viewerLOS.viewer ) this.viewerLOS.viewer = canvas.tokens.controlled[0];
+
+    // Try to set target to the first targeted token if undefined.
+    if ( !this.viewerLOS.target ) this.target = game.user.targets.first();
+
     this.registerHooks();
     this._initializeDebugGraphics();
   }
 
-  /** @type {Token} */
-  #viewer;
-
-  get viewer() {
-    // Try to set viewer to the first controlled token if undefined.
-    // Use setter so the viewerLOS is properly set.
-    if ( !this.#viewer ) this.viewer = canvas.tokens.controlled[0];
-    return this.#viewer;
+  static fromCalculator(calculator, viewer) {
+    return new this(new ViewerLOS(viewer, calculator));
   }
-
-  set viewer(value) {
-    this.#viewer = value;
-    this.viewerLOS.viewer = value;
-  }
-
 
   /** @type {Token} */
-  #target;
+  get viewer() { return this.viewerLOS.viewer; }
 
-  get target() {
-    // Try to set target to the first targeted token if undefined.
-    // Use setter so the viewerLOS is properly set.
-    if ( !this.#target ) this.target = game.user.targets.first();
-    return this.#target;
-  }
+  set viewer(value) { this.viewerLOS.viewer = value; }
 
-  set target(value) {
-    this.#target = value;
-    this.viewerLOS.target = value;
-  }
+  /** @type {Token} */
+  get target() { return this.viewerLOS.target; }
+
+  set target(value) { this.viewerLOS.target = value; }
 
   render() {
     this.clearDebug();
     if ( !(this.viewer && this.target ) ) return;
 
     // First draw the basic debugging graphics for the canvas.
-    this.viewerLOS.viewer = this.viewer;
-    this.viewerLOS.target = this.target;
     this._drawCanvasDebug();
     this.viewerLOS.calculate();
 
@@ -130,7 +115,7 @@ export class DebugVisibilityViewerAbstract {
   onControlToken(token, controlled) {
     // if ( !controlled ) return;
     if ( controlled ) this.viewer = token;
-    else if ( this.#viewer === token ) this.#viewer = undefined;
+    else if ( this.viewer === token ) this.viewer = undefined;
     this.render();
   }
 
@@ -143,7 +128,7 @@ export class DebugVisibilityViewerAbstract {
   onTargetToken(user, targetToken, targeted) {
     if ( game.user !== user ) return;
     if ( targeted ) this.target = targetToken;
-    else if ( this.#target === targetToken ) this.#target = undefined;
+    else if ( this.target === targetToken ) this.target = undefined;
     this.render();
   }
 
@@ -168,7 +153,6 @@ export class DebugVisibilityViewerAbstract {
     this.deregisterHooks();
     canvas.tokens.removeChild(this.#debugContainer);
     if ( this.#debugContainer && !this.#debugContainer.destroyed ) this.#debugContainer.destroy();
-    this.viewerLOS.calculator.destroy();
     this.viewerLOS.destroy();
   }
 
@@ -193,9 +177,7 @@ export class DebugVisibilityViewerAbstract {
 
   _drawCanvasDebug() { this.viewerLOS._drawCanvasDebug(); }
 
-
   clearDebug() { return; }
-
 }
 
 
@@ -310,21 +292,20 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       const { WIDTH, HEIGHT } = this.constructor;
 
       // Divide in the popout space.
-      const PT = this.viewerLOS.constructor.POINT_TYPES;
       const positions = [];
       let viewSize;
-      switch ( this.viewerLOS.config.numViewpoints ) {
-        case PT.CENTER: positions.push([0, 0]); viewSize = WIDTH; break;
+      switch ( this.viewerLOS.numViewpoints ) {
+        case 1: positions.push([0, 0]); viewSize = WIDTH; break;
 
         // ----- | -----
-        case PT.TWO: positions.push(
+        case 2: positions.push(
           [WIDTH * -0.25, 0],
           [WIDTH * 0.25, 0],
         ); viewSize = WIDTH / 2; break;
 
         //     -----
         // ----- | -----
-        case PT.THREE: positions.push(
+        case 3: positions.push(
           [0, HEIGHT * -0.25],
           [WIDTH * -0.25, HEIGHT * 0.25],
           [WIDTH * 0.25, HEIGHT * 0.25],
@@ -332,7 +313,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
         // ----- | -----
         // ----- | -----
-        case PT.FOUR: positions.push(
+        case 4: positions.push(
           [WIDTH * -0.25, HEIGHT * -0.25],
           [WIDTH * 0.25, HEIGHT * -0.25],
           [WIDTH * -0.25, HEIGHT * 0.25],
@@ -341,7 +322,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
         //  ----- | -----
         // --- | --- | ---
-        case PT.FIVE: positions.push(
+        case 5: positions.push(
           [WIDTH * -0.25, HEIGHT * -0.25],
           [WIDTH * 0.25, HEIGHT * -0.25],
           [WIDTH * -0.33, HEIGHT * 0.25],
@@ -352,7 +333,9 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
         // --- | --- | ---
         // --- |     | ---
         // --- | --- | ---
-        case PT.EIGHT: positions.push(
+        case 6:
+        case 7:
+        case 8: positions.push(
           [WIDTH * -0.33, HEIGHT * -0.33],
           [WIDTH * 0, HEIGHT * -0.33],
           [WIDTH * 0.33, HEIGHT * -0.33],
@@ -369,7 +352,8 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
         // --- | --- | ---
         // --- | --- | ---
         // --- | --- | ---
-        case PT.NINE: positions.push(
+        case 9:
+        default: positions.push(
           [WIDTH * -0.33, HEIGHT * -0.33],
           [WIDTH * 0, HEIGHT * -0.33],
           [WIDTH * 0.33, HEIGHT * -0.33],
@@ -477,19 +461,20 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   }
 
   updateDebugForPercentVisible(percentVisible) {
-    const PT = this.viewerLOS.constructor.POINT_TYPES;
     let width = this.constructor.WIDTH;
     let height = this.constructor.HEIGHT;
 
     // Keep width and height even.
-    switch ( this.viewerLOS.config.numViewpoints ) {
-      case PT.CENTER: width *= 0.5; height *= 0.5; break;
-      case PT.TWO:
-      case PT.FOUR: width *= .25; height *= .25; break;
-      case PT.THREE:
-      case PT.FIVE:
-      case PT.EIGHT:
-      case PT.NINE: width *= (0.5 / 3); height *= (0.5 / 3); break;
+    switch ( this.viewerLOS.numViewpoints ) {
+      case 1: width *= 0.5; height *= 0.5; break;
+      case 2:
+      case 4:
+      case 6: width *= .25; height *= .25; break;
+      case 3:
+      case 5:
+      case 7:
+      case 8:
+      case 9: width *= (0.5 / 3); height *= (0.5 / 3); break;
     }
 
     this.viewerLOS.viewpoints.forEach((vp, idx) => {
