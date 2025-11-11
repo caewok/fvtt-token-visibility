@@ -32,14 +32,16 @@ Dim and bright lighting test options:
 
 export class PercentVisiblePointsResult extends PercentVisibleResult {
 
-  _config = {
-    ...this._config,
+  static defaultConfiguration = {
+    ...super.defaultConfiguration,
     numPoints: 1,
   };
 
   data = new SmallBitSet();
 
-  get totalTargetArea() { return this._config.numPoints; }
+  get numPoints() { return this.config.numPoints; }
+
+  get totalTargetArea() { return this.numPoints; }
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
@@ -53,13 +55,16 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMaximize(other) {
-    const out = new this.constructor(this.target, this.config);
-    out.data.or(this.data).or(other.data);
+    let out = super.blendMaximize(other);
+    if ( out ) return out;
+
+    out = this.clone();
+    out.data.or(other.data);
     return out;
   }
 
   makeFullyVisible() {
-    this.data.fillToIndex(this._config.numPoints - 1);
+    this.data.fillToIndex(this.numPoints - 1);
     super.makeFullyVisible();
   }
 
@@ -84,7 +89,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   static resultClass = PercentVisiblePointsResult;
 
   static defaultConfiguration = {
-    ...PercentVisibleCalculatorAbstract.defaultConfiguration,
+    ...super.defaultConfiguration,
     targetPointIndex: 1, // Center only
     targetInset: 0.75,
     radius: Number.POSITIVE_INFINITY,

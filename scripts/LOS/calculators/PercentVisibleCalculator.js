@@ -55,17 +55,19 @@ export class PercentVisibleResult {
 
   type = this.constructor.RESULT_TYPE.CUSTOM;
 
-  _config = {
+  static defaultConfiguration = {
     largeTarget: false,
   };
 
-  get config() { return structuredClone(this._config); }
+  #config = {}
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
+  get config() { return structuredClone(this.#config); }
 
-  constructor(target, opts = {}) {
+  set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false }); }
+
+  constructor(target, cfg = {}) {
     this.target = target;
-    this.config = opts;
+    this.#config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
   }
 
   static fromCalculator(calc, opts = {}) {
@@ -78,7 +80,7 @@ export class PercentVisibleResult {
   makeFullyVisible() { this.type = this.constructor.RESULT_TYPE.FULL; return this; }
 
   clone() {
-    const out = new this.constructor(this.target, this.config);
+    const out = new this.constructor(this.target, this.#config);
     Object.assign(out.data, structuredClone(this.data));
     out.type = this.type;
     return out;
@@ -115,7 +117,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get targetArea() {
-    if ( this.config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
+    if ( this.#config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
     return this.totalTargetArea;
   }
 
@@ -199,16 +201,15 @@ export class PercentVisibleCalculatorAbstract {
 
   constructor(cfg = {}) {
     // Set default configuration first and then override with passed-through values.
-    this._config = structuredClone(this.constructor.defaultConfiguration);
-    this.config = cfg;
-    this.occlusionTester._config = this._config; // Sync the configs.
+    this.#config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.occlusionTester._config = this.#config; // Sync the configs.
   }
 
-  _config = {};
+  #config = {};
 
-  get config() { return structuredClone(this._config); }
+  get config() { return structuredClone(this.#config); }
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
+  set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false }); }
 
   // ----- NOTE: Basic property getters / setters ---- //
 

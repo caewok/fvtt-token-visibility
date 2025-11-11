@@ -75,7 +75,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   static resultClass = PercentVisibleWebGL2Result;
 
   static defaultConfiguration = {
-    ...PercentVisibleCalculatorAbstract.defaultConfiguration,
+    ...super.defaultConfiguration,
     alphaThreshold: 0.75,
   };
 

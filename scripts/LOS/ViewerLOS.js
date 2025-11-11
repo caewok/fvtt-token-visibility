@@ -92,10 +92,12 @@ export class ViewerLOS {
    * @param {Token} viewer      					The token whose LOS should be tested
    * @param {PercentVisibleCalculator} 		The visibility calculator to use.
    */
-  constructor(viewer, calculator) {
+  constructor(viewer, calculator, cfg = {}) {
     this.viewer = viewer;
     this.calculator = calculator;
     // Dirty variable already set for constructor.
+
+    this.#config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
   }
 
   // ----- NOTE: Configuration ---- //
@@ -106,7 +108,7 @@ export class ViewerLOS {
     viewpointInset: 0,
     angle: true, // If constrained by the viewer vision angle
     threshold: 0.75, // Percent used for LOS
-  }
+  };
 
   /** @type {ViewerLOSConfig} */
   #config = { ...this.constructor.defaultConfiguration };
@@ -117,7 +119,7 @@ export class ViewerLOS {
     if ( Object.hasOwn(cfg, "viewpointIndex")
       && cfg.viewpointIndex instanceof SmallBitSet ) cfg.viewpointIndex = cfg.viewpointIndex.word;
     this.#dirty ||= Object.hasOwn(cfg, "viewpointIndex") || Object.hasOwn(cfg, "viewpointInset");
-    foundry.utils.mergeObject(this.#config, cfg, { inplace: true});
+    foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false });
   }
 
   get viewpointInset() { return this.#config.viewpointInset; }
@@ -144,8 +146,7 @@ export class ViewerLOS {
    * Update the viewpoints.
    */
   _clean() {
-    this.initializeViewpoints();
-    this.#dirty = false;
+    this.#dirty = this.initializeViewpoints();;
   }
 
   // ----- NOTE: Viewer ----- //
@@ -179,13 +180,14 @@ export class ViewerLOS {
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
-    if ( !this.viewer ) return;
+    if ( !this.viewer ) return false;
     const pts = this.constructor.constructTokenPoints(this.viewer, {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
     });
     this.viewpoints.length = pts.length;
     pts.forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
+    return true;
   }
 
   // ----- NOTE: Target ---- //
@@ -251,6 +253,7 @@ export class ViewerLOS {
 
     // Test each viewpoint until unobscured is 1.
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
+    if ( this.dirty ) this._clean();
     this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) continue;

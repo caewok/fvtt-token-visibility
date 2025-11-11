@@ -561,7 +561,7 @@ export class Settings extends ModuleSettingsAbstract {
         canvas.tokens.placeables.forEach(token => {
           const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
           if ( !handler ) return;
-          handler.config = config;
+          handler.losViewer.config = config;
         });
         break;
       }

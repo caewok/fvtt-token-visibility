@@ -119,8 +119,7 @@ export function buildCustomLOSCalculator(calcClass, calcCfg = {}) {
  */
 export function buildLOSViewer(viewer) {
   const calculator = buildLOSCalculator();
-  const viewerLOS = new ViewerLOS(viewer, calculator);
-  viewerLOS.config = LOSViewerConfig();
+  const viewerLOS = new ViewerLOS(viewer, calculator, LOSViewerConfig());
   return viewerLOS;
 }
 
@@ -133,9 +132,9 @@ export function buildLOSViewer(viewer) {
  * @returns {ViewerLOS}
  */
 export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
+  calculator ??= currentCalculator();
   const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), losCfg, { inplace: false });
-  const viewerLOS = new ViewerLOS(viewer, calculator);
-  viewerLOS.config = losConfig;
+  const viewerLOS = new ViewerLOS(viewer, calculator, losConfig);
   return viewerLOS;
 }
 
@@ -148,9 +147,6 @@ export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
  */
 export function buildDebugViewer(cl, viewer, calculator, losCfg = {}) {
   cl ??= currentDebugViewerClass();
-  calculator ??= currentCalculator();
-  const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), losCfg, { inplace: false });
-  const viewerLOS = new ViewerLOS(viewer, calculator);
-  viewerLOS.config = losConfig;
+  const viewerLOS = buildCustomLOSViewer(viewer, calculator, losCfg);
   return new cl(viewerLOS);
 }

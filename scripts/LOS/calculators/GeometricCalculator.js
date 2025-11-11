@@ -54,7 +54,7 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     // The target area could change, given the different views.
     // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
-    out = new this.constructor(this.target, this.config);
+    out = this.clone();
     out.data.targetPaths = ClipperPaths.combine([this.data.targetPaths, other.data.targetPaths]);
     out.data.visibleTargetPaths = ClipperPaths.combine([this.data.visibleTargetPaths, other.data.visibleTargetPaths]);
     return out;
