@@ -10,8 +10,9 @@ PIXI
 import { MODULE_ID } from "./const.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
+import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator, pointIndexForSet } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
+import { ATVTokenHandlerID } from "./TokenHandler.js";
 
 // ----- NOTE: Hooks ----- //
 
@@ -73,7 +74,6 @@ export const SETTINGS = {
       },
       POINT_OPTIONS: {
         POINTS: "los-points-options-target",
-        POINT_INDEX: "los-points-index-target",
         INSET: "los-inset-target",
       }
     }
@@ -278,7 +278,7 @@ export class Settings extends ModuleSettingsAbstract {
           [PI.D3.BOTTOM]: "Bottom Elevation",
         },
       })),
-      onChange: value => { console.log("Viewer PointIndex changed", value); }
+      onChange: value => this.losSettingChange(VIEWER.POINTS, value)
     });
 
     register(VIEWER.INSET, {
@@ -361,7 +361,7 @@ export class Settings extends ModuleSettingsAbstract {
           [PI.D3.BOTTOM]: "Bottom Elevation",
         },
       })),
-      onChange: value => { console.log("Target points changed", value); }
+      onChange: value => this.losSettingChange(TARGET.POINT_OPTIONS.POINTS, value)
     });
 
     register(PT_OPTS.INSET, {
@@ -541,41 +541,40 @@ export class Settings extends ModuleSettingsAbstract {
     this.cache.delete(key);
     const { TARGET, VIEWER } = SETTINGS.LOS;
 
-    if ( key === TARGET.ALGORITHM ) {
-      // Set a new shared calculator for all tokens.
-      const calc = buildLOSCalculator();
-      canvas.tokens.placeables.forEach(token => {
-        const losCalc = token[MODULE_ID]?.losCalc;
-        if ( !losCalc ) return;
-        losCalc.calculator = calc;
-      });
-    } else if ( key === VIEWER.POINTS || key === VIEWER.INSET ) {
-      // Update the viewpoints for all tokens.
-      const config = { [configKeyForSetting[key]]: value };
+    switch ( key ) {
+      case TARGET.ALGORITHM: {
+        // Set a new shared calculator for all tokens.
+        const calc = buildLOSCalculator();
+        canvas.tokens.placeables.forEach(token => {
+          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          if ( !handler ) return;
+          handler.calculator = losCalc;
+        });
 
-      canvas.tokens.placeables.forEach(token => {
-        token[MODULE_ID].visibility.losViewer.config = config;
-        const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-        if ( !losCalc ) return;
-        losCalc.initializeViewpoints(config);
-      });
-    } else if ( key === TARGET.PERCENT ) {
-      // Update the threshold percentage for all tokens.
-      canvas.tokens.placeables.forEach(token => {
-        const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-        if ( !losCalc ) return;
-        losCalc.threshold = value;
-      });
-    } else {
-      // Change to the calculator config.
-      const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
-      const currCalc = currentCalculator();
-      currCalc.config = config;
+        // Start up a new debug viewer.
+        if ( this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
+        break;
+      }
+      case VIEWER.POINTS: value = pointIndexForSet(value);
+      case VIEWER.INSET:
+      case TARGET.PERCENT: {
+        // Update the viewpoints for all tokens.
+        const config = { [configKeyForSetting[key]]: value };
+        canvas.tokens.placeables.forEach(token => {
+          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          if ( !handler ) return;
+          handler.config = config;
+        });
+        break;
+      }
+
+      // Changes to the calculator config.
+      default: {
+        const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
+        const currCalc = currentCalculator();
+        currCalc.config = config;
+      }
     }
-
-    // Start up a new debug viewer.
-    if ( key === TARGET.ALGORITHM
-      && this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
   }
 }
 
@@ -584,14 +583,12 @@ const configKeyForSetting = {
   [SETTINGS.LOS.TARGET.PERCENT]: "threshold",
 
   // Viewpoints.
-  [SETTINGS.LOS.TARGET.ALGORITHM]: "viewpointClass",
-  [SETTINGS.LOS.VIEWER.NUM_POINTS]: "numViewpoints",
+  [SETTINGS.LOS.VIEWER.POINTS]: "viewpointIndex",
   [SETTINGS.LOS.VIEWER.INSET]: "viewpointInset",
 
   // Points viewpoints.
-  [SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS]: "pointAlgorithm",
+  [SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS]: "targetPointIndex",
   [SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET]: "targetInset",
-  [SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS3D]: "points3d",
 
   // Blocking
   [SETTINGS.LIVE_TOKENS_BLOCK]: "blocking.tokens.live",

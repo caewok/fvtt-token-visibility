@@ -448,28 +448,46 @@ export class ViewerLOS {
 
   /**
    * Determine which corner- or mid-points are facing and which are back.
+   * Two approaches:
+   * 1. Based on token (viewer) rotation.
+   * 2. Based on points in front of the token's (target's) center point relative to a viewpoint.
+   *    E.g., same side as viewpoint relative to a line perpendicular to the center-->viewpoint line from center.
+   * @param {Point3d[]} pts
+   * @param {Token} viewer
+   * @param {Point3d} [viewpoint]
+   * @returns {object}
+   * - @prop {Point3d[]} facing
+   * - @prop {Point3d[]} back
    */
   static _facingPoints(pts, token, viewpoint) {
-		let facing = [];
-		let back = [];
-		if ( viewpoint ) {
-			pts.forEach(pt => pt._dist = Point3d.distanceSquaredBetween(viewpoint, pt));
-			pts.sort((a, b) => a._dist - b._dist);
-			back = pts.slice(2);
-			facing = pts.slice(0, 2);
-		} else {
-			// Token rotation is 0º for due south, while Ray is 0º for due east.
-			// Token rotation is 90º for due west, while Ray is 90º for due south.
-			// Use the Ray version to divide the token into front and back.
-			const center = Point3d.fromTokenCenter(token);
-			const angle = Math.toRadians(token.document.rotation);
-			const dirPt = PIXI.Point.fromAngle(center, angle, 100);
-			pts.forEach(pt => {
-				const arr = foundry.utils.orient2dFast(center, dirPt, pt) > 0 ? back : facing;
-				arr.push(pt);
-			});
-		}
-		return { facing, back };
+    // Token rotation is 0º for due south, while Ray is 0º for due east.
+    // Token rotation is 90º for due west, while Ray is 90º for due south.
+    // Use the Ray version to divide the token into front and back.
+    const facing = [];
+    const back = [];
+    const center = Point3d.fromTokenCenter(token);
+    let b;
+    if ( viewpoint ) {
+      // Determine the line perpendicular to the center --> viewpoint line and use to sort the points.
+      const dir = viewpoint.subtract(center);
+      const dirPerp = Point3d.tmp.set(-dir.y, dir.x, 0);
+      b = center.add(dirPerp);
+      dir.release();
+      dirPerp.release();
+    } else {
+      // Token rotation is 0º for due south, while Ray is 0º for due east.
+      // Token rotation is 90º for due west, while Ray is 90º for due south.
+      // Use the Ray version to divide the token into front and back.
+      const angle = Math.toRadians(token.document.rotation);
+      b = PIXI.Point.fromAngle(center, angle, 100);
+    }
+    pts.forEach(pt => {
+      const arr = foundry.utils.orient2dFast(center, b, pt) > 0 ? back : facing;
+      arr.push(pt);
+    });
+    center.release();
+    b.release();
+    return { facing, back };
   }
 
   /**
@@ -480,23 +498,25 @@ export class ViewerLOS {
    * @returns {Point3d[]} Array of corner points.
    */
   static getCorners(tokenShape, elevation) {
+    const PAD = -1;
+    // Rectangle is easier to pad, so handle separately.
     if ( tokenShape instanceof PIXI.Rectangle ) {
       // Token unconstrained by walls.
       // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
       // PIXI.Rectangle.prototype.pad modifies in place.
       tokenShape = tokenShape.clone();
-      tokenShape.pad(-1);
+      tokenShape.pad(PAD);
       return [
-        new Point3d(tokenShape.left, tokenShape.top, elevation),
-        new Point3d(tokenShape.right, tokenShape.top, elevation),
-        new Point3d(tokenShape.right, tokenShape.bottom, elevation),
-        new Point3d(tokenShape.left, tokenShape.bottom, elevation)
+        Point3d.tmp.set(tokenShape.left, tokenShape.top, elevation),
+        Point3d.tmp.set(tokenShape.right, tokenShape.top, elevation),
+        Point3d.tmp.set(tokenShape.right, tokenShape.bottom, elevation),
+        Point3d.tmp.set(tokenShape.left, tokenShape.bottom, elevation)
       ];
-    } else if ( !(tokenShape instanceof PIXI.Polygon) ) tokenShape = tokenShape.toPolygon();
+    } else tokenShape = tokenShape.toPolygon();
 
     // Constrained is polygon. Only use corners of polygon
     // Scale down polygon to avoid adjacent walls.
-    const padShape = tokenShape.pad(-2, { scalingFactor: 100 });
+    const padShape = tokenShape.pad(PAD, { scalingFactor: 100 });
     return [...padShape.iteratePoints({close: false})].map(pt => new Point3d(pt.x, pt.y, elevation));
   }
 
@@ -590,6 +610,11 @@ export class ViewerLOS {
     this._drawVisibleTokenBorder(canvasDraw);
     this._drawFrustumLightSources(canvasDraw);
     this.viewpoints.forEach(vp => this.debugDrawForViewpoint(vp).clearDrawings());
+  }
+
+  _clearCanvasDebug() {
+    this.debugCanvasDraw.clearDrawings();
+    this.viewpoints.forEach(vp => this.debugDrawForViewpoint(vp).clearDrawings())
   }
 
   /**

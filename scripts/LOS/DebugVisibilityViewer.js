@@ -177,7 +177,9 @@ export class DebugVisibilityViewerAbstract {
 
   _drawCanvasDebug() { this.viewerLOS._drawCanvasDebug(); }
 
-  clearDebug() { return; }
+  clearDebug() {
+    this.viewerLOS._clearCanvasDebug();
+  }
 }
 
 

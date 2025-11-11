@@ -163,6 +163,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const dist2 = this.config.radius ** 2;
     const numPoints = targetPoints.length;
     const debugPoints = this.debugPoints;
+    debugPoints.length = numPoints;
     for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
       const isOccluded = Point3d.distanceSquaredBetween(this.viewpoint, targetPoint) > dist2
