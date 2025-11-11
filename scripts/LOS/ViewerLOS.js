@@ -470,7 +470,7 @@ export class ViewerLOS {
     if ( viewpoint ) {
       // Determine the line perpendicular to the center --> viewpoint line and use to sort the points.
       const dir = viewpoint.subtract(center);
-      const dirPerp = Point3d.tmp.set(-dir.y, dir.x, 0);
+      const dirPerp = Point3d.tmp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
       b = center.add(dirPerp);
       dir.release();
       dirPerp.release();
