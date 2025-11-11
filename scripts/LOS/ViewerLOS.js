@@ -61,40 +61,18 @@ export class ViewerLOS {
     },
     MID: {
       FACING: 3,
-      SIDES: 4,
-      BACK: 5,
+      BACK: 4,
     },
     D3: {
       // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
       // Otherwise, MID may be omitted.
-      TOP: 6,
-      MID: 7,
-      BOTTOM: 8,
+      TOP: 5,
+      MID: 6,
+      BOTTOM: 7,
     }
   };
 
   static POINT_OPTIONS = {}; // Filled in below.
-
-  /**
-   * How many viewpoints for a given point index code?
-   * @param {number|BitSet} idx
-   * @returns {number}
-   */
-  static numViewpointsForIndex(idx) {
-    const PI = this.POINT_INDICES;
-    const bs = idx instanceof SmallBitSet ? idx : SmallBitSet.fromNumber(idx);
-    let count = 0;
-    count += bs.hasIndex(PI.CENTER);
-    count += 2 * bs.hasIndex(PI.CORNERS.FACING);
-    count += 2 * bs.hasIndex(PI.CORNERS.BACK);
-    count += 2 * bs.hasIndex(PI.MID.SIDES);
-    count += bs.hasIndex(PI.MID.FACING);
-    count += bs.hasIndex(PI.MID.BACK);
-
-    // There are [count] points on each level, minimum of 1 level.
-    const mult = (bs.hasIndex(PI.D3.TOP) + bs.hasIndex(PI.D3.MID) + bs.hasIndex(PI.D3.BOTTOM)) || 1;
-    return count * mult;
-  }
 
   // Simply trim "los-algorithm-" from the setting.
   static VIEWPOINT_ALGORITHM_SETTINGS = {
@@ -197,18 +175,17 @@ export class ViewerLOS {
   /** @type {Viewpoint} */
   viewpoints = [];
 
-  get numViewpoints() { return this.constructor.numViewpointsForIndex(this.#config.viewpointIndex); }
-
   /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
     if ( !this.viewer ) return;
-    this.viewpoints.length = this.numViewpoints;
-    this.constructor.constructTokenPoints(this.viewer, {
+    const pts = this.constructor.constructTokenPoints(this.viewer, {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
-    }).forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
+    });
+    this.viewpoints.length = pts.length;
+    pts.forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
   }
 
   // ----- NOTE: Target ---- //
@@ -366,8 +343,7 @@ export class ViewerLOS {
     const PI = this.POINT_INDICES;
     const center = Point3d.fromTokenCenter(token);
     let cornerPoints;
-    let facing;
-    let back;
+
     const tokenPoints = [];
 
     // Corners
@@ -385,42 +361,28 @@ export class ViewerLOS {
     } else if ( !cornerIx.isEmpty ) {
       cornerPoints = this.getCorners(tokenShape, midZ);
       const res = this._facingPoints(cornerPoints, token, viewpoint);
-      facing = res.facing;
-      back = res.back;
-      if ( cornerIx.hasIndex(PI.CORNERS.FACING) ) tokenPoints.push(...facing);
-      if ( cornerIx.hasIndex(PI.CORNERS.BACK) ) tokenPoints.push(...back);
+      if ( cornerIx.hasIndex(PI.CORNERS.FACING) ) tokenPoints.push(...res.facing);
+      if ( cornerIx.hasIndex(PI.CORNERS.BACK) ) tokenPoints.push(...res.back);
     }
 
     // Set either all side points or a subset
     const sidesMask = SmallBitSet.fromIndices([PI.MID.FACING, PI.MID.BACK, PI.MID.SIDES]);
     const sidesIx = bs.intersectionNew(sidesMask);
-    if ( sidesIx.equals(sidesMask) ) {
-      cornerPoints ??= this.getCorners(tokenShape, midZ);
-      let a = cornerPoints.at(-1);
-      for ( const b of cornerPoints ) {
-        tokenPoints.push(Point3d.midPoint(a, b));
-        a = b;
-      }
-    } else if ( !sidesIx.isEmpty ) {
-      if ( !facing ) {
-        cornerPoints ??= this.getCorners(tokenShape, midZ);
-        const res = this._facingPoints(cornerPoints, token, viewpoint);
-        facing = res.facing;
-        back = res.back;
-      }
-      if ( sidesIx.hasIndex(PI.MID.FACING) ) tokenPoints.push(Point3d.midPoint(facing[0], facing[1])); // Two front points form the frontside.
-      if ( sidesIx.hasIndex(PI.MID.BACK) ) tokenPoints.push(Point3d.midPoint(back[0], back[1])); // Two back points form the backside.
-      if ( sidesIx.hasIndex(PI.MID.SIDES) ) {
-        // The back point closest to the facing point share a side.
-        facing.forEach(pt => pt.t0 = Point3d.distanceSquaredBetween(pt, back[0]));
-        const idx = facing[1].t0 < facing[0].t0;  // idx 0 <= idx 1 ? 0; idx 1 < idx 0 ? 1.
-        tokenPoints.push(Point3d.midPoint(facing[0], back[idx]));  //
-        tokenPoints.push(Point3d.midPOint(facing[1], back[1 - idx]));
-      }
+    if ( !sidesIx.isEmpty ) {
+       cornerPoints ??= this.getCorners(tokenShape, midZ);
+       const mids = midpoints(cornerPoints);
+       if ( sidesIx.equals(sidesMask) ) tokenPoints.push(...mids); // Include all sides.
+       else {
+         const res = this._facingPoints(mids, token, viewpoint);
+         if ( sidesIx.hasIndex(PI.MID.FACING) ) tokenPoints.push(...res.facing);
+         if ( sidesIx.hasIndex(PI.MID.BACK) ) tokenPoints.push(...res.back);
+       }
     }
+
+    // Inset all corner and side points.
     insetPoints(tokenPoints, center, inset);
 
-    // Add center point last, b/c it is not inset. Add to first position.
+    // Add center point last, b/c it is not inset. Add to front of queue for consistency.
     if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(center);
 
     // 3d
@@ -803,6 +765,25 @@ export class CachedViewerLOS extends ViewerLOS {
   }
 
 }
+
+/**
+ * Calculate all the midpoints for an array of points.
+ * Includes the midpoint between end and start (circular).
+ * @param {Point3d[]} pts
+ * @returns {Point3d[]}
+ */
+function midpoints(pts) {
+  const nPts = pts.length;
+  const out = Array(nPts);
+  let a = pts.at(-1);
+  for ( let i = 0; i < nPts; i += 1 ) {
+    const b = pts[i];
+    out[i] = Point3d.midPoint(a, b);
+    a = b;
+  }
+  return out;
+}
+
 
 /**
  * Set the numeric bit value for object of indices, recursively.

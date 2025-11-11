@@ -93,8 +93,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   /** @type {Points3d[][]} */
   targetPoints = [];
 
-  get numPoints() { return ViewerLOS.numViewpointsForIndex(this.config.targetPointIndex); }
-
   get config() { return super.config; } // Must call parent to avoid having no getter here.
 
   set config(cfg = {}) {
@@ -115,7 +113,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   }
 
   _calculateForPoints(points) {
-    this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints: this.numPoints });
+    this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints: points[0].length });
     for ( let i = 0, iMax = points.length; i < iMax; i += 1 ) {
       const targetPoints = points[i];
       const result = this._testPointToPoints(targetPoints);
