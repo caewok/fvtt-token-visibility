@@ -257,7 +257,6 @@ export class Settings extends ModuleSettingsAbstract {
     register(VIEWER.POINTS, {
       name: localize(`${VIEWER.POINTS}.Name`),
       hint: localize(`${VIEWER.POINTS}.Hint`),
-      hint: "PointIndexHint",
       scope: "world",
       config: false,
       tab: "losViewer",
@@ -542,7 +541,7 @@ export class Settings extends ModuleSettingsAbstract {
     switch ( key ) {
       case TARGET.ALGORITHM: {
         // Set a new shared calculator for all tokens.
-        const calc = buildLOSCalculator();
+        const losCalc = buildLOSCalculator();
         canvas.tokens.placeables.forEach(token => {
           const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
           if ( !handler ) return;
@@ -554,7 +553,7 @@ export class Settings extends ModuleSettingsAbstract {
         break;
       }
       case VIEWER.POINTS: value = pointIndexForSet(value);
-      case VIEWER.INSET:
+      case VIEWER.INSET: /* eslint-disable-line no-fallthrough */
       case TARGET.PERCENT: {
         // Update the viewpoints for all tokens.
         const config = { [configKeyForSetting[key]]: value };
@@ -568,7 +567,7 @@ export class Settings extends ModuleSettingsAbstract {
 
       // Changes to the calculator config.
       case TARGET.POINT_OPTIONS.POINTS: value = pointIndexForSet(value);
-      default: {
+      default: { /* eslint-disable-line no-fallthrough */
         const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
         const currCalc = currentCalculator();
         currCalc.config = config;
