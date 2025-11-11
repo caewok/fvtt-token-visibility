@@ -569,6 +569,7 @@ export class Settings extends ModuleSettingsAbstract {
       }
 
       // Changes to the calculator config.
+      case TARGET.POINT_OPTIONS.POINTS: value = pointIndexForSet(value);
       default: {
         const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
         const currCalc = currentCalculator();
