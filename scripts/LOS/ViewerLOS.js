@@ -570,11 +570,11 @@ export class ViewerLOS {
    * Draw debugging objects on the main canvas.
    */
   _drawCanvasDebug() {
+    this._clearCanvasDebug();
     const canvasDraw = this.debugCanvasDraw;
-    canvasDraw.clearDrawings();
     this._drawVisibleTokenBorder(canvasDraw);
     this._drawFrustumLightSources(canvasDraw);
-    this.viewpoints.forEach(vp => this.debugDrawForViewpoint(vp).clearDrawings());
+    this.viewpoints.forEach(vp => vp._drawCanvasDebug(this.debugDrawForViewpoint(vp)));
   }
 
   _clearCanvasDebug() {
