@@ -121,7 +121,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
    * Filter the objects to be rendered by those that may be viewable between target and token.
    * Called after prerender, immediately prior to rendering.
    * @param {Frustum} frustum     Triangle shape used to represent the viewable area
-   * @param {object} [opts]                     Options from BlockingConfig (see AbstractViewerLOS)
+   * @param {object} [opts]                     Options from BlockingConfig (see ViewerLOS)
    * @param {object} [opts]
    * @param {Token} [opts.viewer]
    * @param {Token} [opts.target]

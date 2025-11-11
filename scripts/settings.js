@@ -8,11 +8,11 @@ PIXI
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { SettingsSubmenu } from "./SettingsSubmenu.js";
+import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { AbstractViewerLOS } from "./LOS/AbstractViewerLOS.js";
-import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
-
+import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator, pointIndexForSet } from "./LOSCalculator.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
+import { ATVTokenHandlerID } from "./TokenHandler.js";
 
 // ----- NOTE: Hooks ----- //
 
@@ -37,7 +37,15 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
   SUBMENU: "submenu",
-  POINT_TYPES: AbstractViewerLOS.POINT_TYPES,
+  POINT_TYPES: {
+    CENTER: "points-center",
+    TWO: "points-two",
+    THREE: "points-three", //
+    FOUR: "points-four", // Five without center
+    FIVE: "points-five", // Corners + center
+    EIGHT: "points-eight", // Nine without center
+    NINE: "points-nine" // Corners, midpoints, center
+  },
 
   RANGE: {
     ALGORITHM: "range-algorithm",
@@ -47,8 +55,8 @@ export const SETTINGS = {
 
   LOS: {
     VIEWER: {
-      NUM_POINTS: "los-points-viewer",
-      INSET: "los-inset-viewer"
+      POINTS: "los-points-options-viewer",
+      INSET: "los-inset-viewer",
     },
 
     TARGET: {
@@ -65,9 +73,8 @@ export const SETTINGS = {
         WEBGPU_ASYNC: "los-algorithm-webgpu-async"
       },
       POINT_OPTIONS: {
-        NUM_POINTS: "los-points-target",
+        POINTS: "los-points-options-target",
         INSET: "los-inset-target",
-        POINTS3D: "los-points-3d"
       }
     }
   },
@@ -137,11 +144,10 @@ export class Settings extends ModuleSettingsAbstract {
     return this.#debugViewers.get(sym);
   }
 
-  static async initializeDebugViewer(type) {
+  static initializeDebugViewer(type) {
     type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
     const sym = ALG_SYMBOLS[type];
-    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type));
-    await debugViewer.initialize();
+    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type), undefined, currentCalculator());
     debugViewer.render();
     this.#debugViewers.set(sym, debugViewer);
   }
@@ -186,7 +192,7 @@ export class Settings extends ModuleSettingsAbstract {
       name: localize(`${KEYS.SUBMENU}.Name`),
       label: localize(`${KEYS.SUBMENU}.Label`),
       icon: "fas fa-user-gear",
-      type: SettingsSubmenu,
+      type: ATVSettingsSubmenu,
       restricted: true
     });
 
@@ -231,7 +237,7 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: Boolean,
-      default: true,
+      default: false,
       tab: "range"
     });
 
@@ -241,22 +247,37 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: Boolean,
-      default: true,
+      default: false,
       tab: "range"
     });
 
     // ----- NOTE: Line-of-sight viewer tab ----- //
     const VIEWER = KEYS.LOS.VIEWER;
-    register(VIEWER.NUM_POINTS, {
-      name: localize(`${VIEWER.NUM_POINTS}.Name`),
-      hint: localize(`${VIEWER.NUM_POINTS}.Hint`),
+    const PI = ViewerLOS.POINT_INDICES;
+    register(VIEWER.POINTS, {
+      name: localize(`${VIEWER.POINTS}.Name`),
+      hint: localize(`${VIEWER.POINTS}.Hint`),
+      hint: "PointIndexHint",
       scope: "world",
       config: false,
-      type: String,
-      choices: ptChoices,
-      default: PT_TYPES.CENTER,
       tab: "losViewer",
-      onChange: value => this.losSettingChange(VIEWER.NUM_POINTS, value)
+      default: [PI.CENTER],
+      type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({
+        required: true,
+        blank: false,
+        initial: 0,
+        choices: {
+          [PI.CENTER]: "Center",
+          [PI.CORNERS.FACING]: "Front Corners",
+          [PI.CORNERS.BACK]: "Back Corners",
+          [PI.MID.FACING]: "Front Mid",
+          [PI.MID.BACK]: "Back Mid",
+          [PI.D3.TOP]: "Top Elevation",
+          [PI.D3.MID]: "Middle Elevation",
+          [PI.D3.BOTTOM]: "Bottom Elevation",
+        },
+      })),
+      onChange: value => this.losSettingChange(VIEWER.POINTS, value)
     });
 
     register(VIEWER.INSET, {
@@ -283,7 +304,7 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: Boolean,
-      default: true,
+      default: false,
       tab: "losTarget",
       onChange: value => this.losSettingChange(TARGET.LARGE, value)
     });
@@ -295,7 +316,7 @@ export class Settings extends ModuleSettingsAbstract {
       config: false,
       type: String,
       choices: losChoices,
-      default: LTYPES.NINE,
+      default: LTYPES.POINTS,
       tab: "losTarget",
       onChange: value => this.losSettingChange(TARGET.ALGORITHM, value)
     });
@@ -316,16 +337,29 @@ export class Settings extends ModuleSettingsAbstract {
       onChange: value => this.losSettingChange(TARGET.PERCENT, value)
     });
 
-    register(PT_OPTS.NUM_POINTS, {
-      name: localize(`${PT_OPTS.NUM_POINTS}.Name`),
-      hint: localize(`${PT_OPTS.NUM_POINTS}.Hint`),
+    register(TARGET.POINT_OPTIONS.POINTS, {
+      name: localize(`${TARGET.POINT_OPTIONS.POINTS}.Name`),
+      hint: localize(`${TARGET.POINT_OPTIONS.POINTS}.Hint`),
       scope: "world",
       config: false,
-      type: String,
-      choices: ptChoices,
-      default: PT_TYPES.NINE,
       tab: "losTarget",
-      onChange: value => this.losSettingChange(PT_OPTS.NUM_POINTS, value)
+      default: [PI.CENTER],
+      type: new foundry.data.fields.SetField(new foundry.data.fields.StringField({
+        required: true,
+        blank: false,
+        initial: 0,
+        choices: {
+          [PI.CENTER]: "Center",
+          [PI.CORNERS.FACING]: "Front Corners",
+          [PI.CORNERS.BACK]: "Back Corners",
+          [PI.MID.FACING]: "Front Mid",
+          [PI.MID.BACK]: "Back Mid",
+          [PI.D3.TOP]: "Top Elevation",
+          [PI.D3.MID]: "Middle Elevation",
+          [PI.D3.BOTTOM]: "Bottom Elevation",
+        },
+      })),
+      onChange: value => this.losSettingChange(TARGET.POINT_OPTIONS.POINTS, value)
     });
 
     register(PT_OPTS.INSET, {
@@ -342,17 +376,6 @@ export class Settings extends ModuleSettingsAbstract {
       type: Number,
       tab: "losTarget",
       onChange: value => this.losSettingChange(PT_OPTS.INSET, value)
-    });
-
-    register(PT_OPTS.POINTS3D, {
-      name: localize(`${PT_OPTS.POINTS3D}.Name`),
-      hint: localize(`${PT_OPTS.POINTS3D}.Hint`),
-      scope: "world",
-      config: false,
-      type: Boolean,
-      default: true,
-      tab: "losTarget",
-      onChange: value => this.losSettingChange(PT_OPTS.POINTS3D, value)
     });
 
     // ----- NOTE: Other tab ----- //
@@ -516,40 +539,41 @@ export class Settings extends ModuleSettingsAbstract {
     this.cache.delete(key);
     const { TARGET, VIEWER } = SETTINGS.LOS;
 
-    if ( key === TARGET.ALGORITHM ) {
-      // Set a new shared calculator for all tokens.
-      const calc = buildLOSCalculator();
-      canvas.tokens.placeables.forEach(token => {
-        const losCalc = token[MODULE_ID]?.losCalc;
-        if ( !losCalc ) return;
-        losCalc.calculator = calc;
-      });
-    } else if ( key === VIEWER.NUM_POINTS || key === VIEWER.INSET ) {
-      // Update the viewpoints for all tokens.
-      const config = { [configKeyForSetting[key]]: value };
+    switch ( key ) {
+      case TARGET.ALGORITHM: {
+        // Set a new shared calculator for all tokens.
+        const calc = buildLOSCalculator();
+        canvas.tokens.placeables.forEach(token => {
+          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          if ( !handler ) return;
+          handler.calculator = losCalc;
+        });
 
-      canvas.tokens.placeables.forEach(token => {
-        const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-        if ( !losCalc ) return;
-        losCalc.initializeViewpoints(config);
-      });
-    } else if ( key === TARGET.PERCENT ) {
-      // Update the threshold percentage for all tokens.
-      canvas.tokens.placeables.forEach(token => {
-        const losCalc = token.vision?.[MODULE_ID]?.losCalc;
-        if ( !losCalc ) return;
-        losCalc.threshold = value;
-      });
-    } else {
-      // Change to the calculator config.
-      const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
-      const currCalc = currentCalculator();
-      currCalc.config = config;
+        // Start up a new debug viewer.
+        if ( this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
+        break;
+      }
+      case VIEWER.POINTS: value = pointIndexForSet(value);
+      case VIEWER.INSET:
+      case TARGET.PERCENT: {
+        // Update the viewpoints for all tokens.
+        const config = { [configKeyForSetting[key]]: value };
+        canvas.tokens.placeables.forEach(token => {
+          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          if ( !handler ) return;
+          handler.losViewer.config = config;
+        });
+        break;
+      }
+
+      // Changes to the calculator config.
+      case TARGET.POINT_OPTIONS.POINTS: value = pointIndexForSet(value);
+      default: {
+        const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
+        const currCalc = currentCalculator();
+        currCalc.config = config;
+      }
     }
-
-    // Start up a new debug viewer.
-    if ( key === TARGET.ALGORITHM
-      && this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
   }
 }
 
@@ -558,14 +582,12 @@ const configKeyForSetting = {
   [SETTINGS.LOS.TARGET.PERCENT]: "threshold",
 
   // Viewpoints.
-  [SETTINGS.LOS.TARGET.ALGORITHM]: "viewpointClass",
-  [SETTINGS.LOS.VIEWER.NUM_POINTS]: "numViewpoints",
-  [SETTINGS.LOS.VIEWER.INSET]: "viewpointOffset",
+  [SETTINGS.LOS.VIEWER.POINTS]: "viewpointIndex",
+  [SETTINGS.LOS.VIEWER.INSET]: "viewpointInset",
 
   // Points viewpoints.
-  [SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS]: "pointAlgorithm",
+  [SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS]: "targetPointIndex",
   [SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET]: "targetInset",
-  [SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS3D]: "points3d",
 
   // Blocking
   [SETTINGS.LIVE_TOKENS_BLOCK]: "blocking.tokens.live",

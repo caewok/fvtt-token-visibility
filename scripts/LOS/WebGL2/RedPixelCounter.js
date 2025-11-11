@@ -8,6 +8,8 @@ import * as twgl from "./twgl-full.js";
 import { MODULE_ID } from "../../const.js";
 import { readPixelsAsync, getBufferSubDataAsync } from "./read_pixels_async.js";
 import { WebGL2 } from "./WebGL2.js";
+import { FastBitSet } from "../FastBitSet/FastBitSet.js";
+
 
 /**
  * Different approaches count the number of red pixels in the
@@ -445,6 +447,37 @@ export class RedPixelCounter {
     return this.#readSinglePixelAsync(this.pixelBuffers[type], this.gl.RG, this.gl.FLOAT);
   }
 
+  mapPixels() {
+    const pixels = this.pixelBuffers.readPixelsCount;
+    const nPixels = pixels.length;
+    const red = new FastBitSet();
+    const redBlocked = new FastBitSet();
+    const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
+    for ( let i = 0; i < nPixels; i += 4 ) {
+      const r = pixels[i];
+      // const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const hasR = r >> 7; // Threshold of 128 given Uint8Array.
+      const hasB = b >> 7;
+      const isBlocked = hasR * (hasB || pixels[i + 1] > terrainThreshold);
+      red.set(i, hasR);
+      redBlocked.set(i, isBlocked);
+    }
+    return { red, redBlocked };
+  }
+
+  mapRedPixels() {
+    const pixels = this.pixelBuffers.readPixelsCount
+    const nPixels = pixels.length;
+    const redBlocked = null;
+    const red = new FastBitSet();
+    for ( let i = 0; i < nPixels; i += 4 ) {
+      const r = pixels[i];
+      red.set(i, r >> 7); // Threshold of 128 given Uint8Array.
+    }
+    return { red, redBlocked };
+  }
+
   countPixels() {
     const pixels = this.pixelBuffers.readPixelsCount
     let red = 0;
@@ -533,6 +566,67 @@ export class RedPixelCounter {
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
     return redOnly ? this.countRedPixels() : this.countPixels();
   }
+
+  mapPixelsCount(tex, redOnly = false) {
+    const gl = this.gl;
+    if ( tex ) {
+      twgl.bindFramebufferInfo(gl, this.fbInfos.readPixelsCount);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    }
+    this.gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
+    return redOnly ? this.mapRedPixels() : this.mapPixels();
+  }
+
+  async mapPixelsCountAsync(tex, redOnly = false) {
+    const gl = this.gl;
+    if ( tex ) {
+      twgl.bindFramebufferInfo(gl, this.fbInfos.readPixelsCount);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    }
+    await readPixelsAsync (this.gl, 0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
+    return redOnly ? this.mapRedPixels() : this.mapPixels();
+  }
+
+  mapPixelsCount2(tex, redOnly = false) {
+    const gl = this.gl;
+    if ( tex ) {
+      twgl.bindFramebufferInfo(gl, this.fbInfos.readPixelsCount);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    }
+
+    // Read pixels into PBO
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
+    // gl.readBuffer(gl.COLOR_ATTACHMENT0);
+    gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+
+    // gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this.pixelBuffers.readPixelsCount);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    return redOnly ? this.mapRedPixels() : this.mapPixels();
+  }
+
+  async mapPixelsCount2Async(tex, redOnly = false) {
+    const gl = this.gl;
+    if ( tex ) {
+      twgl.bindFramebufferInfo(gl, this.fbInfos.readPixelsCount);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    }
+
+    // Read pixels into PBO
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
+    // gl.readBuffer(gl.COLOR_ATTACHMENT0);
+    gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+
+    // gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
+    await getBufferSubDataAsync(this.gl, gl.PIXEL_PACK_BUFFER, this.pbo, 0, this.pixelBuffers.readPixelsCount);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    return redOnly ? this.mapRedPixels() : this.mapPixels();
+  }
+
 
   loopCountTransform(tex) {
     const { gl, fbInfos, programInfos } = this;

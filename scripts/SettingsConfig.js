@@ -24,7 +24,7 @@ PATCHES.BASIC = {};
  */
 async function renderSettingsConfig(app, html, data) {
   if ( !game.user.isGM ) return;
-
+  /*
   const settings = html.find(`section[data-tab="${MODULE_ID}"]`);
   if ( !settings || !settings.length ) return;
 
@@ -34,6 +34,7 @@ async function renderSettingsConfig(app, html, data) {
   app.setPosition(app.position);
 
   activateListenersSettingsConfig(app, html);
+  */
 }
 
 /**

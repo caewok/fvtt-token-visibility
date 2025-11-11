@@ -6,21 +6,32 @@ Wall,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
-import { MODULE_ID, OTHER_MODULES } from "../const.js";
+// LOS folder
 import { Frustum } from "./Frustum.js";
-import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
 import {
   NULL_SET,
   tokensOverlap,
   getFlagFast } from "./util.js";
 
+// Base folder
+import { MODULE_ID, OTHER_MODULES } from "../const.js";
+import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
+
+// Geometry
+import { Point3d } from "../geometry/3d/Point3d.js";
+import { Draw } from "../geometry/Draw.js";
+
+
 export class ObstacleOcclusionTest {
-  target;
-
-  rayOrigin = new CONFIG.GeometryLib.threeD.Point3d();
-
-  obstacles = {};
+  obstacles = {
+    tiles: NULL_SET,
+    tokens: NULL_SET,
+    regions: NULL_SET,
+    walls: NULL_SET,
+    terrainWalls: NULL_SET,
+    proximateWalls: NULL_SET,
+    reverseProximateWalls: NULL_SET,
+  };
 
   _config = {
     senseType: "sight",
@@ -38,15 +49,27 @@ export class ObstacleOcclusionTest {
 
   get config() { return structuredClone(this._config); }
 
-  _initialize(rayOrigin, target) {
-    this.rayOrigin.copyFrom(rayOrigin);
-    this.target = target;
+  /** @type {Token} */
+  target;
+
+  /** @type {Token} */
+  viewer;
+
+  /** @type {Point3d} */
+  rayOrigin = new Point3d();
+
+  get viewpoint() { return this.rayOrigin; }
+
+  _initialize({ rayOrigin, viewer, target } = {}) {
+    if ( rayOrigin ) this.rayOrigin.copyFrom(rayOrigin);
+    if ( viewer ) this.viewer = viewer;
+    if ( target ) this.target = target;
     this.findObstacles();
     this.constructObstacleTester();
   }
 
-  rayIsOccluded(rayOrigin, rayDirection, target) {
-    this._initialize(rayOrigin, target)
+  rayIsOccluded(rayOrigin, rayDirection, { viewer, target } = {}) {
+    this._initialize({ rayOrigin, viewer, target })
     return this._rayIsOccluded(rayDirection);
   }
 
@@ -58,7 +81,7 @@ export class ObstacleOcclusionTest {
 
   findObstacles() {
     const senseType = this.config.senseType;
-    this.obstacles = this.constructor.findBlockingObjects(this.rayOrigin, this.target, this.config);
+    this.obstacles = this.constructor.findBlockingObjects(this.rayOrigin, { target: this.target, viewer: this.viewer, ...this.config });
     this.obstacles.terrainWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
     this.obstacles.proximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
     this.obstacles.reverseProximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
@@ -133,11 +156,10 @@ export class ObstacleOcclusionTest {
    *   - @property {Set<Token>} tokens
    *   - @property {Set<Region>} regions
    */
-  static findBlockingObjects(viewpoint, target, opts = {}) {
-    const frustum = this.frustum.rebuild({ viewpoint, target });
+  static findBlockingObjects(viewpoint, opts = {}) {
+    const frustum = this.frustum.rebuild({ viewpoint, target: opts.target });
     opts.blocking ??= {};
     opts.senseType ??= "sight";
-    opts.target ??= target;
     return {
       walls: this.findBlockingWalls(frustum, opts),
       tiles: this.findBlockingTiles(frustum, opts),
@@ -283,6 +305,54 @@ export class ObstacleOcclusionTest {
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
     const geometry = placeable[MODULE_ID][AbstractPlaceableTrackerID];
     return [...geometry.iterateFaces()].filter(poly => poly.isFacing(viewpoint));
+  }
+
+  /**
+   * For debugging.
+   * Draw the vision triangle between viewer point and target.
+   */
+  _drawFrustum(draw) {
+    const { viewpoint, target } = this;
+    const frustum = this.constructor.frustum.rebuild({ viewpoint, target });
+    frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
+  }
+
+  /**
+   * For debugging.
+   * Draw outlines for the various objects that can be detected on the canvas.
+   */
+  _drawDetectedObjects(draw) {
+    const colors = Draw.COLORS;
+    const OBSTACLE_COLORS = {
+      walls: colors.lightred,
+      terrainWalls: colors.lightgreen,
+      proximateWalls: colors.lightblue,
+      tiles: colors.yellow,
+      tokens: colors.orange,
+      regions: colors.red,
+    }
+    for ( const [key, obstacles] of Object.entries(this.obstacles) ) {
+      const color = OBSTACLE_COLORS[key];
+      switch ( key ) {
+        case "walls":
+        case "terrainWalls":
+        case "proximateWalls":
+          obstacles.forEach(wall => draw.segment(wall, { color }));
+          break;
+        case "tiles":
+          obstacles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color })));
+          break;
+        case "tokens":
+          obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
+          break;
+        case "regions":
+          obstacles.forEach(region => region.tokenvisibility.geometry.triangles.forEach(tri =>
+            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color})
+          ));
+          break;
+      }
+    }
   }
 
 }

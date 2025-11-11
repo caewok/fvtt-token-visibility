@@ -14,27 +14,13 @@ import * as twgl from "../WebGL2/twgl.js";
 import { MODULE_ID } from "../../const.js";
 
 // LOS folder
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "../WebGL2/WebGL2Viewpoint.js";
-import { PercentVisibleCalculatorAbstract }  from "../PercentVisibleCalculator.js";
+import { Viewpoint } from "../Viewpoint.js";
+import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "../WebGL2/WebGL2Calculator.js";
+import { PercentVisibleCalculatorAbstract }  from "../calculators/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
 
-/**
- * An eye belong to a specific viewer.
- * It defines a specific position, relative to the viewer, from which the viewpoint is used.
- * Draws lines from the viewpoint to points on the target token to determine LOS.
- */
-export class WebGPUViewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorWebGPU; }
-}
-
-export class WebGPUViewpointAsync extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorWebGPUAsync; }
-}
 
 export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebGL2 {
-
-  static viewpointClass = WebGPUViewpoint;
 
   /** @type {OffScreenCanvas} */
   static gpuCanvas;
@@ -175,8 +161,6 @@ export class PercentVisibleCalculatorWebGPU extends PercentVisibleCalculatorWebG
 }
 
 export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculatorAbstract {
-  static viewpointClass = WebGPUViewpointAsync;
-
   /** @type {number} */
   static WIDTH = 128;
 
@@ -288,8 +272,6 @@ export class PercentVisibleCalculatorWebGPUAsync extends PercentVisibleCalculato
 }
 
 export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopoutAbstract {
-  static viewpointClass = WebGPUViewpoint;
-
   static CONTEXT_TYPE = "webgpu";
 
   /** @type {RenderObstacles} */
@@ -341,8 +323,6 @@ export class DebugVisibilityViewerWebGPU extends DebugVisibilityViewerWithPopout
 }
 
 export class DebugVisibilityViewerWebGPUAsync extends DebugVisibilityViewerWithPopoutAbstract {
-  static viewpointClass = WebGPUViewpointAsync;
-
   static CONTEXT_TYPE = "webgpu";
 
   /** @type {RenderObstacles} */

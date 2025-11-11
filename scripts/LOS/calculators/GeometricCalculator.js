@@ -6,20 +6,18 @@ CONFIG,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../const.js";
-import { Settings } from "../settings.js";
+import { MODULE_ID } from "../../const.js";
+import { Settings } from "../../settings.js";
 
 // LOS folder
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
-import { Camera } from "./Camera.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
-import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "./placeable_tracking/TokenGeometryTracker.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
+import { Camera } from "../Camera.js";
+import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
+import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "../placeable_tracking/TokenGeometryTracker.js";
 
 // Debug
-import { Draw } from "../geometry/Draw.js";
-
+import { Draw } from "../../geometry/Draw.js";
 
 export class PercentVisibleGeometricResult extends PercentVisibleResult {
 
@@ -29,13 +27,16 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     visibleTargetPaths: null,
   };
 
-  get totalTargetArea() { return Math.abs(this.data.targetPaths?.area || 0); }
+  get totalTargetArea() {
+    if ( !~this.type ) return 1; // Not custom, so default to target area of 1.
+    return Math.abs(this.data.targetPaths?.area || 1);
+  }
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
   get visibleArea() {
-    if ( !this.totalTargetArea ) return 0;
+    if ( !~this.type ) return this.type; // Not custom; either empty (0) or full (1).
     return Math.abs(this.data.visibleTargetPaths.area || 0);
   }
 
@@ -46,42 +47,22 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMaximize(other) {
+    let out = super.blendMaximize(other);
+    if ( out ) return out;
+
+    // Both types are custom.
     // The target area could change, given the different views.
     // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
-    const out = new this.constructor(this.target, this.config);
-    out.targetPaths = ClipperPaths.combine([this.data.targetPaths, other.data.targetPaths]);
-    out.visibleTargetPaths = ClipperPaths.combine([this.data.visibleTargetPaths, other.data.visibleTargetPaths]);
+    out = this.clone();
+    out.data.targetPaths = ClipperPaths.combine([this.data.targetPaths, other.data.targetPaths]);
+    out.data.visibleTargetPaths = ClipperPaths.combine([this.data.visibleTargetPaths, other.data.visibleTargetPaths]);
     return out;
-  }
-}
-
-/**
- * An eye belong to a specific viewer.
- * It defines a specific position, relative to the viewer, from which the viewpoint is used.
- * Draws lines from the viewpoint to points on the target token to determine LOS.
- */
-export class GeometricViewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorGeometric; }
-
-  /* ----- NOTE: Debugging methods ----- */
-  /**
-   * For debugging.
-   * Draw the 3d objects in the popout.
-   */
-  _draw3dDebug(draw, _renderer, _container, { width = 100, height = 100 } = {}) {
-    this.calculator._draw3dDebug(this.viewer, this.target, this.viewpoint, this.targetLocation, { draw, width, height });
   }
 }
 
 export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleGeometricResult;
-
-  static viewpointClass = GeometricViewpoint;
-
-  // static get viewpointClass() { return GeometricViewpoint; }
-
-  static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
 
   /** @type {Camera} */
   camera = new Camera({
@@ -142,7 +123,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
       else this.lastResult.data.blockingPaths = this.lastResult.data.blockingPaths.add(this.blockingTerrainPaths).union();
     }
   }
-
 
   /**
    * Each blocking polygon is either a Polygon3d or a Polygons3d.
@@ -395,8 +375,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 }
 
 export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
-  static viewpointClass = GeometricViewpoint;
-
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.GEOMETRIC;
 }
 
@@ -408,7 +386,6 @@ Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("tokenvisibility").api
 Plane = CONFIG.GeometryLib.threeD.Plane
-AbstractViewpoint = api.AbstractViewpoint
 ClipperPaths = CONFIG.GeometryLib.ClipperPaths
 Clipper2Paths = CONFIG.GeometryLib.Clipper2Paths
 
@@ -430,7 +407,6 @@ buildDebugViewer = api.buildDebugViewer
 
 calc = new api.calcs.geometric();
 
-await calc.initialize()
 calc.initializeView({ viewer: randal, target: zanna, viewpoint: Point3d.fromTokenCenter(randal), targetLocation: Point3d.fromTokenCenter(zanna) })
 calc.calculate()
 calc.percentVisible

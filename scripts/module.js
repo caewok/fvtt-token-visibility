@@ -27,13 +27,13 @@ import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTr
 // For API
 import * as bench from "./benchmark.js";
 
-import { AbstractViewpoint } from "./LOS/AbstractViewpoint.js";
+import { Viewpoint } from "./LOS/Viewpoint.js";
 import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
 import { Frustum } from "./LOS/Frustum.js";
 
 import {
   buildLOSCalculator,
-  buildCustomLOSCalculator,
+  // buildCustomLOSCalculator,
   buildLOSViewer,
   buildCustomLOSViewer,
   buildDebugViewer,
@@ -79,13 +79,13 @@ import { DrawableTokenWebGL2 } from "./LOS/WebGL2/DrawableToken.js";
 
 import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstacles.js";
 
-import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/PointsViewpoint.js";
-import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/GeometricViewpoint.js";
-import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/PerPixelViewpoint.js";
-import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Viewpoint.js";
-import { PercentVisibleCalculatorHybrid, DebugVisibilityViewerHybrid } from "./LOS/Hybrid3dViewpoint.js"
-import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/SamplePixelViewpoint.js"
-import { GeometricFaceCalculator } from "./LOS/GeometricFaceCalculator.js";
+import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/calculators/PointsCalculator.js";
+import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/calculators/GeometricCalculator.js";
+import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
+import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Calculator.js";
+import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/calculators/SamplePixelCalculator.js"
+import { GeometricFaceCalculator } from "./LOS/calculators/GeometricFaceCalculator.js";
+import { TokenLightMeter } from "./TokenLightMeter.js";
 
 
 // import {
@@ -118,13 +118,17 @@ import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
-import { BitSet } from "./LOS/BitSet/bitset.mjs";
+import { SmallBitSet } from "./LOS/SmallBitSet.js";
+import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
+
 
 // Other self-executing hooks
 import "./changelog.js";
 import "./geometry/tests/AABB.test.js";
 
 // import "./LOS/WebGPU/webgpu-map-sync.js";
+
+
 
 Hooks.once("init", function() {
   // Load bitmap font
@@ -239,7 +243,18 @@ Hooks.once("init", function() {
      */
     renderTextureSize: 128,
 
+    /**
+     * Number of points to measure in one dimension for light type calculation.
+     * Will be used for all 3 dimensions. E.g., 3 --> 3x3x3 in a cube, or 18 points total.
+     * @type {number}
+     */
+    lightMeasurementNumPoints: 5,
 
+    /**
+     * When enabled, will treat circular token shapes as spheres. Otherwise, uses a cylinder.
+     * @type {boolean}
+     */
+    useTokenSphere: false,
 
     useCaching: false,
 
@@ -268,7 +283,6 @@ Hooks.once("init", function() {
       webgl2: PercentVisibleCalculatorWebGL2,
       // webgpu: PercentVisibleCalculatorWebGPU,
       // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
-      // hybrid: PercentVisibleCalculatorHybrid,
       "per-pixel": PercentVisibleCalculatorPerPixel,
       "sample-pixel": PercentVisibleCalculatorSamplePixel,
     },
@@ -293,7 +307,6 @@ Hooks.once("init", function() {
       webgl2: DebugVisibilityViewerWebGL2,
       // webgpu: DebugVisibilityViewerWebGPU,
       // "webgpu-async": DebugVisibilityViewerWebGPUAsync,
-      hybrid: DebugVisibilityViewerHybrid,
       "per-pixel": DebugVisibilityViewerPerPixel,
     },
 
@@ -322,6 +335,27 @@ Hooks.once("init", function() {
      * @type {boolean}
      */
     regionsBlock: true,
+
+    /**
+     * What percentage of bright points on a token sphere are required to be considered in bright light?
+     * @type {number}  Between 0 and 1
+     */
+    brightCutoff: 0.25,
+
+    /**
+     * What percentage of dim points on a token sphere are required to be considered in dim light?
+     * @type {number}  Between 0 and 1
+     */
+    dimCutoff: 0.25,
+
+    /**
+     * For points on the other side of the token from the light, how should they be lit assuming
+     * no other obstruction than the target token?
+     * For example, DIM would mean that points on the dark side of the token would have maximum
+     * dim light even if the token was within the radius of a bright light.
+     * @type {CONST.LIGHTING_LEVELS}
+     */
+    lightMeterObscureType: CONST.LIGHTING_LEVELS.DIM,
 
     debug: true,
   };
@@ -375,15 +409,16 @@ Hooks.once("init", function() {
       webGL2: PercentVisibleCalculatorWebGL2,
       // webGPU: PercentVisibleCalculatorWebGPU,
       // webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
-      hybrid: PercentVisibleCalculatorHybrid,
       perPixel: PercentVisibleCalculatorPerPixel,
     },
 
     buildLOSCalculator,
-    buildCustomLOSCalculator,
+    // buildCustomLOSCalculator,
     buildLOSViewer,
     buildCustomLOSViewer,
     buildDebugViewer,
+
+    TokenLightMeter,
 
     debugViewers: {
       points: DebugVisibilityViewerPoints,
@@ -391,7 +426,6 @@ Hooks.once("init", function() {
       webGL2: DebugVisibilityViewerWebGL2,
       // webGPU: DebugVisibilityViewerWebGPU,
       // webGPUAsync: DebugVisibilityViewerWebGPUAsync,
-      hybrid: DebugVisibilityViewerHybrid,
       perPixel: DebugVisibilityViewerPerPixel,
     },
 
@@ -432,7 +466,7 @@ Hooks.once("init", function() {
 //     },
 
 
-    AbstractViewpoint,
+    Viewpoint,
     ObstacleOcclusionTest,
     GeometricFaceCalculator,
 
@@ -445,7 +479,8 @@ Hooks.once("init", function() {
     },
 
     MarchingSquares,
-    BitSet,
+    SmallBitSet,
+    FastBitSet,
 
     PATCHER,
     Patcher, HookPatch, MethodPatch, LibWrapperPatch

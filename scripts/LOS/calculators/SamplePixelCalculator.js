@@ -5,15 +5,14 @@ CONFIG,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../const.js";
-import { Settings } from "../settings.js";
+import { MODULE_ID } from "../../const.js";
+import { Settings } from "../../settings.js";
 
 // LOS folder
-import { AbstractViewpoint } from "./AbstractViewpoint.js";
-import { AbstractPolygonTrianglesID } from "./PlaceableTriangles.js";
-import { PercentVisibleCalculatorAbstract } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerArea3dPIXI } from "./DebugVisibilityViewer.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
+import { AbstractPolygonTrianglesID } from "../PlaceableTriangles.js";
+import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 
 
 /* Sample pixel viewpoint
@@ -23,7 +22,44 @@ they would with perspective view, but hopefully much faster.
 */
 
 
+export class PercentVisibleSamplePixelResult extends PercentVisibleResult {
 
+  data = new Map();
+
+  get totalTargetArea() { return this._config.numPoints;
+    // TODO: Need to be able to get the length of a BitSet.
+    let area = 0;
+    for ( const bs of this.data.values() ) area += bs.length;
+  }
+
+  // Handled by the calculator, which combines multiple results.
+  get largeTargetArea() { return this.totalTargetArea; }
+
+  get visibleArea() {
+    let area = 0;
+    for ( const bs of this.data.values() ) area += bs.cardinality;
+  }
+
+  /**
+   * Blend this result with another result, taking the maximum values at each test location.
+   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMaximize(other) {
+    const out = new this.constructor(this.target, this.config);
+    out.data.clear();
+    for ( const [face, bs] of this.data.entries() ) {
+      if ( other.data.has(face) ) {
+        out.data.set(face, bs.or(other.data.get(face)));
+      } else out.data.set(face, bs);
+    }
+    for ( const face of other.data.keys() ) {
+      if ( !out.data.has(face) ) out.data.set(face, other.data.get(face));
+    }
+    return out;
+  }
+}
 
 
 /**
@@ -31,30 +67,16 @@ they would with perspective view, but hopefully much faster.
  * It defines a specific position, relative to the viewer, from which the viewpoint is used.
  * Draws lines from the viewpoint to points on the target token to determine LOS.
  */
-export class SamplePixelViewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorSamplePixel; }
-
-  /* ----- NOTE: Debugging methods ----- */
-  /**
-   * For debugging.
-   * Draw the 3d objects in the popout.
-   */
-  _draw3dDebug(draw, renderer, container, { width = 100, height = 100 } = {}) {
-    this.calculator._draw3dDebug(this.viewer, this.target, this.viewpoint, this.targetLocation, { draw, renderer, container, width, height });
-  }
-}
 
 export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculatorAbstract {
-  static get viewpointClass() { return SamplePixelViewpoint; }
-
-  static get POINT_ALGORITHMS() { return Settings.KEYS.LOS.TARGET.POINT_OPTIONS; }
-
+  static resultClass = PercentVisibleSamplePixelResult;
 
   occlusionTester = new ObstacleOcclusionTest();
 
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
   _calculate() {
+    this.lastResult.data.clear();
     const faces = this._generateTargetFaces(); // Not in initialization b/c may vary depending on _tokenShapeType
     for ( const face of faces ) {
       if ( !face.isFacing(this.viewpoint) ) continue;
@@ -78,20 +100,26 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
     // To sample evenly across different faces:
     // Project grid of points from a rectangular plane onto the face.
     // Use the token 3d border as the edges of the grid.
-    // Drop points that are not within the face.
+
     const { axisNormal, pts } = this._generatePointsForFace(face);
 
-    for ( const pt of pts ) {
-      const ix = face.intersection(pt, axisNormal, Number.NEGATIVE_INFINITY); // Set t to -∞ so it intersects either direction.
-      if ( ix === null ) continue;
-      // this.counts[TOTAL] += 1;
+    // Drop points that are not within the face.
+    const trimmedPts = pts.filter(pt => face.intersection(pt, axisNormal, Number.NEGATIVE_INFINITY))
+    const bs = new FastBitSet();
+    this.lastResult.data.set(face, bs);
+
+    let i = 0;
+    for ( const pt of trimmedPts ) {
       pt.subtract(this.viewpoint, this.#rayDirection);
       const isOccluded = this.occlusionTester._rayIsOccluded(this.#rayDirection);
       // this.counts[OBSCURED] += isOccluded
+      bs.set(i++, !isOccluded);
 
       const debugObject = { A: this.viewpoint, B: pt, isOccluded, isDim: null, isBright: null };
       this.debugPoints.push(debugObject);
-      if ( !isOccluded ) this._testLightingForPoint(pt, debugObject);
+
+
+      // if ( !isOccluded ) this._testLightingForPoint(pt, debugObject);
     }
   }
 
@@ -171,8 +199,6 @@ export class PercentVisibleCalculatorSamplePixel extends PercentVisibleCalculato
 }
 
 export class DebugVisibilityViewerSamplePixel extends DebugVisibilityViewerArea3dPIXI {
-  static viewpointClass = SamplePixelViewpoint;
-
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.PER_PIXEL;
 
   updatePopoutFooter(percentVisible) {

@@ -1,11 +1,11 @@
 {
     "tokenvisibility.name": "Alt. Token Visibility",
     "tokenvisibility.nameAbbr": "ATV",
-    "tokenvisibility.settings.points-center": "Token center only (1 point)",
+    "tokenvisibility.settings.points-center": "Token center only (1 point) ⚀",
     "tokenvisibility.settings.points-two": "Token front-facing corners (2 points)",
     "tokenvisibility.settings.points-three": "Token front-facing and center (3 points)",
-    "tokenvisibility.settings.points-four": "Token corners (4 points)",
-    "tokenvisibility.settings.points-five": "Token corners and center (5 points)",
+    "tokenvisibility.settings.points-four": "Token corners (4 points) ⚃",
+    "tokenvisibility.settings.points-five": "Token corners and center (5 points) &#9860 ⚄",
     "tokenvisibility.settings.points-eight": "Token midpoints and corners (8 points)",
     "tokenvisibility.settings.points-nine": "Token midpoints, corners, center (9 points)",
 
@@ -27,20 +27,22 @@
     "tokenvisibility.settings.los-large-target.Name": "Large Token Subtargeting",
     "tokenvisibility.settings.los-large-target.Hint": "If the target token is larger than the grid square, consider the token visible if at least one grid square worth of token is visible.",
 
-    "tokenvisibility.settings.los-points": "Points",
-    "tokenvisibility.settings.los-area-3d": "3d",
-    "tokenvisibility.settings.los-area-3d-geometric": "Geometric (3d)",
-    "tokenvisibility.settings.los-area-3d-webgl2": "PIXI (3d)",
-    "tokenvisibility.settings.los-area-3d-hybrid": "Hybrid (3d)",
-    "tokenvisibility.settings.los-webgl2": "WebGL2 (3d)",
-    "tokenvisibility.settings.los-webgpu": "WebGPU (3d)",
-    "tokenvisibility.settings.los-webgpu-async": "WebGPU Async (3d)",
+    "tokenvisibility.settings.los-algorithm-points": "Points",
+    "tokenvisibility.settings.los-algorithm-geometric": "Geometric",
+    "tokenvisibility.settings.los-algorithm-webgl2": "WebGL2",
+    "tokenvisibility.settings.los-algorithm-webgpu": "WebGPU",
 
     "tokenvisibility.settings.los-points-viewer.Name": "Points",
     "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Beware that this can dramatically increase the number of tests needed to determine visibility. Foundry default is 'Center' (one point)",
 
     "tokenvisibility.settings.los-inset-viewer.Name": "Inset",
     "tokenvisibility.settings.los-inset-viewer.Hint": "For viewer points other than the center, what percentage to inset the point from the token border towards the token center.",
+
+    "tokenvisibility.settings.los-points-options-viewer.Name": "Point Options",
+    "tokenvisibility.settings.los-points-options-viewer.Hint": "Points on the viewer to test for the viewer's line-of-sight. Each represents an 'eye' of the viewer.",
+
+    "tokenvisibility.settings.los-points-options-target.Name": "Point Options",
+    "tokenvisibility.settings.los-points-options-target.Hint": "Points on the target to test for the viewer's line-of-sight.",
 
     "tokenvisibility.settings.los-points-target.Name": "Points",
     "tokenvisibility.settings.los-points-target.Hint": "How many points on the target to test for the viewer's line-of-sight.",
@@ -105,6 +107,11 @@
     "tokenvisibility.template.settings-config.tabs.other": "Other",
     "tokenvisibility.template.settings-config.other": "Other Vision Settings",
     "tokenvisibility.template.settings-config.otherDescription": "Miscellaneous settings that affect how token line-of-sight is calculated.",
+
+    "tokenvisibility.settings-submenu.tabs.range": "Range",
+    "tokenvisibility.settings-submenu.tabs.losViewer": "Viewer LOS",
+    "tokenvisibility.settings-submenu.tabs.losTarget": "Target LOS",
+    "tokenvisibility.settings-submenu.tabs.other": "Other",
 
     "tokenvisibility.settings.submenu.title": "Alternative Token Visibility Settings",
     "tokenvisibility.settings.submenu.Name": "ATV Settings",

@@ -14,25 +14,68 @@ import * as twgl from "./twgl.js";
 import { MODULE_ID } from "../../const.js";
 
 // LOS folder
-import { AbstractViewpoint } from "../AbstractViewpoint.js";
-import { PercentVisibleCalculatorAbstract } from "../PercentVisibleCalculator.js";
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "../calculators/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
 import { checkFramebufferStatus } from "../util.js";
 
+import { almostBetween } from "../../geometry/util.js";
+
 /**
- * An eye belong to a specific viewer.
- * It defines a specific position, relative to the viewer, from which the viewpoint is used.
- * Draws lines from the viewpoint to points on the target token to determine LOS.
+ * @typedef {object} WebGL2CalculatorConfig
+ * ...{CalculatorConfig}
+ * @property {number} alphaThreshold                    Threshold value for testing alpha of tiles
+ * @property {boolean} useInstancing                    Use instancing with webGL2
  */
-export class WebGL2Viewpoint extends AbstractViewpoint {
-  static get calcClass() { return PercentVisibleCalculatorWebGL2; }
+
+
+export class PercentVisibleWebGL2Result extends PercentVisibleResult {
+
+  data = {
+    blocked: null,
+    target: null,
+    blockedCount: null,
+    targetCount: null,
+  };
+
+  get totalTargetArea() {
+    return this.data.targetCount || this.data.target.cardinality || 0;
+  }
+
+  get blockedArea() {
+    return this.data.blockedCount ?? (this.data.blocked.cardinality || 0);
+  }
+
+  // Handled by the calculator, which combines multiple results.
+  get largeTargetArea() { return this.totalTargetArea; }
+
+  get visibleArea() {
+    const targetArea = this.targetArea;
+    if ( !targetArea ) return 0;
+    return almostBetween(targetArea - this.blockedArea, 0, 1);
+  }
+
+  /**
+   * Blend this result with another result, taking the maximum values at each test location.
+   * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMaximize(other) {
+    // The target area could change, given the different views.
+    // Combine the visible target paths.
+    const out = new this.constructor(this.target, this.config);
+    out.data.target = this.data.target.or(other.data.target);
+    out.data.blocked = this.data.target.and(other.data.target);
+    return out;
+  }
 }
 
+
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
-  static get viewpointClass() { return WebGL2Viewpoint; }
+  static resultClass = PercentVisibleWebGL2Result;
 
   static defaultConfiguration = {
-    ...PercentVisibleCalculatorAbstract.defaultConfiguration,
+    ...super.defaultConfiguration,
     alphaThreshold: 0.75,
   };
 
@@ -163,8 +206,14 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
       this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false });
       res = this.redPixelCounter[type]();
     }
-    // this.counts[TOTAL] = res.red;
-    // this.counts[OBSCURED] = res.redBlocked;
+
+    if ( pixelCounterType.startsWith("map") ) {
+      this.lastResult.data.blocked = res.redBlocked;
+      this.lastResult.data.target = res.red;
+    } else {
+      this.lastResult.data.blockedCount = res.redBlocked;
+      this.lastResult.data.targetCount = res.red
+    }
   }
 
 //   async _calculate() {
@@ -200,51 +249,45 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
    * Called after _calculatePercentVisible.
    * @returns {number}
    */
-  _constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
-    const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
-    const gl = this.gl;
-    let res;
-    const redOnly = true;
-    if ( useRenderTexture ) {
-      const { fbInfo, frame } = this;
-      twgl.bindFramebufferInfo(gl, fbInfo);
-      this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, frame });
-      res = this.redPixelCounter[pixelCounterType](this.renderTexture, redOnly);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    } else {
-      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.renderObstacles.renderTarget(viewpoint, target, { targetLocation });
-      res = this.redPixelCounter[type](undefined, redOnly);
-    }
-    return res.red;
-  }
+//   _constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
+//     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
+//     const gl = this.gl;
+//     let res;
+//     const redOnly = true;
+//     if ( useRenderTexture ) {
+//       const { fbInfo, frame } = this;
+//       twgl.bindFramebufferInfo(gl, fbInfo);
+//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, frame });
+//       res = this.redPixelCounter[pixelCounterType](this.renderTexture, redOnly);
+//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//     } else {
+//       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
+//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation });
+//       res = this.redPixelCounter[type](undefined, redOnly);
+//     }
+//     return res.red;
+//   }
 
-  async constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
-    const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
-    const gl = this.gl;
-    let res;
-    const redOnly = true;
-    if ( useRenderTexture ) {
-      const { fbInfo, frame } = this;
-      twgl.bindFramebufferInfo(gl, fbInfo);
-      this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, frame });
-      res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture, redOnly);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    } else {
-      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.renderObstacles.renderTarget(viewpoint, target, { targetLocation });
-      res = await this.redPixelCounter[`${type}Async`](undefined, redOnly);
-    }
-    return res.red;
-  }
-
-  _viewableTargetArea(_viewer, _target, _viewpoint, _targetLocation) {
-    return this._redPixels - this._redBlockedPixels;
-  }
-
-  _totalTargetArea(_viewer, _target, _viewpoint, _targetLocation) { return this._redPixels; }
+//   async constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
+//     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
+//     const gl = this.gl;
+//     let res;
+//     const redOnly = true;
+//     if ( useRenderTexture ) {
+//       const { fbInfo, frame } = this;
+//       twgl.bindFramebufferInfo(gl, fbInfo);
+//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, frame });
+//       res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture, redOnly);
+//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//     } else {
+//       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
+//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation });
+//       res = await this.redPixelCounter[`${type}Async`](undefined, redOnly);
+//     }
+//     return res.red;
+//   }
 
   destroy() {
     super.destroy();
@@ -253,8 +296,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 }
 
 export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {
-  static viewpointClass = WebGL2Viewpoint;
-
   static CONTEXT_TYPE = "webgl2";
 
   /** @type {boolean} */

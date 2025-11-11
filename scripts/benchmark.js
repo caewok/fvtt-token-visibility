@@ -13,6 +13,7 @@ import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
 import { buildCustomLOSViewer } from "./LOSCalculator.js";
 import { registerArea3d } from "./patching.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
 /* Use
 api = game.modules.get("tokenvisibility").api
@@ -56,9 +57,11 @@ function getTokens() {
 function summarizeTokenVisibility(viewers, targets) {
   const calcs = Object.values(Settings.KEYS.LOS.TARGET.TYPES);
   const summary = {};
+  const opts = { calcName: null };
   for ( const calcType of calcs ) {
     for ( const viewer of viewers ) {
-      const losCalc = buildCustomLOSViewer(viewer, { viewpointClass: calcType });
+      opts.calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[calc];
+      const losCalc = buildCustomLOSViewer(viewer, opts);
       for ( const target of targets ) {
         if ( viewer === target ) continue;
         const label = `${viewer.name} --> ${target.name}`;
@@ -277,10 +280,14 @@ async function revertLOSSettings() {
 async function runLOSTest(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
   nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
-
-  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, { viewpointClass: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
+  const calcOpts = {
+    calcName: ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm],
+    largeTarget: large, 
+    pointAlgorithm: nPoints,
+  };
+  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, calcOpts));
   const promises = [];
-  calcs.forEach(calc => promises.push(calc.initialize()));
+  calcs.forEach(calc => promises.push(calc?.initialize()));
   await Promise.allSettled(promises);
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);
   if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
@@ -315,10 +322,14 @@ async function benchLOSAsync(calcs, targets) {
 async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
   nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
-
-  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, { viewpointClass: algorithm, largeTarget: large, pointAlgorithm: nPoints }));
+  const calcOpts = {
+    calcName: ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm],
+    largeTarget: large, 
+    pointAlgorithm: nPoints,
+  };
+  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, calcOpts));
   const promises = [];
-  calcs.forEach(calc => promises.push(calc.initialize()));
+  calcs.forEach(calc => promises.push(calc?.initialize()));
   await Promise.allSettled(promises);
 
   let label = (`LOS: ${algorithm}, largeToken: ${large}`);
