@@ -227,44 +227,19 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   // ----- NOTE: Debug ----- //
 
-  /** @type {PIXI.Graphics} */
-  #debugGraphics;
-
-  get debugGraphics() {
-    if ( !this.#debugGraphics || this.#debugGraphics.destroyed ) this.#debugGraphics = new PIXI.Graphics();
-    return this.#debugGraphics;
-  }
-
-  /** @type {Draw} */
-  #debugDraw;
-
-  get debugDraw() {
-    const Draw = CONFIG.GeometryLib.Draw;
-    if ( !this.#debugDraw
-      || !this.#debugGraphics
-      || this.#debugGraphics.destroyed ) this.#debugDraw = new Draw(this.debugGraphics);
-    return this.#debugDraw || (this.#debugDraw = new Draw(this.debugGraphics));
-  }
-
   _drawCanvasDebug(debugDraw) {
     super._drawCanvasDebug(debugDraw);
     this._drawDebugPoints(debugDraw);
   }
 
-  _drawDebugPoints(draw) {
+  _drawDebugPoints(debugDraw) {
     const colors = CONFIG.GeometryLib.Draw.COLORS;
     // const width = this.percentVisible > this.viewerLOS.threshold ? 2 : 1;
     for ( const debugPoint of this.debugPoints ) {
       const color = debugPoint.isOccluded ? colors.red : colors.green;
       const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
-      draw.segment(debugPoint, { alpha, color });
+      debugDraw.segment(debugPoint, { alpha, color });
     }
-  }
-
-  destroy() {
-    if ( this.#debugGraphics && !this.#debugGraphics.destroyed ) this.#debugGraphics.destroy();
-    this.#debugGraphics = undefined;
-    super.destroy();
   }
 
 }

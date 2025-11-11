@@ -32,7 +32,6 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
  * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
  * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
  * @property {boolean} testLighting            Should the illuminated target shape be used?
- * @property {boolean} debug                              Trigger debug drawings and logging
  */
 
 
@@ -195,7 +194,6 @@ export class PercentVisibleCalculatorAbstract {
     },
     tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
     senseType: "sight",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
-    debug: false,
     largeTarget: false,
   };
 
@@ -349,7 +347,6 @@ export class PercentVisibleCalculatorAbstract {
       },
       radius: Number.POSITIVE_INFINITY,
       senseType: "light",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
-      debug: false,
       largeTarget: false,
     }
     this.setLightingTest(this.constructor.LIGHTING_TEST_TYPES.NONE);

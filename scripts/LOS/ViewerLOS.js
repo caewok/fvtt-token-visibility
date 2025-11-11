@@ -13,6 +13,7 @@ Token,
 
 import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { Draw } from "../geometry/Draw.js";
 
 // LOS folder
 import { tokensOverlap, insetPoints } from "./util.js";
@@ -128,11 +129,6 @@ export class ViewerLOS {
 
   set threshold(value) { this.#config.threshold = value; }
 
-  get debug() { return this.calculator.config.debug; }
-
-  set debug(debug) { this.calculator.config = { debug }; }
-
-
   // ----- NOTE: Caching ----- //
 
   /** @type {boolean} */
@@ -185,7 +181,12 @@ export class ViewerLOS {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
     });
+
+    // Destroy existing viewpoints
+    this._clearCanvasDebug();
     this.viewpoints.length = pts.length;
+
+    // Build new viewpoints.
     pts.forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
     return true;
   }
@@ -486,10 +487,16 @@ export class ViewerLOS {
   }
 
 
+
+
+  /* ----- NOTE: Debug ----- */
+
   /**
    * Destroy any PIXI objects and remove hooks upon destroying.
    */
   destroy() {
+    this._clearCanvasDebug();
+    this._destroyDebugGraphics();
     this.#target = undefined;
     this.#viewer = undefined;
     this.viewpoints.length = 0;
@@ -497,90 +504,115 @@ export class ViewerLOS {
     // DO NOT destroy calculator, as that depends on whether the calculator was a one-off.
   }
 
-  /* ----- NOTE: Debug ----- */
+  /*
+  When viewpoints are destroyed, their graphics are removed and destroyed.
+  When drawing debug, the graphics are set up as needed.
+  */
 
   /**
-   * Container to hold all canvas graphics.
+   * Container to hold all canvas and viewpoint graphics.
+   * @type {PIXI.Container}
    */
   #canvasDebugContainer;
 
   get canvasDebugContainer() {
-    if ( !this.#canvasDebugContainer || this.#canvasDebugContainer.destroyed ) this._initializeCanvasDebugGraphics();
+    if ( !this.#debugGraphicsReady ) this._initializeDebugGraphics();
     return this.#canvasDebugContainer;
   }
 
   /**
-   * Container to hold all viewpoint canvas graphics. Children indexed to match vp indexes.
+   * Graphics container to display canvas graphics.
+   * @type {PIXI.Graphics}
    */
-  #viewpointDebugContainer;
+  #canvasDebugGraphics;
 
-  _destroyCanvasDebugGraphics() {
-    const c = this.#canvasDebugContainer;
-    if ( c && !c.destroyed ) c.destroy({ children: true });
-    this.#canvasDebugContainer = undefined;
-  }
+  /**
+   * Graphics to hold all viewpoint canvas graphics.
+   * @type {PIXI.Container}
+   */
+  #viewpointDebugGraphics;
 
-  _destroyViewpointDebugGraphics() {
-    const c = this.#viewpointDebugContainer;
-    if ( this.#canvasDebugContainer ) this.#canvasDebugContainer.removeChild(c);
-    if ( c && !c.destroyed ) c.destroy({ children: true });
-    this.#viewpointDebugContainer = undefined;
+  /**
+   * Draw class for drawing canvas graphics.
+   * @type {Draw}
+   */
+  #debugCanvasDraw;
+
+  /**
+   * Draw class for drawing viewpoint graphics.
+   * @type {Draw}
+   */
+  #debugViewpointDraw;
+
+  #debugGraphicsReady = false;
+
+  _initializeDebugGraphics() {
+    if ( this.#debugGraphicsReady ) return;
+    this._initializeCanvasDebugGraphics();
+    this._initializeViewpointDebugGraphics();
+    this.#debugGraphicsReady = true;
   }
 
   _initializeCanvasDebugGraphics() {
-    this._destroyCanvasDebugGraphics();
-    this.#canvasDebugContainer = new PIXI.Container();
-    this.#canvasDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
-    this.#canvasDebugContainer.addChild(new PIXI.Graphics());
+    if ( !this.#canvasDebugContainer ) {
+      this.#canvasDebugContainer = new PIXI.Container();
+      this.#canvasDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
+    }
+    if ( !this.#canvasDebugGraphics ) {
+      this.#canvasDebugGraphics = new PIXI.Graphics();
+      this.#canvasDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
+      this.#canvasDebugContainer.addChild(this.#canvasDebugGraphics)
+    }
+    this.#debugCanvasDraw = new Draw(this.#canvasDebugGraphics);
   }
 
   _initializeViewpointDebugGraphics() {
-    this._destroyViewpointDebugGraphics();
-    this.#viewpointDebugContainer = new PIXI.Container();
-    this.#viewpointDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
-    this.canvasDebugContainer.addChild(this.#viewpointDebugContainer);
-    const Draw = CONFIG.GeometryLib.Draw;
-    this.viewpoints.forEach(vp => {
-      const g = new PIXI.Graphics();
-      g.eventMode = "passive"; // Allow targeting, selection to pass through.
-      this.#viewpointDebugContainer.addChild(g);
-      this._debugViewpointDraw.set(vp, new Draw(g));
-    });
+    if ( !this.#viewpointDebugGraphics ) {
+      this.#viewpointDebugGraphics = new PIXI.Graphics();
+      this.#viewpointDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
+      this.canvasDebugContainer.addChild(this.#viewpointDebugGraphics);
+    }
+    this.#debugViewpointDraw = new Draw(this.#viewpointDebugGraphics);
   }
 
-  #debugCanvasDraw;
-
-  get debugCanvasDraw() {
-    const Draw = CONFIG.GeometryLib.Draw;
-    if ( this.#debugCanvasDraw && !this.#debugCanvasDraw.g.destroyed ) return this.#debugCanvasDraw;
-    this.#debugCanvasDraw = new Draw(this.canvasDebugContainer.children[0]);
-    return this.#debugCanvasDraw;
+  _clearCanvasDebug() {
+    if ( this.#debugCanvasDraw ) this.#debugCanvasDraw.clearDrawings();
+    if ( this.#debugViewpointDraw ) this.#debugViewpointDraw.clearDrawings();
   }
 
-  _debugViewpointDraw = new WeakMap();
-
-  debugDrawForViewpoint(vp) {
-    if ( !this._debugViewpointDraw.has(vp) ) this._initializeViewpointDebugGraphics();
-    return this._debugViewpointDraw.get(vp);
+  _destroyDebugGraphics() {
+    this.#destroyCanvasDebugGraphics();
+    this.#destroyViewpointDebugGraphics();
   }
 
+  #destroyCanvasDebugGraphics() {
+    if ( this.#canvasDebugContainer && !this.#canvasDebugContainer.destroyed ) this.#canvasDebugContainer.destroy({ children: false });
+    if ( this.#canvasDebugGraphics && !this.#canvasDebugGraphics.destroyed ) this.#canvasDebugGraphics.destroy({ children: true });
+    this.#canvasDebugContainer = undefined;
+    this.#canvasDebugGraphics = undefined;
+    this.#debugCanvasDraw = undefined;
+    this.#debugGraphicsReady = false;
+  }
+
+  #destroyViewpointDebugGraphics() {
+    if ( this.#viewpointDebugGraphics && !this.#viewpointDebugGraphics.destroyed ) this.#viewpointDebugGraphics.destroy({ children: true });
+    this.#viewpointDebugGraphics = undefined;
+    this.#debugViewpointDraw = undefined;
+    this.#debugGraphicsReady = false;
+  }
 
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
    */
   _drawCanvasDebug() {
+    this._initializeDebugGraphics();
     this._clearCanvasDebug();
-    const canvasDraw = this.debugCanvasDraw;
-    this._drawVisibleTokenBorder(canvasDraw);
-    this._drawFrustumLightSources(canvasDraw);
-    this.viewpoints.forEach(vp => vp._drawCanvasDebug(this.debugDrawForViewpoint(vp)));
+    this._drawVisibleTokenBorder(this.#debugCanvasDraw);
+    this._drawFrustumLightSources(this.#debugCanvasDraw);
+    this.viewpoints.forEach(vp => vp._drawCanvasDebug(this.#debugViewpointDraw));
   }
 
-  _clearCanvasDebug() {
-    this.debugCanvasDraw.clearDrawings();
-    this.viewpoints.forEach(vp => this.debugDrawForViewpoint(vp).clearDrawings())
-  }
 
   /**
    * For debugging.

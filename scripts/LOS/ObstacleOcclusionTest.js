@@ -23,8 +23,6 @@ import { Draw } from "../geometry/Draw.js";
 
 
 export class ObstacleOcclusionTest {
-
-
   obstacles = {
     tiles: NULL_SET,
     tokens: NULL_SET,
@@ -50,21 +48,21 @@ export class ObstacleOcclusionTest {
   };
 
   get config() { return structuredClone(this._config); }
-  
+
   /** @type {Token} */
   target;
-  
+
   /** @type {Token} */
   viewer;
 
   /** @type {Point3d} */
   rayOrigin = new Point3d();
-  
+
   get viewpoint() { return this.rayOrigin; }
 
   _initialize({ rayOrigin, viewer, target } = {}) {
     if ( rayOrigin ) this.rayOrigin.copyFrom(rayOrigin);
-    if ( viewer ) this.viewer = viewer; 
+    if ( viewer ) this.viewer = viewer;
     if ( target ) this.target = target;
     this.findObstacles();
     this.constructObstacleTester();
@@ -308,7 +306,7 @@ export class ObstacleOcclusionTest {
     const geometry = placeable[MODULE_ID][AbstractPlaceableTrackerID];
     return [...geometry.iterateFaces()].filter(poly => poly.isFacing(viewpoint));
   }
-  
+
   /**
    * For debugging.
    * Draw the vision triangle between viewer point and target.

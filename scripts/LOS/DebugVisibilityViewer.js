@@ -57,8 +57,8 @@ export class DebugVisibilityViewerAbstract {
     if ( !(this.viewer && this.target ) ) return;
 
     // First draw the basic debugging graphics for the canvas.
-    this._drawCanvasDebug();
     this.viewerLOS.calculate();
+    this._drawCanvasDebug();
 
     // Then determine the percent visible using the algorithm and
     // update debug view specific to that algorithm.

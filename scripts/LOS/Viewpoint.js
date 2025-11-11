@@ -51,10 +51,6 @@ export class Viewpoint {
 
   get config() { return this.viewerLOS.calculator.config; }
 
-  get debug() { return this.viewerLOS.debug; }
-
-  set debug(value) { this.viewerLOS.debug = value; }
-
 
   // ----- NOTE: Visibility Percentages ----- //
 
@@ -71,7 +67,6 @@ export class Viewpoint {
       this.calculator.initializeView(this);
       this.lastResult = this.calculator.calculate();
     }
-    if ( this.debug ) this._drawCanvasDebug(this.viewerLOS.debugDrawForViewpoint(this));
     return this.lastResult;
   }
 
@@ -98,6 +93,10 @@ export class Viewpoint {
 
   /* ----- NOTE: Debug ----- */
 
+  /**
+   * Draw viewpoint debugging on the canvas.
+   * @param {Draw} debugDraw
+   */
   _drawCanvasDebug(debugDraw) {
     this.calculator.initializeView(this);
     this.calculator._drawCanvasDebug(debugDraw);
