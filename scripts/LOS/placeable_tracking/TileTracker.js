@@ -119,6 +119,7 @@ export class TileTracker extends PlaceableModelMatrixTracker {
     const BR = TL.add(dims, Point3d.tmp);
     TL.add(BR, out).multiplyScalar(0.5, out);
     Point3d.release(dims, TL, BR);
+    return out;
   }
 }
 

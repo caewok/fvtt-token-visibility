@@ -9,6 +9,12 @@ PIXI,
 "use strict";
 
 import { combineTypedArrays } from "../util.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { MatrixFlat } from "../../geometry/MatrixFlat.js";
+import { Draw } from "../../geometry/Draw.js";
+import { Triangle3d } from "../../geometry/3d/Polygon3d.js";
+import { ClipperPaths } from "../../geometry/ClipperPaths.js";
+import { Clipper2Paths } from "../../geometry/Clipper2Paths.js";
 
 const N = -0.5
 const S = 0.5;
@@ -55,26 +61,26 @@ export class BasicVertices {
    * @returns {Float32Array} The vertices, modified in place
    */
   static transformVertexPositions(vertices, M, stride = this.NUM_VERTEX_ELEMENTS) {
-    const pt = CONFIG.GeometryLib.threeD.Point3d.tmp;
+    const pt = Point3d.tmp;
     for ( let i = 0, iMax = vertices.length; i < iMax; i += stride ) {
       pt.set(vertices[i], vertices[i+1], vertices[i+2]);
       M.multiplyPoint3d(pt, pt);
       vertices.set([...pt], i);
     }
-    pt.relase();
+    pt.release();
     return vertices;
   }
 
   static transformMatrixFromRectangle(rect, { rotateM, outMatrix, topZ = T, bottomZ = B} = {}) {
-    rotateM ??= CONFIG.GeometryLib.MatrixFlat.identity(4, 4);
-    outMatrix ??= CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+    rotateM ??= MatrixFlat.identity(4, 4);
+    outMatrix ??= MatrixFlat.empty(4, 4);
 
     const zHeight = topZ - bottomZ;
     const z = bottomZ + (zHeight * 0.5);
     const ctr = rect.center;
 
-    const scaleM = CONFIG.GeometryLib.MatrixFlat.scale(rect.width, rect.height, zHeight);
-    const translateM = CONFIG.GeometryLib.MatrixFlat.translation(ctr.x, ctr.y, z);
+    const scaleM = MatrixFlat.scale(rect.width, rect.height, zHeight);
+    const translateM = MatrixFlat.translation(ctr.x, ctr.y, z);
     return scaleM.multiply4x4(rotateM, outMatrix).multiply4x4(translateM, outMatrix);
   }
 
@@ -297,7 +303,7 @@ export class BasicVertices {
 
 
   static debugDraw(vertices, indices, { draw, omitAxis = "z", addNormals = false, addUVs = false, ...opts} = {}) {
-    draw ??= CONFIG.GeometryLib.Draw;
+    draw ??= new Draw();
     const triangles = this.toTriangles(vertices, indices, { addNormals, addUVs });
     triangles.forEach(tri => tri.draw2d({ draw, omitAxis, ...opts }));
     return triangles;
@@ -308,7 +314,6 @@ export class BasicVertices {
     const offset = 3 + (addNormals * 3) + (addUVs * 2);
 
     const triangles = Array(indices.length / 3 );
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const a = Point3d.tmp;
     const b = Point3d.tmp;
     const c = Point3d.tmp;
@@ -320,7 +325,7 @@ export class BasicVertices {
       a.set(vertices[idx1], vertices[idx1+1], vertices[idx1+2]);
       b.set(vertices[idx2], vertices[idx2+1], vertices[idx2+2]);
       c.set(vertices[idx3], vertices[idx3+1], vertices[idx3+2]);
-      triangles[j++] = CONFIG.GeometryLib.threeD.Triangle3d.from3Points(a, b, c);
+      triangles[j++] = Triangle3d.from3Points(a, b, c);
     }
     Point3d.release(a, b, c);
     return triangles;
@@ -474,7 +479,7 @@ export class VerticalQuadVertices extends BasicVertices {
   }
 
   static transformMatrixFromSegment(a, b, { topZ = T, bottomZ = B, rotate = 0, outMatrix } = {}) {
-    outMatrix ??= CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+    outMatrix ??= MatrixFlat.empty(4, 4);
 
     // Scale by absolute z-length (vertical height).
     // If the topZ and bottomZ are unbalanced, translate in the z direction to reset topZ to correct elevation.
@@ -490,9 +495,9 @@ export class VerticalQuadVertices extends BasicVertices {
     const length = PIXI.Point.distanceBetween(a, b);
 
     // Build transform matrix.
-    const scaleM = CONFIG.GeometryLib.MatrixFlat.scale(length, 1, zHeight);
-    const translateM = CONFIG.GeometryLib.MatrixFlat.translation(center.x, center.y, z);
-    const rotateM = CONFIG.GeometryLib.MatrixFlat.rotationZ(radians);
+    const scaleM = MatrixFlat.scale(length, 1, zHeight);
+    const translateM = MatrixFlat.translation(center.x, center.y, z);
+    const rotateM = MatrixFlat.rotationZ(radians);
     return scaleM.multiply4x4(rotateM, outMatrix).multiply4x4(translateM, outMatrix);
   }
 }
@@ -592,10 +597,7 @@ export class Rectangle3dVertices extends BasicVertices {
 
 export class Polygon3dVertices extends BasicVertices {
 
-  static isClipper(poly) {
-    return poly instanceof CONFIG.GeometryLib.ClipperPaths
-      || poly instanceof CONFIG.GeometryLib.Clipper2Paths;
-  }
+  static isClipper(poly) { return poly instanceof ClipperPaths || poly instanceof Clipper2Paths; }
 
   static NUM_TRIANGLE_ELEMENTS = 3 * this.NUM_VERTEX_ELEMENTS;
 
@@ -895,7 +897,6 @@ Ex: 6 points, 6 outer edges.
     if ( poly.isHole ^ poly.isClockwise ) poly.reverseOrientation();
 
     const vertexOffset = this.NUM_VERTEX_ELEMENTS;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
 
     // Some temporary points.
@@ -1053,7 +1054,7 @@ export class Ellipse3dVertices extends Polygon3dVertices {
   }
 
   static transformMatrixFromEllipse(ellipse, { topZ = T, bottomZ = B, outMatrix } = {}) {
-    outMatrix ??= CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+    outMatrix ??= MatrixFlat.empty(4, 4);
     const zHeight = topZ - bottomZ;
     const z = bottomZ + (zHeight * 0.5);
     const { width, height } = ellipse;
@@ -1061,9 +1062,9 @@ export class Ellipse3dVertices extends Polygon3dVertices {
     const center = ellipse.center;
 
     // Build transform matrix.
-    const scaleM = CONFIG.GeometryLib.MatrixFlat.scale(width, height, zHeight);
-    const translateM = CONFIG.GeometryLib.MatrixFlat.translation(center.x, center.y, z);
-    const rotateM = CONFIG.GeometryLib.MatrixFlat.rotationZ(rotation);
+    const scaleM = MatrixFlat.scale(width, height, zHeight);
+    const translateM = MatrixFlat.translation(center.x, center.y, z);
+    const rotateM = MatrixFlat.rotationZ(rotation);
     return scaleM.multiply4x4(rotateM, outMatrix).multiply4x4(translateM, outMatrix);
   }
 }
@@ -1080,14 +1081,14 @@ export class Circle3dVertices extends Ellipse3dVertices {
   }
 
   static transformMatrixFromCircle(circle, { topZ = T, bottomZ = B, outMatrix } = {}) {
-    outMatrix ??= CONFIG.GeometryLib.MatrixFlat.empty(4, 4);
+    outMatrix ??= MatrixFlat.empty(4, 4);
     const zHeight = topZ - bottomZ;
     const z = bottomZ + (zHeight * 0.5);
     const { center, radius } = circle;
 
     // Build transform matrix.
-    const scaleM = CONFIG.GeometryLib.MatrixFlat.scale(radius, radius, zHeight);
-    const translateM = CONFIG.GeometryLib.MatrixFlat.translation(center.x, center.y, z);
+    const scaleM = MatrixFlat.scale(radius, radius, zHeight);
+    const translateM = MatrixFlat.translation(center.x, center.y, z);
     return scaleM.multiply4x4(translateM, outMatrix);
   }
 }

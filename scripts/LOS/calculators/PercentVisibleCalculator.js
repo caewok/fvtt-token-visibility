@@ -43,8 +43,8 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
 export class PercentVisibleResult {
 
   static RESULT_TYPE = {
-    FULL: 1,
-    EMPTY: 0,
+    FULLY_VISIBLE: 1,
+    NOT_VISIBLE: 0,
     CUSTOM: -1,
   };
 
@@ -74,9 +74,9 @@ export class PercentVisibleResult {
     return new this(calc.target, opts);
   }
 
-  makeFullyNotVisible() { this.type = this.constructor.RESULT_TYPE.EMPTY; return this; }
+  makeFullyNotVisible() { this.type = this.constructor.RESULT_TYPE.NOT_VISIBLE; return this; }
 
-  makeFullyVisible() { this.type = this.constructor.RESULT_TYPE.FULL; return this; }
+  makeFullyVisible() { this.type = this.constructor.RESULT_TYPE.FULLY_VISIBLE; return this; }
 
   clone() {
     const out = new this.constructor(this.target, this.#config);
@@ -124,10 +124,7 @@ export class PercentVisibleResult {
    * Area of the target that is visible.
    * @type {number}
    */
-  get visibleArea() {
-    if ( !~this.type ) return this.type;
-    return this.targetArea;
-  }
+  get visibleArea() { return this.targetArea; }
 
   get percentVisible() {
     if ( ~this.type ) return this.type;
@@ -265,6 +262,8 @@ export class PercentVisibleCalculatorAbstract {
 
   /** @type {Point3d} */
   targetLocation = new Point3d();
+
+  async initialize() { return; }
 
   /**
    * Utility method to set all relevant viewing characteristics at once.

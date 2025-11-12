@@ -62,16 +62,6 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
     out.data.or(other.data);
     return out;
   }
-
-  makeFullyVisible() {
-    this.data.fillToIndex(this.numPoints - 1);
-    super.makeFullyVisible();
-  }
-
-  makeFullyNotVisible() {
-    this.data.clear();
-    super.makeFullyNotVisible();
-  }
 }
 
 /**

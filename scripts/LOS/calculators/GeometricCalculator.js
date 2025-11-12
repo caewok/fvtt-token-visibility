@@ -33,18 +33,12 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     return data.visibleTargetPaths;
   }
 
-  get totalTargetArea() {
-    if ( !~this.type ) return 1; // Not custom, so default to target area of 1.
-    return Math.abs(this.data.targetPaths?.area || 1);
-  }
+  get totalTargetArea() { return Math.abs(this.data.targetPaths?.area || 1); }
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() {
-    if ( !~this.type ) return this.type; // Not custom; either empty (0) or full (1).
-    return Math.abs(this.visibleTargetPaths.area || 0);
-  }
+  get visibleArea() { return Math.abs(this.visibleTargetPaths.area || 0); }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.
