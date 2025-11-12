@@ -1,5 +1,5 @@
 /* globals
-CONFIG,
+
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -64,20 +64,49 @@ export class Camera {
   #cameraM = MatrixFloat32.empty(4, 4);
 
   /** @type {MatrixFloat32<4,4>} */
-  mirrorM = MatrixFloat32.identity(4, 4);
+  #mirrorM = MatrixFloat32.identity(4, 4);
 
   /** @type {boolean} */
-  #dirty = {
-    perspective: true,
-    lookAt: true,
-    model: true,
-    inverse: true,
-  };
+  #dirtyPerspective = true;
+
+  #dirtyLookAt = true;
+
+  #dirtyModel = true;
+
+  #dirtyInverse = true;
+
+  get dirtyPerspective() { return this.#dirtyPerspective }
+
+  set dirtyPerspective(value) {
+    this.#dirtyPerspective ||= value;
+    this.#dirtyModel ||= value;
+    this.#dirtyInverse ||= value;
+  }
+
+  get dirtyLookAt() { return this.#dirtyLookAt; }
+
+  set dirtyLookAt(value) {
+    this.#dirtyLookAt ||= value;
+    this.#dirtyModel ||= value;
+    this.#dirtyInverse ||= value;
+  }
+
+  get dirtyModel() { return this.#dirtyModel; }
+
+  set dirtyModel(value) {
+    this.#dirtyModel ||= value;
+    this.#dirtyInverse ||= value;
+  }
+
+  get dirtyInverse() { return this.#dirtyInverse; }
+
+  set dirtyInverse(value) { this.#dirtyInverse ||= value; }
+
 
   /** @type {function} */
   #perspectiveFn = MatrixFloat32.perspectiveZO;
 
-  UP = new Point3d();
+  #UP = new Point3d();
 
   #perspectiveType = "perspective";
 
@@ -90,16 +119,13 @@ export class Camera {
   set perspectiveType(value) {
     if ( value !== "perspective"
       && value !== "orthogonal" ) console.error(`${this.constructor.name}|Perspective type ${value} not recognized.`);
-    if ( this.#perspectiveType === value ) return;
     this.#perspectiveType = value;
 
     // Update the relevant internal parameters.
     const fnName = `${this.#perspectiveType}${this.#glType === "webGPU" ? "ZO" : ""}`;
     this.#perspectiveFn = MatrixFloat32[fnName];
     this.#internalParams = value === "orthogonal" ? this.#orthogonalParameters : this.#perspectiveParameters;
-    this.#dirty.perspective ||= true;
-    this.#dirty.model ||= true;
-    this.#dirty.inverse ||= true;
+    this.dirtyPerspective = true;
   }
 
   #modelMatrix = MatrixFloat32.identity(4);
@@ -107,17 +133,18 @@ export class Camera {
   #inverseModelMatrix = MatrixFloat32.identity(4);
 
   get modelMatrix() {
-    if ( this.#dirty.model ) {
-      this.lookAtMatrix.multiply4x4(this.perspectiveMatrix, this.#modelMatrix);
-      this.#dirty.model = false;
+    if ( this.dirtyModel ) {
+      // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
+      this.lookAtMatrix.multiply4x4(this.perspectiveMatrix, this.#modelMatrix).multiply4x4(this.mirrorM, this.#modelMatrix);
+      this.#dirtyModel = false;
     }
     return this.#modelMatrix;
   }
 
   get inverseModelMatrix() {
-    if ( this.#dirty.inverse ) {
+    if ( this.dirtyInverse ) {
       this.modelMatrix.invert(this.#inverseModelMatrix);
-      this.#dirty.inverse = false;
+      this.#dirtyInverse = false;
     }
     return this.#inverseModelMatrix;
   }
@@ -141,9 +168,9 @@ export class Camera {
     this.UP.copyFrom(up);
 
     // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
-    this.mirrorM.setIndex(0, 0, mirrorMDiag.x);
-    this.mirrorM.setIndex(1, 1, mirrorMDiag.y);
-    this.mirrorM.setIndex(2, 2, mirrorMDiag.z);
+    this.#mirrorM.setIndex(0, 0, mirrorMDiag.x);
+    this.#mirrorM.setIndex(1, 1, mirrorMDiag.y);
+    this.#mirrorM.setIndex(2, 2, mirrorMDiag.z);
 
     this.#glType = glType;
     this.perspectiveType = perspectiveType;
@@ -264,18 +291,30 @@ export class Camera {
 
   #internalParams = this.#perspectiveParameters;
 
+  get UP() { return this.#UP; }
+
+  set UP(value) {
+    this.#UP.copyFrom(value);
+    this.dirtyLookAt = true;
+  }
+
+  get mirrorMatrix() { return this.#mirrorM; }
+
+  set mirrorM(value) {
+    this.#mirrorM.setIndex(0, 0, value.x);
+    this.#mirrorM.setIndex(1, 1, value.y);
+    this.#mirrorM.setIndex(2, 2, value.z);
+    this.dirtyModel = true
+  };
+
   /** @type {MatrixFloat32<4x4>} */
   get perspectiveMatrix() {
-    if ( this.#dirty.perspective ) {
+    if ( this.dirtyPerspective ) {
       // mat4.perspective or perspectiveZO?
       // const { fov, aspect, zNear, zFar } = this.#perspectiveParameters;
       // MatrixFloat32.perspectiveZO(fov, aspect, zNear, zFar, this.#M.perspective);
       this.#perspectiveFn(...Object.values(this.#internalParams), this.#M.perspective);
-
-      // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
-      this.#M.perspective.multiply4x4(this.mirrorM, this.#M.perspective);
-
-      this.#dirty.perspective = false;
+      this.#dirtyPerspective = false;
     }
     return this.#M.perspective;
   }
@@ -289,9 +328,7 @@ export class Camera {
     for ( const [key, value] of Object.entries(params) ) {
       this.#perspectiveParameters[key] = value;
     }
-    this.#dirty.perspective ||= true;
-    this.#dirty.model ||= true;
-    this.#dirty.inverse ||= true;
+    this.dirtyPerspective = true;
   }
 
   #orthogonalParameters = {
@@ -312,16 +349,14 @@ export class Camera {
     for ( const [key, value] of Object.entries(params) ) {
       this.#orthogonalParameters[key] = value;
     }
-    this.#dirty.perspective ||= true;
-    this.#dirty.model ||= true;
-    this.#dirty.inverse ||= true;
+    this.dirtyPerspective = true;
   }
 
   /** @type {Float32Array|mat4} */
   get lookAtMatrix() {
-    if ( this.#dirty.lookAt ) {
+    if ( this.dirtyLookAt ) {
       MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
-      this.#dirty.lookAt = false;
+      this.#dirtyLookAt = false;
     }
     return this.#M.lookAt;
   }
@@ -358,13 +393,13 @@ export class Camera {
   set cameraPosition(value) {
     if ( this.#positions.camera.equals(value) ) return;
     this.#positions.camera.copyPartial(value);
-    this.#dirty.lookAt ||= true;
+    this.dirtyLookAt = true;
   }
 
   set targetPosition(value) {
     if ( this.#positions.target.equals(value) ) return;
     this.#positions.target.copyPartial(value);
-    this.#dirty.lookAt ||= true;
+    this.dirtyLookAt = true;
   }
 
   // ----- NOTE: Debug ----- //
