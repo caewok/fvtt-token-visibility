@@ -80,10 +80,11 @@ export class ViewerLOS {
     "los-algorithm-points": "points",
     "los-algorithm-geometric": "geometric",
     "los-algorithm-per-pixel": "per-pixel",
+    "los-algorithm-sample-pixel": "sample-pixel",
     "los-algorithm-hybrid": "hybrid",
-    "los-algorithm-webgl2": "webGL2",
-    "los-algorithm-webgpu": "webGPU",
-    "los-algorithm-webgpu-async": "webGPUAsync",
+    "los-algorithm-webgl2": "webgl2",
+    "los-algorithm-webgpu": "webgpu",
+    "los-algorithm-webgpu-async": "webgpu-async",
   };
 
   /** @type {PercentVisibleCalculator} */

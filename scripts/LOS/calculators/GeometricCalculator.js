@@ -27,18 +27,18 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     visibleTargetPaths: null,
   };
 
-  get totalTargetArea() {
-    if ( !~this.type ) return 1; // Not custom, so default to target area of 1.
-    return Math.abs(this.data.targetPaths?.area || 1);
+  get visibleTargetPaths() {
+    const data = this.data;
+    if ( !data.visibleTargetPaths ) data.visibleTargetPaths = data.blockingPaths.diffPaths(data.targetPaths);
+    return data.visibleTargetPaths;
   }
+
+  get totalTargetArea() { return Math.abs(this.data.targetPaths?.area || 1); }
 
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() {
-    if ( !~this.type ) return this.type; // Not custom; either empty (0) or full (1).
-    return Math.abs(this.data.visibleTargetPaths.area || 0);
-  }
+  get visibleArea() { return Math.abs(this.visibleTargetPaths.area || 0); }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.
@@ -72,30 +72,37 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
   });
 
+
   /**
    * Scaling factor used with Clipper
    */
   static SCALING_FACTOR = 100;
 
   initializeCalculations() {
-    super.initializeCalculations();
     this._initializeCamera();
-
-    // Can build the obstacles now, as they will not change even if target shape does.
     this._constructPerspectiveObstaclePolygons();
     this._constructObstaclePaths();
   }
 
   _calculate() {
+    this.initializeCalculations();
     this._constructPerspectiveTargetPolygons();
-    this._constructTargetPath();
-    this.lastResult.data.visibleTargetPaths = this.lastResult.data.blockingPaths.diffPaths(this.lastResult.data.targetPaths);
+    const result = PercentVisibleGeometricResult.fromCalculator(this);
+    result.data.targetPaths = this._constructTargetPath();
+    result.data.blockingPaths = this._constructObstaclePaths();
+    return result;
   }
 
   _initializeCamera() {
     this.camera.cameraPosition = this.viewpoint;
     this.camera.targetPosition = this.targetLocation;
     this.camera.setTargetTokenFrustum(this.target);
+  }
+
+  _initializeObstacles() {
+    // Obstacles will not change even if target shape does.
+    this._constructPerspectiveObstaclePolygons();
+    this._constructObstaclePaths();
   }
 
   blockingTerrainPaths;
@@ -105,7 +112,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Can combine to Polygons3d.
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const targetPolys3d = CONFIG.GeometryLib.threeD.Polygons3d.from3dPolygons(this.targetPolys);
-    this.lastResult.data.targetPaths = targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor })
+    return targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor });
   }
 
   /**
@@ -114,14 +121,15 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _constructObstaclePaths() {
     // Use Clipper to calculate area of the polygon shapes.
     this.blockingTerrainPaths = this._combineTerrainPolys(this.blockingTerrainPolys);
-    this.lastResult.data.blockingPaths = this._combineObstaclePolys();
+    let blockingPaths = this._combineObstaclePolys();
     if ( this.blockingTerrainPaths && !this.blockingTerrainPaths.area.almostEqual(0) ) {
-      if ( !this.lastResult.data.blockingPaths ) {
-        this.lastResult.data.blockingPaths = this.blockingTerrainPaths.combine();
+      if ( !blockingPaths ) {
+        blockingPaths = this.blockingTerrainPaths.combine();
         console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
       }
-      else this.lastResult.data.blockingPaths = this.lastResult.data.blockingPaths.add(this.blockingTerrainPaths).union();
+      else blockingPaths = blockingPaths.add(this.blockingTerrainPaths).union();
     }
+    return blockingPaths;
   }
 
   /**
@@ -246,6 +254,17 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
        this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
   }
 
+//   _gridPolygons(lookAtM, perspectiveM) {
+//     const target = this.target;
+//     const { x, y } = target.center;
+//     const z = target.bottomZ + (target.topZ - target.bottomZ);
+//     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(x, y, z);
+//     const gridTris = Grid3dTriangles.trianglesForGridShape()
+//       .filter(tri => tri.isFacing(this.viewpoint))
+//       .map(tri => tri.transform(translateM));
+//     return this._applyPerspective(gridTris, lookAtM, perspectiveM);
+//   }
+
   /**
    * Construct target polygons.
    */
@@ -284,80 +303,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(viewer, target, viewpoint, targetLocation, { draw, width = 100, height = 100 } = {}) {
-    draw ??= new CONFIG.GeometryLib.Draw();
-
-    // Recalculate the 3d objects
-    this.initializeView({ viewer, target, viewpoint, targetLocation });
-    this._constructPerspectiveTargetPolygons();
-    this._constructPerspectiveObstaclePolygons();
+  _draw3dDebug(draw, { width = 100, height = 100 } = {}) {
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this;
     const colors = Draw.COLORS;
-
-    // Locate obstacles behind the target.
-//     const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint, target });
-//     const backgroundTiles = frustum.findBackgroundTiles();
-    // const backgroundWalls = frustum.findBackgroundWalls();
-
-    // TODO: Can we sort these based on a simplified depth test? Maybe use the z values after looking at them but before perspective?
-    // Simpler:
-    //   Mainly we are looking at approx. a 2d overhead view.
-    //   So measure closest intersect to the vision triangle, testing edges and center.
-    //   Test only the 2d line—wall or tile triangle.
-    //   If no intersect, test from center of triangle.
-    //   Or rather, just test lineLineIntersection against the 2 vision edges and take the closer.
-
-//     const lookAtM = this.camera.lookAtMatrix;
-//     const perspectiveM = this.camera.perspectiveMatrix;
-
- //    const backgroundPolys = [];
-//     const { b, c } = frustum;
-//     const b3d = new Point3d(b.x, b.y, targetLocation.z);
-//     const c3d = new Point3d(c.x, c.y, targetLocation.z);
-//
-//     const dirs = [
-//       b3d.subtract(viewpoint).normalize(),
-//       c3d.subtract(viewpoint).normalize(),
-//       targetLocation.subtract(viewpoint).normalize(),
-//     ];
-
-//     const backgroundTestFn = (placeable, color, fill) => {
-//       const polys = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(placeable, viewpoint);
-//       polys.forEach(poly => {
-//         const ixs = [];
-//         for ( const dir of dirs ) {
-//           const ix = poly.intersection(viewpoint, dir);
-//           if ( ix ) ixs.push(ix);
-//         }
-//         if ( !ixs.length ) ixs.push(poly.centroid);
-//
-//         const dist2 = ixs.reduce((acc, curr) => {
-//           if ( !curr ) return acc;
-//           return Math.min(acc, Point3d.distanceSquaredBetween(viewpoint, curr));
-//         }, Number.POSITIVE_INFINITY);
-//         poly = poly
-//           .transform(lookAtM)
-//           .clipZ()
-//           .transform(perspectiveM);
-//         backgroundPolys.push({
-//           poly,
-//           dist2,
-//           color,
-//           fill,
-//         });
-//       });
-//     }
-//
-//     backgroundTiles.forEach(tile => backgroundTestFn(tile, colors.orange, colors.orange));
-//     // backgroundWalls.forEach(wall => backgroundTestFn(wall, colors.gray, colors.gray));
-//     backgroundPolys.sort((a, b) => b.dist2 - a.dist2); // Smallest last.
-//     backgroundPolys.forEach(obj => obj.poly.scale({ x: width, y: height }).draw2d({ draw, color: obj.color, width: 2, fill: obj.fill, fillAlpha: 0.5 }));
-
-    // const backgroundTilesPolys = [...backgroundTiles].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-    // const backgroundWallsPolys = [...backgroundWalls].flatMap(obj => this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-
-    // backgroundTilesPolys.forEach(poly => draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, width: 2, fill: colors.orange, fillAlpha: 0.5 }))
-    // backgroundWallsPolys.forEach(poly => draw.shape(poly.scale({ x: width, y: height }), { color: colors.gray, width: 2, fill: colors.gray, fillAlpha: 0.5 }))
 
     // Draw the target in 3d, centered at 0,0.
     // Scale the target graphics to fit in the view window.
@@ -365,8 +313,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     // Draw the grid shape.
     // TODO: Fix; use Polygon3d
+    /*
     if ( this.config.largeTarget ) this._gridPolys.forEach(poly =>
       draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
+    */
 
     // Draw the detected obstacles.
     blockingPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));

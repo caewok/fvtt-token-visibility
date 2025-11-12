@@ -296,7 +296,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       // Divide in the popout space.
       const positions = [];
       let viewSize;
-      switch ( this.viewerLOS.numViewpoints ) {
+      switch ( this.viewerLOS.viewpoints.length ) {
         case 1: positions.push([0, 0]); viewSize = WIDTH; break;
 
         // ----- | -----
@@ -467,7 +467,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     let height = this.constructor.HEIGHT;
 
     // Keep width and height even.
-    switch ( this.viewerLOS.numViewpoints ) {
+    switch ( this.viewerLOS.viewpoints.length ) {
       case 1: width *= 0.5; height *= 0.5; break;
       case 2:
       case 4:
@@ -480,10 +480,11 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     }
 
     this.viewerLOS.viewpoints.forEach((vp, idx) => {
-      vp.calculate();
+      // vp.calculate();
       const draw = this.getPopoutDraw(idx);
       const c = this.getPopoutContainer(idx);
-      vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
+      vp._draw3dDebug(draw, { width, height });
+      // vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
     })
     super.updateDebugForPercentVisible(percentVisible);
   }

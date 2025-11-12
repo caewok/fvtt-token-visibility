@@ -43,8 +43,8 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
 export class PercentVisibleResult {
 
   static RESULT_TYPE = {
-    FULL: 1,
-    EMPTY: 0,
+    FULLY_VISIBLE: 1,
+    NOT_VISIBLE: 0,
     CUSTOM: -1,
   };
 
@@ -74,9 +74,9 @@ export class PercentVisibleResult {
     return new this(calc.target, opts);
   }
 
-  makeFullyNotVisible() { this.type = this.constructor.RESULT_TYPE.EMPTY; return this; }
+  makeFullyNotVisible() { this.type = this.constructor.RESULT_TYPE.NOT_VISIBLE; return this; }
 
-  makeFullyVisible() { this.type = this.constructor.RESULT_TYPE.FULL; return this; }
+  makeFullyVisible() { this.type = this.constructor.RESULT_TYPE.FULLY_VISIBLE; return this; }
 
   clone() {
     const out = new this.constructor(this.target, this.#config);
@@ -124,10 +124,7 @@ export class PercentVisibleResult {
    * Area of the target that is visible.
    * @type {number}
    */
-  get visibleArea() {
-    if ( !~this.type ) return this.type;
-    return this.targetArea;
-  }
+  get visibleArea() { return this.targetArea; }
 
   get percentVisible() {
     if ( ~this.type ) return this.type;
@@ -228,7 +225,7 @@ export class PercentVisibleCalculatorAbstract {
 
   set viewer(value) {
     if ( this.#viewer === value ) return;
-    this.#dirty = true;
+    this.dirty = true;
     this.#viewer = value;
 
     // Default the viewpoint to the center of the token.
@@ -243,7 +240,7 @@ export class PercentVisibleCalculatorAbstract {
 
   set target(value) {
     if ( this.#target === value ) return;
-    this.#dirty = true;
+    this.dirty = true;
     this.#target = value;
 
     // Default the target location to the center of the token.
@@ -259,11 +256,14 @@ export class PercentVisibleCalculatorAbstract {
 
   set viewpoint(value) {
     if ( this.#viewpoint.equals(value) ) return;
-    this.#dirty = true;
+    this.dirty = true;
     this.#viewpoint.copyFrom(value);
   }
 
+  /** @type {Point3d} */
   targetLocation = new Point3d();
+
+  async initialize() { return; }
 
   /**
    * Utility method to set all relevant viewing characteristics at once.
@@ -311,6 +311,8 @@ export class PercentVisibleCalculatorAbstract {
     }
   }
 
+  _createResult() { return this.constructor.resultClass.fromCalculator(this); }
+
   /**
    * Return the visibility result for the current calculator state.
    * Use _initializeView to set state or set individually.
@@ -318,13 +320,11 @@ export class PercentVisibleCalculatorAbstract {
    * @returns {PercentVisibleResult}
    */
   calculate() {
-    if ( this.#dirty ) this._clean();
+    if ( this.dirty ) this._clean();
     return this._calculate();
   }
 
-  _calculate() {
-    return this.constructor.resultClass.fromCalculator(this);
-  }
+  _calculate() { return this._createResult(); }
 
   /**
    * Using the available algorithm, test whether the target w/o/r/t other viewers is
@@ -358,12 +358,12 @@ export class PercentVisibleCalculatorAbstract {
 
       Point3d.fromPointSource(src, this.#viewpoint);
       this.config = { radius: src.radius };
-      let lastResult = this.calculate();
-      dimResult = dimResult.blendMaximums(lastResult);
+      this.calculate();
+      dimResult = dimResult.blendMaximums(this.lastResult);
 
       this.config = { radius: src.brightRadius };
-      lastResult = this.calculate()
-      brightResult = brightResult.blendMaximums(lastResult);
+      this.calculate()
+      brightResult = brightResult.blendMaximums(this.lastResult);
     }
 
     this.config = oldConfig;

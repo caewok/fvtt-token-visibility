@@ -122,6 +122,12 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
       Polygon3d.fromPolygon(border2d.toPolygon(), topZ, faces.top);
     }
 
+    // Confirm the orientation by testing against a point directly above the border plane.
+    const pt0 = faces.top.points[0];
+    const tmp = Point3d.tmp.set(pt0.x, pt0.y, pt0.z + 1);
+    if ( !faces.top.isFacing(tmp) ) faces.top.reverseOrientation();
+
+    // Construct the bottom face, reversing its orientation.
     faces.top.clearCache();
     if ( !faces.bottom || !(faces.bottom instanceof faces.top.constructor) ) faces.bottom = new faces.top.constructor();
     faces.top.clone(faces.bottom);

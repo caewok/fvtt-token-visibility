@@ -10,6 +10,7 @@ import { RenderObstaclesWebGL2 } from "./RenderObstacles.js";
 import { RedPixelCounter } from "./RedPixelCounter.js";
 import * as twgl from "./twgl.js";
 
+
 // Base folder
 import { MODULE_ID } from "../../const.js";
 
@@ -17,8 +18,6 @@ import { MODULE_ID } from "../../const.js";
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "../calculators/PercentVisibleCalculator.js";
 import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
 import { checkFramebufferStatus } from "../util.js";
-
-import { almostBetween } from "../../geometry/util.js";
 
 /**
  * @typedef {object} WebGL2CalculatorConfig
@@ -38,7 +37,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   };
 
   get totalTargetArea() {
-    return this.data.targetCount || this.data.target.cardinality || 0;
+    return this.data.targetCount ?? (this.data.target.cardinality || 0);
   }
 
   get blockedArea() {
@@ -48,11 +47,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() {
-    const targetArea = this.targetArea;
-    if ( !targetArea ) return 0;
-    return almostBetween(targetArea - this.blockedArea, 0, 1);
-  }
+  get visibleArea() { return this.targetArea - this.blockedArea; }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.
@@ -61,11 +56,16 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMaximize(other) {
+    let out = super.blendMaximize();
+    if ( out ) return out;
+
     // The target area could change, given the different views.
     // Combine the visible target paths.
-    const out = new this.constructor(this.target, this.config);
-    out.data.target = this.data.target.or(other.data.target);
-    out.data.blocked = this.data.target.and(other.data.target);
+    out = this.clone();
+    if ( this.data.target ) out.data.target.or(other.data.target);
+    if ( this.data.blocked ) out.data.blocked.and(other.data.target);
+    if ( this.data.blockedCount != null ) out.data.blockedCount = Math.min(this.data.blockedCount, other.data.blockedCount);
+    if ( this.data.targetCount != null ) out.data.blockedCount = Math.max(this.data.targetCount, other.data.targetCount);
     return out;
   }
 }
@@ -116,13 +116,13 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 
   async initialize() {
     if ( this.#initialized ) return;
-    this.#initialized = true; // Avoids async issues if saved right away.
     await super.initialize();
     const size = this.renderTextureSize;
     this.renderObstacles = new RenderObstaclesWebGL2({ webGL2: this.constructor.webGL2, senseType: this.config.senseType });
     await this.renderObstacles.initialize();
     this._initializeFramebuffer();
     this.redPixelCounter.initialize(size, size);
+    this.#initialized = true;
   }
 
   /** @type {twgl.FramebufferInfo} */
@@ -188,6 +188,13 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   }
 
   _calculate() {
+    if ( !this.#initialized ) {
+      const result = this._createResult();
+      result.makeFullyNotVisible();
+      return result;
+    }
+
+    this.initializeCalculations();
     const { viewer, viewpoint, target, targetLocation } = this;
     const { useStencil, useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     const gl = this.gl;
@@ -207,13 +214,16 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
       res = this.redPixelCounter[type]();
     }
 
+
+    const lastResult = this._createResult();
     if ( pixelCounterType.startsWith("map") ) {
-      this.lastResult.data.blocked = res.redBlocked;
-      this.lastResult.data.target = res.red;
+      lastResult.data.blocked = res.redBlocked;
+      lastResult.data.target = res.red;
     } else {
-      this.lastResult.data.blockedCount = res.redBlocked;
-      this.lastResult.data.targetCount = res.red
+      lastResult.data.blockedCount = res.redBlocked;
+      lastResult.data.targetCount = res.red
     }
+    return lastResult;
   }
 
 //   async _calculate() {

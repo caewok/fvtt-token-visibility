@@ -92,7 +92,10 @@ function LOSViewerConfig() {
 export function buildLOSCalculator() {
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
   const calcs = CONFIG[MODULE_ID].losCalculators;
-  calcs[calcName] ??= new CONFIG[MODULE_ID].calculatorClasses[calcName](CalculatorConfig());
+  if ( !calcs[calcName] ) {
+    calcs[calcName] ??= new CONFIG[MODULE_ID].calculatorClasses[calcName](CalculatorConfig());
+    calcs[calcName].initialize(); // Async.
+  }
   return calcs[calcName];
 }
 

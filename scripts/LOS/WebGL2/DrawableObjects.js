@@ -439,10 +439,11 @@ export class DrawableObjectsWebGL2Abstract {
 
   _initializePlaceableHandler() {
     this.placeableTracker = this.constructor.trackerClass.cachedBuild();
-    // this.placeableTracker.registerPlaceableHooks();
-    // this.placeableTracker.initializePlaceables();
+    this.placeableTracker.registerPlaceableHooks();
+    this.placeableTracker.initializePlaceables();
+
     // Set the ids when initializing the vertices.
-    // this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
+    this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
   }
 
   /**
