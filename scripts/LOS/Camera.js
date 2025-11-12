@@ -164,7 +164,7 @@ export class Camera {
    */
   setFrustumForAABB3d(aabb3d) {
     aabb3d = aabb3d.toFinite();
-    const boxCenter = aabb3d.center;
+    const boxCenter = aabb3d.getCenter();
     this.targetPosition = boxCenter;
     const out = this.perspectiveType === "perspective"
       ? this._setPerspectiveFrustumForAABB3d(aabb3d, boxCenter) : this._setOrthogonalFrustumForAABB3d(aabb3d);

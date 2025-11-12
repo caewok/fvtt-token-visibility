@@ -118,16 +118,16 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
   }
 
   _calculateForPoints(points) {
-    this.lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints: points[0].length });
+    let lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints: points[0].length });
     for ( let i = 0, iMax = points.length; i < iMax; i += 1 ) {
       const targetPoints = points[i];
       const result = this._testPointToPoints(targetPoints);
-      this.lastResult = PercentVisiblePointsResult.max(this.lastResult, result);
+      lastResult = PercentVisiblePointsResult.max(lastResult, result);
 
       // If we have hit 100%, we are done.
-      if ( this.lastResult.percentVisible >= 1 ) break;
+      if ( lastResult.percentVisible >= 1 ) break;
     }
-    return this.lastResult;
+    return lastResult;
   }
 
   /* ----- NOTE: Target points ----- */
@@ -159,9 +159,8 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
    * @returns {PercentVisiblePointsResult}
    */
   _testPointToPoints(targetPoints) {
+    const result = PercentVisiblePointsResult.fromCalculator(this, { numPoints: targetPoints.length });
     this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
-    const result = this.lastResult.clone();
-    result.data.clear();
 
     const dist2 = this.config.radius ** 2;
     const numPoints = targetPoints.length;
@@ -281,8 +280,8 @@ randal = canvas.tokens.placeables.find(t => t.name === "Randal")
 calc = new PercentVisibleCalculatorPoints()
 calc.viewer = randal
 calc.target = zanna
-calc.viewpoint.copyFrom(Point3d.fromTokenCenter(calc.viewer))
-calc.targetLocation.copyFrom(Point3d.fromTokenCenter(calc.target))
+calc.viewpoint = Point3d.fromTokenCenter(calc.viewer)
+calc.targetLocation = Point3d.fromTokenCenter(calc.target)
 calc.calculate()
 
 debugViewer = api.buildDebugViewer(api.debugViewers.points)

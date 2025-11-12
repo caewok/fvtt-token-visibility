@@ -61,7 +61,7 @@ export class Viewpoint {
 
   calculate() {
     if ( this.passesSimpleVisibilityTest() ) {
-      this.lastResult ??= new this.calculator.constructor.resultClass();
+      this.lastResult ??= this.calculator._createResult();
       this.lastResult.makeFullyVisible();
     } else {
       this.calculator.initializeView(this);
@@ -100,5 +100,11 @@ export class Viewpoint {
   _drawCanvasDebug(debugDraw) {
     this.calculator.initializeView(this);
     this.calculator._drawCanvasDebug(debugDraw);
+  }
+
+  _draw3dDebug(debugDraw, opts = {}) { // opts incl width, height
+    this.calculator.initializeView(this);
+    this.calculator.calculate();
+    this.calculator._draw3dDebug(debugDraw, opts);
   }
 }
