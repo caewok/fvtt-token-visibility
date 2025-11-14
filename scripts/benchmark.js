@@ -11,9 +11,10 @@ PIXI
 import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
-import { buildCustomLOSViewer } from "./LOSCalculator.js";
+import { buildCustomLOSViewer, buildCustomLOSCalculator } from "./LOSCalculator.js";
 import { registerArea3d } from "./patching.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
+import { MODULE_ID } from "./const.js";
 
 /* Use
 api = game.modules.get("tokenvisibility").api
@@ -54,25 +55,25 @@ function getTokens() {
 /**
  * Construct a table of token percent visibility using the various methods.
  */
-function summarizeTokenVisibility(viewers, targets) {
-  const calcs = Object.values(Settings.KEYS.LOS.TARGET.TYPES);
-  const summary = {};
-  const opts = { calcName: null };
-  for ( const calcType of calcs ) {
-    for ( const viewer of viewers ) {
-      opts.calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[calc];
-      const losCalc = buildCustomLOSViewer(viewer, opts);
-      for ( const target of targets ) {
-        if ( viewer === target ) continue;
-        const label = `${viewer.name} --> ${target.name}`;
-        summary[label] = {};
-        summary[label][calcType] = Math.round(losCalc.percentVisible(target) * 100 * 10) / 10;
-      }
-      losCalc.destroy();
-    }
-  }
-  console.table(summary);
-}
+// export function summarizeTokenVisibility(viewers, targets) {
+//   const calcs = Object.values(Settings.KEYS.LOS.TARGET.TYPES);
+//   const summary = {};
+//   const opts = { calcName: null };
+//   for ( const calcType of calcs ) {
+//     for ( const viewer of viewers ) {
+//       opts.calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[calc];
+//       const losCalc = buildCustomLOSViewer(viewer, opts);
+//       for ( const target of targets ) {
+//         if ( viewer === target ) continue;
+//         const label = `${viewer.name} --> ${target.name}`;
+//         summary[label] = {};
+//         summary[label][calcType] = Math.round(losCalc.percentVisible(target) * 100 * 10) / 10;
+//       }
+//       losCalc.destroy();
+//     }
+//   }
+//   console.table(summary);
+// }
 
 /**
  * Construct a table of token elevations and distances
@@ -226,35 +227,16 @@ export async function benchTokenLOS(n = 100, opts = {}) {
   console.log("\nBenchmarking token los");
   await storeDebugStatus();
 
-  const { POINTS, HYBRID } = Settings.KEYS.LOS.TARGET.TYPES;
-  const { CENTER, TWO, THREE, FOUR, FIVE, EIGHT, NINE } = Settings.KEYS.POINT_TYPES;
-  // const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
-  opts.nPoints = CENTER;
   opts.movement ??= false
 
-  // Count viewpoints.
-  const viewpointCases = { [CENTER]: 1, [TWO]: 2, [THREE]: 3, [FOUR]: 4, [FIVE]: 5, [EIGHT]: 8, [NINE]: 9 }
-  const viewpoints = viewpointCases[Settings.get(Settings.KEYS.LOS.VIEWER.NUM_POINTS)]
-  console.log(`${viewers.length} viewers, ${viewpoints} viewpoints per viewer, ${targets.length} targets`)
-
+  console.log(`${viewers.length} viewers, ${targets.length} targets`)
   console.log("\n")
   const fn = opts.movement ? runLOSTestWithMovement : runLOSTest;
-  for ( const large of [false, true] ) {
-    opts.large = large;
-    for ( const algorithm of Object.values(Settings.KEYS.LOS.TARGET.TYPES) ) {
-      if ( algorithm === HYBRID ) continue; // Skip for the moment b/c it is failing.
-      opts.algorithm = algorithm;
-      await fn(n, viewers, targets, opts);
-
-      // For points test, run additional test using 9 points vs just 1.
-      if ( algorithm === POINTS ) {
-        opts.nPoints = NINE;
-        await fn(n, viewers, targets, opts);
-        opts.nPoints = CENTER;
-      }
-    }
-    console.log("\n")
+  for ( const algorithm of Object.values(Settings.KEYS.LOS.TARGET.TYPES) ) {
+    opts.algorithm = algorithm;
+    await fn(n, viewers, targets, opts);
   }
+  console.log("\n")
 
   await revertDebugStatus();
 }
@@ -269,31 +251,18 @@ export async function benchTokenLOSAlgorithm(n = 100, { movement = false, ...opt
   await revertDebugStatus();
 }
 
-async function revertLOSSettings() {
-  const { ALGORITHM, POINT_OPTIONS, LARGE } = Settings.KEYS.LOS.TARGET;
-  const { algorithm, points, large } = userSettings.los;
-  await Settings.set(ALGORITHM, algorithm);
-  await Settings.set(POINT_OPTIONS.NUM_POINTS, points);
-  await Settings.set(LARGE, large);
-}
-
-async function runLOSTest(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
+async function runLOSTest(n, viewers, targets, { algorithm, sleep = false, useAsync = false } = {}) {
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
-  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
-  const calcOpts = {
-    calcName: ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm],
-    largeTarget: large, 
-    pointAlgorithm: nPoints,
-  };
-  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, calcOpts));
-  const promises = [];
-  calcs.forEach(calc => promises.push(calc?.initialize()));
-  await Promise.allSettled(promises);
-  let label = (`LOS: ${algorithm}, largeToken: ${large}`);
-  if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
+
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
+  const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
+  const calc = buildCustomLOSCalculator(calcClass);
+  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
+
+  let label = (`LOS: ${algorithm}`);
   const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
   const benchFn = useAsync ? benchLOSAsync : benchLOS;
-  await fn(n, benchFn, label, calcs, targets);
+  await fn(n, benchFn, label, losViewers, targets);
 }
 
 function benchLOS(calcs, targets) {
@@ -301,7 +270,8 @@ function benchLOS(calcs, targets) {
   for ( const calc of calcs ) {
     for ( const target of targets ) {
       if ( calc.viewer === target ) continue;
-      out.push(calc.hasLOS(target));
+      calc.target = target;
+      out.push(calc.hasLOS);
     }
   }
   return out;
@@ -312,29 +282,23 @@ async function benchLOSAsync(calcs, targets) {
   for ( const calc of calcs ) {
     for ( const target of targets ) {
       if ( calc.viewer === target ) continue;
-      out.push(await calc.hasLOSAsync(target));
+      calc.target = target;
+      out.push(await calc.hasLOSAsync());
     }
   }
   return out;
 }
 
 
-async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints, large = false, sleep = false, useAsync = false } = {}) {
+async function runLOSTestWithMovement(n, viewers, targets, { algorithm, sleep = false, useAsync = false } = {}) {
   algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
-  nPoints ??= Settings.KEYS.POINT_TYPES.NINE;
-  const calcOpts = {
-    calcName: ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm],
-    largeTarget: large, 
-    pointAlgorithm: nPoints,
-  };
-  const calcs = viewers.map(viewer => buildCustomLOSViewer(viewer, calcOpts));
-  const promises = [];
-  calcs.forEach(calc => promises.push(calc?.initialize()));
-  await Promise.allSettled(promises);
 
-  let label = (`LOS: ${algorithm}, largeToken: ${large}`);
-  if ( algorithm === Settings.KEYS.LOS.TARGET.TYPES.POINTS ) label += `, ${nPoints}`;
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
+  const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
+  const calc = buildCustomLOSCalculator(calcClass);
+  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
 
+  let label = (`LOS: ${algorithm}`);
   const tokens = new Set([...viewers, ...targets]);
   const locMap = new Map();
   for ( const token of tokens ) locMap.set(token, { x: token.document.x, y: token.document.y });
@@ -355,7 +319,7 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, nPoints,
     }
     await Promise.allSettled(promises);
     const t0 = performance.now();
-    await benchFn(calcs, targets);
+    await benchFn(losViewers, targets);
     const t1 = performance.now();
     timings.push(t1 - t0);
     if ( sleep ) await sleepFn(0);

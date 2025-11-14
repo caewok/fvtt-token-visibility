@@ -67,10 +67,10 @@ export const SETTINGS = {
         POINTS: "los-algorithm-points",
         GEOMETRIC: "los-algorithm-geometric",
         PER_PIXEL: "los-algorithm-per-pixel",
-        HYBRID: "los-algorithm-hybrid",
+//         HYBRID: "los-algorithm-hybrid",
         WEBGL2: "los-algorithm-webgl2",
-        WEBGPU: "los-algorithm-webgpu",
-        WEBGPU_ASYNC: "los-algorithm-webgpu-async"
+//         WEBGPU: "los-algorithm-webgpu",
+//         WEBGPU_ASYNC: "los-algorithm-webgpu-async"
       },
       POINT_OPTIONS: {
         POINTS: "los-points-options-target",
