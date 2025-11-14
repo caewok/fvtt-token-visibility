@@ -254,7 +254,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
        this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
   }
 
-//   _gridPolygons(lookAtM, perspectiveM) {
+//   _gridPolygons() {
 //     const target = this.target;
 //     const { x, y } = target.center;
 //     const z = target.bottomZ + (target.topZ - target.bottomZ);
@@ -262,7 +262,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 //     const gridTris = Grid3dTriangles.trianglesForGridShape()
 //       .filter(tri => tri.isFacing(this.viewpoint))
 //       .map(tri => tri.transform(translateM));
-//     return this._applyPerspective(gridTris, lookAtM, perspectiveM);
+//     return this._applyPerspective(gridTris);
 //   }
 
   /**
@@ -281,14 +281,16 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     return [...geometry.iterateFaces()];
   }
 
-  _lookAtObjectWithPerspective(object, lookAtM, perspectiveM) {
+  _lookAtObjectWithPerspective(object) {
     const polys = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(object, this.viewpoint);
-    return this._applyPerspective(polys, lookAtM, perspectiveM);
+    return this._applyPerspective(polys);
   }
 
-  _applyPerspective(polys, lookAtM, perspectiveM) {
+  _applyPerspective(polys) {
     // Save a bit of time by reusing the poly after the clipZ transform.
     // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
     return polys
       .map(poly => {
         poly = poly.transform(lookAtM).clipZ();

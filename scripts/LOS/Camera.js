@@ -135,7 +135,7 @@ export class Camera {
   get modelMatrix() {
     if ( this.dirtyModel ) {
       // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
-      this.lookAtMatrix.multiply4x4(this.perspectiveMatrix, this.#modelMatrix).multiply4x4(this.mirrorM, this.#modelMatrix);
+      this.lookAtMatrix.multiply4x4(this.perspectiveMatrix, this.#modelMatrix);
       this.#dirtyModel = false;
     }
     return this.#modelMatrix;
@@ -304,7 +304,7 @@ export class Camera {
     this.#mirrorM.setIndex(0, 0, value.x);
     this.#mirrorM.setIndex(1, 1, value.y);
     this.#mirrorM.setIndex(2, 2, value.z);
-    this.dirtyModel = true
+    this.dirtyPerspective = true
   };
 
   /** @type {MatrixFloat32<4x4>} */
@@ -314,6 +314,7 @@ export class Camera {
       // const { fov, aspect, zNear, zFar } = this.#perspectiveParameters;
       // MatrixFloat32.perspectiveZO(fov, aspect, zNear, zFar, this.#M.perspective);
       this.#perspectiveFn(...Object.values(this.#internalParams), this.#M.perspective);
+      this.#M.perspective.multiply4x4(this.mirrorMatrix, this.#M.perspective);
       this.#dirtyPerspective = false;
     }
     return this.#M.perspective;
