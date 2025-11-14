@@ -286,7 +286,7 @@ export class ViewerLOS {
    * @returns {boolean}
    */
   static targetWithinLimitedAngleVision(visionSource, targetOrShape) {
-    const targetShape = targetOrShape instanceof Token ? targetOrShape.tokenBorder : targetOrShape;
+    const targetShape = targetOrShape instanceof foundry.canvas.placeables.Token ? targetOrShape.tokenBorder : targetOrShape;
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return true;
 

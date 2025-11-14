@@ -22,7 +22,7 @@ PATCHES.BASIC = {};
  * @returns {boolean}                           Whether the point is currently visible.
  */
 function testVisibility(wrapped, point, {tolerance=2, object=null}={}) {
-  if ( !(object instanceof Token) ) return wrapped(point, { tolerance, object });
+  if ( !(object instanceof foundry.canvas.placeables.Token) ) return wrapped(point, { tolerance, object });
   return wrapped(point, { tolerance: 0, object });
 }
 

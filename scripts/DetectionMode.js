@@ -26,7 +26,7 @@ PATCHES.BASIC = {};
  * @returns {boolean}                           Is the test target visible?
  */
 function testVisibility(wrapped, visionSource, mode, {object, tests}={}) {
-  if ( !(object instanceof Token) ) return wrapped(visionSource, mode, { object, tests });
+  if ( !(object instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, { object, tests });
 
   // Use only a single test. This typically should already occur, if called from
   // CanvasVisibility.prototype.testVisibility.
@@ -44,12 +44,12 @@ PATCHES.BASIC.WRAPS = { testVisibility };
  */
 function _testLOS(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
-  if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
+  if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
 
   // Check the cached value; return if there.
   let hasLOS = test.los.get(visionSource);
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
-  
+
   // Only apply this test to token viewers.
   const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
   if ( !atv ) return wrapped(visionSource, mode, target, test);
@@ -77,7 +77,7 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
  */
 function _testRange(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
-  if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
+  if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
   const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
   if ( !atv ) return wrapped(visionSource, mode, target, test);
   return atv.tokenWithinVisibleRange(target, mode.range);
@@ -94,7 +94,7 @@ function _testRange(wrapped, visionSource, mode, target, test) {
  */
 function _testAngle(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
-  if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
+  if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
 
   const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
   if ( !atv ) return wrapped(visionSource, mode, target, test);
