@@ -20,7 +20,7 @@ const PATCHES = {
   Canvas: PATCHES_Canvas,
   CanvasVisibility: PATCHES_CanvasVisibility,
   "foundry.canvas.perception.DetectionMode": PATCHES_DetectionMode,
-  DetectionModeBasicSight: PATCHES_DetectionModeBasicSight,
+  "foundry.canvas.perception.DetectionModeDarkvision": PATCHES_DetectionModeBasicSight,
   ClientSettings: PATCHES_Settings,
   SettingsConfig: PATCHES_SettingsConfig,
   "foundry.canvas.placeables.Token": PATCHES_Token,
