@@ -1,6 +1,7 @@
 /* globals
 ClipperLib,
 CONFIG,
+CONST,
 PIXI,
 Region,
 */
@@ -302,7 +303,7 @@ export class GeometryRegion {
   static shapeToClipperPaths(shape) {
     if ( shape.clipperPaths.length !== 1 ) console.error("Shape clipper paths not recognized.");
     let clipperPoints = shape.clipperPaths;
-    const scalingFactor = Region.CLIPPER_SCALING_FACTOR;
+    const scalingFactor = CONST.CLIPPER_SCALING_FACTOR;
     const ClipperPaths = CONFIG.tokenvisibility.ClipperPaths;
     if ( shape.data.hole ^ !ClipperLib.Clipper.Orientation(clipperPoints[0]) ) {
       // Don't modify the original array.

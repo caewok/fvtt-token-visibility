@@ -1,5 +1,6 @@
 /* globals
 CONFIG,
+CONST,
 foundry,
 Region,
 */
@@ -348,7 +349,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
 
   toClipperPaths() {
     const clipperPoints = this.shape.clipperPaths;
-    const scalingFactor = Region.CLIPPER_SCALING_FACTOR;
+    const scalingFactor = CONST.CLIPPER_SCALING_FACTOR;
     const ClipperPaths = CONFIG.tokenvisibility.ClipperPaths;
     switch ( CONFIG[MODULE_ID].clipperVersion ) {
       // For both, the points are already scaled, so just pass through the scaling factor to the constructor.
