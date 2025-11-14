@@ -271,6 +271,7 @@ function benchLOS(calcs, targets) {
     for ( const target of targets ) {
       if ( calc.viewer === target ) continue;
       calc.target = target;
+      calc.calculate();
       out.push(calc.hasLOS);
     }
   }
