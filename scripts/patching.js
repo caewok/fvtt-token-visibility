@@ -18,10 +18,10 @@ import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js
 
 const PATCHES = {
   Canvas: PATCHES_Canvas,
-  CanvasVisibility: PATCHES_CanvasVisibility,
+  "foundry.canvas.groups.CanvasVisibility": PATCHES_CanvasVisibility,
   "foundry.canvas.perception.DetectionMode": PATCHES_DetectionMode,
   "foundry.canvas.perception.DetectionModeDarkvision": PATCHES_DetectionModeBasicSight,
-  ClientSettings: PATCHES_Settings,
+  "foundry.helpers.ClientSettings": PATCHES_Settings,
   SettingsConfig: PATCHES_SettingsConfig,
   "foundry.canvas.placeables.Token": PATCHES_Token,
   "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,
