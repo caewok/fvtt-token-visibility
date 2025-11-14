@@ -75,7 +75,7 @@ export class RegionTracker extends PlaceableTracker {
    * Should this region be included in the scene render?
    */
   includePlaceable(region) {
-    if ( region.shapes.length === 0 ) return false;
+    if ( region.document.regionShapes.length === 0 ) return false;
 
     // TODO: Change this to a setting in the region config, and specifies sense type(s) that block.
     if ( !CONFIG[MODULE_ID].regionsBlock ) return false;

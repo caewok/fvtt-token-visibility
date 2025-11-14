@@ -94,7 +94,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   }
 
   initialize() {
-    this.region.shapes.forEach(shape => {
+    this.region.document.regionShapes.forEach(shape => {
       shape[MODULE_ID] ??= {};
       shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
       shape[MODULE_ID][this.constructor.ID].initialize();
@@ -103,7 +103,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   }
 
   update() {
-    this.region.shapes.forEach(shape => {
+    this.region.document.regionShapes.forEach(shape => {
       shape[MODULE_ID] ??= {};
       shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
       shape[MODULE_ID][this.constructor.ID].update();
@@ -112,7 +112,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   }
 
   _updateAABB() {
-    const newAABB = AABB3d.union(this.region.shapes.map(shape =>
+    const newAABB = AABB3d.union(this.region.document.regionShapes.map(shape =>
       shape[MODULE_ID][this.constructor.ID].aabb));
     newAABB.clone(this.aabb);
   }
@@ -138,7 +138,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
     multiTops.length = 0;
     multiBottoms.length = 0;
     sides.length = 0;
-    if ( !region.shapes.length ) return;
+    if ( !region.document.regionShapes.length ) return;
 
     const { topZ, bottomZ } = regionElevation(region);
     const uniqueShapes = this.combineRegionShapes();
@@ -171,7 +171,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
   combineRegionShapes() {
     const region = this.placeable;
-    const nShapes = region.shapes.length;
+    const nShapes = region.document.regionShapes.length;
     if ( !nShapes ) return [];
 
     // Form groups of shapes. If any shape overlaps another, they share a group.
@@ -180,12 +180,12 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
     const uniqueShapes = [];
     for ( let i = 0; i < nShapes; i += 1 ) {
       if ( usedShapes.has(i) ) continue; // Don't need to add to usedShapes b/c not returning to this i.
-      const shape = region.shapes[i];
+      const shape = region.document.regionShapes[i];
       const shapeGroup = [shape];
       uniqueShapes.push(shapeGroup);
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         if ( usedShapes.has(j) ) continue;
-        const other = region.shapes[j];
+        const other = region.document.regionShapes[j];
         const otherGeometry = other[MODULE_ID][this.constructor.ID];
         const otherPIXI = otherGeometry.shapePIXI;
 
@@ -215,7 +215,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
    * @returns {number|null} The distance along the ray
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
-    for ( const shape of this.region.shapes ) {
+    for ( const shape of this.region.document.regionShapes ) {
       const t = shape[MODULE_ID][this.constructor.ID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
       if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }

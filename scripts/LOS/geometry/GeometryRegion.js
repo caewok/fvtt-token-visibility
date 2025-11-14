@@ -70,14 +70,14 @@ export class GeometryRegion {
   }
 
   // Could use IterableWeakMap if we really need to iterate over the map.
-  // For now, accessing shapes via region.shapes is working.
+  // For now, accessing shapes via region.document.regionShapes is working.
   shapeData = new WeakMap();
 
   updateShapes() {
     // Cache the PIXI shape and geometry for each region shape.
     this.shapeData = new WeakMap();
     const opts = { addUVs: this.addUVs, addNormals: this.addNormals, density: this.constructor.CIRCLE_DENSITY };
-    this.region.shapes.forEach((shape, idx) => {
+    this.region.document.regionShapes.forEach((shape, idx) => {
       this.shapeData.set(shape, {
         shapePIXI: convertRegionShapeToPIXI(shape).clone(),
         geom: GeometryRectangleRegionShape.fromRegion(this.region, idx, opts),
@@ -86,7 +86,7 @@ export class GeometryRegion {
   }
 
 //   calculateModelMatrices() {
-//     return this.region.shapes.map(shape => {
+//     return this.region.document.regionShapes.map(shape => {
 //       this.shapeData.get(shape).geom.calculateTransformMatrix();
 //     });
 //   }
@@ -253,11 +253,11 @@ export class GeometryRegion {
    */
   combineRegionShapes() {
     const region = this.region;
-    const nShapes = region.shapes.length;
+    const nShapes = region.document.regionShapes.length;
     if ( !nShapes ) return [];
 
     // TODO: Should not be needed.
-    for ( const shape of region.shapes ) {
+    for ( const shape of region.document.regionShapes ) {
       if ( !this.shapeData.has(shape) ) {
         this.updateShapes();
         break;
@@ -270,11 +270,11 @@ export class GeometryRegion {
     const uniqueShapes = [];
     const omitInteriorWalls = !this.allowInteriorWalls;
     for ( let i = 0; i < nShapes; i += 1 ) {
-      const shape = region.shapes[i];
+      const shape = region.document.regionShapes[i];
       if ( usedShapes.has(shape) ) continue; // Don't need to add to usedShapes b/c not returning to this shape.
       const shapeGroup = { shapes: [shape], hasHole: shape.data.hole, idx: i, type: shape.data.type, path: null };
       for ( let j = i + 1; j < nShapes; j += 1 ) {
-        const other = region.shapes[j];
+        const other = region.document.regionShapes[j];
         if ( usedShapes.has(other) ) continue;
         const otherPIXI = this.shapeData.get(other).shapePIXI;
 
@@ -348,7 +348,7 @@ const RegionShapeMixin = function(Base) {
     }
 
     static fromRegion(region, idx, opts = {}) {
-      const shape = region.shapes[idx];
+      const shape = region.document.regionShapes[idx];
       const cl = REGION_SHAPE_CLASSES[shape.data.type];
       const geom = new cl({ region, placeable: shape, ...opts });
       geom.id = `${region.sourceId}_${shape.data.type}_${idx}`;
