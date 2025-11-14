@@ -31,6 +31,8 @@
     "tokenvisibility.settings.los-algorithm-geometric": "Geometric",
     "tokenvisibility.settings.los-algorithm-webgl2": "WebGL2",
     "tokenvisibility.settings.los-algorithm-webgpu": "WebGPU",
+    "tokenvisibility.settings.los-algorithm-per-pixel": "Per Pixel",
+    "tokenvisibility.settings.los-algorithm-sample-pixel": "Sample Pixel",
 
     "tokenvisibility.settings.los-points-viewer.Name": "Points",
     "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Beware that this can dramatically increase the number of tests needed to determine visibility. Foundry default is 'Center' (one point)",

@@ -482,8 +482,8 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.viewerLOS.viewpoints.forEach((vp, idx) => {
       // vp.calculate();
       const draw = this.getPopoutDraw(idx);
-      const c = this.getPopoutContainer(idx);
-      vp._draw3dDebug(draw, { width, height });
+      const container = this.getPopoutContainer(idx);
+      vp._draw3dDebug(draw, { container, width, height });
       // vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
     })
     super.updateDebugForPercentVisible(percentVisible);
