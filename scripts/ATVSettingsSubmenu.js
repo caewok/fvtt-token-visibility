@@ -1,108 +1,14 @@
 /* globals
-FormApplication
-foundry,
 game,
-SettingsConfig,
-ui
+ui,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
-import { Settings, SETTINGS } from "./settings.js";
+import { SETTINGS } from "./settings.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
-
-export class DefaultSettings {
-  static get changeableSettings() {
-    const { RANGE, LOS } = SETTINGS;
-    const { VIEWER, TARGET } = LOS;
-    return [
-      RANGE.ALGORITHM,
-      RANGE.POINTS3D,
-      RANGE.DISTANCE3D,
-
-      VIEWER.NUM_POINTS,
-      VIEWER.INSET,
-
-      TARGET.ALGORITHM,
-      TARGET.PERCENT,
-      TARGET.LARGE,
-
-      TARGET.POINT_OPTIONS.NUM_POINTS,
-      TARGET.POINT_OPTIONS.INSET,
-      TARGET.POINT_OPTIONS.POINTS3D
-    ];
-  }
-
-  static get foundry() {
-    const { RANGE, LOS } = SETTINGS;
-    const { VIEWER, TARGET } = LOS;
-    return {
-      // Range
-//       [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
-      [RANGE.POINTS3D]: false,
-      [RANGE.DISTANCE3D]: false,
-
-      // LOS Viewer
-//       [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
-      // Unused: [SETTINGS.LOS.VIEWER.INSET]: 0
-
-      // LOS Target
-      [TARGET.ALGORITHM]: TARGET.TYPES.POINTS,
-      [TARGET.PERCENT]: 0,
-      [TARGET.LARGE]: false,
-
-      // LOS Point options
-//       [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.NINE,
-      [TARGET.POINT_OPTIONS.INSET]: 0.75,
-      [TARGET.POINT_OPTIONS.POINTS3D]: false
-    };
-  }
-
-  static get dnd5e() {
-    const { RANGE, LOS } = SETTINGS;
-    const { VIEWER, TARGET } = LOS;
-    return {
-      // Range
-//       [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
-      [RANGE.POINTS3D]: false,
-      [RANGE.DISTANCE3D]: false,
-
-      // LOS Viewer
-//       [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
-      [VIEWER.INSET]: 0,
-
-      // LOS Target
-      [TARGET.ALGORITHM]: TARGET.TYPES.POINTS,
-      [TARGET.PERCENT]: 0,
-      [TARGET.LARGE]: true,
-
-      // LOS Point options
-//       [TARGET.POINT_OPTIONS.NUM_POINTS]: SETTINGS.POINT_TYPES.FOUR,
-      [TARGET.POINT_OPTIONS.INSET]: 0,
-      [TARGET.POINT_OPTIONS.POINTS3D]: false
-    };
-  }
-
-  static get threeD() {
-    const { RANGE, LOS } = SETTINGS;
-    const { VIEWER, TARGET } = LOS;
-    return {
-      // Range
-//       [RANGE.ALGORITHM]: SETTINGS.POINT_TYPES.NINE,
-      [RANGE.POINTS3D]: true,
-      [RANGE.DISTANCE3D]: true,
-
-      // LOS Viewer
-//       [VIEWER.NUM_POINTS]: SETTINGS.POINT_TYPES.CENTER,
-
-      // LOS Target
-      [TARGET.ALGORITHM]: TARGET.TYPES.AREA3D,
-      [TARGET.PERCENT]: 0.2,
-      [TARGET.LARGE]: true
-    };
-  }
-}
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
 export class ATVSettingsSubmenu extends SettingsSubmenu {
   static DEFAULT_OPTIONS = {
@@ -118,10 +24,10 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
 
   async _onFirstRender(context, options) {
     await super._onFirstRender(context, options);
-    const losTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
-    if ( losTab ) {
+    const targetTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
+    if ( targetTab ) {
       // Add data action to the algorithm selector.
-      const algSelector = losTab.querySelector('[name="tokenvisibility.los-algorithm"]');
+      const algSelector = targetTab.querySelector('[name="tokenvisibility.los-algorithm"]');
       algSelector.addEventListener("change", ATVSettingsSubmenu._onAlgorithmSelect.bind(this));
       await ATVSettingsSubmenu._onAlgorithmSelect.call(this);
     }
@@ -129,10 +35,57 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
 
   static async #onResetDND5e() {
     console.log("onResetDND5e");
+
+    // Set each value in the application.
+    const PI = ViewerLOS.POINT_INDICES;
+    const LOS = SETTINGS.LOS;
+    const optsDnd5e = {
+      losTarget: {
+        [LOS.TARGET.ALGORITHM]: LOS.TARGET.TYPES.POINTS,
+        [LOS.TARGET.PERCENT]: 0,
+        [LOS.TARGET.LARGE]: true,
+
+        [LOS.TARGET.POINT_OPTIONS.POINTS]: [PI.CORNERS.FACING, PI.CORNERS.BACK],
+        [LOS.TARGET.POINT_OPTIONS.INSET]: 0,
+      },
+      losViewer: {
+        [LOS.VIEWER.POINTS]: [PI.CORNERS.FACING, PI.CORNERS.BACK],
+        [LOS.VIEWER.INSET]: 0,
+      },
+    };
+    setOptionValues.call(this, optsDnd5e);
+    const moduleName = game.i18n.localize(`${MODULE_ID}.name`);
+    const message = game.i18n.localize(`${MODULE_ID}.settings.submenu.notifyDND5e`);
+    ui.notifications.notify(`${moduleName} | ${message}`);
   }
 
   static async #onReset3d() {
     console.log("onReset3d");
+
+    // Set each value in the application.
+    const PI = ViewerLOS.POINT_INDICES;
+    const { LOS, RANGE, POINT_TYPES } = SETTINGS;
+    const opts3d = {
+      losTarget: {
+        [LOS.TARGET.ALGORITHM]: LOS.TARGET.TYPES.GEOMETRIC,
+        [LOS.TARGET.PERCENT]: 0.2,
+        [LOS.TARGET.LARGE]: false,
+      },
+      losViewer: {
+        [LOS.VIEWER.POINTS]: [PI.CENTER],
+        [LOS.VIEWER.INSET]: 0,
+      },
+      range: {
+        [RANGE.ALGORITHM]: POINT_TYPES.NINE,
+        [RANGE.POINTS3D]: true,
+        [RANGE.DISTANCE3D]: true,
+      }
+    }
+    setOptionValues.call(this, opts3d);
+    await this.constructor._onAlgorithmSelect.call(this);
+    const moduleName = game.i18n.localize(`${MODULE_ID}.name`);
+    const message = game.i18n.localize(`${MODULE_ID}.settings.submenu.notify3d`);
+    ui.notifications.notify(`${moduleName} | ${message}`);
   }
 
   static async _onAlgorithmSelect() {
@@ -151,3 +104,20 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
   }
 }
 
+/**
+ * Helper to set different elements of the settings submenu.
+ * @param {object} tabOpts
+ *   - @prop {object} tab name
+ *     - @prop {object} setting name: setting value
+ */
+function setOptionValues(tabOpts) {
+    for ( const tab of Object.keys(tabOpts) ) {
+      const tabElem = this.element.querySelectorAll(`[data-tab="${tab}"]`)[1];
+      if ( !tabElem ) continue; // Failsafe.
+      for ( const [key, value] of Object.entries(tabOpts[tab]) ) {
+        const optionElem = tabElem.querySelector(`[name="${MODULE_ID}.${key}"]`);
+        if ( !optionElem ) continue;
+        optionElem.value = value;
+      }
+    }
+  }
