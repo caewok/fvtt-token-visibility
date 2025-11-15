@@ -116,6 +116,10 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     },
   };
 
+  _onClickAction(event, target) {
+    console.log(event, target);
+  }
+
   static async #onResetDND5e() {
     console.log("onResetDND5e");
   }
