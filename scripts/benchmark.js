@@ -11,7 +11,7 @@ PIXI
 import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
-import { buildCustomLOSViewer, buildCustomLOSCalculator } from "./LOSCalculator.js";
+import { buildCustomLOSViewer, buildCustomLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
 import { registerArea3d } from "./patching.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { MODULE_ID } from "./const.js";
@@ -105,6 +105,11 @@ function summarizeTokenRange(viewers, targets) {
 export async function benchTokenVisibility(n = 100, sleep = false) {
   const { targets } = getTokens();
   console.log(`\nBenchmarking visibility of ${targets.length} targets from user's current perspective and settings.`);
+  console.log("\nBenchmarking token los");
+  console.log("Calculator Config");
+  console.table(foundry.utils.flattenObject(CalculatorConfig()));
+  console.log(`\nViewer Config for algorithm ${Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)}`);
+  console.table(LOSViewerConfig());
 
   await storeDebugStatus();
   const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
@@ -225,10 +230,14 @@ export async function benchTokenLOS(n = 100, opts = {}) {
   // summarizeTokenVisibility(viewers, targets);
 
   console.log("\nBenchmarking token los");
+  console.log("Calculator Config");
+  console.table(foundry.utils.flattenObject(CalculatorConfig()));
+  console.log("\nViewer Config")
+  console.table(LOSViewerConfig());
+
+
   await storeDebugStatus();
-
   opts.movement ??= false
-
   console.log(`${viewers.length} viewers, ${targets.length} targets`)
   console.log("\n")
   const fn = opts.movement ? runLOSTestWithMovement : runLOSTest;

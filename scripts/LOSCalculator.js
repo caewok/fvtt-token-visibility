@@ -54,7 +54,7 @@ function BlockingConfig() {
 /**
  * @returns {CalculatorConfig|PointsCalculatorConfig}  See PercentVisibleCalculator.js and PointsCalculator.js
  */
-function CalculatorConfig() {
+export function CalculatorConfig() {
   return {
     blocking: BlockingConfig(),
     largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false,
@@ -76,7 +76,7 @@ function CalculatorConfig() {
 /**
  * @returns {ViewerLOSConfig} See ViewerLOS.js
  */
-function LOSViewerConfig() {
+export function LOSViewerConfig() {
   return {
     viewpointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.VIEWER.POINTS)),
     viewpointInset: Settings.get(Settings.KEYS.LOS.VIEWER.INSET),
