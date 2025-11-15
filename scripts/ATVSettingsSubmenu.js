@@ -113,8 +113,20 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     actions: {
       resetDND5e: ATVSettingsSubmenu.#onResetDND5e,
       reset3d: ATVSettingsSubmenu.#onReset3d,
+      atvAlgorithmSelect: ATVSettingsSubmenu._onAlgorithmSelect,
     },
   };
+
+  async _onFirstRender(context, options) {
+    await super._onFirstRender(context, options);
+    const losTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
+    if ( losTab ) {
+      // Add data action to the algorithm selector.
+      const algSelector = losTab.querySelector('[name="tokenvisibility.los-algorithm"]');
+      algSelector.setAttribute("data-action", "atvAlgorithmSelect")
+      await ATVSettingsSubmenu._onAlgorithmSelect.call(this);
+    }
+  }
 
   _onClickAction(event, target) {
     console.log(event, target);
@@ -126,6 +138,21 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
 
   static async #onReset3d() {
     console.log("onReset3d");
+  }
+
+  static async _onAlgorithmSelect() {
+    const losTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
+    if ( losTab ) {
+    // Add data action to the algorithm selector.
+      const algSelector = losTab.querySelector('[name="tokenvisibility.los-algorithm"]');
+      const isPoints = algSelector.value === "los-algorithm-points";
+      const targetOptionsElem = losTab.querySelector('[name="tokenvisibility.los-points-options-target"]');
+      targetOptionsElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
+
+      const targetInsetElem = losTab.querySelector('[name="tokenvisibility.los-inset-target"]');
+      targetInsetElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
+    }
+    this.setPosition(this.position); // Force display refresh.
   }
 }
 
