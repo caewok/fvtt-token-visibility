@@ -11,6 +11,7 @@ import { Point3d } from "./geometry/3d/Point3d.js";
 import { Sphere } from "./geometry/3d/Sphere.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 import { MatrixFlat } from "./geometry/MatrixFlat.js";
+import { Plane } from "./geometry/3d/Plane.js";
 import { PercentVisibleCalculatorPoints } from "./LOS/calculators/PointsCalculator.js";
 
 /*
@@ -241,20 +242,27 @@ export class TokenLightMeter {
    * @returns {BitSet}
    */
   _viewableSphereIndices(viewpoint) {
-    viewpoint ??= this.viewpoint;
-    const center = Point3d.fromTokenCenter(this.token);
     const visible = new FastBitSet();
+    const viewplane = this.viewplane;
+    const viewSide = Math.sign(viewplane.whichSide(viewpoint));
     this.tokenPoints.forEach((pt, idx) => {
-      const a2 = Point3d.distanceSquaredBetween(center, pt);
-      const b2 = Point3d.distanceSquaredBetween(center, viewpoint);
-      const c2 = Point3d.distanceSquaredBetween(pt, viewpoint);
-      if ( (a2 + b2) >= c2 ) visible.add(idx);
+      if ( Math.sign(viewplane.whichSide(pt)) === viewSide ) visible.add(idx);
     });
     return visible;
   }
 
   _obscuredSphereIndices(viewpoint) {
     return this._viewableSphereIndices(viewpoint).flip(); // Flips in place, versus "not" which creates new set.
+  }
+
+  get viewplane() {
+    const center = Point3d.fromTokenCenter(this.target);
+    const dirHorizontal = this.viewpoint.subtract(center);
+    const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, center.z);
+    const perpB = center.add(dirB);
+    const dirC = dirHorizontal.cross(dirB);
+    const perpC = center.add(dirC)
+    return Plane.fromPoints(center, perpB, perpC)
   }
 }
 
@@ -269,7 +277,7 @@ function maskBitSet(data, mask) {
   const arr = mask.toArray();
   const bs = new FastBitSet();
   let j = 0;
-  mask.forEach(elem => {
+  arr.forEach(elem => {
     if ( data.has(elem) ) bs.add(j);
     j++;
   });

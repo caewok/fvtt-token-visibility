@@ -10,6 +10,7 @@ Token,
 import { MODULE_ID } from "./const.js";
 import { buildLOSViewer } from "./LOSCalculator.js";
 import { ATVTokenHandler } from "./TokenHandler.js";
+import { TokenLightMeter } from "./TokenLightMeter.js";
 
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -22,7 +23,8 @@ PATCHES.DEBUG = {};
  * @param {PlaceableObject} object    The object instance being drawn
  */
 function drawToken(token) {
-  if ( !token[ATVTokenHandler.constructor.ATVTokenHandlerID] ) new ATVTokenHandler(token);
+  if ( !token[ATVTokenHandler.constructor.ID] ) new ATVTokenHandler(token);
+  if ( !token[TokenLightMeter.constructor.ID] ) new TokenLightMeter(token);
 }
 
 /**
@@ -31,12 +33,8 @@ function drawToken(token) {
  */
 function destroyToken(token) {
   const losCalc = token[MODULE_ID]?.losCalc;
-  if ( losCalc ) {
-    losCalc.destroy();
-    token[MODULE_ID].losCalc = undefined;
-  }
-  const atv = token[MODULE_ID]?.[ATVTokenHandler.constructor.ATVTokenHandlerID];
-  if ( atv ) token[MODULE_ID][ATVTokenHandler.constructor.ATVTokenHandlerID] = undefined;
+  if ( losCalc ) losCalc.destroy();
+  delete token[MODULE_ID];
 }
 
 /**

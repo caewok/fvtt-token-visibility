@@ -250,12 +250,6 @@ Hooks.once("init", function() {
      */
     lightMeasurementNumPoints: 5,
 
-    /**
-     * When enabled, will treat circular token shapes as spheres. Otherwise, uses a cylinder.
-     * @type {boolean}
-     */
-    useTokenSphere: false,
-
     useCaching: false,
 
     /**
@@ -357,6 +351,26 @@ Hooks.once("init", function() {
      */
     lightMeterObscureType: CONST.LIGHTING_LEVELS.DIM,
 
+    /**
+     * Use spheres to represent token shapes.
+     * Sphere radius will be the maximum of half of width, height, vertical height.
+     * Circular token shapes will be treated as cylinders if this is false.
+     * @type {boolean}
+     */
+    useTokenSphere: false,
+
+    /**
+     * Spacing between points for the per-pixel calculator.
+     * The per-pixel calculator tests a point lattice on the token shape to determine visibility.
+     * Larger spacing means fewer points and better performance, sacrificing resolution.
+     * @type {number} In pixel units
+     */
+    perPixelSpacing: 10,
+
+    /**
+     * Turn on certain debug logging.
+     * @type {boolean}
+     */
     debug: false,
   };
 
