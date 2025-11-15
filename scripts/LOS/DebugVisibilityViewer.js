@@ -8,7 +8,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Area3dPopoutCanvas, Area3dPopout } from "./Area3dPopout.js";
+import { Area3dPopoutCanvas, Area3dPopout, Area3dPopoutV2 } from "./Area3dPopout.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
 import { ViewerLOS } from "./ViewerLOS.js";
@@ -212,9 +212,9 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   constructor(opts) {
     super(opts);
     this.popout = new this.constructor.popoutClass({
-      width: this.constructor.WIDTH,
-      height: this.constructor.HEIGHT + 100,
-      resizable: false
+//       width: this.constructor.WIDTH,
+//       height: this.constructor.HEIGHT + 100,
+//       resizable: false
     });
   }
 
@@ -230,7 +230,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   }
 
   async openPopout() {
-    await this.popout._render(true, {
+    await this.popout.render(true, {
       contextType: this.constructor.CONTEXT_TYPE,
       contextConfiguration: this.constructor.CONTEXT_OPTS,
     });
@@ -247,9 +247,8 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
     if ( !this.popoutIsRendered ) return;
     title ??= this.popoutTitle;
     const popout = this.popout;
-    const elem = popout.element.find(".window-title");
-    elem[0].textContent = title;
-    popout.options.title = title; // Just for consistency.
+    const titleElem = this.popout.element.getElementsByClassName("window-title")[0];
+    if ( titleElem ) titleElem.textContent = title;
   }
 
   /** @type {string} */
@@ -261,7 +260,8 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   updatePopoutFooter(percentVisible) {
     const viewer = this.viewer;
     const target = this.target;
-    const visibleTextElem = this.popout.element[0].getElementsByTagName("p")[0];
+    const elem = this.popout instanceof Application ? this.popout.element[0] : this.popout.element;
+    const visibleTextElem = elem.getElementsByTagName("p")[0];
     visibleTextElem.innerHTML = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible`;
     // console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
   }
@@ -284,7 +284,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
 
 export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPopoutAbstract {
   /** @type {class} */
-  static popoutClass = Area3dPopout;
+  static popoutClass = Area3dPopoutV2;
 
   /** @type {PIXI.Container} */
   #popoutContainers = [];

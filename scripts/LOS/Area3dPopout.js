@@ -51,16 +51,18 @@ export class Area3dPopout extends Application {
   /** @override */
   async _render(force=false, options={}) {
     await super._render(force, options);
+    const { width, height } = this.options;
+
     const pixiApp = this.pixiApp = new PIXI.Application({
-      width: this.options.width,
-      height: this.options.height - 75, // Leave space at bottom for text (percent visibility).
+      width,
+      height: height - 75, // Leave space at bottom for text (percent visibility).
       view: document.getElementById(`${this.id}_canvas`),
       backgroundColor: 0xD3D3D3
     });
 
     // Center of window should be 0,0
-    pixiApp.stage.position.x = this.options.width * 0.5;  // 200 for width 400
-    pixiApp.stage.position.y = (this.options.height - 75) * 0.5;  // 200 for height 400
+    pixiApp.stage.position.x = width * 0.5;  // 200 for width 400
+    pixiApp.stage.position.y = (height - 75) * 0.5;  // 200 for height 400
 
     // Scale to give a bit more room in the popout
     pixiApp.stage.scale.x = 1;
@@ -89,17 +91,22 @@ export class Area3dPopout extends Application {
   }
 }
 
-export class Area3dPopoutV2 extends foundry.applications.api.ApplicationV2 {
+export class Area3dPopoutV2 extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
 
   static DEFAULT_OPTIONS = {
+    id: `${MODULE_ID}-app-{id}`,
+    // classes: `${MODULE_ID}-popout`,
     window: {
       title: `${MODULE_ID} Debug`,
+      minimizable: true,
     },
     position: {
       width: 400,
-      height: 400,
-    }
+      height: 500,
+    },
   };
+
+  static PARTS = { popout: { template: `modules/${MODULE_ID}/scripts/LOS/templates/area3d_popout.html` }};
 
   #savedTop = null;
 
@@ -107,6 +114,7 @@ export class Area3dPopoutV2 extends foundry.applications.api.ApplicationV2 {
 
   static TEMPLATE = `modules/${MODULE_ID}/scripts/LOS/templates/area3d_popout.html`;
 
+  pixiApp;
 
   /* -------------------------------------------- */
   close() {
@@ -115,15 +123,49 @@ export class Area3dPopoutV2 extends foundry.applications.api.ApplicationV2 {
     super.close();
   }
 
-  async _renderHTML(_context, _options) {
-    // let html = await renderTemplate(this.constructor.template, {});
+  async _onFirstRender(context, options) {
+    const out = await super._onFirstRender(context, options);
+
+    const width = this.options.position.width;
+    const height = this.options.position.height - 100; // Leave space at bottom for text (percent visibility).
+    const appElem = document.getElementById(this.id);
+    const canvasElem = appElem.getElementsByTagName("canvas")[0];
+    if ( !canvasElem ) return console.error(`${MODULE_ID}|PIXI App canvas not found.`);
+    const pixiApp = this.pixiApp = new PIXI.Application({
+      width,
+      height,
+      view: canvasElem,
+      backgroundColor: 0xD3D3D3
+    });
+
+    // Center of window should be 0,0
+    pixiApp.stage.position.x = width * 0.5;  // 200 for width 400
+    pixiApp.stage.position.y = height * 0.5;  // 200 for height 400
+
+    // Scale to give a bit more room in the popout
+    pixiApp.stage.scale.x = 1;
+    pixiApp.stage.scale.y = 1;
+
+    OPEN_POPOUTS.add(this);
+
+    return out;
+
+
+    // let html = await renderTemplate(this.constructor.TEMPLATE, {});
     // return html;
-    return document.createElement("canvas");
+    // const canvas = document.createElement("canvas");
   }
 
-  _replaceHTML(result, content, _options) {
-    content.replaceChildren(result);
+  _onClose(options) {
+    this.#savedTop = this.position.top;
+    this.#savedLeft = this.position.left;
+    if ( !this.closing && this.pixiApp & this.pixiApp.renderer ) this.pixiApp.destroy();
+    OPEN_POPOUTS.delete(this);
   }
+
+//   _replaceHTML(result, content, _options) {
+//     content.replaceChildren(result);
+//   }
 }
 
 export class Area3dPopoutCanvas extends Application {
