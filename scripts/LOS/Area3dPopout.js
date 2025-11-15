@@ -20,6 +20,8 @@ export class Area3dPopout extends Application {
   /** @type {PIXI.Application} */
   pixiApp;
 
+  get canvas() { return document.getElementById(`${this.id}_canvas`); }
+
   /* -------------------------------------------- */
 
   /** @override */
@@ -56,7 +58,7 @@ export class Area3dPopout extends Application {
     const pixiApp = this.pixiApp = new PIXI.Application({
       width,
       height: height - 75, // Leave space at bottom for text (percent visibility).
-      view: document.getElementById(`${this.id}_canvas`),
+      view: this.canvas,
       backgroundColor: 0xD3D3D3
     });
 
@@ -116,6 +118,13 @@ export class Area3dPopoutV2 extends foundry.applications.api.HandlebarsApplicati
 
   pixiApp;
 
+  get canvas() {
+    const appElem = document.getElementById(this.id);
+    const canvasElem = appElem.getElementsByTagName("canvas")[0];
+    if ( !canvasElem ) return console.error(`${MODULE_ID}|PIXI App canvas not found.`);
+    return canvasElem;
+  }
+
   /* -------------------------------------------- */
   close() {
     this.#savedTop = this.position.top;
@@ -128,13 +137,10 @@ export class Area3dPopoutV2 extends foundry.applications.api.HandlebarsApplicati
 
     const width = this.options.position.width;
     const height = this.options.position.height - 100; // Leave space at bottom for text (percent visibility).
-    const appElem = document.getElementById(this.id);
-    const canvasElem = appElem.getElementsByTagName("canvas")[0];
-    if ( !canvasElem ) return console.error(`${MODULE_ID}|PIXI App canvas not found.`);
     const pixiApp = this.pixiApp = new PIXI.Application({
       width,
       height,
-      view: canvasElem,
+      view: this.canvas,
       backgroundColor: 0xD3D3D3
     });
 
@@ -173,9 +179,6 @@ export class Area3dPopoutCanvas extends Application {
   #savedTop = null;
 
   #savedLeft = null;
-
-  /** @type {PIXI.Application} */
-  pixiApp;
 
   static async supportsWebGPU() {
     if ( !navigator.gpu ) return false;
@@ -230,68 +233,75 @@ export class Area3dPopoutCanvas extends Application {
   close() {
     this.#savedTop = this.position.top;
     this.#savedLeft = this.position.left;
-    if ( !this.closing && this.pixiApp ) this.pixiApp.destroy();
     super.close();
     OPEN_POPOUTS.delete(this);
   }
 }
 
+export class Area3dPopoutCanvasV2 extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
 
-// Hooks.on("canvasReady", function() {
-//   for ( const [key, obj] of Object.entries(AREA3D_POPOUTS) ) {
-//     obj.app = new Area3dPopout({ title: `Area3d Debug: ${key}`, type: key });
-//   }
-// });
+  static DEFAULT_OPTIONS = {
+    id: `${MODULE_ID}-app-{id}`,
+    // classes: `${MODULE_ID}-popout`,
+    window: {
+      title: `${MODULE_ID} Debug`,
+      minimizable: true,
+    },
+    position: {
+      width: 400,
+      height: 500,
+    },
+    contextType: "webgl",
+    contextConfiguration: {
+      powerPreference: "high-performance",
+      antialias: false,
+      depth: true,
+      stencil: true,
+      alpha: true,  // Equivalent to alpha: "premultiplied" in WebGPU.
+      premultiplied: true,
+    },
+  };
 
-// Hooks.on("renderArea3dPopout", function(app, _html, _data) {
-//   const id = `${app.options.id}_canvas`;
-//   app.pixiApp = new PIXI.Application({
-// width: 400, height: 400, view: document.getElementById(id), backgroundColor: 0xD3D3D3 });
-//
-//   // Center of window should be 0,0
-//   app.pixiApp.stage.position.x = 200;  // 200 for width 400
-//   app.pixiApp.stage.position.y = 200;  // 200 for height 400
-//
-//   // Scale to give a bit more room in the popout
-//   app.pixiApp.stage.scale.x = 1;
-//   app.pixiApp.stage.scale.y = 1;
-// });
-
-/* Testing
-api = game.modules.get("tokenvisibility").api
-Area3dPopout = api.Area3dPopout
-popout = new Area3dPopout()
-popout.render(true)
-
-gr  = new PIXI.Graphics();
-gr.beginFill(0x6200EE);
-gr.lineStyle(3, 0xff0000);
-gr.drawCircle(100, 100, 50);
-gr.endFill();
-
-popout.pixiApp.stage.addChild(gr)
-
-
-class Popout extends Application {
-  static get defaultOptions() {
-    const options = super.defaultOptions;
-    options.popOut = true;
-    options.id = "popout";
-    options.template = `modules/tokenvisibility/templates/area3d_popout.html`;
-    return options;
+  static async supportsWebGPU() {
+    if ( !navigator.gpu ) return false;
+    const adapter = await navigator.gpu.requestAdapter();
+    return Boolean(adapter);
   }
+
+  get canvas() {
+    const appElem = document.getElementById(this.id);
+    const canvasElem = appElem.getElementsByTagName("canvas")[0];
+    if ( !canvasElem ) return console.error(`${MODULE_ID}|PIXI App canvas not found.`);
+    return canvasElem;
+  }
+
+  static PARTS = { popout: { template: `modules/${MODULE_ID}/scripts/LOS/templates/area3d_popout.html` }};
+
+  #savedTop = null;
+
+  #savedLeft = null;
+
+  /* -------------------------------------------- */
+  close() {
+    this.#savedTop = this.position.top;
+    this.#savedLeft = this.position.left;
+    super.close();
+  }
+
+  async _onFirstRender(context, options) {
+    const out = await super._onFirstRender(context, options);
+
+    this.contextType = options.contextType ?? ((await this.constructor.supportsWebGPU()) ? "webgpu" : "webgl");
+    this.context = this.canvas.getContext(this.contextType, options.contextConfiguration);
+    OPEN_POPOUTS.add(this);
+    return out;
+  }
+
+  _onClose(options) {
+    this.#savedTop = this.position.top;
+    this.#savedLeft = this.position.left;
+    OPEN_POPOUTS.delete(this);
+  }
+
 }
 
-app = new Popout()
-app.render(true)
-
-pixiApp = new PIXI.Application({width: 400, height: 400, view: document.getElementById("area3dcanvas")})
-
-gr  = new PIXI.Graphics();
-gr.beginFill(0x6200EE);
-gr.lineStyle(3, 0xff0000);
-gr.drawCircle(100, 100, 50);
-gr.endFill();
-pixiApp.stage.addChild(gr)
-
-*/

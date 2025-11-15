@@ -8,7 +8,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Area3dPopoutCanvas, Area3dPopout, Area3dPopoutV2 } from "./Area3dPopout.js";
+import { Area3dPopoutV2, Area3dPopoutCanvasV2 } from "./Area3dPopout.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
 import { ViewerLOS } from "./ViewerLOS.js";
@@ -192,7 +192,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   static HEIGHT = 400;
 
   /** @type {class} */
-  static popoutClass = Area3dPopoutCanvas;
+  static popoutClass = Area3dPopoutCanvasV2;
 
   static CONTEXT_TYPE = "webgl2";
 
@@ -246,7 +246,6 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   _updatePopoutTitle(title) {
     if ( !this.popoutIsRendered ) return;
     title ??= this.popoutTitle;
-    const popout = this.popout;
     const titleElem = this.popout.element.getElementsByClassName("window-title")[0];
     if ( titleElem ) titleElem.textContent = title;
   }
@@ -260,8 +259,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   updatePopoutFooter(percentVisible) {
     const viewer = this.viewer;
     const target = this.target;
-    const elem = this.popout instanceof Application ? this.popout.element[0] : this.popout.element;
-    const visibleTextElem = elem.getElementsByTagName("p")[0];
+    const visibleTextElem = this.popout.element.getElementsByTagName("p")[0];
     visibleTextElem.innerHTML = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible`;
     // console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
   }
