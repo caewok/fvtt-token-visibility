@@ -113,7 +113,6 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     actions: {
       resetDND5e: ATVSettingsSubmenu.#onResetDND5e,
       reset3d: ATVSettingsSubmenu.#onReset3d,
-      atvAlgorithmSelect: ATVSettingsSubmenu._onAlgorithmSelect,
     },
   };
 
@@ -123,13 +122,9 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     if ( losTab ) {
       // Add data action to the algorithm selector.
       const algSelector = losTab.querySelector('[name="tokenvisibility.los-algorithm"]');
-      algSelector.setAttribute("data-action", "atvAlgorithmSelect")
+      algSelector.addEventListener("change", ATVSettingsSubmenu._onAlgorithmSelect.bind(this));
       await ATVSettingsSubmenu._onAlgorithmSelect.call(this);
     }
-  }
-
-  _onClickAction(event, target) {
-    console.log(event, target);
   }
 
   static async #onResetDND5e() {
