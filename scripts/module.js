@@ -357,7 +357,7 @@ Hooks.once("init", function() {
      */
     lightMeterObscureType: CONST.LIGHTING_LEVELS.DIM,
 
-    debug: true,
+    debug: false,
   };
 
   Object.defineProperty(CONFIG[MODULE_ID], "ClipperPaths", {
