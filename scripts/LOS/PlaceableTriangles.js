@@ -797,7 +797,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
         : null;
 
     let containsTB = 0;
-    for ( const shape of region.shapes ) {
+    for ( const shape of region.document.regionShapes ) {
       // If the point is contained by more shapes than holes, it must intersect a non-hole.
       // Example: Rect contains ellipse hole that contains circle. If in circle, than +2 - 1 = 1. If in ellipses, +1 -1 = 0.
       if ( ixTB && this.shapesPixi.get(shape).contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));
@@ -842,7 +842,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     if ( !this.shapesSides ) this.shapesSides = new WeakMap();
 
     const region = this.placeable;
-    for ( const shape of region.shapes ) {
+    for ( const shape of region.document.regionShapes ) {
       const pixiShape = convertRegionShapeToPIXI(shape);
       const poly = pixiShape.toPolygon();
       const quads = [];
@@ -895,7 +895,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
 
   combineRegionShapes() {
     const region = this.placeable;
-    const nShapes = region.shapes.length;
+    const nShapes = region.document.regionShapes.length;
     if ( !nShapes ) return [];
 
     // Form groups of shapes. If any shape overlaps another, they share a group.
@@ -904,13 +904,13 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     const uniqueShapes = [];
     for ( let i = 0; i < nShapes; i += 1 ) {
       if ( usedShapes.has(i) ) continue; // Don't need to add to usedShapes b/c not returning to this i.
-      const shape = region.shapes[i];
+      const shape = region.document.regionShapes[i];
       const shapePIXI = convertRegionShapeToPIXI(shape).clone();
       const shapeGroup = [{ shape, shapePIXI }];
       uniqueShapes.push(shapeGroup);
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         if ( usedShapes.has(j) ) continue;
-        const other = region.shapes[j];
+        const other = region.document.regionShapes[j];
         const otherPIXI = convertRegionShapeToPIXI(other); // Temporary.
 
         // Any overlap counts.
@@ -934,7 +934,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
     this.tops.length = 0;
     this.bottoms.length = 0;
     this.sides.length = 0;
-    if ( !region.shapes.length ) return;
+    if ( !region.document.regionShapes.length ) return;
 
     const { topZ, bottomZ } = regionElevation(region);
     const uniqueShapes = this.combineRegionShapes();
@@ -984,7 +984,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
    */
   static shapeToClipperPaths(shape) {
     const clipperPoints = shape.clipperPaths;
-    const scalingFactor = Region.CLIPPER_SCALING_FACTOR;
+    const scalingFactor = CONST.CLIPPER_SCALING_FACTOR;
     const ClipperPaths = CONFIG.tokenvisibility.ClipperPaths;
     switch ( CONFIG[MODULE_ID].clipperVersion ) {
       // For both, the points are already scaled, so just pass through the scaling factor to the constructor.

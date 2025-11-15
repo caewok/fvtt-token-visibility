@@ -1,7 +1,7 @@
 /* globals
 canvas,
 CONFIG,
-DetectionModeBasicSight,
+foundry,
 game,
 PIXI
 */
@@ -203,7 +203,7 @@ async function revertRangeSettings() {
 
 function benchRange(viewers, targets) {
   const out = [];
-  const testFn = DetectionModeBasicSight.prototype._testRange;
+  const testFn = foundry.canvas.perception.DetectionModeDarkvision.prototype._testRange;
   for ( const viewer of viewers ) {
     for ( const target of targets ) {
       if ( viewer === target ) continue;

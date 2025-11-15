@@ -287,7 +287,7 @@ function regionsOcclude(rayOrigin, rayDirection, regions) {
         : null;
 
     let containsTB = 0;
-    for ( const shape of region.shapes ) {
+    for ( const shape of region.document.regionShapes ) {
       // If the point is contained by more shapes than holes, it must intersect a non-hole.
       // Example: Rect contains ellipse hole that contains circle. If in circle, than +2 - 1 = 1. If in ellipses, +1 -1 = 0.
       if ( ixTB && handler.shapesPixi.get(shape).contains(ixTB.x, ixTB.y) ) containsTB += (1 * (-1 * shape.data.hole));

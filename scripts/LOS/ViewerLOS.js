@@ -1,7 +1,6 @@
 /* globals
 canvas,
 CONFIG,
-DetectionMode,
 foundry,
 LimitedAnglePolygon,
 PIXI,
@@ -28,14 +27,14 @@ import { Viewpoint } from "./Viewpoint.js";
 
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
-  [DetectionMode.DETECTION_TYPES.SIGHT]: "sight",
-  [DetectionMode.DETECTION_TYPES.SOUND]: "sound",
-  [DetectionMode.DETECTION_TYPES.MOVE]: "move",
-  [DetectionMode.DETECTION_TYPES.OTHER]: "light",
-  "sight": DetectionMode.DETECTION_TYPES.SIGHT,
-  "sound": DetectionMode.DETECTION_TYPES.SOUND,
-  "move": DetectionMode.DETECTION_TYPES.MOVE,
-  "light": DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT]: "sight",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND]: "sound",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE]: "move",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER]: "light",
+  "sight": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT,
+  "sound": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND,
+  "move": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE,
+  "light": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
 }
 
 /**
@@ -286,7 +285,7 @@ export class ViewerLOS {
    * @returns {boolean}
    */
   static targetWithinLimitedAngleVision(visionSource, targetOrShape) {
-    const targetShape = targetOrShape instanceof Token ? targetOrShape.tokenBorder : targetOrShape;
+    const targetShape = targetOrShape instanceof foundry.canvas.placeables.Token ? targetOrShape.tokenBorder : targetOrShape;
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return true;
 

@@ -17,24 +17,24 @@ export const ATVTokenHandlerID = "visibility";
 
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
-  [DetectionMode.DETECTION_TYPES.SIGHT]: "sight",
-  [DetectionMode.DETECTION_TYPES.SOUND]: "sound",
-  [DetectionMode.DETECTION_TYPES.MOVE]: "move",
-  [DetectionMode.DETECTION_TYPES.OTHER]: "light",
-  "sight": DetectionMode.DETECTION_TYPES.SIGHT,
-  "sound": DetectionMode.DETECTION_TYPES.SOUND,
-  "move": DetectionMode.DETECTION_TYPES.MOVE,
-  "light": DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT]: "sight",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND]: "sound",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE]: "move",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER]: "light",
+  "sight": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT,
+  "sound": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND,
+  "move": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE,
+  "light": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
 }
 
 /** @type {Object<"lighting"|"sounds"|DetectionMode.DETECTION_TYPES>} */
 const DM_SOURCE_TYPES = {
-  "lighting": DetectionMode.DETECTION_TYPES.SIGHT,
-  "sounds": DetectionMode.DETECTION_TYPES.SOUND,
-  [DetectionMode.DETECTION_TYPES.SIGHT]: "lighting",
-  [DetectionMode.DETECTION_TYPES.SOUND]: "sounds",
-  [DetectionMode.DETECTION_TYPES.MOVE]: "lighting",
-  [DetectionMode.DETECTION_TYPES.OTHER]: "lighting",
+  "lighting": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT,
+  "sounds": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND,
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT]: "lighting",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND]: "sounds",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE]: "lighting",
+  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER]: "lighting",
 };
 
 

@@ -336,7 +336,7 @@ export class Frustum {
     const geometry = this.#geometryWithinAABB(region);
     if ( !geometry ) return false;
 
-    for ( const shape of region.shapes ) {
+    for ( const shape of region.document.regionShapes ) {
       if ( shape.data.hole ) continue;
       const shapeGeometry = this.#geometryWithinAABB(shape);
       if ( shapeGeometry ) return true; // TODO: Is it worth testing against the frustrum directly for any region shapes?

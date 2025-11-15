@@ -49,7 +49,7 @@ export function initializeVisionSources(sources) {
   // For each token vision source, create a viewerLOS if one does not yet exist.
   for ( const source of sources.values() ) {
     const token = source.object;
-    if ( !token || !(token instanceof Token) ) continue;
+    if ( !token || !(token instanceof foundry.canvas.placeables.Token) ) continue;
     const obj = token[MODULE_ID] ??= {};
     obj.losCalc ??= buildLOSViewer(token);
   }

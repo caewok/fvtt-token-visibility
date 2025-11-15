@@ -229,7 +229,7 @@ export class PercentVisibleCalculatorAbstract {
     this.#viewer = value;
 
     // Default the viewpoint to the center of the token.
-    const method = value instanceof Token ? "fromTokenCenter" : "fromPointSource";
+    const method = value instanceof foundry.canvas.placeables.Token ? "fromTokenCenter" : "fromPointSource";
     Point3d[method](value, this.#viewpoint);
   }
 
