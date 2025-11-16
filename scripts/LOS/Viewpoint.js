@@ -73,7 +73,7 @@ export class Viewpoint {
   targetOverlapsViewpoint() {
     const bounds = this.calculator.targetShape;
     if ( !bounds.contains(this.viewpoint.x, this.viewpoint.y) ) return false;
-    return this.viewpoint.between(this.target.bottomZ, this.target.topZ);
+    return this.viewpoint.z.between(this.target.bottomZ, this.target.topZ);
   }
 
   /**
