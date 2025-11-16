@@ -100,6 +100,8 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
     sides: [],
   }
 
+
+
   get quad3d() { return this.faces.top; }
 
   _updateFaces() {
