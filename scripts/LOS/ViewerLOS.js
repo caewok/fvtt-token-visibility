@@ -5,7 +5,6 @@ foundry,
 LimitedAnglePolygon,
 PIXI,
 Ray,
-Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -257,7 +256,11 @@ export class ViewerLOS {
     if ( this.dirty ) this._clean();
     this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
-      if ( this._viewpointBlockedByViewer(vp.viewpoint) ) continue;
+      if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
+        vp.lastResult = vp.calculator._createResult();
+        vp.lastResult.makeFullyNotVisible();
+        continue;
+      }
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) break;
@@ -610,7 +613,37 @@ export class ViewerLOS {
     this._clearCanvasDebug();
     this._drawVisibleTokenBorder(this.#debugCanvasDraw);
     this._drawFrustumLightSources(this.#debugCanvasDraw);
+    this._drawLineOfSightDebug(this.#debugCanvasDraw)
     this.viewpoints.forEach(vp => vp._drawCanvasDebug(this.#debugViewpointDraw));
+  }
+
+  /**
+   * For debugging.
+   * Draw the line from the viewpoint to the target.
+   * Color red if fails LOS threshold test for that viewpoint.
+   */
+  _drawLineOfSightDebug(draw) {
+    const COLORS = Draw.COLORS;
+    const simpleTest = this.simpleVisibilityTest();
+    if ( ~simpleTest ) {
+      const color = simpleTest ? COLORS.lightgreen : COLORS.lightred;
+      for ( const vp of this.viewpoints ) draw.segment({
+        a: vp.viewpoint,
+        b: vp.targetLocation,
+      }, { color, alpha: 0.5 });
+      return;
+    }
+
+    for ( const vp of this.viewpoints ) {
+      if ( !vp.lastResult ) continue;
+      const percentVis = vp.percentVisible;
+      const color = percentVis === 0 ? COLORS.red
+        : percentVis < this.threshold ? COLORS.orange : COLORS.green;
+      draw.segment({
+        a: vp.viewpoint,
+        b: vp.targetLocation,
+      }, { color, alpha: 0.5 });
+    }
   }
 
 
@@ -619,7 +652,7 @@ export class ViewerLOS {
    * Draw the constrained token border and visible shape, if any.
    */
   _drawVisibleTokenBorder(draw) {
-    const color = CONFIG.GeometryLib.Draw.COLORS.blue;
+    const color = Draw.COLORS.blue;
 
     // Fill in the target border on canvas
     if ( this.target ) {
@@ -644,7 +677,7 @@ export class ViewerLOS {
       if ( !(isDim || isBright) ) continue;
       const fillAlpha = isBright ? 0.3 : 0.1;
       const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint: srcOrigin, target: this.target });
-      frustum.draw2d({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
+      frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.yellow, fillAlpha });
     }
   }
 }
