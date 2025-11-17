@@ -1,4 +1,5 @@
 /* globals
+CONFIG,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -17,6 +18,7 @@ import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Draw } from "../../geometry/Draw.js";
+import { Plane } from "../../geometry/3d/Plane.js";
 
 export class PercentVisiblePerPixelResult extends PercentVisibleResult {
 
@@ -69,10 +71,22 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
 export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePerPixelResult;
 
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    spacing: 10, // Pixel spacing between points
-  };
+  /**
+   * How many spherical points are necessary to achieve a given spacing for a given sphere radius?
+   * @param {number} [radius=1]
+   * @param {number} [spacing]        Defaults to the module spacing default for per-pixel calculator.
+   * @returns {number}
+   */
+  static numberOfSphericalPointsForSpacing(r = 1, l = CONFIG[MODULE_ID].perPixelSpacing || 10) {
+    // Surface area of a sphere is 4πr^2.
+    // With N points, divide by N to get average area per point.
+    // Assuming perfectly equidistant points, consider side length of a square with average area.
+    // l = sqrt(4πr^2/N) = 2r*sqrt(π/N)
+    // To get N, square both sides and simplify.
+    // N = (4πr^2) / l^2
+    // l = 2 * r * Math.sqrt(Math.PI / N);
+    return (4 * Math.PI * (r ** 2)) / (l ** 2);
+  }
 
   /** @type {Camera} */
   camera = new Camera({
@@ -82,7 +96,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     mirrorMDiag: new Point3d(1, 1, 1),
   });
 
-  targetPoints = [];
+  visiblePoints = new FastBitSet();
 
   initializeCalculations() {
     this._initializeCamera();
@@ -101,45 +115,95 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   }
 
   _generateTargetPoints() {
-    // TODO: Handle sphere points as a distinct option.
-    // TODO: Cache and reuse target points. Maybe in the target geometry tracker.
+    return CONFIG[MODULE_ID].useTokenSphere ? this._generateSphericalPoints() : this._generateFacePoints();
+  }
+
+  _generateFacePoints() {
     const faces = this.target[MODULE_ID].geometry.faces;
     const targetFaces = [faces.top, faces.bottom, ...faces.sides];
-    const numFaces = targetFaces.length
+    const numFaces = targetFaces.length;
 
     const result = this._createResult();
-    this.targetPoints = Array(numFaces);
     result.data.unobscured = Array(numFaces);
     result.data.numPoints = Array(numFaces);
-    const opts = { spacing: this.config.spacing, startAtEdge: false };
     for ( let i = 0; i < numFaces; i += 1 ) {
+      // Only score the faces viewable from the viewpoint.
       const face = targetFaces[i];
       if ( !face.isFacing(this.viewpoint) ) continue;
-      result.data.unobscured[i] = new FastBitSet();
 
-      // TODO: Cache the target points.
-      this.targetPoints[i] = face.pointsLattice(opts);
-      result.data.numPoints[i] = this.targetPoints[i].length;
+      // Track the target points of viewable faces.
+      result.data.unobscured[i] = new FastBitSet();
     }
+    return result;
+  }
+
+  _generateSphericalPoints() {
+    const result = this._createResult();
+    result.data.unobscured = [new FastBitSet()];
+    result.data.numPoints = [0];
     return result;
   }
 
   /* ----- NOTE: Pixel testing ----- */
 
-  counts = new Uint16Array(5);
-
   countTargetPixels(result) {
-    const targetPoints = this.targetPoints;
-    for ( let i = 0, iMax = targetPoints.length; i < iMax; i += 1 ) {
-      const pts = targetPoints[i];
-      if ( !pts ) continue;
+    return CONFIG[MODULE_ID].useTokenSphere ? this.countTargetSphericalPixels(result) : this.countTargetFacePixels(result);
+  }
+
+  countTargetFacePixels(result) {
+    const facePoints = this.target[MODULE_ID].geometry.facePoints;
+    const targetFacePoints = [facePoints.top, facePoints.bottom, ...facePoints.sides];
+    for ( let i = 0, iMax = targetFacePoints.length; i < iMax; i += 1 ) {
       const bs = result.data.unobscured[i];
+      if ( !bs ) continue;
+      bs.clear();
+
+      const pts = targetFacePoints[i];
+      result.data.numPoints[i] = pts.length;
       for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
         if ( !this.pointIsOccluded(pts[j]) ) bs.add(j);
       }
     }
     return result;
   }
+
+  countTargetSphericalPixels(result) {
+    result.data.numPoints[0] = 0;
+
+    // Sum the total visible pixels, which will form the denominator.
+    // Only test for obscurity if the pixel is visible (i.e., not behind the sphere).
+    const targetPoints = this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints;
+    const bs = result.data.unobscured[0];
+    bs.clear();
+
+    // Test visibility by constructing a plane perpendicular to the viewpoint --> center line at center.
+    // Point must be in front of the plane to be visible.
+    const viewplane = this.viewplane;
+    const viewSide = Math.sign(viewplane.whichSide(this.viewpoint));
+    const visiblePoints = this.visiblePoints;
+    visiblePoints.clear();
+    for ( let j = 0, jMax = targetPoints.length; j < jMax; j += 1 ) {
+      const pt = targetPoints[j];
+      if ( Math.sign(viewplane.whichSide(pt)) === viewSide ) {
+        visiblePoints.add(j);
+        if ( !this.pointIsOccluded(pt) ) bs.add(j);
+      }
+    }
+    result.data.numPoints[0] = this.visiblePoints.cardinality;
+    return result;
+  }
+
+  // Test visibility by constructing a plane perpendicular to the viewpoint --> center line at center.
+  get viewplane() {
+    const center = Point3d.fromTokenCenter(this.target);
+    const dirHorizontal = this.viewpoint.subtract(center);
+    const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, center.z);
+    const perpB = center.add(dirB);
+    const dirC = dirHorizontal.cross(dirB);
+    const perpC = center.add(dirC)
+    return Plane.fromPoints(center, perpB, perpC)
+  }
+
 
   /**
    * Given a point in 3d space (presumably on a token face), test for occlusion between it and viewpoint.
@@ -190,16 +254,24 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       radius: 2,
       alpha: 0.5,
     };
+    const facePoints = this.target[MODULE_ID].geometry.facePoints;
+    const targetPoints = CONFIG[MODULE_ID].useTokenSphere
+      ? [this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints]
+      : [facePoints.top, facePoints.bottom, ...facePoints.sides];
+
     for ( let i = 0, iMax = result.data.unobscured.length; i < iMax; i += 1 ) {
       const face = result.data.unobscured[i];
       if ( !face ) continue;
       const bs = result.data.unobscured[i];
-      const pts = this._applyPerspective(this.targetPoints[i]);
+      const pts = this._applyPerspective(targetPoints[i]);
       for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
+        const pt = pts[j];
+        if ( CONFIG[MODULE_ID].useTokenSphere && !this.visiblePoints.has(j) ) continue;
+
         opts.color = bs.has(j) ? Draw.COLORS.blue : Draw.COLORS.red;
         // draw.point({ x: i * 5, y: j}, opts);
-        draw.point(pts[j].multiply(mult, a), opts);
-        console.log(pts[j].multiply(mult));
+        draw.point(pt.multiply(mult, a), opts);
+        // console.log(pt.multiply(mult));
       }
     }
     mult.release();

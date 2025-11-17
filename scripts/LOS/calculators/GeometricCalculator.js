@@ -1,6 +1,7 @@
 /* globals
 ClipperLib,
 CONFIG,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -15,6 +16,10 @@ import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { Camera } from "../Camera.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "../placeable_tracking/TokenGeometryTracker.js";
+
+// Geometry
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Circle3d } from "../../geometry/3d/Polygon3d.js";
 
 // Debug
 import { Draw } from "../../geometry/Draw.js";
@@ -112,7 +117,11 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Can combine to Polygons3d.
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const targetPolys3d = CONFIG.GeometryLib.threeD.Polygons3d.from3dPolygons(this.targetPolys);
-    return targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor });
+
+    // For spheres, need to determine density of the points based on the actual radius.
+    const density = PIXI.Circle.approximateVertexDensity(this.targetRadius)
+
+    return targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor, density });
   }
 
   /**
@@ -224,6 +233,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   blockingTerrainPolys = [];
 
   _constructPerspectiveTargetPolygons() {
+    if ( CONFIG[MODULE_ID].useTokenSphere ) {
+      this.targetPolys = this._constructPerspectiveTargetSphere();
+      // this.targetPolys[0].radius *= 100;
+      return;
+
+    }
+
     const viewpoint = this.viewpoint
     const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
     this.targetPolys = this._applyPerspective(facingPolys, this.camera.lookAtMatrix, this.camera.perspectiveMatrix);
@@ -233,6 +249,39 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     if ( txPolys.every(poly => poly.iteratePoints({close: false}).every(pt => pt.z > 0)) ) {
       console.warn(`_applyPerspective|All target z values are positive for ${this.viewer.name} --> ${this.target.name}`);
     }
+  }
+
+  get targetRadius() {
+    const { h, w, topZ, bottomZ } = this.target;
+    const xy = Math.max(h, w) * 0.5;
+    const height = (topZ - bottomZ) * 0.5;
+    return Math.sqrt(xy ** 2 + height ** 2);
+  }
+
+  _constructPerspectiveTargetSphere() {
+    // Perspective sphere is a circle in 2d.
+    // By definition, center is 0,0.
+    // Need to determine the radius.
+    // Get a point on the edge of the sphere at the viewplane (perpendicular to the viewpoint-->center line).
+    const radius = this.targetRadius;
+
+    const center = Point3d.fromTokenCenter(this.target);
+    const dirHorizontal = this.viewpoint.subtract(center);
+    const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, 0).normalize();
+    const perpB = center.add(dirB.multiplyScalar(radius));
+
+    // Translate the point to the perspective view to get the radius.
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    const perspectivePt = Point3d.tmp;
+    lookAtM.multiplyPoint3d(perpB, perspectivePt);
+    perspectiveM.multiplyPoint3d(perspectivePt, perspectivePt);
+
+    const centerPt = Point3d.tmp;
+    lookAtM.multiplyPoint3d(center, centerPt);
+    perspectiveM.multiplyPoint3d(centerPt, centerPt);
+
+    return [Circle3d.fromCircle(new PIXI.Circle(0, 0, PIXI.Point.distanceBetween(perspectivePt, centerPt)), centerPt.z)];
   }
 
   _constructPerspectiveObstaclePolygons() {

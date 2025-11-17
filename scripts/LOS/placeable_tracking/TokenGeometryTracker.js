@@ -12,15 +12,17 @@ import {
   GeometryConstrainedToken,
   GeometryHexToken,
   GeometryLitToken,
-  GeometryBrightLitToken } from "../geometry/GeometryToken.js";
+  GeometryBrightLitToken,
+  GeometrySphericalToken, } from "../geometry/GeometryToken.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
-import { Polygon3d, Quad3d } from "../../geometry/3d/Polygon3d.js";
+import { Polygon3d, Quad3d, Circle3d } from "../../geometry/3d/Polygon3d.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
-import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { MatrixFlat } from "../../geometry/MatrixFlat.js";
 import { AABB3d } from "../../geometry/AABB.js";
 import { almostBetween } from "../../geometry/util.js";
+import { Sphere } from "../../geometry/3d/Sphere.js";
 
 /* WallGeometry
 Placeable geometry stored in wall placeables.
@@ -71,13 +73,13 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
   calculateTranslationMatrix() {
     // Move from center of token.
     const ctr = Point3d.fromTokenCenter(this.token);
-    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
+    MatrixFlat.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
     return this.matrices.translation;
   }
 
   calculateScaleMatrix() {
     const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
-    MatrixFloat32.scale(width, height, zHeight, this.matrices.scale);
+    MatrixFlat.scale(width, height, zHeight, this.matrices.scale);
     return this.matrices.scale;
   }
 
@@ -98,44 +100,70 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
     top: new CONFIG.GeometryLib.threeD.Quad3d(),
     bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
     sides: [],
-  }
+  };
+
+  facePoints = {
+    top: [],
+    bottom: [],
+    sides: [], // Double array
+  };
 
   get quad3d() { return this.faces.top; }
 
   _updateFaces() {
     const border2d = this.constrainTokens ? this.token.constrainedTokenBorder : this.token.tokenBorder;
-    return this._updateFacesForBorder(border2d);
+    this._updateFacesForBorder(border2d);
+    this._generateFacePoints();
   }
 
   _updateFacesForBorder(border2d) {
     const faces = this.faces;
     const { topZ, bottomZ } = this.token;
 
-    if ( border2d instanceof PIXI.Polygon ) {
-      if ( !(faces.top instanceof Polygon3d) ) faces.top = new Polygon3d();
-      Polygon3d.fromPolygon(border2d, topZ, faces.top);
-    } else if ( border2d instanceof PIXI.Rectangle ){ // PIXI.Rectangle
-      if ( !(faces.top instanceof Quad3d) ) faces.top = new Quad3d();
-      Quad3d.fromRectangle(border2d, topZ, faces.top);
-    } else {
-      if ( !(faces.top instanceof Polygon3d) ) faces.top = new Polygon3d();
-      Polygon3d.fromPolygon(border2d.toPolygon(), topZ, faces.top);
-    }
+    if ( border2d instanceof PIXI.Rectangle ) faces.top = Quad3d.fromRectangle(border2d, topZ);
+    else if ( border2d instanceof PIXI.Circle ) faces.top = Circle3d.fromCircle(border2d, topZ);
+    else faces.top = Polygon3d.fromPolygon(border2d.toPolygon(), topZ);
 
-    // Confirm the orientation by testing against a point directly above the border plane.
-    const pt0 = faces.top.points[0];
-    const tmp = Point3d.tmp.set(pt0.x, pt0.y, pt0.z + 1);
-    if ( !faces.top.isFacing(tmp) ) faces.top.reverseOrientation();
+    // Confirm the orientation by testing against a point within the token.
+    const ctr2d = border2d.center;
+    const ctr3d = Point3d.tmp.set(ctr2d.x, ctr2d.y, bottomZ + ((topZ - bottomZ) * 0.5));
+    if ( faces.top.isFacing(ctr3d) ) faces.top.reverseOrientation();
+
+    /*
+    Point3d = CONFIG.GeometryLib.threeD.Point3d
+    krusk = _token
+    geometry = krusk.tokenvisibility.geometry
+    border2d = krusk.tokenBorder
+    let { topZ, bottomZ } = krusk
+    ctr2d = border2d.center;
+    ctr3d = Point3d.tmp.set(ctr2d.x, ctr2d.y, bottomZ + ((topZ - bottomZ) * 0.5));
+    geometry.faces.top.isFacing(ctr3d)
+
+
+    */
 
     // Construct the bottom face, reversing its orientation.
-    faces.top.clearCache();
-    if ( !faces.bottom || !(faces.bottom instanceof faces.top.constructor) ) faces.bottom = new faces.top.constructor();
-    faces.top.clone(faces.bottom);
-    faces.bottom.reverseOrientation();
+    faces.bottom = faces.top.clone();
     faces.bottom.setZ(bottomZ);
+    faces.bottom.reverseOrientation();
 
     // Now build the sides from the top face.
     faces.sides = faces.top.buildTopSides(bottomZ);
+    faces.sides.forEach(side => {
+      if ( side.isFacing(ctr3d) ) side.reverseOrientation();
+    });
+    ctr3d.release();
+  }
+
+  _generateFacePoints() {
+    const opts = { spacing: CONFIG[MODULE_ID].perPixelSpacing || 10, startAtEdge: false };
+    if ( this.faces.top ) this.facePoints.top = this.faces.top.pointsLattice(opts);
+    if ( this.faces.bottom ) this.facePoints.bottom = this.faces.bottom.pointsLattice(opts);
+
+    // Process each side; store in equivalent structure to face.sides array.
+    const numSides = this.faces.sides.length;
+    this.facePoints.sides = new Array(numSides);
+    for ( let i = 0; i < numSides; i += 1 ) this.facePoints.sides[i] = this.faces.sides[i].pointsLattice(opts);
   }
 
   /**
@@ -212,7 +240,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
       this.faces.sides.length = 0;
       return;
     }
-    return this._updateFacesForBorder(border2d);
+    this._updateFacesForBorder(border2d);
   }
 }
 
@@ -253,6 +281,89 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
       this.faces.sides.length = 0;
       return;
     }
-    return this._updateFacesForBorder(border2d);
+    this._updateFacesForBorder(border2d);
+  }
+}
+
+export class SphericalTokenGeometryTracker extends TokenGeometryTracker {
+  static ID = "sphericalGeometry";
+
+  /** @type {GeometryDesc} */
+  static geomClass = GeometrySphericalToken;
+
+  /** @type {number[]} */
+  static _hooks = [];
+
+  static modelMatrixTracker = new FixedLengthTrackingBuffer( { facetLengths: 16, numFacets: 0, type: Float32Array });
+
+  tokenSphere = new Sphere();
+
+  tokenSphereUnitPoints = [];
+
+  tokenSpherePoints = [];
+
+  #scaleM = MatrixFlat.identity(4, 4);
+
+  #translateM = MatrixFlat.identity(4, 4);
+
+  #transformM = MatrixFlat.identity(4, 4);
+
+  _updateFaces() {
+    super._updateFaces();
+
+    // If the radius changes, the number of spherical points may have changed.
+    if ( this.tokenSphere.radius !== this.tokenRadius ) {
+      this.tokenSphere.radius = this.tokenRadius;
+      this.tokenSphereUnitPoints = this._generateSphericalPoints();
+    }
+
+    // Update the position and scale of the token sphere points.
+    // Update the transform matrix.
+    const center = Point3d.fromTokenCenter(this.token);
+    const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
+
+    // const r = this.tokenRadius;
+    MatrixFlat.scale(width * 0.5, height * 0.5, zHeight * 0.5, this.#scaleM);
+    MatrixFlat.translation(center.x, center.y, center.z, this.#translateM);
+    this.#scaleM.multiply4x4(this.#translateM, this.#transformM);
+
+    // Update the token points.
+    const tokenSpherePoints = this.tokenSpherePoints = Array(this.tokenSphereUnitPoints.length);
+    this.tokenSphereUnitPoints.forEach((pt, i) => tokenSpherePoints[i] = this.#transformM.multiplyPoint3d(pt));
+  }
+
+  _generateSphericalPoints() {
+    // TODO: Cache and reuse target points. Maybe in the target geometry tracker.
+    // TODO: Ellipsoids with distinct h, w, z?
+    // See TokenLightMeter
+    const nPoints = Math.floor(this.constructor.numberOfSphericalPointsForSpacing(this.tokenRadius)) || 1;
+    return Sphere.pointsLattice(nPoints);
+  }
+
+  /**
+   * How many spherical points are necessary to achieve a given spacing for a given sphere radius?
+   * @param {number} [radius=1]
+   * @param {number} [spacing]        Defaults to the module spacing default for per-pixel calculator.
+   * @returns {number}
+   */
+  static numberOfSphericalPointsForSpacing(r = 1, l = CONFIG[MODULE_ID].perPixelSpacing || 10) {
+    // Surface area of a sphere is 4πr^2.
+    // With N points, divide by N to get average area per point.
+    // Assuming perfectly equidistant points, consider side length of a square with average area.
+    // l = sqrt(4πr^2/N) = 2r*sqrt(π/N)
+    // To get N, square both sides and simplify.
+    // N = (4πr^2) / l^2
+    // l = 2 * r * Math.sqrt(Math.PI / N);
+    return (4 * Math.PI * (r ** 2)) / (l ** 2);
+  }
+
+  get tokenRadius() {
+    const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
+    return Point3d.distanceBetween(Point3d.tmp.set(0, 0, 0), Point3d.tmp.set(width * 0.5, height * 0.5, zHeight * 0.5));
+  }
+
+  rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
+    const t = this.tokenSphere.rayIntersectionT(rayOrigin, rayDirection);
+    return (t !== null && almostBetween(t, minT, maxT)) ? t : null;
   }
 }

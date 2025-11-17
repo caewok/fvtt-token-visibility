@@ -9,6 +9,8 @@ PIXI,
 
 import { MODULE_ID } from "./const.js";
 
+import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
+
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
@@ -20,7 +22,8 @@ import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracke
 import {
   TokenGeometryTracker,
   LitTokenGeometryTracker,
-  BrightLitTokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
+  BrightLitTokenGeometryTracker,
+  SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
 import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
 
 
@@ -250,12 +253,6 @@ Hooks.once("init", function() {
      */
     lightMeasurementNumPoints: 5,
 
-    /**
-     * When enabled, will treat circular token shapes as spheres. Otherwise, uses a cylinder.
-     * @type {boolean}
-     */
-    useTokenSphere: false,
-
     useCaching: false,
 
     /**
@@ -357,6 +354,26 @@ Hooks.once("init", function() {
      */
     lightMeterObscureType: CONST.LIGHTING_LEVELS.DIM,
 
+    /**
+     * Use spheres to represent token shapes.
+     * Sphere radius will be the maximum of half of width, height, vertical height.
+     * Circular token shapes will be treated as cylinders if this is false.
+     * @type {boolean}
+     */
+    useTokenSphere: false,
+
+    /**
+     * Spacing between points for the per-pixel calculator.
+     * The per-pixel calculator tests a point lattice on the token shape to determine visibility.
+     * Larger spacing means fewer points and better performance, sacrificing resolution.
+     * @type {number} In pixel units
+     */
+    perPixelSpacing: 10,
+
+    /**
+     * Turn on certain debug logging.
+     * @type {boolean}
+     */
     debug: false,
   };
 
@@ -483,7 +500,9 @@ Hooks.once("init", function() {
     FastBitSet,
 
     PATCHER,
-    Patcher, HookPatch, MethodPatch, LibWrapperPatch
+    Patcher, HookPatch, MethodPatch, LibWrapperPatch,
+    geoDelaunay,
+    geoVoronoi,
   };
 });
 
@@ -531,6 +550,7 @@ Hooks.on("canvasReady", function() {
   WallGeometryTracker.registerPlaceableHooks();
   TileGeometryTracker.registerPlaceableHooks();
   TokenGeometryTracker.registerPlaceableHooks();
+  SphericalTokenGeometryTracker.registerPlaceableHooks();
   LitTokenGeometryTracker.registerPlaceableHooks();
   BrightLitTokenGeometryTracker.registerPlaceableHooks();
   RegionGeometryTracker.registerPlaceableHooks();
@@ -538,6 +558,7 @@ Hooks.on("canvasReady", function() {
   WallGeometryTracker.registerExistingPlaceables();
   TileGeometryTracker.registerExistingPlaceables();
   TokenGeometryTracker.registerExistingPlaceables();
+  SphericalTokenGeometryTracker.registerExistingPlaceables();
   LitTokenGeometryTracker.registerExistingPlaceables();
   BrightLitTokenGeometryTracker.registerExistingPlaceables();
   RegionGeometryTracker.registerExistingPlaceables();
