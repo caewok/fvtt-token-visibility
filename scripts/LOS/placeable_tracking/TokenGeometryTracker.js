@@ -100,15 +100,20 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
     top: new CONFIG.GeometryLib.threeD.Quad3d(),
     bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
     sides: [],
-  }
+  };
 
-
+  facePoints = {
+    top: [],
+    bottom: [],
+    sides: [], // Double array
+  };
 
   get quad3d() { return this.faces.top; }
 
   _updateFaces() {
     const border2d = this.constrainTokens ? this.token.constrainedTokenBorder : this.token.tokenBorder;
-    return this._updateFacesForBorder(border2d);
+    this._updateFacesForBorder(border2d);
+    this._generateFacePoints();
   }
 
   _updateFacesForBorder(border2d) {
@@ -140,6 +145,17 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
 
     // Now build the sides from the top face.
     faces.sides = faces.top.buildTopSides(bottomZ);
+  }
+
+  _generateFacePoints() {
+    const opts = { spacing: CONFIG[MODULE_ID].perPixelSpacing || 10, startAtEdge: false };
+    if ( this.faces.top ) this.facePoints.top = this.faces.top.pointsLattice(opts);
+    if ( this.faces.bottom ) this.facePoints.bottom = this.faces.bottom.pointsLattice(opts);
+
+    // Process each side; store in equivalent structure to face.sides array.
+    const numSides = this.faces.sides.length;
+    this.facePoints.sides = new Array(numSides);
+    for ( let i = 0; i < numSides; i += 1 ) this.facePoints.sides[i] = this.faces.sides[i].pointsLattice(opts);
   }
 
   /**
@@ -216,7 +232,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
       this.faces.sides.length = 0;
       return;
     }
-    return this._updateFacesForBorder(border2d);
+    this._updateFacesForBorder(border2d);
   }
 }
 
@@ -257,7 +273,7 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
       this.faces.sides.length = 0;
       return;
     }
-    return this._updateFacesForBorder(border2d);
+    this._updateFacesForBorder(border2d);
   }
 }
 

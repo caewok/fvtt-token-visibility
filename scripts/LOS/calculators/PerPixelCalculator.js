@@ -18,8 +18,6 @@ import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Draw } from "../../geometry/Draw.js";
-import { MatrixFlat } from "../../geometry/MatrixFlat.js";
-import { Sphere } from "../../geometry/3d/Sphere.js";
 import { Plane } from "../../geometry/3d/Plane.js";
 
 export class PercentVisiblePerPixelResult extends PercentVisibleResult {
@@ -73,11 +71,6 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
 export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePerPixelResult;
 
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    spacing: 10, // Pixel spacing between points
-  };
-
   /**
    * How many spherical points are necessary to achieve a given spacing for a given sphere radius?
    * @param {number} [radius=1]
@@ -95,12 +88,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     return (4 * Math.PI * (r ** 2)) / (l ** 2);
   }
 
-  constructor(target, cfg = {}) {
-    // So the configuration can be picked up.
-    cfg.spacing ??= CONFIG[MODULE_ID].perPixelSpacing || 10;
-    super(target, cfg);
-  }
-
   /** @type {Camera} */
   camera = new Camera({
     glType: "webGL2",
@@ -108,8 +95,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     up: new Point3d(0, 0, -1),
     mirrorMDiag: new Point3d(1, 1, 1),
   });
-
-  targetPoints = [];
 
   visiblePoints = new FastBitSet();
 
@@ -134,61 +119,25 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   }
 
   _generateFacePoints() {
-    // TODO: Cache and reuse target points. Maybe in the target geometry tracker.
     const faces = this.target[MODULE_ID].geometry.faces;
     const targetFaces = [faces.top, faces.bottom, ...faces.sides];
-    const numFaces = targetFaces.length
+    const numFaces = targetFaces.length;
 
     const result = this._createResult();
-    this.targetPoints = Array(numFaces);
     result.data.unobscured = Array(numFaces);
     result.data.numPoints = Array(numFaces);
-    const opts = { spacing: this.config.spacing, startAtEdge: false };
     for ( let i = 0; i < numFaces; i += 1 ) {
+      // Only score the faces viewable from the viewpoint.
       const face = targetFaces[i];
       if ( !face.isFacing(this.viewpoint) ) continue;
-      result.data.unobscured[i] = new FastBitSet();
 
-      // TODO: Cache the target points.
-      this.targetPoints[i] = face.pointsLattice(opts);
-      result.data.numPoints[i] = this.targetPoints[i].length;
+      // Track the target points of viewable faces.
+      result.data.unobscured[i] = new FastBitSet();
     }
     return result;
   }
 
-  #scaleM = MatrixFlat.identity(4, 4);
-
-  #translateM = MatrixFlat.identity(4, 4);
-
-  #transformM = MatrixFlat.identity(4, 4);
-
-  get targetRadius() {
-    const { h, w, topZ, bottomZ } = this.target;
-    const xy = Math.max(h, w) * 0.5;
-    const height = (topZ - bottomZ) * 0.5;
-    return Math.sqrt(xy ** 2 + height ** 2);
-  }
-
   _generateSphericalPoints() {
-    // TODO: Cache and reuse target points. Maybe in the target geometry tracker.
-    // TODO: Ellipsoids with distinct h, w, z?
-    // See TokenLightMeter
-    const target = this.target;
-    const r = this.targetRadius
-    const nPoints = Math.floor(this.constructor.numberOfSphericalPointsForSpacing(r)) || 1;
-    const unitPoints = Sphere.pointsLattice(nPoints);
-
-    // Update the transform matrix.
-    const center = Point3d.fromTokenCenter(target);
-    MatrixFlat.scale(r, r, r, this.#scaleM);
-    MatrixFlat.translation(center.x, center.y, center.z, this.#translateM);
-    this.#scaleM.multiply4x4(this.#translateM, this.#transformM);
-
-    // Update the token points.
-    this.targetPoints = [Array(unitPoints.length)];
-    const targetPoints = this.targetPoints[0];
-    unitPoints.forEach((pt, i) => targetPoints[i] = this.#transformM.multiplyPoint3d(pt));
-
     const result = this._createResult();
     result.data.unobscured = [new FastBitSet()];
     result.data.numPoints = [0];
@@ -202,12 +151,15 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   }
 
   countTargetFacePixels(result) {
-    const targetPoints = this.targetPoints;
-    for ( let i = 0, iMax = targetPoints.length; i < iMax; i += 1 ) {
-      const pts = targetPoints[i];
-      if ( !pts ) continue;
+    const facePoints = this.target[MODULE_ID].geometry.facePoints;
+    const targetFacePoints = [facePoints.top, facePoints.bottom, ...facePoints.sides];
+    for ( let i = 0, iMax = targetFacePoints.length; i < iMax; i += 1 ) {
       const bs = result.data.unobscured[i];
+      if ( !bs ) continue;
       bs.clear();
+
+      const pts = targetFacePoints[i];
+      result.data.numPoints[i] = pts.length;
       for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
         if ( !this.pointIsOccluded(pts[j]) ) bs.add(j);
       }
@@ -220,7 +172,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
     // Sum the total visible pixels, which will form the denominator.
     // Only test for obscurity if the pixel is visible (i.e., not behind the sphere).
-    const targetPoints = this.targetPoints[0];
+    const targetPoints = this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints;
     const bs = result.data.unobscured[0];
     bs.clear();
 
@@ -302,11 +254,16 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       radius: 2,
       alpha: 0.5,
     };
+    const facePoints = this.target[MODULE_ID].geometry.facePoints;
+    const targetPoints = CONFIG[MODULE_ID].useTokenSphere
+      ? [this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints]
+      : [facePoints.top, facePoints.bottom, ...facePoints.sides];
+
     for ( let i = 0, iMax = result.data.unobscured.length; i < iMax; i += 1 ) {
       const face = result.data.unobscured[i];
       if ( !face ) continue;
       const bs = result.data.unobscured[i];
-      const pts = this._applyPerspective(this.targetPoints[i]);
+      const pts = this._applyPerspective(targetPoints[i]);
       for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
         const pt = pts[j];
         if ( CONFIG[MODULE_ID].useTokenSphere && !this.visiblePoints.has(j) ) continue;
