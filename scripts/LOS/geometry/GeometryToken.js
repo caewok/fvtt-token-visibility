@@ -13,7 +13,47 @@ import { OBJParser } from "./OBJParser.js";
 import { TriangleSplitter } from "./TriangleSplitter.js";
 import { OTHER_MODULES, FLAGS } from "../../const.js";
 
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Sphere } from "../../geometry/3d/Sphere.js";
+import { Triangle3d } from "../../geometry/3d/Polygon3d.js";
+import { PercentVisibleCalculatorPerPixel } from "../calculators/PerPixelCalculator.js";
+import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
+
 const tmpRect = new PIXI.Rectangle();
+
+/**
+ * Converts 3D Cartesian coordinates (x, y, z) on a sphere
+ * to geographic latitude and longitude in degrees.
+ * @param {Point3d} pt
+ * @returns {PIXI.Point} Object with latitude and longitude in degrees.
+ * @returns {{lon: number, lat: number}}
+ */
+function cartesianToLonLat(pt) {
+  // Calculate the radius 'r' from the center (0,0,0) to the point (x,y,z).
+  // This ensures the function works even if the points aren't on a unit sphere (r=1).
+  const r = pt.magnitude();
+
+  // If r is 0, the point is at the origin. We'll default to (0, 0).
+  if ( r === 0 ) PIXI.Point.tmp.set(0, 0);
+
+  // --- Calculate Latitude ---
+  // Latitude (lat) is the angle from the equatorial (XY) plane.
+  // We can find it using arcsin(z / r).
+  // Math.asin() returns values in radians from -PI/2 to PI/2.
+  const latRadians = Math.asin(pt.z / r);
+
+  // --- Calculate Longitude ---
+  // Longitude (lon) is the angle in the XY-plane from the +X axis.
+  // Math.atan2(y, x) correctly calculates the angle in all four quadrants.
+  // It returns values in radians from -PI to PI.
+  const lonRadians = Math.atan2(-pt.y, pt.x);
+
+  // Convert radians to degrees
+  const lat = latRadians * (180 / Math.PI);
+  const lon = lonRadians * (180 / Math.PI);
+
+  return PIXI.Point.tmp.set(lon, lat);
+}
 
 export class GeometryToken extends GeometryInstanced {
 
@@ -33,6 +73,42 @@ export class GeometryToken extends GeometryInstanced {
     tmpRect.height = height * canvas.dimensions.size;
     return Rectangle3dVertices.transformMatrixFromRectangle(tmpRect,
       { topZ, bottomZ, outMatrix: this.transformMatrix });
+  }
+}
+
+export class GeometrySphericalToken extends GeometryToken {
+  _defineInstanceVertices() {
+    return this.calculateSphericalVertices();
+  }
+
+  calculateSphericalVertices() {
+    const token = this.token;
+    const { w, h } = token;
+    const v = token.topZ - token.bottomZ;
+    const r = Math.max(w, h, v) * 0.5; // Want the radius, not the diameter.
+    const nPoints = Math.floor(PercentVisibleCalculatorPerPixel.numberOfSphericalPointsForSpacing(r)) || 1;
+    const sphericalPoints = Sphere.pointsLattice(nPoints);
+
+    const lonLatPoints = sphericalPoints.map(pt => cartesianToLonLat(pt));
+    const lonLatArr = lonLatPoints.map(pt => [pt.x, pt.y])
+
+    const delauney = geoDelaunay(lonLatArr);
+    const tris3d = delauney.triangles.map(triIndices => {
+      const a = sphericalPoints[triIndices[0]];
+      const b = sphericalPoints[triIndices[1]];
+      const c = sphericalPoints[triIndices[2]];
+      return Triangle3d.from3Points(a, b, c);
+    });
+
+    // Test by scaling.
+    // scaledTris3d = tris3d.map(tri => tri.scale({ x: 1000, y: 1000, z: 1000 }))
+    // scaledTris3d.forEach(tri => tri.draw2d())
+
+    Point3d.release(...sphericalPoints);
+    PIXI.Point.release(...lonLatPoints);
+    const vertices = Triangle3d.trianglesToVertices(tris3d, { addNormals: true })
+    tris3d.forEach(tri => Point3d.release(...tri.points));
+    return BasicVertices.appendUVs(vertices, { stride: 6, outArr: 8 })
   }
 }
 

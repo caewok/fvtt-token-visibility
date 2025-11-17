@@ -252,8 +252,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   get targetRadius() {
-    const xy = Math.max(this.target.h, this.target.w) * 0.5;
-    const height = (this.target.topZ - this.target.bottomZ) * 0.5;
+    const { h, w, topZ, bottomZ } = this.target;
+    const xy = Math.max(h, w) * 0.5;
+    const height = (topZ - bottomZ) * 0.5;
     return Math.sqrt(xy ** 2 + height ** 2);
   }
 

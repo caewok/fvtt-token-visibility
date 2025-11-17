@@ -162,20 +162,24 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
   #transformM = MatrixFlat.identity(4, 4);
 
+  get targetRadius() {
+    const { h, w, topZ, bottomZ } = this.target;
+    const xy = Math.max(h, w) * 0.5;
+    const height = (topZ - bottomZ) * 0.5;
+    return Math.sqrt(xy ** 2 + height ** 2);
+  }
+
   _generateSphericalPoints() {
     // TODO: Cache and reuse target points. Maybe in the target geometry tracker.
     // TODO: Ellipsoids with distinct h, w, z?
     // See TokenLightMeter
     const target = this.target;
-    const { w, h } = target;
-    const v = target.topZ - this.target.bottomZ;
-    const r = Math.max(w, h, v) * 0.5; // Want the radius, not the diameter.
+    const r = this.targetRadius
     const nPoints = Math.floor(this.constructor.numberOfSphericalPointsForSpacing(r)) || 1;
     const unitPoints = Sphere.pointsLattice(nPoints);
 
-
     // Update the transform matrix.
-    const center = Point3d.fromTokenCenter(this.target);
+    const center = Point3d.fromTokenCenter(target);
     MatrixFlat.scale(r, r, r, this.#scaleM);
     MatrixFlat.translation(center.x, center.y, center.z, this.#translateM);
     this.#scaleM.multiply4x4(this.#translateM, this.#transformM);

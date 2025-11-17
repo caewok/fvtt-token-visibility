@@ -12,15 +12,17 @@ import {
   GeometryConstrainedToken,
   GeometryHexToken,
   GeometryLitToken,
-  GeometryBrightLitToken } from "../geometry/GeometryToken.js";
+  GeometryBrightLitToken,
+  GeometrySphericalToken, } from "../geometry/GeometryToken.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
 import { Polygon3d, Quad3d } from "../../geometry/3d/Polygon3d.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
-import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { MatrixFlat } from "../../geometry/MatrixFlat.js";
 import { AABB3d } from "../../geometry/AABB.js";
 import { almostBetween } from "../../geometry/util.js";
+import { Sphere } from "../../geometry/3d/Sphere.js";
 
 /* WallGeometry
 Placeable geometry stored in wall placeables.
@@ -71,13 +73,13 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
   calculateTranslationMatrix() {
     // Move from center of token.
     const ctr = Point3d.fromTokenCenter(this.token);
-    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
+    MatrixFlat.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
     return this.matrices.translation;
   }
 
   calculateScaleMatrix() {
     const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
-    MatrixFloat32.scale(width, height, zHeight, this.matrices.scale);
+    MatrixFlat.scale(width, height, zHeight, this.matrices.scale);
     return this.matrices.scale;
   }
 
@@ -256,5 +258,88 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
       return;
     }
     return this._updateFacesForBorder(border2d);
+  }
+}
+
+export class SphericalTokenGeometryTracker extends TokenGeometryTracker {
+  static ID = "sphericalGeometry";
+
+  /** @type {GeometryDesc} */
+  static geomClass = GeometrySphericalToken;
+
+  /** @type {number[]} */
+  static _hooks = [];
+
+  static modelMatrixTracker = new FixedLengthTrackingBuffer( { facetLengths: 16, numFacets: 0, type: Float32Array });
+
+  tokenSphere = new Sphere();
+
+  tokenSphereUnitPoints = [];
+
+  tokenSpherePoints = [];
+
+  #scaleM = MatrixFlat.identity(4, 4);
+
+  #translateM = MatrixFlat.identity(4, 4);
+
+  #transformM = MatrixFlat.identity(4, 4);
+
+  _updateFaces() {
+    super._updateFaces();
+
+    // If the radius changes, the number of spherical points may have changed.
+    if ( this.tokenSphere.radius !== this.tokenRadius ) {
+      this.tokenSphere.radius = this.tokenRadius;
+      this.tokenSphereUnitPoints = this._generateSphericalPoints();
+    }
+
+    // Update the position and scale of the token sphere points.
+    // Update the transform matrix.
+    const center = Point3d.fromTokenCenter(this.token);
+    const r = this.tokenRadius;
+    MatrixFlat.scale(r, r, r, this.#scaleM);
+    MatrixFlat.translation(center.x, center.y, center.z, this.#translateM);
+    this.#scaleM.multiply4x4(this.#translateM, this.#transformM);
+
+    // Update the token points.
+    const tokenSpherePoints = this.tokenSpherePoints = Array(this.tokenSphereUnitPoints.length);
+    this.tokenSphereUnitPoints.forEach((pt, i) => tokenSpherePoints[i] = this.#transformM.multiplyPoint3d(pt));
+  }
+
+  _generateSphericalPoints() {
+    // TODO: Cache and reuse target points. Maybe in the target geometry tracker.
+    // TODO: Ellipsoids with distinct h, w, z?
+    // See TokenLightMeter
+    const nPoints = Math.floor(this.constructor.numberOfSphericalPointsForSpacing(this.tokenRadius)) || 1;
+    return Sphere.pointsLattice(nPoints);
+  }
+
+  /**
+   * How many spherical points are necessary to achieve a given spacing for a given sphere radius?
+   * @param {number} [radius=1]
+   * @param {number} [spacing]        Defaults to the module spacing default for per-pixel calculator.
+   * @returns {number}
+   */
+  static numberOfSphericalPointsForSpacing(r = 1, l = CONFIG[MODULE_ID].perPixelSpacing || 10) {
+    // Surface area of a sphere is 4πr^2.
+    // With N points, divide by N to get average area per point.
+    // Assuming perfectly equidistant points, consider side length of a square with average area.
+    // l = sqrt(4πr^2/N) = 2r*sqrt(π/N)
+    // To get N, square both sides and simplify.
+    // N = (4πr^2) / l^2
+    // l = 2 * r * Math.sqrt(Math.PI / N);
+    return (4 * Math.PI * (r ** 2)) / (l ** 2);
+  }
+
+  get tokenRadius() {
+    const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
+    const xy = Math.max(width, height) * 0.5;
+    const z = zHeight * 0.5;
+    return Math.sqrt(xy ** 2 + z ** 2);
+  }
+
+  rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
+    const t = this.tokenSphere.rayIntersectionT(rayOrigin, rayDirection);
+    return (t !== null && almostBetween(t, minT, maxT)) ? t : null;
   }
 }

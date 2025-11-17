@@ -9,6 +9,8 @@ PIXI,
 
 import { MODULE_ID } from "./const.js";
 
+import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
+
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
@@ -20,7 +22,8 @@ import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracke
 import {
   TokenGeometryTracker,
   LitTokenGeometryTracker,
-  BrightLitTokenGeometryTracker } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
+  BrightLitTokenGeometryTracker,
+  SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
 import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
 
 
@@ -497,7 +500,9 @@ Hooks.once("init", function() {
     FastBitSet,
 
     PATCHER,
-    Patcher, HookPatch, MethodPatch, LibWrapperPatch
+    Patcher, HookPatch, MethodPatch, LibWrapperPatch,
+    geoDelaunay,
+    geoVoronoi,
   };
 });
 
@@ -545,6 +550,7 @@ Hooks.on("canvasReady", function() {
   WallGeometryTracker.registerPlaceableHooks();
   TileGeometryTracker.registerPlaceableHooks();
   TokenGeometryTracker.registerPlaceableHooks();
+  SphericalTokenGeometryTracker.registerPlaceableHooks();
   LitTokenGeometryTracker.registerPlaceableHooks();
   BrightLitTokenGeometryTracker.registerPlaceableHooks();
   RegionGeometryTracker.registerPlaceableHooks();
@@ -552,6 +558,7 @@ Hooks.on("canvasReady", function() {
   WallGeometryTracker.registerExistingPlaceables();
   TileGeometryTracker.registerExistingPlaceables();
   TokenGeometryTracker.registerExistingPlaceables();
+  SphericalTokenGeometryTracker.registerExistingPlaceables();
   LitTokenGeometryTracker.registerExistingPlaceables();
   BrightLitTokenGeometryTracker.registerExistingPlaceables();
   RegionGeometryTracker.registerExistingPlaceables();
