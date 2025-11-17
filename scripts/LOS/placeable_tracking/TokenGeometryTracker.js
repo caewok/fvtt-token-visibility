@@ -17,7 +17,7 @@ import {
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
-import { Polygon3d, Quad3d } from "../../geometry/3d/Polygon3d.js";
+import { Polygon3d, Quad3d, Circle3d } from "../../geometry/3d/Polygon3d.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { MatrixFlat } from "../../geometry/MatrixFlat.js";
 import { AABB3d } from "../../geometry/AABB.js";
@@ -120,31 +120,39 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
     const faces = this.faces;
     const { topZ, bottomZ } = this.token;
 
-    if ( border2d instanceof PIXI.Polygon ) {
-      if ( !(faces.top instanceof Polygon3d) ) faces.top = new Polygon3d();
-      Polygon3d.fromPolygon(border2d, topZ, faces.top);
-    } else if ( border2d instanceof PIXI.Rectangle ){ // PIXI.Rectangle
-      if ( !(faces.top instanceof Quad3d) ) faces.top = new Quad3d();
-      Quad3d.fromRectangle(border2d, topZ, faces.top);
-    } else {
-      if ( !(faces.top instanceof Polygon3d) ) faces.top = new Polygon3d();
-      Polygon3d.fromPolygon(border2d.toPolygon(), topZ, faces.top);
-    }
+    if ( border2d instanceof PIXI.Rectangle ) faces.top = Quad3d.fromRectangle(border2d, topZ);
+    else if ( border2d instanceof PIXI.Circle ) faces.top = Circle3d.fromCircle(border2d, topZ);
+    else faces.top = Polygon3d.fromPolygon(border2d.toPolygon(), topZ);
 
-    // Confirm the orientation by testing against a point directly above the border plane.
-    const pt0 = faces.top.points[0];
-    const tmp = Point3d.tmp.set(pt0.x, pt0.y, pt0.z + 1);
-    if ( !faces.top.isFacing(tmp) ) faces.top.reverseOrientation();
+    // Confirm the orientation by testing against a point within the token.
+    const ctr2d = border2d.center;
+    const ctr3d = Point3d.tmp.set(ctr2d.x, ctr2d.y, bottomZ + ((topZ - bottomZ) * 0.5));
+    if ( faces.top.isFacing(ctr3d) ) faces.top.reverseOrientation();
+
+    /*
+    Point3d = CONFIG.GeometryLib.threeD.Point3d
+    krusk = _token
+    geometry = krusk.tokenvisibility.geometry
+    border2d = krusk.tokenBorder
+    let { topZ, bottomZ } = krusk
+    ctr2d = border2d.center;
+    ctr3d = Point3d.tmp.set(ctr2d.x, ctr2d.y, bottomZ + ((topZ - bottomZ) * 0.5));
+    geometry.faces.top.isFacing(ctr3d)
+
+
+    */
 
     // Construct the bottom face, reversing its orientation.
-    faces.top.clearCache();
-    if ( !faces.bottom || !(faces.bottom instanceof faces.top.constructor) ) faces.bottom = new faces.top.constructor();
-    faces.top.clone(faces.bottom);
-    faces.bottom.reverseOrientation();
+    faces.bottom = faces.top.clone();
     faces.bottom.setZ(bottomZ);
+    faces.bottom.reverseOrientation();
 
     // Now build the sides from the top face.
     faces.sides = faces.top.buildTopSides(bottomZ);
+    faces.sides.forEach(side => {
+      if ( side.isFacing(ctr3d) ) side.reverseOrientation();
+    });
+    ctr3d.release();
   }
 
   _generateFacePoints() {
@@ -312,8 +320,10 @@ export class SphericalTokenGeometryTracker extends TokenGeometryTracker {
     // Update the position and scale of the token sphere points.
     // Update the transform matrix.
     const center = Point3d.fromTokenCenter(this.token);
-    const r = this.tokenRadius;
-    MatrixFlat.scale(r, r, r, this.#scaleM);
+    const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
+
+    // const r = this.tokenRadius;
+    MatrixFlat.scale(width * 0.5, height * 0.5, zHeight * 0.5, this.#scaleM);
     MatrixFlat.translation(center.x, center.y, center.z, this.#translateM);
     this.#scaleM.multiply4x4(this.#translateM, this.#transformM);
 
