@@ -625,24 +625,43 @@ export class ViewerLOS {
   _drawLineOfSightDebug(draw) {
     const COLORS = Draw.COLORS;
     const simpleTest = this.simpleVisibilityTest();
+    const seg = { a: null, b: this.targetLocation };
+    const opts = { color: null, alpha: 0.5, dashLength: 0, gapLength: 0 };
     if ( ~simpleTest ) {
-      const color = simpleTest ? COLORS.lightgreen : COLORS.lightred;
-      for ( const vp of this.viewpoints ) draw.segment({
-        a: vp.viewpoint,
-        b: vp.targetLocation,
-      }, { color, alpha: 0.5 });
+      // No viewpoints used; color each with light green or light red line.
+      opts.color = simpleTest ? COLORS.lightgreen : COLORS.lightred;
+      opts.dashLength = 10;
+      opts.gapLength = 10;
+      for ( const vp of this.viewpoints ) {
+        seg.a = vp.viewpoint;
+        draw.segment(seg, opts);
+      }
       return;
     }
 
     for ( const vp of this.viewpoints ) {
-      if ( !vp.lastResult ) continue;
-      const percentVis = vp.percentVisible;
-      const color = percentVis === 0 ? COLORS.red
-        : percentVis < this.threshold ? COLORS.orange : COLORS.green;
-      draw.segment({
-        a: vp.viewpoint,
-        b: vp.targetLocation,
-      }, { color, alpha: 0.5 });
+      seg.a = vp.viewpoint;
+      if ( !vp.lastResult ) {
+        // Viewpoint did not count.
+        opts.dashLength = 10;
+        opts.gapLength = 10;
+        opts.color = COLORS.orange;
+      } else if ( vp.lastResult.type === vp.lastResult.constructor.RESULT_TYPE.NOT_VISIBLE ) {
+        opts.dashLength = 10;
+        opts.gapLength = 10;
+        opts.color = COLORS.red;
+      } else if ( vp.lastResult.type === vp.lastResult.constructor.RESULT_TYPE.FULLY_VISIBLE ) {
+        opts.dashLength = 10;
+        opts.gapLength = 10;
+        opts.color = COLORS.green;
+      } else {
+        opts.dashLength = 0;
+        opts.gapLength = 0;
+        const percentVis = vp.percentVisible;
+        opts.color = percentVis === 0 ? COLORS.red
+          : percentVis < this.threshold ? COLORS.orange : COLORS.green;
+      }
+      draw.segment(seg, opts);
     }
   }
 
