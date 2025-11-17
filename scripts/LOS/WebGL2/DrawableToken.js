@@ -8,9 +8,19 @@ CONFIG,
 import { DrawableObjectsInstancingWebGL2Abstract, DrawableObjectsWebGL2Abstract } from "./DrawableObjects.js";
 import { MODULE_ID, OTHER_MODULES, FLAGS } from "../../const.js";
 import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryCustomToken, GeometryLitToken, GeometrySquareGrid, GeometryHexToken, GeometryConstrainedCustomToken, GeometryLitCustomToken } from "../geometry/GeometryToken.js";
 import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
 import { Hex3dVertices } from "../geometry/BasicVertices.js";
+import {
+  GeometryToken,
+  GeometryConstrainedToken,
+  GeometryCustomToken,
+  GeometryLitToken,
+  GeometrySquareGrid,
+  GeometryHexToken,
+  GeometryConstrainedCustomToken,
+  GeometryLitCustomToken,
+  GeometrySphericalToken,
+} from "../geometry/GeometryToken.js";
 
 import * as twgl from "./twgl.js";
 import { log, getFlagFast } from "../util.js";
@@ -74,6 +84,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     constrained: null,
     lit: null,
     custom: new Map(),
+    spherical: null,
   };
 
   drawablesArray = [];
@@ -99,6 +110,11 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
       await this.drawables.lit.initialize();
       this.drawablesArray.push(this.drawables.lit);
     }
+
+    this.drawables.spherical = new DrawableSphericalTokenShapesWebGL2(this.renderer);
+    await this.drawables.spherical.initialize();
+    this.drawablesArray.push(this.drawables.spherical);
+
 
     // Custom tokens are each instanced separately.
     for ( const token of this.placeableTracker.placeables ) {
@@ -166,6 +182,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
     if ( testLighting && this.constructor.drawLit(target) ) this.drawables.lit.renderTarget(target);
     if ( this.constructor.drawConstrained(target) ) this.drawables.constrained.renderTarget(target);
     else if ( this.drawCustom(target) ) this.drawables.get(target.sourceId).renderTarget(target);
+    else if ( CONFIG[MODULE_ID].useTokenSphere ) this.drawables.spherical.renderTarget(target);
     else this.drawables.instanced.renderTarget(target);
   }
 }
@@ -219,6 +236,14 @@ export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Ab
     const idx = this._indexForPlaceable(token);
     this.instanceSet.add(idx);
   }
+}
+
+export class DrawableSphericalTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
+  /** @type {class} */
+  static trackerClass = TokenTracker;
+
+  /** @type {class} */
+  static geomClass = GeometrySphericalToken;
 }
 
 // Group tokens into distinct hex instances.

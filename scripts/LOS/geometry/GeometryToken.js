@@ -83,11 +83,17 @@ export class GeometrySphericalToken extends GeometryToken {
 
   calculateSphericalVertices() {
     const token = this.token;
-    const { w, h } = token;
-    const v = token.topZ - token.bottomZ;
-    const r = Math.max(w, h, v) * 0.5; // Want the radius, not the diameter.
+    let r;
+    if ( token ) {
+      const { w, h } = token;
+      const z = token.topZ - token.bottomZ;
+      r = Point3d.distanceBetween(Point3d.tmp.set(0,0,0), Point3d.tmp.set(w * 0.5, h * 0.5, z * 0.5)); // Want the radius, not the diameter.
+    } else r = 87; // From center to far 3d corner. Point3d.distanceBetween(Point3d.tmp.set(0,0,0), Point3d.tmp.set(50, 50 ,50))
     const nPoints = Math.floor(PercentVisibleCalculatorPerPixel.numberOfSphericalPointsForSpacing(r)) || 1;
     const sphericalPoints = Sphere.pointsLattice(nPoints);
+
+    // Scale the points by 1/2, so instead of -1 to 1 they go from -.5 to .5.
+    sphericalPoints.forEach(pt => pt.multiplyScalar(0.5, pt));
 
     const lonLatPoints = sphericalPoints.map(pt => cartesianToLonLat(pt));
     const lonLatArr = lonLatPoints.map(pt => [pt.x, pt.y])

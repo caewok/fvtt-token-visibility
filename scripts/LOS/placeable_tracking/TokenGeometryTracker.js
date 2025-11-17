@@ -349,9 +349,7 @@ export class SphericalTokenGeometryTracker extends TokenGeometryTracker {
 
   get tokenRadius() {
     const { width, height, zHeight } = this.constructor.tokenDimensions(this.token);
-    const xy = Math.max(width, height) * 0.5;
-    const z = zHeight * 0.5;
-    return Math.sqrt(xy ** 2 + z ** 2);
+    return Point3d.distanceBetween(Point3d.tmp.set(0, 0, 0), Point3d.tmp.set(width * 0.5, height * 0.5, zHeight * 0.5));
   }
 
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
