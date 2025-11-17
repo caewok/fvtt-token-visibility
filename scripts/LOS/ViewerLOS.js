@@ -179,6 +179,7 @@ export class ViewerLOS {
     const pts = this.constructor.constructTokenPoints(this.viewer, {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
+      // tokenShape defaults to this.viewer.tokenBorder.
     });
 
     // Destroy existing viewpoints
@@ -267,18 +268,38 @@ export class ViewerLOS {
     }
   }
 
-
   /**
    * Viewpoint blocked if it is further from the target than the center point.
    * In other words, if it traverses too much of the viewer shape.
+   * Also blocked if outside the constrained token border.
    * @param {Point3d} vp
    * @returns {boolean} True if blocked
    */
   _viewpointBlockedByViewer(vp) {
+    // If the viewpoint is outside the constrained border, treat as blocked.
+    if ( this.constructor.testPointOutsideConstrainedBorder(vp.viewpoint, this.viewer, this.config.inset) ) return true;
+
+    // Viewpoint must be closer to the target center than the viewer center.
     const ctr = this.center;
     if ( vp.almostEqual(ctr) ) return false; // Center point is special; not blocked.
     const targetCtr = Point3d.fromTokenCenter(this.target);
-    return Point3d.distanceSquaredBetween(ctr, targetCtr) < Point3d.distanceSquaredBetween(vp, targetCtr);
+    return PIXI.Point.distanceSquaredBetween(ctr, targetCtr) < PIXI.Point.distanceSquaredBetween(vp, targetCtr); // Use a 2d distance test.
+  }
+
+  /**
+   * Test if a viewpoint or target point is outside the constrained border of the token.
+   * Expands the constrained border slightly to accommodate points exactly on border.
+   * Does not handle insets less than 0.
+   * @param {PIXI.Point} pt
+   * @param {Token} token
+   * @param {number} [inset=1]
+   * @returns {boolean} If no constrained border, returns true. Otherwise true if within the constrained border.
+   */
+  static testPointOutsideConstrainedBorder(pt, token, inset = 1) {
+    const constrainedBorder = token.constrainedTokenBorder;
+    if ( constrainedBorder.equals(token.tokenBorder) ) return false;
+    if ( inset > 0 ) return true;
+    return constrainedBorder.pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
   }
 
   /**
@@ -345,7 +366,7 @@ export class ViewerLOS {
    * @returns {Point3d[]}
    */
   static constructTokenPoints(token, { pointKey = 1, tokenShape, inset, viewpoint } = {}) {
-    tokenShape ??= token.constrainedTokenBorder;
+    tokenShape ??= token.tokenBorder;
     const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
     const PI = this.POINT_INDICES;
     const center = Point3d.fromTokenCenter(token);
@@ -473,15 +494,15 @@ export class ViewerLOS {
       // Token unconstrained by walls.
       // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
       // PIXI.Rectangle.prototype.pad modifies in place.
-      tokenShape = tokenShape.clone();
-      tokenShape.pad(PAD);
+      tokenShape = tokenShape.clone().pad(PAD);
       return [
         Point3d.tmp.set(tokenShape.left, tokenShape.top, elevation),
         Point3d.tmp.set(tokenShape.right, tokenShape.top, elevation),
         Point3d.tmp.set(tokenShape.right, tokenShape.bottom, elevation),
         Point3d.tmp.set(tokenShape.left, tokenShape.bottom, elevation)
       ];
-    } else tokenShape = tokenShape.toPolygon();
+    } else if ( tokenShape instanceof PIXI.Polygon ) tokenShape = tokenShape.clone(); // Avoid modifying the underlying shape with pad.
+    else tokenShape = tokenShape.toPolygon();
 
     // Constrained is polygon. Only use corners of polygon
     // Scale down polygon to avoid adjacent walls.

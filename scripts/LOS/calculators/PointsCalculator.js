@@ -3,12 +3,9 @@ canvas,
 CONFIG,
 CONST,
 game,
-PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
-
-import { MODULE_ID } from "../../const.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
@@ -100,7 +97,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   _calculate() {
     const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
-      ? this.constructor.constrainedGridShapesUnderToken(this.target) : [this.target.constrainedTokenBorder];
+      ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
     if ( !targetShapes.length ) targetShapes.push(this.targetShape);
 
     const targetPointsForShapes = targetShapes.map(shape => this.constructTargetPoints(shape));
@@ -158,8 +155,13 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     debugPoints.length = numPoints;
     for ( let i = 0; i < numPoints; i += 1 ) {
       const targetPoint = targetPoints[i];
-      const isOccluded = Point3d.distanceSquaredBetween(this.viewpoint, targetPoint) > dist2
-        || this.occlusionTester._rayIsOccluded(targetPoint.subtract(this.viewpoint, this.#rayDirection));
+
+      // If not within the constrained border, mark as occluded.
+      let isOccluded = ViewerLOS.testPointOutsideConstrainedBorder(targetPoint, this.target, this.config.targetInset);
+
+      // Otherwise test for occlusion.
+      isOccluded ||= Point3d.distanceSquaredBetween(this.viewpoint, targetPoint) > dist2;
+      isOccluded ||= this.occlusionTester._rayIsOccluded(targetPoint.subtract(this.viewpoint, this.#rayDirection));
       result.data.set(i, !isOccluded);
       const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded };
       debugPoints[i] = debugObject;
@@ -167,50 +169,14 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     return result;
   }
 
+
   /**
-   * Get polygons representing all grids under a token.
-   * If token is constrained, overlap the constrained polygon on the grid shapes.
-   * @param {Token} token
-   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
-   */
-  static constrainedGridShapesUnderToken(token, tokenShape) {
-    tokenShape ??= token.constrainedTokenBorder;
-    const gridShapes = this.gridShapesUnderToken(token);
-
-    // Token unconstrained by walls.
-    if ( token.tokenBorder.equals(tokenShape) ) return gridShapes;
-
-    // For each gridShape, intersect against the constrained shape
-    const constrainedGridShapes = [];
-    const constrainedPath = CONFIG[MODULE_ID].ClipperPaths.fromPolygons([tokenShape]);
-    for ( let gridShape of gridShapes ) {
-      if ( gridShape instanceof PIXI.Rectangle ) gridShape = gridShape.toPolygon();
-
-      const constrainedGridShape = constrainedPath.intersectPolygon(gridShape).simplify();
-      if ( constrainedGridShape instanceof CONFIG[MODULE_ID].ClipperPaths ) {
-        // Ignore holes.
-        const polys = constrainedGridShape.toPolygons().filter(poly => !poly.isHole && poly.points.length >= 6);
-        if ( polys.length ) constrainedGridShapes.push(...polys);
-      } else if ( constrainedGridShape instanceof PIXI.Polygon && constrainedGridShape.points.length >= 6 ) {
-        constrainedGridShapes.push(constrainedGridShape);
-      } else if ( constrainedGridShape instanceof PIXI.Rectangle ) {
-        constrainedGridShapes.push(constrainedGridShape);
-      }
-    }
-
-    return constrainedGridShapes;
-  }
-
-    /**
    * Get polygons representing all grids under a token.
    * @param {Token} token
    * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
    */
   static gridShapesUnderToken(token) {
-    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) {
-      // console.error("gridShapesUnderTarget called on gridless scene!");
-      return [token.bounds];
-    }
+    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) return [token.tokenBorder];
     return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
 
