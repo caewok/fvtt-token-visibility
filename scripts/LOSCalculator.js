@@ -8,6 +8,7 @@ import { MODULE_ID } from "./const.js";
 import { Settings } from "./settings.js";
 import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
+import { ATVTokenHandlerID } from "./TokenHandler.js";
 
 // ViewerLOS = CachedViewerLOS;
 
@@ -148,8 +149,7 @@ export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
  * @param {LOSCalculator} calculator    Calculator to use
  * @param {object} [config]             Custom parameters to override default settings.
  */
-export function buildDebugViewer(cl, viewer, calculator, losCfg = {}) {
-  cl ??= currentDebugViewerClass();
-  const viewerLOS = buildCustomLOSViewer(viewer, calculator, losCfg);
-  return new cl(viewerLOS);
+export function buildDebugViewer(cl) {
+  const viewerLOSFn = viewer => viewer[MODULE_ID][ATVTokenHandlerID].losViewer;
+  return new cl(viewerLOSFn);
 }

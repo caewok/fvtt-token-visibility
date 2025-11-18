@@ -33,7 +33,6 @@ PATCHER.addPatchesFromRegistrationObject(PATCHES);
 export function initializePatching() {
   PATCHER.registerGroup("BASIC");
   PATCHER.registerGroup("LOS");
-  registerArea3d();
 
   // if ( MODULES_ACTIVE.LEVELS ) PATCHER.registerGroup("LEVELS");
   //PATCHER.registerGroup("NO_LEVELS");
@@ -42,9 +41,6 @@ export function initializePatching() {
   // if ( !MODULES_ACTIVE.ELEVATED_VISION ) PATCHER.registerGroup("TILE");
 }
 
-export function registerArea3d() {
-  PATCHER.registerGroup("AREA3D");
-}
 
 export function registerDebug() { }//PATCHER.registerGroup("DEBUG"); }
 

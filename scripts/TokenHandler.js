@@ -37,7 +37,6 @@ const DM_SOURCE_TYPES = {
   [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER]: "lighting",
 };
 
-
 export class ATVTokenHandler {
 
   /** @type {string} */

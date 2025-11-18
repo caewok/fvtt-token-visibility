@@ -5,7 +5,6 @@ foundry,
 LimitedAnglePolygon,
 PIXI,
 Ray,
-Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -44,7 +43,6 @@ const DM_SENSE_TYPES = {
  * @property {boolean} angle                          True if constrained by viewer vision angle
  * @property {number} threshold                       Percent needed to be seen for LOS
  */
-
 export class ViewerLOS {
 
   /**
@@ -57,18 +55,20 @@ export class ViewerLOS {
     CENTER: 0,	    			// e.g., 00000001
     CORNERS: {
       FACING: 1,				  // e.g., 00000010
-      BACK: 2,
+      MID: 2,
+      BACK: 3,
     },
-    MID: {
-      FACING: 3,
-      BACK: 4,
+    SIDES: {
+      FACING: 4,
+      MID: 5,
+      BACK: 6,
     },
     D3: {
       // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
       // Otherwise, MID may be omitted.
-      TOP: 5,
-      MID: 6,
-      BOTTOM: 7,
+      TOP: 7,
+      MID: 8,
+      BOTTOM: 9,
     }
   };
 
@@ -106,7 +106,7 @@ export class ViewerLOS {
   static defaultConfiguration = {
     // Viewpoint configuration
     viewpointIndex: 1, // Center point only.
-    viewpointInset: 0,
+    viewpointInset: 0, // Percentage inset
     angle: true, // If constrained by the viewer vision angle
     threshold: 0.75, // Percent used for LOS
   };
@@ -136,13 +136,13 @@ export class ViewerLOS {
 
   get dirty() { return this.#dirty; }
 
-  set dirty(value) { this.dirty ||= value; }
+  set dirty(value) { this.#dirty ||= value; }
 
   /**
    * Update the viewpoints.
    */
   _clean() {
-    this.#dirty = this.initializeViewpoints();;
+    this.#dirty = !this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewer ----- //
@@ -165,7 +165,6 @@ export class ViewerLOS {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
     this.dirty = true;
-    this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewpoints ----- //
@@ -180,10 +179,10 @@ export class ViewerLOS {
     const pts = this.constructor.constructTokenPoints(this.viewer, {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
+      // tokenShape defaults to this.viewer.tokenBorder.
     });
 
     // Destroy existing viewpoints
-    this._clearCanvasDebug();
     this.viewpoints.length = pts.length;
 
     // Build new viewpoints.
@@ -245,6 +244,10 @@ export class ViewerLOS {
 
 
   calculate() {
+    if ( this.dirty ) this._clean();
+    this.viewpoints.forEach(vp => vp.lastResult = undefined);
+    this.calculator.initializeView(this);
+
     this._percentVisible = 0;
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
@@ -254,28 +257,50 @@ export class ViewerLOS {
 
     // Test each viewpoint until unobscured is 1.
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
-    if ( this.dirty ) this._clean();
-    this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
-      if ( this._viewpointBlockedByViewer(vp.viewpoint) ) continue;
+      if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
+        vp.lastResult = vp.calculator._createResult();
+        vp.lastResult.makeFullyNotVisible();
+        continue;
+      }
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) break;
     }
   }
 
-
   /**
    * Viewpoint blocked if it is further from the target than the center point.
    * In other words, if it traverses too much of the viewer shape.
-   * @param {Point3d} vp
+   * Also blocked if outside the constrained token border.
+   * @param {Point3d} pt
    * @returns {boolean} True if blocked
    */
-  _viewpointBlockedByViewer(vp) {
+  _viewpointBlockedByViewer(pt) {
+    // If the viewpoint is outside the constrained border, treat as blocked.
+    if ( this.constructor.testPointOutsideConstrainedBorder(pt, this.viewer, this.config.inset) ) return true;
+
+    // Viewpoint must be closer to the target center than the viewer center.
     const ctr = this.center;
-    if ( vp.almostEqual(ctr) ) return false; // Center point is special; not blocked.
+    if ( pt.almostEqual(ctr) ) return false; // Center point is special; not blocked.
     const targetCtr = Point3d.fromTokenCenter(this.target);
-    return Point3d.distanceSquaredBetween(ctr, targetCtr) < Point3d.distanceSquaredBetween(vp, targetCtr);
+    return PIXI.Point.distanceSquaredBetween(ctr, targetCtr) < PIXI.Point.distanceSquaredBetween(pt, targetCtr); // Use a 2d distance test.
+  }
+
+  /**
+   * Test if a viewpoint or target point is outside the constrained border of the token.
+   * Expands the constrained border slightly to accommodate points exactly on border.
+   * Does not handle insets less than 0.
+   * @param {PIXI.Point} pt
+   * @param {Token} token
+   * @param {number} [inset=1]
+   * @returns {boolean} If no constrained border, returns true. Otherwise true if within the constrained border.
+   */
+  static testPointOutsideConstrainedBorder(pt, token, inset = 0) {
+    const constrainedBorder = token.constrainedTokenBorder;
+    if ( constrainedBorder.equals(token.tokenBorder) ) return false;
+    if ( inset > 0 ) return true;
+    return constrainedBorder.pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
   }
 
   /**
@@ -342,7 +367,7 @@ export class ViewerLOS {
    * @returns {Point3d[]}
    */
   static constructTokenPoints(token, { pointKey = 1, tokenShape, inset, viewpoint } = {}) {
-    tokenShape ??= token.constrainedTokenBorder;
+    tokenShape ??= token.tokenBorder;
     const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
     const PI = this.POINT_INDICES;
     const center = Point3d.fromTokenCenter(token);
@@ -357,7 +382,7 @@ export class ViewerLOS {
     const midZ = topZ - bottomZ;
 
     // Set either all 4 corners or a subset.
-    const cornerMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.BACK]);
+    const cornerMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK]);
     const cornerIx = bs.intersectionNew(cornerMask);
     if ( cornerIx.equals(cornerMask) ) {
       cornerPoints = this.getCorners(tokenShape, midZ);
@@ -366,11 +391,12 @@ export class ViewerLOS {
       cornerPoints = this.getCorners(tokenShape, midZ);
       const res = this._facingPoints(cornerPoints, token, viewpoint);
       if ( cornerIx.hasIndex(PI.CORNERS.FACING) ) tokenPoints.push(...res.facing);
+      if ( cornerIx.hasIndex(PI.CORNERS.MID) ) tokenPoints.push(...res.mid);
       if ( cornerIx.hasIndex(PI.CORNERS.BACK) ) tokenPoints.push(...res.back);
     }
 
     // Set either all side points or a subset
-    const sidesMask = SmallBitSet.fromIndices([PI.MID.FACING, PI.MID.BACK, PI.MID.SIDES]);
+    const sidesMask = SmallBitSet.fromIndices([PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK]);
     const sidesIx = bs.intersectionNew(sidesMask);
     if ( !sidesIx.isEmpty ) {
        cornerPoints ??= this.getCorners(tokenShape, midZ);
@@ -378,8 +404,9 @@ export class ViewerLOS {
        if ( sidesIx.equals(sidesMask) ) tokenPoints.push(...mids); // Include all sides.
        else {
          const res = this._facingPoints(mids, token, viewpoint);
-         if ( sidesIx.hasIndex(PI.MID.FACING) ) tokenPoints.push(...res.facing);
-         if ( sidesIx.hasIndex(PI.MID.BACK) ) tokenPoints.push(...res.back);
+         if ( sidesIx.hasIndex(PI.SIDES.FACING) ) tokenPoints.push(...res.facing);
+         if ( sidesIx.hasIndex(PI.SIDES.MID) ) tokenPoints.push(...res.mid);
+         if ( sidesIx.hasIndex(PI.SIDES.BACK) ) tokenPoints.push(...res.back);
        }
     }
 
@@ -429,31 +456,55 @@ export class ViewerLOS {
     // Token rotation is 0º for due south, while Ray is 0º for due east.
     // Token rotation is 90º for due west, while Ray is 90º for due south.
     // Use the Ray version to divide the token into front and back.
+    // Divide the token into thirds : front third, mid third (sides), back third.
     const facing = [];
+    const mid = [];
     const back = [];
     const center = Point3d.fromTokenCenter(token);
     let b;
+    let dir = Point3d.tmp;
+    let dirPerp = Point3d.tmp;
+
     if ( viewpoint ) {
       // Determine the line perpendicular to the center --> viewpoint line and use to sort the points.
-      const dir = viewpoint.subtract(center);
-      const dirPerp = Point3d.tmp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
-      b = center.add(dirPerp);
-      dir.release();
-      dirPerp.release();
+      viewpoint.subtract(center, dir);
+      dirPerp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
+
     } else {
       // Token rotation is 0º for due south, while Ray is 0º for due east.
       // Token rotation is 90º for due west, while Ray is 90º for due south.
       // Use the Ray version to divide the token into front and back.
       const angle = Math.toRadians(token.document.rotation);
       b = PIXI.Point.fromAngle(center, angle, 100);
+      const dirPerp2d = b.subtract(center);
+      dirPerp.set(dirPerp2d.x, dirPerp2d.y, 0);
+      dir.set(dirPerp.y, -dirPerp.x, 0);
+      dirPerp2d.release();
     }
+
+    const dist2d = Math.min(token.w, token.h) * 0.33;
+    dir.normalize(dir).multiplyScalar(dist2d, dir);
+    dirPerp.normalize(dirPerp);
+    const aFront = center.add(dir);
+    const aBack = center.subtract(dir);
+    const bFront = aFront.add(dirPerp);
+    const bBack = aBack.add(dirPerp);
+
+    const orient2d = foundry.utils.orient2dFast;
+    const oCenter = orient2d(aFront, bFront, center);
     pts.forEach(pt => {
-      const arr = foundry.utils.orient2dFast(center, b, pt) > 0 ? back : facing;
+      const arr = orient2d(aFront, bFront, pt) * oCenter >= 0 ? facing
+        : orient2d(aBack, bBack, pt) * oCenter >= 0 ? back : mid;
       arr.push(pt);
     });
     center.release();
-    b.release();
-    return { facing, back };
+    dir.release();
+    dirPerp.release();
+    aFront.release();
+    aBack.release();
+    bFront.release();
+    bBack.release();
+    return { facing, mid, back };
   }
 
   /**
@@ -470,15 +521,15 @@ export class ViewerLOS {
       // Token unconstrained by walls.
       // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
       // PIXI.Rectangle.prototype.pad modifies in place.
-      tokenShape = tokenShape.clone();
-      tokenShape.pad(PAD);
+      tokenShape = tokenShape.clone().pad(PAD);
       return [
         Point3d.tmp.set(tokenShape.left, tokenShape.top, elevation),
         Point3d.tmp.set(tokenShape.right, tokenShape.top, elevation),
         Point3d.tmp.set(tokenShape.right, tokenShape.bottom, elevation),
         Point3d.tmp.set(tokenShape.left, tokenShape.bottom, elevation)
       ];
-    } else tokenShape = tokenShape.toPolygon();
+    } else if ( tokenShape instanceof PIXI.Polygon ) tokenShape = tokenShape.clone(); // Avoid modifying the underlying shape with pad.
+    else tokenShape = tokenShape.toPolygon();
 
     // Constrained is polygon. Only use corners of polygon
     // Scale down polygon to avoid adjacent walls.
@@ -491,126 +542,64 @@ export class ViewerLOS {
 
   /* ----- NOTE: Debug ----- */
 
-  /**
-   * Destroy any PIXI objects and remove hooks upon destroying.
-   */
-  destroy() {
-    this._clearCanvasDebug();
-    this._destroyDebugGraphics();
-    this.#target = undefined;
-    this.#viewer = undefined;
-    this.viewpoints.length = 0;
-
-    // DO NOT destroy calculator, as that depends on whether the calculator was a one-off.
-  }
-
-  /*
-  When viewpoints are destroyed, their graphics are removed and destroyed.
-  When drawing debug, the graphics are set up as needed.
-  */
-
-  /**
-   * Container to hold all canvas and viewpoint graphics.
-   * @type {PIXI.Container}
-   */
-  #canvasDebugContainer;
-
-  get canvasDebugContainer() {
-    if ( !this.#debugGraphicsReady ) this._initializeDebugGraphics();
-    return this.#canvasDebugContainer;
-  }
-
-  /**
-   * Graphics container to display canvas graphics.
-   * @type {PIXI.Graphics}
-   */
-  #canvasDebugGraphics;
-
-  /**
-   * Graphics to hold all viewpoint canvas graphics.
-   * @type {PIXI.Container}
-   */
-  #viewpointDebugGraphics;
-
-  /**
-   * Draw class for drawing canvas graphics.
-   * @type {Draw}
-   */
-  #debugCanvasDraw;
-
-  /**
-   * Draw class for drawing viewpoint graphics.
-   * @type {Draw}
-   */
-  #debugViewpointDraw;
-
-  #debugGraphicsReady = false;
-
-  _initializeDebugGraphics() {
-    if ( this.#debugGraphicsReady ) return;
-    this._initializeCanvasDebugGraphics();
-    this._initializeViewpointDebugGraphics();
-    this.#debugGraphicsReady = true;
-  }
-
-  _initializeCanvasDebugGraphics() {
-    if ( !this.#canvasDebugContainer ) {
-      this.#canvasDebugContainer = new PIXI.Container();
-      this.#canvasDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
-    }
-    if ( !this.#canvasDebugGraphics ) {
-      this.#canvasDebugGraphics = new PIXI.Graphics();
-      this.#canvasDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
-      this.#canvasDebugContainer.addChild(this.#canvasDebugGraphics)
-    }
-    this.#debugCanvasDraw = new Draw(this.#canvasDebugGraphics);
-  }
-
-  _initializeViewpointDebugGraphics() {
-    if ( !this.#viewpointDebugGraphics ) {
-      this.#viewpointDebugGraphics = new PIXI.Graphics();
-      this.#viewpointDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
-      this.canvasDebugContainer.addChild(this.#viewpointDebugGraphics);
-    }
-    this.#debugViewpointDraw = new Draw(this.#viewpointDebugGraphics);
-  }
-
-  _clearCanvasDebug() {
-    if ( this.#debugCanvasDraw ) this.#debugCanvasDraw.clearDrawings();
-    if ( this.#debugViewpointDraw ) this.#debugViewpointDraw.clearDrawings();
-  }
-
-  _destroyDebugGraphics() {
-    this.#destroyCanvasDebugGraphics();
-    this.#destroyViewpointDebugGraphics();
-  }
-
-  #destroyCanvasDebugGraphics() {
-    if ( this.#canvasDebugContainer && !this.#canvasDebugContainer.destroyed ) this.#canvasDebugContainer.destroy({ children: false });
-    if ( this.#canvasDebugGraphics && !this.#canvasDebugGraphics.destroyed ) this.#canvasDebugGraphics.destroy({ children: true });
-    this.#canvasDebugContainer = undefined;
-    this.#canvasDebugGraphics = undefined;
-    this.#debugCanvasDraw = undefined;
-    this.#debugGraphicsReady = false;
-  }
-
-  #destroyViewpointDebugGraphics() {
-    if ( this.#viewpointDebugGraphics && !this.#viewpointDebugGraphics.destroyed ) this.#viewpointDebugGraphics.destroy({ children: true });
-    this.#viewpointDebugGraphics = undefined;
-    this.#debugViewpointDraw = undefined;
-    this.#debugGraphicsReady = false;
-  }
 
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
    */
-  _drawCanvasDebug() {
-    this._initializeDebugGraphics();
-    this._clearCanvasDebug();
-    this._drawVisibleTokenBorder(this.#debugCanvasDraw);
-    this._drawFrustumLightSources(this.#debugCanvasDraw);
-    this.viewpoints.forEach(vp => vp._drawCanvasDebug(this.#debugViewpointDraw));
+  _drawCanvasDebug(debugDraw, debugViewpointDraw) {
+    this._drawVisibleTokenBorder(debugDraw);
+    this._drawFrustumLightSources(debugDraw);
+    this._drawLineOfSightDebug(debugDraw);
+    this.viewpoints.forEach(vp => vp._drawCanvasDebug(debugViewpointDraw));
+  }
+
+  /**
+   * For debugging.
+   * Draw the line from the viewpoint to the target.
+   * Color red if fails LOS threshold test for that viewpoint.
+   */
+  _drawLineOfSightDebug(draw) {
+    const COLORS = Draw.COLORS;
+    const simpleTest = this.simpleVisibilityTest();
+    const seg = { a: null, b: this.targetLocation };
+    const opts = { color: null, alpha: 0.5, dashLength: 0, gapLength: 0 };
+    if ( ~simpleTest ) {
+      // No viewpoints used; color each with light green or light red line.
+      opts.color = simpleTest ? COLORS.lightgreen : COLORS.lightred;
+      opts.dashLength = 10;
+      opts.gapLength = 10;
+      for ( const vp of this.viewpoints ) {
+        seg.a = vp.viewpoint;
+        draw.segment(seg, opts);
+      }
+      return;
+    }
+
+    for ( const vp of this.viewpoints ) {
+      seg.a = vp.viewpoint;
+      if ( !vp.lastResult ) {
+        // Viewpoint did not count.
+        opts.dashLength = 10;
+        opts.gapLength = 10;
+        opts.color = COLORS.orange;
+      } else if ( vp.lastResult.type === vp.lastResult.constructor.RESULT_TYPE.NOT_VISIBLE ) {
+        opts.dashLength = 10;
+        opts.gapLength = 10;
+        opts.color = COLORS.red;
+      } else if ( vp.lastResult.type === vp.lastResult.constructor.RESULT_TYPE.FULLY_VISIBLE ) {
+        opts.dashLength = 10;
+        opts.gapLength = 10;
+        opts.color = COLORS.green;
+      } else {
+        opts.dashLength = 0;
+        opts.gapLength = 0;
+        const percentVis = vp.percentVisible;
+        opts.color = percentVis === 0 ? COLORS.red
+          : percentVis < this.threshold ? COLORS.orange : COLORS.green;
+      }
+      draw.segment(seg, opts);
+    }
   }
 
 
@@ -619,7 +608,7 @@ export class ViewerLOS {
    * Draw the constrained token border and visible shape, if any.
    */
   _drawVisibleTokenBorder(draw) {
-    const color = CONFIG.GeometryLib.Draw.COLORS.blue;
+    const color = Draw.COLORS.blue;
 
     // Fill in the target border on canvas
     if ( this.target ) {
@@ -644,7 +633,7 @@ export class ViewerLOS {
       if ( !(isDim || isBright) ) continue;
       const fillAlpha = isBright ? 0.3 : 0.1;
       const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint: srcOrigin, target: this.target });
-      frustum.draw2d({ draw, width: 0, fill: CONFIG.GeometryLib.Draw.COLORS.yellow, fillAlpha });
+      frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.yellow, fillAlpha });
     }
   }
 }

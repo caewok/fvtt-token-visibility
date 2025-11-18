@@ -12,6 +12,7 @@ import { Area3dPopoutV2, Area3dPopoutCanvasV2 } from "./Area3dPopout.js";
 import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
 import { ViewerLOS } from "./ViewerLOS.js";
+import { Draw } from "../geometry/Draw.js";
 
 /* Debug viewer
 
@@ -21,40 +22,52 @@ Calculates percentage visible for the viewer/target combo.
 
 export class DebugVisibilityViewerAbstract {
 
+  /** @type {function} */
+  _viewerLOSFn;
+
   /** @type {ViewerLOS} */
   viewerLOS;
 
-  constructor(viewerLOS) {
-    this.viewerLOS = viewerLOS
-    this.viewerLOS.debug = true;
-
-    // Try to set viewer to the first controlled token if undefined.
-    if ( !this.viewerLOS.viewer ) this.viewerLOS.viewer = canvas.tokens.controlled[0];
-
-    // Try to set target to the first targeted token if undefined.
-    if ( !this.viewerLOS.target ) this.target = game.user.targets.first();
+  /**
+   * @param {function|ViewerLOS}       Either a blank viewerLOS or a function that can
+   *                                   retrieve a viewerLOS for a viewer token.
+   *
+   * For example:
+   * viewerLOSFn = viewer => viewer.tokenvisiblity.visibility.viewerLOS;
+   */
+  constructor(viewerLOSFn) {
+    if ( viewerLOSFn instanceof ViewerLOS ) {
+       this._viewerLOSFn = viewer => {
+         viewerLOSFn.viewer = viewer;
+         return viewerLOSFn;
+       }
+    } else this._viewerLOSFn = viewerLOSFn;
 
     this.registerHooks();
     this._initializeDebugGraphics();
   }
 
-  static fromCalculator(calculator, viewer) {
-    return new this(new ViewerLOS(viewer, calculator));
+  /** @type {Token} */
+  get viewer() { return canvas.tokens.controlled[0]; }
+
+  /** @type {Token} */
+  get target() { return game.user.targets.first(); }
+
+  /**
+   * Update the viewer and target.
+   * @returns {boolean} True if calculation can proceed.
+   */
+  initializeCalculation() {
+    const { viewer, target } = this;
+    if ( !(viewer && target) ) return false;
+    this.viewerLOS = this._viewerLOSFn(this.viewer);
+    this.viewerLOS.target = target;
+    return true;
   }
-
-  /** @type {Token} */
-  get viewer() { return this.viewerLOS.viewer; }
-
-  set viewer(value) { this.viewerLOS.viewer = value; }
-
-  /** @type {Token} */
-  get target() { return this.viewerLOS.target; }
-
-  set target(value) { this.viewerLOS.target = value; }
 
   render() {
     this.clearDebug();
-    if ( !(this.viewer && this.target ) ) return;
+    if ( !this.initializeCalculation() ) return;
 
     // First draw the basic debugging graphics for the canvas.
     this.viewerLOS.calculate();
@@ -112,10 +125,7 @@ export class DebugVisibilityViewerAbstract {
    * @param {Token} token
    * @param {boolean} controlled      True if controlled
    */
-  onControlToken(token, controlled) {
-    // if ( !controlled ) return;
-    if ( controlled ) this.viewer = token;
-    else if ( this.viewer === token ) this.viewer = undefined;
+  onControlToken(_token, _controlled) {
     this.render();
   }
 
@@ -125,10 +135,8 @@ export class DebugVisibilityViewerAbstract {
    * @param {Token} targetToken
    * @param {boolean} targeted      True if targeted
    */
-  onTargetToken(user, targetToken, targeted) {
+  onTargetToken(user, _targetToken, _targeted) {
     if ( game.user !== user ) return;
-    if ( targeted ) this.target = targetToken;
-    else if ( this.target === targetToken ) this.target = undefined;
     this.render();
   }
 
@@ -141,7 +149,10 @@ export class DebugVisibilityViewerAbstract {
     if ( token !== this.viewer && token !== this.target ) return;
     if ( !(flags.refreshPosition
         || flags.refreshElevation
-        || flags.refreshSize ) ) return;
+        || flags.refreshSize
+        || flags.refreshRotation ) ) return;
+
+    if ( (flags.refreshRotation || flags.refreshSize) && this.viewerLOS ) this.viewerLOS.dirty = true; // Force viewpoints to update.
     this.render();
   }
 
@@ -149,36 +160,117 @@ export class DebugVisibilityViewerAbstract {
    * Delete this viewer.
    */
   destroy() {
-    this.clearDebug();
     this.deregisterHooks();
-    canvas.tokens.removeChild(this.#debugContainer);
-    if ( this.#debugContainer && !this.#debugContainer.destroyed ) this.#debugContainer.destroy();
-    this.viewerLOS.destroy();
+    this.clearDebug();
+    this._destroyDebugGraphics();
   }
 
   /* ----- Canvas graphics ----- */
 
-  /** @type {PIXI.Container} */
-  #debugContainer;
+ /**
+   * Container to hold all canvas and viewpoint graphics.
+   * @type {PIXI.Container}
+   */
+  #canvasDebugContainer;
 
-  get debugContainer() {
-    if ( !this.#debugContainer || this.#debugContainer.destroyed ) this._initializeDebugGraphics();
-    return this.#debugContainer;
+  get canvasDebugContainer() {
+    if ( !this.#debugGraphicsReady ) this._initializeDebugGraphics();
+    return this.#canvasDebugContainer;
   }
 
+  /**
+   * Graphics container to display canvas graphics.
+   * @type {PIXI.Graphics}
+   */
+  #canvasDebugGraphics;
+
+  /**
+   * Graphics to hold all viewpoint canvas graphics.
+   * @type {PIXI.Container}
+   */
+  #viewpointDebugGraphics;
+
+  /**
+   * Draw class for drawing canvas graphics.
+   * @type {Draw}
+   */
+  #debugCanvasDraw;
+
+  /**
+   * Draw class for drawing viewpoint graphics.
+   * @type {Draw}
+   */
+  #debugViewpointDraw;
+
+  #debugGraphicsReady = false;
+
   _initializeDebugGraphics() {
-    this.#debugContainer = new PIXI.Container;
-    this.#debugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
-    canvas.tokens.addChild(this.#debugContainer);
-    this.#debugContainer.addChild(this.viewerLOS.canvasDebugContainer);
+    if ( this.#debugGraphicsReady ) return;
+    this._initializeCanvasDebugGraphics();
+    this._initializeViewpointDebugGraphics();
+    this.#debugGraphicsReady = true;
+  }
+
+  _initializeCanvasDebugGraphics() {
+    if ( !this.#canvasDebugContainer ) {
+      this.#canvasDebugContainer = new PIXI.Container();
+      this.#canvasDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
+      canvas.tokens.addChild(this.#canvasDebugContainer);
+    }
+    if ( !this.#canvasDebugGraphics ) {
+      this.#canvasDebugGraphics = new PIXI.Graphics();
+      this.#canvasDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
+      this.#canvasDebugContainer.addChild(this.#canvasDebugGraphics)
+    }
+    this.#debugCanvasDraw = new Draw(this.#canvasDebugGraphics);
+  }
+
+  _initializeViewpointDebugGraphics() {
+    if ( !this.#viewpointDebugGraphics ) {
+      this.#viewpointDebugGraphics = new PIXI.Graphics();
+      this.#viewpointDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
+      this.canvasDebugContainer.addChild(this.#viewpointDebugGraphics);
+    }
+    this.#debugViewpointDraw = new Draw(this.#viewpointDebugGraphics);
+  }
+
+  _clearCanvasDebug() {
+    if ( this.#debugCanvasDraw ) this.#debugCanvasDraw.clearDrawings();
+    if ( this.#debugViewpointDraw ) this.#debugViewpointDraw.clearDrawings();
+  }
+
+  _destroyDebugGraphics() {
+    canvas.tokens.removeChild(this.#canvasDebugContainer);
+    this.#destroyCanvasDebugGraphics();
+    this.#destroyViewpointDebugGraphics();
+  }
+
+  #destroyCanvasDebugGraphics() {
+    if ( this.#canvasDebugContainer && !this.#canvasDebugContainer.destroyed ) this.#canvasDebugContainer.destroy({ children: false });
+    if ( this.#canvasDebugGraphics && !this.#canvasDebugGraphics.destroyed ) this.#canvasDebugGraphics.destroy({ children: true });
+    this.#canvasDebugContainer = undefined;
+    this.#canvasDebugGraphics = undefined;
+    this.#debugCanvasDraw = undefined;
+    this.#debugGraphicsReady = false;
+  }
+
+  #destroyViewpointDebugGraphics() {
+    if ( this.#viewpointDebugGraphics && !this.#viewpointDebugGraphics.destroyed ) this.#viewpointDebugGraphics.destroy({ children: true });
+    this.#viewpointDebugGraphics = undefined;
+    this.#debugViewpointDraw = undefined;
+    this.#debugGraphicsReady = false;
   }
 
   /* ----- NOTE: Debug ----- */
 
-  _drawCanvasDebug() { this.viewerLOS._drawCanvasDebug(); }
+  _drawCanvasDebug() {
+    this._initializeDebugGraphics();
+    this._clearCanvasDebug();
+    this.viewerLOS._drawCanvasDebug(this.#debugCanvasDraw, this.#debugViewpointDraw);
+  }
 
   clearDebug() {
-    this.viewerLOS._clearCanvasDebug();
+    this._clearCanvasDebug();
   }
 }
 
@@ -265,7 +357,6 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   }
 
   render() {
-    if ( !(this.viewer && this.target) ) return;
     if ( !this.popoutIsRendered ) return this.reinitialize().then(() => super.render());
     super.render();
   }
@@ -287,6 +378,16 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   /** @type {PIXI.Container} */
   #popoutContainers = [];
 
+  initializeCalculation() {
+    if ( !super.initializeCalculation() ) return false;
+    if ( !this.popoutIsRendered ) return true;
+    if ( this.viewerLOS.viewpoints.length !== this.#popoutContainers.length ) {
+      this._destroyPopout();
+      this.popoutContainers.forEach(c => this.popout.pixiApp.stage.addChild(c));
+    }
+    return true;
+  }
+
   get popoutContainers() {
     if ( !this.#popoutContainers.length ) {
       const { WIDTH, HEIGHT } = this.constructor;
@@ -294,7 +395,8 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       // Divide in the popout space.
       const positions = [];
       let viewSize;
-      switch ( this.viewerLOS.viewpoints.length ) {
+      const numViewpoints = this.viewerLOS ? this.viewerLOS.viewpoints.length : 1;
+      switch ( numViewpoints ) {
         case 1: positions.push([0, 0]); viewSize = WIDTH; break;
 
         // ----- | -----
@@ -492,7 +594,8 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.#popoutDraws.forEach(d => d.clearDrawings());
   }
 
-  destroy() {
+  _destroyPopout() {
+    this.popout.pixiApp.stage.removeChildren();
     this.#popoutGraphics.forEach(g => {
       if ( !g.destroyed ) g.destroy();
     });
@@ -502,6 +605,10 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.#popoutGraphics.length = 0;
     this.#popoutDraws.length = 0;
     this.#popoutContainers.length = 0;
+  }
+
+  destroy() {
+    this._destroyPopout();
     super.destroy();
   }
 }

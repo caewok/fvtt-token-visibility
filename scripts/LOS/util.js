@@ -56,8 +56,8 @@ export function roundFastPositive(n) { return (n + 0.5) << 0; }
 export function tokensOverlap(token1, token2, pad = -2) {
   if ( token1.elevationE !== token2.elevationE ) return false;
   if ( token1.center.equals(token2.center) ) return true;
-  const border1 = token1.constrainedTokenBorder.pad(pad);
-  const border2 = token2.constrainedTokenBorder.pad(pad);
+  const border1 = token1.constrainedTokenBorder.clone().pad(pad);
+  const border2 = token2.constrainedTokenBorder.clone().pad(pad);
   return border1.overlaps(border2);
 }
 

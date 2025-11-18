@@ -380,7 +380,7 @@ export class PercentVisibleCalculatorAbstract {
    * @param {Draw} draw
    */
   _drawCanvasDebug(debugDraw) {
-    this._drawLineOfSight(debugDraw);
+    // this._drawLineOfSight(debugDraw);
     this.occlusionTester._drawDetectedObjects(debugDraw);
     this.occlusionTester._drawFrustum(debugDraw);
   }
