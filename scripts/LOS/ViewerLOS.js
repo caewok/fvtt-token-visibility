@@ -143,7 +143,8 @@ export class ViewerLOS {
    * Update the viewpoints.
    */
   _clean() {
-    this.#dirty = this.initializeViewpoints();;
+    this.#dirty = this.initializeViewpoints();
+    this.#dirty = false;
   }
 
   // ----- NOTE: Viewer ----- //
@@ -166,7 +167,6 @@ export class ViewerLOS {
     if ( this.#viewer === value ) return;
     this.#viewer = value;
     this.dirty = true;
-    this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewpoints ----- //

@@ -557,7 +557,14 @@ export class Settings extends ModuleSettingsAbstract {
         break;
       }
       case VIEWER.POINTS: value = pointIndexForSet(value);
-      case VIEWER.INSET: /* eslint-disable-line no-fallthrough */
+      case VIEWER.INSET: { /* eslint-disable-line no-fallthrough */
+        // Tell the los viewer to update the viewpoints.
+        canvas.tokens.placeables.forEach(token => {
+          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          if ( !handler ) return;
+          handler.losViewer.dirty = true;
+        });
+      }
       case TARGET.PERCENT: {
         // Update the viewpoints for all tokens.
         const config = { [configKeyForSetting[key]]: value };
