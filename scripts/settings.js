@@ -136,38 +136,23 @@ export class Settings extends ModuleSettingsAbstract {
     this.DEBUG_RANGE.clear();
   }
 
-  static #debugViewers = new WeakMap();
-
-  static getDebugViewer(type) {
-    type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
-    const sym = ALG_SYMBOLS[type];
-    return this.#debugViewers.get(sym);
-  }
+  static debugViewer;
 
   static initializeDebugViewer(type) {
     type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
-    const sym = ALG_SYMBOLS[type];
-    const debugViewer = this.#debugViewers.get(sym) ?? buildDebugViewer(currentDebugViewerClass(type), undefined, currentCalculator());
-    debugViewer.render();
-    this.#debugViewers.set(sym, debugViewer);
+    this.debugViewer ??= buildDebugViewer(currentDebugViewerClass(type));
+    this.debugViewer.render();
   }
 
-  static destroyAllDebugViewers() {
-    for ( const type of Object.values(this.KEYS.LOS.TARGET.TYPES) ) this.destroyDebugViewer(type);
-  }
-
-  static destroyDebugViewer(type) {
-    type ??= this.get(this.KEYS.LOS.TARGET.ALGORITHM);
-    const sym = ALG_SYMBOLS[type];
-    if ( !this.#debugViewers.has(sym) ) return;
-    const debugViewer = this.#debugViewers.get(sym);
-    debugViewer.destroy();
-    this.#debugViewers.delete(sym);
+  static destroyDebugViewer() {
+    if ( !this.debugViewer ) return;
+    this.debugViewer.destroy();
+    this.debugViewer = undefined;
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
     if ( enabled ) this.initializeDebugViewer();
-    else this.destroyAllDebugViewers();
+    else this.destroyDebugViewer();
   }
 
   /**

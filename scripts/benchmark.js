@@ -12,7 +12,6 @@ import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometr
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
 import { buildCustomLOSViewer, buildCustomLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
-import { registerArea3d } from "./patching.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { MODULE_ID } from "./const.js";
 
@@ -224,7 +223,6 @@ function benchRange(viewers, targets) {
 export async function benchTokenLOS(n = 100, opts = {}) {
   console.log("\n");
   const { viewers, targets } = getTokens();
-  registerArea3d(); // Required for Area3d algorithms to work.
   console.log("Percent visible using different LOS algorithms.");
 
   // summarizeTokenVisibility(viewers, targets);
@@ -252,7 +250,6 @@ export async function benchTokenLOS(n = 100, opts = {}) {
 
 export async function benchTokenLOSAlgorithm(n = 100, { movement = false, ...opts }= {}) {
   const { viewers, targets } = getTokens();
-  registerArea3d(); // Required for Area3d algorithms to work.
 
   await storeDebugStatus();
   const fn = movement ? runLOSTestWithMovement : runLOSTest;

@@ -43,7 +43,6 @@ const DM_SENSE_TYPES = {
  * @property {boolean} angle                          True if constrained by viewer vision angle
  * @property {number} threshold                       Percent needed to be seen for LOS
  */
-
 export class ViewerLOS {
 
   /**
@@ -137,14 +136,13 @@ export class ViewerLOS {
 
   get dirty() { return this.#dirty; }
 
-  set dirty(value) { this.dirty ||= value; }
+  set dirty(value) { this.#dirty ||= value; }
 
   /**
    * Update the viewpoints.
    */
   _clean() {
-    this.#dirty = this.initializeViewpoints();
-    this.#dirty = false;
+    this.#dirty = !this.initializeViewpoints();
   }
 
   // ----- NOTE: Viewer ----- //
@@ -185,7 +183,6 @@ export class ViewerLOS {
     });
 
     // Destroy existing viewpoints
-    this._clearCanvasDebug();
     this.viewpoints.length = pts.length;
 
     // Build new viewpoints.
@@ -247,6 +244,10 @@ export class ViewerLOS {
 
 
   calculate() {
+    if ( this.dirty ) this._clean();
+    this.viewpoints.forEach(vp => vp.lastResult = undefined);
+    this.calculator.initializeView(this);
+
     this._percentVisible = 0;
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
@@ -256,8 +257,6 @@ export class ViewerLOS {
 
     // Test each viewpoint until unobscured is 1.
     // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
-    if ( this.dirty ) this._clean();
-    this.calculator.initializeView(this);
     for ( const vp of this.viewpoints ) {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
         vp.lastResult = vp.calculator._createResult();
@@ -274,18 +273,18 @@ export class ViewerLOS {
    * Viewpoint blocked if it is further from the target than the center point.
    * In other words, if it traverses too much of the viewer shape.
    * Also blocked if outside the constrained token border.
-   * @param {Point3d} vp
+   * @param {Point3d} pt
    * @returns {boolean} True if blocked
    */
-  _viewpointBlockedByViewer(vp) {
+  _viewpointBlockedByViewer(pt) {
     // If the viewpoint is outside the constrained border, treat as blocked.
-    if ( this.constructor.testPointOutsideConstrainedBorder(vp.viewpoint, this.viewer, this.config.inset) ) return true;
+    if ( this.constructor.testPointOutsideConstrainedBorder(pt, this.viewer, this.config.inset) ) return true;
 
     // Viewpoint must be closer to the target center than the viewer center.
     const ctr = this.center;
-    if ( vp.almostEqual(ctr) ) return false; // Center point is special; not blocked.
+    if ( pt.almostEqual(ctr) ) return false; // Center point is special; not blocked.
     const targetCtr = Point3d.fromTokenCenter(this.target);
-    return PIXI.Point.distanceSquaredBetween(ctr, targetCtr) < PIXI.Point.distanceSquaredBetween(vp, targetCtr); // Use a 2d distance test.
+    return PIXI.Point.distanceSquaredBetween(ctr, targetCtr) < PIXI.Point.distanceSquaredBetween(pt, targetCtr); // Use a 2d distance test.
   }
 
   /**
@@ -543,127 +542,16 @@ export class ViewerLOS {
 
   /* ----- NOTE: Debug ----- */
 
-  /**
-   * Destroy any PIXI objects and remove hooks upon destroying.
-   */
-  destroy() {
-    this._clearCanvasDebug();
-    this._destroyDebugGraphics();
-    this.#target = undefined;
-    this.#viewer = undefined;
-    this.viewpoints.length = 0;
-
-    // DO NOT destroy calculator, as that depends on whether the calculator was a one-off.
-  }
-
-  /*
-  When viewpoints are destroyed, their graphics are removed and destroyed.
-  When drawing debug, the graphics are set up as needed.
-  */
-
-  /**
-   * Container to hold all canvas and viewpoint graphics.
-   * @type {PIXI.Container}
-   */
-  #canvasDebugContainer;
-
-  get canvasDebugContainer() {
-    if ( !this.#debugGraphicsReady ) this._initializeDebugGraphics();
-    return this.#canvasDebugContainer;
-  }
-
-  /**
-   * Graphics container to display canvas graphics.
-   * @type {PIXI.Graphics}
-   */
-  #canvasDebugGraphics;
-
-  /**
-   * Graphics to hold all viewpoint canvas graphics.
-   * @type {PIXI.Container}
-   */
-  #viewpointDebugGraphics;
-
-  /**
-   * Draw class for drawing canvas graphics.
-   * @type {Draw}
-   */
-  #debugCanvasDraw;
-
-  /**
-   * Draw class for drawing viewpoint graphics.
-   * @type {Draw}
-   */
-  #debugViewpointDraw;
-
-  #debugGraphicsReady = false;
-
-  _initializeDebugGraphics() {
-    if ( this.#debugGraphicsReady ) return;
-    this._initializeCanvasDebugGraphics();
-    this._initializeViewpointDebugGraphics();
-    this.#debugGraphicsReady = true;
-  }
-
-  _initializeCanvasDebugGraphics() {
-    if ( !this.#canvasDebugContainer ) {
-      this.#canvasDebugContainer = new PIXI.Container();
-      this.#canvasDebugContainer.eventMode = "passive"; // Allow targeting, selection to pass through.
-    }
-    if ( !this.#canvasDebugGraphics ) {
-      this.#canvasDebugGraphics = new PIXI.Graphics();
-      this.#canvasDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
-      this.#canvasDebugContainer.addChild(this.#canvasDebugGraphics)
-    }
-    this.#debugCanvasDraw = new Draw(this.#canvasDebugGraphics);
-  }
-
-  _initializeViewpointDebugGraphics() {
-    if ( !this.#viewpointDebugGraphics ) {
-      this.#viewpointDebugGraphics = new PIXI.Graphics();
-      this.#viewpointDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
-      this.canvasDebugContainer.addChild(this.#viewpointDebugGraphics);
-    }
-    this.#debugViewpointDraw = new Draw(this.#viewpointDebugGraphics);
-  }
-
-  _clearCanvasDebug() {
-    if ( this.#debugCanvasDraw ) this.#debugCanvasDraw.clearDrawings();
-    if ( this.#debugViewpointDraw ) this.#debugViewpointDraw.clearDrawings();
-  }
-
-  _destroyDebugGraphics() {
-    this.#destroyCanvasDebugGraphics();
-    this.#destroyViewpointDebugGraphics();
-  }
-
-  #destroyCanvasDebugGraphics() {
-    if ( this.#canvasDebugContainer && !this.#canvasDebugContainer.destroyed ) this.#canvasDebugContainer.destroy({ children: false });
-    if ( this.#canvasDebugGraphics && !this.#canvasDebugGraphics.destroyed ) this.#canvasDebugGraphics.destroy({ children: true });
-    this.#canvasDebugContainer = undefined;
-    this.#canvasDebugGraphics = undefined;
-    this.#debugCanvasDraw = undefined;
-    this.#debugGraphicsReady = false;
-  }
-
-  #destroyViewpointDebugGraphics() {
-    if ( this.#viewpointDebugGraphics && !this.#viewpointDebugGraphics.destroyed ) this.#viewpointDebugGraphics.destroy({ children: true });
-    this.#viewpointDebugGraphics = undefined;
-    this.#debugViewpointDraw = undefined;
-    this.#debugGraphicsReady = false;
-  }
 
   /**
    * For debugging.
    * Draw debugging objects on the main canvas.
    */
-  _drawCanvasDebug() {
-    this._initializeDebugGraphics();
-    this._clearCanvasDebug();
-    this._drawVisibleTokenBorder(this.#debugCanvasDraw);
-    this._drawFrustumLightSources(this.#debugCanvasDraw);
-    this._drawLineOfSightDebug(this.#debugCanvasDraw)
-    this.viewpoints.forEach(vp => vp._drawCanvasDebug(this.#debugViewpointDraw));
+  _drawCanvasDebug(debugDraw, debugViewpointDraw) {
+    this._drawVisibleTokenBorder(debugDraw);
+    this._drawFrustumLightSources(debugDraw);
+    this._drawLineOfSightDebug(debugDraw);
+    this.viewpoints.forEach(vp => vp._drawCanvasDebug(debugViewpointDraw));
   }
 
   /**
