@@ -378,6 +378,16 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   /** @type {PIXI.Container} */
   #popoutContainers = [];
 
+  initializeCalculation() {
+    if ( !super.initializeCalculation() ) return false;
+    if ( !this.popoutIsRendered ) return true;
+    if ( this.viewerLOS.viewpoints.length !== this.#popoutContainers.length ) {
+      this._destroyPopout();
+      this.popoutContainers.forEach(c => this.popout.pixiApp.stage.addChild(c));
+    }
+    return true;
+  }
+
   get popoutContainers() {
     if ( !this.#popoutContainers.length ) {
       const { WIDTH, HEIGHT } = this.constructor;
@@ -584,7 +594,8 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.#popoutDraws.forEach(d => d.clearDrawings());
   }
 
-  destroy() {
+  _destroyPopout() {
+    this.popout.pixiApp.stage.removeChildren();
     this.#popoutGraphics.forEach(g => {
       if ( !g.destroyed ) g.destroy();
     });
@@ -594,6 +605,10 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     this.#popoutGraphics.length = 0;
     this.#popoutDraws.length = 0;
     this.#popoutContainers.length = 0;
+  }
+
+  destroy() {
+    this._destroyPopout();
     super.destroy();
   }
 }
