@@ -256,7 +256,6 @@ export class ViewerLOS {
     }
 
     // Test each viewpoint until unobscured is 1.
-    // If testing lighting, dim must also be 1. (Currently, can ignore bright. Unlikely to be drastically different per viewpoint.)
     for ( const vp of this.viewpoints ) {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
         vp.lastResult = vp.calculator._createResult();
@@ -265,8 +264,26 @@ export class ViewerLOS {
       }
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
-      if ( this._percentVisible >= 1 ) break;
+      if ( this._percentVisible >= 1 ) return;
     }
+    if ( CONFIG[MODULE_ID].useStereoBlending
+      && this._percentVisible < this.config.threshold ) this._calculateStereo();
+  }
+
+  /** @type {PercentVisibleResult} */
+  _stereoResult;
+
+  /**
+   * For a given set of viewpoint results, blend into a single result
+   */
+  _calculateStereo() {
+    const numViewpoints = this.viewpoints.length;
+    this._stereoResult = this.viewpoints[0].lastResult
+    for ( let i = 1; i < numViewpoints; i += 1 ) {
+      const vp = this.viewpoints[i];
+      this._stereoResult = this._stereoResult.blendMaximize(vp.lastResult)
+    }
+    this._percentVisible = this._stereoResult.percentVisible;
   }
 
   /**
@@ -583,11 +600,11 @@ export class ViewerLOS {
         opts.dashLength = 10;
         opts.gapLength = 10;
         opts.color = COLORS.orange;
-      } else if ( vp.lastResult.type === vp.lastResult.constructor.RESULT_TYPE.NOT_VISIBLE ) {
+      } else if ( vp.lastResult.type === vp.lastResult.constructor.VISIBILITY.NONE ) {
         opts.dashLength = 10;
         opts.gapLength = 10;
         opts.color = COLORS.red;
-      } else if ( vp.lastResult.type === vp.lastResult.constructor.RESULT_TYPE.FULLY_VISIBLE ) {
+      } else if ( vp.lastResult.type === vp.lastResult.constructor.VISIBILITY.FULL ) {
         opts.dashLength = 10;
         opts.gapLength = 10;
         opts.color = COLORS.green;

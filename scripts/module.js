@@ -371,6 +371,16 @@ Hooks.once("init", function() {
     perPixelSpacing: 10,
 
     /**
+     * Combine multiple viewpoints into one view by overlapping the views.
+     * If any viewpoint is fully visible, or the threshold visibility is met, this is ignored.
+     * The algorithm used varies somewhat depending on the underlying LOS algorithm:
+     * - Points and Per-Pixel: A point is visible if it is visible from any viewpoint.
+     * - Geometry: Each face is considered separately
+     * - Geometry sphere and WebGL2: Images overlaid.
+     */
+    useStereoBlending: false,
+
+    /**
      * Turn on certain debug logging.
      * @type {boolean}
      */
