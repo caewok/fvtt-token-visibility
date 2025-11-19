@@ -42,17 +42,17 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
  */
 export class PercentVisibleResult {
 
-  static RESULT_TYPE = {
-    FULLY_VISIBLE: 1,
-    NOT_VISIBLE: 0,
-    CUSTOM: -1,
+  static VISIBILITY = {
+    FULL: 1,
+    NONE: 0,
+    MEASURED: -1,
   };
 
   target;
 
   data = {};
 
-  type = this.constructor.RESULT_TYPE.CUSTOM;
+  visibility = this.constructor.VISIBILITY.MEASURED;
 
   static defaultConfiguration = {
     largeTarget: false,
@@ -74,14 +74,14 @@ export class PercentVisibleResult {
     return new this(calc.target, opts);
   }
 
-  makeFullyNotVisible() { this.type = this.constructor.RESULT_TYPE.NOT_VISIBLE; return this; }
+  makeFullyNotVisible() { this.visibility = this.constructor.VISIBILITY.NONE; return this; }
 
-  makeFullyVisible() { this.type = this.constructor.RESULT_TYPE.FULLY_VISIBLE; return this; }
+  makeFullyVisible() { this.visibility = this.constructor.VISIBILITY.FULL; return this; }
 
   clone() {
     const out = new this.constructor(this.target, this.#config);
     Object.assign(out.data, structuredClone(this.data));
-    out.type = this.type;
+    out.visibility = this.visibility;
     return out;
   }
 
@@ -127,7 +127,7 @@ export class PercentVisibleResult {
   get visibleArea() { return this.targetArea; }
 
   get percentVisible() {
-    if ( ~this.type ) return this.type;
+    if ( ~this.visibility ) return this.visibility;
     return approximateClamp(this.visibleArea / this.targetArea, 0, 1, 1e-02);
   }
 
@@ -138,17 +138,17 @@ export class PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMaximize(other) {
-    const { FULL, EMPTY } = this.constructor.RESULT_TYPE;
+    const { FULL, NONE } = this.constructor.VISIBILITY;
 
     // If this type is full, maximize will be full.
-    if ( this.type === FULL ) return this.clone();
+    if ( this.visibility === FULL ) return this.clone();
 
     // If this data type is empty, maximize will be the other.
-    if ( this.type === EMPTY ) return other.clone();
+    if ( this.visibility === NONE ) return other.clone();
 
     // This data type is custom. Check if the other is full or empty.
-    if ( other.type === FULL ) return other.clone();
-    if ( other.type === EMPTY ) return this.clone();
+    if ( other.visibility === FULL ) return other.clone();
+    if ( other.visibility === NONE ) return this.clone();
 
     return null; // Must be handled by subclass.
   }
