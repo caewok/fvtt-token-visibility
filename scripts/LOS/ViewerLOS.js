@@ -385,52 +385,41 @@ export class ViewerLOS {
    */
   static constructTokenPoints(token, { pointKey = 1, tokenShape, inset, viewpoint } = {}) {
     tokenShape ??= token.tokenBorder;
+    const tokenPoints = [];
     const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
     const PI = this.POINT_INDICES;
-    const center = Point3d.fromTokenCenter(token);
-    let cornerPoints;
 
-    const tokenPoints = [];
+    // Are there any corners?
+    const cornersMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK]);
+    const cornersIx = bs.intersectionNew(cornersMask);
 
-    // Corners
-    // If two points, keep only the front-facing points.
-    // For targets, keep the closest two points to the viewer point.
-    const { topZ, bottomZ } = token;
-    const midZ = topZ - bottomZ;
-
-    // Set either all 4 corners or a subset.
-    const cornerMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK]);
-    const cornerIx = bs.intersectionNew(cornerMask);
-    if ( cornerIx.equals(cornerMask) ) {
-      cornerPoints = this.getCorners(tokenShape, midZ);
-      tokenPoints.push(...cornerPoints);
-    } else if ( !cornerIx.isEmpty ) {
-      cornerPoints = this.getCorners(tokenShape, midZ);
-      const res = this._facingPoints(cornerPoints, token, viewpoint);
-      if ( cornerIx.hasIndex(PI.CORNERS.FACING) ) tokenPoints.push(...res.facing);
-      if ( cornerIx.hasIndex(PI.CORNERS.MID) ) tokenPoints.push(...res.mid);
-      if ( cornerIx.hasIndex(PI.CORNERS.BACK) ) tokenPoints.push(...res.back);
-    }
-
-    // Set either all side points or a subset
+    // Are there any sides?
     const sidesMask = SmallBitSet.fromIndices([PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK]);
     const sidesIx = bs.intersectionNew(sidesMask);
-    if ( !sidesIx.isEmpty ) {
-       cornerPoints ??= this.getCorners(tokenShape, midZ);
-       const mids = midpoints(cornerPoints);
-       if ( sidesIx.equals(sidesMask) ) tokenPoints.push(...mids); // Include all sides.
-       else {
-         const res = this._facingPoints(mids, token, viewpoint);
-         if ( sidesIx.hasIndex(PI.SIDES.FACING) ) tokenPoints.push(...res.facing);
-         if ( sidesIx.hasIndex(PI.SIDES.MID) ) tokenPoints.push(...res.mid);
-         if ( sidesIx.hasIndex(PI.SIDES.BACK) ) tokenPoints.push(...res.back);
-       }
+
+    if ( !(cornersIx.isEmpty && sidesIx.isEmpty) ) {
+      const pointCategories = viewpoint
+        ? this._facingTargetPoints(token, tokenShape, viewpoint)
+        : this._facingViewerPoints(token, tokenShape);
+
+      // Add corners.
+      const corners = pointCategories.corners;
+      if ( cornersIx.hasIndex(PI.CORNERS.FACING) ) tokenPoints.push(...corners.facing);
+      if ( cornersIx.hasIndex(PI.CORNERS.MID) ) tokenPoints.push(...corners.mid);
+      if ( cornersIx.hasIndex(PI.CORNERS.BACK) ) tokenPoints.push(...corners.back);
+
+      // Add sides.
+      const sides = pointCategories.sides;
+      if ( sidesIx.hasIndex(PI.SIDES.FACING) ) tokenPoints.push(...sides.facing);
+      if ( sidesIx.hasIndex(PI.SIDES.MID) ) tokenPoints.push(...sides.mid);
+      if ( sidesIx.hasIndex(PI.SIDES.BACK) ) tokenPoints.push(...sides.back);
     }
 
     // Inset all corner and side points.
+    const center = Point3d.fromTokenCenter(token);
     insetPoints(tokenPoints, center, inset);
 
-    // Add center point last, b/c it is not inset. Add to front of queue for consistency.
+    // Add center point last, b/c it is not inset nor rotated. Add to front of queue for consistency.
     if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(center);
 
     // 3d
@@ -441,6 +430,7 @@ export class ViewerLOS {
     if ( d3Ix.isEmpty ) return tokenPoints;
 
     // Create top, mid, or bottom points as needed.
+    const { topZ, bottomZ } = token;
     const out = [];
     if ( d3Ix.hasIndex(PI.D3.MID) ) out.push(...tokenPoints);
     if ( d3Ix.hasIndex(PI.D3.TOP) ) out.push(...tokenPoints.map(pt => {
@@ -457,71 +447,124 @@ export class ViewerLOS {
   }
 
   /**
-   * Determine which corner- or mid-points are facing and which are back.
-   * Two approaches:
-   * 1. Based on token (viewer) rotation.
-   * 2. Based on points in front of the token's (target's) center point relative to a viewpoint.
-   *    E.g., same side as viewpoint relative to a line perpendicular to the center-->viewpoint line from center.
+   * @typedef {object} FacingPoints
+   *
+   * @prop {object} corners
+   *   - @prop {Point3d[]} facing
+   *   - @prop {Point3d[]} mid
+   *   - @prop {Point3d[]} back
+   * @prop {object} sides
+   *   - @prop {Point3d[]} facing
+   *   - @prop {Point3d[]} mid
+   *   - @prop {Point3d[]} back
+   */
+
+  /**
+   * Determine the corner- and midpoints for a given viewer that faces a given direction.
+   * Viewer points should not change in number based on rotation. Instead,
+   * the points are set based on a south-facing target (rotation = 0). Then points are rotated.
    * @param {Point3d[]} pts
    * @param {Token} viewer
-   * @param {Point3d} [viewpoint]
+   * @param {Point3d} viewpoint
+   * @returns {FacingPoints}
+   */
+  static _facingViewerPoints(token, tokenShape) {
+    // Rotate by the token rotation.
+    // First shift so the token center is 0,0,0.
+    // Then rotate.
+    // Then translate back.
+    // Note: Point.rotate and Point.translate does not currently affect z values.
+    const out = this._facingTokenPoints(token, tokenShape);
+    const rad = Math.toRadians(token.document.rotation);
+    if ( !rad ) return out; // No rotation.
+    const ctr = token.center;
+    const fn = pt => pt
+      .translate(-ctr.x, -ctr.y, pt)
+      .rotate(rad, pt)
+      .translate(ctr.x, ctr.y, pt);
+
+    for ( const loc of ["facing", "mid", "back"] ) {
+      out.corners[loc].forEach(fn);
+      out.sides[loc].forEach(fn);
+    }
+    return out;
+  }
+
+  /**
+   * Sort given token points into front, mid, back.
+   * @param {Point3d[]} pts
+   * @param {Token} token
+   * @param {Point3d} [dir]     Direction from center point that indicates the token front. Defaults to due south.
    * @returns {object}
    * - @prop {Point3d[]} facing
+   * - @prop {Point3d[]} mid
    * - @prop {Point3d[]} back
    */
-  static _facingPoints(pts, token, viewpoint) {
-    // Token rotation is 0º for due south, while Ray is 0º for due east.
-    // Token rotation is 90º for due west, while Ray is 90º for due south.
-    // Use the Ray version to divide the token into front and back.
-    // Divide the token into thirds : front third, mid third (sides), back third.
-    const facing = [];
-    const mid = [];
-    const back = [];
-    const center = Point3d.fromTokenCenter(token);
-    let b;
-    let dir = Point3d.tmp;
-    let dirPerp = Point3d.tmp;
-
-    if ( viewpoint ) {
-      // Determine the line perpendicular to the center --> viewpoint line and use to sort the points.
-      viewpoint.subtract(center, dir);
-      dirPerp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
-
-    } else {
-      // Token rotation is 0º for due south, while Ray is 0º for due east.
-      // Token rotation is 90º for due west, while Ray is 90º for due south.
-      // Use the Ray version to divide the token into front and back.
-      const angle = Math.toRadians(token.document.rotation);
-      b = PIXI.Point.fromAngle(center, angle, 100);
-      const dirPerp2d = b.subtract(center);
-      dirPerp.set(dirPerp2d.x, dirPerp2d.y, 0);
-      dir.set(dirPerp.y, -dirPerp.x, 0);
-      dirPerp2d.release();
-    }
-
-    const dist2d = Math.min(token.w, token.h) * 0.33;
+  static sortFacingPoints(pts, token, dir) {
+    dir = dir ? dir.clone() : Point3d.tmp.set(0, 1, 0);
+    const dirPerp = Point3d.tmp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
+    const dist2d = Math.min(token.w, token.h) * 0.25; // Divide at the 0.25 and 0.75 marks
     dir.normalize(dir).multiplyScalar(dist2d, dir);
     dirPerp.normalize(dirPerp);
+
+    const center = Point3d.fromTokenCenter(token);
+    const out = {
+      facing: [],
+      mid: [],
+      back: [],
+    };
     const aFront = center.add(dir);
     const aBack = center.subtract(dir);
     const bFront = aFront.add(dirPerp);
     const bBack = aBack.add(dirPerp);
-
     const orient2d = foundry.utils.orient2dFast;
-    const oCenter = orient2d(aFront, bFront, center);
+    const oCenterFront = orient2d(aFront, bFront, center);
+    const oCenterBack = orient2d(aBack, bBack, center);
     pts.forEach(pt => {
-      const arr = orient2d(aFront, bFront, pt) * oCenter >= 0 ? facing
-        : orient2d(aBack, bBack, pt) * oCenter >= 0 ? back : mid;
+      const arr = (orient2d(aFront, bFront, pt) * oCenterFront) < 0 ? out.facing
+        : (orient2d(aBack, bBack, pt) * oCenterBack) < 0 ? out.back : out.mid;
       arr.push(pt);
     });
-    center.release();
-    dir.release();
-    dirPerp.release();
-    aFront.release();
-    aBack.release();
-    bFront.release();
-    bBack.release();
-    return { facing, mid, back };
+    Point3d.release(aFront, aBack, bFront, bBack, dir, dirPerp, center);
+    return out;
+  }
+
+  /**
+   * Determine which corner- or mid-points are facing and which are back for a target.
+   * Based on points in front of the token's (target's) center point relative to a viewpoint.
+   * E.g., same side as viewpoint relative to a line perpendicular to the center-->viewpoint line from center.
+   * @param {Point3d[]} pts
+   * @param {Token} viewer
+   * @param {Point3d} viewpoint
+   * @returns {FacingPoints}
+   */
+  static _facingTargetPoints(token, tokenShape, viewpoint) {
+    // Determine the line perpendicular to the center --> viewpoint line and use to sort the points.
+    const center = Point3d.fromTokenCenter(token);
+    const dir = viewpoint.subtract(center);
+    return this._facingTokenPoints(token, tokenShape, dir);
+  }
+
+  /**
+   * Determine which corner- or mid-points are facing and which are back for a token facing a given direction.
+   * Based on points in front of the token's (target's) center point relative to a viewpoint.
+   * E.g., same side as viewpoint relative to a line perpendicular to the center-->viewpoint line from center.
+   * @param {Point3d[]} pts
+   * @param {Token} viewer
+   * @param {Point3d} viewpoint
+   * @returns {FacingPoints}
+   */
+  static _facingTokenPoints(token, tokenShape, dir) {
+    // Divide the token into thirds : front third, mid third (sides), back third.
+    // Target points don't shift with rotation. But what is considered "front", "mid", "back" can change
+    // based on viewpoint perspective
+    const midZ = token.bottomZ + ((token.topZ - token.bottomZ) * 0.5);
+    const corners = this.getCorners(tokenShape, midZ);
+    const sides = midpoints(corners);
+    return {
+      corners: this.sortFacingPoints(corners, token, dir),
+      sides: this.sortFacingPoints(sides, token, dir),
+    };
   }
 
   /**
