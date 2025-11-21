@@ -33,7 +33,7 @@ export class PercentVisiblePerPixelResult extends PercentVisibleResult {
     return this.data.numPoints.reduce((acc, curr) => acc + curr, 0); // empty elements transformed to 0.
   }
 
-  // Handled by the calculator, which combines multiple results.
+  // TODO: Is this correct?
   get largeTargetArea() { return this.totalTargetArea; }
 
   get visibleArea() { return this.data.unobscured.reduce((acc, curr) => acc + (curr ? curr.cardinality : 0), 0); }
@@ -94,7 +94,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     spherical: null, // If null, use the configuration setting.
   }
 
-  get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
+  get spherical() { return this.config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
   /** @type {Camera} */
   camera = new Camera({
@@ -112,12 +112,12 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
   initializeView(opts = {}) {
     super.initializeView(opts);
-    if ( opts.viewer ) this.config = { radius: viewer.vision?.radius ?? Number.POSITIVE_INFINITY };
+    if ( opts.viewer ) this.config = { radius: this.viewer.vision?.radius ?? Number.POSITIVE_INFINITY };
   }
 
   _calculate() {
     this.initializeCalculations();
-    const result = this._generateTargetPoints();
+    const result = this._generateTargetResult();
     return this.countTargetPixels(result);
   }
 
@@ -127,11 +127,19 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     this.camera.setTargetTokenFrustum(this.target);
   }
 
-  _generateTargetPoints() {
-    return this.spherical ? this._generateSphericalPoints() : this._generateFacePoints();
+  /** @type {Point3d[][]} */
+  get targetPoints() {
+    if ( this.spherical ) return [this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints];
+
+    const facePoints = this.target[MODULE_ID].geometry.facePoints;
+    return [facePoints.top, facePoints.bottom, ...facePoints.sides];
   }
 
-  _generateFacePoints() {
+  _generateTargetResult() {
+    return this.spherical ? this._generateSphericalResult() : this._generateFaceResult();
+  }
+
+  _generateFaceResult() {
     const faces = this.target[MODULE_ID].geometry.faces;
     const targetFaces = [faces.top, faces.bottom, ...faces.sides];
     const numFaces = targetFaces.length;
@@ -150,7 +158,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     return result;
   }
 
-  _generateSphericalPoints() {
+  _generateSphericalResult() {
     const result = this._createResult();
     result.data.unobscured = [new FastBitSet()];
     result.data.numPoints = [0];
@@ -164,9 +172,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   }
 
   countTargetFacePixels(result) {
-    const facePoints = this.target[MODULE_ID].geometry.facePoints;
-    const targetFacePoints = [facePoints.top, facePoints.bottom, ...facePoints.sides];
-    const radius2 = this._config.radius ** 2;
+    const targetFacePoints = this.targetPoints;
+    const radius2 = this.config.radius ** 2;
     const vp = this.viewpoint;
     for ( let i = 0, iMax = targetFacePoints.length; i < iMax; i += 1 ) {
       const bs = result.data.unobscured[i];
@@ -190,7 +197,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
     // Sum the total visible pixels, which will form the denominator.
     // Only test for obscurity if the pixel is visible (i.e., not behind the sphere).
-    const targetPoints = this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints;
+    const targetPoints = this.targetPoints[0];
     const bs = result.data.unobscured[0];
     bs.clear();
 
@@ -272,11 +279,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       radius: 2,
       alpha: 0.5,
     };
-    const facePoints = this.target[MODULE_ID].geometry.facePoints;
-    const targetPoints = this.spherical
-      ? [this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints]
-      : [facePoints.top, facePoints.bottom, ...facePoints.sides];
 
+    const targetPoints = this.targetPoints;
     for ( let i = 0, iMax = result.data.unobscured.length; i < iMax; i += 1 ) {
       const face = result.data.unobscured[i];
       if ( !face ) continue;
