@@ -93,6 +93,11 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     super.config = cfg;
   }
 
+  initializeView(opts = {}) {
+    super.initializeView(opts);
+    if ( opts.viewer ) this.config = { radius: viewer.vision?.radius ?? Number.POSITIVE_INFINITY };
+  }
+
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
   _calculate() {
@@ -149,7 +154,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const result = PercentVisiblePointsResult.fromCalculator(this, { numPoints: targetPoints.length });
     this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
 
-    const dist2 = this.config.radius ** 2;
+    const dist2 = this._config.radius ** 2;
     const numPoints = targetPoints.length;
     const debugPoints = this.debugPoints;
     debugPoints.length = numPoints;

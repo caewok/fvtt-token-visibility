@@ -88,6 +88,12 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
     return (4 * Math.PI * (r ** 2)) / (l ** 2);
   }
 
+  static defaultConfiguration = {
+    ...super.defaultConfiguration,
+    radius: Number.POSITIVE_INFINITY,
+  }
+
+
   /** @type {Camera} */
   camera = new Camera({
     glType: "webGL2",
@@ -100,6 +106,11 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
   initializeCalculations() {
     this._initializeCamera();
+  }
+
+  initializeView(opts = {}) {
+    super.initializeView(opts);
+    if ( opts.viewer ) this.config = { radius: viewer.vision?.radius ?? Number.POSITIVE_INFINITY };
   }
 
   _calculate() {
@@ -153,6 +164,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   countTargetFacePixels(result) {
     const facePoints = this.target[MODULE_ID].geometry.facePoints;
     const targetFacePoints = [facePoints.top, facePoints.bottom, ...facePoints.sides];
+    const radius2 = this._config.radius ** 2;
+    const vp = this.viewpoint;
     for ( let i = 0, iMax = targetFacePoints.length; i < iMax; i += 1 ) {
       const bs = result.data.unobscured[i];
       if ( !bs ) continue;
@@ -160,8 +173,11 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
       const pts = targetFacePoints[i];
       result.data.numPoints[i] = pts.length;
+
       for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
-        if ( !this.pointIsOccluded(pts[j]) ) bs.add(j);
+        const pt = pts[j];
+        if ( Point3d.distanceSquaredBetween(vp, pt) > radius2 ) continue; // Not within visible radius.
+        if ( !this.pointIsOccluded(pt) ) bs.add(j);
       }
     }
     return result;

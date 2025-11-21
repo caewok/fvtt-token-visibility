@@ -259,7 +259,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _constructPerspectiveTargetSphere() {
-    // Perspective sphere is a circle in 2d.
+    // Perspective sphere is a circle in 2d (assuming a plane perpendicular to the camera view; otherwise ellipse).
     // By definition, center is 0,0.
     // Need to determine the radius.
     // Get a point on the edge of the sphere at the viewplane (perpendicular to the viewpoint-->center line).
