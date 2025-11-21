@@ -534,11 +534,15 @@ export class Settings extends ModuleSettingsAbstract {
         canvas.tokens.placeables.forEach(token => {
           const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
           if ( !handler ) return;
-          handler.calculator = losCalc;
+          if ( handler.losViewer.calculator ) handler.losViewer.calculator.destroy();
+          handler.losViewer.calculator = losCalc;
         });
 
         // Start up a new debug viewer.
-        if ( this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
+        if ( this.get(this.KEYS.DEBUG.LOS) ) {
+          this.destroyDebugViewer();
+          this.initializeDebugViewer(value);
+        }
         break;
       }
       case VIEWER.POINTS: value = pointIndexForSet(value);
