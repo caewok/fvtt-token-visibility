@@ -69,7 +69,7 @@ export class TokenLightMeter {
   unitPoints = [];
 
   /** @type {Point3d[]} */
-  tokenPoints = [];
+  get tokenPoints() { return this.token[MODULE_ID].sphericalGeometry.tokenSpherePoints; }
 
   /** @type {object<BitSet>} */
   data = {
@@ -78,14 +78,7 @@ export class TokenLightMeter {
   };
 
   /** @type {number} */
-  get numPoints() { return this.unitPoints.length; }
-
-  set numPoints(n) {
-    this.tokenPoints.forEach(pt => pt.release());
-    this.tokenPoints.length = 0;
-    this.unitPoints.forEach(pt => pt.release());
-    this.unitPoints = Sphere.pointsLattice(n);
-  }
+  get numPoints() { return this.tokenPoints.length; }
 
   get percentBright() { return this.data.bright.cardinality / this.numPoints; }
 
@@ -107,12 +100,16 @@ export class TokenLightMeter {
 
   set viewpoint(value) { this.calc.viewpoint.copyFrom(value); }
 
-  constructor(token, { numPoints = 20 } = {}) {
+  // Two calc options:
+  // 1. Points calculator, using a 3d set of points.
+  // 2. Per-Pixel calculator, using spherical points.
+  // TODO: Face point options and non-point options possible, except probably spherical non-point.
+
+  constructor(token) {
     token[MODULE_ID] ??= {};
     token[MODULE_ID][this.constructor.ID] = this;
 
     this.token = token;
-    this.numPoints = numPoints;
 
     // Set up a points calculator.
     // Blocking walls and regions; tokens don't block.
@@ -127,8 +124,6 @@ export class TokenLightMeter {
       },
       tokenShapeType: "constrainedTokenBorder",
     });
-
-    this.calc.initializeView({ target: this.token });
   }
 
   #scaleM = MatrixFlat.identity(4, 4);
@@ -150,7 +145,7 @@ export class TokenLightMeter {
 
     for ( const light of lights ) {
       this.calc.initializeView({ viewer: light });
-      if ( CONFIG[MODULE_ID].lightMeterObscureType !== BRIGHT ) viewable = this._viewableSphereIndices();
+      if ( CONFIG[MODULE_ID].lightMeterObscureType !== BRIGHT ) viewable = this._viewableSphereIndices(this.calc.viewpoint);
 
       // Test bright radius.
       this.calc.config = { radius: light.brightRadius };
@@ -180,30 +175,8 @@ export class TokenLightMeter {
     }
   }
 
-  /**
-   * Translate and scale the unit sphere points to match the token position and size.
-   */
-  updateTokenPoints() {
-    // TODO: Does this still work if creating ellipsoids, with distinct h, w, z?
-    const { w, h } = this.token;
-    const v = this.token.topZ - this.token.bottomZ;
-    const s = Math.max(w, h, v) * 0.5; // Want the radius, not the diameter.
-    const center = Point3d.fromTokenCenter(this.token);
-
-    // Update the transform matrix.
-    MatrixFlat.scale(s, s, s, this.#scaleM);
-    MatrixFlat.translation(center.x, center.y, center.z, this.#translateM);
-    this.#scaleM.multiply4x4(this.#translateM, this.#transformM);
-
-    // Update the token points.
-    const { tokenPoints, unitPoints } = this;
-    tokenPoints.length = unitPoints.length;
-    unitPoints.forEach((pt, i) => tokenPoints[i] = this.#transformM.multiplyPoint3d(pt));
-  }
-
   calculateLightFromViewpoint(viewpoint) {
     this.updateLights();
-    this.updateTokenPoints();
     return this._calculateLightFromViewpoint(viewpoint);
   }
 
@@ -256,7 +229,7 @@ export class TokenLightMeter {
   }
 
   get viewplane() {
-    const center = Point3d.fromTokenCenter(this.target);
+    const center = Point3d.fromTokenCenter(this.token);
     const dirHorizontal = this.viewpoint.subtract(center);
     const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, center.z);
     const perpB = center.add(dirB);

@@ -188,11 +188,9 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   }
 
   _calculate() {
-    if ( !this.#initialized ) {
-      const result = this._createResult();
-      result.makeFullyNotVisible();
-      return result;
-    }
+    const result = super._calculate(); // Test radius between viewpoint and target.
+    if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
+    if ( !this.#initialized ) return result.makeFullyNotVisibile();
 
     this.initializeCalculations();
     const { viewer, viewpoint, target, targetLocation } = this;
@@ -321,7 +319,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     if ( this.renderer ) this.renderer.destroy();
     const webGL2 = new WebGL2(this.gl);
     this.renderer = new RenderObstaclesWebGL2({
-      senseType: this.viewerLOS.config.senseType,
+      senseType: this.viewerLOS?.config.senseType ?? "sight",
       debugViewNormals: this.debugView,
       webGL2,
     });
@@ -329,6 +327,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   }
 
   updateDebugForPercentVisible(percentVisible) {
+    this.renderer.config = { senseType: this.viewerLOS?.config.senseType ?? "sight" };
     super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
     // TODO: Handle multiple viewpoints.

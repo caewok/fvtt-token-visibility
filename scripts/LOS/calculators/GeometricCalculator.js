@@ -58,7 +58,6 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     // Both types are custom.
     // The target area could change, given the different views.
     // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     out = this.clone();
     out.data.targetPaths = this.data.targetPaths.union(other.data.targetPaths);
     out.data.visibleTargetPaths = this.data.visibleTargetPaths.union(other.data.visibleTargetPaths);
@@ -90,9 +89,11 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _calculate() {
+    const result = super._calculate(); // Test radius between viewpoint and target.
+    if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
+
     this.initializeCalculations();
     this._constructPerspectiveTargetPolygons();
-    const result = PercentVisibleGeometricResult.fromCalculator(this);
     result.data.targetPaths = this._constructTargetPath();
     result.data.blockingPaths = this._constructObstaclePaths();
     return result;

@@ -79,11 +79,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     ...super.defaultConfiguration,
     targetPointIndex: 1, // Center only
     targetInset: 0.75,
-    radius: Number.POSITIVE_INFINITY,
   }
-
-  /** @type {Points3d[][]} */
-  targetPoints = [];
 
   get config() { return super.config; } // Must call parent to avoid having no getter here.
 
@@ -93,20 +89,10 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     super.config = cfg;
   }
 
-  initializeView(opts = {}) {
-    super.initializeView(opts);
-    if ( opts.viewer ) this.config = { radius: viewer.vision?.radius ?? Number.POSITIVE_INFINITY };
-  }
-
   #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
 
   _calculate() {
-    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
-      ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
-    if ( !targetShapes.length ) targetShapes.push(this.targetShape);
-
-    const targetPointsForShapes = targetShapes.map(shape => this.constructTargetPoints(shape));
-    return this._calculateForPoints(targetPointsForShapes);
+    return this._calculateForPoints(this.targetPoints);
   }
 
   _calculateForPoints(points) {
@@ -126,19 +112,24 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   /**
    * Build a set of 3d points on a given token shape, dependent on settings and shape.
-   * @param {PIXI.Polygon} tokenShape
-   * @returns {Point3d[]}
+   * @type {Point3d[][]}
    */
-  constructTargetPoints(tokenShape) {
+  get targetPoints() {
     const target = this.target;
     const { targetPointIndex, targetInset } = this.config;
     const cfg = {
       pointKey: targetPointIndex,
       inset: targetInset,
       viewpoint: this.viewpoint,
-      tokenShape: tokenShape ?? this.tokenShape
+      tokenShape: null,
     };
-    return ViewerLOS.constructTokenPoints(target, cfg);
+    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
+      ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
+    if ( !targetShapes.length ) targetShapes.push(this.targetShape);
+    return targetShapes.map(shape => {
+      cfg.tokenShape = shape;
+      return ViewerLOS.constructTokenPoints(target, cfg);
+    });
   }
 
   /* ----- NOTE: Visibility testing ----- */
@@ -154,7 +145,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     const result = PercentVisiblePointsResult.fromCalculator(this, { numPoints: targetPoints.length });
     this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
 
-    const dist2 = this._config.radius ** 2;
+    const dist2 = this.radius ** 2;
     const numPoints = targetPoints.length;
     const debugPoints = this.debugPoints;
     debugPoints.length = numPoints;

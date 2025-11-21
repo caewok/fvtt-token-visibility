@@ -191,6 +191,7 @@ export class PercentVisibleCalculatorAbstract {
     tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
     senseType: "sight",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
     largeTarget: false,
+    radius: null, // Default is to use the viewer's vision lightRadius or ∞.
   };
 
   constructor(cfg = {}) {
@@ -204,6 +205,8 @@ export class PercentVisibleCalculatorAbstract {
   get config() { return structuredClone(this.#config); }
 
   set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false }); }
+
+  get radius() { return this.#config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
 
   // ----- NOTE: Basic property getters / setters ---- //
 
@@ -323,7 +326,12 @@ export class PercentVisibleCalculatorAbstract {
     return this._calculate();
   }
 
-  _calculate() { return this._createResult(); }
+  _calculate() {
+    // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
+    const result = this._createResult();
+    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.radius ** 2;
+    return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
+  }
 
   /**
    * Using the available algorithm, test whether the target w/o/r/t other viewers is

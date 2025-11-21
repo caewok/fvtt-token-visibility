@@ -90,10 +90,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
   static defaultConfiguration = {
     ...super.defaultConfiguration,
-    radius: Number.POSITIVE_INFINITY,
     spherical: null, // If null, use the configuration setting.
   }
 
+  /** @type {boolean} */
   get spherical() { return this.config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
   /** @type {Camera} */
@@ -108,11 +108,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
   initializeCalculations() {
     this._initializeCamera();
-  }
-
-  initializeView(opts = {}) {
-    super.initializeView(opts);
-    if ( opts.viewer ) this.config = { radius: this.viewer.vision?.radius ?? Number.POSITIVE_INFINITY };
   }
 
   _calculate() {
@@ -173,7 +168,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
 
   countTargetFacePixels(result) {
     const targetFacePoints = this.targetPoints;
-    const radius2 = this.config.radius ** 2;
+    const radius2 = this.radius ** 2;
     const vp = this.viewpoint;
     for ( let i = 0, iMax = targetFacePoints.length; i < iMax; i += 1 ) {
       const bs = result.data.unobscured[i];
