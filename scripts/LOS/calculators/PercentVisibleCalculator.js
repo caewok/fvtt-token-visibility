@@ -2,7 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
