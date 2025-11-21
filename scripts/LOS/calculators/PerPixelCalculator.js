@@ -91,8 +91,10 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   static defaultConfiguration = {
     ...super.defaultConfiguration,
     radius: Number.POSITIVE_INFINITY,
+    spherical: null, // If null, use the configuration setting.
   }
 
+  get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
   /** @type {Camera} */
   camera = new Camera({
@@ -126,7 +128,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   }
 
   _generateTargetPoints() {
-    return CONFIG[MODULE_ID].useTokenSphere ? this._generateSphericalPoints() : this._generateFacePoints();
+    return this.spherical ? this._generateSphericalPoints() : this._generateFacePoints();
   }
 
   _generateFacePoints() {
@@ -158,7 +160,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
   /* ----- NOTE: Pixel testing ----- */
 
   countTargetPixels(result) {
-    return CONFIG[MODULE_ID].useTokenSphere ? this.countTargetSphericalPixels(result) : this.countTargetFacePixels(result);
+    return this.spherical ? this.countTargetSphericalPixels(result) : this.countTargetFacePixels(result);
   }
 
   countTargetFacePixels(result) {
@@ -271,7 +273,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       alpha: 0.5,
     };
     const facePoints = this.target[MODULE_ID].geometry.facePoints;
-    const targetPoints = CONFIG[MODULE_ID].useTokenSphere
+    const targetPoints = this.spherical
       ? [this.target[MODULE_ID].sphericalGeometry.tokenSpherePoints]
       : [facePoints.top, facePoints.bottom, ...facePoints.sides];
 
@@ -282,7 +284,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
       const pts = this._applyPerspective(targetPoints[i]);
       for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
         const pt = pts[j];
-        if ( CONFIG[MODULE_ID].useTokenSphere && !this.visiblePoints.has(j) ) continue;
+        if ( this.spherical && !this.visiblePoints.has(j) ) continue;
 
         opts.color = bs.has(j) ? Draw.COLORS.blue : Draw.COLORS.red;
         // draw.point({ x: i * 5, y: j}, opts);
