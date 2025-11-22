@@ -2,20 +2,29 @@
 canvas,
 CONFIG,
 CONST,
-game,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+// Base folder
+import { Settings } from "../../settings.js";
+
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { ViewerLOS } from "../ViewerLOS.js";
-import { DebugVisibilityViewerAbstract } from "../DebugVisibilityViewer.js";
+import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 import { SmallBitSet } from "../SmallBitSet.js";
+import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 import { squaresUnderToken, hexesUnderToken } from "../shapes_under_token.js";
+import { Camera } from "../Camera.js";
+
+// Placeable tracking
+
 
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Draw } from "../../geometry/Draw.js";
 
 /*
 Points algorithm also can use area and threshold.
@@ -29,21 +38,33 @@ Dim and bright lighting test options:
 
 export class PercentVisiblePointsResult extends PercentVisibleResult {
 
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    numPoints: 1,
+  // Which faces or large token portions are represented?
+  // Non-facing faces or non-tested faces/groups will be empty in the array.
+  data = {
+    unobscured: [],
+    numPoints: [],
   };
 
-  data = new SmallBitSet();
+  get percentVisible() {
+    // For points, the maximum unobscured points divided by points for a given area.
+    const { unobscured, numPoints } = this.data;
+    let maxPercent = 0;
+    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
+      const bs = unobscured[i];
+      if ( !bs ) continue; // Skipped this face/group.
+      maxPercent = Math.max(maxPercent, bs.cardinality / numPoints[i]);
+      if ( maxPercent >= 1 ) break;
+    }
+    return maxPercent;
+  }
 
-  get numPoints() { return this.config.numPoints; }
+  get totalTargetArea() {
+    return this.data.numPoints.reduce((acc, curr) => acc + curr, 0); // empty elements transformed to 0.
+  }
 
-  get totalTargetArea() { return this.numPoints; }
-
-  // Handled by the calculator, which combines multiple results.
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() { return this.data.cardinality; }
+  get visibleArea() { return this.data.unobscured.reduce((acc, curr) => acc + (curr ? curr.cardinality : 0), 0); }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.
@@ -54,9 +75,18 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
   blendMaximize(other) {
     let out = super.blendMaximize(other);
     if ( out ) return out;
-
     out = this.clone();
-    out.data.or(other.data);
+    for ( let i = 0, iMax = out.data.numPoints.length; i < iMax; i += 1 ) {
+      // Combine each face in turn.
+      if ( out.data.unobscured[i] && other.data.unobscured[i] ) {
+        out.data.unobscured[i].or(other.data.unobscured[i]);
+        out.data.numPoints[i] += other.data.numPoints[i];
+      }
+      else if ( other.data.unobscured[i] ) { // this.data for index i is empty.
+        out.data.unobscured[i] = other.data.unobscured[i];
+        out.data.numPoints[i] = other.data.numPoints[i];
+      } // Else other.data for index i is empty.
+    }
     return out;
   }
 }
@@ -89,21 +119,23 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     super.config = cfg;
   }
 
-  #rayDirection = new CONFIG.GeometryLib.threeD.Point3d();
-
   _calculate() {
-    return this._calculateForPoints(this.targetPoints);
+    return this._calculateForAllPoints(this.targetPoints);
   }
 
-  _calculateForPoints(points) {
-    let lastResult = PercentVisiblePointsResult.fromCalculator(this, { numPoints: points[0].length });
+  /**
+   * @param {Point3d[][]} points
+   */
+  _calculateForAllPoints(points) {
+    const lastResult = this._createResult();
+    lastResult.data.numPoints = points.map(pts => pts.length);
+    lastResult.data.unobscured.length = points.length;
+    this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
+
     for ( let i = 0, iMax = points.length; i < iMax; i += 1 ) {
       const targetPoints = points[i];
-      const result = this._testPointToPoints(targetPoints);
-      lastResult = PercentVisiblePointsResult.max(lastResult, result);
-
-      // If we have hit 100%, we are done.
-      if ( lastResult.percentVisible >= 1 ) break;
+      const bs = this._testPoints(targetPoints);
+      lastResult.data.unobscured[i] = bs;
     }
     return lastResult;
   }
@@ -132,39 +164,30 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     });
   }
 
-  /* ----- NOTE: Visibility testing ----- */
-
-  debugPoints = [];
-
-  /**
-   * Test which target points are occluded and return the result.
-   * @param {Point3d[]}
-   * @returns {PercentVisiblePointsResult}
-   */
-  _testPointToPoints(targetPoints) {
-    const result = PercentVisiblePointsResult.fromCalculator(this, { numPoints: targetPoints.length });
-    this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
-
-    const dist2 = this.radius ** 2;
-    const numPoints = targetPoints.length;
-    const debugPoints = this.debugPoints;
-    debugPoints.length = numPoints;
-    for ( let i = 0; i < numPoints; i += 1 ) {
-      const targetPoint = targetPoints[i];
-
-      // If not within the constrained border, mark as occluded.
-      let isOccluded = ViewerLOS.testPointOutsideConstrainedBorder(targetPoint, this.target, this.config.targetInset);
-
-      // Otherwise test for occlusion.
-      isOccluded ||= Point3d.distanceSquaredBetween(this.viewpoint, targetPoint) > dist2;
-      isOccluded ||= this.occlusionTester._rayIsOccluded(targetPoint.subtract(this.viewpoint, this.#rayDirection));
-      result.data.set(i, !isOccluded);
-      const debugObject = { A: this.viewpoint, B: targetPoint, isOccluded };
-      debugPoints[i] = debugObject;
+  _testPoints(targetPoints, bitSet = new FastBitSet()) {
+    const radius2 = this.radius ** 2;
+    const vp = this.viewpoint;
+    bitSet.clear();
+    for ( let i = 0, n = targetPoints.length; i < n; i += 1 ) {
+      const pt = targetPoints[i];
+      if ( Point3d.distanceSquaredBetween(vp, pt) > radius2 ) continue; // Outside of visible radius.
+      if ( !this.pointIsOccluded(pt) ) bitSet.add(i);
     }
-    return result;
+    return bitSet;
   }
 
+  /**
+   * Given a point in 3d space (presumably on a token face), test for occlusion between it and viewpoint.
+   * @param {Point3d} fragmentPoint
+   * @returns {boolean} True if occluded.
+   */
+  #rayDirection = new Point3d();
+
+  pointIsOccluded(pt) {
+    // Is it occluded from the camera/viewer?
+    pt.subtract(this.viewpoint, this.#rayDirection);
+    return this.occlusionTester._rayIsOccluded(this.#rayDirection);
+  }
 
   /**
    * Get polygons representing all grids under a token.
@@ -178,47 +201,160 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
 
   // ----- NOTE: Debug ----- //
 
-  _drawCanvasDebug(debugDraw) {
-    super._drawCanvasDebug(debugDraw);
-    this._drawDebugPoints(debugDraw);
+  _drawCanvasDebug(result, debugDraw) {
+    super._drawCanvasDebug(result, debugDraw);
+    this._drawDebugPoints(result, debugDraw);
   }
 
-  _drawDebugPoints(debugDraw) {
+  _drawDebugPoints(result, debugDraw) {
     const colors = CONFIG.GeometryLib.Draw.COLORS;
-    // const width = this.percentVisible > this.viewerLOS.threshold ? 2 : 1;
-    for ( const debugPoint of this.debugPoints ) {
-      const color = debugPoint.isOccluded ? colors.red : colors.green;
-      const alpha = debugPoint.isBright ? 0.8 : debugPoint.isDim ? 0.5 : 0.2;
-      debugDraw.segment(debugPoint, { alpha, color });
+    const targetPoints = this.targetPoints;
+    const { unobscured, numPoints } = result.data;
+    const vp = this.viewpoint;
+    const segment = { a: vp, b: null };
+    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
+      const bs = unobscured[i];
+      const pts = targetPoints[i];
+      const n = numPoints[i];
+      for ( let j = 0; j < n; j += 1 ) {
+        segment.b = pts[j];
+        if ( !bs ) {
+          // Point never tested.
+          const color = colors.orange;
+          debugDraw.segment(segment, { color, dashLength: 10, gapLength: 10 });
+          continue;
+        }
+        const isVisible = bs.has(j);
+        const color = isVisible ? colors.blue : colors.red;
+        debugDraw.segment(segment, { color });
+      }
     }
   }
 
+  /** @type {Camera} */
+  #camera;
+
+  get camera() {
+    return this.#camera || (this.#camera = new Camera({
+      glType: "webGL2",
+      perspectiveType: "perspective",
+      up: new Point3d(0, 0, -1),
+      mirrorMDiag: new Point3d(1, 1, 1),
+    }));
+  }
+
+  /**
+   * Set the camera's position and look at position.
+   */
+  _initializeCamera() {
+    const camera = this.camera;
+    camera.cameraPosition = this.viewpoint;
+    camera.targetPosition = this.targetLocation;
+    camera.setTargetTokenFrustum(this.target);
+  }
+
+  /**
+   * Transform a 3d point to a 2d perspective for point of view of viewpoint.
+   * @param {Point3d} pt
+   * @returns {PIXI.Point} pt
+   */
+  _applyPerspectiveToPoints(pts) {
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    return pts
+      .map(pt => lookAtM.multiplyPoint3d(pt))
+      .filter(pt => {
+        if ( pt.z >= 0 ) {
+          pt.release();
+          return false;
+        }
+        return true;
+      })
+      .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+  }
+
+  _applyPerspectiveToPolygon(poly) {
+    const lookAtM = this.camera.lookAtMatrix;
+    const perspectiveM = this.camera.perspectiveMatrix;
+    poly = poly.transform(lookAtM).clipZ();
+    poly.transform(perspectiveM, poly);
+    return poly.isValid ? poly : null;
+  }
+
+  /**
+   * For debugging.
+   * Draw the 3d objects in the popout.
+   */
+  _draw3dDebug(result, draw, { width = 100, height = 100 } = []) {
+    const mult = PIXI.Point.tmp.set(width, height);
+    const a = PIXI.Point.tmp;
+    const opts = {
+      color: Draw.COLORS.blue,
+      radius: 2,
+      alpha: 0.5,
+    };
+
+    this._initializeCamera();
+
+    // Draw the token border for reference.
+    const faces = this.target.tokenvisibility.geometry.faces;
+    const viewpoint = this.viewpoint
+    const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
+    for ( const face of [faces.top, faces.bottom, ...faces.sides] ) {
+      if ( !face.isFacing(viewpoint) ) {
+        drawOpts.alpha = 0.3;
+        drawOpts.color = Draw.COLORS.gray;
+      } else {
+        drawOpts.color = Draw.COLORS.black;
+        drawOpts.alpha = 0.8;
+      }
+      const perspPoly = this._applyPerspectiveToPolygon(face);
+      if ( !perspPoly ) continue;
+      perspPoly.scale({ x: width, y: height}).draw2d(drawOpts);
+    }
+
+    // Draw the token points.
+    const targetPoints = this.targetPoints;
+    const { unobscured, numPoints } = result.data;
+    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
+      const bs = unobscured[i];
+      if ( !bs ) continue;
+
+      const pts = this._applyPerspectiveToPoints(targetPoints[i]);
+      const n = numPoints[i];
+      for ( let j = 0; j < n; j += 1 ) {
+        const pt = pts[j];
+        opts.color = bs.has(j) ? Draw.COLORS.blue : Draw.COLORS.red;
+        draw.point(pt.multiply(mult, a), opts);
+      }
+    }
+    mult.release();
+    a.release();
+  }
 }
 
-
-
-
-export class DebugVisibilityViewerPoints extends DebugVisibilityViewerAbstract {
+export class DebugVisibilityViewerPoints extends DebugVisibilityViewerArea3dPIXI {
+  algorithm = Settings.KEYS.LOS.TARGET.TYPES.POINTS;
 
   /** @type {Token[]} */
-  get viewers() { return canvas.tokens.controlled; }
+//   get viewers() { return canvas.tokens.controlled; }
 
   /** @type {Token[]} */
-  get targets() { return game.user.targets.values(); }
+//   get targets() { return game.user.targets.values(); }
 
   /**
    * Triggered whenever a token is refreshed.
    * @param {Token} token
    * @param {RenderFlags} flags
    */
-  onRefreshToken(token, flags) {
-    if ( !(this.viewers.some(viewer => viewer === token)
-        || this.targets.some(target => target === token)) ) return;
-    if ( !(flags.refreshPosition
-        || flags.refreshElevation
-        || flags.refreshSize ) ) return;
-    this.render();
-  }
+//   onRefreshToken(token, flags) {
+//     if ( !(this.viewers.some(viewer => viewer === token)
+//         || this.targets.some(target => target === token)) ) return;
+//     if ( !(flags.refreshPosition
+//         || flags.refreshElevation
+//         || flags.refreshSize ) ) return;
+//     this.render();
+//   }
 }
 
 /*
