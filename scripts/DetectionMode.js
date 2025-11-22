@@ -4,8 +4,7 @@ Token,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { ATVTokenHandlerID } from "./TokenHandler.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 // import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 // Patches for the DetectionMode class
@@ -51,7 +50,7 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
   if ( hasLOS === true || hasLOS === false ) return hasLOS;
 
   // Only apply this test to token viewers.
-  const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
+  const atv = visionSource.object?.[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
   if ( !atv ) return wrapped(visionSource, mode, target, test);
 
 //   const viewer = visionSource.object;
@@ -78,7 +77,7 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
 function _testRange(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
-  const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
+  const atv = visionSource.object?.[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
   if ( !atv ) return wrapped(visionSource, mode, target, test);
   return atv.tokenWithinVisibleRange(target, mode.range);
 }
@@ -96,7 +95,7 @@ function _testAngle(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
 
-  const atv = visionSource.object?.[MODULE_ID]?.[ATVTokenHandlerID];
+  const atv = visionSource.object?.[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
   if ( !atv ) return wrapped(visionSource, mode, target, test);
   return atv.tokenWithinLimitedAngleVision(target);
 }

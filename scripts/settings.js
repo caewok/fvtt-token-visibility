@@ -7,12 +7,11 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator, pointIndexForSet } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
-import { ATVTokenHandlerID } from "./TokenHandler.js";
 
 // ----- NOTE: Hooks ----- //
 
@@ -532,7 +531,7 @@ export class Settings extends ModuleSettingsAbstract {
         // Set a new shared calculator for all tokens.
         const losCalc = buildLOSCalculator();
         canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
           if ( !handler ) return;
           if ( handler.losViewer.calculator ) handler.losViewer.calculator.destroy();
           handler.losViewer.calculator = losCalc;
@@ -549,7 +548,7 @@ export class Settings extends ModuleSettingsAbstract {
       case VIEWER.INSET: { /* eslint-disable-line no-fallthrough */
         // Tell the los viewer to update the viewpoints.
         canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
           if ( !handler ) return;
           handler.losViewer.dirty = true;
         });

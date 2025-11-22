@@ -6,7 +6,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
+import { MODULE_ID, TRACKER_IDS } from "../../const.js";
 import {
   GeometryToken,
   GeometryConstrainedToken,
@@ -33,10 +33,7 @@ Placeable geometry stored in wall placeables.
 - Update key
 
 Faces and triangles oriented based on wall direction.
-
-
 */
-
 
 export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeometryTracker) {
   static HOOKS = {
@@ -204,7 +201,7 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
 }
 
 export class LitTokenGeometryTracker extends TokenGeometryTracker {
-  static ID = "litGeometry";
+  static ID = TRACKER_IDS.GEOMETRY.TOKEN.LIT;
 
   static HOOKS = {
     drawToken: "_onPlaceableDraw",
@@ -245,7 +242,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
 }
 
 export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
-  static ID = "brightLitGeometry";
+  static ID = TRACKER_IDS.GEOMETRY.TOKEN.BRIGHT;
 
   static HOOKS = {
     drawToken: "_onPlaceableDraw",
@@ -286,7 +283,7 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
 }
 
 export class SphericalTokenGeometryTracker extends TokenGeometryTracker {
-  static ID = "sphericalGeometry";
+  static ID = TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL;
 
   /** @type {GeometryDesc} */
   static geomClass = GeometrySphericalToken;

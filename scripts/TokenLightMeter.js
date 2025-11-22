@@ -6,7 +6,7 @@ CONST,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { Sphere } from "./geometry/3d/Sphere.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
@@ -55,12 +55,11 @@ Equivalently, test a^2 + b^2 > c^2 (vs < or =)
  - Disperse light based on intensities
 */
 
-export const ATVTokenLightMeterID = "lightMeter";
 
 export class TokenLightMeter {
 
   /** @type {string} */
-  static ID = ATVTokenLightMeterID;
+  static ID = TRACKER_IDS.LIGHT_METER;
 
   /** @type {Token} */
   token;

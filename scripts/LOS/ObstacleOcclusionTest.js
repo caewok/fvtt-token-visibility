@@ -14,8 +14,7 @@ import {
   getFlagFast } from "./util.js";
 
 // Base folder
-import { MODULE_ID, OTHER_MODULES } from "../const.js";
-import { AbstractPlaceableTrackerID } from "./placeable_tracking/PlaceableGeometryTracker.js";
+import { MODULE_ID, OTHER_MODULES, TRACKER_IDS } from "../const.js";
 
 // Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -108,13 +107,13 @@ export class ObstacleOcclusionTest {
   }
 
   wallsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.walls.some(wall => wall[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection) !== null);
+    return this.obstacles.walls.some(wall => wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE.PLACEABLE].rayIntersection(rayOrigin, rayDirection) !== null);
   }
 
   terrainWallsOcclude(rayOrigin, rayDirection) {
     let limitedOcclusion = 0;
     for ( const wall of this.obstacles.terrainWalls ) {
-      if ( wall[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection) === null ) continue;
+      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection) === null ) continue;
       if ( limitedOcclusion++ ) return true;
     }
     return false;
@@ -124,21 +123,21 @@ export class ObstacleOcclusionTest {
     for ( const wall of [...this.obstacles.proximateWalls, ...this.obstacles.reverseProximateWalls] ) {
       // If the proximity threshold is met, this edge excluded from perception calculations.
       if ( wall.edge.applyThreshold(this.config.senseType, rayOrigin) ) continue;
-      if ( wall[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection) !== null ) return true;
+      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection) !== null ) return true;
     }
     return false;
   }
 
   tilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => tile[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tiles.some(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection));
   }
 
   tokensOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tokens.some(token => token[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tokens.some(token => token[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection));
   }
 
   regionsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.regions.some(region => region[MODULE_ID][AbstractPlaceableTrackerID].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.regions.some(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection));
   }
 
   // ----- NOTE: Static collision tests ----- //
@@ -303,7 +302,7 @@ export class ObstacleOcclusionTest {
   }
 
   static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const geometry = placeable[MODULE_ID][AbstractPlaceableTrackerID];
+    const geometry = placeable[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
     return [...geometry.iterateFaces()].filter(poly => poly.isFacing(viewpoint));
   }
 

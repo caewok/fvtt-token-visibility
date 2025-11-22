@@ -50,3 +50,17 @@ export const FLAGS = {
     OFFSET: "customShapeOffset",
   },
 };
+
+export const TRACKER_IDS = {
+  GEOMETRY: {
+    PLACEABLE: "geometry",
+    TOKEN: {
+      NORMAL: "geometry",
+      LIT: "litGeometry",
+      BRIGHT: "brightLitGeometry",
+      SPHERICAL: "sphericalGeometry",
+    }
+  },
+  VISIBILITY: "visibility",
+  LIGHT_METER: "lightMeter",
+};
