@@ -230,13 +230,12 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
    * @param {Point3d} fragmentPoint
    * @returns {boolean} True if occluded.
    */
-  pointIsOccluded(fragmentPoint) {
+  #rayDirection = new Point3d();
+
+  pointIsOccluded(pt) {
     // Is it occluded from the camera/viewer?
-    const rayDirection = Point3d.tmp;
-    fragmentPoint.subtract(this.viewpoint, rayDirection);
-    const isOccluded = this.occlusionTester._rayIsOccluded(rayDirection);
-    rayDirection.release();
-    return isOccluded;
+    pt.subtract(this.viewpoint, this.#rayDirection);
+    return this.occlusionTester._rayIsOccluded(this.#rayDirection);
   }
 
   // ----- NOTE: Debugging ----- //
@@ -265,8 +264,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorAb
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(draw, { width = 100, height = 100 } = []) {
-    const result = this.calculate();
+  _draw3dDebug(result, draw, { width = 100, height = 100 } = []) {
     const mult = PIXI.Point.tmp.set(width, height);
     const a = PIXI.Point.tmp;
     const opts = {

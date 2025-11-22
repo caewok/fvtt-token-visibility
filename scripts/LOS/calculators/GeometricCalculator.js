@@ -243,7 +243,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     const viewpoint = this.viewpoint
     const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
-    this.targetPolys = this._applyPerspective(facingPolys, this.camera.lookAtMatrix, this.camera.perspectiveMatrix);
+    this.targetPolys = this._applyPerspective(facingPolys);
 
     // Test if the transformed polys are all getting clipped.
     const txPolys = facingPolys.map(poly => poly.transform(this.camera.lookAtMatrix));
@@ -355,7 +355,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(draw, { width = 100, height = 100 } = {}) {
+  _draw3dDebug(result, draw, { width = 100, height = 100 } = {}) {
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this;
     const colors = Draw.COLORS;
 
