@@ -107,7 +107,7 @@ export class ObstacleOcclusionTest {
   }
 
   wallsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.walls.some(wall => wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE.PLACEABLE].rayIntersection(rayOrigin, rayDirection) !== null);
+    return this.obstacles.walls.some(wall => wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection) !== null);
   }
 
   terrainWallsOcclude(rayOrigin, rayDirection) {
