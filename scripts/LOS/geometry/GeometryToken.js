@@ -12,6 +12,7 @@ import { Rectangle3dVertices, Polygon3dVertices, Hex3dVertices, BasicVertices } 
 import { OBJParser } from "./OBJParser.js";
 import { TriangleSplitter } from "./TriangleSplitter.js";
 import { OTHER_MODULES, FLAGS } from "../../const.js";
+import { numberOfSphericalPointsForSpacing } from "../util.js";
 
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Sphere } from "../../geometry/3d/Sphere.js";
@@ -89,7 +90,7 @@ export class GeometrySphericalToken extends GeometryToken {
       const z = token.topZ - token.bottomZ;
       r = Point3d.distanceBetween(Point3d.tmp.set(0,0,0), Point3d.tmp.set(w * 0.5, h * 0.5, z * 0.5)); // Want the radius, not the diameter.
     } else r = 87; // From center to far 3d corner. Point3d.distanceBetween(Point3d.tmp.set(0,0,0), Point3d.tmp.set(50, 50 ,50))
-    const nPoints = Math.floor(PercentVisibleCalculatorPerPixel.numberOfSphericalPointsForSpacing(r)) || 1;
+    const nPoints = Math.floor(numberOfSphericalPointsForSpacing(r)) || 1;
     const sphericalPoints = Sphere.pointsLattice(nPoints);
 
     // Scale the points by 1/2, so instead of -1 to 1 they go from -.5 to .5.

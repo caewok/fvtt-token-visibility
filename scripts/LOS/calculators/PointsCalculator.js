@@ -8,6 +8,7 @@ PIXI,
 "use strict";
 
 // Base folder
+import { MODULE_ID, TRACKER_IDS } from "../../const.js";
 import { Settings } from "../../settings.js";
 
 // LOS folder
@@ -36,27 +37,47 @@ Dim and bright lighting test options:
 
 */
 
-export class PercentVisiblePointsResult extends PercentVisibleResult {
+/*
+Points lattice:
+
+Normal:
+Some faces (surface) not visible; null
+Each visible (facing) face:
+- all points for face are either visible or not visible
+- point within radius
+- point visible = true
+- point not occluded
+Percent visible = Total across visible faces: counted points / total points
+
+Spherical:
+Single face (surface)
+All points:
+- point within radius
+- point visible (facing)
+- point not occluded
+Percent visible = counted visible points / visible points
+
+PointsCalc:
+Each face (surface) is a large token grid space.
+All faces visible
+Each face:
+- point within radius
+- point visible = true
+- point not occluded
+Percent visible = maximum for each face: counted points / total points
+
+
+*/
+
+export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
 
   // Which faces or large token portions are represented?
   // Non-facing faces or non-tested faces/groups will be empty in the array.
   data = {
-    unobscured: [],
-    numPoints: [],
+    unobscured: [],       // Visible and unobscured.
+    visible: [],          // Visible at this viewpoint but possibly obscured.
+    numPoints: [],        // Total points for this surface.
   };
-
-  get percentVisible() {
-    // For points, the maximum unobscured points divided by points for a given area.
-    const { unobscured, numPoints } = this.data;
-    let maxPercent = 0;
-    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
-      const bs = unobscured[i];
-      if ( !bs ) continue; // Skipped this face/group.
-      maxPercent = Math.max(maxPercent, bs.cardinality / numPoints[i]);
-      if ( maxPercent >= 1 ) break;
-    }
-    return maxPercent;
-  }
 
   get totalTargetArea() {
     return this.data.numPoints.reduce((acc, curr) => acc + curr, 0); // empty elements transformed to 0.
@@ -102,78 +123,70 @@ export class PercentVisiblePointsResult extends PercentVisibleResult {
 /**
  * Handle points algorithm.
  */
-export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbstract {
-  static resultClass = PercentVisiblePointsResult;
+export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalculatorAbstract {
+  static resultClass = PercentVisiblePointsResultAbstract;
 
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    targetPointIndex: 1, // Center only
-    targetInset: 0.75,
-  }
-
-  get config() { return super.config; } // Must call parent to avoid having no getter here.
-
-  set config(cfg = {}) {
-    if ( Object.hasOwn(cfg, "targetPointIndex")
-      && cfg.targetPointIndex instanceof SmallBitSet ) cfg.targetPointIndex = cfg.targetPointIndex.word;
-    super.config = cfg;
-  }
+  static BitSetClass = FastBitSet;
 
   _calculate() {
-    return this._calculateForAllPoints(this.targetPoints);
+    return this._testAllSurfaces(this.targetPoints, this.targetSurfaces);
   }
 
   /**
    * @param {Point3d[][]} points
+   * @param {(Polygon3d|Sphere)[]} surfaces
    */
-  _calculateForAllPoints(points) {
-    const lastResult = this._createResult();
-    lastResult.data.numPoints = points.map(pts => pts.length);
-    lastResult.data.unobscured.length = points.length;
+  _testAllSurfaces(points, surfaces) {
+    surfaces ??= Array(points.length);
+    const result = this._createResult();
+    const n = points.length;
+    result.data.numPoints = points.map(pts => pts.length);
+    result.data.unobscured.length = n;
+    result.data.visible.length = n;
     this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
-
-    for ( let i = 0, iMax = points.length; i < iMax; i += 1 ) {
-      const targetPoints = points[i];
-      const bs = this._testPoints(targetPoints);
-      lastResult.data.unobscured[i] = bs;
+    for ( let i = 0; i < n; i += 1 ) {
+      const surface = surfaces[i];
+      if ( !this.surfaceIsVisible(surface) ) continue;
+      const { unobscured, visible } = this._testPointsForSurface(surface, points[i]);
+      result.data.unobscured[i] = unobscured;
+      result.data.visible[i] = visible;
     }
-    return lastResult;
+    return result;
   }
+
+  surfaceIsVisible(_surface) { return true; }
 
   /* ----- NOTE: Target points ----- */
 
-  /**
-   * Build a set of 3d points on a given token shape, dependent on settings and shape.
-   * @type {Point3d[][]}
-   */
-  get targetPoints() {
-    const target = this.target;
-    const { targetPointIndex, targetInset } = this.config;
-    const cfg = {
-      pointKey: targetPointIndex,
-      inset: targetInset,
-      viewpoint: this.viewpoint,
-      tokenShape: null,
-    };
-    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
-      ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
-    if ( !targetShapes.length ) targetShapes.push(this.targetShape);
-    return targetShapes.map(shape => {
-      cfg.tokenShape = shape;
-      return ViewerLOS.constructTokenPoints(target, cfg);
-    });
+  /** @type {Polygon3d[]} */
+  get targetSurfaces() {
+    const faces = this.target[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].faces;
+    return [faces.top, faces.bottom, ...faces.sides];
   }
 
-  _testPoints(targetPoints, bitSet = new FastBitSet()) {
+  /** @type {Point3d[][]} */
+  get targetPoints() {
+    const facePoints = this.target[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].facePoints;
+    return [facePoints.top, facePoints.bottom, ...facePoints.sides];
+  }
+
+  _testPointsForSurface(targetSurface, targetPoints) {
+    const unobscured = new this.constructor.BitSetClass();
+    const visible = new this.constructor.BitSetClass();
     const radius2 = this.radius ** 2;
-    const vp = this.viewpoint;
-    bitSet.clear();
     for ( let i = 0, n = targetPoints.length; i < n; i += 1 ) {
       const pt = targetPoints[i];
-      if ( Point3d.distanceSquaredBetween(vp, pt) > radius2 ) continue; // Outside of visible radius.
-      if ( !this.pointIsOccluded(pt) ) bitSet.add(i);
+      if ( !this.pointIsVisible(pt, radius2) ) continue;
+      visible.add(i);
+      if ( this.pointIsOccluded(pt) ) continue;
+      unobscured.add(i);
     }
-    return bitSet;
+
+    return { unobscured, visible };
+  }
+
+  pointIsVisible(pt, radius2 = this.radius ** 2) {
+    return Point3d.distanceSquaredBetween(this.viewpoint, pt) <= radius2;
   }
 
   /**
@@ -187,16 +200,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     // Is it occluded from the camera/viewer?
     pt.subtract(this.viewpoint, this.#rayDirection);
     return this.occlusionTester._rayIsOccluded(this.#rayDirection);
-  }
-
-  /**
-   * Get polygons representing all grids under a token.
-   * @param {Token} token
-   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
-   */
-  static gridShapesUnderToken(token) {
-    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) return [token.tokenBorder];
-    return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
 
   // ----- NOTE: Debug ----- //
@@ -332,6 +335,75 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorAbst
     a.release();
   }
 }
+
+export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstract {
+   get percentVisible() {
+    // For points, the maximum unobscured points divided by points for a given area.
+    const { unobscured, numPoints } = this.data;
+    let maxPercent = 0;
+    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
+      const bs = unobscured[i];
+      if ( !bs ) continue; // Skipped this face/group.
+      maxPercent = Math.max(maxPercent, bs.cardinality / numPoints[i]);
+      if ( maxPercent >= 1 ) break;
+    }
+    return maxPercent;
+  }
+}
+
+
+export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPointsAbstract {
+  static resultClass = PercentVisiblePointsResult
+
+  static BitSetClass = SmallBitSet;
+
+  static defaultConfiguration = {
+    ...super.defaultConfiguration,
+    targetPointIndex: 1, // Center only
+    targetInset: 0.75,
+  }
+
+  get config() { return super.config; } // Must call parent to avoid having no getter here.
+
+  set config(cfg = {}) {
+    if ( Object.hasOwn(cfg, "targetPointIndex")
+      && cfg.targetPointIndex instanceof SmallBitSet ) cfg.targetPointIndex = cfg.targetPointIndex.word;
+    super.config = cfg;
+  }
+
+  /**
+   * Build a set of 3d points on a given token shape, dependent on settings and shape.
+   * @type {Point3d[][]}
+   */
+  get targetPoints() {
+    const target = this.target;
+    const { targetPointIndex, targetInset } = this.config;
+    const cfg = {
+      pointKey: targetPointIndex,
+      inset: targetInset,
+      viewpoint: this.viewpoint,
+      tokenShape: null,
+    };
+    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
+      ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
+    if ( !targetShapes.length ) targetShapes.push(this.targetShape);
+    return targetShapes.map(shape => {
+      cfg.tokenShape = shape;
+      return ViewerLOS.constructTokenPoints(target, cfg);
+    });
+  }
+
+  /**
+   * Get polygons representing all grids under a token.
+   * @param {Token} token
+   * @return {PIXI.Polygon[]|PIXI.Rectangle[]|null}
+   */
+  static gridShapesUnderToken(token) {
+    if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) return [token.tokenBorder];
+    return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
+  }
+ }
+
 
 export class DebugVisibilityViewerPoints extends DebugVisibilityViewerArea3dPIXI {
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.POINTS;

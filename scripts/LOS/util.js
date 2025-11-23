@@ -618,6 +618,23 @@ export function approximateClamp(num, min, max, epsilon = 1e-08) {
 }
 
 /**
+ * How many spherical points are necessary to achieve a given spacing for a given sphere radius?
+ * @param {number} [radius=1]
+ * @param {number} [spacing]        Defaults to the module spacing default for per-pixel calculator.
+ * @returns {number}
+ */
+export function numberOfSphericalPointsForSpacing(r = 1, l = CONFIG[MODULE_ID].perPixelSpacing || 10) {
+  // Surface area of a sphere is 4πr^2.
+  // With N points, divide by N to get average area per point.
+  // Assuming perfectly equidistant points, consider side length of a square with average area.
+  // l = sqrt(4πr^2/N) = 2r*sqrt(π/N)
+  // To get N, square both sides and simplify.
+  // N = (4πr^2) / l^2
+  // l = 2 * r * Math.sqrt(Math.PI / N);
+  return (4 * Math.PI * (r ** 2)) / (l ** 2);
+}
+
+/**
  * Map mean to link arbitrary ids to index integers.
  * Allows reverse lookup and tracking of used indices.
  */

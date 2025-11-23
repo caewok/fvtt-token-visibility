@@ -143,4 +143,6 @@ export class SmallBitSet {
 SmallBitSet.prototype.union = SmallBitSet.prototype.or;
 SmallBitSet.prototype.intersection = SmallBitSet.prototype.and;
 
-
+SmallBitSet.prototype.add = SmallBitSet.prototype.setIndex;
+SmallBitSet.prototype.remove = SmallBitSet.prototype.unsetIndex;
+SmallBitSet.prototype.has = SmallBitSet.prototype.hasIndex;
