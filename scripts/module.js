@@ -346,13 +346,41 @@ Hooks.once("init", function() {
     dimCutoff: 0.25,
 
     /**
-     * For points on the other side of the token from the light, how should they be lit assuming
-     * no other obstruction than the target token?
-     * For example, DIM would mean that points on the dark side of the token would have maximum
-     * dim light even if the token was within the radius of a bright light.
-     * @type {CONST.LIGHTING_LEVELS}
+     * Configurations that affect the light meter.
+     * @type {object}
      */
-    lightMeterObscureType: CONST.LIGHTING_LEVELS.DIM,
+    lightMeter: {
+
+      /**
+       * What class of calculator to use for the light meter?
+       * Currently works with PercentVisibleCalculatorPoints and PercentVisibleCalculatorPerPixel
+       * @type {PercentVisibleCalculatorAbstract}
+       */
+      calculatorClass: PercentVisibleCalculatorPerPixel,
+
+      /**
+       * For points on the other side of the token from the light, how should they be lit assuming
+       * no other obstruction than the target token?
+       * For example, DIM would mean that points on the dark side of the token would have maximum
+       * dim light even if the token was within the radius of a bright light.
+       * @type {CONST.LIGHTING_LEVELS}
+       */
+      obscureType: CONST.LIGHTING_LEVELS.DIM,
+
+      /**
+       * Use spheres to represent token shapes.
+       * Sphere radius will be the maximum of half of width, height, vertical height.
+       * Circular token shapes will be treated as cylinders if this is false.
+       * @type {boolean}
+       */
+      useTokenSphere: false,
+
+      /**
+       * If using PercentVisibleCalculatorPoints, what point configuration to use.
+       * @type {ViewerLOS.POINT_INDICES} Bit union of POINT_INDICES.
+       */
+      targetPointIndex: 1022, // Everything except CENTER (0)
+    },
 
     /**
      * Use spheres to represent token shapes.

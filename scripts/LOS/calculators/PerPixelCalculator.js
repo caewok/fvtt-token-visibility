@@ -64,8 +64,9 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   /* ----- NOTE: Pixel testing ----- */
 
   pointIsVisible(pt, radius2) {
+    // TODO: Cache testSurfaceVisibility and spherical.
     if ( !super.pointIsVisible(pt, radius2) ) return false;
-    if ( !this.spherical ) return true;
+    if ( !this.spherical || !this.config.testSurfaceVisibility ) return true;
     const viewplane = this.viewplane;
     return viewplane.whichSide(pt) * viewplane.whichSide(this.viewpoint) > 0
   }

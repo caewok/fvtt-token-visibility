@@ -32,6 +32,17 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     visibleTargetPaths: null,
   };
 
+  clone() {
+    const out = super.clone();
+    for ( let i = 0, iMax = this.data.blockingPaths.length; i < iMax; i += 1 ) {
+      if ( !this.data.blockingPaths[i] ) continue;
+      out.data.blockingPaths[i] = this.data.blockingPaths[i].clone();
+      out.data.targetPaths[i] = this.data.targetPaths[i].clone();
+      out.data.visibleTargetPaths[i] = this.data.targetPaths[i].clone();
+    }
+    return out;
+  }
+
   get visibleTargetPaths() {
     const data = this.data;
     if ( !data.visibleTargetPaths ) data.visibleTargetPaths = data.blockingPaths.diffPaths(data.targetPaths);

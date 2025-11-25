@@ -57,6 +57,8 @@ export class PercentVisibleResult {
     largeTarget: false,
   };
 
+  logData() { console.table(logData); }
+
   #config = {}
 
   get config() { return structuredClone(this.#config); }
@@ -150,6 +152,20 @@ export class PercentVisibleResult {
     if ( other.visibility === NONE ) return this.clone();
 
     return null; // Must be handled by subclass.
+  }
+
+  blendMinimize(other) {
+    const { FULL, NONE } = this.constructor.VISIBILITY;
+
+    // If both are full, minimize will be full.
+    if ( this.visibility === FULL && other.visibility === FULL ) return this.clone();
+
+    // If this data type is empty, minimize will be empty.
+    if ( this.visibility === NONE ) return this.clone();
+    if ( other.visibility === NONE ) return other.clone();
+
+    // One or both are CUSTOM; handle with subclass.
+    return null;
   }
 
   static max(...results) {

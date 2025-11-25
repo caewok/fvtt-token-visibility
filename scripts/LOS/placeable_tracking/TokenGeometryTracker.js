@@ -216,7 +216,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
   };
 
   static _onLightingUpdate() {
-    canvas.tokens.forEach(t => {
+    canvas.tokens.placeables.forEach(t => {
       const geom = t[MODULE_ID][this.ID];
       if ( !geom ) return;
       geom._updateFaces();
@@ -257,7 +257,7 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
   };
 
   static _onLightingUpdate() {
-    canvas.tokens.forEach(t => {
+    canvas.tokens.placeables.forEach(t => {
       const geom = t[MODULE_ID][this.ID];
       if ( !geom ) return;
       geom._updateFaces();

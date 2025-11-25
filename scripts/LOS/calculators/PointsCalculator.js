@@ -79,6 +79,25 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     numPoints: [],        // Total points for this surface.
   };
 
+  logData() {
+    console.table({
+      numPoints: this.data.numPoints,
+      visible: this.data.visible.map(bs => bs?.cardinality),
+      unobscured: this.data.unobscured.map(bs => bs?.cardinality),
+    });
+  }
+
+  clone() {
+    const out = super.clone();
+    for ( let i = 0, iMax = this.data.unobscured.length; i < iMax; i += 1 ) {
+      if ( !this.data.unobscured[i] ) continue;
+      out.data.unobscured[i] = this.data.unobscured[i].clone();
+      out.data.visible[i] = this.data.visible[i].clone();
+      // Points should have already been cloned.
+    }
+    return out;
+  }
+
   get totalTargetArea() {
     return this.data.numPoints.reduce((acc, curr) => acc + curr, 0); // empty elements transformed to 0.
   }
@@ -100,13 +119,41 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     for ( let i = 0, iMax = out.data.numPoints.length; i < iMax; i += 1 ) {
       // Combine each face in turn.
       if ( out.data.unobscured[i] && other.data.unobscured[i] ) {
-        out.data.unobscured[i].or(other.data.unobscured[i]);
-        out.data.numPoints[i] += other.data.numPoints[i];
+        out.data.unobscured[i].union(other.data.unobscured[i]);
+        out.data.visible[i].union(other.data.visible[i]);
+        out.data.numPoints[i] = Math.max(out.data.numPoints[i], other.data.numPoints[i]);
       }
       else if ( other.data.unobscured[i] ) { // this.data for index i is empty.
-        out.data.unobscured[i] = other.data.unobscured[i];
+        out.data.unobscured[i] = other.data.unobscured[i].clone();
+        out.data.visible[i] = other.data.visible[i].clone();
         out.data.numPoints[i] = other.data.numPoints[i];
       } // Else other.data for index i is empty.
+    }
+    return out;
+  }
+
+  /**
+   * Blend this result with another result, taking the minimum values at each test location.
+   * Used to screen out viewpoints, such as with light meter testing of dim or bright non-occluded points.
+   * @param {PercentVisibleResult} other
+   * @returns {PercentVisibleResult} A new combined set.
+   */
+  blendMinimize(other) {
+    let out = super.blendMinimize(other);
+    if ( out ) return out;
+    out = this.clone();
+    for ( let i = 0, iMax = out.data.numPoints.length; i < iMax; i += 1 ) {
+      // Combine each face in turn.
+      if ( out.data.unobscured[i] && other.data.unobscured[i] ) {
+        out.data.unobscured[i].intersection(other.data.unobscured[i]);
+        out.data.visible[i].intersection(other.data.visible[i]);
+        out.data.numPoints[i] = Math.min(out.data.numPoints[i], other.data.numPoints[i]);
+
+      } else if ( this.data.unobscured[i] ) {
+        // Other data slot is empty, so this one should be made empty as well.
+        out.data.unobscured[i] = other.data.unobscured[i];
+        out.data.visible[i] = other.data.visible[i];
+      } // Otherwise this data slot is empty; keep.
     }
     return out;
   }
@@ -128,6 +175,11 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   static BitSetClass = FastBitSet;
 
+  static defaultConfiguration = {
+    ...super.defaultConfiguration,
+    testSurfaceVisibility: true,
+  };
+
   _calculate() {
     return this._testAllSurfaces(this.targetPoints, this.targetSurfaces);
   }
@@ -138,6 +190,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    */
   _testAllSurfaces(points, surfaces) {
     surfaces ??= Array(points.length);
+    const testSurfaceVisibility = this.config.testSurfaceVisibility;
     const result = this._createResult();
     const n = points.length;
     result.data.numPoints = points.map(pts => pts.length);
@@ -146,7 +199,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
     for ( let i = 0; i < n; i += 1 ) {
       const surface = surfaces[i];
-      if ( !this.surfaceIsVisible(surface) ) continue;
+      if ( testSurfaceVisibility && !this.surfaceIsVisible(surface) ) continue;
       const { unobscured, visible } = this._testPointsForSurface(surface, points[i]);
       result.data.unobscured[i] = unobscured;
       result.data.visible[i] = visible;
