@@ -131,8 +131,8 @@ export class TokenLightMeter {
    */
   get lightingType() {
     const TYPES = CONST.LIGHTING_LEVELS;
-    if ( this.percentBright > CONFIG[MODULE_ID].brightCutoff ) return TYPES.BRIGHT;
-    else if ( this.percentDim > CONFIG[MODULE_ID].dimCutoff ) return TYPES.DIM;
+    if ( this.percentBright > CONFIG[MODULE_ID].lightMeter.brightCutoff ) return TYPES.BRIGHT;
+    else if ( this.percentDim > CONFIG[MODULE_ID].lightMeter.dimCutoff ) return TYPES.DIM;
     else return TYPES.UNLIT;
   }
 
@@ -184,7 +184,12 @@ export class TokenLightMeter {
 
   calculateLightFromViewpoint(viewpoint) {
     this.updateLights();
-    return this._calculateLightFromViewpoint(viewpoint);
+    const { bright, dim } = this._calculateLightFromViewpoint(viewpoint);
+
+    const TYPES = CONST.LIGHTING_LEVELS;
+    if ( bright.percentVisible > CONFIG[MODULE_ID].lightMeter.brightCutoff ) return TYPES.BRIGHT;
+    else if ( dim.percentVisible > CONFIG[MODULE_ID].lightMeter.dimCutoff ) return TYPES.DIM;
+    else return TYPES.UNLIT;
   }
 
   /**

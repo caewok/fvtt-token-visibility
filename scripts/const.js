@@ -64,3 +64,5 @@ export const TRACKER_IDS = {
   VISIBILITY: "visibility",
   LIGHT_METER: "lightMeter",
 };
+
+export const FALLBACK_ICON = "icons/svg/hazard.svg";

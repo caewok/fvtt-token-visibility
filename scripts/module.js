@@ -25,7 +25,7 @@ import {
   BrightLitTokenGeometryTracker,
   SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
 import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
-
+import { LightStatusTracker } from "./LightStatusTracker.js";
 
 // For API
 import * as bench from "./benchmark.js";
@@ -333,23 +333,25 @@ Hooks.once("init", function() {
      */
     regionsBlock: true,
 
-    /**
-     * What percentage of bright points on a token sphere are required to be considered in bright light?
-     * @type {number}  Between 0 and 1
-     */
-    brightCutoff: 0.25,
 
-    /**
-     * What percentage of dim points on a token sphere are required to be considered in dim light?
-     * @type {number}  Between 0 and 1
-     */
-    dimCutoff: 0.25,
 
     /**
      * Configurations that affect the light meter.
      * @type {object}
      */
     lightMeter: {
+      /**
+       * What percentage of bright points are required to be considered in bright light?
+       * @type {number}  Between 0 and 1
+       */
+      brightCutoff: 0.25,
+
+      /**
+       * What percentage of dim points are required to be considered in dim light?
+       * (If both bright and dim cutoffs are met, bright takes precedence.)
+       * @type {number}  Between 0 and 1
+       */
+      dimCutoff: 0.25,
 
       /**
        * What class of calculator to use for the light meter?
@@ -365,7 +367,7 @@ Hooks.once("init", function() {
        * dim light even if the token was within the radius of a bright light.
        * @type {CONST.LIGHTING_LEVELS}
        */
-      obscureType: CONST.LIGHTING_LEVELS.DIM,
+      obscureType: CONST.LIGHTING_LEVELS.BRIGHT,
 
       /**
        * Use spheres to represent token shapes.
@@ -541,6 +543,7 @@ Hooks.once("init", function() {
     Patcher, HookPatch, MethodPatch, LibWrapperPatch,
     geoDelaunay,
     geoVoronoi,
+    LightStatusTracker,
   };
 });
 
@@ -571,13 +574,30 @@ function tokenIsDead(token) {
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
-  // CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
+
+  // Add status effects for dim and no light.
+  const dimLight = {
+    id: "dimLight",
+    _id: ("atvDimLight").padEnd(16, "0"),
+    name: "Dim Light",
+    img: "icons/sundries/lights/torch-brown-lit.webp",
+    reference: MODULE_ID,
+  };
+  const noLight = {
+    id: "noLight",
+    _id: ("atvNoLight").padEnd(16, "0"),
+    name: "No Light",
+    img: "icons/sundries/lights/torch-brown.webp",
+    reference: MODULE_ID,
+  };
+  CONFIG.statusEffects.push(dimLight, noLight);
 });
 
 Hooks.once("ready", function() {
   console.debug(`${MODULE_ID}|ready hook`);
   Settings.migrate(); // Cannot be set until world is ready.
   Settings.initializeDebugGraphics();
+  LightStatusTracker.loadLightIcons(); // Async.
 });
 
 Hooks.on("canvasReady", function() {

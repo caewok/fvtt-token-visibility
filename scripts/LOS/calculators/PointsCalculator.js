@@ -99,12 +99,18 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
   }
 
   get totalTargetArea() {
-    return this.data.numPoints.reduce((acc, curr) => acc + curr, 0); // empty elements transformed to 0.
+    // Skip empty faces.
+    let total = 0;
+    const { unobscured, numPoints } = this.data;
+    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
+      if ( unobscured[i] ) total += numPoints[i];
+    }
+    return total || 1;
   }
 
   get largeTargetArea() { return this.totalTargetArea; }
 
-  get visibleArea() { return this.data.unobscured.reduce((acc, curr) => acc + (curr ? curr.cardinality : 0), 0); }
+  get visibleArea() { return this.data.unobscured.reduce((acc, curr) => acc + (curr?.cardinality || 0), 0); }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.
@@ -380,6 +386,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
       const n = numPoints[i];
       for ( let j = 0; j < n; j += 1 ) {
         const pt = pts[j];
+        if ( !pt ) console.error(`Point ${j} is undefined.`);
         opts.color = bs.has(j) ? Draw.COLORS.blue : Draw.COLORS.red;
         draw.point(pt.multiply(mult, a), opts);
       }
