@@ -621,6 +621,8 @@ Hooks.on("canvasReady", function() {
   BrightLitTokenGeometryTracker.registerExistingPlaceables();
   RegionGeometryTracker.registerExistingPlaceables();
 
+  // Must be after the trackers are ready.
+  Settings.updateLightMonitor(Settings.get(Settings.KEYS.LIGHT_MONITOR.ALGORITHM));
 
 
 //   // Create default calculators used by all the tokens.

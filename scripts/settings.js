@@ -33,7 +33,6 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 */
 
 
-
 export const SETTINGS = {
   AREA3D_USE_SHADOWS: "area3d-use-shadows", // For benchmarking and debugging for now.
   SUBMENU: "submenu",
@@ -207,7 +206,6 @@ export class Settings extends ModuleSettingsAbstract {
       default: KEYS.LIGHT_MONITOR.TYPES.NONE,
       onChange: this.updateLightMonitor
     });
-    this.updateLightMonitor(this.get(KEYS.LIGHT_MONITOR.ALGORITHM));
 
     register(KEYS.DEBUG.RANGE, {
       name: localize(`${KEYS.DEBUG.RANGE}.Name`),

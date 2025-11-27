@@ -51,7 +51,7 @@ export class LightStatusTracker {
   startLightMonitor() {
     this.stopLightMonitor();
     this.hooks.lightMonitor = Hooks.on("sightRefresh", this.constructor.lightMonitor.bind(this));
-    this.constructor.lightMonitor();
+    this.constructor.lightMonitor.call(this);
   }
 
   /**
