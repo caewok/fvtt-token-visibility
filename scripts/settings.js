@@ -12,6 +12,7 @@ import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator, pointIndexForSet } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
+import { LightStatusTracker } from "./LightStatusTracker.js";
 
 // ----- NOTE: Hooks ----- //
 
@@ -76,6 +77,15 @@ export const SETTINGS = {
         INSET: "los-inset-target",
       }
     }
+  },
+
+  LIGHT_MONITOR: {
+    ALGORITHM: "lm-algorithm",
+    TYPES: {
+      NONE: "lm-algorithm-none",
+      TOKENS: "lm-algorithm-tokens",
+      VIEWPOINT: "lm-algorithm-viewpoint",
+    },
   },
 
   PRONE_STATUS_ID: "prone-status-id",
@@ -154,6 +164,9 @@ export class Settings extends ModuleSettingsAbstract {
     else this.destroyDebugViewer();
   }
 
+  /** @type {LightStatusTracker} */
+  static lightMonitor;
+
   /**
    * Register all settings
    */
@@ -179,6 +192,22 @@ export class Settings extends ModuleSettingsAbstract {
       type: ATVSettingsSubmenu,
       restricted: true
     });
+
+    register(KEYS.LIGHT_MONITOR.ALGORITHM, {
+      name: localize(`${KEYS.LIGHT_MONITOR.ALGORITHM}.Name`),
+      hint: localize(`${KEYS.LIGHT_MONITOR.ALGORITHM}.Hint`),
+      scope: "world",
+      config: true,
+      type: String,
+      choices: {
+        [KEYS.LIGHT_MONITOR.TYPES.NONE]: localize(`${KEYS.LIGHT_MONITOR.TYPES.NONE}`),
+        [KEYS.LIGHT_MONITOR.TYPES.TOKENS]: localize(`${KEYS.LIGHT_MONITOR.TYPES.TOKENS}`),
+        [KEYS.LIGHT_MONITOR.TYPES.VIEWPOINT]: localize(`${KEYS.LIGHT_MONITOR.TYPES.VIEWPOINT}`),
+      },
+      default: KEYS.LIGHT_MONITOR.TYPES.NONE,
+      onChange: this.updateLightMonitor
+    });
+    this.updateLightMonitor(this.get(KEYS.LIGHT_MONITOR.ALGORITHM));
 
     register(KEYS.DEBUG.RANGE, {
       name: localize(`${KEYS.DEBUG.RANGE}.Name`),
@@ -503,6 +532,27 @@ export class Settings extends ModuleSettingsAbstract {
       default: false,
       type: Boolean
     });
+  }
+
+  static updateLightMonitor(value) {
+    const LM = Settings.KEYS.LIGHT_MONITOR;
+    switch ( value ) {
+      case LM.TYPES.NONE:
+        if ( !Settings.lightMonitor ) break;
+        Settings.lightMonitor.destroy();
+        Settings.lightMonitor = undefined;
+        break;
+      case LM.TYPES.TOKENS:
+        Settings.lightMonitor ??= new LightStatusTracker();
+        Settings.lightMonitor.stopLocalIconMonitor();
+        Settings.lightMonitor.startLightMonitor();
+        break;
+      case LM.TYPES.VIEWPOINT:
+        Settings.lightMonitor ??= new LightStatusTracker();
+        Settings.lightMonitor.stopLightMonitor();
+        Settings.lightMonitor.startLocalIconMonitor();
+        break;
+    }
   }
 
   static migrate() {

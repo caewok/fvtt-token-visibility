@@ -1,6 +1,13 @@
 {
     "tokenvisibility.name": "Alt. Token Visibility",
     "tokenvisibility.nameAbbr": "ATV",
+
+    "tokenvisibility.settings.lm-algorithm.Name": "Light Monitor",
+    "tokenvisibility.settings.lm-algorithm.Hint": "Per Token: Add an active effect and status icon when token is in dim or no light. Viewpoint: When a user controls a token, mark tokens in dim or no light from perspective of that controlled token.",
+    "tokenvisibility.settings.lm-algorithm-none": "Disable",
+    "tokenvisibility.settings.lm-algorithm-tokens": "Per Token",
+    "tokenvisibility.settings.lm-algorithm-viewpoint": "Viewpoint",
+
     "tokenvisibility.settings.points-center": "Token center only (1 point) ⚀",
     "tokenvisibility.settings.points-two": "Token front-facing corners (2 points)",
     "tokenvisibility.settings.points-three": "Token front-facing and center (3 points)",
@@ -122,4 +129,5 @@
 
     "tokenvisibility.settings.submenu.notifyDND5e": "Changing settings to dnd5e.",
     "tokenvisibility.settings.submenu.notify3d": "Changing settings to 3d."
+
  }

@@ -51,6 +51,7 @@ export class LightStatusTracker {
   startLightMonitor() {
     this.stopLightMonitor();
     this.hooks.lightMonitor = Hooks.on("sightRefresh", this.constructor.lightMonitor.bind(this));
+    this.constructor.lightMonitor();
   }
 
   /**
@@ -60,6 +61,10 @@ export class LightStatusTracker {
     if ( !this.hooks.lightMonitor ) return;
     Hooks.off("sightRefresh", this.hooks.lightMonitor);
     this.hooks.lightMonitor = null;
+    canvas.tokens.forEach(token => {
+      this.constructor.removeStatusFromActor(token.actor, "dimLight"); // Async.
+      this.constructor.removeStatusFromActor(token.actor, "noLight"); // Async.
+    });
   }
 
   static lightMonitor() {
@@ -102,8 +107,8 @@ export class LightStatusTracker {
    */
   startLocalIconMonitor() {
     this.stopLocalIconMonitor();
-    this.hooks.iconMonitor = Hooks.on("sightRefresh", this.constructor.iconMonitor.bind(this));
-    this.hooks.iconTokenControl = Hooks.on("controlToken", this.constructor.tokenIconControlMonitor.bind(this));
+    this.hooks.iconMonitor = Hooks.on("sightRefresh", this.constructor.tokenIconMonitor.bind(this));
+    this.hooks.iconTokenControl = Hooks.on("controlToken", this.constructor.tokenControlIconMonitor.bind(this));
   }
 
   stopLocalIconMonitor() {
@@ -113,6 +118,8 @@ export class LightStatusTracker {
 
     Hooks.off("controlToken", this.hooks.iconTokenControl);
     this.hooks.iconTokenControl = null;
+
+    canvas.tokens.forEach(token => this.clearIcons(token));
   }
 
   static tokenIconMonitor() {
@@ -124,6 +131,7 @@ export class LightStatusTracker {
     const ctr = Point3d.fromTokenCenter(viewingToken);
 
     for ( const token of canvas.tokens.placeables ) {
+      if ( token === viewingToken ) continue;
       const tokenUpdated = this.tokenTracker.logUpdate(token);
       if ( !(lightingUpdated || viewerUpdated || tokenUpdated) ) continue;
 
@@ -131,16 +139,13 @@ export class LightStatusTracker {
       const lm = token[MODULE_ID][TRACKER_IDS.LIGHT_METER];
       lm.updateLights();
       this.updateTokenLightingIcons(token, ctr);
+      this.drawIcons(token);
     }
     ctr.release();
   }
 
-  static tokenIconControlMonitor(token, controlled) {
-    canvas.tokens.placeables.forEach(token => this.clearIcons(token));
-    // TODO: Need to check for lighting or token updates here?
-    this.removeIcon(token, "noLight");
-    this.removeIcon(token, "dimLight");
-
+  static tokenControlIconMonitor(token, controlled) {
+    canvas.tokens.placeables.forEach(t => this.clearIcons(t));
     const viewingToken = controlled ? token : canvas.tokens.controlled.at(-1);
     if ( viewingToken ) {
       // For now, change all based on newly controlled viewpoint.
@@ -148,13 +153,13 @@ export class LightStatusTracker {
       const ctr = Point3d.fromTokenCenter(viewingToken);
       for ( const other of canvas.tokens.placeables ) {
         if ( other === viewingToken ) continue;
-        this.updateTokenLightingIcons(token, ctr);
+        this.updateTokenLightingIcons(other, ctr);
       }
       ctr.release();
 
-    } else canvas.tokens.placeables.forEach(token => this.clearIcons(token));
+    } else canvas.tokens.placeables.forEach(t => this.clearIcons(t));
 
-    canvas.tokens.placeables.forEach(token => this.constructor.drawIcons(token));
+    canvas.tokens.placeables.forEach(t => this.drawIcons(t));
   }
 
   updateTokenLightingIcons(token, viewpoint) {
@@ -355,32 +360,12 @@ export class LightStatusTracker {
    * Refresh the display of icons, adjusting their position for token width and height.
    */
   static refreshIcons(token) {
-    // See Token#_refreshEffects.
-    let i = 0;
-    const iconsToRefresh = [];
-    for ( const effect of token.effects.children ) {
-      if ( effect === token.effects.bg ) continue;
-      if ( effect === token.effects.overlay ) continue;
-      if ( this.#icons.has(effect) ) iconsToRefresh.push(effect);
-      else i += 1; // Determine how many non-icon effects are already drawn.
-    }
-
-    // Reorder on grid like with _refreshEffects.
-    const size = Math.round(canvas.dimensions.size / 10) * 2;
-    const rows = Math.floor(token.document.height * 5);
-    for ( const icon of iconsToRefresh ) {
-      icon.width = icon.height = size;
-      icon.x = Math.floor(i / rows) * size;
-      icon.y = (i % rows) * size;
-      token.effects.bg.drawRoundedRect(icon.x + 1, icon.y + 1, size - 2, size - 2, 2);
-      i += 1;
-    }
+    token._refreshEffects();
   }
 
   destroy() {
-    this.#icons.clear();
-    this.#iconTextures.forEach(tex => tex.destroy());
-    this.#iconTextures.clear();
+    this.stopLightMonitor();
+    this.stopLocalIconMonitor();
   }
 }
 
