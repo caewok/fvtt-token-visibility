@@ -61,7 +61,7 @@ export class LightStatusTracker {
     if ( !this.hooks.lightMonitor ) return;
     Hooks.off("sightRefresh", this.hooks.lightMonitor);
     this.hooks.lightMonitor = null;
-    canvas.tokens.forEach(token => {
+    canvas.tokens.placeables.forEach(token => {
       this.constructor.removeStatusFromActor(token.actor, "dimLight"); // Async.
       this.constructor.removeStatusFromActor(token.actor, "noLight"); // Async.
     });
@@ -119,7 +119,7 @@ export class LightStatusTracker {
     Hooks.off("controlToken", this.hooks.iconTokenControl);
     this.hooks.iconTokenControl = null;
 
-    canvas.tokens.forEach(token => this.clearIcons(token));
+    canvas.tokens.placeables.forEach(token => this.clearIcons(token));
   }
 
   static tokenIconMonitor() {

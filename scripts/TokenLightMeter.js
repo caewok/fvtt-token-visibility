@@ -143,9 +143,11 @@ export class TokenLightMeter {
 
   /**
    * For each point on the token, run the points algorithm to determine bright/dim/dark.
+   * @param {PointLightSource[]} [lights]     If not provided, will test all light sources on canvas except Global.
    */
   updateLights(lights) {
-    lights ??= canvas.lighting.placeables;
+    lights ??= canvas.effects.lightSources
+    lights = lights.filter(l => !(l instanceof GlobalLightSource));
     const calc = this.constructor.calculator;
     calc.initializeView({ target: this.token });
     this.data.dim = calc._createResult().makeFullyNotVisible();
@@ -159,18 +161,20 @@ export class TokenLightMeter {
       calc.initializeView({ viewer: light });
 
       // Test bright radius.
-      cfg.radius = light.brightRadius;
-      switch( obscureType ) {
-        case UNLIT:                                         // Don't count any points on the dark side of the token.
-        case DIM: cfg.testSurfaceVisibility = true; break;  // Points on dark side of token can only contribute to dim score.
-        case BRIGHT: cfg.testSurfaceVisibility = false;     // Points all sides can count as bright.
+      if ( light.data.bright ) {
+        cfg.radius = light.data.bright;
+        switch( obscureType ) {
+          case UNLIT:                                         // Don't count any points on the dark side of the token.
+          case DIM: cfg.testSurfaceVisibility = true; break;  // Points on dark side of token can only contribute to dim score.
+          case BRIGHT: cfg.testSurfaceVisibility = false;     // Points all sides can count as bright.
+        }
+        calc.config = cfg;
+        const brightResult = calc.calculate();
+        this.data.bright = this.data.bright.blendMaximize(brightResult);
       }
-      calc.config = cfg;
-      const brightResult = calc.calculate();
-      this.data.bright = this.data.bright.blendMaximize(brightResult);
 
       // Test dim radius.
-      cfg.radius = light.dimRadius;
+      cfg.radius = light.data.dim;
       switch( obscureType ) {
         case UNLIT: cfg.testSurfaceVisibility = true; break;  // Don't count any points on the dark side of the token.
         case DIM:                                             // Points on dark side of token can only contribute to dim score.
