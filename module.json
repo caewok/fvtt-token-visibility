@@ -28,10 +28,6 @@
     ]
   },
 
-  "scripts": [
-    "scripts/LOS/gl_matrix/gl-matrix.js "
-  ],
-
   "esmodules": [
     "scripts/module.js"
   ],

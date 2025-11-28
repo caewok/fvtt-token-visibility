@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONFIG,
+CONST,
 game,
 Hooks,
 PIXI,
@@ -53,16 +54,6 @@ import * as range from "./visibility_range.js";
 
 // import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/Camera.js";
-
-import {
-  mat2, mat2d, mat3, mat4,
-  quat, quat2,
-  vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
-// import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
-// import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
-// import { wgsl } from "./LOS/wgsl-preprocessor.js";
-// import { AsyncQueue } from "./LOS/AsyncQueue.js";
-
 
 import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
 import { WallTracker } from "./LOS/placeable_tracking/WallTracker.js";
@@ -509,12 +500,6 @@ Hooks.once("init", function() {
     ObstacleOcclusionTest,
 
     countTargetPixels,
-
-    glmatrix: {
-      mat2, mat2d, mat3, mat4,
-      quat, quat2,
-      vec2, vec3, vec4
-    },
 
     MarchingSquares,
     SmallBitSet,

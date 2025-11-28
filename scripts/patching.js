@@ -24,7 +24,6 @@ const PATCHES = {
   "foundry.helpers.ClientSettings": PATCHES_Settings,
   SettingsConfig: PATCHES_SettingsConfig,
   "foundry.canvas.placeables.Token": PATCHES_Token,
-  "CONFIG.Levels.handlers.SightHandler": PATCHES_Levels_SightHandler,
 };
 
 export const PATCHER = new Patcher();
