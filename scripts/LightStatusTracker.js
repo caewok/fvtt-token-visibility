@@ -136,48 +136,50 @@ export class LightStatusTracker {
       if ( !(lightingUpdated || viewerUpdated || tokenUpdated) ) continue;
 
       // Update the token light icon.
+      console.debug(`tokenIconMonitor|Updating and drawing ${token.name}`);
       const lm = token[MODULE_ID][TRACKER_IDS.LIGHT_METER];
       lm.updateLights();
-      this.updateTokenLightingIcons(token, ctr);
-      this.drawIcons(token);
+      if ( this.updateTokenLightingIcons(token, ctr) ) this.drawIcons(token);
     }
     ctr.release();
   }
 
   static tokenControlIconMonitor(token, controlled) {
-    canvas.tokens.placeables.forEach(t => this.clearIcons(t));
     const viewingToken = controlled ? token : canvas.tokens.controlled.at(-1);
     if ( viewingToken ) {
       // For now, change all based on newly controlled viewpoint.
       // TODO: Combined view?
+      if ( this.clearIcons(viewingToken) ) this.drawIcons(viewingToken);
       const ctr = Point3d.fromTokenCenter(viewingToken);
       for ( const other of canvas.tokens.placeables ) {
         if ( other === viewingToken ) continue;
-        this.updateTokenLightingIcons(other, ctr);
+        console.debug(`tokenControlIconMonitor|Updating ${token.name}.`);
+        if ( this.updateTokenLightingIcons(other, ctr) ) this.drawIcons(other);
       }
       ctr.release();
-
-    } else canvas.tokens.placeables.forEach(t => this.clearIcons(t));
-
-    canvas.tokens.placeables.forEach(t => this.drawIcons(t));
+    }
   }
 
   updateTokenLightingIcons(token, viewpoint) {
     const TYPES = CONST.LIGHTING_LEVELS;
     const lm = token[MODULE_ID][TRACKER_IDS.LIGHT_METER];
+    let dimUpdate = false;
+    let noneUpdate = false;
     switch ( lm.calculateLightFromViewpoint(viewpoint) ) {
       case TYPES.BRIGHT:
-        this.removeIcon(token, "dimLight");
-        this.removeIcon(token, "noLight");
+        dimUpdate = this.removeIcon(token, "dimLight");
+        noneUpdate = this.removeIcon(token, "noLight");
         break;
       case TYPES.DIM:
-        this.addIcon(token, "dimLight");
-        this.removeIcon(token, "noLight");
+        dimUpdate = this.addIcon(token, "dimLight");
+        noneUpdate = this.removeIcon(token, "noLight");
         break;
-      default:
-        this.removeIcon(token, "dimLight");
-        this.addIcon(token, "noLight");
+      default: {
+        dimUpdate = this.removeIcon(token, "dimLight");
+        noneUpdate = this.addIcon(token, "noLight");
+      }
     }
+    return dimUpdate || noneUpdate;
   }
 
   /**
@@ -360,6 +362,7 @@ export class LightStatusTracker {
    * Refresh the display of icons, adjusting their position for token width and height.
    */
   static refreshIcons(token) {
+    console.debug(`refreshIcons|${token.name}`);
     token._refreshEffects();
   }
 
