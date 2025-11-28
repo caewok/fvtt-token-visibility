@@ -86,8 +86,6 @@ import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./L
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/calculators/GeometricCalculator.js";
 import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Calculator.js";
-import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/calculators/SamplePixelCalculator.js"
-import { GeometricFaceCalculator } from "./LOS/calculators/GeometricFaceCalculator.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";
 
 
@@ -281,7 +279,6 @@ Hooks.once("init", function() {
       // webgpu: PercentVisibleCalculatorWebGPU,
       // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
       "per-pixel": PercentVisibleCalculatorPerPixel,
-      "sample-pixel": PercentVisibleCalculatorSamplePixel,
     },
 
     losCalculators: {
@@ -525,7 +522,6 @@ Hooks.once("init", function() {
 
     Viewpoint,
     ObstacleOcclusionTest,
-    GeometricFaceCalculator,
 
     countTargetPixels,
 
