@@ -7,7 +7,7 @@ Hooks,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
+import { MODULE_ID, TRACKER_IDS } from "../../const.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
@@ -29,7 +29,6 @@ Stored on each placeable
 - Hooks to trigger updates
 - Tracking update number
 */
-export const AbstractPlaceableTrackerID = "geometry";
 
 /** @type {MatrixFlat<4,4>} */
 const identityM = MatrixFloat32.identity(4, 4);
@@ -37,7 +36,7 @@ Object.freeze(identityM);
 
 
 export class AbstractPlaceableGeometryTracker {
-  static ID = AbstractPlaceableTrackerID;
+  static ID = TRACKER_IDS.GEOMETRY.PLACEABLE;
 
   /* ----- NOTE: Hooks ----- */
 

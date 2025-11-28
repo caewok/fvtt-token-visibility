@@ -4,11 +4,10 @@ foundry,
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { Settings } from "./settings.js";
 import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
-import { ATVTokenHandlerID } from "./TokenHandler.js";
 
 // ViewerLOS = CachedViewerLOS;
 
@@ -150,6 +149,6 @@ export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
  * @param {object} [config]             Custom parameters to override default settings.
  */
 export function buildDebugViewer(cl) {
-  const viewerLOSFn = viewer => viewer[MODULE_ID][ATVTokenHandlerID].losViewer;
+  const viewerLOSFn = viewer => viewer[MODULE_ID][TRACKER_IDS.VISIBILITY].losViewer;
   return new cl(viewerLOSFn);
 }

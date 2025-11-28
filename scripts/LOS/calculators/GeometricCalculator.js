@@ -32,6 +32,17 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     visibleTargetPaths: null,
   };
 
+  clone() {
+    const out = super.clone();
+    for ( let i = 0, iMax = this.data.blockingPaths.length; i < iMax; i += 1 ) {
+      if ( !this.data.blockingPaths[i] ) continue;
+      out.data.blockingPaths[i] = this.data.blockingPaths[i].clone();
+      out.data.targetPaths[i] = this.data.targetPaths[i].clone();
+      out.data.visibleTargetPaths[i] = this.data.targetPaths[i].clone();
+    }
+    return out;
+  }
+
   get visibleTargetPaths() {
     const data = this.data;
     if ( !data.visibleTargetPaths ) data.visibleTargetPaths = data.blockingPaths.diffPaths(data.targetPaths);
@@ -58,7 +69,6 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     // Both types are custom.
     // The target area could change, given the different views.
     // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
     out = this.clone();
     out.data.targetPaths = this.data.targetPaths.union(other.data.targetPaths);
     out.data.visibleTargetPaths = this.data.visibleTargetPaths.union(other.data.visibleTargetPaths);
@@ -90,9 +100,11 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _calculate() {
+    const result = super._calculate(); // Test radius between viewpoint and target.
+    if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
+
     this.initializeCalculations();
     this._constructPerspectiveTargetPolygons();
-    const result = PercentVisibleGeometricResult.fromCalculator(this);
     result.data.targetPaths = this._constructTargetPath();
     result.data.blockingPaths = this._constructObstaclePaths();
     return result;
@@ -242,7 +254,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     const viewpoint = this.viewpoint
     const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
-    this.targetPolys = this._applyPerspective(facingPolys, this.camera.lookAtMatrix, this.camera.perspectiveMatrix);
+    this.targetPolys = this._applyPerspective(facingPolys);
 
     // Test if the transformed polys are all getting clipped.
     const txPolys = facingPolys.map(poly => poly.transform(this.camera.lookAtMatrix));
@@ -259,7 +271,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _constructPerspectiveTargetSphere() {
-    // Perspective sphere is a circle in 2d.
+    // Perspective sphere is a circle in 2d (assuming a plane perpendicular to the camera view; otherwise ellipse).
     // By definition, center is 0,0.
     // Need to determine the radius.
     // Get a point on the edge of the sphere at the viewplane (perpendicular to the viewpoint-->center line).
@@ -354,7 +366,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(draw, { width = 100, height = 100 } = {}) {
+  _draw3dDebug(result, draw, { width = 100, height = 100 } = {}) {
     const { targetPolys, blockingPolys, blockingTerrainPolys } = this;
     const colors = Draw.COLORS;
 

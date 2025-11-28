@@ -99,12 +99,13 @@ export class Viewpoint {
    */
   _drawCanvasDebug(debugDraw) {
     this.calculator.initializeView(this);
-    this.calculator._drawCanvasDebug(debugDraw);
+    const result = this.calculator.calculate();
+    this.calculator._drawCanvasDebug(result, debugDraw);
   }
 
   _draw3dDebug(debugDraw, opts = {}) { // opts incl width, height
     this.calculator.initializeView(this);
-    this.calculator.calculate();
-    this.calculator._draw3dDebug(debugDraw, opts);
+    const result = this.calculator.calculate();
+    this.calculator._draw3dDebug(result, debugDraw, opts);
   }
 }

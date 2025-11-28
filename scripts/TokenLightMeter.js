@@ -6,13 +6,8 @@ CONST,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
-import { Sphere } from "./geometry/3d/Sphere.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
-import { MatrixFlat } from "./geometry/MatrixFlat.js";
-import { Plane } from "./geometry/3d/Plane.js";
-import { PercentVisibleCalculatorPoints } from "./LOS/calculators/PointsCalculator.js";
 
 /*
 Spherical approach
@@ -55,21 +50,59 @@ Equivalently, test a^2 + b^2 > c^2 (vs < or =)
  - Disperse light based on intensities
 */
 
-export const ATVTokenLightMeterID = "lightMeter";
 
 export class TokenLightMeter {
 
   /** @type {string} */
-  static ID = ATVTokenLightMeterID;
+  static ID = TRACKER_IDS.LIGHT_METER;
+
+  static #calc;
+
+  static defaultConfiguration = {
+    blocking: {
+      walls: true,
+      tiles: true,
+      regions: true,
+      tokens: {
+        dead: false,
+        live: false,
+        prone: false,
+      },
+    },
+    tokenShapeType: "constrainedTokenBorder",
+    senseType: "sight",
+    largeTarget: false,
+    radius: null,
+    testSurfaceVisibility: true,
+    spherical: false,
+    targetPointIndex: 1022,  // Everything but center.
+    targetInset: 0,
+  }
+
+  static get calculator() {
+    if ( !this.#calc || this.calcChanged() ) {
+      const calcCfg = structuredClone(this.defaultConfiguration);
+      const cfgs = CONFIG[MODULE_ID].lightMeter;
+      if ( this.#calc ) this.#calc.destroy();
+      calcCfg.spherical = cfgs.useTokenSphere;
+      calcCfg.targetPointIndex = cfgs.targetPointIndex;
+      this.#calc = new cfgs.calculatorClass(calcCfg);
+    }
+    return this.#calc;
+  }
+
+  static calcChanged() {
+    const cfgs = CONFIG[MODULE_ID].lightMeter;
+    if ( !(this.#calc instanceof cfgs.calculatorClass) ) return true;
+
+    const calcCfg = this.#calc.config;
+    if ( cfgs.useTokenSphere !== calcCfg.spherical ) return true;
+    if ( cfgs.targetPointIndex !== calcCfg.targetPointIndex ) return true;
+    return false;
+  }
 
   /** @type {Token} */
   token;
-
-  /** @type {Point3d[]} */
-  unitPoints = [];
-
-  /** @type {Point3d[]} */
-  tokenPoints = [];
 
   /** @type {object<BitSet>} */
   data = {
@@ -77,19 +110,20 @@ export class TokenLightMeter {
     dim: new FastBitSet(),
   };
 
-  /** @type {number} */
-  get numPoints() { return this.unitPoints.length; }
-
-  set numPoints(n) {
-    this.tokenPoints.forEach(pt => pt.release());
-    this.tokenPoints.length = 0;
-    this.unitPoints.forEach(pt => pt.release());
-    this.unitPoints = Sphere.pointsLattice(n);
+  // Two calc options:
+  // 1. Points calculator.
+  // 2. Per-Pixel calculator.
+  // TODO: Face point options and non-point options possible, except probably spherical non-point.
+  constructor(token) {
+    token[MODULE_ID] ??= {};
+    token[MODULE_ID][this.constructor.ID] = this;
+    this.token = token;
   }
 
-  get percentBright() { return this.data.bright.cardinality / this.numPoints; }
+  /** @type {number} */
+  get percentBright() { return this.data.bright.percentVisible; }
 
-  get percentDim() { return this.data.dim.cardinality / this.numPoints; }
+  get percentDim() { return this.data.dim.percentVisible; }
 
   /**
    * Determine whether the token is in bright/dim/dark light.
@@ -97,8 +131,8 @@ export class TokenLightMeter {
    */
   get lightingType() {
     const TYPES = CONST.LIGHTING_LEVELS;
-    if ( this.percentBright > CONFIG[MODULE_ID].brightCutoff ) return TYPES.BRIGHT;
-    else if ( this.percentDim > CONFIG[MODULE_ID].dimCutoff ) return TYPES.DIM;
+    if ( this.percentBright > CONFIG[MODULE_ID].lightMeter.brightCutoff ) return TYPES.BRIGHT;
+    else if ( this.percentDim > CONFIG[MODULE_ID].lightMeter.dimCutoff ) return TYPES.DIM;
     else return TYPES.UNLIT;
   }
 
@@ -107,104 +141,59 @@ export class TokenLightMeter {
 
   set viewpoint(value) { this.calc.viewpoint.copyFrom(value); }
 
-  constructor(token, { numPoints = 20 } = {}) {
-    token[MODULE_ID] ??= {};
-    token[MODULE_ID][this.constructor.ID] = this;
-
-    this.token = token;
-    this.numPoints = numPoints;
-
-    // Set up a points calculator.
-    // Blocking walls and regions; tokens don't block.
-    this.calc = new PercentVisibleCalculatorPoints({
-      senseType: "sight",
-      blocking: {
-        tokens: {
-          dead: false,
-          live: false,
-          prone: false,
-        },
-      },
-      tokenShapeType: "constrainedTokenBorder",
-    });
-
-    this.calc.initializeView({ target: this.token });
-  }
-
-  #scaleM = MatrixFlat.identity(4, 4);
-
-  #translateM = MatrixFlat.identity(4, 4);
-
-  #transformM = MatrixFlat.identity(4, 4);
-
   /**
    * For each point on the token, run the points algorithm to determine bright/dim/dark.
+   * @param {PointLightSource[]} [lights]     If not provided, will test all light sources on canvas except Global.
    */
   updateLights(lights) {
-    lights ??= canvas.lighting.placeables;
-    this.data.dim.clear();
-    this.data.bright.clear();
-    this.calc.initializeView({ target: this.token });
-    let viewable;
-    const { UNLIT, DIM, BRIGHT } = CONST.LIGHTING_LEVELS
+    lights ??= canvas.effects.lightSources
+    lights = lights.filter(l => !(l instanceof GlobalLightSource));
+    const calc = this.constructor.calculator;
+    calc.initializeView({ target: this.token });
+    this.data.dim = calc._createResult().makeFullyNotVisible();
+    this.data.bright = calc._createResult().makeFullyNotVisible();
 
+    // Test each light's view of the target token.
+    const { UNLIT, DIM, BRIGHT } = CONST.LIGHTING_LEVELS
+    const obscureType = CONFIG[MODULE_ID].lightMeter.obscureType;
+    const cfg = { radius: Number.POSITIVE_INFINITY, testSurfaceVisibility: true };
     for ( const light of lights ) {
-      this.calc.initializeView({ viewer: light });
-      if ( CONFIG[MODULE_ID].lightMeterObscureType !== BRIGHT ) viewable = this._viewableSphereIndices();
+      calc.initializeView({ viewer: light });
 
       // Test bright radius.
-      this.calc.config = { radius: light.brightRadius };
-      this.calc._calculateForPoints([this.tokenPoints]);
-      let brightRes = this.calc.lastResult.data;
-      switch( CONFIG[MODULE_ID].lightMeterObscureType ) {
-        case UNLIT: // Don't count any points on the dark side of the token.
-        case DIM: // Points on dark side of token can only contribute to dim score.
-          brightRes = brightRes.and(viewable);
-          break;
-        case BRIGHT: break; // Points on both sides of token sphere can count as bright.
+      if ( light.data.bright ) {
+        cfg.radius = light.data.bright;
+        switch( obscureType ) {
+          case UNLIT:                                         // Don't count any points on the dark side of the token.
+          case DIM: cfg.testSurfaceVisibility = true; break;  // Points on dark side of token can only contribute to dim score.
+          case BRIGHT: cfg.testSurfaceVisibility = false;     // Points all sides can count as bright.
+        }
+        calc.config = cfg;
+        const brightResult = calc.calculate();
+        this.data.bright = this.data.bright.blendMaximize(brightResult);
       }
-      this.data.bright = this.data.bright.or(brightRes);
 
       // Test dim radius.
-      this.calc.config = { radius: light.dimRadius };
-      this.calc._calculateForPoints([this.tokenPoints]);
-      let dimRes = this.calc.lastResult.data;
-      switch( CONFIG[MODULE_ID].lightMeterObscureType ) {
-        case UNLIT: // Don't count any points on the dark side of the token.
-          dimRes = dimRes.and(viewable);
-          break;
-        case DIM: // Points on dark side of token can only contribute to dim score.
-        case BRIGHT: break; // Points on both sides of token sphere can count as bright.
+      cfg.radius = light.data.dim;
+      switch( obscureType ) {
+        case UNLIT: cfg.testSurfaceVisibility = true; break;  // Don't count any points on the dark side of the token.
+        case DIM:                                             // Points on dark side of token can only contribute to dim score.
+        case BRIGHT: cfg.testSurfaceVisibility = false;       // Points on both sides of token sphere can count as bright.
       }
-      this.data.dim = this.data.dim.or(dimRes);
+      calc.config = cfg;
+      const dimResult = calc.calculate();
+      this.data.dim = this.data.dim.blendMaximize(dimResult);
     }
-  }
-
-  /**
-   * Translate and scale the unit sphere points to match the token position and size.
-   */
-  updateTokenPoints() {
-    // TODO: Does this still work if creating ellipsoids, with distinct h, w, z?
-    const { w, h } = this.token;
-    const v = this.token.topZ - this.token.bottomZ;
-    const s = Math.max(w, h, v) * 0.5; // Want the radius, not the diameter.
-    const center = Point3d.fromTokenCenter(this.token);
-
-    // Update the transform matrix.
-    MatrixFlat.scale(s, s, s, this.#scaleM);
-    MatrixFlat.translation(center.x, center.y, center.z, this.#translateM);
-    this.#scaleM.multiply4x4(this.#translateM, this.#transformM);
-
-    // Update the token points.
-    const { tokenPoints, unitPoints } = this;
-    tokenPoints.length = unitPoints.length;
-    unitPoints.forEach((pt, i) => tokenPoints[i] = this.#transformM.multiplyPoint3d(pt));
   }
 
   calculateLightFromViewpoint(viewpoint) {
     this.updateLights();
-    this.updateTokenPoints();
-    return this._calculateLightFromViewpoint(viewpoint);
+    const { bright, dim } = this._calculateLightFromViewpoint(viewpoint);
+
+    const TYPES = CONST.LIGHTING_LEVELS;
+    if ( bright.percentVisible > CONFIG[MODULE_ID].lightMeter.brightCutoff ) return TYPES.BRIGHT;
+    else if ( dim.percentVisible > CONFIG[MODULE_ID].lightMeter.dimCutoff ) return TYPES.DIM;
+    else return TYPES.UNLIT;
   }
 
   /**
@@ -215,73 +204,17 @@ export class TokenLightMeter {
   _calculateLightFromViewpoint(viewpoint) {
     // Get the visibility of the points from the viewpoint.
     viewpoint ??= this.viewpoint;
-    this.calc.initializeView({ target: this.token, viewpoint });
-    this.calc.config = { radius: Number.POSITIVE_INFINITY };
+    const calc = this.constructor.calculator;
+    calc.initializeView({ target: this.token, viewpoint });
+    calc.config = { radius: Number.POSITIVE_INFINITY, testSurfaceVisibility: true };
 
-    // Test the sphere points visible from the viewpoint.
-    const visible = this._viewableSphereIndices(viewpoint);
-    const visTokenPoints = visible.maskArray(this.tokenPoints);
-    const res = this.calc._calculateForPoints([visTokenPoints]);
-
-    // For points that are not obscured, mark bright and dim.
-    let bright = maskBitSet(visible, this.data.bright);
-    let dim = maskBitSet(visible, this.data.dim);
-    bright = bright.and(res.data);
-    dim = dim.and(res.data);
-
-    const n = visible.cardinality;
-    bright = bright.cardinality / n;
-    dim = dim.cardinality / n;
-    return { bright, dim };
+    // Test the points visible from the viewpoint.
+    const result = calc.calculate();
+    return {
+      bright: result.blendMinimize(this.data.bright),
+      dim: result.blendMinimize(this.data.dim),
+    };
   }
-
-  /**
-   * Indices for points on the spherical target token representation that are viewable
-   * from the viewpoint, only considering the spherical shape as blocking.
-   * @param {Point3d} [viewpoint]
-   * @returns {BitSet}
-   */
-  _viewableSphereIndices(viewpoint) {
-    const visible = new FastBitSet();
-    const viewplane = this.viewplane;
-    const viewSide = Math.sign(viewplane.whichSide(viewpoint));
-    this.tokenPoints.forEach((pt, idx) => {
-      if ( Math.sign(viewplane.whichSide(pt)) === viewSide ) visible.add(idx);
-    });
-    return visible;
-  }
-
-  _obscuredSphereIndices(viewpoint) {
-    return this._viewableSphereIndices(viewpoint).flip(); // Flips in place, versus "not" which creates new set.
-  }
-
-  get viewplane() {
-    const center = Point3d.fromTokenCenter(this.target);
-    const dirHorizontal = this.viewpoint.subtract(center);
-    const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, center.z);
-    const perpB = center.add(dirB);
-    const dirC = dirHorizontal.cross(dirB);
-    const perpC = center.add(dirC)
-    return Plane.fromPoints(center, perpB, perpC)
-  }
-}
-
-
-/**
- * For a given bitset, return a smaller bitset that holds only the elements specified by these indices.
- * @param {BitSet} data
- * @param {BitSet} mask
- * @returns {BitSet}
- */
-function maskBitSet(data, mask) {
-  const arr = mask.toArray();
-  const bs = new FastBitSet();
-  let j = 0;
-  arr.forEach(elem => {
-    if ( data.has(elem) ) bs.add(j);
-    j++;
-  });
-  return bs;
 }
 
 

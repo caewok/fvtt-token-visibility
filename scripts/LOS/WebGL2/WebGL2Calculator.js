@@ -36,6 +36,25 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
     targetCount: null,
   };
 
+  logData() {
+    console.log(`Total Blocked: ${this.data.blockedCount}\tTotal Target: ${this.data.targetCount}`)
+    console.table({
+      blocked: this.data.blocked.map(bs => bs?.cardinality),
+      target: this.data.target.map(bs => bs?.cardinality),
+    });
+  }
+
+  clone() {
+    const out = super.clone();
+    for ( let i = 0, iMax = this.data.blocked.length; i < iMax; i += 1 ) {
+      if ( !this.data.blocked[i] ) continue;
+      out.data.blocked[i] = this.data.blocked[i].clone();
+      out.data.target[i] = this.data.target[i].clone();
+      // blockedCount, targetCount should have already been cloned.
+    }
+    return out;
+  }
+
   get totalTargetArea() {
     return this.data.targetCount ?? (this.data.target.cardinality || 0);
   }
@@ -188,11 +207,9 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   }
 
   _calculate() {
-    if ( !this.#initialized ) {
-      const result = this._createResult();
-      result.makeFullyNotVisible();
-      return result;
-    }
+    const result = super._calculate(); // Test radius between viewpoint and target.
+    if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
+    if ( !this.#initialized ) return result.makeFullyNotVisibile();
 
     this.initializeCalculations();
     const { viewer, viewpoint, target, targetLocation } = this;
@@ -321,7 +338,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     if ( this.renderer ) this.renderer.destroy();
     const webGL2 = new WebGL2(this.gl);
     this.renderer = new RenderObstaclesWebGL2({
-      senseType: this.viewerLOS.config.senseType,
+      senseType: this.viewerLOS?.config.senseType ?? "sight",
       debugViewNormals: this.debugView,
       webGL2,
     });
@@ -329,6 +346,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   }
 
   updateDebugForPercentVisible(percentVisible) {
+    this.renderer.config = { senseType: this.viewerLOS?.config.senseType ?? "sight" };
     super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
     // TODO: Handle multiple viewpoints.

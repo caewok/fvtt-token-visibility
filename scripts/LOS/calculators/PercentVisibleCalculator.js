@@ -2,7 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -57,6 +56,8 @@ export class PercentVisibleResult {
   static defaultConfiguration = {
     largeTarget: false,
   };
+
+  logData() { console.table(logData); }
 
   #config = {}
 
@@ -153,6 +154,20 @@ export class PercentVisibleResult {
     return null; // Must be handled by subclass.
   }
 
+  blendMinimize(other) {
+    const { FULL, NONE } = this.constructor.VISIBILITY;
+
+    // If both are full, minimize will be full.
+    if ( this.visibility === FULL && other.visibility === FULL ) return this.clone();
+
+    // If this data type is empty, minimize will be empty.
+    if ( this.visibility === NONE ) return this.clone();
+    if ( other.visibility === NONE ) return other.clone();
+
+    // One or both are CUSTOM; handle with subclass.
+    return null;
+  }
+
   static max(...results) {
     let out = results.pop();
     for ( const result of results ) {
@@ -192,6 +207,7 @@ export class PercentVisibleCalculatorAbstract {
     tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
     senseType: "sight",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
     largeTarget: false,
+    radius: null, // Default is to use the viewer's vision lightRadius or ∞.
   };
 
   constructor(cfg = {}) {
@@ -205,6 +221,8 @@ export class PercentVisibleCalculatorAbstract {
   get config() { return structuredClone(this.#config); }
 
   set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false }); }
+
+  get radius() { return this.#config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
 
   // ----- NOTE: Basic property getters / setters ---- //
 
@@ -324,7 +342,12 @@ export class PercentVisibleCalculatorAbstract {
     return this._calculate();
   }
 
-  _calculate() { return this._createResult(); }
+  _calculate() {
+    // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
+    const result = this._createResult();
+    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.radius ** 2;
+    return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
+  }
 
   /**
    * Using the available algorithm, test whether the target w/o/r/t other viewers is
@@ -379,7 +402,7 @@ export class PercentVisibleCalculatorAbstract {
    * Draw various debug guides on the canvas.
    * @param {Draw} draw
    */
-  _drawCanvasDebug(debugDraw) {
+  _drawCanvasDebug(result, debugDraw) {
     // this._drawLineOfSight(debugDraw);
     this.occlusionTester._drawDetectedObjects(debugDraw);
     this.occlusionTester._drawFrustum(debugDraw);

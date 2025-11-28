@@ -7,12 +7,12 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
 import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator, pointIndexForSet } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
-import { ATVTokenHandlerID } from "./TokenHandler.js";
+import { LightStatusTracker } from "./LightStatusTracker.js";
 
 // ----- NOTE: Hooks ----- //
 
@@ -31,7 +31,6 @@ await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-dead")
 await api.bench.QBenchmarkLoopFn(N, getSetting, "cached","cover-token-live")
 await api.bench.QBenchmarkLoopFn(N, fnDefault, "default","cover-token-live")
 */
-
 
 
 export const SETTINGS = {
@@ -77,6 +76,15 @@ export const SETTINGS = {
         INSET: "los-inset-target",
       }
     }
+  },
+
+  LIGHT_MONITOR: {
+    ALGORITHM: "lm-algorithm",
+    TYPES: {
+      NONE: "lm-algorithm-none",
+      TOKENS: "lm-algorithm-tokens",
+      VIEWPOINT: "lm-algorithm-viewpoint",
+    },
   },
 
   PRONE_STATUS_ID: "prone-status-id",
@@ -155,6 +163,9 @@ export class Settings extends ModuleSettingsAbstract {
     else this.destroyDebugViewer();
   }
 
+  /** @type {LightStatusTracker} */
+  static lightMonitor;
+
   /**
    * Register all settings
    */
@@ -179,6 +190,21 @@ export class Settings extends ModuleSettingsAbstract {
       icon: "fas fa-user-gear",
       type: ATVSettingsSubmenu,
       restricted: true
+    });
+
+    register(KEYS.LIGHT_MONITOR.ALGORITHM, {
+      name: localize(`${KEYS.LIGHT_MONITOR.ALGORITHM}.Name`),
+      hint: localize(`${KEYS.LIGHT_MONITOR.ALGORITHM}.Hint`),
+      scope: "world",
+      config: true,
+      type: String,
+      choices: {
+        [KEYS.LIGHT_MONITOR.TYPES.NONE]: localize(`${KEYS.LIGHT_MONITOR.TYPES.NONE}`),
+        [KEYS.LIGHT_MONITOR.TYPES.TOKENS]: localize(`${KEYS.LIGHT_MONITOR.TYPES.TOKENS}`),
+        [KEYS.LIGHT_MONITOR.TYPES.VIEWPOINT]: localize(`${KEYS.LIGHT_MONITOR.TYPES.VIEWPOINT}`),
+      },
+      default: KEYS.LIGHT_MONITOR.TYPES.NONE,
+      onChange: this.updateLightMonitor
     });
 
     register(KEYS.DEBUG.RANGE, {
@@ -506,6 +532,27 @@ export class Settings extends ModuleSettingsAbstract {
     });
   }
 
+  static updateLightMonitor(value) {
+    const LM = Settings.KEYS.LIGHT_MONITOR;
+    switch ( value ) {
+      case LM.TYPES.NONE:
+        if ( !Settings.lightMonitor ) break;
+        Settings.lightMonitor.destroy();
+        Settings.lightMonitor = undefined;
+        break;
+      case LM.TYPES.TOKENS:
+        Settings.lightMonitor ??= new LightStatusTracker();
+        Settings.lightMonitor.stopLocalIconMonitor();
+        Settings.lightMonitor.startLightMonitor();
+        break;
+      case LM.TYPES.VIEWPOINT:
+        Settings.lightMonitor ??= new LightStatusTracker();
+        Settings.lightMonitor.stopLightMonitor();
+        Settings.lightMonitor.startLocalIconMonitor();
+        break;
+    }
+  }
+
   static migrate() {
     if ( !this.get(this.KEYS.MIGRATION.v080) ) {
       let alg = this.get(this.KEYS.LOS.TARGET.ALGORITHM);
@@ -532,20 +579,24 @@ export class Settings extends ModuleSettingsAbstract {
         // Set a new shared calculator for all tokens.
         const losCalc = buildLOSCalculator();
         canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
           if ( !handler ) return;
-          handler.calculator = losCalc;
+          if ( handler.losViewer.calculator ) handler.losViewer.calculator.destroy();
+          handler.losViewer.calculator = losCalc;
         });
 
         // Start up a new debug viewer.
-        if ( this.get(this.KEYS.DEBUG.LOS) ) this.initializeDebugViewer(value);
+        if ( this.get(this.KEYS.DEBUG.LOS) ) {
+          this.destroyDebugViewer();
+          this.initializeDebugViewer(value);
+        }
         break;
       }
       case VIEWER.POINTS: value = pointIndexForSet(value);
       case VIEWER.INSET: { /* eslint-disable-line no-fallthrough */
         // Tell the los viewer to update the viewpoints.
         canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
           if ( !handler ) return;
           handler.losViewer.dirty = true;
         });

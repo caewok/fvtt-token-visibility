@@ -6,7 +6,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
+import { MODULE_ID, TRACKER_IDS } from "../../const.js";
 import {
   GeometryToken,
   GeometryConstrainedToken,
@@ -16,7 +16,9 @@ import {
   GeometrySphericalToken, } from "../geometry/GeometryToken.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
+import { numberOfSphericalPointsForSpacing } from "../util.js";
 
+// libGeometry
 import { Polygon3d, Quad3d, Circle3d } from "../../geometry/3d/Polygon3d.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { MatrixFlat } from "../../geometry/MatrixFlat.js";
@@ -33,10 +35,7 @@ Placeable geometry stored in wall placeables.
 - Update key
 
 Faces and triangles oriented based on wall direction.
-
-
 */
-
 
 export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeometryTracker) {
   static HOOKS = {
@@ -204,7 +203,7 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
 }
 
 export class LitTokenGeometryTracker extends TokenGeometryTracker {
-  static ID = "litGeometry";
+  static ID = TRACKER_IDS.GEOMETRY.TOKEN.LIT;
 
   static HOOKS = {
     drawToken: "_onPlaceableDraw",
@@ -217,7 +216,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
   };
 
   static _onLightingUpdate() {
-    canvas.tokens.forEach(t => {
+    canvas.tokens.placeables.forEach(t => {
       const geom = t[MODULE_ID][this.ID];
       if ( !geom ) return;
       geom._updateFaces();
@@ -245,7 +244,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
 }
 
 export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
-  static ID = "brightLitGeometry";
+  static ID = TRACKER_IDS.GEOMETRY.TOKEN.BRIGHT;
 
   static HOOKS = {
     drawToken: "_onPlaceableDraw",
@@ -258,7 +257,7 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
   };
 
   static _onLightingUpdate() {
-    canvas.tokens.forEach(t => {
+    canvas.tokens.placeables.forEach(t => {
       const geom = t[MODULE_ID][this.ID];
       if ( !geom ) return;
       geom._updateFaces();
@@ -286,7 +285,7 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
 }
 
 export class SphericalTokenGeometryTracker extends TokenGeometryTracker {
-  static ID = "sphericalGeometry";
+  static ID = TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL;
 
   /** @type {GeometryDesc} */
   static geomClass = GeometrySphericalToken;
@@ -336,25 +335,8 @@ export class SphericalTokenGeometryTracker extends TokenGeometryTracker {
     // TODO: Cache and reuse target points. Maybe in the target geometry tracker.
     // TODO: Ellipsoids with distinct h, w, z?
     // See TokenLightMeter
-    const nPoints = Math.floor(this.constructor.numberOfSphericalPointsForSpacing(this.tokenRadius)) || 1;
+    const nPoints = Math.floor(numberOfSphericalPointsForSpacing(this.tokenRadius)) || 1;
     return Sphere.pointsLattice(nPoints);
-  }
-
-  /**
-   * How many spherical points are necessary to achieve a given spacing for a given sphere radius?
-   * @param {number} [radius=1]
-   * @param {number} [spacing]        Defaults to the module spacing default for per-pixel calculator.
-   * @returns {number}
-   */
-  static numberOfSphericalPointsForSpacing(r = 1, l = CONFIG[MODULE_ID].perPixelSpacing || 10) {
-    // Surface area of a sphere is 4πr^2.
-    // With N points, divide by N to get average area per point.
-    // Assuming perfectly equidistant points, consider side length of a square with average area.
-    // l = sqrt(4πr^2/N) = 2r*sqrt(π/N)
-    // To get N, square both sides and simplify.
-    // N = (4πr^2) / l^2
-    // l = 2 * r * Math.sqrt(Math.PI / N);
-    return (4 * Math.PI * (r ** 2)) / (l ** 2);
   }
 
   get tokenRadius() {

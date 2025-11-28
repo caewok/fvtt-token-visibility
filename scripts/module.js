@@ -25,7 +25,7 @@ import {
   BrightLitTokenGeometryTracker,
   SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
 import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
-
+import { LightStatusTracker } from "./LightStatusTracker.js";
 
 // For API
 import * as bench from "./benchmark.js";
@@ -333,26 +333,56 @@ Hooks.once("init", function() {
      */
     regionsBlock: true,
 
-    /**
-     * What percentage of bright points on a token sphere are required to be considered in bright light?
-     * @type {number}  Between 0 and 1
-     */
-    brightCutoff: 0.25,
+
 
     /**
-     * What percentage of dim points on a token sphere are required to be considered in dim light?
-     * @type {number}  Between 0 and 1
+     * Configurations that affect the light meter.
+     * @type {object}
      */
-    dimCutoff: 0.25,
+    lightMeter: {
+      /**
+       * What percentage of bright points are required to be considered in bright light?
+       * @type {number}  Between 0 and 1
+       */
+      brightCutoff: 0.25,
 
-    /**
-     * For points on the other side of the token from the light, how should they be lit assuming
-     * no other obstruction than the target token?
-     * For example, DIM would mean that points on the dark side of the token would have maximum
-     * dim light even if the token was within the radius of a bright light.
-     * @type {CONST.LIGHTING_LEVELS}
-     */
-    lightMeterObscureType: CONST.LIGHTING_LEVELS.DIM,
+      /**
+       * What percentage of dim points are required to be considered in dim light?
+       * (If both bright and dim cutoffs are met, bright takes precedence.)
+       * @type {number}  Between 0 and 1
+       */
+      dimCutoff: 0.25,
+
+      /**
+       * What class of calculator to use for the light meter?
+       * Currently works with PercentVisibleCalculatorPoints and PercentVisibleCalculatorPerPixel
+       * @type {PercentVisibleCalculatorAbstract}
+       */
+      calculatorClass: PercentVisibleCalculatorPerPixel,
+
+      /**
+       * For points on the other side of the token from the light, how should they be lit assuming
+       * no other obstruction than the target token?
+       * For example, DIM would mean that points on the dark side of the token would have maximum
+       * dim light even if the token was within the radius of a bright light.
+       * @type {CONST.LIGHTING_LEVELS}
+       */
+      obscureType: CONST.LIGHTING_LEVELS.BRIGHT,
+
+      /**
+       * Use spheres to represent token shapes.
+       * Sphere radius will be the maximum of half of width, height, vertical height.
+       * Circular token shapes will be treated as cylinders if this is false.
+       * @type {boolean}
+       */
+      useTokenSphere: false,
+
+      /**
+       * If using PercentVisibleCalculatorPoints, what point configuration to use.
+       * @type {ViewerLOS.POINT_INDICES} Bit union of POINT_INDICES.
+       */
+      targetPointIndex: 1022, // Everything except CENTER (0)
+    },
 
     /**
      * Use spheres to represent token shapes.
@@ -513,6 +543,7 @@ Hooks.once("init", function() {
     Patcher, HookPatch, MethodPatch, LibWrapperPatch,
     geoDelaunay,
     geoVoronoi,
+    LightStatusTracker,
   };
 });
 
@@ -543,13 +574,30 @@ function tokenIsDead(token) {
 Hooks.once("setup", function() {
   Settings.registerAll();
   console.debug(`${MODULE_ID}|registered settings`);
-  // CONFIG.GeometryLib.threeD.Point3d.prototype.toString = function() { return `{x: ${this.x}, y: ${this.y}, z: ${this.z}}`};
+
+  // Add status effects for dim and no light.
+  const dimLight = {
+    id: "dimLight",
+    _id: ("atvDimLight").padEnd(16, "0"),
+    name: "Dim Light",
+    img: "icons/sundries/lights/torch-brown-lit.webp",
+    reference: MODULE_ID,
+  };
+  const noLight = {
+    id: "noLight",
+    _id: ("atvNoLight").padEnd(16, "0"),
+    name: "No Light",
+    img: "icons/sundries/lights/torch-brown.webp",
+    reference: MODULE_ID,
+  };
+  CONFIG.statusEffects.push(dimLight, noLight);
 });
 
 Hooks.once("ready", function() {
   console.debug(`${MODULE_ID}|ready hook`);
   Settings.migrate(); // Cannot be set until world is ready.
   Settings.initializeDebugGraphics();
+  LightStatusTracker.loadLightIcons(); // Async.
 });
 
 Hooks.on("canvasReady", function() {
@@ -573,6 +621,8 @@ Hooks.on("canvasReady", function() {
   BrightLitTokenGeometryTracker.registerExistingPlaceables();
   RegionGeometryTracker.registerExistingPlaceables();
 
+  // Must be after the trackers are ready.
+  Settings.updateLightMonitor(Settings.get(Settings.KEYS.LIGHT_MONITOR.ALGORITHM));
 
 
 //   // Create default calculators used by all the tokens.

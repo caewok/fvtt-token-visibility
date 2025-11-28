@@ -26,7 +26,7 @@ export class PercentVisibleSamplePixelResult extends PercentVisibleResult {
 
   data = new Map();
 
-  get totalTargetArea() { return this._config.numPoints;
+  get totalTargetArea() { return this.config.numPoints;
     // TODO: Need to be able to get the length of a BitSet.
     let area = 0;
     for ( const bs of this.data.values() ) area += bs.length;
