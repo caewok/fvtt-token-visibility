@@ -85,17 +85,17 @@ export class LightStatusTracker {
     const TYPES = CONST.LIGHTING_LEVELS;
     switch ( lightingType ) {
       case TYPES.BRIGHT:
-        console.log(`${MODULE_ID}|${actor.name} is in bright light.`)
+        // console.log(`${MODULE_ID}|${actor.name} is in bright light.`)
         this.#queue.enqueue(async () => this.removeStatusFromActor(actor, "dimLight"));
         this.#queue.enqueue(async () => this.removeStatusFromActor(actor, "noLight"));
         break;
       case TYPES.DIM:
-        console.log(`${MODULE_ID}|${actor.name} is in dim light.`)
+        // console.log(`${MODULE_ID}|${actor.name} is in dim light.`)
         this.#queue.enqueue(async () => this.removeStatusFromActor(actor, "noLight"));
         this.#queue.enqueue(async () => this.addStatusToActor(actor, "dimLight"));
         break;
       default:
-        console.log(`${MODULE_ID}|${actor.name} is in no light.`)
+        // console.log(`${MODULE_ID}|${actor.name} is in no light.`)
         this.#queue.enqueue(async () => this.removeStatusFromActor(actor, "dimLight"));
         this.#queue.enqueue(async () => this.addStatusToActor(actor, "noLight"));
     }
@@ -136,7 +136,7 @@ export class LightStatusTracker {
       if ( !(lightingUpdated || viewerUpdated || tokenUpdated) ) continue;
 
       // Update the token light icon.
-      console.debug(`tokenIconMonitor|Updating and drawing ${token.name}`);
+      // console.debug(`tokenIconMonitor|Updating and drawing ${token.name}`);
       const lm = token[MODULE_ID][TRACKER_IDS.LIGHT_METER];
       lm.updateLights();
       if ( this.updateTokenLightingIcons(token, ctr) ) this.drawIcons(token);
@@ -153,7 +153,7 @@ export class LightStatusTracker {
       const ctr = Point3d.fromTokenCenter(viewingToken);
       for ( const other of canvas.tokens.placeables ) {
         if ( other === viewingToken ) continue;
-        console.debug(`tokenControlIconMonitor|Updating ${token.name}.`);
+        // console.debug(`tokenControlIconMonitor|Updating ${token.name}.`);
         if ( this.updateTokenLightingIcons(other, ctr) ) this.drawIcons(other);
       }
       ctr.release();
@@ -197,15 +197,15 @@ export class LightStatusTracker {
     const { id, label, icon, hud, ...effectData } = statusEffect;
     effectData.name = game.i18n.localize(label ?? effectData.name);
     effectData.statuses = Array.from(new Set([id, ...effectData.statuses ?? []]))
-    console.log(`${MODULE_ID}|Adding ${statusId} to ${actor.name}`);
+    // console.log(`${MODULE_ID}|Adding ${statusId} to ${actor.name}`);
     try {
-      console.log(`${MODULE_ID}|Trying to add ${statusId} to ${actor.name}`);
+      // console.log(`${MODULE_ID}|Trying to add ${statusId} to ${actor.name}`);
       await actor.createEmbeddedDocuments("ActiveEffect", [effectData], { keepId: true }); // See dnd5e _onToggleCondition
     } catch(err) {
       console.log(`${MODULE_ID}|Error when trying to add ${statusId} to ${actor.name}`);
-      console.debug(err);
+      // console.debug(err);
     }
-    console.log(`${MODULE_ID}|Finished adding ${statusId} to ${actor.name}`);
+    // console.log(`${MODULE_ID}|Finished adding ${statusId} to ${actor.name}`);
   }
 
   /**
@@ -218,13 +218,14 @@ export class LightStatusTracker {
   static async removeStatusFromActor(actor, statusId) {
     if ( !actor.statuses.has(statusId) ) return false;
     const statusEffect = CONFIG.statusEffects.find(elem => elem.id === statusId);
-    console.log(`${MODULE_ID}|Removing ${statusId} from ${actor.name}`);
+    // console.log(`${MODULE_ID}|Removing ${statusId} from ${actor.name}`);
     try {
       await actor.deleteEmbeddedDocuments("ActiveEffect", [statusEffect._id]);
     } catch(err) {
+      console.log(`${MODULE_ID}|Error when trying to remove ${statusId} from ${actor.name}`);
       console.debug(err);
     }
-    console.log(`${MODULE_ID}|Finished removing ${statusId} from ${actor.name}`);
+    // console.log(`${MODULE_ID}|Finished removing ${statusId} from ${actor.name}`);
   }
 
   static async loadLightIcons() {
