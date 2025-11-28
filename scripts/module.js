@@ -498,8 +498,6 @@ Hooks.once("init", function() {
     Viewpoint,
     ObstacleOcclusionTest,
 
-    countTargetPixels,
-
     MarchingSquares,
     SmallBitSet,
     FastBitSet,

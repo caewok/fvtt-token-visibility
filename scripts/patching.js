@@ -13,9 +13,6 @@ import { PATCHES as PATCHES_Settings } from "./ModuleSettingsAbstract.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 
-// Levels
-import { PATCHES as PATCHES_Levels_SightHandler } from "./Levels_SightHandler.js";
-
 const PATCHES = {
   Canvas: PATCHES_Canvas,
   "foundry.canvas.groups.CanvasVisibility": PATCHES_CanvasVisibility,
