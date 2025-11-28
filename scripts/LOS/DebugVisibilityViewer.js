@@ -395,7 +395,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       // Divide in the popout space.
       const positions = [];
       let viewSize;
-      const numViewpoints = this.viewerLOS ? this.viewerLOS.viewpoints.length : 1;
+      const numViewpoints = this.viewerLOS?.viewpoints.length || 1;
       switch ( numViewpoints ) {
         case 1: positions.push([0, 0]); viewSize = WIDTH; break;
 
