@@ -196,7 +196,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    */
   _testAllSurfaces(points, surfaces) {
     surfaces ??= Array(points.length);
-    const testSurfaceVisibility = this.config.testSurfaceVisibility;
+    const testSurfaceVisibility = this._config.testSurfaceVisibility;
     const result = this._createResult();
     const n = points.length;
     result.data.numPoints = points.map(pts => pts.length);
@@ -445,7 +445,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
       viewpoint: this.viewpoint,
       tokenShape: null,
     };
-    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
+    const targetShapes = this._config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
       ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
     if ( !targetShapes.length ) targetShapes.push(this.targetShape);
     return targetShapes.map(shape => {

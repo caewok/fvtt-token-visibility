@@ -303,7 +303,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const { walls, terrainWalls, proximateWalls, reverseProximateWalls, tokens, tiles,  regions } = this.occlusionTester.obstacles;
 
     // If the proximity threshold is met, this edge excluded from perception calculations.
-    const senseType = this.config.senseType;
+    const senseType = this._config.senseType;
     const viewpoint = this.viewpoint;
     proximateWalls.forEach(w => { if ( w.edge.applyThreshold(senseType, viewpoint) ) proximateWalls.delete(w); });
     reverseProximateWalls.forEach(w => { if ( w.edge.applyThreshold(senseType, viewpoint) ) proximateWalls.delete(w); });
@@ -332,12 +332,12 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _targetPolygons() {
     const atv = this.target[MODULE_ID];
     let geometry;
-    switch ( this.config.tokenShapeType ) {
+    switch ( this._config.tokenShapeType ) {
       case "tokenBorder": geometry = atv[TokenGeometryTracker.ID]; break;
       case "constrainedTokenBorder": geometry = atv[TokenGeometryTracker.ID]; break;
       case "litTokenBorder": geometry = atv[LitTokenGeometryTracker.ID]; break;
       case "brightLitTokenBorder": geometry = atv[BrightLitTokenGeometryTracker.ID]; break;
-      default: console.error(`_targetPolygons|tokenShapeType ${this.config.tokenShapeType} not recognized.`);
+      default: console.error(`_targetPolygons|tokenShapeType ${this._config.tokenShapeType} not recognized.`);
     }
     return [...geometry.iterateFaces()];
   }
@@ -377,7 +377,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Draw the grid shape.
     // TODO: Fix; use Polygon3d
     /*
-    if ( this.config.largeTarget ) this._gridPolys.forEach(poly =>
+    if ( this._config.largeTarget ) this._gridPolys.forEach(poly =>
       draw.shape(poly.scale({ x: width, y: height }), { color: colors.orange, fill: colors.lightorange, fillAlpha: 0.4 }));
     */
 
