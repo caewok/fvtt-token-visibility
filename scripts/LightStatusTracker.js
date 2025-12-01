@@ -201,9 +201,9 @@ export class LightStatusTracker {
     try {
       // console.log(`${MODULE_ID}|Trying to add ${statusId} to ${actor.name}`);
       await actor.createEmbeddedDocuments("ActiveEffect", [effectData], { keepId: true }); // See dnd5e _onToggleCondition
-    } catch(err) {
+    } catch(_err) {
       console.log(`${MODULE_ID}|Error when trying to add ${statusId} to ${actor.name}`);
-      // console.debug(err);
+      // console.debug(_err);
     }
     // console.log(`${MODULE_ID}|Finished adding ${statusId} to ${actor.name}`);
   }

@@ -6,7 +6,9 @@ PIXI,
 "use strict";
 
 import { combineTypedArrays } from "../util.js";
-
+import { ClipperPaths } from "../../geometry/ClipperPaths.js";
+import { Clipper2Paths } from "../../geometry/Clipper2Paths.js";
+import { Point3d } from "../../Point3d.js";
 
 // BBEdit notes: mark, fixme, fix-me, note, nyi, review, todo, to-do, xxx, ???, !!!
 // TODO: todo
@@ -388,8 +390,7 @@ export class GeometryDesc {
     let holes = [];
 
     // Earcut to determine indices. Then construct the vertices.
-    if ( poly instanceof CONFIG.GeometryLib.ClipperPaths
-      || poly instanceof CONFIG.GeometryLib.Clipper2Paths ) {
+    if ( poly instanceof ClipperPaths || poly instanceof Clipper2Paths ) {
       // Assume a more complex shape, possibly with holes. See ClipperPaths.prototype.earcut.
       const coords = poly.toEarcutCoordinates();
       vertices2d = coords.vertices;
@@ -470,7 +471,6 @@ export class GeometryDesc {
    * - @prop {Uint16Array} indices
    */
   static polygonSideFaces(poly, { flip = false, topZ = 0, bottomZ = 0 } = {}) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     if ( !(poly instanceof PIXI.Polygon) ) poly = poly.toPolygon();
     if ( poly.isClockwise ^ flip ) poly.reverseOrientation();
 

@@ -1,6 +1,6 @@
 /* globals
+foundry,
 game,
-renderTemplate
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -41,7 +41,7 @@ PATCHES.BASIC.HOOKS = { renderSettingsConfig };
 
 // ----- NOTE: Helper functions ----- //
 
-function activateListenersSettingsConfig(app, html) {
+function activateListenersSettingsConfig(app, _html) {
   app.options.actions.atvOpenDocumentation = openDocumentation;
   app.options.actions.atvOpenIssue = openIssue;
 

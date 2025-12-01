@@ -1,7 +1,5 @@
 /* globals
 foundry,
-game,
-Token,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 

@@ -20,6 +20,7 @@ PIXI,
 
 
 import { GeometryDesc } from "./GeometryDesc.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 /**
  * Describe a square cube (token) by its vertices, normals, and uvs.
@@ -492,7 +493,7 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
     }
 
     // Center at 0,0,0
-    const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const { x, y, z } = Point3d.fromTokenCenter(token);
     const txBorder = border.translate(-x, -y);
     topZ -= z;
     bottomZ -= z;
@@ -503,7 +504,7 @@ export class GeometryConstrainedTokenDesc extends GeometryDesc {
   // Can be overriden by passing specific x,y,z opts that are not 0.
   _defineVerticesAndIndices(opts) {
     const token = opts.token;
-    const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const { x, y, z } = Point3d.fromTokenCenter(token);
     opts.x ||= x;
     opts.y ||= y;
     opts.z ||= z;
@@ -728,7 +729,7 @@ export class GeometryGridFromTokenDesc extends GeometryConstrainedTokenDesc {
    */
   static defineVertices({ token }) {
     let poly = new PIXI.Polygon(...canvas.grid.getShape());
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
+    const ctr = Point3d.fromTokenCenter(token);
     poly = poly.translate(...ctr)
     const topZ = canvas.grid.size * 0.5 + ctr.z;
     const bottomZ = canvas.grid.size * -0.5 + ctr.z;

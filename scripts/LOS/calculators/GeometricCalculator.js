@@ -19,7 +19,7 @@ import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTr
 
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
-import { Circle3d } from "../../geometry/3d/Polygon3d.js";
+import { Circle3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
 
 // Debug
 import { Draw } from "../../geometry/Draw.js";
@@ -83,8 +83,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   camera = new Camera({
     glType: "webGL2",
     perspectiveType: "perspective",
-    up: new CONFIG.GeometryLib.threeD.Point3d(0, 0, -1),
-    mirrorMDiag: new CONFIG.GeometryLib.threeD.Point3d(1, 1, 1),
+    up: new Point3d(0, 0, -1),
+    mirrorMDiag: new Point3d(1, 1, 1),
   });
 
 
@@ -128,7 +128,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Once perspective-transformed, the token array of polygons are on the same plane, with z ~ 1.
     // Can combine to Polygons3d.
     const scalingFactor = this.constructor.SCALING_FACTOR;
-    const targetPolys3d = CONFIG.GeometryLib.threeD.Polygons3d.from3dPolygons(this.targetPolys);
+    const targetPolys3d = Polygons3d.from3dPolygons(this.targetPolys);
 
     // For spheres, need to determine density of the points based on the actual radius.
     const density = PIXI.Circle.approximateVertexDensity(this.targetRadius)
@@ -173,7 +173,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const simplePolys = [];
     const complexPolys = [];
     blockingPolys.forEach(poly => {
-      const arr = (poly instanceof CONFIG.GeometryLib.threeD.Polygons3d) ? complexPolys : simplePolys;
+      const arr = (poly instanceof Polygons3d) ? complexPolys : simplePolys;
       arr.push(poly);
     });
     const nSimple = simplePolys.length;
@@ -314,17 +314,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
        this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
   }
-
-//   _gridPolygons() {
-//     const target = this.target;
-//     const { x, y } = target.center;
-//     const z = target.bottomZ + (target.topZ - target.bottomZ);
-//     const translateM = CONFIG.GeometryLib.MatrixFlat.translation(x, y, z);
-//     const gridTris = Grid3dTriangles.trianglesForGridShape()
-//       .filter(tri => tri.isFacing(this.viewpoint))
-//       .map(tri => tri.transform(translateM));
-//     return this._applyPerspective(gridTris);
-//   }
 
   /**
    * Construct target polygons.

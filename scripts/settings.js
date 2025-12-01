@@ -601,11 +601,11 @@ export class Settings extends ModuleSettingsAbstract {
           handler.losViewer.dirty = true;
         });
       }
-      case TARGET.PERCENT: {
+      case TARGET.PERCENT: {  /* eslint-disable-line no-fallthrough */
         // Update the viewpoints for all tokens.
         const config = { [configKeyForSetting[key]]: value };
         canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[ATVTokenHandlerID];
+          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
           if ( !handler ) return;
           handler.losViewer.config = config;
         });

@@ -1,6 +1,6 @@
 /* globals
 CONFIG,
-DetectionMode,
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";

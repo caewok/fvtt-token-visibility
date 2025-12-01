@@ -11,6 +11,10 @@ import { GeometryTile } from "../geometry/GeometryTile.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Polygon3dVertices } from "../geometry/BasicVertices.js";
+import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { AABB3d } from "../../geometry/AABB.js";
+import { Quad3d, Polygon3d, Polygons3d, Triangle3d } from "../../geometry/3d/Polygon3d.js";
+import { almostBetween } from "../../geometry/util.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
@@ -64,29 +68,29 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
 
   calculateTranslationMatrix() {
     const ctr = this.constructor.tileCenter(this.tile);
-    CONFIG.GeometryLib.MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
+    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, this.matrices.translation);
     return this.matrices.translation;
   }
 
   calculateRotationMatrix() {
     const rot = this.constructor.tileRotation(this.tile)
-    CONFIG.GeometryLib.MatrixFloat32.rotationZ(rot, true, this.matrices.rotation);
+    MatrixFloat32.rotationZ(rot, true, this.matrices.rotation);
     return this.matrices.rotation;
   }
 
   calculateScaleMatrix() {
     const { width, height } = this.constructor.tileDimensions(this.tile);
-    CONFIG.GeometryLib.MatrixFloat32.scale(width, height, 1.0, this.matrices.scale);
+    MatrixFloat32.scale(width, height, 1.0, this.matrices.scale);
     return this.matrices.scale;
   }
 
   _updateAABB() {
-    CONFIG.GeometryLib.threeD.AABB3d.fromTileAlpha(this.tile, this.alphaThreshold, this.aabb);
+    AABB3d.fromTileAlpha(this.tile, this.alphaThreshold, this.aabb);
   }
 
   faces = {
-    top: new CONFIG.GeometryLib.threeD.Quad3d(),
-    bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
+    top: new Quad3d(),
+    bottom: new Quad3d(),
     sides: [],
   }
 
@@ -114,11 +118,9 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     const elevZ = tile.elevationZ;
 
     if ( alphaShape instanceof PIXI.Polygon ) {
-      const Polygon3d = CONFIG.GeometryLib.threeD.Polygon3d;
       if ( !(this.faces.top instanceof Polygon3d) ) this.faces.top = new Polygon3d();
       Polygon3d.fromPolygon(alphaShape, elevZ, this.faces.top);
     } else { // PIXI.Rectangle
-      const Quad3d = CONFIG.GeometryLib.threeD.Quad3d;
       if ( !(this.faces.top instanceof Quad3d) ) this.faces.top = new Quad3d();
       Quad3d.fromRectangle(alphaShape, elevZ, this.faces.top);
     }
@@ -137,7 +139,7 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
   _updatePathsToFacePolygons() {
     const paths = this.#alphaThresholdPaths;
     if ( !paths ) return;
-    const top = CONFIG.GeometryLib.threeD.Polygons3d.fromClipperPaths(paths)
+    const top = Polygons3d.fromClipperPaths(paths)
     const bottom = top.clone();
     bottom.reverseOrientation(); // Reverse orientation but keep the hole designations.
     this.alphaThresholdPolygons.top = top;
@@ -166,8 +168,8 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     const topTrimmed = Polygon3dVertices.trimNormalsAndUVs(top);
     const bottomTrimmed = Polygon3dVertices.trimNormalsAndUVs(bottom);
     tris.push(
-      ...CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(topTrimmed),
-      ...CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(bottomTrimmed)
+      ...Triangle3d.fromVertices(topTrimmed),
+      ...Triangle3d.fromVertices(bottomTrimmed)
     );
 
     // Drop any triangles that are nearly collinear or have very small areas.
@@ -248,12 +250,12 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
-    if ( t === null || !CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT) ) return null;
+    if ( t === null || !almostBetween(t, minT, maxT) ) return null;
     if ( !this.alphaThreshold ) return t;
 
     // Threshold test at the intersection point.
     const pxThreshold = 255 * this.alphaThreshold;
-    const projPt = CONFIG.GeometryLib.threeD.Point3d.tmp;
+    const projPt = Point3d.tmp;
     rayOrigin.add(rayDirection.multiplyScalar(t, projPt), projPt);
     const px = this.tile.evPixelCache.pixelAtCanvas(projPt.x, projPt.y);
     projPt.release();
@@ -290,7 +292,6 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
    * @returns {Point3d}
    */
   static tileCenter(tile) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const out = new Point3d();
     const { x, y, width, height, elevation } = this.tileDimensions(tile);
     const dims = Point3d.tmp.set(width, height, 0);

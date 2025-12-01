@@ -1,16 +1,14 @@
 /* globals
-canvas,
 CONFIG,
 foundry,
-LimitedAnglePolygon,
 PIXI,
-Ray,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { EPSILON, MODULE_ID, OTHER_MODULES } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { gridUnitsToPixels } from "../geometry/util.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
@@ -509,7 +507,6 @@ export function isTypedArray(obj) {
  * @returns {object<topZ: {number}, bottomZ: {number}>}
  */
 export function regionElevation(region) {
-  const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels
   const tm = region.terrainmapper;
   let topZ = (OTHER_MODULES.TERRAIN_MAPPER.ACTIVE && tm.isElevated)
     ? gridUnitsToPixels(tm.plateauElevation) : region.topZ;

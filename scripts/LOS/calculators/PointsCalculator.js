@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 CONST,
 PIXI,
 */
@@ -269,7 +268,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   }
 
   _drawDebugPoints(result, debugDraw) {
-    const colors = CONFIG.GeometryLib.Draw.COLORS;
+    const colors = Draw.COLORS;
     const targetPoints = this.targetPoints;
     const { unobscured, numPoints } = result.data;
     const vp = this.viewpoint;

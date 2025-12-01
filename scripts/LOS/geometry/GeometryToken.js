@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 foundry,
 PIXI,
 */
@@ -17,8 +16,8 @@ import { numberOfSphericalPointsForSpacing } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Sphere } from "../../geometry/3d/Sphere.js";
 import { Triangle3d } from "../../geometry/3d/Polygon3d.js";
-import { PercentVisibleCalculatorPerPixel } from "../calculators/PerPixelCalculator.js";
-import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
+import { isOnSegment } from "../../geometry/util.js";
+import { geoDelaunay } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
 
 const tmpRect = new PIXI.Rectangle();
 
@@ -272,7 +271,7 @@ export class GeometryCustomToken extends GeometryToken {
     const doc = token.document;
     const objFile = doc.getFlag(ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC) || "modules/tokenvisibility/icons/Cube.obj";
     const objName = doc.getFlag(ATV.KEY, FLAGS.CUSTOM_TOKENS.NAME) || "Cube";
-    const objOffset = CONFIG.GeometryLib.threeD.Point3d.fromObject(doc.getFlag(ATV.KEY, FLAGS.CUSTOM_TOKENS.OFFSET) || { x: 0, y: 0, z: 0 });
+    const objOffset = Point3d.fromObject(doc.getFlag(ATV.KEY, FLAGS.CUSTOM_TOKENS.OFFSET) || { x: 0, y: 0, z: 0 });
     this.objData.fileLoc = objFile;
     this.objData.name = objName;
     this.objData.offset = objOffset;
@@ -313,7 +312,7 @@ export class GeometryConstrainedCustomToken extends GeometryCustomToken {
     } else this.isConstrained = true;
 
     // Convert to triangles, which will be later constrained by the constrained border.
-    let tris = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
+    let tris = Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
 
     // TODO: Need to ensure the edges are A --> B where CW faces in toward the filled polygon.
     const edgeDiffFn = token.tokenBorder instanceof PIXI.Rectangle ? diffRectanglePolygonEdges : diffPolygonEdges;
@@ -324,7 +323,7 @@ export class GeometryConstrainedCustomToken extends GeometryCustomToken {
       const splitter = TriangleSplitter.from2dPoints(edge.A, edge.B, true);
       tris = splitter.splitFromTriangles3d(tris);
     }
-    const vs = CONFIG.GeometryLib.threeD.Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
+    const vs = Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
     return BasicVertices.condenseVertexData(vs, { stride: this.stride });
   }
 }
@@ -356,7 +355,7 @@ export class GeometryLitCustomToken extends GeometryCustomToken {
     } else this.isLit = true;
 
     // Convert to triangles, which will be later constrained by the constrained border.
-    let tris = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
+    let tris = Triangle3d.fromVertices(res.vertices, res.indices, this.stride);
 
     // TODO: Need to ensure the edges are A --> B where CW faces in toward the filled polygon.
     const edgeDiffFn = token.tokenBorder instanceof PIXI.Rectangle ? diffRectanglePolygonEdges : diffPolygonEdges;
@@ -367,7 +366,7 @@ export class GeometryLitCustomToken extends GeometryCustomToken {
       const splitter = TriangleSplitter.from2dPoints(edge.A, edge.B, true);
       tris = splitter.splitFromTriangles3d(tris);
     }
-    const vs = CONFIG.GeometryLib.threeD.Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
+    const vs = Triangle3d.trianglesToVertices(tris, { addNormals: this.addNormals })
     return BasicVertices.condenseVertexData(vs, { stride: this.stride });
   }
 
@@ -393,7 +392,6 @@ export class GeometryLitCustomToken extends GeometryCustomToken {
  */
 function diffPolygonEdges(poly0, poly1) {
   // Sweep left to right along x-axis with sorting instead of brute force
-  const isOnSegment = CONFIG.GeometryLib.utils.isOnSegment;
   const orient2d = foundry.utils.orient2dFast;
   const edges0 = [...poly0.iterateEdges({ close: true })];
   const edges1 = [...poly1.iterateEdges({ close: true })];

@@ -5,13 +5,12 @@ CONST,
 foundry,
 Hooks,
 PIXI,
-Region,
 */
 "use strict";
 
 import { MODULE_ID, OTHER_MODULES } from "../const.js";
 import { Polygon3dVertices } from "./geometry/BasicVertices.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometryBrightLitToken, GeometrySquareGrid } from "./geometry/GeometryToken.js";
+import { GeometryToken, GeometryConstrainedToken, GeometryLitToken, GeometrySquareGrid } from "./geometry/GeometryToken.js";
 import { GeometryWall } from "./geometry/GeometryWall.js";
 import { GeometryTile } from "./geometry/GeometryTile.js";
 import { PlaceableTracker  } from "./placeable_tracking/PlaceableTracker.js";
@@ -19,7 +18,11 @@ import { WallTracker } from "./placeable_tracking/WallTracker.js";
 import { TileTracker } from "./placeable_tracking/TileTracker.js";
 import { TokenTracker } from "./placeable_tracking/TokenTracker.js";
 import { regionElevation, convertRegionShapeToPIXI } from "./util.js";
+
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { Plane } from "../geometry/3d/Plane.js";
+import { Quad3d, Polygon3d, Polygons3d, Triangle3d } from "../geometry/3d/Polygon3d.js";
+import { MatrixFlat } from "../geometry/MatrixFlat.js";
 
 import * as MarchingSquares from "./marchingsquares-esm.js";
 
@@ -132,7 +135,7 @@ class AbstractPolygonTriangles {
   rayIntersection(rayOrigin, rayDirection, cutoff = 1) {
     for ( const tri of this.triangles ) {
       if ( tri.isFacing(rayOrigin) ) {
-        const t = CONFIG.GeometryLib.threeD.Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
+        const t = Plane.rayIntersectionTriangle3d(rayOrigin, rayDirection, tri.a, tri.b, tri.c);
         if ( t !== null && t.between(0, cutoff, false) ) return t;
       }
     }
@@ -161,7 +164,7 @@ class AbstractPolygonTrianglesWithPrototype extends AbstractPolygonTriangles {
 
   static get prototypeTriangles() {
     this.geom ??= new this.geomClass(this.geomOpts);
-    return (this._prototypeTriangles ??= CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(this.geom.vertices, this.geom.indices));
+    return (this._prototypeTriangles ??= Triangle3d.fromVertices(this.geom.vertices, this.geom.indices));
   }
 
   /** @type {class} */
@@ -259,7 +262,7 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
   }
 
   /** @type {Quad3d} */
-  quad3d = new CONFIG.GeometryLib.threeD.Quad3d();
+  quad3d = new Quad3d();
 
   update() {
     super.update();
@@ -267,7 +270,7 @@ export class WallTriangles extends AbstractPolygonTrianglesWithPrototype {
   }
 
   updateQuad() {
-    if ( !this.quad3d ) this.quad = new CONFIG.GeometryLib.threeD.Quad3d();
+    if ( !this.quad3d ) this.quad = new Quad3d();
     const wall = this.placeable;
     const quad = this.quad3d;
     let topZ = wall.topZ;
@@ -364,9 +367,9 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   #alphaThresholdPaths;
 
   /** @type {Quad3d} */
-  quad3d = new CONFIG.GeometryLib.threeD.Quad3d();
+  quad3d = new Quad3d();
 
-  alphaQuad3d = new CONFIG.GeometryLib.threeD.Quad3d(); // Only if tile is not rotated.
+  alphaQuad3d = new Quad3d(); // Only if tile is not rotated.
 
   /* ----- NOTE: Intersection ----- */
 
@@ -418,7 +421,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   }
 
   updateQuad() {
-    if ( !this.quad3d ) this.quad = new CONFIG.GeometryLib.threeD.Quad3d();
+    if ( !this.quad3d ) this.quad = new Quad3d();
     const tile = this.placeable;
     const quad = this.quad3d;
     const elevZ = tile.elevationZ;
@@ -459,7 +462,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
   _updatePathsToFacePolygons() {
     const paths = this.#alphaThresholdPaths;
     if ( !paths ) return;
-    const top = CONFIG.GeometryLib.threeD.Polygons3d.fromClipperPaths(paths)
+    const top = Polygons3d.fromClipperPaths(paths)
     const bottom = top.clone();
     bottom.reverseOrientation(); // Reverse orientation but keep the hole designations.
     this.alphaThresholdPolygons[0] = top;
@@ -488,8 +491,8 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     const topTrimmed = Polygon3dVertices.trimNormalsAndUVs(top);
     const bottomTrimmed = Polygon3dVertices.trimNormalsAndUVs(bottom);
     tris.push(
-      ...CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(topTrimmed),
-      ...CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(bottomTrimmed)
+      ...Triangle3d.fromVertices(topTrimmed),
+      ...Triangle3d.fromVertices(bottomTrimmed)
     );
 
     // Drop any triangles that are nearly collinear or have very small areas.
@@ -562,8 +565,8 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     const bounds = tile.evPixelCache.getThresholdLocalBoundingBox(CONFIG[MODULE_ID].alphaThreshold);
     const pts = [...bounds.iteratePoints({ close: false })];
 
-    const tri0 = CONFIG.GeometryLib.threeD.Triangle3d.from2dPoints(pts.slice(0,3));
-    const tri1 = CONFIG.GeometryLib.threeD.Triangle3d.from2dPoints([pts[0], pts[2], pts[3]]);
+    const tri0 = Triangle3d.from2dPoints(pts.slice(0,3));
+    const tri1 = Triangle3d.from2dPoints([pts[0], pts[2], pts[3]]);
     return [
       tri0,
       tri1,
@@ -603,7 +606,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     // Expand the canvas conversion matrix to 4x4.
     // Last row of the 3x3 is the translation matrix, which should be moved to row 4.
     const toCanvasM3x3 = tile.evPixelCache.toCanvasTransform;
-    const toCanvasM = CONFIG.GeometryLib.MatrixFlat.identity(4, 4);
+    const toCanvasM = MatrixFlat.identity(4, 4);
     toCanvasM.setElements((elem, r, c) => {
       if ( r < 2 && c < 3 ) return toCanvasM3x3.arr[r][c];
       if ( r === 3 && c < 2 ) return  toCanvasM3x3.arr[2][c];
@@ -611,7 +614,7 @@ export class TileTriangles extends AbstractPolygonTrianglesWithPrototype {
     });
 
     // Add elevation translation.
-    const elevationT = CONFIG.GeometryLib.MatrixFlat.translation(0, 0, tile.elevationZ);
+    const elevationT = MatrixFlat.translation(0, 0, tile.elevationZ);
     const M = toCanvasM.multiply4x4(elevationT);
 
     const nTris = tris.length;
@@ -679,7 +682,7 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
   updateConstrainedTriangles() {
     const token = this.placeable;
     const geom = new GeometryConstrainedToken({ placeable: token });
-    this.constrainedTriangles = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(geom.vertices, geom.indices);
+    this.constrainedTriangles = Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
   updateLitTriangles() {
@@ -687,7 +690,7 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
     if ( !token.litTokenBorder ) this.litTriangles.length = 0;
 
     const geom = new GeometryLitToken({ placeable: token });
-    this.litTriangles = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(geom.vertices, geom.indices);
+    this.litTriangles = Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
   updateBrightLitTriangles() {
@@ -695,7 +698,7 @@ export class TokenTriangles extends AbstractPolygonTrianglesWithPrototype {
     if ( !token.brightLitTokenBorder ) this.litTriangles.length = 0;
 
     const geom = new GeometryLitToken({ placeable: token });
-    this.brightLitTriangles = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(geom.vertices, geom.indices);
+    this.brightLitTriangles = Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
   update() {
@@ -721,7 +724,7 @@ export class Grid3dTriangles extends AbstractPolygonTriangles {
   static buildGridGeom() {
     // TODO: Hex grids
     const geom = new GeometrySquareGrid();
-    this.prototypeTriangles = CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(geom.vertices, geom.indices);
+    this.prototypeTriangles = Triangle3d.fromVertices(geom.vertices, geom.indices);
   }
 
   static trianglesForGridShape() {
@@ -826,8 +829,8 @@ export class RegionTriangles extends AbstractPolygonTriangles {
   }
 
   updatePlanes() {
-    const Plane = CONFIG.GeometryLib.threeD.Plane;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
+    const Plane = Plane;
+    const Point3d = Point3d;
     const TM = OTHER_MODULES.TERRAIN_MAPPER;
     const region = this.placeable;
     const { topZ, bottomZ } = regionElevation(region);
@@ -855,7 +858,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
 
       const { topZ, bottomZ } = regionElevation(region);
       for ( const edge of poly.iterateEdges({ close: true }) ) {
-        const quad = new CONFIG.GeometryLib.threeD.Quad3d();
+        const quad = new Quad3d();
         quad.points[0].set(edge.A.x, edge.A.y, topZ);
         quad.points[1].set(edge.A.x, edge.A.y, bottomZ);
         quad.points[2].set(edge.B.x, edge.B.y, bottomZ);
@@ -947,7 +950,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
       const combinedPaths = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
 
       const path = combinedPaths.combine();
-      const polys = CONFIG.GeometryLib.threeD.Polygons3d.fromClipperPaths(path, topZ);
+      const polys = Polygons3d.fromClipperPaths(path, topZ);
       const t = this.tops[i] = polys;
       const b = this.bottoms[i] = polys.clone();
       b.setZ(bottomZ); // topZ already set above.
@@ -969,7 +972,7 @@ export class RegionTriangles extends AbstractPolygonTriangles {
           if ( !(topEdge || bottomEdge ) ) break;
 
           // Counter-clockwise.
-          const side = CONFIG.GeometryLib.threeD.Polygon3d.from3dPoints([topEdge.B, topEdge.A, bottomEdge.A, bottomEdge.B]);
+          const side = Polygon3d.from3dPoints([topEdge.B, topEdge.A, bottomEdge.A, bottomEdge.B]);
           sidePolys.push(side);
         }
       }

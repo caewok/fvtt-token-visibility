@@ -2,6 +2,7 @@
 canvas,
 CONFIG,
 CONST,
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -147,7 +148,7 @@ export class TokenLightMeter {
    */
   updateLights(lights) {
     lights ??= canvas.effects.lightSources
-    lights = lights.filter(l => !(l instanceof GlobalLightSource));
+    lights = lights.filter(l => !(l instanceof foundry.canvas.sources.GlobalLightSource));
     const calc = this.constructor.calculator;
     calc.initializeView({ target: this.token });
     this.data.dim = calc._createResult().makeFullyNotVisible();

@@ -1,5 +1,4 @@
 /* globals
-CONFIG,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -7,6 +6,7 @@ PIXI,
 
 import { GeometryInstanced } from "./GeometryDesc.js";
 import { HorizontalQuadVertices } from "./BasicVertices.js";
+import { MatrixFlat } from "../../geometry/MatrixFlat.js";
 
 const tmpRect = new PIXI.Rectangle();
 
@@ -24,7 +24,7 @@ export class GeometryTile extends GeometryInstanced {
     tile ??= this.placeable;
     const { rotation, x, y, width, height, elevation } = tile.document;
     const radians = Math.toRadians(rotation);
-    const rotateM = CONFIG.GeometryLib.MatrixFlat.rotationZ(radians);
+    const rotateM = MatrixFlat.rotationZ(radians);
     tmpRect.x = x;
     tmpRect.y = y;
     tmpRect.width = width;

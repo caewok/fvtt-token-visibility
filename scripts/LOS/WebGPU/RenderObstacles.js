@@ -22,6 +22,7 @@ import {
   DrawableLitTokens,
   DrawableGridShape,
   } from "./DrawableObjects.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 /*
 walls and tiles seldom change.
@@ -352,7 +353,7 @@ export class RenderObstacles {
    * Set camera for a given render.
    */
   _setCamera(viewerLocation, target, { targetLocation } = {}) {
-    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+    targetLocation ??= Point3d.fromTokenCenter(target);
     this.camera.cameraPosition = viewerLocation;
     // this.camera.targetPosition = targetLocation; // Set by setTargetTokenFrustum.
     this.camera.setTargetTokenFrustum(target);

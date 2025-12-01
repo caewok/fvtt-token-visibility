@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 game,
 Hooks,
 PIXI,
@@ -535,10 +534,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   get popoutDraws() {
     if ( !this.#popoutDraws.length ) {
-      this.popoutGraphics.forEach(g => {
-        const d = new CONFIG.GeometryLib.Draw(g);
-        this.#popoutDraws.push(d);
-      });
+      this.popoutGraphics.forEach(g => this.#popoutDraws.push(new Draw(g)));
     }
     return this.#popoutDraws;
   }

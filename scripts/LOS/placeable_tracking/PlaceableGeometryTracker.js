@@ -9,6 +9,8 @@ Hooks,
 
 import { MODULE_ID, TRACKER_IDS } from "../../const.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { AABB3d } from "../../geometry/AABB.js";
+import { almostBetween } from "../../geometry/util.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
 /* Store key geometry information for each placeable.
@@ -199,14 +201,14 @@ export const matricesMixin = function(Base) {
 
     /** @type {object<MatrixFloat32>} */
     matrices = {
-      rotation: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#matrixBuffer, 0, 16), 4, 4),
-      translation: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#matrixBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
-      scale: new CONFIG.GeometryLib.MatrixFloat32(new Float32Array(this.#matrixBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
+      rotation: new MatrixFloat32(new Float32Array(this.#matrixBuffer, 0, 16), 4, 4),
+      translation: new MatrixFloat32(new Float32Array(this.#matrixBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
+      scale: new MatrixFloat32(new Float32Array(this.#matrixBuffer, 32 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
     };
 
     get modelMatrix() {
       const arr = this.constructor.modelMatrixTracker.viewFacetById(this.placeableId);
-      return new CONFIG.GeometryLib.MatrixFloat32(arr, 4, 4);
+      return new MatrixFloat32(arr, 4, 4);
     }
 
     get placeableId() { return this.placeable.sourceId; }
@@ -262,7 +264,7 @@ export const matricesMixin = function(Base) {
 // Add AABB
 export const aabbMixin = function(Base) {
   class PlaceableAABB extends Base {
-    aabb = new CONFIG.GeometryLib.threeD.AABB3d();
+    aabb = new AABB3d();
 
     update() {
       this._updateAABB();
@@ -309,7 +311,6 @@ export const faceMixin = function(Base) {
      * @returns {number|null} The distance along the ray
      */
     rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
-      const almostBetween = CONFIG.GeometryLib.utils.almostBetween;
       for ( const face of this.iterateFaces() ) {
         const t = face.intersectionT(rayOrigin, rayDirection);
         if ( t !== null && almostBetween(t, minT, maxT) ) return t;

@@ -7,6 +7,7 @@ CONFIG,
 
 import { PlaceableModelMatrixTracker } from "./PlaceableTracker.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
 import { OTHER_MODULES } from "../../const.js";
 import { getFlagFast } from "../util.js";
 
@@ -63,20 +64,20 @@ export class TileTracker extends PlaceableModelMatrixTracker {
   translationMatrixForPlaceable(tile) {
     // Move from center of tile.
     const ctr = this.constructor.tileCenter(tile);
-    CONFIG.GeometryLib.MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
+    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
     return translationM;
   }
 
   scaleMatrixForPlaceable(tile) {
     // Scale based on width, height of tile.
     const { width, height } = this.constructor.tileDimensions(tile);
-    CONFIG.GeometryLib.MatrixFloat32.scale(width, height, 1.0, scaleM);
+    MatrixFloat32.scale(width, height, 1.0, scaleM);
     return scaleM;
   }
 
   rotationMatrixForPlaceable(tile) {
     // Rotate based on tile rotation.
-    CONFIG.GeometryLib.MatrixFloat32.rotationZ(this.constructor.tileRotation(tile), true, rotationM);
+    MatrixFloat32.rotationZ(this.constructor.tileRotation(tile), true, rotationM);
     return rotationM;
   }
 
@@ -111,7 +112,6 @@ export class TileTracker extends PlaceableModelMatrixTracker {
    * @returns {Point3d}
    */
   static tileCenter(tile) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const out = new Point3d();
     const { x, y, width, height, elevation } = this.tileDimensions(tile);
     const dims = Point3d.tmp.set(width, height, 0);
@@ -139,6 +139,6 @@ export class SceneBackgroundTracker extends TileTracker {
 
   static tileCenter() {
     const ctr = canvas.dimensions.rect.center;
-    return new CONFIG.GeometryLib.threeD.Point3d(ctr.x, ctr.y, 0);
+    return new Point3d(ctr.x, ctr.y, 0);
   }
 }

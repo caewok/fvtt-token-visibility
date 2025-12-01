@@ -14,6 +14,8 @@ import { randomUniform } from "./random.js";
 import { buildCustomLOSViewer, buildCustomLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { MODULE_ID } from "./const.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
+import { pixelsToGridUnits } from "./geometry/util.js";
 
 /* Use
 api = game.modules.get("tokenvisibility").api
@@ -78,8 +80,6 @@ function getTokens() {
  * Construct a table of token elevations and distances
  */
 function summarizeTokenRange(viewers, targets) {
-  const Point3d = CONFIG.GeometryLib.threeD.Point3d;
-  const gridFn = CONFIG.GeometryLib.utils.pixelsToGridUnits;
   const summary = {};
   for ( const viewer of viewers ) {
     for ( const target of targets ) {
@@ -91,8 +91,8 @@ function summarizeTokenRange(viewers, targets) {
       summary[`${viewer.name} --> ${target.name}`] = {
         viewerElevation: viewer.elevationE,
         targetElevation: target.elevationE,
-        distance2d: Math.round(gridFn(distance2d) * 10) / 10,
-        distance3d: Math.round(gridFn(distance3d) * 10) / 10
+        distance2d: Math.round(pixelsToGridUnits(distance2d) * 10) / 10,
+        distance3d: Math.round(pixelsToGridUnits(distance3d) * 10) / 10
       };
     }
   }

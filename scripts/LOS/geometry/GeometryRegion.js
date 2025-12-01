@@ -3,7 +3,6 @@ ClipperLib,
 CONFIG,
 CONST,
 PIXI,
-Region,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -12,6 +11,8 @@ import { MODULE_ID } from "../../const.js";
 import { GeometryNonInstanced, GeometryInstanced } from "./GeometryDesc.js";
 import { BasicVertices, Rectangle3dVertices, Circle3dVertices, Ellipse3dVertices, Polygon3dVertices } from "./BasicVertices.js";
 import { regionElevation, convertRegionShapeToPIXI, setTypedArray } from "../util.js";
+import { ElevatedPoint } from "../../geometry/3d/ElevatedPoint.js";
+import { gridUnitsToPixels } from "../../geometry/util.js";
 
 const TERRAIN_MAPPER = "terrainmapper";
 const tmpRect = new PIXI.Rectangle();
@@ -487,11 +488,9 @@ export class GeometryRampRegionShape extends GeometryPolygonRegionShape {
     if ( this.placeable ) this._untrimmedVertices = Polygon3dVertices.calculateVertices(this.poly, elev);
 
     const vs = this._untrimmedVertices;
-    const RegionMovementWaypoint3d = CONFIG.GeometryLib.threeD.RegionMovementWaypoint3d;
     const tm = this.region[TERRAIN_MAPPER];
     const useSteps = false;
     const round = false;
-    const gridUnitsToPixels = CONFIG.GeometryLib.utils.gridUnitsToPixels;
 
     // Modify elevation for ramp.
     // Replace each top elevation with elevation at that point.
@@ -499,7 +498,7 @@ export class GeometryRampRegionShape extends GeometryPolygonRegionShape {
     for ( let i = 0, iMax = vs.length; i < iMax; i += 8 ) {
       const [x, y, z] = out.subarray(i, i + 3);
       if ( z !== elev.topZ ) continue;
-      const waypoint = RegionMovementWaypoint3d.fromPoint({ x, y, z });
+      const waypoint = ElevatedPoint.fromPoint({ x, y, z });
       out[i + 2] = gridUnitsToPixels(tm._rampElevation(waypoint, useSteps, round));
     }
 

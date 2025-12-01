@@ -116,6 +116,9 @@ import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 
+// Geometry
+import { ClipperPaths } from "./geometry/ClipperPaths.js";
+import { Clipper2Paths } from "./geometry/Clipper2Paths.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -390,8 +393,7 @@ Hooks.once("init", function() {
   };
 
   Object.defineProperty(CONFIG[MODULE_ID], "ClipperPaths", {
-    get: () => CONFIG[MODULE_ID].clipperVersion === 1
-      ? CONFIG.GeometryLib.ClipperPaths : CONFIG.GeometryLib.Clipper2Paths
+    get: () => CONFIG[MODULE_ID].clipperVersion === 1 ? ClipperPaths : Clipper2Paths
   });
 
   game.modules.get(MODULE_ID).api = {
