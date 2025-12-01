@@ -339,16 +339,19 @@ export class ObstacleOcclusionTest {
           obstacles.forEach(wall => draw.segment(wall, { color }));
           break;
         case "tiles":
-          obstacles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri =>
-            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color })));
+          obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE]
+            .faces.top.draw2d({ draw, color, fillAlpha: 0.1, fill: color}));
+//           obstacles.forEach(tile => {
+//             const geom = tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
+//             geom.alphaThresholdPolygons.top.transform(geom.modelMatrix).draw2d({ draw, color, fillAlpha: 0.1, fill: color });
+//           });
           break;
         case "tokens":
           obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
           break;
         case "regions":
-          obstacles.forEach(region => region.tokenvisibility.geometry.triangles.forEach(tri =>
-            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color})
-          ));
+          obstacles.forEach(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE]
+            .faces.top.draw2d({ draw, color, fillAlpha: 0.1, fill: color}));
           break;
       }
     }
