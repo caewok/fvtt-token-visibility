@@ -57,17 +57,17 @@ export class PercentVisibleResult {
     largeTarget: false,
   };
 
-  logData() { console.table(logData); }
+  logData() { }
 
-  #config = {}
+  _config = {}
 
-  get config() { return structuredClone(this.#config); }
+  get config() { return structuredClone(this._config); }
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false }); }
+  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
 
   constructor(target, cfg = {}) {
     this.target = target;
-    this.#config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this._config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
   }
 
   static fromCalculator(calc, opts = {}) {
@@ -80,7 +80,7 @@ export class PercentVisibleResult {
   makeFullyVisible() { this.visibility = this.constructor.VISIBILITY.FULL; return this; }
 
   clone() {
-    const out = new this.constructor(this.target, this.#config);
+    const out = new this.constructor(this.target, this._config);
     Object.assign(out.data, structuredClone(this.data));
     out.visibility = this.visibility;
     return out;
@@ -117,7 +117,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get targetArea() {
-    if ( this.#config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
+    if ( this._config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
     return this.totalTargetArea;
   }
 
@@ -212,17 +212,17 @@ export class PercentVisibleCalculatorAbstract {
 
   constructor(cfg = {}) {
     // Set default configuration first and then override with passed-through values.
-    this.#config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
-    this.occlusionTester._config = this.#config; // Sync the configs.
+    this._config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.occlusionTester._config = this._config; // Sync the configs.
   }
 
-  #config = {};
+  _config = {};
 
-  get config() { return structuredClone(this.#config); }
+  get config() { return structuredClone(this._config); }
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false }); }
+  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
 
-  get radius() { return this.#config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
+  get radius() { return this._config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
 
   // ----- NOTE: Basic property getters / setters ---- //
 
@@ -300,7 +300,7 @@ export class PercentVisibleCalculatorAbstract {
 
   get targetBorder() { return CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
 
-  get targetShape() { return this.target[this.config.tokenShapeType]; }
+  get targetShape() { return this.target[this._config.tokenShapeType]; }
 
   _clean() {
     this.occlusionTester._initialize(this); // Params: rayOrigin, viewer, target.
@@ -322,11 +322,13 @@ export class PercentVisibleCalculatorAbstract {
 
   setLightingTest(type) {
     const { TYPES } = this.constructor.LIGHTING_TEST_TYPES;
+    let tokenShapeType;
     switch ( type ) {
-      case TYPES.DIM: this.config.tokenShapeType = "litTokenBorder"; break;
-      case TYPES.BRIGHT: this.config.tokenShapeType = "brightLitTokenBorder"; break;
-      default: this.config.tokenShapeType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
+      case TYPES.DIM: tokenShapeType = "litTokenBorder"; break;
+      case TYPES.BRIGHT: tokenShapeType = "brightLitTokenBorder"; break;
+      default: tokenShapeType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
     }
+    this.config = { tokenShapeType };
   }
 
   _createResult() { return this.constructor.resultClass.fromCalculator(this); }

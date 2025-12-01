@@ -162,7 +162,7 @@ export class Area3dPopoutV2 extends foundry.applications.api.HandlebarsApplicati
     // const canvas = document.createElement("canvas");
   }
 
-  _onClose(options) {
+  _onClose(_options) {
     this.#savedTop = this.position.top;
     this.#savedLeft = this.position.left;
     if ( !this.closing && this.pixiApp & this.pixiApp.renderer ) this.pixiApp.destroy();
@@ -297,7 +297,7 @@ export class Area3dPopoutCanvasV2 extends foundry.applications.api.HandlebarsApp
     return out;
   }
 
-  _onClose(options) {
+  _onClose(_options) {
     this.#savedTop = this.position.top;
     this.#savedLeft = this.position.left;
     OPEN_POPOUTS.delete(this);

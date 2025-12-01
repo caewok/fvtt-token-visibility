@@ -79,7 +79,7 @@ export class ObstacleOcclusionTest {
   }
 
   findObstacles() {
-    const senseType = this.config.senseType;
+    const senseType = this._config.senseType;
     this.obstacles = this.constructor.findBlockingObjects(this.rayOrigin, { target: this.target, viewer: this.viewer, ...this.config });
     this.obstacles.terrainWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
     this.obstacles.proximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
@@ -90,7 +90,7 @@ export class ObstacleOcclusionTest {
 
   constructObstacleTester() {
     // Obstacle found should follow the blocking config.
-    const blocking = this.config.blocking;
+    const blocking = this._config.blocking;
     const fnNames = [];
     if ( blocking.walls ) fnNames.push("wallsOcclude", "terrainWallsOcclude", "proximateWallsOcclude");
     if ( blocking.tiles ) fnNames.push("tilesOcclude");
@@ -122,7 +122,7 @@ export class ObstacleOcclusionTest {
   proximateWallsOcclude(rayOrigin, rayDirection) {
     for ( const wall of [...this.obstacles.proximateWalls, ...this.obstacles.reverseProximateWalls] ) {
       // If the proximity threshold is met, this edge excluded from perception calculations.
-      if ( wall.edge.applyThreshold(this.config.senseType, rayOrigin) ) continue;
+      if ( wall.edge.applyThreshold(this._config.senseType, rayOrigin) ) continue;
       if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection) !== null ) return true;
     }
     return false;

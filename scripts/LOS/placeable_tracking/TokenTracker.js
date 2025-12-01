@@ -7,6 +7,7 @@ CONFIG,
 
 import { PlaceableModelMatrixTracker } from "./PlaceableTracker.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 // Base folder
 
@@ -41,15 +42,15 @@ export class TokenTracker extends PlaceableModelMatrixTracker {
 
   translationMatrixForPlaceable(token) {
     // Move from center of token.
-    const ctr = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
-    CONFIG.GeometryLib.MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
+    const ctr = Point3d.fromTokenCenter(token);
+    MatrixFloat32.translation(ctr.x, ctr.y, ctr.z, translationM);
     return translationM;
   }
 
   scaleMatrixForPlaceable(token) {
     // Scale based on width, height, zHeight of token.
     const { width, height, zHeight } = this.constructor.tokenDimensions(token);
-    CONFIG.GeometryLib.MatrixFloat32.scale(width, height, zHeight, scaleM);
+    MatrixFloat32.scale(width, height, zHeight, scaleM);
     return scaleM;
   }
 

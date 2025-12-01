@@ -1,6 +1,7 @@
 /* globals
 canvas,
 CONFIG,
+CONST,
 game,
 Hooks,
 PIXI,
@@ -17,15 +18,19 @@ import { initializePatching, PATCHER } from "./patching.js";
 import { Patcher, HookPatch, MethodPatch, LibWrapperPatch } from "./Patcher.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { getObjectProperty } from "./LOS/util.js";
-import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
-import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
+
+// Trackers
 import {
   TokenGeometryTracker,
   LitTokenGeometryTracker,
   BrightLitTokenGeometryTracker,
   SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
+import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
+import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
 import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
 import { LightStatusTracker } from "./LightStatusTracker.js";
+
+
 
 // For API
 import * as bench from "./benchmark.js";
@@ -49,16 +54,6 @@ import * as range from "./visibility_range.js";
 
 // import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
 import { Camera } from "./LOS/Camera.js";
-
-import {
-  mat2, mat2d, mat3, mat4,
-  quat, quat2,
-  vec2, vec3, vec4, } from "./LOS/gl_matrix/index.js";
-// import { RenderObstacles } from "./LOS/WebGPU/RenderObstacles.js";
-// import { WebGPUSumRedPixels } from "./LOS/WebGPU/SumPixels.js";
-// import { wgsl } from "./LOS/wgsl-preprocessor.js";
-// import { AsyncQueue } from "./LOS/AsyncQueue.js";
-
 
 import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
 import { WallTracker } from "./LOS/placeable_tracking/WallTracker.js";
@@ -86,8 +81,6 @@ import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./L
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/calculators/GeometricCalculator.js";
 import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Calculator.js";
-import { PercentVisibleCalculatorSamplePixel, DebugVisibilityViewerSamplePixel } from "./LOS/calculators/SamplePixelCalculator.js"
-import { GeometricFaceCalculator } from "./LOS/calculators/GeometricFaceCalculator.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";
 
 
@@ -117,13 +110,15 @@ import { GeometryWall } from "./LOS/geometry/GeometryWall.js";
 import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/geometry/GeometryRegion.js";
 
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
-import { countTargetPixels } from "./LOS/count_target_pixels.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 
+// Geometry
+import { ClipperPaths } from "./geometry/ClipperPaths.js";
+import { Clipper2Paths } from "./geometry/Clipper2Paths.js";
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -173,19 +168,28 @@ Hooks.once("init", function() {
     /**
      * Filter the various placeable instances in Javascript, as opposed to
      * drawing all of them and letting the GPU filter them out.
+     * @type {boolean}
      */
     filterInstances: true,
 
+    /**
+     * In WebGL2 algorithm, use the stencil buffer to identify target pixels.
+     * @type {boolean}
+     */
     useStencil: false,
 
-    usePixelReducer: false,
-
+    /**
+     * When constructing a region geometry, whether to include walls that are interior to the region.
+     * E.g., when two shapes that form a region overlap.
+     * @type {boolean}
+     */
     allowInteriorWalls: true,
 
     /**
      * Whether to constrain token shapes that overlap walls.
      * When enabled, reshape the token border to fit within the overlapping walls (based on token center).
      * Performance-intensive for custom token shapes. Used for obstructing tokens and target tokens.
+     * @type {boolean}
      */
     constrainTokens: false,
 
@@ -195,22 +199,16 @@ Hooks.once("init", function() {
      * 0: Ignore
      * 1: Constrain the target token shape to only that portion of the shape within the lights' polygons.
      * 2: Test occlusion between selected points or pixels and lights in the scene.
+     * @type {litTokenOptions}
      */
     litToken: 1,
 
+    /** @type {enum<number>} */
     litTokenOptions: {
       IGNORE: 0,
       CONSTRAIN: 1,
       OCCLUSION: 2,
     },
-
-    perPixelScale: 50,
-
-    perPixelQuickInterpolation: false,
-
-    perPixelDebugLit: true,
-
-    samplePixelNumberSamples: 4 ** 2, // Use power of two to keep same width/height points.
 
 
     /** @type {string} */
@@ -220,9 +218,12 @@ Hooks.once("init", function() {
     reductionCount, reductionCount2   // With useRenderTexture: true,
     readPixelsCount, readPixelsCount2 // With useRenderTexture: false or true
     */
-
     pixelCounterType: "readPixelsCount",
 
+    /**
+     * For WebGL2, whether to use a rendertexture to count pixels.
+     * @type {boolean}
+     */
     useRenderTexture: false,
 
     /**
@@ -230,10 +231,11 @@ Hooks.once("init", function() {
      * "triangles": Basic two flat triangles that form a rectangle
      * "alphaThresholdTriangles": triangles representing opaque parts of the tile texture (using earcut and marching squares)
      * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares)
-     * @type {"triangles"|"alphaThresholdTriangles"|"alphaThresholdPolygons"} (See tileThresholdShapeOptions.)
+     * @type {tileThresholdShapeOptions}
      */
     tileThresholdShape: "triangles",
 
+    /** @type {enum<string>} */
     tileThresholdShapeOptions: {
       BASIC_TRIANGLES: "triangles",
       ALPHA_TRIANGLES: "alphaThresholdTriangles",
@@ -253,22 +255,6 @@ Hooks.once("init", function() {
      */
     lightMeasurementNumPoints: 5,
 
-    useCaching: false,
-
-    /**
-     * Resolution of the render texture used in the webZGL LOS algorithm.
-     * Should be between (0, 1).
-     * @type {number}
-     */
-    renderTextureResolution: 1,
-
-    /**
-     * For Area3D, debug tiles using the rendered tile texture in the window, as opposed to
-     * the red/blue filled color.
-     * @type {boolean}
-     */
-    useDebugShaders: true,
-
     /**
      * Classes and associated calculators that can determine percent visibility.
      * Created and initialized at canvasReady hook
@@ -281,7 +267,6 @@ Hooks.once("init", function() {
       // webgpu: PercentVisibleCalculatorWebGPU,
       // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
       "per-pixel": PercentVisibleCalculatorPerPixel,
-      "sample-pixel": PercentVisibleCalculatorSamplePixel,
     },
 
     losCalculators: {
@@ -290,9 +275,7 @@ Hooks.once("init", function() {
       webgl2: null,
       // webgpu: null,
       // "webgpu-async": null,
-      hybrid: null,
       "per-pixel": null,
-      "sample-pixel": null,
     },
 
     /**
@@ -308,13 +291,7 @@ Hooks.once("init", function() {
     },
 
     /**
-     * Calculator for percent visible tokens using sight.
-     * @type {PercentVisibleCalculatorAbstract}
-     */
-    percentVisibleWebGL2: null,
-
-    /**
-     * Function to determine if a token is alive
+     * Function to determine if a token is alive.
      * @type {function}
      */
     tokenIsAlive,
@@ -332,8 +309,6 @@ Hooks.once("init", function() {
      * @type {boolean}
      */
     regionsBlock: true,
-
-
 
     /**
      * Configurations that affect the light meter.
@@ -418,8 +393,7 @@ Hooks.once("init", function() {
   };
 
   Object.defineProperty(CONFIG[MODULE_ID], "ClipperPaths", {
-    get: () => CONFIG[MODULE_ID].clipperVersion === 1
-      ? CONFIG.GeometryLib.ClipperPaths : CONFIG.GeometryLib.Clipper2Paths
+    get: () => CONFIG[MODULE_ID].clipperVersion === 1 ? ClipperPaths : Clipper2Paths
   });
 
   game.modules.get(MODULE_ID).api = {
@@ -525,15 +499,6 @@ Hooks.once("init", function() {
 
     Viewpoint,
     ObstacleOcclusionTest,
-    GeometricFaceCalculator,
-
-    countTargetPixels,
-
-    glmatrix: {
-      mat2, mat2d, mat3, mat4,
-      quat, quat2,
-      vec2, vec3, vec4
-    },
 
     MarchingSquares,
     SmallBitSet,
@@ -623,61 +588,6 @@ Hooks.on("canvasReady", function() {
 
   // Must be after the trackers are ready.
   Settings.updateLightMonitor(Settings.get(Settings.KEYS.LIGHT_MONITOR.ALGORITHM));
-
-
-//   // Create default calculators used by all the tokens.
-//   const basicCalcs = [
-//     "points",
-//     "geometric",
-//     "webgl2",
-//     "hybrid",
-//     "per-pixel",
-//     "sample-pixel",
-//   ];
-// //   const webGPUCalcs = [
-// //     "webgpu",
-// //     "webgpu-async",
-// //   ];
-//   const sightCalcs = CONFIG[MODULE_ID].sightCalculators;
-//   const hearingCalcs = CONFIG[MODULE_ID].hearingCalculators;
-//   const calcClasses = CONFIG[MODULE_ID].calculatorClasses;
-//   Object.values(sightCalcs).forEach(calc => { if ( calc ) calc.destroy() });
-//
-//   // Must create after settings are registered.
-//   for ( const calcName of basicCalcs ) {
-//     const cl = calcClasses[calcName];
-//     const sightCalc = sightCalcs[calcName] = new cl({ senseType: "sight", sourceType: "lighting" });
-//     const hearingCalc = hearingCalcs[calcName] = new cl({ senseType: "sight", sourceType: "sounds" });
-//     sightCalc.initialize(); // Async
-//     hearingCalc.initialize(); // Async
-//   }
-
-//   WebGPUDevice.getDevice().then(device => {
-//     if ( !device ) {
-//       console.warn("No WebGPU device located. Falling back to WebGL2.");
-//       const currAlg = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
-//       if ( currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU
-//         || currAlg === Settings.KEYS.LOS.TARGET.TYPES.WEBGPU_ASYNC ) {
-//         Settings.set(Settings.KEYS.LOS.TARGET.ALGORITHM, Settings.KEYS.LOS.TARGET.TYPES.WEBGL2);
-//       }
-//       sightCalcs.webGPU = sightCalcs.webGL2;
-//       sightCalcs.webGPUAsync = sightCalcs.webGL2;
-//       soundCalcs.webGPU = soundCalcs.webGL2;
-//       hearingCalcs.webGPUAsync = soundCalcs.webGL2;
-//
-//     } else {
-//       CONFIG[MODULE_ID].webGPUDevice = device;
-//       for ( const calcName of webGPUCalcs ) {
-//         const cl = calcClasses[calcName];
-//         const sightCalc = sightCalcs[calcName] = new cl({ senseType: "sight", sourceType: "lighting" });
-//         const hearingCalc = hearingCalcs[calcName] = new cl({ senseType: "sight", sourceType: "sounds" });
-//         sightCalc.initialize(); // Async
-//         hearingCalc.initialize(); // Async
-//       }
-//     }
-//
-//     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
-//   });
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 CONST,
 foundry,
 PIXI,

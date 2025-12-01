@@ -7,6 +7,10 @@ PIXI,
 "use strict";
 
 import { GeometryWall } from "../geometry/GeometryWall.js";
+import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { AABB3d } from "../../geometry/AABB.js";
+import { Quad3d } from "../../geometry/3d/Polygon3d.js";
+import { almostBetween, gridUnitsToPixels } from "../../geometry/util.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
@@ -64,14 +68,14 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     const { top, bottom } = this.constructor.edgeElevation(edge);
     const zHeight = top - bottom;
     const z = top - (zHeight * 0.5);
-    CONFIG.GeometryLib.MatrixFloat32.translation(pos.x, pos.y, z, this.matrices.translation);
+    MatrixFloat32.translation(pos.x, pos.y, z, this.matrices.translation);
     return this.matrices.translation;
 
   }
 
   calculateRotationMatrix() {
     const rot = this.constructor.edgeAngle(this.edge);
-    CONFIG.GeometryLib.MatrixFloat32.rotationZ(rot, true, this.matrices.rotation);
+    MatrixFloat32.rotationZ(rot, true, this.matrices.rotation);
     return this.matrices.rotation;
   }
 
@@ -80,11 +84,11 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     const ln = this.constructor.edgeLength(edge);
     const { top, bottom } = this.constructor.edgeElevation(edge);
     const scaleZ = top - bottom;
-    CONFIG.GeometryLib.MatrixFloat32.scale(ln, 1.0, scaleZ, this.matrices.scale);
+    MatrixFloat32.scale(ln, 1.0, scaleZ, this.matrices.scale);
     return this.matrices.scale;
   }
 
-  _updateAABB() { CONFIG.GeometryLib.threeD.AABB3d.fromEdge(this.edge, this.aabb); }
+  _updateAABB() { AABB3d.fromEdge(this.edge, this.aabb); }
 
   _updateVerticesIndices() {
     const type = this.isDirectional ? "directional" : "double";
@@ -92,8 +96,8 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
   }
 
   faces = {
-    top: new CONFIG.GeometryLib.threeD.Quad3d(),
-    bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
+    top: new Quad3d(),
+    bottom: new Quad3d(),
     sides: [],
   }
 
@@ -103,7 +107,7 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     this.#updateFace(this.faces.top);
     if ( this.constructor.isDirectional(this.edge) ) this.faces.bottom = undefined;
     else {
-      this.faces.bottom ??= new CONFIG.GeometryLib.threeD.Quad3d();
+      this.faces.bottom ??= new Quad3d();
       this.faces.top.clone(this.faces.bottom);
       this.faces.bottom.reverseOrientation();
     }
@@ -120,7 +124,7 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
-    return (t !== null && CONFIG.GeometryLib.utils.almostBetween(t, minT, maxT)) ? t : null;
+    return (t !== null && almostBetween(t, minT, maxT)) ? t : null;
   }
 
   #updateFace(quad) {
@@ -149,8 +153,8 @@ export class WallGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     let { top, bottom } = edge.elevationLibGeometry.a;
     top ??= 1e05;
     bottom ??= -1e05;
-    top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
-    bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
+    top = gridUnitsToPixels(top);
+    bottom = gridUnitsToPixels(bottom);
     return { top, bottom };
   }
 

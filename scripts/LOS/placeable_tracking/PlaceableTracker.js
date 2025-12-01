@@ -338,7 +338,7 @@ export class PlaceableModelMatrixTracker extends PlaceableTracker {
   getMatrixForPlaceable(placeable) {
     const arr = this.tracker.viewFacetById(placeable.sourceId);
     if ( !arr ) return null;
-    return new CONFIG.GeometryLib.MatrixFloat32(arr, 4, 4);
+    return new MatrixFloat32(arr, 4, 4);
   }
 
   /**

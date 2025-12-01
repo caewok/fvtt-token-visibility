@@ -96,8 +96,8 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
   }
 
   faces = {
-    top: new CONFIG.GeometryLib.threeD.Quad3d(),
-    bottom: new CONFIG.GeometryLib.threeD.Quad3d(),
+    top: new Quad3d(),
+    bottom: new Quad3d(),
     sides: [],
   };
 

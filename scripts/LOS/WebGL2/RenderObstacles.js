@@ -1,5 +1,4 @@
 /* globals
-CONFIG,
 foundry,
 PIXI,
 */
@@ -20,6 +19,7 @@ import {
 } from "./DrawableToken.js";
 import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
 import { log, sameSide } from "../util.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
 
 export class RenderObstaclesWebGL2 {
 
@@ -214,7 +214,7 @@ export class RenderObstaclesWebGL2 {
    * Set camera for a given render.
    */
   _setCamera(viewerLocation, target, { targetLocation } = {}) {
-    targetLocation ??= CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(target);
+    targetLocation ??= Point3d.fromTokenCenter(target);
     const camera = this.camera;
     camera.cameraPosition = viewerLocation;
     camera.targetPosition = targetLocation;

@@ -8,7 +8,7 @@ import { MODULE_ID } from "../../const.js";
 import { WebGL2 } from "./WebGL2.js";
 import { GeometryInstanced } from "../geometry/GeometryDesc.js";
 import { PlaceableTracker } from "../placeable_tracking/PlaceableTracker.js";
-import { VariableLengthAbstractBuffer, VariableLengthTrackingBuffer, VerticesIndicesTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
+import { VerticesIndicesTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
 

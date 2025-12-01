@@ -37,7 +37,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   }
 
   /** @type {boolean} */
-  get spherical() { return this.config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
+  get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
   _calculate() {
     this._initializeCamera();
@@ -66,7 +66,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   pointIsVisible(pt, radius2) {
     // TODO: Cache testSurfaceVisibility and spherical.
     if ( !super.pointIsVisible(pt, radius2) ) return false;
-    if ( !this.spherical || !this.config.testSurfaceVisibility ) return true;
+    if ( !this.spherical || !this._config.testSurfaceVisibility ) return true;
     const viewplane = this.viewplane;
     return viewplane.whichSide(pt) * viewplane.whichSide(this.viewpoint) > 0
   }

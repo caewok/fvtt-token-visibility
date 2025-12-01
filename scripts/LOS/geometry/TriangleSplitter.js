@@ -1,10 +1,13 @@
 /* globals
-CONFIG,
+
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { BasicVertices } from "./BasicVertices.js";
+import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Plane } from "../../geometry/3d/Plane.js";
+import { Polygon3d, Polygons3d, Triangle3d } from "../../geometry/3d/Polygon3d.js";
 
 /* Split triangles along vertical plane
 
@@ -69,18 +72,17 @@ export class TriangleSplitter {
    * Create a vertical cutting plane along the a|b 2d overhead segment.
    */
   static from2dPoints(a, b, keepCW = true) {
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const a3 = new Point3d(a.x, a.y, 0);
     const b3 = new Point3d(b.x, b.y, 0);
     const c3 = new Point3d(a.x, a.y, 1);
-    const plane = new CONFIG.GeometryLib.threeD.Plane.fromPoints(a3, b3, c3);
+    const plane = new Plane.fromPoints(a3, b3, c3);
     return new this(plane, keepCW);
   }
 
   trianglesFromVerticesIndices(vertices, indices, { keepUVs = false, keepNormals = false} = {}) {
     // TODO: Track UVs and normals for triangles3d, polygons3d
     const vs = BasicVertices.trimNormalsAndUVs(vertices, { keepUVs, keepNormals });
-    return CONFIG.GeometryLib.threeD.Triangle3d.fromVertices(vs, indices);
+    return Triangle3d.fromVertices(vs, indices);
   }
 
   splitFromTriangles3d(tris) {
@@ -142,11 +144,11 @@ export class TriangleSplitter {
           points[j++] = segment.a;
           points[j++] = segment.b;
         }
-        const poly3d = new CONFIG.GeometryLib.threeD.Polygon3d.from3dPoints(points);
+        const poly3d = new Polygon3d.from3dPoints(points);
         tris.push(...poly3d.triangulate());
       }
     }
-    const out = new CONFIG.GeometryLib.threeD.Polygons3d();
+    const out = new Polygons3d();
     out.polygons = tris;
     return out;
   }
@@ -210,13 +212,13 @@ export class TriangleSplitter {
       console.error(`this.constructor.name|_splitTriangle3d|No intersecting segments found for tri`, tri);
       return false;
     }
-    if ( ixSegment instanceof CONFIG.GeometryLib.Point3d ) return numIn > 1; // 1 point is on the plane.
+    if ( ixSegment instanceof Point3d ) return numIn > 1; // 1 point is on the plane.
 
     // TODO: Copy normal and update UVs.
-    if ( numIn === 1 ) return [new CONFIG.GeometryLib.threeD.Triangle3d.from3Points(ixSegment.a, ixSegment.b, inEndpoints[0])];
+    if ( numIn === 1 ) return [new Triangle3d.from3Points(ixSegment.a, ixSegment.b, inEndpoints[0])];
     return [
-      new CONFIG.GeometryLib.threeD.Triangle3d.from3Points(ixSegment.a, ixSegment.b, inEndpoints[0]),
-      new CONFIG.GeometryLib.threeD.Triangle3d.from3Points(ixSegment.a, ixSegment.b, inEndpoints[1]),
+      new Triangle3d.from3Points(ixSegment.a, ixSegment.b, inEndpoints[0]),
+      new Triangle3d.from3Points(ixSegment.a, ixSegment.b, inEndpoints[1]),
     ];
   }
 

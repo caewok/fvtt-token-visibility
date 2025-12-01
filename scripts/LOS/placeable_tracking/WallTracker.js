@@ -9,6 +9,7 @@ PIXI,
 
 import { PlaceableModelMatrixTracker } from "./PlaceableTracker.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { gridUnitsToPixels } from "../../geometry/util.js";
 
 // Base folder
 
@@ -54,13 +55,13 @@ export class WallTracker extends PlaceableModelMatrixTracker {
     const { top, bottom } = this.constructor.edgeElevation(edge);
     const zHeight = top - bottom;
     const z = top - (zHeight * 0.5);
-    CONFIG.GeometryLib.MatrixFloat32.translation(pos.x, pos.y, z, translationM);
+    MatrixFloat32.translation(pos.x, pos.y, z, translationM);
     return translationM;
   }
 
   rotationMatrixForPlaceable(wall) {
     const rot = this.constructor.edgeAngle(wall.edge);
-    CONFIG.GeometryLib.MatrixFloat32.rotationZ(rot, true, rotationM);
+    MatrixFloat32.rotationZ(rot, true, rotationM);
     return rotationM;
   }
 
@@ -69,7 +70,7 @@ export class WallTracker extends PlaceableModelMatrixTracker {
     const ln = this.constructor.edgeLength(edge);
     const { top, bottom } = this.constructor.edgeElevation(edge);
     const scaleZ = top - bottom;
-    CONFIG.GeometryLib.MatrixFloat32.scale(ln, 1.0, scaleZ, scaleM);
+    MatrixFloat32.scale(ln, 1.0, scaleZ, scaleM);
     return scaleM;
   }
 
@@ -84,8 +85,8 @@ export class WallTracker extends PlaceableModelMatrixTracker {
     let { top, bottom } = edge.elevationLibGeometry.a;
     top ??= 1e05;
     bottom ??= -1e05;
-    top = CONFIG.GeometryLib.utils.gridUnitsToPixels(top);
-    bottom = CONFIG.GeometryLib.utils.gridUnitsToPixels(bottom);
+    top = gridUnitsToPixels(top);
+    bottom = gridUnitsToPixels(bottom);
     return { top, bottom };
   }
 

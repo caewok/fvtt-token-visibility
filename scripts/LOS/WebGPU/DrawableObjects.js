@@ -1497,7 +1497,6 @@ export class DrawableConstrainedTokens extends DrawableObjectPlaceableAbstract {
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
-        // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
         const geom = new GeometryConstrainedTokenDesc({ placeable: token, addNormals: this.debugViewNormals, addUVs: false })
         this.geometries.set(token.id, geom);
         this.targetDrawables.set(token.id, {
@@ -1625,7 +1624,6 @@ export class DrawableLitTokens extends DrawableConstrainedTokens {
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
-        // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
         const geom = new GeometryLitTokenDesc({ token, addNormals: this.debugViewNormals, addUVs: false })
         this.geometries.set(token.id, geom);
         this.targetDrawables.set(token.id, {
@@ -1666,7 +1664,6 @@ export class DrawableGridShape extends DrawableConstrainedTokens {
         // log (`${this.constructor.name}|prerender|Adding geometry for ${token.name}, ${token.id}`);
 
         // GeometryConstrainedTokenDesc already returns world space so that instance matrix does not need to be applied.
-        // const { x, y, z } = CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(token);
         const geom = new GeometryGridFromTokenDesc({ token, addNormals: false, addUVs: false })
         this.geometries.set(token.id, geom);
         this.targetDrawables.set(token.id, {

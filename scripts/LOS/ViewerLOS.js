@@ -148,7 +148,7 @@ export class ViewerLOS {
   // ----- NOTE: Viewer ----- //
 
   /** @type {Point3d} */
-  get center() { return this.viewer ? CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.viewer) : undefined; }
+  get center() { return this.viewer ? Point3d.fromTokenCenter(this.viewer) : undefined; }
 
   /** @type {number} */
   get visionAngle() { return this.viewer?.vision.data.angle ?? 360; }
@@ -207,7 +207,7 @@ export class ViewerLOS {
   set target(value) { this.#target = value; }
 
   /** @type {Point3d} */
-  get targetLocation() { return CONFIG.GeometryLib.threeD.Point3d.fromTokenCenter(this.target); }
+  get targetLocation() { return Point3d.fromTokenCenter(this.target); }
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -683,7 +683,6 @@ export class ViewerLOS {
    */
   _drawFrustumLightSources(draw) {
     if ( canvas.environment.globalLightSource.active ) return;
-    const Point3d = CONFIG.GeometryLib.threeD.Point3d;
     const ctr = Point3d.fromTokenCenter(this.target);
     for ( const src of canvas.lighting.placeables ) {
       const srcOrigin = Point3d.fromPointSource(src);

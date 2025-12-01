@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 CONST,
 PIXI,
 */
@@ -196,7 +195,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    */
   _testAllSurfaces(points, surfaces) {
     surfaces ??= Array(points.length);
-    const testSurfaceVisibility = this.config.testSurfaceVisibility;
+    const testSurfaceVisibility = this._config.testSurfaceVisibility;
     const result = this._createResult();
     const n = points.length;
     result.data.numPoints = points.map(pts => pts.length);
@@ -269,7 +268,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   }
 
   _drawDebugPoints(result, debugDraw) {
-    const colors = CONFIG.GeometryLib.Draw.COLORS;
+    const colors = Draw.COLORS;
     const targetPoints = this.targetPoints;
     const { unobscured, numPoints } = result.data;
     const vp = this.viewpoint;
@@ -318,21 +317,23 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   /**
    * Transform a 3d point to a 2d perspective for point of view of viewpoint.
    * @param {Point3d} pt
-   * @returns {PIXI.Point} pt
+   * @returns {PIXI.Point|null} pt or null if the point is positive z after look at transform.
    */
   _applyPerspectiveToPoints(pts) {
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    return pts
-      .map(pt => lookAtM.multiplyPoint3d(pt))
-      .filter(pt => {
-        if ( pt.z >= 0 ) {
-          pt.release();
-          return false;
-        }
-        return true;
-      })
-      .map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+    pts = pts.map(pt => lookAtM.multiplyPoint3d(pt));
+
+    /*
+    if ( filter ) {
+      pts = pts.filter(pt => pt.z < 0);
+      return pts.map(pt => perspectiveM.multiplyPoint3d(pt, pt));
+    }
+    */
+    return pts.map(pt => {
+      if ( pt.z >= 0 ) return null;
+      return perspectiveM.multiplyPoint3d(pt, pt);
+    });
   }
 
   _applyPerspectiveToPolygon(poly) {
@@ -377,16 +378,15 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
     // Draw the token points.
     const targetPoints = this.targetPoints;
-    const { unobscured, numPoints } = result.data;
+    const unobscured = result.data.unobscured;
     for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
       const bs = unobscured[i];
       if ( !bs ) continue;
 
       const pts = this._applyPerspectiveToPoints(targetPoints[i]);
-      const n = numPoints[i];
-      for ( let j = 0; j < n; j += 1 ) {
+      for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
         const pt = pts[j];
-        if ( !pt ) console.error(`Point ${j} is undefined.`);
+        if ( !pt ) continue;
         opts.color = bs.has(j) ? Draw.COLORS.blue : Draw.COLORS.red;
         draw.point(pt.multiply(mult, a), opts);
       }
@@ -444,7 +444,7 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
       viewpoint: this.viewpoint,
       tokenShape: null,
     };
-    const targetShapes = this.config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
+    const targetShapes = this._config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
       ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
     if ( !targetShapes.length ) targetShapes.push(this.targetShape);
     return targetShapes.map(shape => {

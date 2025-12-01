@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 game,
 Hooks,
 PIXI,
@@ -378,10 +377,12 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   /** @type {PIXI.Container} */
   #popoutContainers = [];
 
+  get numViewpoints() { return this.viewerLOS?.viewpoints.length || 1; }
+
   initializeCalculation() {
     if ( !super.initializeCalculation() ) return false;
     if ( !this.popoutIsRendered ) return true;
-    if ( this.viewerLOS.viewpoints.length !== this.#popoutContainers.length ) {
+    if ( this.numViewpoints !== this.#popoutContainers.length ) {
       this._destroyPopout();
       this.popoutContainers.forEach(c => this.popout.pixiApp.stage.addChild(c));
     }
@@ -395,8 +396,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       // Divide in the popout space.
       const positions = [];
       let viewSize;
-      const numViewpoints = this.viewerLOS ? this.viewerLOS.viewpoints.length : 1;
-      switch ( numViewpoints ) {
+      switch ( this.numViewpoints ) {
         case 1: positions.push([0, 0]); viewSize = WIDTH; break;
 
         // ----- | -----
@@ -534,10 +534,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   get popoutDraws() {
     if ( !this.#popoutDraws.length ) {
-      this.popoutGraphics.forEach(g => {
-        const d = new CONFIG.GeometryLib.Draw(g);
-        this.#popoutDraws.push(d);
-      });
+      this.popoutGraphics.forEach(g => this.#popoutDraws.push(new Draw(g)));
     }
     return this.#popoutDraws;
   }
@@ -567,7 +564,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     let height = this.constructor.HEIGHT;
 
     // Keep width and height even.
-    switch ( this.viewerLOS.viewpoints.length ) {
+    switch ( this.numViewpoints ) {
       case 1: width *= 0.5; height *= 0.5; break;
       case 2:
       case 4:

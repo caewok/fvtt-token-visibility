@@ -209,7 +209,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
-    if ( !this.#initialized ) return result.makeFullyNotVisibile();
+    if ( !this.#initialized ) return result.makeFullyNotVisible();
 
     this.initializeCalculations();
     const { viewer, viewpoint, target, targetLocation } = this;
