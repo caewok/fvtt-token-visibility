@@ -332,26 +332,35 @@ export class ObstacleOcclusionTest {
     }
     for ( const [key, obstacles] of Object.entries(this.obstacles) ) {
       const color = OBSTACLE_COLORS[key];
+      const drawOpts = { draw, color, fillAlpha: 0.1, fill: color };
       switch ( key ) {
         case "walls":
         case "terrainWalls":
         case "proximateWalls":
           obstacles.forEach(wall => draw.segment(wall, { color }));
           break;
-        case "tiles":
-          obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE]
-            .faces.top.draw2d({ draw, color, fillAlpha: 0.1, fill: color}));
-//           obstacles.forEach(tile => {
-//             const geom = tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
-//             geom.alphaThresholdPolygons.top.transform(geom.modelMatrix).draw2d({ draw, color, fillAlpha: 0.1, fill: color });
-//           });
+        case "tiles": {
+          const tileOpts = CONFIG[MODULE_ID].tileThresholdShapeOptions;
+          const drawOpts = { draw, color, fillAlpha: 0.1, fill: color };
+          switch ( CONFIG[MODULE_ID].tileThresholdShape ) {
+            case tileOpts.RECTANGLE:
+              obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].faces.top.draw2d(drawOpts));
+              break;
+            case tileOpts.ALPHA_TRIANGLES:
+              obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].alphaThresholdTriangles.top.draw2d(drawOpts));
+              break;
+            case tileOpts.ALPHA_POLYGONS:
+              obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].alphaThresholdPolygons.top.draw2d(drawOpts));
+              break;
+          }
           break;
+        }
         case "tokens":
           obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
           break;
         case "regions":
           obstacles.forEach(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE]
-            .faces.top.draw2d({ draw, color, fillAlpha: 0.1, fill: color}));
+            .faces.top.draw2d(drawOpts));
           break;
       }
     }

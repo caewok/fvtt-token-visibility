@@ -233,11 +233,11 @@ Hooks.once("init", function() {
      * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares)
      * @type {tileThresholdShapeOptions}
      */
-    tileThresholdShape: "triangles",
+    tileThresholdShape: "alphaThresholdPolygons",
 
     /** @type {enum<string>} */
     tileThresholdShapeOptions: {
-      BASIC_TRIANGLES: "triangles",
+      RECTANGLE: "rectangle",
       ALPHA_TRIANGLES: "alphaThresholdTriangles",
       ALPHA_POLYGONS: "alphaThresholdPolygons",
     },
