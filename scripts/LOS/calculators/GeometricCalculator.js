@@ -103,6 +103,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
+    result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
     this.initializeCalculations();
     this._constructPerspectiveTargetPolygons();

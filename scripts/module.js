@@ -237,9 +237,9 @@ Hooks.once("init", function() {
 
     /** @type {enum<string>} */
     tileThresholdShapeOptions: {
-      RECTANGLE: "rectangle",
-      ALPHA_TRIANGLES: "alphaThresholdTriangles",
-      ALPHA_POLYGONS: "alphaThresholdPolygons",
+      RECTANGLE: "rectangle", // Fastest, but only trims rectangular transparent border without considering holes or irregular shapes.
+      ALPHA_TRIANGLES: "alphaThresholdTriangles", // In testing, this seems very slow.
+      ALPHA_POLYGONS: "alphaThresholdPolygons", // Much faster than triangles.
     },
 
     /**
