@@ -19,8 +19,6 @@ import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
-const tmpPt3d_0 = new Point3d();
-
 /* TileGeometry
 Placeable geometry stored in tile placeables.
 - AABB
@@ -159,6 +157,7 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     if ( !paths ) return;
 
     this.alphaThresholdPolygons.top = Polygons3d.fromClipperPaths(paths);
+    this.alphaThresholdPolygons.top.setZ(this.tile.elevationZ);
     this.alphaThresholdPolygons.bottom  = this.alphaThresholdPolygons.top.clone().reverseOrientation(); // Reverse orientation but keep the hole designations.
   }
 
@@ -191,6 +190,9 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     this.alphaThresholdTriangles.bottom = Polygons3d.from3dPolygons(Triangle3d
       .fromVertices(bottomTrimmed)
       .filter(tri => !foundry.utils.orient2dFast(tri.a, tri.b, tri.c).almostEqual(0, 1e-06)));
+
+    this.alphaThresholdTriangles.top.setZ(this.tile.elevationZ);
+    this.alphaThresholdTriangles.bottom.setZ(this.tile.elevationZ);
   }
 
   /**
