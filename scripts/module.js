@@ -233,13 +233,13 @@ Hooks.once("init", function() {
      * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares)
      * @type {tileThresholdShapeOptions}
      */
-    tileThresholdShape: "triangles",
+    tileThresholdShape: "alphaThresholdPolygons",
 
     /** @type {enum<string>} */
     tileThresholdShapeOptions: {
-      BASIC_TRIANGLES: "triangles",
-      ALPHA_TRIANGLES: "alphaThresholdTriangles",
-      ALPHA_POLYGONS: "alphaThresholdPolygons",
+      RECTANGLE: "rectangle", // Fastest, but only trims rectangular transparent border without considering holes or irregular shapes.
+      ALPHA_TRIANGLES: "alphaThresholdTriangles", // In testing, this seems very slow.
+      ALPHA_POLYGONS: "alphaThresholdPolygons", // Much faster than triangles.
     },
 
     /**

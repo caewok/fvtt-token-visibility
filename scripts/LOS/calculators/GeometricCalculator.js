@@ -1,18 +1,18 @@
 /* globals
 ClipperLib,
 CONFIG,
+foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../../const.js";
+import { MODULE_ID, TRACKER_IDS } from "../../const.js";
 import { Settings } from "../../settings.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { Camera } from "../Camera.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "../placeable_tracking/TokenGeometryTracker.js";
@@ -95,6 +95,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
   initializeCalculations() {
     this._initializeCamera();
+    this.occlusionTester._initialize(this);
     this._constructPerspectiveObstaclePolygons();
     this._constructObstaclePaths();
   }
@@ -102,6 +103,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
+    result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
     this.initializeCalculations();
     this._constructPerspectiveTargetPolygons();
@@ -249,7 +251,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
       this.targetPolys = this._constructPerspectiveTargetSphere();
       // this.targetPolys[0].radius *= 100;
       return;
-
     }
 
     const viewpoint = this.viewpoint
@@ -332,7 +333,23 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _lookAtObjectWithPerspective(object) {
-    const polys = ObstacleOcclusionTest.filterPlaceablePolygonsByViewpoint(object, this.viewpoint);
+    const geom = object[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    let polys;
+    if ( object instanceof foundry.canvas.placeables.Tile ) {
+      const opts = CONFIG[MODULE_ID].tileThresholdShapeOptions;
+      let label;
+      switch ( CONFIG[MODULE_ID].tileThresholdShape ) {
+        case opts.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
+        case opts.ALPHA_POLYGONS: /* eslint-disable-line no-fallthrough */
+          label ??= "alphaThresholdPolygons";
+          polys = [geom[label].top.clone(), geom[label].bottom.clone()];
+          polys.forEach(polygons3d => polygons3d.polygons = this.occlusionTester.filterPolys3d(polygons3d.polygons));
+          break;
+        default: polys = [...geom.iterateFaces()]; break;
+      }
+    } else polys = [...geom.iterateFaces()];
+
+    polys = polys.filter(poly => poly.isFacing(this.viewpoint));
     return this._applyPerspective(polys);
   }
 

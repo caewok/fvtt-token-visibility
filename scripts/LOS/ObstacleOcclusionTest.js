@@ -32,6 +32,10 @@ export class ObstacleOcclusionTest {
     reverseProximateWalls: NULL_SET,
   };
 
+  /** @type {Frustum} */
+  frustum = new Frustum();
+
+  /** @type {CalculatorConfig} */
   _config = {
     senseType: "sight",
     blocking: {
@@ -59,10 +63,12 @@ export class ObstacleOcclusionTest {
 
   get viewpoint() { return this.rayOrigin; }
 
-  _initialize({ rayOrigin, viewer, target } = {}) {
+  _initialize({ rayOrigin, viewer, target, viewpoint } = {}) {
+    if ( viewpoint ) this.rayOrigin.copyFrom(viewpoint);
     if ( rayOrigin ) this.rayOrigin.copyFrom(rayOrigin);
     if ( viewer ) this.viewer = viewer;
     if ( target ) this.target = target;
+    this.frustum.rebuild({ viewpoint: this.viewpoint, target: this.target });
     this.findObstacles();
     this.constructObstacleTester();
   }
@@ -80,7 +86,7 @@ export class ObstacleOcclusionTest {
 
   findObstacles() {
     const senseType = this._config.senseType;
-    this.obstacles = this.constructor.findBlockingObjects(this.rayOrigin, { target: this.target, viewer: this.viewer, ...this.config });
+    this.obstacles = this.constructor.findBlockingObjectsByFrustum(this.frustum, this.config);
     this.obstacles.terrainWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
     this.obstacles.proximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
     this.obstacles.reverseProximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
@@ -140,10 +146,9 @@ export class ObstacleOcclusionTest {
     return this.obstacles.regions.some(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection));
   }
 
-  // ----- NOTE: Static collision tests ----- //
+  filterPolys3d(polys) { return polys.filter(poly => this.frustum.poly3dWithinFrustum(poly)); }
 
-  /** @type {Frustum} */
-  static frustum = new Frustum();
+  // ----- NOTE: Static collision tests ----- //
 
   /**
    * Filter relevant objects in the scene using the vision triangle.
@@ -155,8 +160,7 @@ export class ObstacleOcclusionTest {
    *   - @property {Set<Token>} tokens
    *   - @property {Set<Region>} regions
    */
-  static findBlockingObjects(viewpoint, opts = {}) {
-    const frustum = this.frustum.rebuild({ viewpoint, target: opts.target });
+  static findBlockingObjectsByFrustum(frustum, opts = {}) {
     opts.blocking ??= {};
     opts.senseType ??= "sight";
     return {
@@ -301,18 +305,13 @@ export class ObstacleOcclusionTest {
     return true;
   }
 
-  static filterPlaceablePolygonsByViewpoint(placeable, viewpoint) {
-    const geometry = placeable[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
-    return [...geometry.iterateFaces()].filter(poly => poly.isFacing(viewpoint));
-  }
-
   /**
    * For debugging.
    * Draw the vision triangle between viewer point and target.
    */
   _drawFrustum(draw) {
     const { viewpoint, target } = this;
-    const frustum = this.constructor.frustum.rebuild({ viewpoint, target });
+    const frustum = this.frustum.rebuild({ viewpoint, target });
     frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.gray, fillAlpha: 0.1 });
   }
 
@@ -332,23 +331,39 @@ export class ObstacleOcclusionTest {
     }
     for ( const [key, obstacles] of Object.entries(this.obstacles) ) {
       const color = OBSTACLE_COLORS[key];
+      const drawOpts = { draw, color, fillAlpha: 0.1, fill: color };
       switch ( key ) {
         case "walls":
         case "terrainWalls":
         case "proximateWalls":
           obstacles.forEach(wall => draw.segment(wall, { color }));
           break;
-        case "tiles":
-          obstacles.forEach(tile => tile.tokenvisibility.geometry.triangles.forEach(tri =>
-            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color })));
+        case "tiles": {
+          const tileOpts = CONFIG[MODULE_ID].tileThresholdShapeOptions;
+          const drawOpts = { draw, color, fillAlpha: 0.1, fill: color };
+          let label;
+          switch ( CONFIG[MODULE_ID].tileThresholdShape ) {
+            case tileOpts.RECTANGLE:
+              obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].faces.top.draw2d(drawOpts));
+              break;
+            case tileOpts.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
+            case tileOpts.ALPHA_POLYGONS:
+              label ??= "alphaThresholdPolygons";
+              obstacles.forEach(tile => {
+                const polygons3d = tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE][label].top.clone();
+                polygons3d.polygons = this.filterPolys3d(polygons3d.polygons);
+                polygons3d.draw2d(drawOpts);
+              });
+              break;
+          }
           break;
+        }
         case "tokens":
           obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
           break;
         case "regions":
-          obstacles.forEach(region => region.tokenvisibility.geometry.triangles.forEach(tri =>
-            tri.draw2d({ draw, color, fillAlpha: 0.1, fill: color})
-          ));
+          obstacles.forEach(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE]
+            .faces.top.draw2d(drawOpts));
           break;
       }
     }

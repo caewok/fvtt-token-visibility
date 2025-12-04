@@ -12,9 +12,7 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { Triangle3d, Quad3d } from "../geometry/3d/Polygon3d.js";
 import { AABB3d } from "../geometry/AABB.js";
 
-// Temporary points
-const pt3d_0 = new Point3d();
-const pt3d_1 = new Point3d();
+
 
 /**
  * The viewable area between viewer and target.
@@ -24,7 +22,6 @@ const pt3d_1 = new Point3d();
  */
 export class Frustum {
 
-  // Frustum is called early, as a static object for Viewpoint. So it needs imported versions.
   top = new Triangle3d();
 
   bottom = new Triangle3d();
@@ -99,8 +96,8 @@ export class Frustum {
         const center = border2d.center;
 
         // Extend the triangle rays from viewpoint so they intersect the perpendicular line from the center.
-        const dir = viewpoint.to2d().subtract(center, pt3d_0);
-        const perpPt = pt3d_1.set(center.x - dir.y, center.y + dir.x); // Project along the perpDir: center + perpDir
+        const dir = viewpoint.to2d().subtract(center, Point3d.tmp);
+        const perpPt = Point3d.tmp.set(center.x - dir.y, center.y + dir.x); // Project along the perpDir: center + perpDir
         b = foundry.utils.lineLineIntersection(viewpoint, k0, center, perpPt);
         c = foundry.utils.lineLineIntersection(viewpoint, k1, center, perpPt);
         if ( !(b && c) ) {
@@ -239,7 +236,7 @@ export class Frustum {
     let bInside = true;
     for ( const face of this.iterateFaces() ) {
       if ( face.plane.lineSegmentIntersects(a, b)
-        && face.intersectionT(a, b.subtract(a, pt3d_0)) !== null ) return true;
+        && face.intersectionT(a, b.subtract(a, Point3d.tmp)) !== null ) return true;
       aInside ||= !face.isFacing(a);
       bInside ||= !face.isFacing(b);
     }
@@ -276,11 +273,16 @@ export class Frustum {
   }
 
   poly3dWithinFrustum(poly3d) {
-    if ( !this.convexPolygon3dWithinBounds(poly3d) ) return false;
+    if ( !this.overlapsAABB(poly3d.aabb) ) return false;
+    return true;
+
+    // TODO: Need to finalize the SAT test for polygon with frustum.
+
+    // if ( !this.convexPolygon3dWithinBounds(poly3d) ) return false;
 
     // Polygon edge intersects 1+ planes and the segment created is within bounds.
     for ( const face of this.iterateFaces() ) {
-      const res = face.intersectPlane(poly3d); // Faces are all triangles, so likely better to use them for the intersection.
+      const res = face.intersectPlane(poly3d.plane); // Faces are all triangles, so likely better to use them for the intersection.
       if ( !res ) continue;
 
       // Segment intersection

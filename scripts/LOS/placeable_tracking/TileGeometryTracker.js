@@ -19,8 +19,6 @@ import { FixedLengthTrackingBuffer } from "./TrackingBuffer.js";
 
 import * as MarchingSquares from "../marchingsquares-esm.js";
 
-const tmpPt3d_0 = new Point3d();
-
 /* TileGeometry
 Placeable geometry stored in tile placeables.
 - AABB
@@ -96,8 +94,14 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
 
   get quad3d() { return this.faces.top; }
 
-  /** @type {object<Polygons3d[]>} */
+  /** @type {object<Polygons3d>} */
   alphaThresholdPolygons = {
+    top: null,
+    bottom: null,
+  };
+
+  /** @type {object<Polygons3d>} */
+  alphaThresholdTriangles = {
     top: null,
     bottom: null,
   };
@@ -131,19 +135,30 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     this.faces.bottom.reverseOrientation();
   }
 
+  /**
+   * Convert alpha threshold paths from local to canvas space.
+   * Uses the evPixelCache matrix to do the transform
+   * @return {ClipperPaths|Clippper2Paths}
+   */
+  get alphaThresholdPathsCanvas() {
+    const paths = this.#alphaThresholdPaths;
+    if ( !paths ) return paths;
+    const pixelCache = this.tile.evPixelCache;
+    if ( !pixelCache ) return paths;
+    return paths.transform(pixelCache.toCanvasTransform);
+  }
 
   /**
    * Convert clipper paths representing a tile shape to top and bottom faces.
    * Bottom faces have opposite orientation.
    */
   _updatePathsToFacePolygons() {
-    const paths = this.#alphaThresholdPaths;
+    const paths = this.alphaThresholdPathsCanvas;
     if ( !paths ) return;
-    const top = Polygons3d.fromClipperPaths(paths)
-    const bottom = top.clone();
-    bottom.reverseOrientation(); // Reverse orientation but keep the hole designations.
-    this.alphaThresholdPolygons.top = top;
-    this.alphaThresholdPolygons.bottom = bottom;
+
+    this.alphaThresholdPolygons.top = Polygons3d.fromClipperPaths(paths);
+    this.alphaThresholdPolygons.top.setZ(this.tile.elevationZ);
+    this.alphaThresholdPolygons.bottom  = this.alphaThresholdPolygons.top.clone().reverseOrientation(); // Reverse orientation but keep the hole designations.
   }
 
   /**
@@ -153,30 +168,32 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
    * @returns {Triangle3d[]}
    */
   _updatePathsToFaceTriangles() {
-    const polys = this.#alphaThresholdPaths;
-    if ( !polys ) return;
+    const paths = this.alphaThresholdPathsCanvas;
+    if ( !paths ) return;
 
     // Convert the polygons to top and bottom faces.
     // Then make these into triangles.
     // Trickier than leaving as polygons but can dramatically cut down the number of polys
     // for more complex shapes.
-    const tris = [];
     const elev = this.placeable.elevationZ;
-    const { top, bottom } = Polygon3dVertices.polygonTopBottomFaces(polys, {  topZ: elev, bottomZ: elev });
+    const { top, bottom } = Polygon3dVertices.polygonTopBottomFaces(paths, { topZ: elev, bottomZ: elev });
 
     // Trim the UVs and Normals.
     const topTrimmed = Polygon3dVertices.trimNormalsAndUVs(top);
     const bottomTrimmed = Polygon3dVertices.trimNormalsAndUVs(bottom);
-    tris.push(
-      ...Triangle3d.fromVertices(topTrimmed),
-      ...Triangle3d.fromVertices(bottomTrimmed)
-    );
 
     // Drop any triangles that are nearly collinear or have very small areas.
     // Note: This works b/c the triangles all have z values of 0, which can be safely ignored.
-    this.alphaThresholdTriangles = tris.filter(tri => !foundry.utils.orient2dFast(tri.a, tri.b, tri.c).almostEqual(0, 1e-06) );
-  }
+    this.alphaThresholdTriangles.top = Polygons3d.from3dPolygons(Triangle3d
+      .fromVertices(topTrimmed)
+      .filter(tri => !foundry.utils.orient2dFast(tri.a, tri.b, tri.c).almostEqual(0, 1e-06)));
+    this.alphaThresholdTriangles.bottom = Polygons3d.from3dPolygons(Triangle3d
+      .fromVertices(bottomTrimmed)
+      .filter(tri => !foundry.utils.orient2dFast(tri.a, tri.b, tri.c).almostEqual(0, 1e-06)));
 
+    this.alphaThresholdTriangles.top.setZ(this.tile.elevationZ);
+    this.alphaThresholdTriangles.bottom.setZ(this.tile.elevationZ);
+  }
 
   /**
    * For a given tile, convert its pixels to an array of polygon isobands representing
