@@ -97,7 +97,7 @@ export class Frustum {
 
         // Extend the triangle rays from viewpoint so they intersect the perpendicular line from the center.
         const dir = viewpoint.to2d().subtract(center, Point3d.tmp);
-        const perpPt = pt3d_1.set(center.x - dir.y, center.y + dir.x); // Project along the perpDir: center + perpDir
+        const perpPt = Point3d.tmp.set(center.x - dir.y, center.y + dir.x); // Project along the perpDir: center + perpDir
         b = foundry.utils.lineLineIntersection(viewpoint, k0, center, perpPt);
         c = foundry.utils.lineLineIntersection(viewpoint, k1, center, perpPt);
         if ( !(b && c) ) {
