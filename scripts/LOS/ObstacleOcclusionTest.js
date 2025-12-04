@@ -225,12 +225,16 @@ export class ObstacleOcclusionTest {
 
     const regions = frustum.findRegions();
     const TM = OTHER_MODULES.TERRAIN_MAPPER;
-
     if ( !TM.ACTIVE ) return regions;
+
+    // If Terrain Mapper is active, consider the region blocking if its wall type blocks sight.
+    // TODO: Should handle limited and proximate wall types.
     return frustum.findRegions().filter(r => {
-      const senseTypes = new Set(getFlagFast(r.document, TM.KEY, TM.FLAGS.REGION.WALL_RESTRICTIONS) || []);
-      if ( senseType === "move" && senseTypes.has("cover") ) return true; // Treat all move restrictions as physical cover; same as with walls.
-      return senseTypes.has(senseType);
+      for ( const behavior of r.document.behaviors ) {
+        if ( behavior.type !== "terrainmapper.blockingWalls" ) continue;
+        if ( behavior.system.types.sight > 0 ) return true;
+      }
+      return false;
     });
   }
 
