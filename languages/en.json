@@ -38,7 +38,7 @@
     "tokenvisibility.settings.los-algorithm-geometric": "Geometric",
     "tokenvisibility.settings.los-algorithm-webgl2": "WebGL2",
     "tokenvisibility.settings.los-algorithm-webgpu": "WebGPU",
-    "tokenvisibility.settings.los-algorithm-per-pixel": "Per Pixel",
+    "tokenvisibility.settings.los-algorithm-per-pixel": "Face Points Lattice",
     "tokenvisibility.settings.los-algorithm-sample-pixel": "Sample Pixel",
 
     "tokenvisibility.settings.los-points-viewer.Name": "Points",
