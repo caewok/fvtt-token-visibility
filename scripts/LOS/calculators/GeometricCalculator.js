@@ -171,6 +171,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const opts = { omitAxis: "z", scalingFactor };
     if ( n === 1 ) return blockingPolys[0].toClipperPaths(opts);
 
+    const solution = ClipperPaths.joinPaths(blockingPolys.map(poly => poly.toClipperPaths(opts)));
+    return solution.union();
+
+    /* Below does not work well with regions.
     // All the simple polygons can be unioned as one.
     const simplePolys = [];
     const complexPolys = [];
@@ -207,6 +211,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
       });
     }
     return solution.union();
+    */
   }
 
   /**
