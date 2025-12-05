@@ -91,7 +91,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
       for ( const top of this.faces.multiTops ) yield top;
       for ( const bottom of this.faces.multiBottoms ) yield bottom;
       for ( const side of this.faces.sides ) yield side;
-    } else return super.iterateFaces();
+    } else yield*  super.iterateFaces();
   }
 
   initialize() {
@@ -147,9 +147,9 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
       if ( shapeGroup.length === 1 ) {
         const geometry = shapeGroup[0][MODULE_ID][this.constructor.ID];
         if ( geometry.isHole ) continue;
-        topArr.push(geometry.top)
-        bottomArr.push(geometry.bottom);
-        sides.push(...geometry.sides);
+        topArr.push(geometry.faces.top)
+        bottomArr.push(geometry.faces.bottom);
+        sides.push(...geometry.faces.sides);
 
       } else {
         // Combine and convert to Polygon3d.
@@ -158,13 +158,13 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
         const path = combinedPaths.combine();
         const polys = Polygons3d.fromClipperPaths(path, topZ);
-        const t = polys;
-        const b = polys.clone();
-        b.setZ(bottomZ); // topZ already set above.
-        b.reverseOrientation();
+        this.faces.top = polys;
+        this.faces.bottom = polys.clone();
+        this.faces.bottom.setZ(bottomZ); // topZ already set above.
+        this.faces.bottom.reverseOrientation();
 
         // Build all the side polys.
-        sides.push(...t.buildTopSides(bottomZ))
+        sides.push(...this.faces.top.buildTopSides(bottomZ))
       }
     }
 
@@ -336,7 +336,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
     this.faces.bottom.reverseOrientation();
 
     // Build sides from the edges.
-    this.sides = this.faces.top.buildTopSides(bottomZ);
+    this.faces.sides = this.faces.top.buildTopSides(bottomZ);
   }
 
   static regionElevationZ(region) {
@@ -374,7 +374,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
       const t = this.faces.top.intersectionT(rayOrigin, rayDirection);
       if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }
-    for ( const side of this.sides ) {
+    for ( const side of this.faces.sides ) {
       const t = side.intersectionT(rayOrigin, rayDirection);
       if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }
