@@ -563,13 +563,8 @@ Hooks.once("ready", function() {
   Settings.migrate(); // Cannot be set until world is ready.
   Settings.initializeDebugGraphics();
   LightStatusTracker.loadLightIcons(); // Async.
-});
 
-Hooks.on("canvasReady", function() {
-  console.debug(`${MODULE_ID}|canvasReady`);
-  if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
-
-  // Register the placeable geometry.
+  // Register the placeable geometry hooks.
   WallGeometryTracker.registerPlaceableHooks();
   TileGeometryTracker.registerPlaceableHooks();
   TokenGeometryTracker.registerPlaceableHooks();
@@ -578,16 +573,6 @@ Hooks.on("canvasReady", function() {
   BrightLitTokenGeometryTracker.registerPlaceableHooks();
   RegionGeometryTracker.registerPlaceableHooks();
 
-  WallGeometryTracker.registerExistingPlaceables();
-  TileGeometryTracker.registerExistingPlaceables();
-  TokenGeometryTracker.registerExistingPlaceables();
-  SphericalTokenGeometryTracker.registerExistingPlaceables();
-  LitTokenGeometryTracker.registerExistingPlaceables();
-  BrightLitTokenGeometryTracker.registerExistingPlaceables();
-  RegionGeometryTracker.registerExistingPlaceables();
-
-  // Must be after the trackers are ready.
-  Settings.updateLightMonitor(Settings.get(Settings.KEYS.LIGHT_MONITOR.ALGORITHM));
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
