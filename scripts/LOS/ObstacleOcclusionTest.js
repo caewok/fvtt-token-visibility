@@ -64,6 +64,7 @@ export class ObstacleOcclusionTest {
   get viewpoint() { return this.rayOrigin; }
 
   _initialize({ rayOrigin, viewer, target, viewpoint } = {}) {
+    // console.debug("ObstacleOcclusionTest|_initialize");
     if ( viewpoint ) this.rayOrigin.copyFrom(viewpoint);
     if ( rayOrigin ) this.rayOrigin.copyFrom(rayOrigin);
     if ( viewer ) this.viewer = viewer;
@@ -74,6 +75,7 @@ export class ObstacleOcclusionTest {
   }
 
   rayIsOccluded(rayOrigin, rayDirection, { viewer, target } = {}) {
+    // console.debug("ObstacleOcclusionTest|rayIsOccluded");
     this._initialize({ rayOrigin, viewer, target })
     return this._rayIsOccluded(rayDirection);
   }
@@ -81,6 +83,7 @@ export class ObstacleOcclusionTest {
   // Can use this method if the target point (rayDirection) is still within the target bounds.
   // Obstacles are filtered based on the vision triangle from origin to the target bounds.
   _rayIsOccluded(rayDirection) {
+    // console.debug("ObstacleOcclusionTest|_rayIsOccluded");
     return this.obstacleTester(this.rayOrigin, rayDirection);
   }
 
@@ -113,13 +116,14 @@ export class ObstacleOcclusionTest {
   }
 
   wallsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.walls.some(wall => wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection) !== null);
+    return this.obstacles.walls.some(wall => wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null);
   }
 
   terrainWallsOcclude(rayOrigin, rayDirection) {
+    // console.debug(`rayOrigin ${rayOrigin}, rayDirection ${rayDirection} for ${this.obstacles.terrainWalls.size} terrain walls.`);
     let limitedOcclusion = 0;
     for ( const wall of this.obstacles.terrainWalls ) {
-      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection) === null ) continue;
+      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) === null ) continue;
       if ( limitedOcclusion++ ) return true;
     }
     return false;
@@ -129,21 +133,21 @@ export class ObstacleOcclusionTest {
     for ( const wall of [...this.obstacles.proximateWalls, ...this.obstacles.reverseProximateWalls] ) {
       // If the proximity threshold is met, this edge excluded from perception calculations.
       if ( wall.edge.applyThreshold(this._config.senseType, rayOrigin) ) continue;
-      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection) !== null ) return true;
+      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null ) return true;
     }
     return false;
   }
 
   tilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tiles.some(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   tokensOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tokens.some(token => token[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.tokens.some(token => token[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   regionsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.regions.some(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection));
+    return this.obstacles.regions.some(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   filterPolys3d(polys) { return polys.filter(poly => this.frustum.poly3dWithinFrustum(poly)); }

@@ -63,10 +63,7 @@ export class Viewpoint {
     if ( this.passesSimpleVisibilityTest() ) {
       this.lastResult ??= this.calculator._createResult();
       this.lastResult.makeFullyVisible();
-    } else {
-      this.calculator.initializeView(this);
-      this.lastResult = this.calculator.calculate();
-    }
+    } else this.lastResult = this.calculator.calculate();
     return this.lastResult;
   }
 
