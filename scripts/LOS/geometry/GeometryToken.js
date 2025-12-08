@@ -17,7 +17,9 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Sphere } from "../../geometry/3d/Sphere.js";
 import { Triangle3d } from "../../geometry/3d/Polygon3d.js";
 import { isOnSegment } from "../../geometry/util.js";
-import { geoDelaunay } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
+
+import { geoDelaunay } from "../d3-geo-voronoi-bundled.js";
+// import { geoDelaunay } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
 
 const tmpRect = new PIXI.Rectangle();
 

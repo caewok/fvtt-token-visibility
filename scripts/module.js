@@ -10,7 +10,8 @@ PIXI,
 
 import { MODULE_ID } from "./const.js";
 
-import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
+import { geoVoronoi, geoDelaunay } from "./LOS/d3-geo-voronoi-bundled.js";
+// import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
 
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";

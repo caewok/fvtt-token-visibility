@@ -1,0 +1,143 @@
+Let me help you set up Webpack to properly import and use d3-geo-voronoi. Here's a step-by-step guide:
+
+First, install the required dependencies:
+bash
+npm install --save d3-geo-voronoi d3-geo d3-array d3-delaunay d3-tricontour
+npm install --save-dev webpack webpack-cli
+Create or update your webpack.config.js:
+javascript
+const path = require('path');
+
+module.exports = {
+  mode: 'development', // or 'production'
+  entry: './src/index.js', // your entry file
+  output: {
+    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist'),
+  },
+  module: {
+    rules: [
+      {
+        test: /\.m?js$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-env']
+          }
+        }
+      }
+    ]
+  },
+  resolve: {
+    alias: {
+      'd3-geo-voronoi': path.resolve(__dirname, 'node_modules/d3-geo-voronoi/dist/d3-geo-voronoi.js')
+    }
+  }
+};
+In your JavaScript file (e.g., src/index.js), import the module:
+javascript
+import { geoVoronoi, geoDelaunay, geoContour } from 'd3-geo-voronoi';
+
+// Now you can use the imported functions
+console.log(geoVoronoi); // Should log the function
+If you're still having issues with the UMD module, create a wrapper file:
+javascript
+// src/lib/d3-geo-voronoi-wrapper.js
+import * as d3 from 'd3-array'; // Import any d3 modules you need
+import * as d3Geo from 'd3-geo';
+import * as d3Delaunay from 'd3-delaunay';
+import * as d3Tricontour from 'd3-tricontour';
+
+// Import the module
+import 'd3-geo-voronoi';
+
+// Re-export the functions
+export const { geoVoronoi, geoDelaunay, geoContour } = window.d3;
+Then in your main file:
+javascript
+import { geoVoronoi } from './lib/d3-geo-voronoi-wrapper';
+
+// Now you can use geoVoronoi without polluting the global namespace
+Add these scripts to your package.json:
+json
+"scripts": {
+  "build": "webpack --mode production",
+  "dev": "webpack --watch --mode development"
+}
+Run the build:
+bash
+npm run build
+This setup will:
+
+Properly bundle all dependencies
+Handle the UMD module correctly
+Prevent global namespace pollution
+Work with modern JavaScript features
+If you're still having issues, you might need to install additional loaders:
+
+bash
+npm install --save-dev babel-loader @babel/core @babel/preset-env
+
+
+-------------------
+
+I'll help you download and use d3-geo-voronoi locally. Here's how to do it:
+
+First, install the package and its peer dependencies using npm:
+bash
+npm install d3-geo-voronoi d3-geo d3-array d3-delaunay d3-tricontour
+In your project, create a directory called vendor (or any name you prefer) to store the local copies:
+bash
+mkdir -p public/vendor/d3-geo-voronoi
+Copy the necessary files to your vendor directory:
+bash
+cp node_modules/d3-geo-voronoi/dist/d3-geo-voronoi.js public/vendor/d3-geo-voronoi/
+cp node_modules/d3-geo/dist/d3-geo.js public/vendor/
+cp node_modules/d3-array/dist/d3-array.js public/vendor/
+cp node_modules/d3-delaunay/dist/d3-delaunay.js public/vendor/
+cp node_modules/d3-tricontour/dist/d3-tricontour.js public/vendor/
+Create an importmap.json file in your project root:
+json
+{
+  "imports": {
+    "d3-array": "./vendor/d3-array.js",
+    "d3-geo": "./vendor/d3-geo.js",
+    "d3-delaunay": "./vendor/d3-delaunay.js",
+    "d3-tricontour": "./vendor/d3-tricontour.js",
+    "d3-geo-voronoi": "./vendor/d3-geo-voronoi/d3-geo-voronoi.js"
+  }
+}
+In your HTML file, add the import map:
+html
+<script type="importmap" src="importmap.json"></script>
+Now you can use the local imports in your module:
+javascript
+import { geoDelaunay, geoVoronoi } from './vendor/d3-geo-voronoi/d3-geo-voronoi.js';
+If you prefer to use a bundler like Webpack or Rollup, you can import directly from node_modules:
+javascript
+import { geoDelaunay, geoVoronoi } from 'd3-geo-voronoi';
+And in your webpack.config.js:
+
+javascript
+module.exports = {
+  // ... other config
+  resolve: {
+    modules: ['node_modules'],
+  }
+};
+For development, you might want to use a local development server to avoid CORS issues. You can use http-server:
+bash
+npm install -g http-server
+http-server
+This setup will:
+
+Download all dependencies locally
+Work without an internet connection
+Be more reliable than CDN-based solutions
+Give you control over versioning
+Remember to update the dependencies periodically to get bug fixes and new features. You can do this by running:
+
+bash
+npm update d3-geo-voronoi d3-geo d3-array d3-delaunay d3-tricontour
+And then repeat step 3 to update the files in your vendor directory.
