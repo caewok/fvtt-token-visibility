@@ -84,7 +84,7 @@ export class ObstacleOcclusionTest {
   // Obstacles are filtered based on the vision triangle from origin to the target bounds.
   _rayIsOccluded(rayDirection) {
     // console.debug("ObstacleOcclusionTest|_rayIsOccluded");
-    return this.obstacleTester(this.rayOrigin, rayDirection);
+    return this.obstacleTester.call(this, this.rayOrigin, rayDirection);
   }
 
   findObstacles() {

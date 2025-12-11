@@ -234,21 +234,33 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     const unobscured = new this.constructor.BitSetClass();
     const visible = new this.constructor.BitSetClass();
     const radius2 = this.radius ** 2;
+    //this.occlusionTester._initialize(this);
     for ( let i = 0, n = targetPoints.length; i < n; i += 1 ) {
+      // console.debug(`${this.target.name}: ${this.target.x}, ${this.target.y}`);
       const pt = targetPoints[i];
       if ( !this.pointIsVisible(pt, radius2) ) continue;
       visible.add(i);
-      // console.debug(`\nPoint: ${pt}, viewpoint: ${this.viewpoint}, direction: ${this.#rayDirection}`);
-      if ( !this.pointIsOccluded(pt) ) {
-        const a = 1;
-        // console.debug(`Point: ${pt}, viewpoint: ${this.viewpoint}, direction: ${this.#rayDirection} (Unoccluded Test #1)`);
+
+      // this.occlusionTester._initialize(this);
+
+      const dir0 = pt.subtract(this.viewpoint);
+
+
+      const isOccluded = this.pointIsOccluded(pt)
+      const dir1 = this.#rayDirection;
+
+      if ( !isOccluded ) console.debug(`\n ${i} not occluded`);
+
+      //this.occlusionTester._initialize(this);
+      if ( this.pointIsOccluded(pt) !== isOccluded ) {
+        const dir2 = this.#rayDirection
+        console.debug(`\n ${i} occluded? ${isOccluded}`);
+        console.debug(`\t${dir0}`);
+        console.debug(`\t${dir1}`);
+        console.debug(`\t${dir2}`);
       }
-      if ( this.pointIsOccluded(pt) ) {
-        const a = 2;
-        // console.debug(`Point: ${pt}, viewpoint: ${this.viewpoint}, direction: ${this.#rayDirection} (Occluded Test #2)`);
-        continue;
-      }
-      // console.debug(`Point: ${pt}, viewpoint: ${this.viewpoint}, direction: ${this.#rayDirection} (Unoccluded Test #2)`);
+
+      if ( isOccluded ) continue;
       unobscured.add(i);
     }
 
