@@ -241,26 +241,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
       if ( !this.pointIsVisible(pt, radius2) ) continue;
       visible.add(i);
 
-      // this.occlusionTester._initialize(this);
-
-      const dir0 = pt.subtract(this.viewpoint);
-
-
-      const isOccluded = this.pointIsOccluded(pt)
-      const dir1 = this.#rayDirection;
-
-      if ( !isOccluded ) console.debug(`\n ${i} not occluded`);
-
-      //this.occlusionTester._initialize(this);
-      if ( this.pointIsOccluded(pt) !== isOccluded ) {
-        const dir2 = this.#rayDirection
-        console.debug(`\n ${i} occluded? ${isOccluded}`);
-        console.debug(`\t${dir0}`);
-        console.debug(`\t${dir1}`);
-        console.debug(`\t${dir2}`);
-      }
-
-      if ( isOccluded ) continue;
+      if ( this.pointIsOccluded(pt) ) continue;
       unobscured.add(i);
     }
 
