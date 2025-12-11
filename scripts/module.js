@@ -16,7 +16,6 @@ import { geoVoronoi, geoDelaunay } from "./LOS/d3-geo-voronoi-bundled.js";
 // Hooks and method registration
 import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
-import { Patcher, HookPatch, MethodPatch, LibWrapperPatch } from "./Patcher.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { getObjectProperty } from "./LOS/util.js";
 
@@ -35,10 +34,7 @@ import { LightStatusTracker } from "./LightStatusTracker.js";
 
 // For API
 import * as bench from "./benchmark.js";
-
-import { Viewpoint } from "./LOS/Viewpoint.js";
-import { ObstacleOcclusionTest } from "./LOS/ObstacleOcclusionTest.js";
-import { Frustum } from "./LOS/Frustum.js";
+import { OPEN_POPOUTS } from "./LOS/Area3dPopout.js";
 
 import {
   buildLOSCalculator,
@@ -48,69 +44,11 @@ import {
   buildDebugViewer,
 } from "./LOSCalculator.js";
 
-import { OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas } from "./LOS/Area3dPopout.js";
-
-import * as range from "./visibility_range.js";
-
-
-// import { WebGPUDevice, WebGPUShader, WebGPUBuffer, WebGPUTexture } from "./LOS/WebGPU/WebGPU.js";
-import { Camera } from "./LOS/Camera.js";
-
-import { PlaceableTracker, PlaceableModelMatrixTracker } from "./LOS/placeable_tracking/PlaceableTracker.js";
-import { WallTracker } from "./LOS/placeable_tracking/WallTracker.js";
-import { TileTracker } from "./LOS/placeable_tracking/TileTracker.js";
-import { TokenTracker } from "./LOS/placeable_tracking/TokenTracker.js";
-import { RegionTracker } from "./LOS/placeable_tracking/RegionTracker.js";
-import {
-  VariableLengthAbstractBuffer,
-  VariableLengthTrackingBuffer,
-  FixedLengthTrackingBuffer,
-  VerticesIndicesAbstractTrackingBuffer,
-  VerticesIndicesTrackingBuffer } from "./LOS/placeable_tracking/TrackingBuffer.js";
-
-
-import { WebGL2 } from "./LOS/WebGL2/WebGL2.js";
-
-import { DrawableWallWebGL2 } from "./LOS/WebGL2/DrawableWall.js";
-import { DrawableTileWebGL2, DrawableSceneBackgroundWebGL2 } from "./LOS/WebGL2/DrawableTile.js";
-import { DrawableTokenWebGL2 } from "./LOS/WebGL2/DrawableToken.js";
-
-
-import { RenderObstaclesWebGL2 } from "./LOS/WebGL2/RenderObstacles.js";
-
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/calculators/PointsCalculator.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/calculators/GeometricCalculator.js";
 import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
 import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Calculator.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";
-
-
-// import {
-//   PercentVisibleCalculatorWebGPU,
-//   PercentVisibleCalculatorWebGPUAsync,
-//   DebugVisibilityViewerWebGPU,
-//   DebugVisibilityViewerWebGPUAsync,
-// } from "./LOS/WebGPU/WebGPUViewpoint.js";
-
-import {
-  HorizontalQuadVertices,
-  VerticalQuadVertices,
-  Rectangle3dVertices,
-  Polygon3dVertices,
-  Ellipse3dVertices,
-  Circle3dVertices,
-  Hex3dVertices,
-  BasicVertices,
-} from "./LOS/geometry/BasicVertices.js";
-
-import { OBJParser } from "./LOS/geometry/OBJParser.js";
-
-import { GeometryTile } from "./LOS/geometry/GeometryTile.js";
-import { GeometryToken, GeometryConstrainedToken, GeometryLitToken } from "./LOS/geometry/GeometryToken.js";
-import { GeometryWall } from "./LOS/geometry/GeometryWall.js";
-import { GeometryRegion, GeometryRectangleRegionShape, GeometryPolygonRegionShape, GeometryEllipseRegionShape, GeometryCircleRegionShape  } from "./LOS/geometry/GeometryRegion.js";
-
-import { DocumentUpdateTracker, TokenUpdateTracker } from "./LOS/UpdateTracker.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
@@ -399,39 +337,8 @@ Hooks.once("init", function() {
 
   game.modules.get(MODULE_ID).api = {
     bench,
-    range,
 
-    DocumentUpdateTracker, TokenUpdateTracker,
-
-    geometry: {
-      HorizontalQuadVertices,
-      VerticalQuadVertices,
-      Rectangle3dVertices,
-      Polygon3dVertices,
-      Ellipse3dVertices,
-      Circle3dVertices,
-      Hex3dVertices,
-      BasicVertices,
-
-      GeometryTile,
-      GeometryToken,
-      GeometryConstrainedToken,
-      GeometryLitToken,
-      GeometryWall,
-      GeometryRegion,
-      GeometryRectangleRegionShape,
-      GeometryPolygonRegionShape,
-      GeometryEllipseRegionShape,
-      GeometryCircleRegionShape,
-
-      Camera,
-
-      OBJParser,
-
-      Frustum,
-    },
-
-    OPEN_POPOUTS, Area3dPopout, Area3dPopoutV2, Area3dPopoutCanvas,
+    OPEN_POPOUTS,
 
     Settings,
 
@@ -461,55 +368,16 @@ Hooks.once("init", function() {
       perPixel: DebugVisibilityViewerPerPixel,
     },
 
-    webgl: {
-      WebGL2,
-      DrawableWallWebGL2,
-      DrawableTileWebGL2,
-      DrawableTokenWebGL2,
-      DrawableSceneBackgroundWebGL2,
-      RenderObstaclesWebGL2,
-      twgl,
-    },
-
-    placeableTracker: {
-      VariableLengthAbstractBuffer,
-      VariableLengthTrackingBuffer,
-      FixedLengthTrackingBuffer,
-      VerticesIndicesAbstractTrackingBuffer,
-      VerticesIndicesTrackingBuffer,
-      PlaceableTracker,
-      PlaceableModelMatrixTracker,
-      WallTracker,
-      TileTracker,
-      TokenTracker,
-      RegionTracker
-    },
-
-//     webgpu: {
-//       WebGPUDevice,
-//       WebGPUShader,
-//       WebGPUBuffer,
-//       WebGPUTexture,
-//       Camera,
-//       RenderObstacles,
-//       WebGPUSumRedPixels,
-//       wgsl,
-//       AsyncQueue,
-//     },
-
-
-    Viewpoint,
-    ObstacleOcclusionTest,
-
     MarchingSquares,
     SmallBitSet,
     FastBitSet,
 
     PATCHER,
-    Patcher, HookPatch, MethodPatch, LibWrapperPatch,
+
     geoDelaunay,
     geoVoronoi,
     LightStatusTracker,
+    twgl,
   };
 });
 
