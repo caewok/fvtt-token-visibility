@@ -1,3 +1,21 @@
+## 0.8.0
+Updated for Foundry v13.
+
+Updated algorithms for measuring line-of-sight to a token target.
+1. Points.
+2. Surface Points Lattice.
+3. Geometric.
+4. WebGL.
+
+Investigated but did not yet finalize a WebGPU version because it did not improve performance.
+Updated the debug popout viewer for the algorithms.
+Added an experimental light meter to measure when tokens are in bright, dim, or no light.
+Refactored tracking of placeables.
+Refactored how viewers and viewpoints are handled.
+Allow for viewpoint locations to be independently set (middle front vs middle back, etc.).
+Update libGeometry to v0.4.6.
+
+
 ## 0.7.0
 Foundry v12 compatibility.
 

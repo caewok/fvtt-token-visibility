@@ -11,10 +11,6 @@
 # Alternative Token Visibility
 This module provides options to modify Foundry's default methods for measuring visibility range and line-of-sight between tokens. Some options are more performant, while others trade some performance for a more precise method of computing visibility. Alt Token Visibility is particularly useful when dealing with token elevations, elevated tiles, and walls with limited heights or depth.
 
-
-
-
-
 Major features:
 - Choose whether one or more points on the viewing target are tested for line-of-sight, with the best result taken. Options include a "stereo" version that uses two points on the front facing side of the token.
 - Change the number of points used to determine range.
@@ -49,27 +45,27 @@ Alt. Token Visibility currently offers four choices for how line-of-sight should
 To benchmark the algorithms for the current settings, testing the view of every token against every other token in a scene:
 ```js
 N = 10;
-await game.modules.get("tokenvisibility").api.bench.benchTokenLOS(N); 
+await game.modules.get("tokenvisibility").api.bench.benchTokenLOS(N);
 ```
 (If tokens are controlled, only those will be considered "viewers." If tokens are targeted, only those tokens will be considered "targets.")
 
 ## Points
-Test whether a 3d ray from a point in the viewer token to a point on the target token is blocked by an obstacle. Multiple points on the target can be tested to determine whether a threshold percentage of rays is met for visibility. For overhead tiles, considers them to block unless the ray passes through a transparent portion of the tile. 
+Test whether a 3d ray from a point in the viewer token to a point on the target token is blocked by an obstacle. Multiple points on the target can be tested to determine whether a threshold percentage of rays is met for visibility. For overhead tiles, considers them to block unless the ray passes through a transparent portion of the tile.
 
 This algorithm mimics the default Foundry VTT visibility test, but provides more options to vary the points used for testing. Unlike the Surface Points Lattice, these points may be "inside" the target token.
 
 ## Surface Points Lattice
-For a grid of points on the surface of the 3d target token, test each point for visibility from point of viewer of a viewer token. Similar to the Points algorithm in that rays to points are individually tested. But it only considers the points for the surfaces facing the viewer. (E.g., for a cube token shape this would be either two or three faces in view.) 
+For a grid of points on the surface of the 3d target token, test each point for visibility from point of viewer of a viewer token. Similar to the Points algorithm in that rays to points are individually tested. But it only considers the points for the surfaces facing the viewer. (E.g., for a cube token shape this would be either two or three faces in view.)
 
-Slower because of the number of points tested. Capabable of approximating the percent surface viewed. 
+Slower because of the number of points tested. Capabable of approximating the percent surface viewed.
 
-Note that Surface Points Lattice does not use a 2d projection. Therefore, the viewable sides are treated equally, regardless of area viewable via perspective. In other words, from the viewer perspective, one of the target token cube faces usually appears much larger than the other one or two viewable faces, but the points on all viewable faces receive the same weight. Switching to a spherical token shape alleviates this. (`CONFIG.tokenvisibility.useTokenSphere=true`). 
+Note that Surface Points Lattice does not use a 2d projection. Therefore, the viewable sides are treated equally, regardless of area viewable via perspective. In other words, from the viewer perspective, one of the target token cube faces usually appears much larger than the other one or two viewable faces, but the points on all viewable faces receive the same weight. Switching to a spherical token shape alleviates this. (`CONFIG.tokenvisibility.useTokenSphere=true`).
 
 ## Geometric
-Views the target token in perspective from the points of view of the viewer token, with obstacles projected on top. Essentially mimics the perspective view of WebGL, but measures area precisely using the underlying geometry of the target token shape and relevant obstacles. 
+Views the target token in perspective from the points of view of the viewer token, with obstacles projected on top. Essentially mimics the perspective view of WebGL, but measures area precisely using the underlying geometry of the target token shape and relevant obstacles.
 
 ## WebGL
-Test the percentage of the 3d view of a target token that is viewable from the perspective of a point on the viewer token. The "percentage viewable" is approximated by counting the pixels in the resulting WebGL image of the rendered target with obstacles overlaid. 
+Test the percentage of the 3d view of a target token that is viewable from the perspective of a point on the viewer token. The "percentage viewable" is approximated by counting the pixels in the resulting WebGL image of the rendered target with obstacles overlaid.
 
 # Main Settings Menu
 
@@ -79,7 +75,7 @@ When enabled, these will visualize the range and line-of-sight algorithms on the
 ## Light Monitor
 A new feature, still experimental, that identifies tokens that are in full darkness or dim light. "Per Token" considers each token's position with respect to lights in the scene. "Viewpoint" considers each token with respect to the controlled viewing token. For "Viewpoint," only the viewable faces are considered, whereas "Per Token" considers all the token faces.
 
-Currently uses the Surface Points Lattice algorithm to associate lighting with each face. `CONFIG.tokenvisibility.lightMeter.dimCutoff` and `CONFIG.tokenvisibility.lightMeter.brightCutoff` control the percentage of points required to be "lit" to be considered within dim or bright light, respectively. 
+Currently uses the Surface Points Lattice algorithm to associate lighting with each face. `CONFIG.tokenvisibility.lightMeter.dimCutoff` and `CONFIG.tokenvisibility.lightMeter.brightCutoff` control the percentage of points required to be "lit" to be considered within dim or bright light, respectively.
 
 # ATV Settings Configuration Menu
 Most of the relevant ATV module settings appear in a popout when you hit the "Configure" button in the main settings menu.
@@ -121,13 +117,13 @@ You can test performance on a given scene by running the following code in the c
 ```js
 api = game.modules.get('tokenvisibility').api;
 N = 10; // Change if you want more iterations.
-await api.bench.benchTokenRange(N); 
+await api.bench.benchTokenRange(N);
 await api.bench.benchTokenLOS(N);
-await api.bench.benchTokenVisibility(); // Bench from the current user's controlled tokens view. 
+await api.bench.benchTokenVisibility(); // Bench from the current user's controlled tokens view.
 ```
 
 # API
 Various methods and classes are exposed at `game.modules.get('tokenvisibility').api`. These may change over time as this module evolves.
-Various defined values are exposed at `CONFIG.tokenvisibility`. 
+Various defined values are exposed at `CONFIG.tokenvisibility`.
 
 Feel free to message me in Discord if you have questions about specific methods.

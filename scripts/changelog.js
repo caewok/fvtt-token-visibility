@@ -92,6 +92,23 @@ Hooks.once("ready", () => {
           Limited testing thus far. The debug viewer needs work.`
     })
 
+    .addEntry({
+      version: "0.8.0",
+      title: "Foundry v13 compatibility",
+      body: `\
+           Updated for Foundry v13. Updated algorithms for measuring line-of-sight to a token target.
+           Updated the debug popout viewer for the algorithms. Added an experimental light meter to measure when tokens are in bright, dim, or no light.
+
+           You can now define specific viewpoints and, for the Points algorithm, specific target points to use.
+           For example, you can use only front corners and front midpoints of the token border.
+
+           A new Surface Points Lattice provides a different way to test for visibility, by testing the target faces in 3d
+           to estimate area visible.
+
+           Tile transparency is now handled in all 4 algorithms, meaning that tokens can see through tiles with transparent holes.
+      `
+    })
+
 
     .build()
     ?.render(true);
