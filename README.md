@@ -2,6 +2,12 @@
 [![Foundry Version](https://img.shields.io/badge/dynamic/json.svg?url=https://github.com/caewok/fvtt-token-visibility/releases/latest/download/module.json&label=Foundry%20Version&query=$.compatibility.verified&colorB=blueviolet)](https://github.com/caewok/fvtt-token-visibility/releases/latest)
 [![License](https://img.shields.io/github/license/caewok/fvtt-token-visibility)](LICENSE)
 
+![Forge Installs](https://img.shields.io/badge/dynamic/json?label=Forge%20Installs&query=package.installs&suffix=%25&url=https://forge-vtt.com/api/bazaar/package/tokenvisibility&colorB=4aa94a)
+![Latest Release Download Count](https://img.shields.io/github/downloads/caewok/fvtt-token-visibility/latest/module.zip)
+![All Downloads](https://img.shields.io/github/downloads/caewok/fvtt-token-visibility/total)
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/H2H3Y7IJW)
+
 # Alternative Token Visibility
 This module provides options to modify Foundry's default methods for measuring visibility range and line-of-sight between tokens. Some options are more performant, while others trade some performance for a more precise method of computing visibility. Alt Token Visibility is particularly useful when dealing with token elevations, elevated tiles, and walls with limited heights or depth.
 
