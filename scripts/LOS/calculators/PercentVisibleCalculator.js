@@ -232,7 +232,6 @@ export class PercentVisibleCalculatorAbstract {
   get viewer() { return this.#viewer; }
 
   set viewer(value) {
-    if ( this.#viewer === value ) return;
     this.#viewer = value;
 
     // Default the viewpoint to the center of the token.
@@ -246,11 +245,10 @@ export class PercentVisibleCalculatorAbstract {
   get target() { return this.#target; }
 
   set target(value) {
-    if ( this.#target === value ) return;
     this.#target = value;
 
     // Default the target location to the center of the token.
-    Point3d.fromTokenCenter(value, this.targetLocation);
+    Point3d.fromTokenCenter(value, this.#targetLocation);
   }
 
   /** @type {Point3d} */
@@ -260,14 +258,14 @@ export class PercentVisibleCalculatorAbstract {
 
   get rayOrigin() { return this.#viewpoint; }
 
-  set viewpoint(value) {
-    if ( this.#viewpoint.equals(value) ) return;
-    this.dirty = true;
-    this.#viewpoint.copyFrom(value);
-  }
+  set viewpoint(value) { this.#viewpoint.copyFrom(value); }
 
   /** @type {Point3d} */
-  targetLocation = new Point3d();
+  #targetLocation = new Point3d();
+
+  get targetLocation() { return this.#targetLocation; }
+
+  set targetLocation(value) { this.#targetLocation.copyFrom(value); }
 
   async initialize() { return; }
 
@@ -284,7 +282,7 @@ export class PercentVisibleCalculatorAbstract {
     if ( viewer ) this.viewer = viewer;
     if ( target ) this.target = target;
     if ( viewpoint ) this.viewpoint = viewpoint;
-    if ( targetLocation ) this.targetLocation.copyFrom(targetLocation);
+    if ( targetLocation ) this.targetLocation = targetLocation;
   }
 
   get targetBorder() { return CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }

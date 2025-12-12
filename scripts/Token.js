@@ -5,7 +5,7 @@ foundry,
 
 // Patches for the Token class
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { buildLOSViewer } from "./LOSCalculator.js";
 import { ATVTokenHandler } from "./TokenHandler.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";
@@ -54,8 +54,9 @@ function drawToken(token) {
  * @param {PlaceableObject} object    The object instance being destroyed
  */
 function destroyToken(token) {
-  const losCalc = token[MODULE_ID]?.losCalc;
-  if ( losCalc ) losCalc.destroy();
+  const atv = token[MODULE_ID];
+  if ( !atv ) return;
+  Object.values(TRACKER_IDS.GEOMETRY.TOKEN).forEach(tag => atv[tag]?.destroy());
   delete token[MODULE_ID];
 }
 
