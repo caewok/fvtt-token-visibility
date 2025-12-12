@@ -5,10 +5,9 @@
 # Alternative Token Visibility
 This module provides options to modify Foundry's default methods for measuring visibility range and line-of-sight between tokens. Some options are more performant, while others trade some performance for a more precise method of computing visibility. Alt Token Visibility is particularly useful when dealing with token elevations, elevated tiles, and walls with limited heights or depth.
 
-Line-of-Sight Algorithm choices:
-- Points. Test whether a 3d ray from a point on the viewer token to a point on the target token is blocked by an obstacle. Multiple points on the target can be tested to determine whether a threshold percentage of rays is met for visibility. For overhead tiles, considers them to block unless the ray passes through a transparent portion of the tile.
-- Area2d. Test the percentage of the overhead view of a target token that is viewable from the perspective of a point on the viewer token. For overhead tiles, does not consider transparency.
-- Area3d. Test the percentage of the 3d view of a target token that is viewable from the perspective of a point on the viewer token. For overhead tiles, uses webGL to test transparency.
+
+
+
 
 Major features:
 - Choose whether one or more points on the viewing target are tested for line-of-sight, with the best result taken. Options include a "stereo" version that uses two points on the front facing side of the token.
@@ -26,26 +25,55 @@ Add this [Manifest URL](https://github.com/caewok/fvtt-token-visibility/releases
 
 # Dependencies
 - [libWrapper](https://github.com/ruipin/fvtt-lib-wrapper)
-- [socketlib](https://github.com/manuelVo/foundryvtt-socketlib)
 
 # Recommended module additions
 - [Wall Height](https://github.com/theripper93/wall-height). Not only does Wall Height provide the ability to set elevation for wall tops and bottoms, it also gives tokens height based on their size. The Area3d option for Alt Token Visibility takes full advantage of token height.
-- [Elevated Vision](https://github.com/caewok/fvtt-elevated-vision). Can assist with setting terrain and token elevations.
 - [Token Lean](https://github.com/WesBelmont/token-lean). Useful when you want players to be able to "peer" over limited-height walls.
-
-## Levels
-Token Visibility is intended to work with the [Levels](https://github.com/theripper93/Levels) module. Both the Points and the Area3d algorithms will ignore transparent portions of tiles as expected in Levels. The Area2d algorithm treats overhead tiles as blocking regardless of transparency and thus may not work in all cases with Levels.
 
 # Token Height
 Token height, for purposes of measuring vision, can be changed using the [Wall Height](https://github.com/theripper93/wall-height) module. Token height is otherwise set based on scale of the token—namely,the number of grid squares it occupies.
 
 Note that very large tokens can be quite tall, and may poke through an overhead tile. Depending on your settings, this may cause large tokens to be visible if a sufficient portion of the token is visible.
 
+# Line-of-Sight Algorithm choices
+Line-of-sight means testing from a specific point-of-view (the "eye") in 3d space to a target token. Depending on the algorithm, one or more points associated with the target may be tested, or the target may be considered as a whole. Obstacles can include walls, regions, or tiles. Alpha transparency of tiles may be considered.
+
+Alt. Token Visibility currently offers four choices for how line-of-sight should be calculated. Some versions may be preferable for different gaming rules. Performance varies in ways that are not always predictable. As a general rule, the Points algorithm is usually fastest, and should almost always be substantially faster than the Surface Points Lattice algorithm. Depending on scene and computer, the WebGL version may be fastest.
+
+To benchmark the algorithms for the current settings, testing the view of every token against every other token in a scene:
+```js
+N = 10;
+await game.modules.get("tokenvisibility").api.bench.benchTokenLOS(N); 
+```
+(If tokens are controlled, only those will be considered "viewers." If tokens are targeted, only those tokens will be considered "targets.")
+
+## Points
+Test whether a 3d ray from a point in the viewer token to a point on the target token is blocked by an obstacle. Multiple points on the target can be tested to determine whether a threshold percentage of rays is met for visibility. For overhead tiles, considers them to block unless the ray passes through a transparent portion of the tile. 
+
+This algorithm mimics the default Foundry VTT visibility test, but provides more options to vary the points used for testing. Unlike the Surface Points Lattice, these points may be "inside" the target token.
+
+## Surface Points Lattice
+For a grid of points on the surface of the 3d target token, test each point for visibility from point of viewer of a viewer token. Similar to the Points algorithm in that rays to points are individually tested. But it only considers the points for the surfaces facing the viewer. (E.g., for a cube token shape this would be either two or three faces in view.) 
+
+Slower because of the number of points tested. Capabable of approximating the percent surface viewed. 
+
+Note that Surface Points Lattice does not use a 2d projection. Therefore, the viewable sides are treated equally, regardless of area viewable via perspective. In other words, from the viewer perspective, one of the target token cube faces usually appears much larger than the other one or two viewable faces, but the points on all viewable faces receive the same weight. Switching to a spherical token shape alleviates this. (`CONFIG.tokenvisibility.useTokenSphere=true`). 
+
+## Geometric
+Views the target token in perspective from the points of view of the viewer token, with obstacles projected on top. Essentially mimics the perspective view of WebGL, but measures area precisely using the underlying geometry of the target token shape and relevant obstacles. 
+
+## WebGL
+Test the percentage of the 3d view of a target token that is viewable from the perspective of a point on the viewer token. The "percentage viewable" is approximated by counting the pixels in the resulting WebGL image of the rendered target with obstacles overlaid. 
+
 # Main Settings Menu
-<img width="565" alt="ATV Settings - Main" src="https://github.com/caewok/fvtt-token-visibility/assets/1267134/adb0b1ff-9f99-4425-9ae5-771c2f03cfa5">
 
 ## Debug Range and Debug LOS
-When enabled, these will visualize the range and line-of-sight algorithms on the canvas. Range is indicated by dots on the target tokens, red for out-of-range and green for in-range. For LOS Area3d, you must control a token and target another token to make a popout window appear that will show a 3d view from the perspective of the controlled token looking directly at the targeted token. (You might need to move the controlled token to force the popout to refresh.)
+When enabled, these will visualize the range and line-of-sight algorithms on the canvas. Range is indicated by dots on the target tokens, red for out-of-range and green for in-range. A popout window displays a 3d version, with perspective, of the target for the given algorithm.
+
+## Light Monitor
+A new feature, still experimental, that identifies tokens that are in full darkness or dim light. "Per Token" considers each token's position with respect to lights in the scene. "Viewpoint" considers each token with respect to the controlled viewing token. For "Viewpoint," only the viewable faces are considered, whereas "Per Token" considers all the token faces.
+
+Currently uses the Surface Points Lattice algorithm to associate lighting with each face. `CONFIG.tokenvisibility.lightMeter.dimCutoff` and `CONFIG.tokenvisibility.lightMeter.brightCutoff` control the percentage of points required to be "lit" to be considered within dim or bright light, respectively. 
 
 # ATV Settings Configuration Menu
 Most of the relevant ATV module settings appear in a popout when you hit the "Configure" button in the main settings menu.
@@ -53,62 +81,47 @@ Most of the relevant ATV module settings appear in a popout when you hit the "Co
 ## Viewer Line-of-Sight
 Settings relevant to the viewing token.
 
-<img width="699" alt="ATV Settings - Viewer LOS" src="https://github.com/caewok/fvtt-token-visibility/assets/1267134/208d6aa6-b96c-4d10-b14f-f484f4cd1b3a">
-
 The viewing points are the viewing token's "eyes." If more than one viewing point, the viewer will have line-of-sight to the target if at least one point would have line-of-sight. When more than one point is used, an "offset" allows you to determine how far each point lies on a line between the viewer center and the viewer border. If two points are used, they are set to the token's front-facing direction.
 
 ## Target Line-of-Sight
 Settings relevant to the target token.
 
-<img width="699" alt="ATV Settings - Target LOS" src="https://github.com/caewok/fvtt-token-visibility/assets/1267134/584a7715-e536-4b3d-92f3-5afae1314242">
+### Algorithm
+How to measure line-of-sight. If Points is selected, you can further customize the configuration of points and their inset. This is comparable to the viewing points configuration in the Viewer LOS.
 
-## Percent Threshold
-The percent threshold governs how much of a target token must be viewable for a viewing token to be considered to have line-of-sight to the target. For the Points algorithm, this is the percent of points that are visible on the target. For the Area2d and Area3d algorithms, this is the percent area visible compared to what the target area would be with no obstacles. Note that targets against a wall will have their token shape trimmed accordingly, so that they are not visible through the wall.
+### Percent Threshold
+The percent threshold governs how much of a target token must be viewable for a viewing token to be considered to have line-of-sight to the target. For point-based algorithms, this is the percent of points that are visible on the target. For Geometric and WebGL algorithms, this is the percent area visible compared to what the target area would be with no obstacles. Note that targets against a wall will have their token shape trimmed accordingly, so that they are not visible through the wall.
 
 ### Large Token Subtargeting
 If enabled, tokens larger than a grid square will be considered visible if at least one grid square's worth of the token is visible. For the Points algorithm, each grid square that the target occupies is tested separately as if it were a single token. For the Area2d and Area3d algorithms, the percentage area required is based on the size of a single grid square instead of the size of the entire target. The result is that tokens larger than a grid square can be more than 100% visible.
 
 This setting is slightly less performant but very useful for larger tokens. For example, without large token subtargeting, 3 grid squares of a dragon could be visible and—depending on your percentage threshold setting—this may still be insufficient to "see" the dragon.
 
-### Points Algorithm
-The points algorithm tests whether a 3d ray from the viewing point to a point on the target token is blocked by an obstacle. As with the viewer, the offset determines how close each point is to the center of the target token. The percentage threshold determines how many visible points on the target are required for the viewer to be considered to have line-of-sight to the target. If 3d points are enabled, additional points at the top and bottom of the target token will be tested.
-
-### Area2d Algorithm
-The Area2d algorithm tests how much of the overhead target token shape is visible. It usually is very performant, but less intuitive and less accurate than the Area3d algorithm. It treats all overhead tiles as opaque.
-
-### Area3d Algorithm
-The Area3d algorithm constructs a simplistic 3d model of the scene from the point of view of the viewing token looking toward the target token. It then measures the visible area of the 3d target. This can be faster than the Points algorithm in certain scenes.
-
-If overhead tiles are encountered within the viewing triangle, the Area3d algorithm switches to webGL to construct its 3d model. This allows it to take into account transparent portions of the overhead tile. The webGL is much slower, however, so it only uses it when necessary. (The slowdown is primarily because the webGL scene must be converted back into pixels that Javascript can then summarize to determine the viewable area.)
-
 ## Range
 Settings relevant to calculating range between the viewer and target.
-
-<img width="699" alt="ATV Settings - Range" src="https://github.com/caewok/fvtt-token-visibility/assets/1267134/5538be90-0466-499c-ac7b-24bd2f7e4cff">
 
 Options are provided to adjust how many points are tested when calculating range. The viewer center point is always used, and if any point on the target is within range, the target will be considered within range. Note that the difference in performance between these options is negligible, and so you should select whatever makes sense in your campaign setting.
 
 ## Other
 Other settings that affect the line-of-sight calculation.
 
-<img width="699" alt="ATV Settings - Other" src="https://github.com/caewok/fvtt-token-visibility/assets/1267134/8cbc98d8-9dc7-4e67-b5d1-d23c0e6c2c9f">
-
 Optionally, you can have live or dead tokens block vision. Prone tokens can also optionally block vision. For these settings to work, you must tell ATV what the prone status is for your system, and where to find the hit points attribute. (It is assumed that 0 or below means "dead" for purposes of defining dead tokens.)
 
 The vision height multiplier allows you to change the height at which a viewing token observes the scene. Think of this as the height of the eyes of the token above the ground, as a percentage of the total token height.
 
 # Performance
-
 You can test performance on a given scene by running the following code in the console. This will test whether the tokens in the scene can see every other token in the scene for a variety of settings. If you control one or more tokens, those will be treated as the viewing tokens. Targeting one or more tokens will test those targets against the viewing tokens.
 
 ```js
 api = game.modules.get('tokenvisibility').api;
-N = 100; // Change if you want more iterations.
-api.bench.benchAll(N)
+N = 10; // Change if you want more iterations.
+await api.bench.benchTokenRange(N); 
+await api.bench.benchTokenLOS(N);
+await api.bench.benchTokenVisibility(); // Bench from the current user's controlled tokens view. 
 ```
 
 # API
-
 Various methods and classes are exposed at `game.modules.get('tokenvisibility').api`. These may change over time as this module evolves.
+Various defined values are exposed at `CONFIG.tokenvisibility`. 
 
 Feel free to message me in Discord if you have questions about specific methods.
