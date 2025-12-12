@@ -1,0 +1,77 @@
+Visibility approach 2025-09
+
+Obstructions for visibility test
+- Can vary based on options. Walls, Tiles, Regions (walls), Tokens
+- Visible based on considering the full token vs visible based on single grid space of token ("large tokens")
+
+Bright/dim/dark light on target token should be handled considering the entire token (not face-specific)
+Lighting does not depend on facing the light --- i.e., backlit tokens are still in bright or dim light.
+Reasonable to assume substantial amount of light bouncing, plus tokens are smaller and more complex than block shapes.
+
+
+Bright/dim/dark light can depend on whether there is an obstruction. Same for bright/dark sound.
+- Ignore token obstructions. Vary too much and tokens would not necessarily fully block the light
+- Using whole token, so simplest is to use existing point calculator.
+- For given points on token, determine maximum for each light: bright/dim/none. Then determine percentage of total.
+
+For example, assuming 9 points, where x is none / o is dim / • is bright
+Light 1:
+x o •
+x o •
+o o •
+
+Light 2:
+o x x
+x o •
+x • • 
+
+Combined:
+o o •
+x o •   => 4/9 (44%) bright; 4/9 (44%) dim; 1/9 (11%) none.
+o • •
+
+
+Could use faces instead and measure area covered for each face, taking max % area where two lights hit the face.
+Harder, but matches with geometry for viewer/sight algorithm.
+
+So each algorithm should return the bright/dim/none object and allow combining.
+
+
+Two conceptualizations of dark/dim/bright:
+1. The token is in dark/dim/bright light, w/r/t itself.
+- Use point test or area test to determine percentage dark/dim/bright compared to threshold.
+- Uses entire constrained token border
+- Can be marked with AE.
+
+2. The token is in dark/dim/bright light w/r/t another viewer.
+- Must meet visibility threshold for given token border.
+  - Constrained: If met, token is visible in darkness.
+  - litTokenBorder: If met, token is visible in dim light.
+  - brightLitTokenBorder: If met, token is visible in bright light.
+- Can be marked with AE that changes based on viewer token selected.
+- Viewer might have ability, like darkvision, that switches which border should be used.
+
+
+--> Handle combining multiple viewpoints by allowing results to be additively (maximum) joined.
+
+
+
+Viewer --> object
+
+Viewer:
+- Point in 3d space
+- Options controlling rules for blocking. E.g., light would not be blocked by tokens.
+- A source type, indicating the corresponding wall restriction. E.g., sight/sound/move/light
+- Radius indicating to what distance the viewer can see. Can be infinite.
+
+Object:
+- For now, only tokens.
+- 3d objects with defined faces.
+
+Points (2d or 3d within token shape)
+
+
+
+
+Visibility
+

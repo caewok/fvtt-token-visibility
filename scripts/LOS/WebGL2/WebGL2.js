@@ -1,0 +1,357 @@
+/* globals
+foundry,
+PIXI,
+*/
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
+"use strict";
+
+import { MODULE_ID } from "../../const.js";
+import { wgsl } from "../wgsl-preprocessor.js";
+import * as twgl from "./twgl.js";
+import { applyConsecutively, log } from "../util.js";
+
+
+/**
+ * Misc static functions to assist with WebGL2 rendering.
+ * Also handles caching and WebGL2 state.
+ */
+export class WebGL2 {
+
+  /** @type {WebGL2RenderingContext} */
+  gl;
+
+  /**
+   * @param {WebGL2RenderingContext} gl
+   */
+  constructor(gl) {
+    this.gl = gl;
+    this.glState.viewport.width = gl.canvas.width;
+    this.glState.viewport.height = gl.canvas.height;
+    this.initializeGLState();
+  }
+
+  // ----- NOTE: Cache program ----- //
+
+  /** @type {Map<string, twgl.ProgramInfo} */
+  programs = new Map();
+
+  /** @type {twgl.ProgramInfo} */
+  currentProgramInfo;
+
+  useProgram(programInfo) {
+    if ( this.currentProgramInfo !== programInfo ) this.gl.useProgram(programInfo.program);
+    this.currentProgramInfo = programInfo;
+    if ( this.currentProgramInfo.program !== this.gl.getParameter(this.gl.CURRENT_PROGRAM) ) console.error("Current program is incorrect.");
+    // else console.debug("Current program is correct.")
+  }
+
+  /**
+   * Key to store the drawable's program, allowing it to be reused.
+   * @param {DrawableObjectsWebGL2Abstract} drawable
+   * @returns {string}
+   */
+  static programKey(vsFile, fsFile, opts = {}) {
+    opts = JSON.stringify(opts);
+    return `${vsFile}_${fsFile}_${opts}`;
+  }
+
+  /**
+   * Create and cache the program info or build a new one
+   * @param {DrawableObjectsWebGL2Abstract} drawable
+   * @returns {twgl.ProgramInfo} the program info for the drawable
+   */
+  async cacheProgram(vsFile, fsFile, opts = {}) {
+    const key = this.constructor.programKey(vsFile, fsFile, opts);
+    if ( this.programs.has(key) ) return this.programs.get(key);
+    const programInfo = await this.createProgram(vsFile, fsFile, opts);
+    this.programs.set(key, programInfo);
+    return programInfo;
+  }
+
+  /**
+   * Create a WebGL2 program from vertex and fragment files.
+   * @param {string} vsFile       Vertex source file
+   * @param {string} fsFile       Fragment source file
+   * @param {object} [opts]       Options passed to sourceFromGLSLFile used to parse the file
+   * @returns {twgl.ProgramInfo}
+   */
+  async createProgram(vsFile, fsFile, opts = {}) {
+    const vertexShaderSource = await WebGL2.sourceFromGLSLFile(vsFile, opts)
+    const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(fsFile, opts)
+    return twgl.createProgramInfo(this.gl, [vertexShaderSource, fragmentShaderSource]);
+  }
+
+  // ----- Cache WebGL2 state ----- //
+
+  /** @type {object} */
+  glState = {
+    viewport: new PIXI.Rectangle(),
+    DEPTH_TEST: false,
+    STENCIL_TEST: false,
+    BLEND: false,
+    CULL_FACE: false,
+    cullFace: "BACK",
+    colorMask: this.constructor.noColorMask,
+    clearColor: this.constructor.blackClearColor,
+  }
+
+  /**
+   * Force gl state to current values.
+   */
+  initializeGLState() {
+    const { gl, glState } = this;
+    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
+    gl.cullFace(gl[glState.cullFace]);
+    gl.colorMask(...glState.colorMask);
+    gl.clearColor(...glState.clearColor);
+    for ( const name of ["DEPTH_TEST", "STENCIL_TEST", "BLEND", "CULL_FACE"] ) {
+      if ( glState[name] ) gl.enable(gl[name]);
+      else gl.disable(gl[name]);
+      // console.debug(`Setting ${name} to ${glState[name]}`);
+    }
+  }
+
+  /**
+   * Set one of the boolean WebGL states and cache the value.
+   * @param {string} name         WebGL state name, e.g. "DEPTH_TEST"
+   * @param {boolean} [enabled=true]     Whether to enable or disable
+   */
+  #setGLBooleanState(name, enabled = true) {
+//     const param = this.gl.getParameter(this.gl[name])
+//     if ( param !== this.glState[name] ) console.error(`State ${name} is incorrect. Should be ${param}`);
+    if ( this.glState[name] === enabled ) return;
+    const gl = this.gl;
+    if ( enabled ) gl.enable(gl[name]);
+    else gl.disable(gl[name]);
+    this.glState[name] = enabled;
+    // console.debug(`Setting ${name} to ${enabled}`);
+  }
+
+  /**
+   * Set gl.DEPTH_TEST to enabled or disabled.
+   * @param {boolean} [enabled=true]    Whether to enable or disable
+   */
+  setDepthTest(enabled) { this.#setGLBooleanState("DEPTH_TEST", enabled); }
+
+  setStencilTest(enabled) { this.#setGLBooleanState("STENCIL_TEST", enabled); }
+
+  setBlending(enabled) { this.#setGLBooleanState("BLEND", enabled); }
+
+  setCulling(enabled) { this.#setGLBooleanState("CULL_FACE", enabled); }
+
+  /**
+   * Set the viewport to a given rectangle and cache the value.
+   * @param {PIXI.Rectangle} rect
+   */
+  setViewport(rect) {
+//     const param = this.gl.getParameter(this.gl.VIEWPORT);
+//     if ( this.glState.viewport.x !== param[0]
+//       || this.glState.viewport.y !== param[1]
+//       || this.glState.viewport.width !== param[2]
+//       || this.glState.viewport.height !== param[3] ) console.error(`Viewport is incorrect. Should be`, param);
+    if ( this.glState.viewport.equals(rect) ) return;
+    const { gl, glState } = this;
+    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
+    glState.viewport.copyFrom(rect);
+  }
+
+  setCullFace(face = "BACK") {
+//     const param = this.gl.getParameter(this.gl.CULL_FACE_MODE)
+//     if ( param !== this.gl[this.glState.cullFace] ) console.error(`Cull face mode is incorrect. Should be ${param}`);
+    if ( this.glState.cullFace === face ) return;
+    this.gl.cullFace(this.gl[face]);
+    this.glState.cullFace = face;
+  }
+
+  setColorMask(mask = this.constructor.noColorMask) {
+//     const param = this.gl.getParameter(this.gl.COLOR_WRITEMASK);
+//     if ( !param.equals(this.glState.colorMask) ) console.error(`Color mask is incorrect. Should be`, param);
+    if ( this.glState.colorMask.equals(mask) ) return;
+    this.gl.colorMask(...mask);
+    this.glState.colorMask = mask;
+  }
+
+  setClearColor(color = this.constructor.blackClearColor) {
+//     const param = this.gl.getParameter(this.gl.COLOR_CLEAR_VALUE);
+//     if ( !this.glState.clearColor.every((elem, idx) => elem === param[idx]) ) console.error(`Clear color is incorrect. Should be`, param);
+    if ( this.glState.clearColor.equals(color) ) return;
+    this.gl.clearColor(...color);
+    this.glState.clearColor = color;
+  }
+
+  static blackClearColor = [0, 0, 0, 0];
+
+  static redAlphaMask = [true, false, false, true];
+
+  static blueAlphaMask = [false, false, true, true];
+
+  static greenAlphaMask = [false, true, false, true];
+
+  static noColorMask = [true, true, true, true];
+
+
+  // ----- NOTE: Static methods ----- //
+
+  /**
+   * Load code from a GLSL file.
+   * @param {string} fileName       Name of the GLSL file, found at scripts/glsl/
+   * @param {object} params         Parameters used to interpolate the loaded code string
+   * @returns {string}
+   */
+  static async sourceFromGLSLFile(filename, params) {
+    const code = await this.fetchGLSLCode(filename);
+    return interpolate(code, params);
+  }
+
+  /**
+   * Fetch GLSL code as text.
+   * @param {string} fileName     The file name without extension or directory path.
+   * @returns {string}
+   */
+  static async fetchGLSLCode(fileName) {
+    const resp = await foundry.utils.fetchWithTimeout(`modules/${MODULE_ID}/scripts/LOS/WebGL2/glsl/${fileName}.glsl`);
+    return resp.text();
+  }
+
+  /**
+   * Draw representation of pixels
+   */
+  static drawPixels(imgData, { minX = 0, maxX, minY = 0, maxY, channel = 0 } = {}) {
+    let str = "";
+    maxX ??= imgData.width;
+    maxY ??= imgData.height;
+
+    // 0,0 is bottom left
+    // pixel is data[(width * height - 1) * pixelSize]
+    for ( let y = imgData.height - 1; y >= 0; y -= 1 ) {
+      for ( let x = 0; x < imgData.width; x += 1 ) {
+          if ( x < minX || x > maxX ) continue;
+          if ( y < minY || y > maxY ) continue;
+          const px = imgData.pixels[(x * y * 4) + channel];
+          const nStr = `${px}`;
+          const paddingLn = 3 - nStr.length;
+          const paddedStr = "0".repeat(paddingLn) + nStr;
+          str += `${paddedStr} `;
+        }
+        str += "\n";
+      }
+    console.log(str);
+    // return str;
+  }
+
+
+  /**
+   * Given image data or image pixels, print summary of the 4 color channels to console.
+   * @param {object|TypedArray} pixels      Object with pixels parameter or an array of pixels
+   */
+  static summarizePixelData(pixels) {
+    if ( Object.hasOwn(pixels, "pixels") ) pixels = pixels.pixels;
+    const acc = Array(12).fill(0);
+    const max = Array(4).fill(0);
+    const min = Array(4).fill(0)
+    pixels.forEach((px, idx) => {
+      acc[idx % 4] += px;
+      acc[idx % 4 + 4] += Boolean(px);
+      acc[idx % 4 + 8] += !px;
+      max[idx % 4] = Math.max(px, max[idx % 4])
+      min[idx % 4] = Math.min(px, min[idx % 4])
+    });
+    let redBlocked = 0;
+    const terrainThreshold = 255 * 0.75;
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      redBlocked += Boolean(r) * Boolean(b || (g > terrainThreshold))
+    }
+
+    console.table([
+      { label: "sum", r: acc[0], g: acc[1], b: acc[2], a: acc[3] },
+      { label: "count", r: acc[4], g: acc[5], b: acc[6], a: acc[7] },
+      { label: "zeroes", r: acc[8], g: acc[9], b: acc[10], a: acc[11] },
+      { label: "min", r: min[0], g: min[1], b: min[2], a: min[3] },
+      { label: "max", r: max[0], g: max[1], b: max[2], a: max[3] },
+      { label: "redBlocked", r: redBlocked, g: redBlocked, b: redBlocked, a: redBlocked}
+    ])
+  }
+
+
+
+  static draw(gl, count, offset = 0) {
+    const primitiveType = gl.TRIANGLES;
+    const indexType = gl.UNSIGNED_SHORT;
+    gl.drawElements(primitiveType, count, indexType, offset);
+  }
+
+
+  static drawSet(gl, instanceSet, offsets, lengths) {
+    if ( !(instanceSet.size || instanceSet.length) ) return;
+
+    // Handle either instances all same number of vertices or different number.
+    const instanceLength = Number.isNumeric(lengths) ? lengths : 0;
+
+    // For a consecutive group, draw all at once.
+    // So if 0–5, 7–9, 12, should result in 3 draw calls.
+    applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
+      // Pull the offset and count from the offsetData.
+      const offset = offsets[firstInstance];
+      const count = (instanceLength * instanceCount)
+        || sumArray(lengths.slice(firstInstance, firstInstance + instanceCount));
+      log(`drawSet|Drawing ${count} from ${firstInstance} using offset ${offset}`);
+      this.draw(gl, count, offset);
+    });
+  }
+
+  static drawInstanced(gl, elementCount, offset = 0, instanceCount = 1) {
+    const primitiveType = gl.TRIANGLES;
+    const indexType = gl.UNSIGNED_SHORT;
+    gl.drawElementsInstanced(primitiveType, elementCount, indexType, offset, instanceCount);
+  }
+
+  /**
+   * Draw instanced for only the specified instances.
+   * Cannot simply specify the instance start in webGL2, b/c that extension is barely supported.
+   * Instead, move the pointer in the buffer accordingly.
+   * This function assumes a single (model) matrix that must be instanced.
+   * @param {WebGL2Context} gl
+   * @param {Set<number>} instanceSet     Instances to draw
+   * @param {number} elementCount         Number of vertices to draw
+   * @param {twgl.AttribInfo} instanceBufferInfo    Info for the instance buffer
+   * @param {number} positionLoc                    Position of the matrix attribute
+   */
+  static drawInstancedMatrixSet(gl, instanceSet, elementCount, instanceBufferInfo, positionLoc) {
+    const instanceSize = 16 * 4;
+    const { type, stride, normalize, buffer: mBuffer } = instanceBufferInfo;
+    applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
+      const offset = (firstInstance * instanceSize);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
+      gl.vertexAttribPointer(positionLoc, 4, type, normalize, stride, offset);
+      gl.vertexAttribPointer(positionLoc+1, 4, type, normalize, stride, offset + 4*4);
+      gl.vertexAttribPointer(positionLoc+2, 4, type, normalize, stride, offset + 4*8);
+      gl.vertexAttribPointer(positionLoc+3, 4, type, normalize, stride, offset + 4*12);
+      // log({ size, stride, offset, instanceCount });
+      this.drawInstanced(gl, elementCount, 0, instanceCount);
+    });
+  }
+}
+
+function sumArray(arr) { return arr.reduce((acc, curr) => acc + curr, 0); }
+
+
+/**
+ * Limited string replacement so the imported glsl code can be treated as a template literal
+ * (without using eval).
+ * See https://stackoverflow.com/questions/29182244/convert-a-string-to-a-template-string
+ * @param {string} str      String with ${} values to replace
+ * @param {object} params   Valid objects that can be replaced; either variables or function names
+ * @returns {string}
+ */
+function interpolate(str, params = {}) {
+  // Replace the names with the relevant values.
+  const names = Object.keys(params);
+  const vals = Object.values(params);
+  return new Function("wgsl", ...names, `return wgsl\`${str}\`;`)(wgsl, ...vals);
+}
+
+
+

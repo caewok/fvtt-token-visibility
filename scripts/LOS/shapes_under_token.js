@@ -20,8 +20,8 @@ export function squaresUnderToken(token) {
   const w = token.document.width;
   const h = token.document.height;
 
-  const r1 = canvas.grid.grid.getRect(1, 1);
-  const r = canvas.grid.grid.getRect(w, h);
+  const r = token.document.getSize();
+  const r1 = { width: canvas.grid.sizeX, height: canvas.grid.sizeY }; // Size 1, 1
 
   const wRem = r.width % r1.width;
   const hRem = r.height % r1.height;

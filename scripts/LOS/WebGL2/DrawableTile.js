@@ -1,0 +1,197 @@
+/* globals
+*/
+/* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
+"use strict";
+
+import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
+import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
+import { GeometryTile } from "../geometry/GeometryTile.js";
+import {
+  TileTracker,
+  SceneBackgroundTracker,
+} from "../placeable_tracking/TileTracker.js";
+
+import * as twgl from "./twgl.js";
+
+// Set that is used for temporary values.
+// Not guaranteed to have any specific value.
+const TMP_SET = new Set();
+
+export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
+  /** @type {class} */
+  static trackerClass = TileTracker;
+
+  /** @type {class} */
+  static geomClass = GeometryTile;
+
+  // ----- NOTE: Program ----- //
+  async _createProgram(opts = {}) {
+    opts.isTile = true;
+    return super._createProgram(opts);
+  }
+
+  // ----- NOTE: Uniforms ----- //
+
+  _initializeUniforms() {
+    super._initializeUniforms();
+    this._initializeTextures();
+  }
+
+  // ----- NOTE: Attributes ----- //
+
+  /** @type {Map<string, WebGLTexture>} */
+  textures = new Map();
+
+  _initializeGeoms(opts = {}) {
+    opts.addUVs = true;
+    super._initializeGeoms(opts);
+  }
+
+  _defineAttributeProperties() {
+    const vertexProps = super._defineAttributeProperties();
+    const debugViewNormals = this.debugViewNormals;
+
+    // coords (3), normal (3), uv (2)
+    let stride = Float32Array.BYTES_PER_ELEMENT * 5;
+    if ( debugViewNormals ) {
+      stride = Float32Array.BYTES_PER_ELEMENT * 8;
+      vertexProps.aNorm.stride = stride;
+    }
+    vertexProps.aPos.stride = stride;
+    vertexProps.aUV = {
+      numComponents: 2,
+      buffer: vertexProps.aPos.buffer,
+      stride,
+      offset: Float32Array.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
+    }
+    return vertexProps;
+  }
+
+  // ----- NOTE: Tile texture ----- //
+
+  static textureOptions(gl) {
+    return {
+      target: gl.TEXTURE_2D,
+      level: 0,
+      minMag: gl.NEAREST,
+      wrap: gl.CLAMP_TO_EDGE,
+      internalFormat: gl.RGBA,
+      format: gl.RGBA,
+      type: gl.UNSIGNED_BYTE,
+    };
+  }
+
+  static tileSource(tile) { return tile.texture.baseTexture.resource.source; }
+
+  _initializeTextures() {
+    const textureOpts = this.constructor.textureOptions(this.gl);
+    for ( const tile of this.placeableTracker.placeables ) {
+      textureOpts.src = this.constructor.tileSource(tile);
+      this.textures.set(tile.sourceId, twgl.createTexture(this.gl, textureOpts));
+    }
+  }
+
+  _rebuildModelBuffer() {
+    super._rebuildModelBuffer();
+    this._initializeTextures();
+  }
+
+  _drawFilteredInstances(instanceSet) {
+    instanceSet ??= this.instanceSet;
+    for ( const idx of instanceSet ) {
+      TMP_SET.clear();
+      TMP_SET.add(idx);
+      const id = this.placeableTracker.tracker.facetIdMap.getKeyAtIndex(idx);
+      if ( !id ) continue;
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(id));
+      // uniforms.uTileTexture = this.textures.get(idx);
+      // twgl.setUniforms(this.programInfo, uniforms);
+      super._drawFilteredInstances(TMP_SET);
+    }
+  }
+
+  _drawUnfilteredInstances() {
+    // Still need to draw each one at a time so texture uniform can be changed.
+
+    const instanceSet = Array.fromRange(this.trackers.indices.facetIdMap.maxIndex);
+    super._drawFilteredInstances(instanceSet);
+  }
+
+  /**
+   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Called after prerender, immediately prior to rendering.
+   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
+   * @param {object} [opts]                     Options from BlockingConfig (see ViewerLOS)
+   * @param {object} [opts]
+   * @param {Token} [opts.viewer]
+   * @param {Token} [opts.target]
+   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   */
+  filterObjects(frustum, { blocking = {} } = {}) {
+    const instanceSet = this.instanceSet;
+    instanceSet.clear();
+    blocking.tiles ??= true;
+    if ( !blocking.tiles ) return;
+
+    // Limit to tiles within the vision triangle
+    const tiles = ObstacleOcclusionTest.filterTilesByFrustum(frustum, { senseType: this.senseType });
+    for ( const tile of tiles ) {
+      if ( !this.placeableTracker.hasPlaceable(tile) ) continue;
+      const idx = this._indexForPlaceable(tile);
+      instanceSet.add(idx);
+    }
+  }
+}
+
+// TODO: Fix DrawableSceneBackgroundWebGL2.
+export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
+  /** @type {class} */
+  static trackerClass = SceneBackgroundTracker;
+
+  /** @type {class} */
+  static geomClass = GeometryTile;
+
+  /** @type ImageBitMap */
+  backgroundImage;
+
+  async initialize() {
+    const promises = [this._createProgram()];
+    this.placeableTracker.registerPlaceableHooks();
+    this._initializePlaceableHandler();
+
+    const sceneObj = this.placeableTracker.placeables.next().value;
+    if ( sceneObj && sceneObj.src ) {
+      this.backgroundImage = await loadImageBitmap(sceneObj.src, {
+        //imageOrientation: "flipY",
+        // premultiplyAlpha: "premultiply",
+        premultiplyAlpha: "none",
+      });
+      this.instanceSet.add(0);
+    }
+
+    this._initializeGeoms();
+    await Promise.allSettled(promises); // Prior to updating buffers, etc.
+    this._updateAllInstances();
+  }
+
+  validateInstances() { return; } // Nothing to change.
+
+  filterObjects() { return; }
+
+  _sourceForTile() { return this.backgroundImage; }
+}
+
+/**
+ * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
+ * Load an image bitmap from a url.
+ * @param {string} url
+ * @param {object} [opts]       Options passed to createImageBitmap
+ * @returns {ImageBitmap}
+ */
+async function loadImageBitmap(url, opts = {}) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await createImageBitmap(blob, opts);
+}
+
+

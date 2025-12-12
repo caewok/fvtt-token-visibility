@@ -9,20 +9,60 @@ export const EPSILON = 1e-08;
 export const DOCUMENTATION_URL = "https://github.com/caewok/fvtt-token-visibility/blob/master/README.md";
 export const ISSUE_URL = "https://github.com/caewok/fvtt-token-visibility/issues";
 
-export const MODULES_ACTIVE = {
-  LEVELS: false,
-  TOKEN_COVER: false,
-  ELEVATED_VISION: false,
-  RIDEABLE: false,
-  API: {}
+// Track certain modules that complement features of this module.
+export const OTHER_MODULES = {
+  TERRAIN_MAPPER: {
+    KEY: "terrainmapper",
+    FLAGS: {
+      REGION: {
+        WALL_RESTRICTIONS: "wallRestrictions"
+      },
+    },
+  },
+  LEVELS: {
+    KEY: "levels",
+    FLAGS: {
+      ALLOW_SIGHT: "noCollision",
+    },
+  },
+  WALL_HEIGHT: { KEY: "wall-height" },
+  ATC: { KEY: "token_cover" },
+  ATV: { KEY: "token_visibility" },
+  RIDEABLE: { KEY: "Rideable" },
 };
 
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
-  MODULES_ACTIVE.LEVELS = game.modules.get("levels")?.active;
-  MODULES_ACTIVE.TOKEN_COVER = game.modules.get("tokencover")?.active;
-  MODULES_ACTIVE.ELEVATED_VISION = game.modules.get("elevatedvision")?.active;
-  MODULES_ACTIVE.RIDEABLE = game.modules.get("Rideable")?.active;
-
-  if ( MODULES_ACTIVE.RIDEABLE ) MODULES_ACTIVE.API.RIDEABLE = game.modules.get("Rideable").api;
+  for ( const obj of Object.values(OTHER_MODULES) ) obj.ACTIVE = game.modules.get(obj.KEY)?.active;
 });
+
+// API not necessarily available until ready hook. (Likely added at init.)
+Hooks.once("ready", function() {
+  const { TERRAIN_MAPPER, RIDEABLE } = OTHER_MODULES;
+  if ( TERRAIN_MAPPER.ACTIVE ) TERRAIN_MAPPER.API = game.modules.get(TERRAIN_MAPPER.KEY).api;
+  if ( RIDEABLE.ACTIVE ) RIDEABLE.API = game.modules.get(RIDEABLE.KEY).api;
+});
+
+export const FLAGS = {
+  CUSTOM_TOKENS: {
+    FILE_LOC: "customShapeFile",
+    NAME: "customShapeName",
+    OFFSET: "customShapeOffset",
+  },
+};
+
+export const TRACKER_IDS = {
+  GEOMETRY: {
+    PLACEABLE: "geometry",
+    TOKEN: {
+      NORMAL: "geometry",
+      LIT: "litGeometry",
+      BRIGHT: "brightLitGeometry",
+      SPHERICAL: "sphericalGeometry",
+    }
+  },
+  VISIBILITY: "visibility",
+  LIGHT_METER: "lightMeter",
+};
+
+export const FALLBACK_ICON = "icons/svg/hazard.svg";

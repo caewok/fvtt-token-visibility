@@ -1,5 +1,5 @@
 /* globals
-Token
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -77,14 +77,14 @@ Intersect border | 10000 iterations | 999.2ms | 0.0999ms per | 10/50/90: 0 / 0.1
  */
 function _testPoint(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
-  if ( !(target instanceof Token) ) return wrapped(visionSource, mode, target, test);
+  if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
 
   // If within range, counts if any portion of the token is visible.
   if ( this._testRange(visionSource, mode, target, test)
-    && this._testLOS(visionSource, mode, target, test, { useLitTargetShape: false }) ) return true;
+    && this._testLOS(visionSource, mode, target, test, { testLighting: false }) ) return true;
 
   // Outside of vision range, token is visible if the lit portions are visible.
-  return this._testLOS(visionSource, mode, target, test, { useLitTargetShape: true });
+  return this._testLOS(visionSource, mode, target, test, { testLighting: true });
 }
 
 

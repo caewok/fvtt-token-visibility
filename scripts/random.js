@@ -56,7 +56,7 @@ function rand_bm() {
  */
 export function randomPoint(max_x = canvas.dimensions.width, max_y = canvas.dimensions.height) {
   return { x: Math.floor(Math.random() * max_x),
-           y: Math.floor(Math.random() * max_y) }; // eslint-disable-line indent
+           y: Math.floor(Math.random() * max_y) };
 }
 
 

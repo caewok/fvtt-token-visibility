@@ -4,10 +4,9 @@
   "version": "#{VERSION}#",
   "library": "false",
   "socket": "false",
-  "manifestPlusVersion": "1.0.0",
   "compatibility": {
-    "minimum": "12",
-    "verified": "12.327"
+    "minimum": "13",
+    "verified": "13.348"
   },
   "authors": [
     {
@@ -28,11 +27,6 @@
       }
     ]
   },
-
-  "scripts": [
-    "scripts/LOS/pixi_projection/pixi-projection.js",
-    "scripts/LOS/gl_matrix/gl-matrix.js "
-  ],
 
   "esmodules": [
     "scripts/module.js"

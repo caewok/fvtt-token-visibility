@@ -1,36 +1,29 @@
 /* globals
 canvas,
 CONFIG,
-DetectionModeBasicSight,
+foundry,
 game,
 PIXI
 */
 
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { QBenchmarkLoopFn } from "./benchmark_functions.js";
-import { Settings, SETTINGS } from "./settings.js";
-import { Point3d } from "./geometry/3d/Point3d.js";
+import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
+import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
-
-import { PointsLOS } from "./LOS/PointsLOS.js";
-import { Area2dLOS } from "./LOS/Area2dLOS.js";
-import { Area3dLOSGeometric } from "./LOS/Area3dLOSGeometric.js";
-import { Area3dLOSWebGL } from "./LOS/Area3dLOSWebGL1.js";
-import { Area3dLOSWebGL2 } from "./LOS/Area3dLOSWebGL2.js";
-import { Area3dLOSHybrid } from "./LOS/Area3dLOSHybrid.js";
-import { LOSCalculator } from "./LOSCalculator.js";
-
-import { registerArea3d } from "./patching.js";
+import { buildCustomLOSViewer, buildCustomLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
+import { MODULE_ID } from "./const.js";
+import { Point3d } from "./geometry/3d/Point3d.js";
+import { pixelsToGridUnits } from "./geometry/util.js";
 
 /* Use
 api = game.modules.get("tokenvisibility").api
 await api.bench.benchAll();
 
-await api.benchTokenRange(1000)
-await api.benchTokenLOS(100)
-await api.benchTokenVisibility(1000)
+await api.bench.benchTokenRange(1000)
+await api.bench.benchTokenLOS(100)
+await api.bench.TokenVisibility(1000)
 */
 
 /**
@@ -40,10 +33,10 @@ await api.benchTokenVisibility(1000)
  * - test visibility of all other tokens
  */
 
-export async function benchAll(n = 100) {
-  await benchTokenRange(n);
-  await benchTokenLOS(n);
-  await benchTokenVisibility(n);
+export async function benchAll(n = 100, sleep = false) {
+  await benchTokenRange(n, sleep);
+  await benchTokenLOS(n, { sleep });
+  await benchTokenVisibility(n, sleep);
 }
 
 // ----- NOTE: Setup and summaries ----- //
@@ -63,39 +56,30 @@ function getTokens() {
 /**
  * Construct a table of token percent visibility using the various methods.
  */
-function summarizeTokenVisibility(viewers, targets) {
-  const calcs = {
-    calcPoints: new PointsLOS(),
-    calcArea2d: new Area2dLOS(),
-    calcArea3dGeometric: new Area3dLOSGeometric(),
-    calcArea3dWebGL1: new Area3dLOSWebGL(),
-    calcArea3dWebGL2: new Area3dLOSWebGL2(),
-    calcArea3dLOSHybrid: new Area3dLOSHybrid()
-  };
-
-  const summary = {};
-  for ( const viewer of viewers ) {
-    Object.values(calcs).forEach(calc => calc.viewer = viewer);
-    for ( const target of targets ) {
-      if ( viewer === target ) continue;
-      const label = `${viewer.name} --> ${target.name}`;
-      summary[label] = {};
-      Object.entries(calcs).forEach(([name, calc]) => {
-        calc.target = target;
-        summary[label][name] = Math.round(calc.percentVisible() * 100 * 10) / 10;
-      });
-    }
-  }
-
-  console.table(summary);
-  Object.values(calcs).forEach(calc => calc.destroy());
-}
+// export function summarizeTokenVisibility(viewers, targets) {
+//   const calcs = Object.values(Settings.KEYS.LOS.TARGET.TYPES);
+//   const summary = {};
+//   const opts = { calcName: null };
+//   for ( const calcType of calcs ) {
+//     for ( const viewer of viewers ) {
+//       opts.calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[calc];
+//       const losCalc = buildCustomLOSViewer(viewer, opts);
+//       for ( const target of targets ) {
+//         if ( viewer === target ) continue;
+//         const label = `${viewer.name} --> ${target.name}`;
+//         summary[label] = {};
+//         summary[label][calcType] = Math.round(losCalc.percentVisible(target) * 100 * 10) / 10;
+//       }
+//       losCalc.destroy();
+//     }
+//   }
+//   console.table(summary);
+// }
 
 /**
  * Construct a table of token elevations and distances
  */
 function summarizeTokenRange(viewers, targets) {
-  const gridFn = CONFIG.GeometryLib.utils.pixelsToGridUnits;
   const summary = {};
   for ( const viewer of viewers ) {
     for ( const target of targets ) {
@@ -107,8 +91,8 @@ function summarizeTokenRange(viewers, targets) {
       summary[`${viewer.name} --> ${target.name}`] = {
         viewerElevation: viewer.elevationE,
         targetElevation: target.elevationE,
-        distance2d: Math.round(gridFn(distance2d) * 10) / 10,
-        distance3d: Math.round(gridFn(distance3d) * 10) / 10
+        distance2d: Math.round(pixelsToGridUnits(distance2d) * 10) / 10,
+        distance3d: Math.round(pixelsToGridUnits(distance3d) * 10) / 10
       };
     }
   }
@@ -117,12 +101,18 @@ function summarizeTokenRange(viewers, targets) {
 
 // ----- NOTE: Visibility testing -----
 
-export async function benchTokenVisibility(n = 100) {
+export async function benchTokenVisibility(n = 100, sleep = false) {
   const { targets } = getTokens();
   console.log(`\nBenchmarking visibility of ${targets.length} targets from user's current perspective and settings.`);
+  console.log("\nBenchmarking token los");
+  console.log("Calculator Config");
+  console.table(foundry.utils.flattenObject(CalculatorConfig()));
+  console.log(`\nViewer Config for algorithm ${Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)}`);
+  console.table(LOSViewerConfig());
 
   await storeDebugStatus();
-  await QBenchmarkLoopFn(n, benchVisibility, "Visibility", targets);
+  const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
+  await fn(n, benchVisibility, "Visibility", targets);
   await revertDebugStatus();
 }
 
@@ -143,73 +133,85 @@ function testVisibility(target) {
     y: target.center.y + Math.round(randomUniform(-10, 10))
   };
 
-  return canvas.effects.visibility.testVisibility(center, { tolerance, object: target });
+  return canvas.visibility.testVisibility(center, { tolerance, object: target });
 }
 
 // ----- NOTE: Range testing -----
 
-export async function benchTokenRange(n = 100) {
+export async function benchTokenRange(n = 100, sleep = false) {
   console.log("\n");
   const { viewers, targets } = getTokens();
+
   console.log("Elevation and distance summary.");
   summarizeTokenRange(viewers, targets);
 
   console.log("\nBenchmarking token range");
   await storeDebugStatus();
   storeRangeSettings();
-
+  const opts = { sleep };
   console.log("\n");
-  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.CENTER, false);
-  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.NINE, false);
-
-  console.log("\n");
-  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.CENTER, true);
-  await runRangeTest(n, viewers, targets, SETTINGS.POINT_TYPES.NINE, true);
-
+  for ( const d3 of [false, true] ) {
+    opts.d3 = d3;
+    for ( const algorithm of Object.values(Settings.KEYS.POINT_TYPES) ) {
+      opts.algorithm = algorithm;
+      await runRangeTest(n, viewers, targets, opts);
+    }
+    console.log("\n");
+  }
   await revertDebugStatus();
   await revertRangeSettings();
 }
 
-async function runRangeTest(n, viewers, targets, algorithm, d3 = false) {
+async function runRangeTest(n, viewers, targets, { algorithm, d3 = false, sleep = false } = {}) {
+  algorithm ??= Settings.KEYS.POINT_TYPES.CENTER;
+
   const label = (`Range: ${algorithm}, 3d: ${d3}`);
-  await Settings.set(SETTINGS.RANGE.ALGORITHM, algorithm);
-  await Settings.set(SETTINGS.RANGE.POINTS3D, d3);
-  await Settings.set(SETTINGS.RANGE.DISTANCE3D, d3);
-  await QBenchmarkLoopFn(n, benchRange, label, viewers, targets);
+  const { ALGORITHM, POINTS3D, DISTANCE3D } = Settings.KEYS.RANGE;
+  await Settings.set(ALGORITHM, algorithm);
+  await Settings.set(POINTS3D, d3);
+  await Settings.set(DISTANCE3D, d3);
+
+  const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
+  await fn(n, benchRange, label, viewers, targets);
 }
 
 const userSettings = { debug: {}, range: {}, los: {}};
 async function storeDebugStatus() {
-  userSettings.debug.range = Settings.get(SETTINGS.DEBUG.RANGE);
-  userSettings.debug.los = Settings.get(SETTINGS.DEBUG.LOS);
-  await Settings.set(SETTINGS.DEBUG.RANGE, false);
-  await Settings.set(SETTINGS.DEBUG.LOS, false);
+  const { RANGE, LOS } = Settings.KEYS.DEBUG;
+  userSettings.debug.range = Settings.get(RANGE);
+  userSettings.debug.los = Settings.get(LOS);
+  await Settings.set(RANGE, false);
+  await Settings.set(LOS, false);
 }
 
 async function revertDebugStatus() {
-  await Settings.set(SETTINGS.DEBUG.RANGE, userSettings.debug.range);
-  await Settings.set(SETTINGS.DEBUG.LOS, userSettings.debug.los);
+  const { RANGE, LOS } = Settings.KEYS.DEBUG;
+  await Settings.set(RANGE, userSettings.debug.range);
+  await Settings.set(LOS, userSettings.debug.los);
 }
 
 function storeRangeSettings() {
-  userSettings.range.algorithm = Settings.get(SETTINGS.RANGE.ALGORITHM);
-  userSettings.range.points3d = Settings.get(SETTINGS.RANGE.POINTS3D);
-  userSettings.range.distance3d = Settings.get(SETTINGS.RANGE.DISTANCE3D);
+  const { ALGORITHM, POINTS3D, DISTANCE3D } = Settings.KEYS.RANGE;
+  userSettings.range.algorithm = Settings.get(ALGORITHM);
+  userSettings.range.points3d = Settings.get(POINTS3D);
+  userSettings.range.distance3d = Settings.get(DISTANCE3D);
 }
 
 async function revertRangeSettings() {
+  const { ALGORITHM, POINTS3D, DISTANCE3D } = Settings.KEYS.RANGE;
   const { algorithm, points3d, distance3d } = userSettings.range;
-  await Settings.set(SETTINGS.RANGE.ALGORITHM, algorithm);
-  await Settings.set(SETTINGS.RANGE.POINTS3D, points3d);
-  await Settings.set(SETTINGS.RANGE.DISTANCE3D, distance3d);
+  await Settings.set(ALGORITHM, algorithm);
+  await Settings.set(POINTS3D, points3d);
+  await Settings.set(DISTANCE3D, distance3d);
 }
 
 function benchRange(viewers, targets) {
   const out = [];
-  const testFn = DetectionModeBasicSight.prototype._testRange;
+  const testFn = foundry.canvas.perception.DetectionModeDarkvision.prototype._testRange;
   for ( const viewer of viewers ) {
     for ( const target of targets ) {
       if ( viewer === target ) continue;
+      if ( !viewer.vision ) continue;
       out.push(testFn(viewer.vision, "sight", target));
     }
   }
@@ -218,77 +220,139 @@ function benchRange(viewers, targets) {
 
 // ----- NOTE: LOS testing -----
 
-export async function benchTokenLOS(n = 100) {
+export async function benchTokenLOS(n = 100, opts = {}) {
   console.log("\n");
   const { viewers, targets } = getTokens();
-  registerArea3d(); // Required for Area3d algorithms to work.
   console.log("Percent visible using different LOS algorithms.");
-  summarizeTokenVisibility(viewers, targets);
+
+  // summarizeTokenVisibility(viewers, targets);
 
   console.log("\nBenchmarking token los");
+  console.log("Calculator Config");
+  console.table(foundry.utils.flattenObject(CalculatorConfig()));
+  console.log("\nViewer Config")
+  console.table(LOSViewerConfig());
+
+
   await storeDebugStatus();
-  storeLOSSettings();
-
-  const algs = SETTINGS.LOS.TARGET.TYPES;
-  const nPts = SETTINGS.POINT_TYPES;
-  const nSmall = Math.round(n * 0.1); // For the very slow webGL1.
-
-  await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.CENTER);
-  await runLOSTest(n, viewers, targets, algs.POINTS, false, nPts.NINE);
-  await runLOSTest(n, viewers, targets, algs.AREA2D, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, false);
-  await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, false);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, false);
-
-  console.log("\n");
-  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.CENTER);
-  await runLOSTest(n, viewers, targets, algs.POINTS, true, nPts.NINE);
-  await runLOSTest(n, viewers, targets, algs.AREA2D, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_GEOMETRIC, true);
-  await runLOSTest(nSmall, viewers, targets, algs.AREA3D_WEBGL1, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_WEBGL2, true);
-  await runLOSTest(n, viewers, targets, algs.AREA3D_HYBRID, true);
+  opts.movement ??= false
+  console.log(`${viewers.length} viewers, ${targets.length} targets`)
+  console.log("\n")
+  const fn = opts.movement ? runLOSTestWithMovement : runLOSTest;
+  for ( const algorithm of Object.values(Settings.KEYS.LOS.TARGET.TYPES) ) {
+    opts.algorithm = algorithm;
+    await fn(n, viewers, targets, opts);
+  }
+  console.log("\n")
 
   await revertDebugStatus();
-  await revertLOSSettings();
 }
 
-function storeLOSSettings() {
-  userSettings.los.algorithm = Settings.get(SETTINGS.LOS.TARGET.ALGORITHM);
-  userSettings.los.points = Settings.get(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS);
-  userSettings.los.large = Settings.get(SETTINGS.LOS.TARGET.LARGE);
+export async function benchTokenLOSAlgorithm(n = 100, { movement = false, ...opts }= {}) {
+  const { viewers, targets } = getTokens();
+
+  await storeDebugStatus();
+  const fn = movement ? runLOSTestWithMovement : runLOSTest;
+  await fn(n, viewers, targets, opts);
+  await revertDebugStatus();
 }
 
-async function revertLOSSettings() {
-  const { algorithm, points, large } = userSettings.los;
-  await Settings.set(SETTINGS.LOS.TARGET.ALGORITHM, algorithm);
-  await Settings.set(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS, points);
-  await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
+async function runLOSTest(n, viewers, targets, { algorithm, sleep = false, useAsync = false } = {}) {
+  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
+  const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
+  const calc = buildCustomLOSCalculator(calcClass);
+  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
+
+  let label = (`LOS: ${algorithm}`);
+  const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
+  const benchFn = useAsync ? benchLOSAsync : benchLOS;
+  await fn(n, benchFn, label, losViewers, targets);
 }
 
-async function runLOSTest(n, viewers, targets, algorithm, large, nPoints) {
-  let label = (`LOS: ${algorithm}, largeToken: ${large}`);
-  if ( algorithm === SETTINGS.LOS.TARGET.TYPES.POINTS ) {
-    await Settings.set(SETTINGS.LOS.TARGET.POINT_OPTIONS.NUM_POINTS, nPoints);
-    label += `, ${nPoints}`;
-  }
-  await Settings.set(SETTINGS.LOS.TARGET.ALGORITHM, algorithm);
-  await Settings.set(SETTINGS.LOS.TARGET.LARGE, large);
-  await QBenchmarkLoopFn(n, benchLOS, label, viewers, targets);
-}
-
-function benchLOS(viewers, targets) {
+function benchLOS(calcs, targets) {
   const out = [];
-  for ( const viewer of viewers ) {
-    const losCalc = viewer.vision?.[MODULE_ID]?.losCalc ?? new LOSCalculator(viewer, undefined);
+  for ( const calc of calcs ) {
     for ( const target of targets ) {
-      if ( viewer === target ) continue;
-      out.push(losCalc.hasLOSTo(target));
+      if ( calc.viewer === target ) continue;
+      calc.target = target;
+      calc.calculate();
+      out.push(calc.hasLOS);
     }
   }
   return out;
 }
+
+async function benchLOSAsync(calcs, targets) {
+  const out = [];
+  for ( const calc of calcs ) {
+    for ( const target of targets ) {
+      if ( calc.viewer === target ) continue;
+      calc.target = target;
+      out.push(await calc.hasLOSAsync());
+    }
+  }
+  return out;
+}
+
+
+async function runLOSTestWithMovement(n, viewers, targets, { algorithm, sleep = false, useAsync = false } = {}) {
+  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
+  const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
+  const calc = buildCustomLOSCalculator(calcClass);
+  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
+
+  let label = (`LOS: ${algorithm}`);
+  const tokens = new Set([...viewers, ...targets]);
+  const locMap = new Map();
+  for ( const token of tokens ) locMap.set(token, { x: token.document.x, y: token.document.y });
+
+  const benchFn = useAsync ? benchLOSAsync : benchLOS;
+  const timings = [];
+  for ( let i = 0; i < n; i += 1 ) {
+    const promises = [];
+    for ( const token of tokens ) {
+      const xDiff = Math.round((Math.random() - 0.5) * 100); // Move up to 50.
+      const yDiff = Math.round((Math.random() - 0.5) * 100);
+
+      // Keep within scene bounds to avoid polygon errors.
+      const x = token.document.x + xDiff;
+      const y = token.document.y + yDiff;
+      if ( !canvas.dimensions.sceneRect.contains(x, y) ) continue;
+      promises.push(token.document.update({ x, y }));
+    }
+    await Promise.allSettled(promises);
+    const t0 = performance.now();
+    await benchFn(losViewers, targets);
+    const t1 = performance.now();
+    timings.push(t1 - t0);
+    if ( sleep ) await sleepFn(0);
+  }
+  const sum = timings.reduce((prev, curr) => prev + curr);
+  const q = quantile(timings, [.1, .5, .9]);
+
+  const promises2 = [];
+  for ( const token of tokens ) {
+    const loc = locMap.get(token);
+    promises2.push(token.document.update({ x: loc.x, y: loc.y }));
+  }
+
+  console.log(`${label} | ${n} iterations | ${precision(sum, 4)}ms | ${precision(sum / n, 4)}ms per | 10/50/90: ${precision(q[.1], 6)} / ${precision(q[.5], 6)} / ${precision(q[.9], 6)}`);
+  await Promise.allSettled(promises2);
+}
+
+/**
+ * Round a decimal number to a specified number of digits.
+ * @param {Number}  n       Number to round.
+ * @param {Number}  digits  Digits to round to.
+ */
+function precision(n, digits = 2) {
+  return Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits);
+}
+
+export async function sleepFn(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 
