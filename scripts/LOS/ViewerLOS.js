@@ -244,9 +244,9 @@ export class ViewerLOS {
 
 
   calculate() {
-    if ( this.dirty ) this._clean();
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
     this.calculator.initializeView(this);
+    if ( this.dirty ) this._clean();
 
     this._percentVisible = 0;
     const simpleTest = this.simpleVisibilityTest();

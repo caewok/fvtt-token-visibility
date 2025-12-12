@@ -186,6 +186,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   };
 
   _calculate() {
+    // console.debug("PointsCalculator|_calculate");
     return this._testAllSurfaces(this.targetPoints, this.targetSurfaces);
   }
 
@@ -194,6 +195,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    * @param {(Polygon3d|Sphere)[]} surfaces
    */
   _testAllSurfaces(points, surfaces) {
+    // console.debug("PointsCalculator|_testAllSurfaces");
     surfaces ??= Array(points.length);
     const testSurfaceVisibility = this._config.testSurfaceVisibility;
     const result = this._createResult();
@@ -201,7 +203,6 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     result.data.numPoints = points.map(pts => pts.length);
     result.data.unobscured.length = n;
     result.data.visible.length = n;
-    this.occlusionTester._initialize({ rayOrigin: this.viewpoint, viewer: this.viewer, target: this.target });
     for ( let i = 0; i < n; i += 1 ) {
       const surface = surfaces[i];
       if ( testSurfaceVisibility && !this.surfaceIsVisible(surface) ) continue;
@@ -229,13 +230,17 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   }
 
   _testPointsForSurface(targetSurface, targetPoints) {
+    // console.debug("PointsCalculator|_testPointsForSurface");
     const unobscured = new this.constructor.BitSetClass();
     const visible = new this.constructor.BitSetClass();
     const radius2 = this.radius ** 2;
+    //this.occlusionTester._initialize(this);
     for ( let i = 0, n = targetPoints.length; i < n; i += 1 ) {
+      // console.debug(`${this.target.name}: ${this.target.x}, ${this.target.y}`);
       const pt = targetPoints[i];
       if ( !this.pointIsVisible(pt, radius2) ) continue;
       visible.add(i);
+
       if ( this.pointIsOccluded(pt) ) continue;
       unobscured.add(i);
     }
@@ -257,6 +262,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   pointIsOccluded(pt) {
     // Is it occluded from the camera/viewer?
     pt.subtract(this.viewpoint, this.#rayDirection);
+    // this.#rayDirection = pt.subtract(this.viewpoint);
     return this.occlusionTester._rayIsOccluded(this.#rayDirection);
   }
 

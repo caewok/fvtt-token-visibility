@@ -64,8 +64,8 @@ export const SETTINGS = {
       LARGE: "los-large-target",
       TYPES: {
         POINTS: "los-algorithm-points",
-        GEOMETRIC: "los-algorithm-geometric",
         PER_PIXEL: "los-algorithm-per-pixel",
+        GEOMETRIC: "los-algorithm-geometric",
 //         HYBRID: "los-algorithm-hybrid",
         WEBGL2: "los-algorithm-webgl2",
 //         WEBGPU: "los-algorithm-webgpu",
@@ -175,7 +175,7 @@ export class Settings extends ModuleSettingsAbstract {
     const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
     const PT_OPTS = KEYS.LOS.TARGET.POINT_OPTIONS;
     const LTYPES = foundry.utils.filterObject(KEYS.LOS.TARGET.TYPES,
-      { POINTS: 0, GEOMETRIC: 0, WEBGL2: 0, PER_PIXEL: 0 });
+      { POINTS: 0, PER_PIXEL: 0, GEOMETRIC: 0, WEBGL2: 0 });
     const losChoices = {};
     const ptChoices = {};
     const rangeChoices = {};

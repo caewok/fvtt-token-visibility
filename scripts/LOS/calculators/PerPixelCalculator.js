@@ -40,6 +40,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
   _calculate() {
+    // console.debug("PerPixelCalculator|_calculate");
     this._initializeCamera();
     return super._calculate();
   }
