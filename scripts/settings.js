@@ -310,16 +310,6 @@ export class Settings extends ModuleSettingsAbstract {
 
     // ----- NOTE: Line-of-sight target tab ----- //
     const TARGET = KEYS.LOS.TARGET;
-    register(TARGET.LARGE, {
-      name: localize(`${TARGET.LARGE}.Name`),
-      hint: localize(`${TARGET.LARGE}.Hint`),
-      scope: "world",
-      config: false,
-      type: Boolean,
-      default: false,
-      tab: "losTarget",
-      onChange: value => this.losSettingChange(TARGET.LARGE, value)
-    });
 
     register(TARGET.ALGORITHM, {
       name: localize(`${TARGET.ALGORITHM}.Name`),
@@ -347,6 +337,17 @@ export class Settings extends ModuleSettingsAbstract {
       type: Number,
       tab: "losTarget",
       onChange: value => this.losSettingChange(TARGET.PERCENT, value)
+    });
+
+    register(TARGET.LARGE, {
+      name: localize(`${TARGET.LARGE}.Name`),
+      hint: localize(`${TARGET.LARGE}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      tab: "losTarget",
+      onChange: value => this.losSettingChange(TARGET.LARGE, value)
     });
 
     register(TARGET.POINT_OPTIONS.POINTS, {
