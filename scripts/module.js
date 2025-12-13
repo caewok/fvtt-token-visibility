@@ -63,9 +63,6 @@ import { Clipper2Paths } from "./geometry/Clipper2Paths.js";
 import "./changelog.js";
 import "./geometry/tests/AABB.test.js";
 
-// import "./LOS/WebGPU/webgpu-map-sync.js";
-
-
 
 Hooks.once("init", function() {
   // Load bitmap font
