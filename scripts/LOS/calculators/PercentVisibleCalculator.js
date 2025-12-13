@@ -323,9 +323,21 @@ export class PercentVisibleCalculatorAbstract {
    */
   calculate() {
     // console.debug("PercentVisibleCalculator|calculate");
-    this.occlusionTester._initialize(this);
+    this._initializeCalculation();
     return this._calculate();
   }
+
+  /**
+   * Prepare portions of the calculation that require the current position of the viewer and target.
+   * But not necessarily the precise target point, where applicable.
+   * This method for the abstract class initializes the occlusion tester.
+   * It is assumed that a user could call _initializeCalculation and then _calculate (possibly repeatedly)
+   * instead of calculate.
+   */
+  _initializeCalculation() {
+    this.occlusionTester._initialize(this);
+  }
+
 
   _calculate() {
     // console.debug("PercentVisibleCalculator|_calculate");

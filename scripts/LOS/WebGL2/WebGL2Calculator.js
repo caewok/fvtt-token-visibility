@@ -197,14 +197,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
-
   static nonRTCountTypes = new Set([])
-
-
-  initializeCalculations() {
-    // Don't use light testing or occlusion testers, so can skip the parent initializeCalculations.
-    this.renderObstacles.prerender();
-  }
 
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
@@ -212,7 +205,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( !this.#initialized ) return result.makeFullyNotVisible();
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
-    this.initializeCalculations();
+    this.renderObstacles.prerender();
     const { viewer, viewpoint, target, targetLocation } = this;
     const { useStencil, useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     const gl = this.gl;
@@ -232,7 +225,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
       res = this.redPixelCounter[type]();
     }
 
-
     const lastResult = this._createResult();
     if ( pixelCounterType.startsWith("map") ) {
       lastResult.data.blocked = res.redBlocked;
@@ -243,33 +235,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     }
     return lastResult;
   }
-
-//   async _calculate() {
-//     const { useStencil, useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
-//     const gl = this.gl;
-//     let res;
-//     if ( useRenderTexture ) {
-//       const { fbInfo, frame } = this;
-//       twgl.bindFramebufferInfo(gl, fbInfo);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, useStencil, clear: true, frame});
-//       this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false, frame });
-//       res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture);
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     } else {
-//       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, useStencil, clear: true });
-//       this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false });
-//       res = await this.redPixelCounter[`${type}Async`]();
-//     }
-//     this.counts[TOTAL] = res.red;
-//     this.counts[OBSCURED] = res.redBlocked;
-//   }
-
-
-
-
-
 
   /**
    * Constrained target area, counting both lit and unlit portions of the target.

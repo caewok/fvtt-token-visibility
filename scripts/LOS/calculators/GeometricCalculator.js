@@ -93,11 +93,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    */
   static SCALING_FACTOR = 100;
 
-  initializeCalculations() {
+  _initializeCalculation() {
+    super._initializeCalculation();
     this._initializeCamera();
-    this.occlusionTester._initialize(this);
-    this._constructPerspectiveObstaclePolygons();
-    this._constructObstaclePaths();
   }
 
   _calculate() {
@@ -105,8 +103,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
-    this.initializeCalculations();
     this._constructPerspectiveTargetPolygons();
+    this._constructPerspectiveObstaclePolygons();
+    this._constructObstaclePaths();
     result.data.targetPaths = this._constructTargetPath();
     result.data.blockingPaths = this._constructObstaclePaths();
     return result;
@@ -116,12 +115,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.camera.cameraPosition = this.viewpoint;
     this.camera.targetPosition = this.targetLocation;
     this.camera.setTargetTokenFrustum(this.target);
-  }
-
-  _initializeObstacles() {
-    // Obstacles will not change even if target shape does.
-    this._constructPerspectiveObstaclePolygons();
-    this._constructObstaclePaths();
   }
 
   blockingTerrainPaths;
