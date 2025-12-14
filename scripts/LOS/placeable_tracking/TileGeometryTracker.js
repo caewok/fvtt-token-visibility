@@ -118,7 +118,7 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
 
   _updateFaces() {
     const tile = this.placeable;
-    const alphaShape = tile.evPixelCache.getThresholdCanvasBoundingBox(this.alphaThreshold);
+    const alphaShape = tile.evPixelCache?.getThresholdCanvasBoundingBox(this.alphaThreshold) || tile.bounds;
     const elevZ = tile.elevationZ;
 
     if ( alphaShape instanceof PIXI.Polygon ) {
@@ -206,7 +206,7 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
   convertTileToIsoBands() {
     const { tile, alphaThreshold } = this;
 
-    if ( !alphaThreshold || !tile.evPixelCache ) return null;
+    if ( !(alphaThreshold && tile.evPixelCache) ) return null;
     const threshold = 255 * alphaThreshold;
     const pixels = tile.evPixelCache.pixels;
     const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
@@ -268,7 +268,7 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
     if ( t === null || !almostBetween(t, minT, maxT) ) return null;
-    if ( !this.alphaThreshold ) return t;
+    if ( !(this.alphaThreshold && this.tile.evPixelCache)  ) return t;
 
     // Threshold test at the intersection point.
     const pxThreshold = 255 * this.alphaThreshold;
