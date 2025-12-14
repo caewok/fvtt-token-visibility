@@ -11,19 +11,25 @@ import {
   GeometryCircleRegionShape,
   GeometryEllipseRegionShape,
   GeometryRectangleRegionShape } from "../geometry/GeometryRegion.js";
-import { RegionTracker } from "../placeable_tracking/RegionTracker.js";
+import {
+  RegionGeometryTracker,
+  CircleRegionShapeGeometryTracker,
+  EllipseRegionShapeGeometryTracker,
+  RectangleRegionShapeGeometryTracker,
+  PolygonRegionShapeGeometryTracker,
+} from "../placeable_tracking/RegionGeometryTracker.js";
 import { log, isString } from "../util.js";
 const TERRAIN_MAPPER = "terrainmapper";
 
 const RegionShapeMixin = function(Base) {
   class DrawableRegionShape extends Base {
-    static trackerClass = RegionTracker;
-
     constructor(renderer, regionDrawableObject) {
       super(renderer);
       this.regionDrawableObject = regionDrawableObject;
       delete this.placeableTracker; // So the getter works. See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa/77093264.
     }
+
+    get placeables() { return canvas.regions.placeables;}
 
     get placeableTracker() { return this.regionDrawableObject.placeableTracker; }
 
@@ -37,11 +43,21 @@ const RegionShapeMixin = function(Base) {
   return DrawableRegionShape;
 }
 
+const TRACKER_TYPES = {
+  ellipse: EllipseRegionShapeGeometryTracker,
+  circle: CircleRegionShapeGeometryTracker,
+  rectangle: RectangleRegionShapeGeometryTracker,
+  polygon: PolygonRegionShapeGeometryTracker,
+};
+
 export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
+  /** @type {class} */
+  static trackerClass = RegionGeometryTracker;
+
   _initializeOffsetTrackers() {
     // Don't need indices or vertices trackers.
     // Model matrices stored in placeableTracker.
-    this.trackers.model = this.placeableTracker.trackers[this.constructor.TYPE];
+    this.trackers.model = TRACKER_TYPES[this.constructor.TYPE].modelMatrixTracker;
   }
 
   _updateModelBufferForInstance(region) {
@@ -72,7 +88,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     if ( region[TERRAIN_MAPPER].isRamp ) return; // Handled by polygons.
 
     // Assume the region has already been filtered by Viewpoint.filterRegionsByFrustum.
-    // And this.placeableTracker.placeables has the region.
+    // And this.placeables has the region.
     const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
     const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
     for ( const shapeGroup of shapeGroupArr ) {
@@ -131,7 +147,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
     delete this.geoms; // So the getter works. See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa/77093264.
   }
 
-  get geoms() { return this.placeableTracker.polygons; }
+  get geoms() { return []; } // return this.placeableTracker.polygons; }
 
   _initializeGeoms(_opts) { return; }
 
@@ -198,9 +214,9 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
  */
 export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static trackerClass = RegionTracker;
-
   static geomClass = GeometryRegion;
+
+  get placeables() { return canvas.regions.placeables; }
 
   get numPolygons() { return this.placeableTracker.trackers.polygon.numFacets; }
 
@@ -244,14 +260,12 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   _initializeUniforms() { return; }
 
-  hasPlaceable(placeableOrId) {
-    // Check if this is a shape id, which is likely. If so, extract the region id.
-    if ( isString(placeableOrId) ) {
-      const regex = /^.*?(?=_)/; // Capture everything before the first underscore ("_").
-      const res = placeableOrId.match(regex);
-      if ( res ) placeableOrId = res[0];
-    }
-    return super.hasPlaceable(placeableOrId);
+
+  getPlaceableFromId(id) {
+    const regex = /^.*?(?=_)/; // Capture everything before the first underscore ("_").
+    const res = id.match(regex);
+    if ( res ) id = res[0];
+    return super.getPlaceableFromId(id);
   }
 
   validateInstances() {
@@ -277,7 +291,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
     // For each region, determine which shapes are within the vision triangle.
     // Add the id of each shape group to its respective drawable.
     for ( const region of regions ) {
-      if ( !this.placeableTracker.hasPlaceable(region) ) continue;
+      if ( !this.hasPlaceable(region) ) continue;
       for ( const drawable of Object.values(this.drawables) ) drawable._filterShapesForRegion(frustum, region, opts);
     }
   }

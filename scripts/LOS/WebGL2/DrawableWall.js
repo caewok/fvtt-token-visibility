@@ -1,5 +1,5 @@
 /* globals
-
+canvas,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -7,15 +7,17 @@
 import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { GeometryWall } from "../geometry/GeometryWall.js";
-import { WallTracker } from "../placeable_tracking/WallTracker.js";
+import { WallGeometryTracker } from "../placeable_tracking/WallGeometryTracker.js";
 
 
 export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static trackerClass = WallTracker;
+  static trackerClass = WallGeometryTracker;
 
   /** @type {class} */
   static geomClass = GeometryWall;
+
+  get placeables() { return canvas.walls.placeables; }
 
   /** @type {boolean} */
   #directional = false;
@@ -33,6 +35,22 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   get senseType() { return this.renderer.senseType; }
+
+  /**
+   * Is this a terrain (limited) edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  static isTerrain(edge, { senseType = "sight" } = {}) {
+    return edge[senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
+  }
+
+  /**
+   * Is this a directional edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  static isDirectional(edge) { return Boolean(edge.direction); }
 
   _initializeGeoms() {
     const type = this.directional ? "directional" : "double";
@@ -56,9 +74,9 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     const opts = { senseType: this.senseType };
     const walls = ObstacleOcclusionTest.filterWallsByFrustum(frustum, opts);
     for ( const wall of walls ) {
-      if ( !this.placeableTracker.hasPlaceable(wall) ) continue;
-      if ( WallTracker.isTerrain(wall, opts) ^ this.limitedWall ) continue;
-      if ( WallTracker.isDirectional(wall) ^ this.directional ) continue;
+      if ( !this.hasPlaceable(wall) ) continue;
+      if ( this.constructor.isTerrain(wall, opts) ^ this.limitedWall ) continue;
+      if ( this.constructor.isDirectional(wall) ^ this.directional ) continue;
       const idx = this._indexForPlaceable(wall);
       this.instanceSet.add(idx);
     }

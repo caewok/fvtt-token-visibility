@@ -22,8 +22,6 @@ import { SmallBitSet } from "./SmallBitSet.js";
 // Viewpoint algorithms.
 import { Viewpoint } from "./Viewpoint.js";
 
-// import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
-
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
   [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT]: "sight",

@@ -382,7 +382,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
   }
 }
 
-class CircleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class CircleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryCircleRegionShape;
 
   static polygonClass = Circle3d;
@@ -399,7 +399,7 @@ class CircleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracke
   }
 }
 
-class EllipseRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class EllipseRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryEllipseRegionShape;
 
   static polygonClass = Ellipse3d;
@@ -416,7 +416,7 @@ class EllipseRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTrack
   }
 }
 
-class RectangleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class RectangleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryRectangleRegionShape;
 
   static polygonClass = Quad3d;
@@ -434,7 +434,7 @@ class RectangleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTra
 
 }
 
-class PolygonRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class PolygonRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryPolygonRegionShape;
 
   static polygonClass = Polygon3d;

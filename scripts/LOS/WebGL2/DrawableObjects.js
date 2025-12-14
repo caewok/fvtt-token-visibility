@@ -1,13 +1,14 @@
 /* globals
+canvas,
 CONFIG,
+foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
+import { MODULE_ID, TRACKER_IDS } from "../../const.js";
 import { WebGL2 } from "./WebGL2.js";
 import { GeometryInstanced } from "../geometry/GeometryDesc.js";
-import { PlaceableTracker } from "../placeable_tracking/PlaceableTracker.js";
 import { VerticesIndicesTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
@@ -17,9 +18,6 @@ import { log } from "../util.js";
  * Drawing of a placeable object without instancing.
  */
 export class DrawableObjectsWebGL2Abstract {
-  /** @type {class} */
-  static trackerClass = PlaceableTracker;
-
   /** @type {class} */
   static geomClass;
 
@@ -68,9 +66,6 @@ export class DrawableObjectsWebGL2Abstract {
     this._initializeAttributes();
     this._initializeUniforms();
     // this._updateAllVertices();
-
-    // Register that we are synced with the current placeable data.
-    this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
 
     this.#initialized = true;
   }
@@ -215,7 +210,6 @@ export class DrawableObjectsWebGL2Abstract {
    */
   _initializeVertices() {
     const vi = this.trackers.vi;
-    // const pt = this.placeableTracker;
     this._updateAllVertices();
 
     // Create distinct views into the vertices and indices buffers
@@ -229,11 +223,7 @@ export class DrawableObjectsWebGL2Abstract {
     }
   }
 
-  hasPlaceable(placeableOrId) {
-    const pt = this.placeableTracker;
-    const { placeable } = pt._placeableOrId(placeableOrId);
-    return pt.hasPlaceable(placeable);
-  }
+
 
   _updateAllVertices() {
     const vi = this.trackers.vi;
@@ -241,7 +231,8 @@ export class DrawableObjectsWebGL2Abstract {
     // Remove missing/deleted ids from the trackers.
     // Assume id is same in indices and vertices.
     for ( const id of vi.indices.facetIdMap.keys() ) {
-      if ( this.hasPlaceable(id) ) continue;
+      const placeable = this.getPlaceableFromId(id);
+      if ( this.hasPlaceable(placeable) ) continue;
       vi.deleteFacet(id);
     }
 
@@ -428,22 +419,38 @@ export class DrawableObjectsWebGL2Abstract {
 
   // ----- NOTE: Placeable handler ----- //
 
-  /** @type {PlaceableInstanceHandler} */
-  placeableTracker;
+  get placeables() { return console.error("DrawableObjectsWebGL2Abstract|getPlaceables must be defined by child class."); }
 
-  /** @type {number} */
-  #placeableTrackerUpdateId = 0;
+  /**
+   * Track when each placeable was last updated.
+   * @type {Map<PlaceableObject, number>}
+   */
+  placeableLastUpdated = new foundry.utils.IterableWeakMap();
 
-  /** @type {number} */
-  get placeableTrackerUpdateId() { return this.#placeableTrackerUpdateId; }
+  getPlaceableFromId(id) {
+    // const suffix = ".preview$";
+    // const escapedSuffix = suffix.replace(/\./g, "\\.");
+    // const regex = new RegExp(escapedSuffix);
+    const isPreview = id.endsWith(".preview");
+    const regexSuffix = /\.preview$/;
+    id = id.replace(regexSuffix, "");
+
+    // const regexPrefix = /^.*\./ // Drop prefixes like Wall., Region., etc.
+    const regexPrefix = /^(Wall|Region|Token|Tile)\./;
+    id = id.replace(regexPrefix, "");
+
+    const doc = canvas[this.constructor.layer].documentCollection.get(id);
+    if ( !doc ) return null;
+    return isPreview ? (doc.object._preview ?? doc.object) : doc.object;
+  }
+
+  hasPlaceable(placeable) { return this.placeableLastUpdated.has(placeable); }
 
   _initializePlaceableHandler() {
-    this.placeableTracker = this.constructor.trackerClass.cachedBuild();
-    this.placeableTracker.registerPlaceableHooks();
-    this.placeableTracker.initializePlaceables();
-
-    // Set the ids when initializing the vertices.
-    this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
+    this.placeableLastUpdated.clear();
+    for ( const placeable of this.placeables ) {
+      this.placeableLastUpdated.set(placeable, placeable[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId);
+    }
   }
 
   /**
@@ -464,13 +471,12 @@ export class DrawableObjectsWebGL2Abstract {
     if ( this.rebuildNeeded ) return this.updateAllPlaceableData();
 
     // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
-    const placeableTracker = this.placeableTracker;
-    if ( placeableTracker.updateId <= this.#placeableTrackerUpdateId ) return; // No changes since last update.
-    for ( const [placeable, lastUpdate] of placeableTracker.placeableLastUpdated.entries() ) {
-      if ( lastUpdate <= this.#placeableTrackerUpdateId ) continue; // No changes for this instance since last update.
+    for ( const [placeable, updateId] of this.placeableLastUpdated.entries() ) {
+      const lastUpdate = placeable[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId;
+      if ( lastUpdate <= updateId ) continue; // No changes for this instance since last update.
       if ( !this.updatePlaceableData(placeable) ) return this.updateAllPlaceableData(); // If _updateInstance set rebuildNeeded to true.
+      this.placeableLastUpdated.set(placeable, lastUpdate);
     }
-    this.#placeableTrackerUpdateId = placeableTracker.updateId;
   }
 
   /**
@@ -478,11 +484,9 @@ export class DrawableObjectsWebGL2Abstract {
    */
   updateAllPlaceableData() {
     log(`${this.constructor.name}|updateAllPlaceableData`);
+    this._initializePlaceableHandler();
     this._updateAllPlaceableData();
     this.#rebuildNeeded = false;
-
-    // Register that we are synced with the current placeable data.
-    this.#placeableTrackerUpdateId = this.placeableTracker.updateId;
   }
 
   _updateAllPlaceableData() {
@@ -530,7 +534,7 @@ export class DrawableObjectsWebGL2Abstract {
    */
   filterObjects(_frustum, _opts) {
     this.instanceSet.clear();
-    this.placeableTracker.placeables.forEach(p => {
+    this.placeableLastUpdated.keys().forEach(p => {
       const idx = this._indexForPlaceable(p);
       this.instanceSet.add(idx);
     });
@@ -598,6 +602,9 @@ export class DrawableObjectsWebGL2Abstract {
  * Drawing of a placeable object with instancing
  */
 export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebGL2Abstract {
+  /** @type {class} */
+  static trackerClass;
+
   /** @type {string} */
   static vertexFile = "instance_vertex_ubo";
 
@@ -626,8 +633,8 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
   _initializeOffsetTrackers() {
     // Don't need indices or vertices trackers.
-    // Model matrices stored in placeableTracker.
-    this.trackers.model = this.placeableTracker.tracker;
+    // Model matrices stored in placeable tracker static class.
+    this.trackers.model = this.constructor.trackerClass.modelMatrixTracker;
   }
 
   _defineAttributeProperties() {
@@ -741,11 +748,10 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   // ----- NOTE: Render ----- //
 
   // Pull from the placeable tracker matrix indexes.
-  _indexForPlaceable(placeable) { return this.placeableTracker.tracker.facetIdMap.get(placeable.sourceId); }
+  _indexForPlaceable(placeable) { return this.trackers.model.facetIdMap.get(placeable.sourceId); }
 
   _drawFilteredInstances(instanceSet) {
     // To draw select instances, modify the buffer offset.
-    // const tmp = this.placeableTracker.instanceArrayValues;
     // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableTracker.numInstances} placeables`);
     const nVertices = this.geoms.indices.length; // Number of vertices to draw.
 
@@ -773,7 +779,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
 
   _drawUnfilteredInstances() {
     // Draw every instance
-    const n = this.trackers.models.numFacets;
+    const n = this.trackers.model.numFacets;
     const nVertices = this.geoms.indices.length; // Number of vertices to draw.
 
     if ( CONFIG[MODULE_ID].debug ) {
@@ -783,7 +789,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       console.table({ vertices: [...vertices], indices: [...indices] });
 
       for ( const i of this.instanceSet ) {
-        const model = this.tracker.model.viewFacetAtIndex(i);
+        const model = this.trackers.model.viewFacetAtIndex(i);
         log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
         console.table({  model: [...model] });
       }

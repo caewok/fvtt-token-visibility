@@ -7,9 +7,8 @@ import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { GeometryTile } from "../geometry/GeometryTile.js";
 import {
-  TileTracker,
-  SceneBackgroundTracker,
-} from "../placeable_tracking/TileTracker.js";
+  TileGeometryTracker,
+} from "../placeable_tracking/TileGeometryTracker.js";
 
 import * as twgl from "./twgl.js";
 
@@ -19,10 +18,12 @@ const TMP_SET = new Set();
 
 export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static trackerClass = TileTracker;
+  static trackerClass = TileGeometryTracker;
 
   /** @type {class} */
   static geomClass = GeometryTile;
+
+  get placeables() { return canvas.tiles.placeables; }
 
   // ----- NOTE: Program ----- //
   async _createProgram(opts = {}) {
@@ -85,7 +86,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
   _initializeTextures() {
     const textureOpts = this.constructor.textureOptions(this.gl);
-    for ( const tile of this.placeableTracker.placeables ) {
+    for ( const tile of this.placeables ) {
       textureOpts.src = this.constructor.tileSource(tile);
       this.textures.set(tile.sourceId, twgl.createTexture(this.gl, textureOpts));
     }
@@ -101,7 +102,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     for ( const idx of instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      const id = this.placeableTracker.tracker.facetIdMap.getKeyAtIndex(idx);
+      const id = this.trackerClass.modelMatrixTracker.facetIdMap.getKeyAtIndex(idx);
       if ( !id ) continue;
       this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(id));
       // uniforms.uTileTexture = this.textures.get(idx);
@@ -136,49 +137,11 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     // Limit to tiles within the vision triangle
     const tiles = ObstacleOcclusionTest.filterTilesByFrustum(frustum, { senseType: this.senseType });
     for ( const tile of tiles ) {
-      if ( !this.placeableTracker.hasPlaceable(tile) ) continue;
+      if ( !this.hasPlaceable(tile) ) continue;
       const idx = this._indexForPlaceable(tile);
       instanceSet.add(idx);
     }
   }
-}
-
-// TODO: Fix DrawableSceneBackgroundWebGL2.
-export class DrawableSceneBackgroundWebGL2 extends DrawableTileWebGL2 {
-  /** @type {class} */
-  static trackerClass = SceneBackgroundTracker;
-
-  /** @type {class} */
-  static geomClass = GeometryTile;
-
-  /** @type ImageBitMap */
-  backgroundImage;
-
-  async initialize() {
-    const promises = [this._createProgram()];
-    this.placeableTracker.registerPlaceableHooks();
-    this._initializePlaceableHandler();
-
-    const sceneObj = this.placeableTracker.placeables.next().value;
-    if ( sceneObj && sceneObj.src ) {
-      this.backgroundImage = await loadImageBitmap(sceneObj.src, {
-        //imageOrientation: "flipY",
-        // premultiplyAlpha: "premultiply",
-        premultiplyAlpha: "none",
-      });
-      this.instanceSet.add(0);
-    }
-
-    this._initializeGeoms();
-    await Promise.allSettled(promises); // Prior to updating buffers, etc.
-    this._updateAllInstances();
-  }
-
-  validateInstances() { return; } // Nothing to change.
-
-  filterObjects() { return; }
-
-  _sourceForTile() { return this.backgroundImage; }
 }
 
 /**

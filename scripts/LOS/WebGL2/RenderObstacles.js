@@ -11,7 +11,7 @@ import { Frustum } from "../Frustum.js";
 import { DrawableWallWebGL2 } from "./DrawableWall.js";
 import {
   DrawableTileWebGL2,
-  DrawableSceneBackgroundWebGL2,
+  // DrawableSceneBackgroundWebGL2,
 } from "./DrawableTile.js";
 import {
   DrawableTokenWebGL2,
@@ -84,7 +84,7 @@ export class RenderObstaclesWebGL2 {
       DrawableTokenWebGL2,
     ];
 
-    if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
+    // if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
 
     for ( const cl of drawableClasses ) this.drawableObjects.push(new cl(this));
 
