@@ -215,7 +215,7 @@ export class Frustum {
    * @returns {boolean}
    */
   containsPoint(p, testBottom = true) {
-    if ( !this.aabb.contains(p) ) return false;
+    if ( !this.aabb.containsPoint(p) ) return false;
     for ( const face of this.iterateFaces(testBottom) ) {
       if ( face.isFacing(p) ) return false;
     }
@@ -274,20 +274,16 @@ export class Frustum {
 
   poly3dWithinFrustum(poly3d) {
     if ( !this.overlapsAABB(poly3d.aabb) ) return false;
-    return true;
-
-    // TODO: Need to finalize the SAT test for polygon with frustum.
-
-    // if ( !this.convexPolygon3dWithinBounds(poly3d) ) return false;
+    if ( !this.aabb.overlapsConvexPolygon3d(poly3d) ) return false;
 
     // Polygon edge intersects 1+ planes and the segment created is within bounds.
     for ( const face of this.iterateFaces() ) {
       const res = face.intersectPlane(poly3d.plane); // Faces are all triangles, so likely better to use them for the intersection.
       if ( !res ) continue;
 
-      // Segment intersection
-      if ( res.b && this.segmentOverlapsFrustum(res.a, res.b) ) return true;
-      else if ( this.pointWithinFrustum(res.a) ) return true; // Single point of intersection
+      // Test the resulting point or line that intersects the plane.
+      if ( (res.b && this.overlapsSegment(res.a, res.b)) // Segment intersection
+        || this.containsPoint(res.a) ) return true; // Single point of intersection
     }
     return false;
   }
@@ -297,10 +293,12 @@ export class Frustum {
     if ( edge.direction
       && (edge.orientPoint(this.viewpoint) === edge.direction) ) return false;
 
+    // Test the 3d wall face against the frustum.
     const geometry = this.#geometryWithinAABB(edge.object);
     if ( !geometry ) return false;
 
-    return this.aabb.overlapsConvexPolygon3d(geometry.quad3d);
+    // TODO: Could assume vertical walls and avoid a generic convex polygon test.
+    return this.poly3dWithinFrustum(geometry.faces.top);
   }
 
   containsWall(wall) { return this.containsEdge(wall.edge); }
