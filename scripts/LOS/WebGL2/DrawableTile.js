@@ -102,7 +102,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     for ( const idx of instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      const id = this.trackerClass.modelMatrixTracker.facetIdMap.getKeyAtIndex(idx);
+      const id = this.trackers.model.facetIdMap.getKeyAtIndex(idx);
       if ( !id ) continue;
       this.gl.bindTexture(this.gl.TEXTURE_2D, this.textures.get(id));
       // uniforms.uTileTexture = this.textures.get(idx);
