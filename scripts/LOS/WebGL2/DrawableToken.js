@@ -143,33 +143,17 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 
   /**
-   * Filter the objects to be rendered by those that may be viewable between target and token.
-   * Called after prerender, immediately prior to rendering.
-   * Camera (viewer/target) are set by the renderer and will not change between now and render.
-   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
-   * @param {object} [opts]
-   * @param {Token} [opts.viewer]
-   * @param {Token} [opts.target]
-   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   * Clear previous instances to be drawn.
    */
-  filterObjects(frustum, { viewer, target, blocking } = {}) {
-    for ( const drawable of this.drawablesArray ) drawable.instanceSet.clear();
+  clearInstances() { for ( const drawable of this.drawablesArray ) drawable.instanceSet.clear(); }
 
-    blocking.tokens ??= {};
-    blocking.tokens.dead ??= true;
-    blocking.tokens.live ??= true;
-    blocking.tokens.prone ??= true;
-    if ( !(blocking.tokens.dead || blocking.tokens.live) ) return;
-
-    // Limit to tokens within the vision triangle.
-    const tokens = ObstacleOcclusionTest.filterTokensByFrustum(frustum,
-      { viewer, target, blockingTokensOpts: blocking.tokens });
-    for ( const token of tokens ) {
-      if ( !(this.hasPlaceable(token)) ) continue;
-      if ( this.constructor.drawConstrained(token) ) this.drawables.constrained.addToInstanceSet(token);
-      else if ( this.drawCustom(token) ) this.drawables.get(token.sourceId).addToInstanceSet(token);
-      else this.drawables.instanced.addToInstanceSet(token);
-    }
+  /**
+   * Add a specific placeable to the set of placeables to draw.
+   */
+  addPlaceableToInstanceSet(token) {
+    if ( this.constructor.drawConstrained(token) ) this.drawables.constrained.addToInstanceSet(token);
+    else if ( this.drawCustom(token) ) this.drawables.get(token.sourceId).addToInstanceSet(token);
+    else this.drawables.instanced.addPlaceableToInstanceSet(token);
   }
 
   render() {
@@ -230,11 +214,6 @@ export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Ab
     gl.bindVertexArray(null);
     this.gl.finish(); // For debugging
   }
-
-  addToInstanceSet(token) {
-    const idx = this._indexForPlaceable(token);
-    this.instanceSet.add(idx);
-  }
 }
 
 export class DrawableSphericalTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
@@ -259,10 +238,10 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
     for ( const drawable of this.drawables.values() ) await drawable.initialize();
   }
 
-  filterObjects(frustum, opts) {
-    super.filterObjects(frustum, opts);
-    this.drawables.forEach(drawable => drawable.filterObjects());
+  addPlaceableToInstanceSet(token) {
+    this.drawables.forEach(drawable => drawable.addPlaceableToInstanceSet(token));
   }
+
 
   async _initializeProgram() { return; }
 
@@ -292,9 +271,6 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
     this.drawables.forEach(drawable => drawable.validateInstances());
   }
 
-  addToInstanceSet(tokens) {
-    this.drawables.forEach(drawable => drawable.addToInstanceSet(tokens));
-  }
 
 
   renderTarget(target) {
@@ -385,7 +361,7 @@ export class DrawableCustomTokenShapeWebGL2 extends DrawableTokenShapesWebGL2 {
   // Only a single token and single matrix here.
   _indexForPlaceable(_placeable) { return 0; }
 
-  addToInstanceSet(token) {
+  addPlaceableToInstanceSet(token) {
     if ( token !== this.token ) return;
     this.instanceSet.add(0);
   }
@@ -430,11 +406,10 @@ export class DrawableHexShape extends DrawableTokenShapesWebGL2 {
     super.validateInstances();
   }
 
-  addToInstanceSet(token) {
+  addPlaceableToInstanceSet(token) {
     if ( !this.initialized ) return; // Possible that this geometry was just added.
     if ( Hex3dVertices.hexKeyForToken(token) !== this.hexKey ) return;
-    const idx = this._indexForPlaceable(token);
-    this.instanceSet.add(idx);
+    super.addPlaceableToInstanceSet(token);
   }
 
   renderTarget(target) {
@@ -493,11 +468,6 @@ export class DrawableConstrainedTokenShapesWebGL2 extends DrawableObjectsWebGL2A
 
   // TODO: Need to monitor for changes to token custom options.
   // Maybe use a separate hook and update all token geometry.
-
-  addToInstanceSet(token) {
-    const idx = this._indexForPlaceable(token);
-    this.instanceSet.add(idx);
-  }
 
   renderTarget(target) { DrawableTokenShapesWebGL2.prototype.renderTarget.call(this, target); }
 }

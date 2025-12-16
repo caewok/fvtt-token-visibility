@@ -39,7 +39,7 @@ export class DrawableObjectsWebGL2Abstract {
   /** @type {WebGL2RenderingContext} */
   get gl() { return this.renderer.gl; };
 
-  get frustum() { return this.renderer.frustum; }
+  // get frustum() { return this.renderer.frustum; }
 
   get camera() { return this.renderer.camera; }
 
@@ -525,21 +525,26 @@ export class DrawableObjectsWebGL2Abstract {
   instanceSet = new Set();
 
   /**
-   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Filter the objects to be rendered.
    * Called after prerender, immediately prior to rendering.
-   * Camera (viewer/target) are set by the renderer and will not change between now and render.
-   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
-   * @param {object} [opts]
-   * @param {Token} [opts.viewer]
-   * @param {Token} [opts.target]
-   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   * @param {PlaceableObject[]} placeables      Placeable objects to be drawn
+   * @returns {PlaceableObject[]} Objects that can be rendered by this drawable.
    */
-  filterObjects(_frustum, _opts) {
-    this.instanceSet.clear();
-    this.placeableLastUpdated.keys().forEach(p => {
-      const idx = this._indexForPlaceable(p);
-      this.instanceSet.add(idx);
-    });
+  filterObjects(placeables) {
+    return placeables.filter(placeable => this.hasPlaceable(placeable));
+  }
+
+  /**
+   * Clear previous instances to be drawn.
+   */
+  clearInstances() { this.instanceSet.clear; }
+
+  /**
+   * Add a specific placeable to the set of placeables to draw.
+   */
+  addPlaceableToInstanceSet(placeable) {
+    const idx = this._indexForPlaceable(placeable);
+    this.instanceSet.add(idx);
   }
 
   // Pull from the index for the indices.

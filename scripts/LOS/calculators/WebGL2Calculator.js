@@ -264,8 +264,10 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     opts.viewer = this.viewer;
     opts.clear = false;
     opts.useStencil = CONFIG[MODULE_ID].useStencil;
-    const { walls, terrainWalls, proximateWalls, reverseProximateWalls, tokens, tiles, regions } = this.occlusionTester.obstacles;
-    renderer.renderObstacles(this.viewpoint, this.target, opts);
+
+    // For loop or flatMap appears to make little difference in performance
+    const obstacles = Object.values(this.occlusionTester.obstacles).flatMap(obstacleSet => [...obstacleSet]);
+    renderer.renderObstacles(obstacles, opts);
   }
 
   /**
@@ -364,12 +366,6 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
       calc._renderTarget({ frame, clear }, this.renderer);
       calc._renderObstacles({ frame }, this.renderer);
     }
-  }
-
-  // Same as calculator.
-  _renderTarget(opts = {}) {
-    opts.clear ??= true;
-    this.renderer.renderTarget(this.target, opts);
   }
 
   _canvasDimensionsForViewpoints() {

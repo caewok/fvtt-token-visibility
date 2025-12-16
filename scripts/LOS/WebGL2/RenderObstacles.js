@@ -7,7 +7,6 @@ PIXI,
 
 import { WebGL2 } from "./WebGL2.js";
 import { Camera } from "../Camera.js";
-import { Frustum } from "../Frustum.js";
 import { DrawableWallWebGL2 } from "./DrawableWall.js";
 import {
   DrawableTileWebGL2,
@@ -18,7 +17,7 @@ import {
   DrawableGridShape,
 } from "./DrawableToken.js";
 import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
-import { log, sameSide } from "../util.js";
+import { log } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 
 export class RenderObstaclesWebGL2 {
@@ -46,9 +45,6 @@ export class RenderObstaclesWebGL2 {
 
   /** @type {DrawableObjectsAbstract} */
   drawableGridShape;
-
-  /** @type {Frustum} */
-  frustum = new Frustum();
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
@@ -371,15 +367,27 @@ export class RenderObstaclesWebGL2 {
     // this.gl.flush();
   }
 
-  renderObstacles(viewpoint, target, { viewer, frame, clear = false, useStencil = false } = {}) {
-    // Filter the obstacles to only those within view.
-    const opts = { viewer, target, blocking: this.config.blocking };
-    const frustum = this.frustum.rebuild({ viewpoint, target });
-    this.drawableObstacles.forEach(drawable => drawable.filterObjects(frustum, opts));
-    this.drawableTerrain.forEach(drawable => drawable.filterObjects(frustum, opts));
+  renderObstacles(obstacles, { frame, clear = false, useStencil = false } = {}) {
+    // Sort the obstacles into drawables.
+    let hasObstacles = false;
+    this.drawableObstacles.forEach(drawable => {
+      drawable.clearInstances();
+      drawable
+        .filterObjects(obstacles, { senseType: this.senseType })
+        .forEach(placeable => drawable.addPlaceableToInstanceSet(placeable));
+      hasObstacles ||= drawable.numObjectsToDraw;
+    });
 
-    const hasObstacles = this.drawableObstacles.some(drawable => drawable.numObjectsToDraw);
-    const hasTerrain = this.drawableTerrain.some(drawable => drawable.numObjectsToDraw);
+    let hasTerrain = false;
+    this.drawableTerrain.forEach(drawable => {
+      drawable.clearInstances();
+      drawable
+        .filterObjects(obstacles)
+        .forEach(placeable => drawable.addPlaceableToInstanceSet(placeable));
+      hasTerrain ||= drawable.numObjectsToDraw;
+    });
+
+    // Check if any obstacles remain to draw.
     if ( !(hasObstacles || hasTerrain) ) return;
 
     const gl = this.gl;
@@ -410,10 +418,10 @@ export class RenderObstaclesWebGL2 {
       if ( colorCoded ) webGL2.setColorMask(WebGL2.blueAlphaMask);
       else webGL2.setColorMask(WebGL2.noColorMask); // Either red from target, blue
 
-      // this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewer, frustum, viewpoint);
+      // this._renderConstrainingWalls(this.drawableNonTerrainWalls, target, viewpoint);
 
       webGL2.setDepthTest(true);
-      this.drawableObstacles.forEach(drawableObj => drawableObj.render(target, viewer, frustum));
+      this.drawableObstacles.forEach(drawableObj => drawableObj.render());
     }
 
     // Draw green limited (terrain) walls.
@@ -430,36 +438,36 @@ export class RenderObstaclesWebGL2 {
       const dstAlpha = colorCoded ? gl.ZERO : gl.ONE_MINUS_SRC_ALPHA;
       gl.blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 
-      // this._renderConstrainingWalls(this.drawableTerrainWalls, target, viewer, frustum, viewerLocation);
-      this.drawableTerrain.forEach(drawableObj => drawableObj.render(target, viewer, frustum));
+      // this._renderConstrainingWalls(this.drawableTerrainWalls, target, viewerLocation);
+      this.drawableTerrain.forEach(drawableObj => drawableObj.render());
     }
     // this.gl.flush();
   }
 
   // Draw walls that intersect the target border and are in front of the target border.
   // This is an alternative to drawing separate constrained tokens.
-  _renderConstrainingWalls(drawables, target, viewer, frustum, viewerLocation) {
-    for ( const drawable of drawables ) {
-      // Draw only the intersecting walls that are in front of the center of the token from this camera view.
-      const intersectingWalls = [];
-      intersectingWalls.push(...constrainingWallsForDrawable(drawable, target, viewerLocation));
-      if ( !intersectingWalls.length ) continue;
-
-      this.webGL2.setDepthTest(false);
-
-      // Temporarily override the instances and render the intersecting walls only.
-      const intersectingIndexes = intersectingWalls
-        .map(wall => drawable.trackers.model.facetIdMap.get(wall.sourceId))
-        .filter(idx => drawable.instanceSet.has(idx)); // Just in case.
-      const oldSet = new Set([...drawable.instanceSet]);
-      drawable.instanceSet.clear();
-      intersectingIndexes.forEach(idx => drawable.instanceSet.add(idx));
-      drawable.render(target, viewer, frustum);
-
-      // Keep only the non-intersecting instances.
-      drawable.instanceSet = oldSet.difference(drawable.instanceSet);
-    }
-  }
+//   _renderConstrainingWalls(drawables, target, viewerLocation) {
+//     for ( const drawable of drawables ) {
+//       // Draw only the intersecting walls that are in front of the center of the token from this camera view.
+//       const intersectingWalls = [];
+//       intersectingWalls.push(...constrainingWallsForDrawable(drawable, target, viewerLocation));
+//       if ( !intersectingWalls.length ) continue;
+//
+//       this.webGL2.setDepthTest(false);
+//
+//       // Temporarily override the instances and render the intersecting walls only.
+//       const intersectingIndexes = intersectingWalls
+//         .map(wall => drawable.trackers.model.facetIdMap.get(wall.sourceId))
+//         .filter(idx => drawable.instanceSet.has(idx)); // Just in case.
+//       const oldSet = new Set([...drawable.instanceSet]);
+//       drawable.instanceSet.clear();
+//       intersectingIndexes.forEach(idx => drawable.instanceSet.add(idx));
+//       drawable.render();
+//
+//       // Keep only the non-intersecting instances.
+//       drawable.instanceSet = oldSet.difference(drawable.instanceSet);
+//     }
+//   }
 
   destroy() {}
 }
@@ -469,16 +477,16 @@ RenderObstaclesWebGL2.MATERIAL_COLORS.target.set([1, 0, 0, 1]);
 RenderObstaclesWebGL2.MATERIAL_COLORS.obstacle.set([0, 0, 1, 1]);
 RenderObstaclesWebGL2.MATERIAL_COLORS.terrain.set([0, 0.5, 0, 0.5]);
 
-function constrainingWallsForDrawable(drawable, target, viewerLocation) {
-  const intersectingWalls = [];
-  for ( const idx of drawable.instanceSet ) {
-    // Walls are all instanced.
-    const id = drawable.trackers.model.facetIdMap.getKeyAtIndex(idx);
-    const wall = drawable.placeableTracker.getPlaceableFromId(id);
-    if ( !wall ) continue;
-    const { a, b } = wall.edge;
-    if ( !sameSide(a, b, target.center, viewerLocation)
-      && target.tokenBorder.lineSegmentIntersects(a, b, { inside: true }) ) intersectingWalls.push(wall);
-  }
-  return intersectingWalls;
-}
+// function constrainingWallsForDrawable(drawable, target, viewerLocation) {
+//   const intersectingWalls = [];
+//   for ( const idx of drawable.instanceSet ) {
+//     // Walls are all instanced.
+//     const id = drawable.trackers.model.facetIdMap.getKeyAtIndex(idx);
+//     const wall = drawable.placeableTracker.getPlaceableFromId(id);
+//     if ( !wall ) continue;
+//     const { a, b } = wall.edge;
+//     if ( !sameSide(a, b, target.center, viewerLocation)
+//       && target.tokenBorder.lineSegmentIntersects(a, b, { inside: true }) ) intersectingWalls.push(wall);
+//   }
+//   return intersectingWalls;
+// }

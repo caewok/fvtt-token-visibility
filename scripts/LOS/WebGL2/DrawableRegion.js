@@ -1,11 +1,11 @@
 /* globals
+canvas,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { TRACKER_IDS, MODULE_ID } from "../../const.js";
 import { DrawableObjectsWebGL2Abstract, DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
-import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import {
   GeometryRegion,
   GeometryPolygonRegionShape,
@@ -19,8 +19,7 @@ import {
   RectangleRegionShapeGeometryTracker,
   PolygonRegionShapeGeometryTracker,
 } from "../placeable_tracking/RegionGeometryTracker.js";
-import { log, isString } from "../util.js";
-const TERRAIN_MAPPER = "terrainmapper";
+import { log } from "../util.js";
 
 const RegionShapeMixin = function(Base) {
   class DrawableRegionShape extends Base {
@@ -80,8 +79,8 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
   }
 
-  _filterShape(frustum, shape, _opts) {
-    if ( shape.data.hole || !frustum.containsRegionShape(shape) ) return;
+  addPlaceableToInstanceSet(shape) {
+    if ( shape.data.hole ) return; // NOTE: Could check if frustum contains region shape. But that would require accessing the occlusion tester frustum.
 
     const id = shape[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
     const idx = this.trackers.model.facetIdMap.get(id);
@@ -136,8 +135,8 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
 
   _initializeGeoms(_opts) { return; }
 
-  _filterShape(frustum, shape, _opts) {
-    if ( shape.data.hole || !frustum.containsRegionShape(shape) ) return;
+  addPlaceableToInstanceSet(shape) {
+    if ( shape.data.hole  ) return;
 
     const id = shape[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
     const idx = this.trackers.model.facetIdMap.get(id); // TODO: This is probably wrong.
@@ -145,7 +144,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
     this.instanceSet.add(idx);
   }
 
-  _filterShapeGroup(frustum, region, shapeGroup, _opts) {
+  _filterShapeGroup(region, shapeGroup) {
     // TODO: Fix.
 
   }
@@ -249,45 +248,32 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 
   /**
-   * Filter the objects to be rendered by those that may be viewable between target and token.
-   * Called after prerender, immediately prior to rendering.
-   * Camera (viewer/target) are set by the renderer and will not change between now and render.
-   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
-   * @param {object} [opts]
-   * @param {Token} [opts.viewer]
-   * @param {Token} [opts.target]
-   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   * Clear previous instances to be drawn.
    */
-  filterObjects(frustum, opts) {
+  clearInstances() {
     this.instanceSet.clear();
     for ( const drawable of Object.values(this.drawables) ) drawable.instanceSet.clear();
+  }
 
-    const regions = ObstacleOcclusionTest.filterRegionsByFrustum(frustum);
+  /**
+   * Add a specific placeable to the set of placeables to draw.
+   */
+  addPlaceableToInstanceSet(region) {
+    // Group region shapes by whether they overlap.
+    const geomRegion = region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    for ( const shapeGroup of geomRegion.combineRegionShapes() ) {
+      // If any holes in the shape group, pass the group to the polygon handler.
+      if ( shapeGroup.some(shape => shape.isHole) ) this.drawables.polygon._filterShapeGroup(region, shapeGroup);
 
-    // For each region, determine which shapes are within the vision triangle.
-    // Add the id of each shape group to its respective drawable.
-    for ( const region of regions ) {
-      if ( !this.hasPlaceable(region) ) continue;
+      // Otherwise, add the region shape to its corresponding drawable.
 
-      // Group region shapes by whether they overlap.
-      const geomRegion = region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
-      const regionShapeGroups = geomRegion.combineRegionShapes();
-      const regionId = region.id;
-
-      for ( const shapeGroup of regionShapeGroups ) {
-        // If any holes in the shape group, pass the group to the polygon handler.
-        if ( shapeGroup.some(shape => shape.isHole) ) this.drawables.polygon._filterShapeGroup(frustum, region, shapeGroup, opts);
-
-        // Otherwise, add the region shape to its corresponding drawable.
-
-        for ( const shape of shapeGroup ) {
-          switch ( shape.data.type ) {
-            case "rectangle": this.drawables.rectangle._filterShape(frustum, shape, opts); break;
-            case "ellipse": this.drawables.ellipse._filterShape(frustum, shape, opts); break;
-            case "circle": this.drawables.circle._filterShape(frustum, shape, opts); break;
-            case "polygon": this.drawables.polygon._filterShape(frustum, shape, opts); break;
-            default: this.drawables.polygon._filterShape(frustum, shape, opts);
-          }
+      for ( const shape of shapeGroup ) {
+        switch ( shape.data.type ) {
+          case "rectangle": this.drawables.rectangle.addPlaceableToInstanceSet(shape); break;
+          case "ellipse": this.drawables.ellipse.addPlaceableToInstanceSet(shape); break;
+          case "circle": this.drawables.circle.addPlaceableToInstanceSet(shape); break;
+          case "polygon": this.drawables.polygon.addPlaceableToInstanceSet(shape); break;
+          default: this.drawables.polygon.addPlaceableToInstanceSet(shape);
         }
       }
     }
