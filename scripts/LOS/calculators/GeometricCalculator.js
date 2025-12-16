@@ -299,7 +299,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Construct polygons representing the perspective view of the blocking objects.
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    const { walls, terrainWalls, proximateWalls, reverseProximateWalls, tokens, tiles,  regions } = this.occlusionTester.obstacles;
+    const { walls, terrainWalls, proximateWalls, reverseProximateWalls, tokens, tiles, regions } = this.occlusionTester.obstacles;
 
     // If the proximity threshold is met, this edge excluded from perception calculations.
     const senseType = this._config.senseType;

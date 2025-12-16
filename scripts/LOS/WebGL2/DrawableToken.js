@@ -202,7 +202,7 @@ export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Ab
   renderTarget(target) {
     if ( CONFIG[MODULE_ID].debug ) {
       const i = this._indexForPlaceable(target);
-      log(`${this.constructor.name}|renderTarget${target.name}, ${target.sourceId}|${i}`);
+      log(`${this.constructor.name}|renderTarget ${target.name}, ${target.sourceId}|${i}`);
       if ( this.trackers.vi ) {
         const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
         console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });

@@ -47,7 +47,7 @@ import {
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/calculators/PointsCalculator.js";
 import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/calculators/GeometricCalculator.js";
 import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
-import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/WebGL2/WebGL2Calculator.js";
+import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";

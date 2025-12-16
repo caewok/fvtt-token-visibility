@@ -213,13 +213,13 @@ export class RenderObstaclesWebGL2 {
   /**
    * Set camera for a given render.
    */
-  _setCamera(viewerLocation, target, { targetLocation } = {}) {
+  setCamera(viewerLocation, target, { targetLocation } = {}) {
     targetLocation ??= Point3d.fromTokenCenter(target);
     const camera = this.camera;
     camera.cameraPosition = viewerLocation;
     camera.targetPosition = targetLocation;
     camera.setTargetTokenFrustum(target);
-    log(`${this.constructor.name}|_setCamera|viewer at ${viewerLocation}; target ${target.name} at ${targetLocation}`);
+    log(`${this.constructor.name}|setCamera|viewer at ${viewerLocation}; target ${target.name} at ${targetLocation}`);
 
     /*
     camera.perspectiveParameters = {
@@ -307,7 +307,7 @@ export class RenderObstaclesWebGL2 {
   }
 
   renderGridShape(viewerLocation, target, { targetLocation, frame } = {}) {
-    this._setCamera(viewerLocation, target, { targetLocation });
+    this.setCamera(viewerLocation, target, { targetLocation });
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
     const gl = this.gl;
     const webGL2 = this.webGL2;
@@ -331,9 +331,7 @@ export class RenderObstaclesWebGL2 {
     // this.gl.flush();
   }
 
-  renderTarget(viewerLocation, target, { targetLocation, frame, testLighting = false, clear = true, useStencil = false } = {}) {
-    this._setCamera(viewerLocation, target, { targetLocation });
-
+  renderTarget(target, { frame, testLighting = false, clear = true, useStencil = false } = {}) {
     const gl = this.gl;
     const webGL2 = this.webGL2;
     const colorCoded = !this.debugViewNormals;
@@ -373,7 +371,7 @@ export class RenderObstaclesWebGL2 {
     // this.gl.flush();
   }
 
-  renderObstacles(viewpoint, target, { viewer, targetLocation, frame, clear = false, useStencil = false } = {}) {
+  renderObstacles(viewpoint, target, { viewer, frame, clear = false, useStencil = false } = {}) {
     // Filter the obstacles to only those within view.
     const opts = { viewer, target, blocking: this.config.blocking };
     const frustum = this.frustum.rebuild({ viewpoint, target });
@@ -383,8 +381,6 @@ export class RenderObstaclesWebGL2 {
     const hasObstacles = this.drawableObstacles.some(drawable => drawable.numObjectsToDraw);
     const hasTerrain = this.drawableTerrain.some(drawable => drawable.numObjectsToDraw);
     if ( !(hasObstacles || hasTerrain) ) return;
-
-    this._setCamera(viewpoint, target, { targetLocation });
 
     const gl = this.gl;
     const webGL2 = this.webGL2;

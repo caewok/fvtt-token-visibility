@@ -39,6 +39,8 @@ export class DrawableObjectsWebGL2Abstract {
   /** @type {WebGL2RenderingContext} */
   get gl() { return this.renderer.gl; };
 
+  get frustum() { return this.renderer.frustum; }
+
   get camera() { return this.renderer.camera; }
 
   get debugViewNormals() { return this.renderer.debugViewNormals; }
