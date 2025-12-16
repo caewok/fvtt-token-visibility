@@ -371,8 +371,10 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     if ( !this.isHole ) {
-      const t = this.faces.top.intersectionT(rayOrigin, rayDirection);
-      if ( t !== null && almostBetween(t, minT, maxT) ) return t;
+      for ( const face of [this.faces.top, this.faces.bottom] ) {
+        const t = this.faces.top.intersectionT(rayOrigin, rayDirection);
+        if ( t !== null && almostBetween(t, minT, maxT) ) return t;
+      }
     }
     for ( const side of this.faces.sides ) {
       const t = side.intersectionT(rayOrigin, rayDirection);

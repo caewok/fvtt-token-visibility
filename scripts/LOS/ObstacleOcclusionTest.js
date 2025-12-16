@@ -89,10 +89,10 @@ export class ObstacleOcclusionTest {
 
   findObstacles() {
     const senseType = this._config.senseType;
-    this.obstacles = this.constructor.findBlockingObjectsByFrustum(this.frustum, this.config);
-    this.obstacles.terrainWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
-    this.obstacles.proximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
-    this.obstacles.reverseProximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
+    this.findBlockingObjects();
+    this.obstacles.terrainWalls = this.constructor.subsetWallsByType(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
+    this.obstacles.proximateWalls = this.constructor.subsetWallsByType(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
+    this.obstacles.reverseProximateWalls = this.constructor.subsetWallsByType(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
   }
 
   obstacleTester;
@@ -152,7 +152,7 @@ export class ObstacleOcclusionTest {
 
   filterPolys3d(polys) { return polys.filter(poly => this.frustum.poly3dWithinFrustum(poly)); }
 
-  // ----- NOTE: Static collision tests ----- //
+  // ----- NOTE: Collision tests ----- //
 
   /**
    * Filter relevant objects in the scene using the vision triangle.
@@ -164,25 +164,21 @@ export class ObstacleOcclusionTest {
    *   - @property {Set<Token>} tokens
    *   - @property {Set<Region>} regions
    */
-  static findBlockingObjectsByFrustum(frustum, opts = {}) {
-    opts.blocking ??= {};
-    opts.senseType ??= "sight";
-    return {
-      walls: this.findBlockingWalls(frustum, opts),
-      tiles: this.findBlockingTiles(frustum, opts),
-      tokens: this.findBlockingTokens(frustum, opts),
-      regions: this.findBlockingRegions(frustum, opts),
-    }
+  findBlockingObjects() {
+    this.findBlockingWalls();
+    this.findBlockingTiles();
+    this.findBlockingTokens();
+    this.findBlockingRegions();
   }
 
   /**
-   * Pull out terrain walls from a set of walls.
+   * Pull out terrain walls or other wall types from a set of walls.
    * @param {Set<Wall>} walls               Set of walls to divide
    * @param {CONST.WALL_SENSE_TYPES}        What type of wall to pull out
    * @param {string} [senseType="sight"]    Restriction type to test
    * @returns {Set<Wall>}  Modifies walls set *in place* and returns terrain walls.
    */
-  static pullOutWalls(walls, wallType = CONST.WALL_SENSE_TYPES.LIMITED, senseType = "sight") {
+  static subsetWallsByType(walls, wallType = CONST.WALL_SENSE_TYPES.LIMITED, senseType = "sight") {
     if ( !walls.size ) return NULL_SET;
     const wallSubset = new Set();
     walls
@@ -194,29 +190,53 @@ export class ObstacleOcclusionTest {
     return wallSubset;
   }
 
-  static findBlockingWalls(frustum, { senseType = "sight", blocking = {} } = {}) {
-    blocking.walls ??= true;
-    if ( !blocking.walls ) return NULL_SET;
-    return this.filterWallsByFrustum(frustum, { senseType });
-  }
-
-  static findBlockingTiles(frustum, { senseType = "sight", blocking = {} } = {}) {
-    blocking.tiles ??= true;
-    return blocking.tiles ?  this.filterTilesByFrustum(frustum, { senseType }) : NULL_SET;
-  }
-
-  static findBlockingTokens(frustum, { viewer, target, blocking = {} } = {}) {
-    blocking.tokens ??= {};
-    blocking.tokens.live ??= true;
-    blocking.tokens.dead ??= true;
-    return ( blocking.tokens.live || blocking.tokens.dead )
-      ? this.filterTokensByFrustum(frustum, { viewer, target, blockingTokensOpts: blocking.tokens })
+  findBlockingWalls() {
+    this.obstacles.walls = this._config.blocking.walls
+      ? this.constructor.filterWallsByFrustum(this.frustum, { senseType: this._config.senseType })
       : NULL_SET;
   }
 
-  static findBlockingRegions(frustum, { senseType = "sight", blocking = {} } = {}) {
-    blocking.regions ??= true;
-    return blocking.regions ? this.filterRegionsByFrustum(frustum, { senseType }) : NULL_SET;
+  findBlockingTiles() {
+    this.obstacles.tiles = this._config.blocking.tiles
+      ? this.constructor.filterTilesByFrustum(this.frustum, { senseType: this._config.senseType })
+      : NULL_SET;
+  }
+
+  findBlockingTokens() {
+    if ( !(this._config.blocking.tokens.live || this._config.blocking.tokens.dead) ) {
+      this.obstacles.tokens = NULL_SET;
+      return;
+    }
+
+    // Locate tokens but exclude the target and viewer.
+    this.obstacles.tokens = this.constructor.filterTokensByFrustum(this.frustum, { senseType: this._config.senseType });
+    this.obstacles.tokens.delete(this.target);
+    this.obstacles.tokens.delete(this.viewer);
+    if ( !this.obstacles.tokens.size ) return; // Avoid processing below exceptions.
+
+    // Filter all mounts and riders of both viewer and target.
+    const api = OTHER_MODULES.RIDEABLE.API;
+    if ( api ) {
+      this.obstacles.tokens = this.obstacles.tokens.filter(t =>
+        !(api.RidingConnection(t, this.target) || api.RidingConnection(t, this.viewer)));
+    }
+
+    // Test for dead/live/prone.
+    this.obstacles.tokens = this.obstacles.tokens.filter(t => this.includeToken(t));
+  }
+
+  includeToken(token) {
+    if ( this._config.blocking.tokens.dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return true;
+    if ( this._config.blocking.tokens.live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return true;
+    if ( this._config.blocking.tokens.prone && token.isProne ) return true;
+    return false;
+  }
+
+  findBlockingRegions() {
+    this.obstacles.regions = this._config.blocking.regions
+      ? this.constructor.filterRegionsByFrustum(this.frustum, { senseType: this._config.senseType })
+      : NULL_SET;
+
   }
 
   /**
@@ -282,36 +302,7 @@ export class ObstacleOcclusionTest {
    * token under the viewer point.
    * @returns {Set<Token>}
    */
-  static filterTokensByFrustum(frustum, {
-    viewer,
-    target,
-    blockingTokensOpts }) {
-
-    let tokens = frustum.findTokens();
-
-    // Filter out the viewer and target from the token set.
-    // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
-    const api = OTHER_MODULES.RIDEABLE.API;
-    if ( target ) {
-      tokens.delete(target);
-      if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, target))
-    }
-    if ( viewer ) {
-      tokens.delete(viewer);
-      tokens = tokens.filter(t => !tokensOverlap(viewer, t));
-      if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer))
-    }
-
-    // Filter live, dead, prone tokens.
-    return tokens.filter(token => this.includeToken(token, blockingTokensOpts));
-  }
-
-  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
-    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
-    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
-    if ( !prone && token.isProne ) return false;
-    return true;
-  }
+  static filterTokensByFrustum(frustum) { return frustum.findTokens(); }
 
   /**
    * For debugging.
