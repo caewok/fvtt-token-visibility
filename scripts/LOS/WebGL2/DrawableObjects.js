@@ -537,7 +537,7 @@ export class DrawableObjectsWebGL2Abstract {
   /**
    * Clear previous instances to be drawn.
    */
-  clearInstances() { this.instanceSet.clear; }
+  clearInstances() { this.instanceSet.clear(); }
 
   /**
    * Add a specific placeable to the set of placeables to draw.
@@ -556,7 +556,10 @@ export class DrawableObjectsWebGL2Abstract {
    * E.g., tokens that move a lot.
    * Camera (e.g., viewer, target) may still change after prerender
    */
-  prerender() { this.validateInstances(); }
+  prerender() {
+    log(`${this.constructor.name}|prerender`);
+    this.validateInstances();
+  }
 
   /**
    * Render this drawable.
@@ -769,9 +772,10 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       console.table({ vertices: [...vertices], indices: [...indices] });
 
       for ( const i of instanceSet ) {
-        const model = this.trackers.model.viewFacetAtIndex(i);
         log(`${this.constructor.name}|_drawFilteredInstances|${i}`);
-        console.table({  model: [...model] });
+        const model = this.trackers.model.viewFacetAtIndex(i);
+        const mat = new CONFIG.GeometryLib.MatrixFloat32(model, 4, 4);
+        mat.print()
       }
     }
 
@@ -796,9 +800,10 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       console.table({ vertices: [...vertices], indices: [...indices] });
 
       for ( const i of this.instanceSet ) {
-        const model = this.trackers.model.viewFacetAtIndex(i);
         log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
-        console.table({  model: [...model] });
+        const model = this.trackers.model.viewFacetAtIndex(i);
+        const mat = new CONFIG.GeometryLib.MatrixFloat32(model, 4, 4);
+        mat.print()
       }
     }
 

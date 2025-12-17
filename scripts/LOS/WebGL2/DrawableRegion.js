@@ -197,7 +197,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   get numObjectsToDraw() {
     let n = 0;
-    for ( const drawable of Object.values(this.drawables) ) n += drawable.instanceSet.size;
+    for ( const drawable of Object.values(this.drawables) ) n += drawable.numObjectsToDraw;
     return n;
   }
 

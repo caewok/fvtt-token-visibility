@@ -607,7 +607,6 @@ export class ViewerLOS {
    */
   _drawCanvasDebug(debugDraw, debugViewpointDraw) {
     this._drawVisibleTokenBorder(debugDraw);
-    this._drawFrustumLightSources(debugDraw);
     this._drawLineOfSightDebug(debugDraw);
     this.viewpoints.forEach(vp => vp._drawCanvasDebug(debugViewpointDraw));
   }
@@ -672,25 +671,6 @@ export class ViewerLOS {
     if ( this.target ) {
       const border = CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
       draw.shape(border, { color, fill: color, fillAlpha: 0.2});
-    }
-  }
-
-  /**
-   * For debugging.
-   * Draw the vision triangle between light source and target.
-   */
-  _drawFrustumLightSources(draw) {
-    if ( canvas.environment.globalLightSource.active ) return;
-    const ctr = Point3d.fromTokenCenter(this.target);
-    for ( const src of canvas.lighting.placeables ) {
-      const srcOrigin = Point3d.fromPointSource(src);
-      const dist2 = Point3d.distanceSquaredBetween(ctr, srcOrigin);
-      const isBright = src.brightRadius && (src.brightRadius ** 2) < dist2;
-      const isDim = (src.radius ** 2) < dist2;
-      if ( !(isDim || isBright) ) continue;
-      const fillAlpha = isBright ? 0.3 : 0.1;
-      const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint: srcOrigin, target: this.target });
-      frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.yellow, fillAlpha });
     }
   }
 }

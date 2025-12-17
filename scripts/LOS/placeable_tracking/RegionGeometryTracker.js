@@ -305,9 +305,8 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
   calculateScaleMatrix() {
     const { topZ, bottomZ } = this.constructor.regionElevationZ(this.region);
     const zHeight = topZ - bottomZ;
-    const z = topZ - (zHeight * 0.5);
     const { x, y } = this._xyScale();
-    MatrixFloat32.scale(x, y, z, this.matrices.scale);
+    MatrixFloat32.scale(x, y, zHeight, this.matrices.scale);
     return this.matrices.scale;
   }
 

@@ -88,6 +88,15 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   drawablesArray = [];
 
+  get numObjectsToDraw() {
+    const d = this.drawables;
+    return (d.instanced?.numObjectsToDraw || 0)
+      + (d.constrained?.numObjectsToDraw || 0)
+      + (d.lit?.numObjectsToDraw || 0)
+      + (d.spherical?.numObjectsToDraw || 0)
+      + d.custom.size;
+  }
+
   async initialize() {
     await super.initialize();
 
@@ -193,7 +202,9 @@ export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Ab
       }
       if ( this.trackers.model ) {
         const model = this.trackers.model.viewFacetAtIndex(i);
-        console.table({ vertices: [...this.verticesArray], indices: [...this.indicesArray], model: [...model] });
+        console.table({ vertices: [...this.verticesArray], indices: [...this.indicesArray] });
+        const mat = new CONFIG.GeometryLib.MatrixFloat32(model, 4, 4);
+        mat.print()
       }
     }
 
