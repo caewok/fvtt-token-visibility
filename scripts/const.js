@@ -51,8 +51,6 @@ export const FLAGS = {
   },
 };
 
-export const ATV_ID = "tokenvisibility";
-
 export const TRACKER_IDS = {
   GEOMETRY: {
     PLACEABLE: "geometry",

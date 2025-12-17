@@ -66,6 +66,10 @@ export function CalculatorConfig() {
     // Points algorithm
     targetInset: Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75,
     targetPointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS)),
+
+    // WebGL2 Calc
+    alphaThreshold: CONFIG[MODULE_ID].alphaThreshold,
+    useInstancing: CONFIG[MODULE_ID].useInstancing,
   };
 }
 
