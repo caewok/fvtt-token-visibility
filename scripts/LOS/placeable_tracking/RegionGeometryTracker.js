@@ -7,7 +7,7 @@ Region,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, OTHER_MODULES } from "../../const.js";
+import { MODULE_ID, ATV_ID, OTHER_MODULES } from "../../const.js";
 import { GeometryRegion, GeometryCircleRegionShape, GeometryEllipseRegionShape, GeometryRectangleRegionShape, GeometryPolygonRegionShape } from "../geometry/GeometryRegion.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { regionElevation, convertRegionShapeToPIXI } from "../util.js";
@@ -96,25 +96,25 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
   initialize() {
     this.region.document.regionShapes.forEach(shape => {
-      shape[MODULE_ID] ??= {};
-      shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
-      shape[MODULE_ID][this.constructor.ID].initialize();
+      shape[ATV_ID] ??= {};
+      shape[ATV_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
+      shape[ATV_ID][this.constructor.ID].initialize();
     });
     super.initialize();
   }
 
   update() {
     this.region.document.regionShapes.forEach(shape => {
-      shape[MODULE_ID] ??= {};
-      shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
-      shape[MODULE_ID][this.constructor.ID].update();
+      shape[ATV_ID] ??= {};
+      shape[ATV_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
+      shape[ATV_ID][this.constructor.ID].update();
     });
     super.update();
   }
 
   _updateAABB() {
     const newAABB = AABB3d.union(this.region.document.regionShapes.map(shape =>
-      shape[MODULE_ID][this.constructor.ID].aabb));
+      shape[ATV_ID][this.constructor.ID].aabb));
     newAABB.clone(this.aabb);
   }
 
@@ -145,7 +145,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
     const uniqueShapes = this.combineRegionShapes();
     for ( const shapeGroup of uniqueShapes ) {
       if ( shapeGroup.length === 1 ) {
-        const geometry = shapeGroup[0][MODULE_ID][this.constructor.ID];
+        const geometry = shapeGroup[0][ATV_ID][this.constructor.ID];
         if ( geometry.isHole ) continue;
         topArr.push(geometry.faces.top)
         bottomArr.push(geometry.faces.bottom);
@@ -153,7 +153,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
       } else {
         // Combine and convert to Polygon3d.
-        const paths = shapeGroup.map(shape => shape[MODULE_ID][this.constructor.ID].toClipperPaths());
+        const paths = shapeGroup.map(shape => shape[ATV_ID][this.constructor.ID].toClipperPaths());
         const combinedPaths = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
 
         const path = combinedPaths.combine();
@@ -187,12 +187,12 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         if ( usedShapes.has(j) ) continue;
         const other = region.document.regionShapes[j];
-        const otherGeometry = other[MODULE_ID][this.constructor.ID];
+        const otherGeometry = other[ATV_ID][this.constructor.ID];
         const otherPIXI = otherGeometry.shapePIXI;
 
         // Any overlap counts.
         for ( const shape of shapeGroup ) {
-          const shapeGeometry = shape[MODULE_ID][this.constructor.ID];
+          const shapeGeometry = shape[ATV_ID][this.constructor.ID];
           const shapePIXI = shapeGeometry.shapePIXI;
           if ( shapePIXI.overlaps(otherPIXI) ) {
             shapeGroup.push(other);
@@ -217,7 +217,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     for ( const shape of this.region.document.regionShapes ) {
-      const t = shape[MODULE_ID][this.constructor.ID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
+      const t = shape[ATV_ID][this.constructor.ID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
       if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }
     return null;

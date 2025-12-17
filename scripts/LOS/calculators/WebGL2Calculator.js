@@ -19,14 +19,6 @@ import { checkFramebufferStatus, log } from "../util.js";
 // Base folder
 import { MODULE_ID } from "../../const.js";
 
-/**
- * @typedef {object} WebGL2CalculatorConfig
- * ...{CalculatorConfig}
- * @property {number} alphaThreshold                    Threshold value for testing alpha of tiles
- * @property {boolean} useInstancing                    Use instancing with webGL2
- */
-
-
 export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 
   data = {
@@ -92,11 +84,6 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleWebGL2Result;
-
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    alphaThreshold: 0.75,
-  };
 
   /** @type {number} */
   static WIDTH = 128;

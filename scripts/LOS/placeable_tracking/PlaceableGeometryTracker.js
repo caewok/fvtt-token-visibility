@@ -7,7 +7,7 @@ Hooks,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { ATV_ID, TRACKER_IDS } from "../../const.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
 import { AABB3d } from "../../geometry/AABB.js";
 import { almostBetween } from "../../geometry/util.js";
@@ -35,7 +35,6 @@ Stored on each placeable
 /** @type {MatrixFlat<4,4>} */
 const identityM = MatrixFloat32.identity(4, 4);
 Object.freeze(identityM);
-
 
 export class AbstractPlaceableGeometryTracker {
   static ID = TRACKER_IDS.GEOMETRY.PLACEABLE;
@@ -115,7 +114,7 @@ export class AbstractPlaceableGeometryTracker {
     const placeable = placeableD.object;
     if ( !placeable ) return;
     const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
-    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[MODULE_ID][this.ID].update();
+    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[ATV_ID][this.ID].update();
   }
 
   /**
@@ -144,7 +143,7 @@ export class AbstractPlaceableGeometryTracker {
     // TODO: Can flags be set to false? Need this filter if so.
     // const changeKeys = Object.entries(flags).filter([key, value] => value).map([key, value] => key);
     const changeKeys = Object.keys(flags);
-    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[MODULE_ID][this.ID].update();
+    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[ATV_ID][this.ID].update();
   }
 
   /**
@@ -152,7 +151,7 @@ export class AbstractPlaceableGeometryTracker {
    * @param {PlaceableObject} object    The object instance being destroyed
    */
   static _onPlaceableDestroy(placeable) {
-    const geometry = placeable?.[MODULE_ID]?.[this.ID];
+    const geometry = placeable?.[ATV_ID]?.[this.ID];
     if ( !geometry ) return;
     geometry.destroy();
   }
@@ -164,8 +163,8 @@ export class AbstractPlaceableGeometryTracker {
 
   constructor(placeable) {
     this.placeable = placeable;
-    placeable[MODULE_ID] ??= {};
-    placeable[MODULE_ID][this.constructor.ID] = this;
+    placeable[ATV_ID] ??= {};
+    placeable[ATV_ID][this.constructor.ID] = this;
   }
 
   initialize() {

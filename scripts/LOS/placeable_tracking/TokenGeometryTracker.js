@@ -6,7 +6,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { MODULE_ID, ATV_ID, TRACKER_IDS } from "../../const.js";
 import {
   GeometryToken,
   GeometryConstrainedToken,
@@ -220,7 +220,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
 
   static _onLightingUpdate() {
     canvas.tokens.placeables.forEach(t => {
-      const geom = t[MODULE_ID][this.ID];
+      const geom = t[ATV_ID][this.ID];
       if ( !geom ) return;
       geom._updateFaces();
     });
@@ -261,7 +261,7 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
 
   static _onLightingUpdate() {
     canvas.tokens.placeables.forEach(t => {
-      const geom = t[MODULE_ID][this.ID];
+      const geom = t[ATV_ID][this.ID];
       if ( !geom ) return;
       geom._updateFaces();
     });
