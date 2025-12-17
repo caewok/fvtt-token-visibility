@@ -430,7 +430,7 @@ export class RectangleRegionShapeGeometryTracker extends AbstractRegionShapeGeom
 
   _xyScale() {
     const { width, height } = this.shape.data;
-    return { x: width * 0.5, y: height * 0.5 };
+    return { x: width, y: height };
   }
 
 }
