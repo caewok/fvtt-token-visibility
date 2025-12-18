@@ -68,7 +68,7 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   static drawLit(token) { return CONFIG[MODULE_ID].litTokens && token.litTokenBorder && !token.litTokenBorder.equals(token.constrainedTokenBorder); }
 
-  static isCustom(token) { return getFlagFast(token.document, OTHER_MODULES.ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC); }
+  static isCustom(token) { return OTHER_MODULES.ATV ? getFlagFast(token.document, OTHER_MODULES.ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC) : false; }
 
   get placeables() { return canvas.tokens.placeables; }
 
@@ -308,7 +308,7 @@ export class DrawableCustomTokenShapeWebGL2 extends DrawableTokenShapesWebGL2 {
 //   }
 
   static isCustom(token) {
-    return Boolean(getFlagFast(token.document, OTHER_MODULES.ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC));
+    return Boolean(OTHER_MODULES.ATV ? getFlagFast(token.document, OTHER_MODULES.ATV.KEY, FLAGS.CUSTOM_TOKENS.FILE_LOC) : false);
   }
 
   token;

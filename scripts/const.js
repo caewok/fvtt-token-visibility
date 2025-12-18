@@ -33,14 +33,16 @@ export const OTHER_MODULES = {
 
 // Hook init b/c game.modules is not initialized at start.
 Hooks.once("init", function() {
-  for ( const obj of Object.values(OTHER_MODULES) ) obj.ACTIVE = game.modules.get(obj.KEY)?.active;
+  for ( const [key, obj] of Object.entries(OTHER_MODULES) ) {
+    if ( !game.modules.get(obj.KEY)?.active ) delete OTHER_MODULES[key];
+  }
 });
 
 // API not necessarily available until ready hook. (Likely added at init.)
 Hooks.once("ready", function() {
   const { TERRAIN_MAPPER, RIDEABLE } = OTHER_MODULES;
-  if ( TERRAIN_MAPPER.ACTIVE ) TERRAIN_MAPPER.API = game.modules.get(TERRAIN_MAPPER.KEY).api;
-  if ( RIDEABLE.ACTIVE ) RIDEABLE.API = game.modules.get(RIDEABLE.KEY).api;
+  if ( TERRAIN_MAPPER ) TERRAIN_MAPPER.API = game.modules.get(TERRAIN_MAPPER.KEY).api;
+  if ( RIDEABLE ) RIDEABLE.API = game.modules.get(RIDEABLE.KEY).api;
 });
 
 export const FLAGS = {

@@ -215,10 +215,10 @@ export class ObstacleOcclusionTest {
     if ( !this.obstacles.tokens.size ) return; // Avoid processing below exceptions.
 
     // Filter all mounts and riders of both viewer and target.
-    const api = OTHER_MODULES.RIDEABLE.API;
-    if ( api ) {
+    const RIDEABLE = OTHER_MODULES.RIDEABLE;
+    if ( RIDEABLE ) {
       this.obstacles.tokens = this.obstacles.tokens.filter(t =>
-        !(api.RidingConnection(t, this.target) || api.RidingConnection(t, this.viewer)));
+        !(RIDEABLE.API.RidingConnection(t, this.target) || RIDEABLE.API.RidingConnection(t, this.viewer)));
     }
 
     // Test for dead/live/prone.
@@ -248,8 +248,7 @@ export class ObstacleOcclusionTest {
     if ( !CONFIG[MODULE_ID].regionsBlock ) return NULL_SET;
 
     const regions = frustum.findRegions();
-    const TM = OTHER_MODULES.TERRAIN_MAPPER;
-    if ( !TM.ACTIVE ) return regions;
+    if ( !OTHER_MODULES.TERRAIN_MAPPER ) return regions;
 
     // If Terrain Mapper is active, consider the region blocking if its wall type blocks sight.
     // TODO: Should handle limited and proximate wall types.
@@ -289,7 +288,7 @@ export class ObstacleOcclusionTest {
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
     const LEVELS = OTHER_MODULES.LEVELS;
-    if ( LEVELS.ACTIVE && senseType === "sight" ) {
+    if ( LEVELS && senseType === "sight" ) {
       return tiles.filter(t => !getFlagFast(t.document, LEVELS.KEY, LEVELS.FLAGS.ALLOW_SIGHT));
     }
     return tiles;

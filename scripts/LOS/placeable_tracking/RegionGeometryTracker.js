@@ -71,7 +71,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
   get hasMultiPlaneRamp() {
     const TM = OTHER_MODULES.TERRAIN_MAPPER;
-    if ( !TM.ACTIVE ) return false;
+    if ( !TM ) return false;
     const tmHandler = this.region[TM.KEY];
     return tmHandler.isRamp && tmHandler.splitPolygons;
   }
