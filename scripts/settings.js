@@ -10,7 +10,8 @@ PIXI
 import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator, pointIndexForSet } from "./LOSCalculator.js";
+import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
+import { pointIndexForSet } from "./LOS/SmallBitSet.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { LightStatusTracker } from "./LightStatusTracker.js";
 

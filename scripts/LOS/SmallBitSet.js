@@ -146,3 +146,11 @@ SmallBitSet.prototype.intersection = SmallBitSet.prototype.and;
 SmallBitSet.prototype.add = SmallBitSet.prototype.setIndex;
 SmallBitSet.prototype.remove = SmallBitSet.prototype.unsetIndex;
 SmallBitSet.prototype.has = SmallBitSet.prototype.hasIndex;
+
+/**
+ * Given a set of indices, get the bit value for the set.
+ * E.g., `pointIndexForSet(new Set([0, 1, 2, 3]))` returns 15. (2**4 - 1)
+ * @param {Set<number>} s
+ * @returns {number}
+ */
+export function pointIndexForSet(s) { return SmallBitSet.fromIndices([...s]).word; }
