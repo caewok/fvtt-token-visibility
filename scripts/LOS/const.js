@@ -28,11 +28,11 @@ export const TRACKER_IDS = {
 };
 
 /** @type {enum<string>} */
-export const TILE_THRESHOLD_SHAPE_OPTIONS: {
+export const TILE_THRESHOLD_SHAPE_OPTIONS = {
   RECTANGLE: "rectangle", // Fastest, but only trims rectangular transparent border without considering holes or irregular shapes.
   ALPHA_TRIANGLES: "alphaThresholdTriangles", // In testing, this seems very slow.
   ALPHA_POLYGONS: "alphaThresholdPolygons", // Much faster than triangles.
-},
+};
 
 // Track certain modules that complement features of this module.
 export const OTHER_MODULES = {

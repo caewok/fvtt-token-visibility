@@ -9,6 +9,7 @@ PIXI,
 "use strict";
 
 import { MODULE_ID } from "./const.js";
+import { LOS_CONFIG } from "./LOS/config.js";
 
 import { geoVoronoi, geoDelaunay } from "./LOS/d3-geo-voronoi-bundled.js";
 // import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
@@ -84,100 +85,6 @@ Hooks.once("init", function() {
   CONFIG[MODULE_ID] = {
 
     /**
-     * Which clipper version to use: 1 or 2.
-     */
-    clipperVersion: 1,
-
-    /**
-     * The percent threshold under which a tile should be considered transparent at that pixel.
-     * @type {number}
-     */
-    alphaThreshold: 0.75,
-
-    /**
-     * Limit the tile alpha pixels by contiguous area.
-     * Limits when a portion of the tile is considered an obstacle.
-     * For points or geometric algorithm, this will not be considered blocking.
-     */
-    alphaAreaThreshold: 25, // Area in pixels, e.g. 5x5 or ~ 8 x 3
-
-    /**
-     * Filter the various placeable instances in Javascript, as opposed to
-     * drawing all of them and letting the GPU filter them out.
-     * @type {boolean}
-     */
-    filterInstances: true,
-
-    /**
-     * In WebGL2 algorithm, use the stencil buffer to identify target pixels.
-     * @type {boolean}
-     */
-    useStencil: false,
-
-    /**
-     * When constructing a region geometry, whether to include walls that are interior to the region.
-     * E.g., when two shapes that form a region overlap.
-     * @type {boolean}
-     */
-    allowInteriorWalls: true,
-
-    /**
-     * Whether to constrain token shapes that overlap walls.
-     * When enabled, reshape the token border to fit within the overlapping walls (based on token center).
-     * Performance-intensive for custom token shapes. Used for obstructing tokens and target tokens.
-     * @type {boolean}
-     */
-    constrainTokens: false,
-
-    /**
-     * How to calculate the extent to which a token is lit by lighting or sounds.
-     * Used in Foundry's visibility test.
-     * 0: Ignore
-     * 1: Constrain the target token shape to only that portion of the shape within the lights' polygons.
-     * 2: Test occlusion between selected points or pixels and lights in the scene.
-     * @type {litTokenOptions}
-     */
-    litToken: 1,
-
-    /** @type {enum<number>} */
-    litTokenOptions: {
-      IGNORE: 0,
-      CONSTRAIN: 1,
-      OCCLUSION: 2,
-    },
-
-
-    /** @type {string} */
-    /*
-    loopCount, loopCount2             // With useRenderTexture: true,
-    blendCount, blendCount2           // With useRenderTexture: true,
-    reductionCount, reductionCount2   // With useRenderTexture: true,
-    readPixelsCount, readPixelsCount2 // With useRenderTexture: false or true
-    */
-    pixelCounterType: "readPixelsCount",
-
-    /**
-     * For WebGL2, whether to use a rendertexture to count pixels.
-     * @type {boolean}
-     */
-    useRenderTexture: false,
-
-    /**
-     * What to use when testing tiles for visibility.
-     * "rectangle": Trims the rectangular transparent border without considering holes or irregular shapes. Fast.
-     * "alphaThresholdTriangles": Triangles representing opaque parts of the tile texture (using earcut and marching squares). Slow.
-     * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares). Much faster than triangles.
-     * @type {tileThresholdShapeOptions}
-     */
-    tileThresholdShape: "alphaThresholdPolygons",
-
-    /**
-     * Size of the render texture (width and height) used in the webGL LOS algorithms.
-     * @type {number}
-     */
-    renderTextureSize: 128,
-
-    /**
      * Number of points to measure in one dimension for light type calculation.
      * Will be used for all 3 dimensions. E.g., 3 --> 3x3x3 in a cube, or 18 points total.
      * @type {number}
@@ -218,25 +125,6 @@ Hooks.once("init", function() {
       "per-pixel": DebugVisibilityViewerPerPixel,
     },
 
-    /**
-     * Function to determine if a token is alive.
-     * @type {function}
-     */
-    tokenIsAlive,
-
-    /**
-     * Function to determine if a token is dead
-     * @type {function}
-     */
-    tokenIsDead,
-
-    /**
-     * Include Terrain Mapper regions.
-     * TODO: Change to setting in the region config that also specifies
-     * sense type for blocking. (Likely more than one type)
-     * @type {boolean}
-     */
-    regionsBlock: true,
 
     /**
      * Configurations that affect the light meter.
@@ -288,41 +176,14 @@ Hooks.once("init", function() {
     },
 
     /**
-     * Use spheres to represent token shapes.
-     * Sphere radius will be the maximum of half of width, height, vertical height.
-     * Circular token shapes will be treated as cylinders if this is false.
-     * @type {boolean}
-     */
-    useTokenSphere: false,
-
-    /**
-     * Spacing between points for the per-pixel calculator.
-     * The per-pixel calculator tests a point lattice on the token shape to determine visibility.
-     * Larger spacing means fewer points and better performance, sacrificing resolution.
-     * @type {number} In pixel units
-     */
-    perPixelSpacing: 10,
-
-    /**
-     * Combine multiple viewpoints into one view by overlapping the views.
-     * If any viewpoint is fully visible, or the threshold visibility is met, this is ignored.
-     * The algorithm used varies somewhat depending on the underlying LOS algorithm:
-     * - Points and Per-Pixel: A point is visible if it is visible from any viewpoint.
-     * - Geometry: Each face is considered separately
-     * - Geometry sphere and WebGL2: Images overlaid.
-     */
-    useStereoBlending: false,
-
-    /**
      * Turn on certain debug logging.
      * @type {boolean}
      */
     debug: false,
+
+    ...LOS_CONFIG,
   };
 
-  Object.defineProperty(CONFIG[MODULE_ID], "ClipperPaths", {
-    get: () => CONFIG[MODULE_ID].clipperVersion === 1 ? ClipperPaths : Clipper2Paths
-  });
 
   game.modules.get(MODULE_ID).api = {
     bench,
@@ -369,29 +230,6 @@ Hooks.once("init", function() {
     twgl,
   };
 });
-
-
-/**
- * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsDead.
- * @param {Token} token
- * @returns {boolean} True if dead.
- */
-function tokenIsAlive(token) { return !tokenIsDead(token); }
-
-/**
- * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsAlive.
- * @param {Token} token
- * @returns {boolean} True if dead.
- */
-function tokenIsDead(token) {
-  const deadStatus = CONFIG.statusEffects.find(status => status.id === "dead");
-  if ( deadStatus && token.actor.statuses.has(deadStatus.id) ) return true;
-
-  const tokenHPAttribute = Settings.get(Settings.KEYS.TOKEN_HP_ATTRIBUTE)
-  const hp = getObjectProperty(token.actor, tokenHPAttribute);
-  if ( typeof hp !== "number" ) return false;
-  return hp <= 0;
-}
 
 
 Hooks.once("setup", function() {

@@ -312,6 +312,7 @@ export class GeometryRegion {
       tmp.reverse();
       clipperPoints = [tmp];
     }
+
     switch ( CONFIG[MODULE_ID].clipperVersion ) {
       // For both, the points are already scaled, so just pass through the scaling factor to the constructor.
       case 2: return new ClipperPaths(ClipperPaths.pathFromClipper1Points(clipperPoints), { scalingFactor });
