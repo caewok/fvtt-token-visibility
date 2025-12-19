@@ -4,7 +4,8 @@ canvas,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { TRACKER_IDS, MODULE_ID } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
+import { TRACKER_IDS } from "../const.js";
 import { DrawableObjectsWebGL2Abstract, DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import {
   GeometryRegion,
@@ -82,7 +83,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
   addPlaceableToInstanceSet(shape) {
     if ( shape.data.hole ) return; // NOTE: Could check if frustum contains region shape. But that would require accessing the occlusion tester frustum.
 
-    const id = shape[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
+    const id = shape[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
     const idx = this.trackers.model.facetIdMap.get(id);
     if ( typeof idx === "undefined" ) return;
     this.instanceSet.add(idx);
@@ -138,7 +139,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
   addPlaceableToInstanceSet(shape) {
     if ( shape.data.hole  ) return;
 
-    const id = shape[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
+    const id = shape[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
     const idx = this.trackers.model.facetIdMap.get(id); // TODO: This is probably wrong.
     if ( typeof idx === "undefined" ) return;
     this.instanceSet.add(idx);
@@ -260,7 +261,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
    */
   addPlaceableToInstanceSet(region) {
     // Group region shapes by whether they overlap.
-    const geomRegion = region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    const geomRegion = region[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
     for ( const shapeGroup of geomRegion.combineRegionShapes() ) {
       // If any holes in the shape group, pass the group to the polygon handler.
       if ( shapeGroup.some(shape => shape.isHole) ) this.drawables.polygon._filterShapeGroup(region, shapeGroup);

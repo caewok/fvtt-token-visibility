@@ -6,7 +6,8 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
+import { TRACKER_IDS } from "../const.js";
 import { WebGL2 } from "./WebGL2.js";
 import { GeometryInstanced } from "../geometry/GeometryDesc.js";
 import { VerticesIndicesTrackingBuffer } from "../placeable_tracking/TrackingBuffer.js";
@@ -451,7 +452,7 @@ export class DrawableObjectsWebGL2Abstract {
   _initializePlaceableHandler() {
     this.placeableLastUpdated.clear();
     for ( const placeable of this.placeables ) {
-      this.placeableLastUpdated.set(placeable, placeable[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId);
+      this.placeableLastUpdated.set(placeable, placeable[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId);
     }
   }
 
@@ -474,7 +475,7 @@ export class DrawableObjectsWebGL2Abstract {
 
     // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
     for ( const [placeable, updateId] of this.placeableLastUpdated.entries() ) {
-      const lastUpdate = placeable[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId;
+      const lastUpdate = placeable[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId;
       if ( lastUpdate <= updateId ) continue; // No changes for this instance since last update.
       if ( !this.updatePlaceableData(placeable) ) return this.updateAllPlaceableData(); // If _updateInstance set rebuildNeeded to true.
       this.placeableLastUpdated.set(placeable, lastUpdate);

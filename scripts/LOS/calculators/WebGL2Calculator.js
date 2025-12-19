@@ -160,7 +160,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   #renderTextureSize = 0;
 
   get renderTextureSize() {
-    if ( !this.#renderTextureSize ) this.#renderTextureSize = CONFIG[MODULE_ID].renderTextureSize;
+    if ( !this.#renderTextureSize ) this.#renderTextureSize = CONFIG[MODULE_ID].renderTextureSize || 128;
     return this.#renderTextureSize;
   }
 

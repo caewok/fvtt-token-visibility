@@ -209,7 +209,7 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     if ( !(alphaThreshold && tile.evPixelCache) ) return null;
     const threshold = 255 * alphaThreshold;
     const pixels = tile.evPixelCache.pixels;
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths || CONFIG.GeometryLib.ClipperPaths;
 
     // Convert pixels to isobands.
     const width = tile.evPixelCache.width
@@ -249,8 +249,8 @@ export class TileGeometryTracker extends allGeometryMixin(AbstractPlaceableGeome
     }
 
     // Use Clipper to clean the polygons. Leave as clipper paths for earcut later.
-    const paths = CONFIG[MODULE_ID].ClipperPaths.fromPolygons(polys, { scalingFactor: 100 });
-    return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold);
+    const paths = ClipperPaths.fromPolygons(polys, { scalingFactor: 100 });
+    return paths.clean().trimByArea(CONFIG[MODULE_ID].alphaAreaThreshold ?? 25);
   }
 
 

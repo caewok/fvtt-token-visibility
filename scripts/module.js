@@ -164,19 +164,12 @@ Hooks.once("init", function() {
 
     /**
      * What to use when testing tiles for visibility.
-     * "triangles": Basic two flat triangles that form a rectangle
-     * "alphaThresholdTriangles": triangles representing opaque parts of the tile texture (using earcut and marching squares)
-     * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares)
+     * "rectangle": Trims the rectangular transparent border without considering holes or irregular shapes. Fast.
+     * "alphaThresholdTriangles": Triangles representing opaque parts of the tile texture (using earcut and marching squares). Slow.
+     * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares). Much faster than triangles.
      * @type {tileThresholdShapeOptions}
      */
     tileThresholdShape: "alphaThresholdPolygons",
-
-    /** @type {enum<string>} */
-    tileThresholdShapeOptions: {
-      RECTANGLE: "rectangle", // Fastest, but only trims rectangular transparent border without considering holes or irregular shapes.
-      ALPHA_TRIANGLES: "alphaThresholdTriangles", // In testing, this seems very slow.
-      ALPHA_POLYGONS: "alphaThresholdPolygons", // Much faster than triangles.
-    },
 
     /**
      * Size of the render texture (width and height) used in the webGL LOS algorithms.
@@ -193,7 +186,6 @@ Hooks.once("init", function() {
 
     /**
      * Classes and associated calculators that can determine percent visibility.
-     * Created and initialized at canvasReady hook
      * Each calculator can calculate visibility based on viewer, target, and optional viewer/target locations.
      */
     calculatorClasses: {

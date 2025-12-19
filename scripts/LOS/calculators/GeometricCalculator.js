@@ -8,11 +8,12 @@ PIXI,
 "use strict";
 
 // Base folder
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
 import { Settings } from "../../settings.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
+import { TRACKER_IDS, TILE_THRESHOLD_SHAPE_OPTIONS } from "../const.js";
 import { Camera } from "../Camera.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "../placeable_tracking/TokenGeometryTracker.js";
@@ -156,7 +157,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _combineObstaclePolys() {
     const blockingPolys = this.blockingPolys;
 
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths || CONFIG.GeometryLib.ClipperPaths;
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const n = blockingPolys.length;
     if ( !n ) return new ClipperPaths(undefined, { scalingFactor });
@@ -213,9 +214,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * @returns {ClipperPaths}
    */
   _combineTerrainPolys() {
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths || CONFIG.GeometryLib.ClipperPaths;
     const blockingTerrainPolys = this.blockingTerrainPolys;
     const scalingFactor = this.constructor.SCALING_FACTOR;
-    const blockingTerrainPaths = new CONFIG[MODULE_ID].ClipperPaths()
+    const blockingTerrainPaths = new ClipperPaths()
 
     // The intersection of each two terrain polygons forms a blocking path.
     // Only need to test each combination once.
@@ -318,7 +320,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Construct target polygons.
    */
   _targetPolygons() {
-    const atv = this.target[MODULE_ID];
+    const atv = this.target[TRACKER_IDS.BASE];
     let geometry;
     switch ( this._config.tokenShapeType ) {
       case "tokenBorder": geometry = atv[TokenGeometryTracker.ID]; break;
@@ -331,14 +333,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _lookAtObjectWithPerspective(object) {
-    const geom = object[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    const geom = object[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
     let polys;
     if ( object instanceof foundry.canvas.placeables.Tile ) {
-      const opts = CONFIG[MODULE_ID].tileThresholdShapeOptions;
       let label;
-      switch ( CONFIG[MODULE_ID].tileThresholdShape ) {
-        case opts.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
-        case opts.ALPHA_POLYGONS: /* eslint-disable-line no-fallthrough */
+      switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
+        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
+        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: /* eslint-disable-line no-fallthrough */
           label ??= "alphaThresholdPolygons";
           polys = [geom[label].top.clone(), geom[label].bottom.clone()];
           polys.forEach(polygons3d => polygons3d.polygons = this.occlusionTester.filterPolys3d(polygons3d.polygons));

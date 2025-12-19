@@ -6,7 +6,8 @@ CONFIG,
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2Abstract, DrawableObjectsWebGL2Abstract } from "./DrawableObjects.js";
-import { MODULE_ID, OTHER_MODULES, FLAGS, TRACKER_IDS } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
+import { TRACKER_IDS, OTHER_MODULES } from "../const.js";
 import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { TokenGeometryTracker } from "../placeable_tracking/TokenGeometryTracker.js";
 import { Hex3dVertices } from "../geometry/BasicVertices.js";
@@ -269,7 +270,7 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
   validateInstances() {
     // If the tracker has been updated, check for new token hex types.
     for ( const [token, updateId] of this.placeableLastUpdated.entries() ) {
-      const lastUpdate = placeable[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId;
+      const lastUpdate = placeable[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId;
       if ( lastUpdate <= updateId ) continue; // No changes for this instance since last update.
       const hexKey = Hex3dVertices.hexKeyForToken(token);
       if ( !this.drawables.has(hexKey) ) {

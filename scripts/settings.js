@@ -642,6 +642,3 @@ const configKeyForSetting = {
   [SETTINGS.DEAD_TOKENS_BLOCK]: "blocking.tokens.dead",
   [SETTINGS.PRONE_TOKENS_BLOCK]: "blocking.tokens.prone",
 }
-
-const ALG_SYMBOLS = {};
-Object.values(SETTINGS.LOS.TARGET.TYPES).forEach(value => ALG_SYMBOLS[value] = Symbol(value));

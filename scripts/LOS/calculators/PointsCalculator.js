@@ -7,7 +7,8 @@ PIXI,
 "use strict";
 
 // Base folder
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
+import { TRACKER_IDS } from "../const.js";
 import { Settings } from "../../settings.js";
 
 // LOS folder
@@ -219,13 +220,13 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   /** @type {Polygon3d[]} */
   get targetSurfaces() {
-    const faces = this.target[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].faces;
+    const faces = this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].faces;
     return [faces.top, faces.bottom, ...faces.sides];
   }
 
   /** @type {Point3d[][]} */
   get targetPoints() {
-    const facePoints = this.target[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].facePoints;
+    const facePoints = this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].facePoints;
     return [facePoints.top, facePoints.bottom, ...facePoints.sides];
   }
 

@@ -7,6 +7,7 @@ Wall,
 "use strict";
 
 // LOS folder
+import { OTHER_MODULES, TRACKER_IDS, TILE_THRESHOLD_SHAPE_OPTIONS } from "./const.js";
 import { Frustum } from "./Frustum.js";
 import {
   NULL_SET,
@@ -14,7 +15,7 @@ import {
   getFlagFast } from "./util.js";
 
 // Base folder
-import { MODULE_ID, OTHER_MODULES, TRACKER_IDS } from "../const.js";
+import { MODULE_ID } from "../const.js";
 
 // Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -116,14 +117,14 @@ export class ObstacleOcclusionTest {
   }
 
   wallsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.walls.some(wall => wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null);
+    return this.obstacles.walls.some(wall => wall[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null);
   }
 
   terrainWallsOcclude(rayOrigin, rayDirection) {
     // console.debug(`rayOrigin ${rayOrigin}, rayDirection ${rayDirection} for ${this.obstacles.terrainWalls.size} terrain walls.`);
     let limitedOcclusion = 0;
     for ( const wall of this.obstacles.terrainWalls ) {
-      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) === null ) continue;
+      if ( wall[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) === null ) continue;
       if ( limitedOcclusion++ ) return true;
     }
     return false;
@@ -133,21 +134,21 @@ export class ObstacleOcclusionTest {
     for ( const wall of [...this.obstacles.proximateWalls, ...this.obstacles.reverseProximateWalls] ) {
       // If the proximity threshold is met, this edge excluded from perception calculations.
       if ( wall.edge.applyThreshold(this._config.senseType, rayOrigin) ) continue;
-      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null ) return true;
+      if ( wall[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null ) return true;
     }
     return false;
   }
 
   tilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
+    return this.obstacles.tiles.some(tile => tile[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   tokensOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tokens.some(token => token[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
+    return this.obstacles.tokens.some(token => token[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   regionsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.regions.some(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
+    return this.obstacles.regions.some(region => region[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   filterPolys3d(polys) { return polys.filter(poly => this.frustum.poly3dWithinFrustum(poly)); }
@@ -337,18 +338,17 @@ export class ObstacleOcclusionTest {
           obstacles.forEach(wall => draw.segment(wall, { color }));
           break;
         case "tiles": {
-          const tileOpts = CONFIG[MODULE_ID].tileThresholdShapeOptions;
           const drawOpts = { draw, color, fillAlpha: 0.1, fill: color };
           let label;
-          switch ( CONFIG[MODULE_ID].tileThresholdShape ) {
-            case tileOpts.RECTANGLE:
-              obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].faces.top.draw2d(drawOpts));
+          switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
+            case TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE:
+              obstacles.forEach(tile => tile[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].faces.top.draw2d(drawOpts));
               break;
-            case tileOpts.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
-            case tileOpts.ALPHA_POLYGONS:
+            case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
+            case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS:
               label ??= "alphaThresholdPolygons";
               obstacles.forEach(tile => {
-                const polygons3d = tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE][label].top.clone();
+                const polygons3d = tile[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE][label].top.clone();
                 polygons3d.polygons = this.filterPolys3d(polygons3d.polygons);
                 polygons3d.draw2d(drawOpts);
               });
@@ -360,7 +360,7 @@ export class ObstacleOcclusionTest {
           obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
           break;
         case "regions":
-          obstacles.forEach(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE]
+          obstacles.forEach(region => region[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE]
             .faces.top.draw2d(drawOpts));
           break;
       }

@@ -7,7 +7,8 @@ PIXI
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "../const.js";
+import { MODULE_ID } from "../const.js";
+import { TRACKER_IDS } from "./const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Triangle3d, Quad3d } from "../geometry/3d/Polygon3d.js";
 import { AABB3d } from "../geometry/AABB.js";
@@ -351,7 +352,7 @@ export class Frustum {
    * @returns {PlaceableGeometryTracker|false}
    */
   #geometryWithinAABB(placeable) {
-    const geometry = placeable[MODULE_ID]?.[TRACKER_IDS.GEOMETRY.PLACEABLE];
+    const geometry = placeable[TRACKER_IDS.BASE]?.[TRACKER_IDS.GEOMETRY.PLACEABLE];
     if ( !geometry ) {
       console.warn(`${this.constructor.name}|geometryWithinAABB|${placeable.id} does not have a geometry object.`, placeable);
       return false;
