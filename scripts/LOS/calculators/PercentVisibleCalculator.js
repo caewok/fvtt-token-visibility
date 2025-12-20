@@ -194,6 +194,20 @@ export class PercentVisibleResult {
 export class PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleResult;
 
+
+
+  /**
+   * @param {CalculatorConfig} cfg
+   */
+  constructor(cfg = {}) {
+    // Set default configuration first and then override with passed-through values.
+    this.#permanentConfig = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.restorePermanentConfig();
+    this.occlusionTester._config = this._config; // Sync the configs.
+  }
+
+  // ----- NOTE: Configuration ----- //
+
   /** @type {CalculatorConfig} */
   static defaultConfiguration = {
     blocking: {
@@ -211,16 +225,6 @@ export class PercentVisibleCalculatorAbstract {
     largeTarget: false,
     radius: null, // Default is to use the viewer's vision lightRadius or ∞.
   };
-
-  /**
-   * @param {CalculatorConfig} cfg
-   */
-  constructor(cfg = {}) {
-    // Set default configuration first and then override with passed-through values.
-    this.#permanentConfig = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
-    this.restorePermanentConfig();
-    this.occlusionTester._config = this._config; // Sync the configs.
-  }
 
   /** @type {CalculatorConfig} */
   #permanentConfig = {};
@@ -253,7 +257,7 @@ export class PercentVisibleCalculatorAbstract {
 
   restorePermanentConfig() {
     if ( !this.#hasTmpConfig ) return;
-    this._config = structuredClone(this._permanentConfig);
+    this._config = structuredClone(this.#permanentConfig);
     this.#hasTmpConfig = false;
   }
 
