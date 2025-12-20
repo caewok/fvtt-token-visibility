@@ -170,6 +170,20 @@ export class ViewerLOS {
   viewpoints = [];
 
   /**
+   * Initialize the view for the underlying calculator.
+   * Also set viewpoints if necessary.
+   */
+  initializeView(opts = {}) {
+    if ( opts.viewer ) this.viewer = opts.viewer;
+    if ( opts.target ) this.target = opts.target;
+    if ( opts.targetLocation ) this.targetLocation = opts.targetLocation;
+    if ( this.dirty ) this._clean();
+    this.calculator.initializeView({ viewpoint: opts.viewpoint, ...this });
+  }
+
+  _initializeCalculation() { this.calculator._initializeCalculation; }
+
+  /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
