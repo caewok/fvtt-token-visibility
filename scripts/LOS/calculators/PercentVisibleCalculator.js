@@ -203,7 +203,6 @@ export class PercentVisibleCalculatorAbstract {
     // Set default configuration first and then override with passed-through values.
     this.#permanentConfig = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
     this.restorePermanentConfig();
-    this.occlusionTester._config = this._config; // Sync the configs.
   }
 
   // ----- NOTE: Configuration ----- //
@@ -230,7 +229,7 @@ export class PercentVisibleCalculatorAbstract {
   #permanentConfig = {};
 
   /** @type {boolean} */
-  #hasTmpConfig = false;
+  #hasTmpConfig = true; // True to start so the permanent config gets copied over.
 
   get hasTemporaryConfig() { return this.#hasTmpConfig; }
 
@@ -258,6 +257,7 @@ export class PercentVisibleCalculatorAbstract {
   restorePermanentConfig() {
     if ( !this.#hasTmpConfig ) return;
     this._config = structuredClone(this.#permanentConfig);
+    this.occlusionTester._config = this._config; // Sync the configs.
     this.#hasTmpConfig = false;
   }
 
