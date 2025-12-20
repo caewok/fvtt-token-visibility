@@ -224,6 +224,10 @@ export class PercentVisibleCalculatorAbstract {
 
   get radius() { return this._config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
 
+  get tokensBlock() { return this._config.blocking.tokens.dead || this._config.blocking.tokens.live; }
+
+  get nonTokensBlock() { return this._config.blocking.walls || this._config.blocking.tiles || this._config.blocking.regions; }
+
   // ----- NOTE: Basic property getters / setters ---- //
 
   /** @type {Token} */
