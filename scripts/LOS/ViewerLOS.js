@@ -16,7 +16,6 @@ import { Draw } from "../geometry/Draw.js";
 // LOS folder
 import { tokensOverlap, insetPoints } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { SmallBitSet } from "./SmallBitSet.js";
 
 // Viewpoint algorithms.
@@ -254,8 +253,11 @@ export class ViewerLOS {
     return -1;
   }
 
-
-  calculate() {
+  /**
+   * Calculate the line-of-sight for a set of viewpoints.
+   * @param {CalculatorConfig} cfg
+   */
+  calculate(cfg) {
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
     this.calculator.initializeView(this);
     if ( this.dirty ) this._clean();
@@ -266,6 +268,9 @@ export class ViewerLOS {
       this._percentVisible = simpleTest;
       return;
     }
+
+    // Set the calculator config here to avoid doing it repeatedly in the loop.
+    if ( cfg ) this.calculator.config = cfg;
 
     // Test each viewpoint until unobscured is 1.
     for ( const vp of this.viewpoints ) {
