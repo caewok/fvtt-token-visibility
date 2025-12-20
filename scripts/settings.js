@@ -619,7 +619,7 @@ export class Settings extends ModuleSettingsAbstract {
       default: { /* eslint-disable-line no-fallthrough */
         const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
         const currCalc = currentCalculator();
-        currCalc.config = config;
+        currCalc.permanentConfig = config;
       }
     }
   }

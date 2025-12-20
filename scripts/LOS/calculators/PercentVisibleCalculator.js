@@ -186,13 +186,15 @@ export class PercentVisibleResult {
 }
 
 /* Percent visible calculator
-
-Calculate percent visibility for a token viewer, light, or sound looking at a target token.
-
-*/
+ * Calculate percent visibility for a token viewer, light, or sound looking at a target token.
+ *
+ * When constructed, stores a default configuration as modified by the constructor input ("permanent config").
+ * Config can be temporarily overridden and reset. Calling `calculate` resets and takes optional temp config.
+ */
 export class PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleResult;
 
+  /** @type {CalculatorConfig} */
   static defaultConfiguration = {
     blocking: {
       walls: true,
@@ -210,17 +212,50 @@ export class PercentVisibleCalculatorAbstract {
     radius: null, // Default is to use the viewer's vision lightRadius or ∞.
   };
 
+  /**
+   * @param {CalculatorConfig} cfg
+   */
   constructor(cfg = {}) {
     // Set default configuration first and then override with passed-through values.
-    this._config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.#permanentConfig = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.restorePermanentConfig();
     this.occlusionTester._config = this._config; // Sync the configs.
   }
 
-  _config = {};
+  /** @type {CalculatorConfig} */
+  #permanentConfig = {};
+
+  /** @type {boolean} */
+  #hasTmpConfig = false;
+
+  get hasTemporaryConfig() { return this.#hasTmpConfig; }
+
+  /** @type {CalculatorConfig} */
+  _config = {}; // Not private so subclasses can access without structuredClone copy.
 
   get config() { return structuredClone(this._config); }
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
+  set config(cfg = {}) {
+    foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false });
+    this.#hasTmpConfig = true;
+  }
+
+  /**
+   * Modify one or more settings of the permanent config.
+   * Also causes the temp config to be reset.
+   * @param {CalculatorConfig} cfg
+   */
+  set permanentConfig(cfg) {
+    foundry.utils.mergeObject(this.#permanentConfig, cfg, { inplace: true, insertKeys: false });
+    this.#hasTmpConfig = true;
+    this.restorePermanentConfig();
+  }
+
+  restorePermanentConfig() {
+    if ( !this.#hasTmpConfig ) return;
+    this._config = structuredClone(this._permanentConfig);
+    this.#hasTmpConfig = false;
+  }
 
   get radius() { return this._config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
 
@@ -323,10 +358,13 @@ export class PercentVisibleCalculatorAbstract {
    * Return the visibility result for the current calculator state.
    * Use _initializeView to set state or set individually.
    * Also depends on config.
+   * @param {CalculatorConfig} cfg
    * @returns {PercentVisibleResult}
    */
-  calculate() {
+  calculate(cfg) {
     // console.debug("PercentVisibleCalculator|calculate");
+    this.restorePermanentConfig();
+    if ( cfg ) this.config = cfg;
     this._initializeCalculation();
     return this._calculate();
   }
