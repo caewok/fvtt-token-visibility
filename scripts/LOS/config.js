@@ -5,6 +5,7 @@ Hooks
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+import { getObjectProperty } from "./util.js";
 
 export const LOS_CONFIG = {
 
