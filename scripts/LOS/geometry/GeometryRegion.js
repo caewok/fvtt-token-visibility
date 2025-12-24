@@ -195,7 +195,7 @@ export class GeometryRegion {
 
   groupRegionShapes(uniqueShapes) {
     uniqueShapes ??= this.combineRegionShapes();
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths || CONFIG.GeometryLib.ClipperPaths;
     const out = {
       circle: [],
       ellipse: [],
@@ -312,10 +312,11 @@ export class GeometryRegion {
       tmp.reverse();
       clipperPoints = [tmp];
     }
+
     switch ( CONFIG[MODULE_ID].clipperVersion ) {
       // For both, the points are already scaled, so just pass through the scaling factor to the constructor.
-      case 1: return new ClipperPaths(clipperPoints, { scalingFactor });
       case 2: return new ClipperPaths(ClipperPaths.pathFromClipper1Points(clipperPoints), { scalingFactor });
+      default: return new ClipperPaths(clipperPoints, { scalingFactor });
     }
   }
 

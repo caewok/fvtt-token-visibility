@@ -5,19 +5,19 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { WebGL2 } from "./WebGL2.js";
-import { RenderObstaclesWebGL2 } from "./RenderObstacles.js";
-import { RedPixelCounter } from "./RedPixelCounter.js";
-import * as twgl from "./twgl.js";
+// WebGL2 folder
+import { WebGL2 } from "../WebGL2/WebGL2.js";
+import { RenderObstaclesWebGL2 } from "../WebGL2/RenderObstacles.js";
+import { RedPixelCounter } from "../WebGL2/RedPixelCounter.js";
+import * as twgl from "../WebGL2/twgl.js";
 
+// LOS folder
+import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
+import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
+import { checkFramebufferStatus, log } from "../util.js";
 
 // Base folder
 import { MODULE_ID } from "../../const.js";
-
-// LOS folder
-import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "../calculators/PercentVisibleCalculator.js";
-import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
-import { checkFramebufferStatus } from "../util.js";
 
 /**
  * @typedef {object} WebGL2CalculatorConfig
@@ -129,7 +129,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   }
 
   /** @type {RenderObstaclesWebGL2} */
-  renderObstacles;
+  renderer;
 
   #initialized = false;
 
@@ -137,8 +137,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( this.#initialized ) return;
     await super.initialize();
     const size = this.renderTextureSize;
-    this.renderObstacles = new RenderObstaclesWebGL2({ webGL2: this.constructor.webGL2, senseType: this.config.senseType });
-    await this.renderObstacles.initialize();
+    this.renderer = new RenderObstaclesWebGL2({ webGL2: this.constructor.webGL2, senseType: this.config.senseType });
+    await this.renderer.initialize();
     this._initializeFramebuffer();
     this.redPixelCounter.initialize(size, size);
     this.#initialized = true;
@@ -160,7 +160,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   #renderTextureSize = 0;
 
   get renderTextureSize() {
-    if ( !this.#renderTextureSize ) this.#renderTextureSize = CONFIG[MODULE_ID].renderTextureSize;
+    if ( !this.#renderTextureSize ) this.#renderTextureSize = CONFIG[MODULE_ID].renderTextureSize || 128;
     return this.#renderTextureSize;
   }
 
@@ -197,14 +197,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
-
   static nonRTCountTypes = new Set([])
-
-
-  initializeCalculations() {
-    // Don't use light testing or occlusion testers, so can skip the parent initializeCalculations.
-    this.renderObstacles.prerender();
-  }
 
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
@@ -212,26 +205,30 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( !this.#initialized ) return result.makeFullyNotVisible();
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
-    this.initializeCalculations();
-    const { viewer, viewpoint, target, targetLocation } = this;
-    const { useStencil, useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
+    this.renderer.prerender();
+    const { viewpoint, target, targetLocation } = this;
+    const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
     const gl = this.gl;
     let res;
+    log("\n");
+    log("WebGL2Calc|Rendering For Calculation");
+    this.renderer.setCamera(viewpoint, target, { targetLocation });
+
     if ( useRenderTexture ) {
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
-      this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, useStencil, clear: true, frame});
-      this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false, frame });
+      this._renderTarget({ frame });
+      this._renderObstacles({ frame });
       res = this.redPixelCounter[pixelCounterType](this.renderTexture);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
-      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, useStencil, clear: true });
-      this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false });
+      this._renderTarget();
+      this._renderObstacles();
+      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2"
+        ? pixelCounterType : "readPixelsCount" ;
       res = this.redPixelCounter[type]();
     }
-
 
     const lastResult = this._createResult();
     if ( pixelCounterType.startsWith("map") ) {
@@ -244,32 +241,34 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     return lastResult;
   }
 
-//   async _calculate() {
-//     const { useStencil, useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
-//     const gl = this.gl;
-//     let res;
-//     if ( useRenderTexture ) {
-//       const { fbInfo, frame } = this;
-//       twgl.bindFramebufferInfo(gl, fbInfo);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, useStencil, clear: true, frame});
-//       this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false, frame });
-//       res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture);
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     } else {
-//       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, useStencil, clear: true });
-//       this.renderObstacles.renderObstacles(viewpoint, target, { viewer, targetLocation, useStencil, clear: false });
-//       res = await this.redPixelCounter[`${type}Async`]();
-//     }
-//     this.counts[TOTAL] = res.red;
-//     this.counts[OBSCURED] = res.redBlocked;
-//   }
+  /**
+   * Render the target.
+   * Assumes camera has been set for the renderer.
+   * Assumes prerender has already been done.
+   * Clears the prior render, if any.
+   * @param {PIXI.Rectangle} [frame]        Dimensions in which to draw the target
+   */
+  _renderTarget(opts = {}, renderer = this.renderer) {
+    opts.clear ??= true;
+    opts.useStencil = CONFIG[MODULE_ID].useStencil;
+    renderer.renderTarget(this.target, opts);
+  }
 
+  /**
+   * Render all obstacles within the viewable frustum.
+   * Assumes camera has been set for the renderer.
+   * Assumes prerender has already been done.
+   * @param {PIXI.Rectangle} [frame]        Dimensions in which to draw the obstacles
+   */
+  _renderObstacles(opts = {}, renderer = this.renderer) {
+    opts.viewer = this.viewer;
+    opts.clear = false;
+    opts.useStencil = CONFIG[MODULE_ID].useStencil;
 
-
-
-
+    // For loop or flatMap appears to make little difference in performance
+    const obstacles = Object.values(this.occlusionTester.obstacles).flatMap(obstacleSet => [...obstacleSet]);
+    renderer.renderObstacles(obstacles, opts);
+  }
 
   /**
    * Constrained target area, counting both lit and unlit portions of the target.
@@ -285,13 +284,13 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 //     if ( useRenderTexture ) {
 //       const { fbInfo, frame } = this;
 //       twgl.bindFramebufferInfo(gl, fbInfo);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, frame });
+//       this.renderer.renderTarget(viewpoint, target, { targetLocation, frame });
 //       res = this.redPixelCounter[pixelCounterType](this.renderTexture, redOnly);
 //       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 //     } else {
 //       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
 //       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation });
+//       this.renderer.renderTarget(viewpoint, target, { targetLocation });
 //       res = this.redPixelCounter[type](undefined, redOnly);
 //     }
 //     return res.red;
@@ -305,13 +304,13 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 //     if ( useRenderTexture ) {
 //       const { fbInfo, frame } = this;
 //       twgl.bindFramebufferInfo(gl, fbInfo);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation, frame });
+//       this.renderer.renderTarget(viewpoint, target, { targetLocation, frame });
 //       res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture, redOnly);
 //       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 //     } else {
 //       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
 //       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//       this.renderObstacles.renderTarget(viewpoint, target, { targetLocation });
+//       this.renderer.renderTarget(viewpoint, target, { targetLocation });
 //       res = await this.redPixelCounter[`${type}Async`](undefined, redOnly);
 //     }
 //     return res.red;
@@ -319,7 +318,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 
   destroy() {
     super.destroy();
-    this.renderObstacles.destroy();
+    this.renderer.destroy();
   }
 }
 
@@ -348,17 +347,24 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
   updateDebugForPercentVisible(percentVisible) {
     this.renderer.config = { senseType: this.viewerLOS?.config.senseType ?? "sight" };
+    const calc = this.viewerLOS.calculator;
+
     super.updateDebugForPercentVisible(percentVisible);
     this.renderer.prerender();
-    // TODO: Handle multiple viewpoints.
 
+    log("\n");
+    log("WebGL2Calc|Rendering Debug");
     const frames = this._canvasDimensionsForViewpoints();
     for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
-      const { viewer, target, viewpoint: viewpoint, targetLocation } = this.viewerLOS.viewpoints[i];
+      const { viewer, target, viewpoint, targetLocation } = this.viewerLOS.viewpoints[i];
       const frame = frames[i];
       const clear = i === 0;
-      this.renderer.renderTarget(viewpoint, target, { targetLocation, frame, clear });
-      this.renderer.renderObstacles(viewpoint, target, { viewer, targetLocation, frame });
+
+      calc.initializeView({ viewer, target, viewpoint, targetLocation });
+      calc._initializeCalculation();
+      this.renderer.setCamera(viewpoint, target, { targetLocation });
+      calc._renderTarget({ frame, clear }, this.renderer);
+      calc._renderObstacles({ frame }, this.renderer);
     }
   }
 

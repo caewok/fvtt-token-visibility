@@ -6,7 +6,8 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
+import { TRACKER_IDS } from "../const.js";
 import {
   GeometryToken,
   GeometryConstrainedToken,
@@ -175,8 +176,11 @@ export class TokenGeometryTracker extends allGeometryMixin(AbstractPlaceableGeom
    * @returns {number|null} The distance along the ray
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
-    const t = this.quad3d.intersectionT(rayOrigin, rayDirection);
-    return (t !== null && almostBetween(t, minT, maxT)) ? t : null;
+    for ( const face of this.iterateFaces() ) {
+      const t = face.intersectionT(rayOrigin, rayDirection);
+      if ( t !== null && almostBetween(t, minT, maxT) ) return t;
+    }
+    return null;
   }
 
   /**
@@ -217,7 +221,7 @@ export class LitTokenGeometryTracker extends TokenGeometryTracker {
 
   static _onLightingUpdate() {
     canvas.tokens.placeables.forEach(t => {
-      const geom = t[MODULE_ID][this.ID];
+      const geom = t[TRACKER_IDS.BASE][this.ID];
       if ( !geom ) return;
       geom._updateFaces();
     });
@@ -258,7 +262,7 @@ export class BrightLitTokenGeometryTracker extends TokenGeometryTracker {
 
   static _onLightingUpdate() {
     canvas.tokens.placeables.forEach(t => {
-      const geom = t[MODULE_ID][this.ID];
+      const geom = t[TRACKER_IDS.BASE][this.ID];
       if ( !geom ) return;
       geom._updateFaces();
     });

@@ -1,21 +1,23 @@
 /* globals
-
+canvas,
+CONST,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
-import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import { GeometryWall } from "../geometry/GeometryWall.js";
-import { WallTracker } from "../placeable_tracking/WallTracker.js";
+import { WallGeometryTracker } from "../placeable_tracking/WallGeometryTracker.js";
 
 
 export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static trackerClass = WallTracker;
+  static trackerClass = WallGeometryTracker;
 
   /** @type {class} */
   static geomClass = GeometryWall;
+
+  get placeables() { return canvas.walls.placeables; }
 
   /** @type {boolean} */
   #directional = false;
@@ -34,33 +36,37 @@ export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   get senseType() { return this.renderer.senseType; }
 
+  /**
+   * Is this a terrain (limited) edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  static isTerrain(edge, { senseType = "sight" } = {}) {
+    return edge[senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
+  }
+
+  /**
+   * Is this a directional edge?
+   * @param {Edge} edge
+   * @returns {boolean}
+   */
+  static isDirectional(edge) { return Boolean(edge.direction); }
+
   _initializeGeoms() {
     const type = this.directional ? "directional" : "double";
     super._initializeGeoms({ type });
   }
 
   /**
-   * Filter the objects to be rendered by those that may be viewable between target and token.
+   * Filter the objects to be rendered.
    * Called after prerender, immediately prior to rendering.
-   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
-   * @param {object} [opts]                     Options from BlockingConfig (see ViewerLOS)
+   * @param {PlaceableObject[]} placeables      Placeable objects to be drawn
+   * @returns {PlaceableObject[]} Objects that can be rendered by this drawable.
    */
-  filterObjects(frustum, { blocking = {} } = {}) {
-    const instanceSet = this.instanceSet;
-    instanceSet.clear();
-    blocking.walls ??= true;
-    if ( !blocking.walls ) return;
-
-    // Limit to walls within the vision triangle
-    // Drop open doors.
-    const opts = { senseType: this.senseType };
-    const walls = ObstacleOcclusionTest.filterWallsByFrustum(frustum, opts);
-    for ( const wall of walls ) {
-      if ( !this.placeableTracker.hasPlaceable(wall) ) continue;
-      if ( WallTracker.isTerrain(wall, opts) ^ this.limitedWall ) continue;
-      if ( WallTracker.isDirectional(wall) ^ this.directional ) continue;
-      const idx = this._indexForPlaceable(wall);
-      this.instanceSet.add(idx);
-    }
+  filterObjects(walls, { senseType = "sight" } = {}) {
+    return super.filterObjects(walls)
+      .filter(wall => !(
+        (this.constructor.isTerrain(wall, { senseType }) ^ this.limitedWall)
+          || (this.constructor.isDirectional(wall) ^ this.directional)));
   }
 }

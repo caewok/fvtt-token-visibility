@@ -7,7 +7,7 @@ foundry,
 import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { Settings } from "./settings.js";
 import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
-import { SmallBitSet } from "./LOS/SmallBitSet.js";
+import { pointIndexForSet } from "./LOS/SmallBitSet.js";
 
 // ViewerLOS = CachedViewerLOS;
 
@@ -25,8 +25,6 @@ export function currentDebugViewerClass(type) {
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[type];
   return debugViewers[calcName];
 }
-
-export function pointIndexForSet(s) { return SmallBitSet.fromIndices([...s]).word; }
 
 /**
  * @returns {TokenBlockingConfig}  See PercentVisibleCalculator.js
@@ -129,9 +127,9 @@ export function buildLOSViewer(viewer) {
 /**
  * Build an LOS calculator for this viewer that uses the current settings, modified by
  * custom parameters.
- * @param {Token} viewer                The viewing token
- * @param {LOSCalculator} calculator    Calculator to use
- * @param {object} [config]             Custom parameters to override default settings.
+ * @param {Token} viewer                    The viewing token
+ * @param {LOSCalculator} calculator        Calculator to use
+ * @param {object} [losCfg={}]              Custom parameters to override default settings.
  * @returns {ViewerLOS}
  */
 export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
@@ -143,10 +141,8 @@ export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
 
 /**
  * Build a debug viewer using the current settings.
- * @param {class} cl                    Class of the viewer
- * @param {Token} viewer                The viewing token
- * @param {LOSCalculator} calculator    Calculator to use
- * @param {object} [config]             Custom parameters to override default settings.
+ * @param {DebugVisibilityViewerAbstract} cl                    Class of the viewer
+ * @returns {DebugVisibilityViewerAbstract}
  */
 export function buildDebugViewer(cl) {
   const viewerLOSFn = viewer => viewer[MODULE_ID][TRACKER_IDS.VISIBILITY].losViewer;

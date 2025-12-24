@@ -42,7 +42,7 @@
     "tokenvisibility.settings.los-algorithm-sample-pixel": "Sample Pixel",
 
     "tokenvisibility.settings.los-points-viewer.Name": "Points",
-    "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Beware that this can dramatically increase the number of tests needed to determine visibility. Foundry default is 'Center' (one point)",
+    "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Foundry default is 'Center' (one point).",
 
     "tokenvisibility.settings.los-inset-viewer.Name": "Inset",
     "tokenvisibility.settings.los-inset-viewer.Hint": "For viewer points other than the center, what percentage to inset the point from the token border towards the token center.",
@@ -58,9 +58,6 @@
 
     "tokenvisibility.settings.los-inset-target.Name": "Inset",
     "tokenvisibility.settings.los-inset-target.Hint": "For target points other than the center, what percentage to inset the point from the token border towards the token center.",
-
-    "tokenvisibility.settings.los-points-3d.Name": "3d points",
-    "tokenvisibility.settings.los-points-3d.Hint": "Test the top and bottom of the target token in addition to the points in the middle of the token vertically.",
 
     "tokenvisibility.settings.debug-range.Name": "Debug Range",
     "tokenvisibility.settings.debug-range.Hint": "If enabled, will draw representation on the canvas of the token vision range. Note that tokens still may be visible if illuminated but out of range.",

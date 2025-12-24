@@ -16,13 +16,10 @@ import { Draw } from "../geometry/Draw.js";
 // LOS folder
 import { tokensOverlap, insetPoints } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
-import { ObstacleOcclusionTest } from "./ObstacleOcclusionTest.js";
 import { SmallBitSet } from "./SmallBitSet.js";
 
 // Viewpoint algorithms.
 import { Viewpoint } from "./Viewpoint.js";
-
-// import { WebGPUViewpoint, WebGPUViewpointAsync } from "./WebGPU/WebGPUViewpoint.js";
 
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
@@ -172,6 +169,25 @@ export class ViewerLOS {
   viewpoints = [];
 
   /**
+   * Initialize the view for the underlying calculator.
+   * Also set viewpoints if necessary.
+   */
+  initializeView(opts = {}) {
+    if ( opts.viewer ) this.viewer = opts.viewer;
+    if ( opts.target ) this.target = opts.target;
+    if ( opts.targetLocation ) this.targetLocation = opts.targetLocation;
+    if ( this.dirty ) this._clean();
+    this.calculator.initializeView({
+      ...opts,
+      viewer: this.viewer,
+      target: this.target,
+      targetLocation: this.targetLocation,
+    });
+  }
+
+  _initializeCalculation() { this.calculator._initializeCalculation(); }
+
+  /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
@@ -242,8 +258,11 @@ export class ViewerLOS {
     return -1;
   }
 
-
-  calculate() {
+  /**
+   * Calculate the line-of-sight for a set of viewpoints.
+   * @param {CalculatorConfig} cfg
+   */
+  calculate(cfg) {
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
     this.calculator.initializeView(this);
     if ( this.dirty ) this._clean();
@@ -254,6 +273,9 @@ export class ViewerLOS {
       this._percentVisible = simpleTest;
       return;
     }
+
+    // Set the calculator config here to avoid doing it repeatedly in the loop.
+    if ( cfg ) this.calculator.config = cfg;
 
     // Test each viewpoint until unobscured is 1.
     for ( const vp of this.viewpoints ) {
@@ -609,7 +631,6 @@ export class ViewerLOS {
    */
   _drawCanvasDebug(debugDraw, debugViewpointDraw) {
     this._drawVisibleTokenBorder(debugDraw);
-    this._drawFrustumLightSources(debugDraw);
     this._drawLineOfSightDebug(debugDraw);
     this.viewpoints.forEach(vp => vp._drawCanvasDebug(debugViewpointDraw));
   }
@@ -674,25 +695,6 @@ export class ViewerLOS {
     if ( this.target ) {
       const border = CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
       draw.shape(border, { color, fill: color, fillAlpha: 0.2});
-    }
-  }
-
-  /**
-   * For debugging.
-   * Draw the vision triangle between light source and target.
-   */
-  _drawFrustumLightSources(draw) {
-    if ( canvas.environment.globalLightSource.active ) return;
-    const ctr = Point3d.fromTokenCenter(this.target);
-    for ( const src of canvas.lighting.placeables ) {
-      const srcOrigin = Point3d.fromPointSource(src);
-      const dist2 = Point3d.distanceSquaredBetween(ctr, srcOrigin);
-      const isBright = src.brightRadius && (src.brightRadius ** 2) < dist2;
-      const isDim = (src.radius ** 2) < dist2;
-      if ( !(isDim || isBright) ) continue;
-      const fillAlpha = isBright ? 0.3 : 0.1;
-      const frustum = ObstacleOcclusionTest.frustum.rebuild({ viewpoint: srcOrigin, target: this.target });
-      frustum.draw2d({ draw, width: 0, fill: Draw.COLORS.yellow, fillAlpha });
     }
   }
 }

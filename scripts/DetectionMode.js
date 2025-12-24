@@ -5,7 +5,6 @@ foundry,
 "use strict";
 
 import { MODULE_ID, TRACKER_IDS } from "./const.js";
-// import { WebGPUViewpointAsync } from "./LOS/WebGPU/WebGPUViewpoint.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};

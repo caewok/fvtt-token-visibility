@@ -5,13 +5,14 @@ CONFIG,
 "use strict";
 
 // Base folder
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
 import { Settings } from "../../settings.js";
 
 // Calculator
 import { PercentVisiblePointsResultAbstract, PercentVisibleCalculatorPointsAbstract } from "./PointsCalculator.js";
 
 // LOS folder
+import { TRACKER_IDS } from "../const.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 
@@ -39,21 +40,20 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   /** @type {boolean} */
   get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
-  _calculate() {
-    // console.debug("PerPixelCalculator|_calculate");
+  _initializeCalculation() {
     this._initializeCamera();
-    return super._calculate();
+    super._initializeCalculation();
   }
 
   /** @type {Point3d[][]} */
   get targetPoints() {
-    if ( this.spherical ) return [this.target[MODULE_ID][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSpherePoints];
+    if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSpherePoints];
     return super.targetPoints;
   }
 
   /** @type {Polygon3d[]|[Sphere]} */
   get targetSurfaces() {
-    if ( this.spherical ) return [this.target[MODULE_ID][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSphere];
+    if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSphere];
     return super.targetSurfaces;
   }
 

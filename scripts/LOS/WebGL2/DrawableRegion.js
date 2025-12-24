@@ -1,35 +1,37 @@
 /* globals
+canvas,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../../const.js";
+import { TRACKER_IDS } from "../const.js";
 import { DrawableObjectsWebGL2Abstract, DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
-import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
 import {
   GeometryRegion,
   GeometryPolygonRegionShape,
   GeometryCircleRegionShape,
   GeometryEllipseRegionShape,
   GeometryRectangleRegionShape } from "../geometry/GeometryRegion.js";
-import { RegionTracker } from "../placeable_tracking/RegionTracker.js";
-import { log, isString } from "../util.js";
-const TERRAIN_MAPPER = "terrainmapper";
+import {
+  RegionGeometryTracker,
+  CircleRegionShapeGeometryTracker,
+  EllipseRegionShapeGeometryTracker,
+  RectangleRegionShapeGeometryTracker,
+  PolygonRegionShapeGeometryTracker,
+} from "../placeable_tracking/RegionGeometryTracker.js";
+import { log } from "../util.js";
 
 const RegionShapeMixin = function(Base) {
   class DrawableRegionShape extends Base {
-    static trackerClass = RegionTracker;
-
     constructor(renderer, regionDrawableObject) {
       super(renderer);
       this.regionDrawableObject = regionDrawableObject;
-      delete this.placeableTracker; // So the getter works. See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa/77093264.
     }
 
-    get placeableTracker() { return this.regionDrawableObject.placeableTracker; }
+    get placeables() { return canvas.regions.placeables;}
 
-    set placeableTracker(_value) { return; } // Ignore any attempts to set it but do not throw error.
-
-    get numInstances() { return this.placeableTracker.trackers[this.constructor.TYPE].numFacets; }
+    get numInstances() { return this.trackers.model.numFacets; }
 
     _initializePlaceableHandler() { return; } // Can skip b/c the region drawable controls the handler.
 
@@ -37,11 +39,21 @@ const RegionShapeMixin = function(Base) {
   return DrawableRegionShape;
 }
 
+const TRACKER_TYPES = {
+  ellipse: EllipseRegionShapeGeometryTracker,
+  circle: CircleRegionShapeGeometryTracker,
+  rectangle: RectangleRegionShapeGeometryTracker,
+  polygon: PolygonRegionShapeGeometryTracker,
+};
+
 export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
+  /** @type {class} */
+  static trackerClass = RegionGeometryTracker;
+
   _initializeOffsetTrackers() {
     // Don't need indices or vertices trackers.
     // Model matrices stored in placeableTracker.
-    this.trackers.model = this.placeableTracker.trackers[this.constructor.TYPE];
+    this.trackers.model = TRACKER_TYPES[this.constructor.TYPE].modelMatrixTracker;
   }
 
   _updateModelBufferForInstance(region) {
@@ -68,24 +80,13 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
   }
 
-  _filterShapesForRegion(frustum, region, _opts) {
-    if ( region[TERRAIN_MAPPER].isRamp ) return; // Handled by polygons.
+  addPlaceableToInstanceSet(shape) {
+    if ( shape.data.hole ) return; // NOTE: Could check if frustum contains region shape. But that would require accessing the occlusion tester frustum.
 
-    // Assume the region has already been filtered by Viewpoint.filterRegionsByFrustum.
-    // And this.placeableTracker.placeables has the region.
-    const regionShapeGroups = this.placeableTracker.shapeGroups.get(region);
-    const shapeGroupArr = regionShapeGroups[this.constructor.TYPE];
-    for ( const shapeGroup of shapeGroupArr ) {
-      const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
-      for ( const shape of shapeGroup.shapes ) {
-        if ( shape.data.hole ) continue; // Ignore holes.
-        if ( frustum.containsRegionShape(shape) ) {
-          const idx = this.trackers.model.facetIdMap.get(id);
-          this.instanceSet.add(idx);
-          break;
-        }
-      }
-    }
+    const id = shape[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
+    const idx = this.trackers.model.facetIdMap.get(id);
+    if ( typeof idx === "undefined" ) return;
+    this.instanceSet.add(idx);
   }
 }
 
@@ -131,31 +132,22 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
     delete this.geoms; // So the getter works. See https://stackoverflow.com/questions/77092766/override-getter-with-field-works-but-not-vice-versa/77093264.
   }
 
-  get geoms() { return this.placeableTracker.polygons; }
+  get geoms() { return []; } // return this.placeableTracker.polygons; }
 
   _initializeGeoms(_opts) { return; }
 
-  _filterShapesForRegion(frustum, region, _opts) {
-    // Assume the region has already been filtered by Viewpoint.filterRegionsByFrustum.
-    // And this.placeableTracker.placeables has the region.
-    const regionShapeGroups = this.placeableTracker.shapeGroups.get(region); // circle, ellipse, rectangle, polygon, combined
-    const groupTypes = ["polygon", "combined"];
-    if ( region[TERRAIN_MAPPER].isRamp ) groupTypes.push(...this.placeableTracker.constructor.MODEL_SHAPES);
-    for ( const groupType of groupTypes ) {
-      const shapeGroupArr = regionShapeGroups[groupType];
-      for ( const shapeGroup of shapeGroupArr ) {
-        const id = `${region.sourceId}_${shapeGroup.type}_${shapeGroup.idx}`;
-        if ( !this.trackers.vi.indices.facetIdMap.has(id) ) continue;
-        for ( const shape of shapeGroup.shapes ) {
-          if ( shape.data.hole ) continue; // Ignore holes.
-          if ( frustum.containsRegionShape(shape) ) {
-            const idx = this.trackers.vi.indices.facetIdMap.get(id);
-            this.instanceSet.add(idx);
-            break;
-          }
-        }
-      }
-    }
+  addPlaceableToInstanceSet(shape) {
+    if ( shape.data.hole  ) return;
+
+    const id = shape[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
+    const idx = this.trackers.model.facetIdMap.get(id); // TODO: This is probably wrong.
+    if ( typeof idx === "undefined" ) return;
+    this.instanceSet.add(idx);
+  }
+
+  _filterShapeGroup(region, shapeGroup) {
+    // TODO: Fix.
+
   }
 
   /**
@@ -198,15 +190,15 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
  */
 export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static trackerClass = RegionTracker;
-
   static geomClass = GeometryRegion;
+
+  get placeables() { return canvas.regions.placeables; }
 
   get numPolygons() { return this.placeableTracker.trackers.polygon.numFacets; }
 
   get numObjectsToDraw() {
     let n = 0;
-    for ( const drawable of Object.values(this.drawables) ) n += drawable.instanceSet.size;
+    for ( const drawable of Object.values(this.drawables) ) n += drawable.numObjectsToDraw;
     return n;
   }
 
@@ -244,14 +236,12 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   _initializeUniforms() { return; }
 
-  hasPlaceable(placeableOrId) {
-    // Check if this is a shape id, which is likely. If so, extract the region id.
-    if ( isString(placeableOrId) ) {
-      const regex = /^.*?(?=_)/; // Capture everything before the first underscore ("_").
-      const res = placeableOrId.match(regex);
-      if ( res ) placeableOrId = res[0];
-    }
-    return super.hasPlaceable(placeableOrId);
+
+  getPlaceableFromId(id) {
+    const regex = /^.*?(?=_)/; // Capture everything before the first underscore ("_").
+    const res = id.match(regex);
+    if ( res ) id = res[0];
+    return super.getPlaceableFromId(id);
   }
 
   validateInstances() {
@@ -259,26 +249,34 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 
   /**
-   * Filter the objects to be rendered by those that may be viewable between target and token.
-   * Called after prerender, immediately prior to rendering.
-   * Camera (viewer/target) are set by the renderer and will not change between now and render.
-   * @param {Frustum} frustum     Triangle shape used to represent the viewable area
-   * @param {object} [opts]
-   * @param {Token} [opts.viewer]
-   * @param {Token} [opts.target]
-   * @param {BlockingConfig} [opts.blocking]    Whether different objects block LOS
+   * Clear previous instances to be drawn.
    */
-  filterObjects(frustum, opts) {
+  clearInstances() {
     this.instanceSet.clear();
     for ( const drawable of Object.values(this.drawables) ) drawable.instanceSet.clear();
+  }
 
-    const regions = ObstacleOcclusionTest.filterRegionsByFrustum(frustum);
+  /**
+   * Add a specific placeable to the set of placeables to draw.
+   */
+  addPlaceableToInstanceSet(region) {
+    // Group region shapes by whether they overlap.
+    const geomRegion = region[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    for ( const shapeGroup of geomRegion.combineRegionShapes() ) {
+      // If any holes in the shape group, pass the group to the polygon handler.
+      if ( shapeGroup.some(shape => shape.isHole) ) this.drawables.polygon._filterShapeGroup(region, shapeGroup);
 
-    // For each region, determine which shapes are within the vision triangle.
-    // Add the id of each shape group to its respective drawable.
-    for ( const region of regions ) {
-      if ( !this.placeableTracker.hasPlaceable(region) ) continue;
-      for ( const drawable of Object.values(this.drawables) ) drawable._filterShapesForRegion(frustum, region, opts);
+      // Otherwise, add the region shape to its corresponding drawable.
+
+      for ( const shape of shapeGroup ) {
+        switch ( shape.data.type ) {
+          case "rectangle": this.drawables.rectangle.addPlaceableToInstanceSet(shape); break;
+          case "ellipse": this.drawables.ellipse.addPlaceableToInstanceSet(shape); break;
+          case "circle": this.drawables.circle.addPlaceableToInstanceSet(shape); break;
+          case "polygon": this.drawables.polygon.addPlaceableToInstanceSet(shape); break;
+          default: this.drawables.polygon.addPlaceableToInstanceSet(shape);
+        }
+      }
     }
   }
 

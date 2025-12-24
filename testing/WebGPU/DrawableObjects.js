@@ -11,9 +11,9 @@ import { GeometryDesc } from "./GeometryDesc.js";
 import { GeometryWallDesc } from "./GeometryWall.js";
 import { GeometryCubeDesc, GeometryConstrainedTokenDesc, GeometryLitTokenDesc, GeometryHexTokenShapesDesc, GeometryGridFromTokenDesc } from "./GeometryToken.js";
 import { GeometryHorizontalPlaneDesc } from "./GeometryTile.js";
-import { WallTracker } from "../placeable_tracking/WallTracker.js";
-import { TileTracker } from "../placeable_tracking/TileTracker.js";
-import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
+// import { WallTracker } from "../placeable_tracking/WallTracker.js";
+// import { TileTracker } from "../placeable_tracking/TileTracker.js";
+// import { TokenTracker } from "../placeable_tracking/TokenTracker.js";
 import { VariableLengthAbstractBuffer } from "../placeable_tracking/TrackingBuffer.js";
 
 
