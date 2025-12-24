@@ -1,3 +1,11 @@
+## 0.8.1
+Updates to support Token Cover module.
+WebGL algorithm now uses the same occlusion tester as other algorithms.
+Fix for blocking tokens not being rendered.
+Fix for rectangular regions not being rendered.
+Fix for new token dragged to scene not being correctly handled.
+Update libGeometry to v0.4.7.
+
 ## 0.8.0
 Updated for Foundry v13.
 
