@@ -6,7 +6,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { EPSILON, MODULE_ID, OTHER_MODULES } from "../const.js";
+import { EPSILON, MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { gridUnitsToPixels } from "../geometry/util.js";
 
@@ -508,12 +508,12 @@ export function isTypedArray(obj) {
  */
 export function regionElevation(region) {
   const tm = region.terrainmapper;
-  let topZ = (OTHER_MODULES.TERRAIN_MAPPER.ACTIVE && tm.isElevated)
+  let topZ = (tm && tm.isElevated)
     ? gridUnitsToPixels(tm.plateauElevation) : region.topZ;
   let bottomZ = region.bottomZ;
   if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
   if ( !(bottomZ && isFinite(bottomZ)) ) bottomZ = -1e06;
-  const rampFloor = (OTHER_MODULES.TERRAIN_MAPPER.ACTIVE && tm.isRamp) ? gridUnitsToPixels(tm.rampFloor) : null;
+  const rampFloor = (tm && tm.isRamp) ? gridUnitsToPixels(tm.rampFloor) : null;
   return { topZ, bottomZ, rampFloor };
 }
 

@@ -5,7 +5,8 @@ foundry,
 
 // Patches for the Token class
 
-import { MODULE_ID, TRACKER_IDS } from "./const.js";
+import { MODULE_ID } from "./const.js";
+import { TRACKER_IDS } from "./LOS/const.js";
 import { buildLOSViewer } from "./LOSCalculator.js";
 import { ATVTokenHandler } from "./TokenHandler.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";

@@ -10,7 +10,7 @@ import { GeometryInstanced, GeometryNonInstanced } from "./GeometryDesc.js";
 import { Rectangle3dVertices, Polygon3dVertices, Hex3dVertices, BasicVertices } from "./BasicVertices.js";
 import { OBJParser } from "./OBJParser.js";
 import { TriangleSplitter } from "./TriangleSplitter.js";
-import { OTHER_MODULES, FLAGS } from "../../const.js";
+import { OTHER_MODULES, FLAGS } from "../const.js";
 import { numberOfSphericalPointsForSpacing } from "../util.js";
 
 import { Point3d } from "../../geometry/3d/Point3d.js";

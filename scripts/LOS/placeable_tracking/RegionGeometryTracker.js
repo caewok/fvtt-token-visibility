@@ -7,7 +7,8 @@ Region,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, OTHER_MODULES } from "../../const.js";
+import { MODULE_ID } from "../../const.js";
+import { TRACKER_IDS, OTHER_MODULES } from "../const.js";
 import { GeometryRegion, GeometryCircleRegionShape, GeometryEllipseRegionShape, GeometryRectangleRegionShape, GeometryPolygonRegionShape } from "../geometry/GeometryRegion.js";
 import { AbstractPlaceableGeometryTracker, allGeometryMixin } from "./PlaceableGeometryTracker.js";
 import { regionElevation, convertRegionShapeToPIXI } from "../util.js";
@@ -71,7 +72,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
   get hasMultiPlaneRamp() {
     const TM = OTHER_MODULES.TERRAIN_MAPPER;
-    if ( !TM.ACTIVE ) return false;
+    if ( !TM ) return false;
     const tmHandler = this.region[TM.KEY];
     return tmHandler.isRamp && tmHandler.splitPolygons;
   }
@@ -96,25 +97,25 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
   initialize() {
     this.region.document.regionShapes.forEach(shape => {
-      shape[MODULE_ID] ??= {};
-      shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
-      shape[MODULE_ID][this.constructor.ID].initialize();
+      shape[TRACKER_IDS.BASE] ??= {};
+      shape[TRACKER_IDS.BASE][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
+      shape[TRACKER_IDS.BASE][this.constructor.ID].initialize();
     });
     super.initialize();
   }
 
   update() {
     this.region.document.regionShapes.forEach(shape => {
-      shape[MODULE_ID] ??= {};
-      shape[MODULE_ID][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
-      shape[MODULE_ID][this.constructor.ID].update();
+      shape[TRACKER_IDS.BASE] ??= {};
+      shape[TRACKER_IDS.BASE][this.constructor.ID] ??= AbstractRegionShapeGeometryTracker.fromShape(shape, this.region);
+      shape[TRACKER_IDS.BASE][this.constructor.ID].update();
     });
     super.update();
   }
 
   _updateAABB() {
     const newAABB = AABB3d.union(this.region.document.regionShapes.map(shape =>
-      shape[MODULE_ID][this.constructor.ID].aabb));
+      shape[TRACKER_IDS.BASE][this.constructor.ID].aabb));
     newAABB.clone(this.aabb);
   }
 
@@ -127,7 +128,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
   _updateTrackingBuffer() {}
 
   buildRegionPolygons3d() {
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths;
+    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths || CONFIG.GeometryLib.ClipperPaths;
     const region = this.placeable;
 
     // Clear prior data.
@@ -145,7 +146,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
     const uniqueShapes = this.combineRegionShapes();
     for ( const shapeGroup of uniqueShapes ) {
       if ( shapeGroup.length === 1 ) {
-        const geometry = shapeGroup[0][MODULE_ID][this.constructor.ID];
+        const geometry = shapeGroup[0][TRACKER_IDS.BASE][this.constructor.ID];
         if ( geometry.isHole ) continue;
         topArr.push(geometry.faces.top)
         bottomArr.push(geometry.faces.bottom);
@@ -153,7 +154,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
 
       } else {
         // Combine and convert to Polygon3d.
-        const paths = shapeGroup.map(shape => shape[MODULE_ID][this.constructor.ID].toClipperPaths());
+        const paths = shapeGroup.map(shape => shape[TRACKER_IDS.BASE][this.constructor.ID].toClipperPaths());
         const combinedPaths = paths.length === 1 ? paths[0] : ClipperPaths.joinPaths(paths);
 
         const path = combinedPaths.combine();
@@ -187,12 +188,12 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
       for ( let j = i + 1; j < nShapes; j += 1 ) {
         if ( usedShapes.has(j) ) continue;
         const other = region.document.regionShapes[j];
-        const otherGeometry = other[MODULE_ID][this.constructor.ID];
+        const otherGeometry = other[TRACKER_IDS.BASE][this.constructor.ID];
         const otherPIXI = otherGeometry.shapePIXI;
 
         // Any overlap counts.
         for ( const shape of shapeGroup ) {
-          const shapeGeometry = shape[MODULE_ID][this.constructor.ID];
+          const shapeGeometry = shape[TRACKER_IDS.BASE][this.constructor.ID];
           const shapePIXI = shapeGeometry.shapePIXI;
           if ( shapePIXI.overlaps(otherPIXI) ) {
             shapeGroup.push(other);
@@ -217,7 +218,7 @@ export class RegionGeometryTracker extends allGeometryMixin(AbstractPlaceableGeo
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     for ( const shape of this.region.document.regionShapes ) {
-      const t = shape[MODULE_ID][this.constructor.ID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
+      const t = shape[TRACKER_IDS.BASE][this.constructor.ID].rayIntersection(rayOrigin, rayDirection, minT, maxT);
       if ( t !== null && almostBetween(t, minT, maxT) ) return t;
     }
     return null;
@@ -305,9 +306,8 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
   calculateScaleMatrix() {
     const { topZ, bottomZ } = this.constructor.regionElevationZ(this.region);
     const zHeight = topZ - bottomZ;
-    const z = topZ - (zHeight * 0.5);
     const { x, y } = this._xyScale();
-    MatrixFloat32.scale(x, y, z, this.matrices.scale);
+    MatrixFloat32.scale(x, y, zHeight, this.matrices.scale);
     return this.matrices.scale;
   }
 
@@ -351,7 +351,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
     const clipperPoints = this.shape.clipperPaths;
     const scalingFactor = CONST.CLIPPER_SCALING_FACTOR;
     const ClipperPaths = CONFIG.tokenvisibility.ClipperPaths;
-    switch ( CONFIG[MODULE_ID].clipperVersion ) {
+    switch ( CONFIG[MODULE_ID].clipperVersion || 1 ) {
       // For both, the points are already scaled, so just pass through the scaling factor to the constructor.
       case 1: return new ClipperPaths(clipperPoints, { scalingFactor });
       case 2: return new ClipperPaths(ClipperPaths.pathFromClipper1Points(clipperPoints), { scalingFactor });
@@ -371,8 +371,10 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
    */
   rayIntersection(rayOrigin, rayDirection, minT = 0, maxT = Number.POSITIVE_INFINITY) {
     if ( !this.isHole ) {
-      const t = this.faces.top.intersectionT(rayOrigin, rayDirection);
-      if ( t !== null && almostBetween(t, minT, maxT) ) return t;
+      for ( const face of [this.faces.top, this.faces.bottom] ) {
+        const t = this.faces.top.intersectionT(rayOrigin, rayDirection);
+        if ( t !== null && almostBetween(t, minT, maxT) ) return t;
+      }
     }
     for ( const side of this.faces.sides ) {
       const t = side.intersectionT(rayOrigin, rayDirection);
@@ -382,7 +384,7 @@ class AbstractRegionShapeGeometryTracker extends allGeometryMixin(AbstractPlacea
   }
 }
 
-class CircleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class CircleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryCircleRegionShape;
 
   static polygonClass = Circle3d;
@@ -399,7 +401,7 @@ class CircleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracke
   }
 }
 
-class EllipseRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class EllipseRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryEllipseRegionShape;
 
   static polygonClass = Ellipse3d;
@@ -416,7 +418,7 @@ class EllipseRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTrack
   }
 }
 
-class RectangleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class RectangleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryRectangleRegionShape;
 
   static polygonClass = Quad3d;
@@ -429,12 +431,12 @@ class RectangleRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTra
 
   _xyScale() {
     const { width, height } = this.shape.data;
-    return { x: width * 0.5, y: height * 0.5 };
+    return { x: width, y: height };
   }
 
 }
 
-class PolygonRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
+export class PolygonRegionShapeGeometryTracker extends AbstractRegionShapeGeometryTracker {
   static geomClass = GeometryPolygonRegionShape;
 
   static polygonClass = Polygon3d;

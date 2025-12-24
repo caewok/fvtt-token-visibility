@@ -8,7 +8,8 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { Quad3d } from "../geometry/3d/Polygon3d.js";
 import { MatrixFloat32 } from "../geometry/MatrixFlat.js";
 
-import { MODULE_ID, TRACKER_IDS } from "../const.js";
+import { MODULE_ID } from "../const.js";
+import { TRACKER_IDS } from "./const.js";
 
 export class Camera {
 
@@ -176,7 +177,7 @@ export class Camera {
   }
 
   setTargetTokenFrustum(targetToken) {
-    const geometry = targetToken[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    const geometry = targetToken[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
     const aabb3d = geometry.aabb;
     this.setFrustumForAABB3d(aabb3d);
   }

@@ -2,12 +2,24 @@
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 
-export class AsyncQueue {
-  /** @type {boolean} */
-  isRunning = false;
+/**
+ * Basic queue class
+ */
+class Queue {
 
-  /** @type {function} */
-  queue = [];
+  /** @type {*} */
+  #queue = [];
+
+  enqueue(item) { this.#queue.push(item); }
+
+  dequeue() { return this.#queue.shift(); }
+
+  get size() { return this.#queue.length; }
+}
+
+export class AsyncQueue extends Queue {
+  /** @type {boolean} */
+  #isRunning = false;
 
   /**
    * Add a function to the task. The function should be async.
@@ -15,17 +27,17 @@ export class AsyncQueue {
    * @param {function|Promise} task
    */
   enqueue(task) {
-    this.queue.push(task);
-    if ( !this.isRunning ) this.processNext();
+    super.enqueue(task);
+    if ( !this.#isRunning ) this.processNext();
   }
 
   async processNext() {
-    if ( !this.queue.length ) {
-      this.isRunning = false;
+    if ( !this.size ) {
+      this.#isRunning = false;
       return;
     }
-    this.isRunning = true;
-    const task = this.queue.shift();
+    this.#isRunning = true;
+    const task = this.dequeue();
     try {
       if ( task instanceof Promise ) await task;
       else await task();
@@ -55,8 +67,15 @@ task2 = async () => {
   console.log("Task 2 completed");
 }
 
+task3 = async () => {
+  console.log(`Task 3 started. ${a}`);
+  await sleep(500);
+  console.log("Task 3 completed");
+}
+
 queue.enqueue(task1)
 queue.enqueue(task2)
+queue.enqueue(task3)
 
 */
 

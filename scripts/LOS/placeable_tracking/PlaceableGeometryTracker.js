@@ -7,7 +7,7 @@ Hooks,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "../../const.js";
+import { TRACKER_IDS } from "../const.js";
 import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
 import { AABB3d } from "../../geometry/AABB.js";
 import { almostBetween } from "../../geometry/util.js";
@@ -115,7 +115,7 @@ export class AbstractPlaceableGeometryTracker {
     const placeable = placeableD.object;
     if ( !placeable ) return;
     const changeKeys = Object.keys(foundry.utils.flattenObject(changed));
-    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[MODULE_ID][this.ID].update();
+    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[TRACKER_IDS.BASE][this.ID].update();
   }
 
   /**
@@ -141,10 +141,12 @@ export class AbstractPlaceableGeometryTracker {
    * @param {RenderFlags} flags
    */
   static _onPlaceableRefresh(placeable, flags) {
+
+
     // TODO: Can flags be set to false? Need this filter if so.
     // const changeKeys = Object.entries(flags).filter([key, value] => value).map([key, value] => key);
     const changeKeys = Object.keys(flags);
-    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[MODULE_ID][this.ID].update();
+    if ( changeKeys.some(key => this.UPDATE_KEYS.has(key)) ) placeable[TRACKER_IDS.BASE][this.ID].update();
   }
 
   /**
@@ -152,7 +154,7 @@ export class AbstractPlaceableGeometryTracker {
    * @param {PlaceableObject} object    The object instance being destroyed
    */
   static _onPlaceableDestroy(placeable) {
-    const geometry = placeable?.[MODULE_ID]?.[this.ID];
+    const geometry = placeable?.[TRACKER_IDS.BASE]?.[this.ID];
     if ( !geometry ) return;
     geometry.destroy();
   }
@@ -164,8 +166,8 @@ export class AbstractPlaceableGeometryTracker {
 
   constructor(placeable) {
     this.placeable = placeable;
-    placeable[MODULE_ID] ??= {};
-    placeable[MODULE_ID][this.constructor.ID] = this;
+    placeable[TRACKER_IDS.BASE] ??= {};
+    placeable[TRACKER_IDS.BASE][this.constructor.ID] = this;
   }
 
   initialize() {

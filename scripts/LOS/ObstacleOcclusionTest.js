@@ -7,6 +7,7 @@ Wall,
 "use strict";
 
 // LOS folder
+import { OTHER_MODULES, TRACKER_IDS, TILE_THRESHOLD_SHAPE_OPTIONS } from "./const.js";
 import { Frustum } from "./Frustum.js";
 import {
   NULL_SET,
@@ -14,7 +15,7 @@ import {
   getFlagFast } from "./util.js";
 
 // Base folder
-import { MODULE_ID, OTHER_MODULES, TRACKER_IDS } from "../const.js";
+import { MODULE_ID } from "../const.js";
 
 // Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
@@ -89,10 +90,10 @@ export class ObstacleOcclusionTest {
 
   findObstacles() {
     const senseType = this._config.senseType;
-    this.obstacles = this.constructor.findBlockingObjectsByFrustum(this.frustum, this.config);
-    this.obstacles.terrainWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
-    this.obstacles.proximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
-    this.obstacles.reverseProximateWalls = this.constructor.pullOutWalls(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
+    this.findBlockingObjects();
+    this.obstacles.terrainWalls = this.constructor.subsetWallsByType(this.obstacles.walls, CONST.WALL_SENSE_TYPES.LIMITED, senseType);
+    this.obstacles.proximateWalls = this.constructor.subsetWallsByType(this.obstacles.walls, CONST.WALL_SENSE_TYPES.PROXIMITY, senseType);
+    this.obstacles.reverseProximateWalls = this.constructor.subsetWallsByType(this.obstacles.walls, CONST.WALL_SENSE_TYPES.DISTANCE, senseType);
   }
 
   obstacleTester;
@@ -116,14 +117,14 @@ export class ObstacleOcclusionTest {
   }
 
   wallsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.walls.some(wall => wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null);
+    return this.obstacles.walls.some(wall => wall[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null);
   }
 
   terrainWallsOcclude(rayOrigin, rayDirection) {
     // console.debug(`rayOrigin ${rayOrigin}, rayDirection ${rayDirection} for ${this.obstacles.terrainWalls.size} terrain walls.`);
     let limitedOcclusion = 0;
     for ( const wall of this.obstacles.terrainWalls ) {
-      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) === null ) continue;
+      if ( wall[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) === null ) continue;
       if ( limitedOcclusion++ ) return true;
     }
     return false;
@@ -133,26 +134,26 @@ export class ObstacleOcclusionTest {
     for ( const wall of [...this.obstacles.proximateWalls, ...this.obstacles.reverseProximateWalls] ) {
       // If the proximity threshold is met, this edge excluded from perception calculations.
       if ( wall.edge.applyThreshold(this._config.senseType, rayOrigin) ) continue;
-      if ( wall[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null ) return true;
+      if ( wall[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1) !== null ) return true;
     }
     return false;
   }
 
   tilesOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tiles.some(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
+    return this.obstacles.tiles.some(tile => tile[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   tokensOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.tokens.some(token => token[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
+    return this.obstacles.tokens.some(token => token[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   regionsOcclude(rayOrigin, rayDirection) {
-    return this.obstacles.regions.some(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
+    return this.obstacles.regions.some(region => region[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].rayIntersection(rayOrigin, rayDirection, 0, 1));
   }
 
   filterPolys3d(polys) { return polys.filter(poly => this.frustum.poly3dWithinFrustum(poly)); }
 
-  // ----- NOTE: Static collision tests ----- //
+  // ----- NOTE: Collision tests ----- //
 
   /**
    * Filter relevant objects in the scene using the vision triangle.
@@ -164,25 +165,21 @@ export class ObstacleOcclusionTest {
    *   - @property {Set<Token>} tokens
    *   - @property {Set<Region>} regions
    */
-  static findBlockingObjectsByFrustum(frustum, opts = {}) {
-    opts.blocking ??= {};
-    opts.senseType ??= "sight";
-    return {
-      walls: this.findBlockingWalls(frustum, opts),
-      tiles: this.findBlockingTiles(frustum, opts),
-      tokens: this.findBlockingTokens(frustum, opts),
-      regions: this.findBlockingRegions(frustum, opts),
-    }
+  findBlockingObjects() {
+    this.findBlockingWalls();
+    this.findBlockingTiles();
+    this.findBlockingTokens();
+    this.findBlockingRegions();
   }
 
   /**
-   * Pull out terrain walls from a set of walls.
+   * Pull out terrain walls or other wall types from a set of walls.
    * @param {Set<Wall>} walls               Set of walls to divide
    * @param {CONST.WALL_SENSE_TYPES}        What type of wall to pull out
    * @param {string} [senseType="sight"]    Restriction type to test
    * @returns {Set<Wall>}  Modifies walls set *in place* and returns terrain walls.
    */
-  static pullOutWalls(walls, wallType = CONST.WALL_SENSE_TYPES.LIMITED, senseType = "sight") {
+  static subsetWallsByType(walls, wallType = CONST.WALL_SENSE_TYPES.LIMITED, senseType = "sight") {
     if ( !walls.size ) return NULL_SET;
     const wallSubset = new Set();
     walls
@@ -194,29 +191,53 @@ export class ObstacleOcclusionTest {
     return wallSubset;
   }
 
-  static findBlockingWalls(frustum, { senseType = "sight", blocking = {} } = {}) {
-    blocking.walls ??= true;
-    if ( !blocking.walls ) return NULL_SET;
-    return this.filterWallsByFrustum(frustum, { senseType });
-  }
-
-  static findBlockingTiles(frustum, { senseType = "sight", blocking = {} } = {}) {
-    blocking.tiles ??= true;
-    return blocking.tiles ?  this.filterTilesByFrustum(frustum, { senseType }) : NULL_SET;
-  }
-
-  static findBlockingTokens(frustum, { viewer, target, blocking = {} } = {}) {
-    blocking.tokens ??= {};
-    blocking.tokens.live ??= true;
-    blocking.tokens.dead ??= true;
-    return ( blocking.tokens.live || blocking.tokens.dead )
-      ? this.filterTokensByFrustum(frustum, { viewer, target, blockingTokensOpts: blocking.tokens })
+  findBlockingWalls() {
+    this.obstacles.walls = this._config.blocking.walls
+      ? this.constructor.filterWallsByFrustum(this.frustum, { senseType: this._config.senseType })
       : NULL_SET;
   }
 
-  static findBlockingRegions(frustum, { senseType = "sight", blocking = {} } = {}) {
-    blocking.regions ??= true;
-    return blocking.regions ? this.filterRegionsByFrustum(frustum, { senseType }) : NULL_SET;
+  findBlockingTiles() {
+    this.obstacles.tiles = this._config.blocking.tiles
+      ? this.constructor.filterTilesByFrustum(this.frustum, { senseType: this._config.senseType })
+      : NULL_SET;
+  }
+
+  findBlockingTokens() {
+    if ( !(this._config.blocking.tokens.live || this._config.blocking.tokens.dead) ) {
+      this.obstacles.tokens = NULL_SET;
+      return;
+    }
+
+    // Locate tokens but exclude the target and viewer.
+    this.obstacles.tokens = this.constructor.filterTokensByFrustum(this.frustum, { senseType: this._config.senseType });
+    this.obstacles.tokens.delete(this.target);
+    this.obstacles.tokens.delete(this.viewer);
+    if ( !this.obstacles.tokens.size ) return; // Avoid processing below exceptions.
+
+    // Filter all mounts and riders of both viewer and target.
+    const RIDEABLE = OTHER_MODULES.RIDEABLE;
+    if ( RIDEABLE ) {
+      this.obstacles.tokens = this.obstacles.tokens.filter(t =>
+        !(RIDEABLE.API.RidingConnection(t, this.target) || RIDEABLE.API.RidingConnection(t, this.viewer)));
+    }
+
+    // Test for dead/live/prone.
+    this.obstacles.tokens = this.obstacles.tokens.filter(t => this.includeToken(t));
+  }
+
+  includeToken(token) {
+    if ( this._config.blocking.tokens.dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return true;
+    if ( this._config.blocking.tokens.live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return true;
+    if ( this._config.blocking.tokens.prone && token.isProne ) return true;
+    return false;
+  }
+
+  findBlockingRegions() {
+    this.obstacles.regions = this._config.blocking.regions
+      ? this.constructor.filterRegionsByFrustum(this.frustum, { senseType: this._config.senseType })
+      : NULL_SET;
+
   }
 
   /**
@@ -228,8 +249,7 @@ export class ObstacleOcclusionTest {
     if ( !CONFIG[MODULE_ID].regionsBlock ) return NULL_SET;
 
     const regions = frustum.findRegions();
-    const TM = OTHER_MODULES.TERRAIN_MAPPER;
-    if ( !TM.ACTIVE ) return regions;
+    if ( !OTHER_MODULES.TERRAIN_MAPPER ) return regions;
 
     // If Terrain Mapper is active, consider the region blocking if its wall type blocks sight.
     // TODO: Should handle limited and proximate wall types.
@@ -269,7 +289,7 @@ export class ObstacleOcclusionTest {
 
     // For Levels, "noCollision" is the "Allow Sight" config option. Drop those tiles.
     const LEVELS = OTHER_MODULES.LEVELS;
-    if ( LEVELS.ACTIVE && senseType === "sight" ) {
+    if ( LEVELS && senseType === "sight" ) {
       return tiles.filter(t => !getFlagFast(t.document, LEVELS.KEY, LEVELS.FLAGS.ALLOW_SIGHT));
     }
     return tiles;
@@ -282,36 +302,7 @@ export class ObstacleOcclusionTest {
    * token under the viewer point.
    * @returns {Set<Token>}
    */
-  static filterTokensByFrustum(frustum, {
-    viewer,
-    target,
-    blockingTokensOpts }) {
-
-    let tokens = frustum.findTokens();
-
-    // Filter out the viewer and target from the token set.
-    // Filter all mounts and riders of both viewer and target. Possibly covered by previous test.
-    const api = OTHER_MODULES.RIDEABLE.API;
-    if ( target ) {
-      tokens.delete(target);
-      if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, target))
-    }
-    if ( viewer ) {
-      tokens.delete(viewer);
-      tokens = tokens.filter(t => !tokensOverlap(viewer, t));
-      if ( api ) tokens = tokens.filter(t => api.RidingConnection(t, viewer))
-    }
-
-    // Filter live, dead, prone tokens.
-    return tokens.filter(token => this.includeToken(token, blockingTokensOpts));
-  }
-
-  static includeToken(token, { dead = true, live = true, prone = true } = {}) {
-    if ( !dead && CONFIG[MODULE_ID].tokenIsDead(token) ) return false;
-    if ( !live && CONFIG[MODULE_ID].tokenIsAlive(token) ) return false;
-    if ( !prone && token.isProne ) return false;
-    return true;
-  }
+  static filterTokensByFrustum(frustum) { return frustum.findTokens(); }
 
   /**
    * For debugging.
@@ -347,18 +338,17 @@ export class ObstacleOcclusionTest {
           obstacles.forEach(wall => draw.segment(wall, { color }));
           break;
         case "tiles": {
-          const tileOpts = CONFIG[MODULE_ID].tileThresholdShapeOptions;
           const drawOpts = { draw, color, fillAlpha: 0.1, fill: color };
           let label;
-          switch ( CONFIG[MODULE_ID].tileThresholdShape ) {
-            case tileOpts.RECTANGLE:
-              obstacles.forEach(tile => tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE].faces.top.draw2d(drawOpts));
+          switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
+            case TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE:
+              obstacles.forEach(tile => tile[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].faces.top.draw2d(drawOpts));
               break;
-            case tileOpts.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
-            case tileOpts.ALPHA_POLYGONS:
+            case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
+            case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS:
               label ??= "alphaThresholdPolygons";
               obstacles.forEach(tile => {
-                const polygons3d = tile[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE][label].top.clone();
+                const polygons3d = tile[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE][label].top.clone();
                 polygons3d.polygons = this.filterPolys3d(polygons3d.polygons);
                 polygons3d.draw2d(drawOpts);
               });
@@ -370,7 +360,7 @@ export class ObstacleOcclusionTest {
           obstacles.forEach(token => draw.shape(token.constrainedTokenBorder, { color, fillAlpha: 0.2 }));
           break;
         case "regions":
-          obstacles.forEach(region => region[MODULE_ID][TRACKER_IDS.GEOMETRY.PLACEABLE]
+          obstacles.forEach(region => region[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE]
             .faces.top.draw2d(drawOpts));
           break;
       }

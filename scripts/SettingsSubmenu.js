@@ -125,6 +125,4 @@ export class SettingsSubmenu extends foundry.applications.settings.SettingsConfi
     }
     ui.notifications.info("SETTINGS.ResetInfo", {localize: true});
   }
-
-
 }

@@ -10,7 +10,8 @@ PIXI
 import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator, pointIndexForSet } from "./LOSCalculator.js";
+import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
+import { pointIndexForSet } from "./LOS/SmallBitSet.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { LightStatusTracker } from "./LightStatusTracker.js";
 
@@ -618,7 +619,7 @@ export class Settings extends ModuleSettingsAbstract {
       default: { /* eslint-disable-line no-fallthrough */
         const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
         const currCalc = currentCalculator();
-        currCalc.config = config;
+        currCalc.permanentConfig = config;
       }
     }
   }
@@ -641,6 +642,3 @@ const configKeyForSetting = {
   [SETTINGS.DEAD_TOKENS_BLOCK]: "blocking.tokens.dead",
   [SETTINGS.PRONE_TOKENS_BLOCK]: "blocking.tokens.prone",
 }
-
-const ALG_SYMBOLS = {};
-Object.values(SETTINGS.LOS.TARGET.TYPES).forEach(value => ALG_SYMBOLS[value] = Symbol(value));

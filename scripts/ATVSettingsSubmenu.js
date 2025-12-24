@@ -39,7 +39,7 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     // Set each value in the application.
     const PI = ViewerLOS.POINT_INDICES;
     const LOS = SETTINGS.LOS;
-    const optsDnd5e = {
+    const opts = {
       losTarget: {
         [LOS.TARGET.ALGORITHM]: LOS.TARGET.TYPES.POINTS,
         [LOS.TARGET.PERCENT]: 0,
@@ -53,7 +53,7 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
         [LOS.VIEWER.INSET]: 0,
       },
     };
-    setOptionValues.call(this, optsDnd5e);
+    setOptionValues.call(this, opts);
     const moduleName = game.i18n.localize(`${MODULE_ID}.name`);
     const message = game.i18n.localize(`${MODULE_ID}.settings.submenu.notifyDND5e`);
     ui.notifications.notify(`${moduleName} | ${message}`);
@@ -65,9 +65,9 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     // Set each value in the application.
     const PI = ViewerLOS.POINT_INDICES;
     const { LOS, RANGE, POINT_TYPES } = SETTINGS;
-    const opts3d = {
+    const opts = {
       losTarget: {
-        [LOS.TARGET.ALGORITHM]: LOS.TARGET.TYPES.GEOMETRIC,
+        [LOS.TARGET.ALGORITHM]: LOS.TARGET.TYPES.WEBGL2,
         [LOS.TARGET.PERCENT]: 0.2,
         [LOS.TARGET.LARGE]: false,
       },
@@ -81,7 +81,7 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
         [RANGE.DISTANCE3D]: true,
       }
     }
-    setOptionValues.call(this, opts3d);
+    setOptionValues.call(this, opts);
     await this.constructor._onAlgorithmSelect.call(this);
     const moduleName = game.i18n.localize(`${MODULE_ID}.name`);
     const message = game.i18n.localize(`${MODULE_ID}.settings.submenu.notify3d`);
@@ -111,13 +111,13 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
  *     - @prop {object} setting name: setting value
  */
 function setOptionValues(tabOpts) {
-    for ( const tab of Object.keys(tabOpts) ) {
-      const tabElem = this.element.querySelectorAll(`[data-tab="${tab}"]`)[1];
-      if ( !tabElem ) continue; // Failsafe.
-      for ( const [key, value] of Object.entries(tabOpts[tab]) ) {
-        const optionElem = tabElem.querySelector(`[name="${MODULE_ID}.${key}"]`);
-        if ( !optionElem ) continue;
-        optionElem.value = value;
-      }
+  for ( const tab of Object.keys(tabOpts) ) {
+    const tabElem = this.element.querySelectorAll(`[data-tab="${tab}"]`)[1];
+    if ( !tabElem ) continue; // Failsafe.
+    for ( const [key, value] of Object.entries(tabOpts[tab]) ) {
+      const optionElem = tabElem.querySelector(`[name="${MODULE_ID}.${key}"]`);
+      if ( !optionElem ) continue;
+      optionElem.value = value;
     }
   }
+}

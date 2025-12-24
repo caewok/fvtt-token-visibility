@@ -186,13 +186,28 @@ export class PercentVisibleResult {
 }
 
 /* Percent visible calculator
-
-Calculate percent visibility for a token viewer, light, or sound looking at a target token.
-
-*/
+ * Calculate percent visibility for a token viewer, light, or sound looking at a target token.
+ *
+ * When constructed, stores a default configuration as modified by the constructor input ("permanent config").
+ * Config can be temporarily overridden and reset. Calling `calculate` resets and takes optional temp config.
+ */
 export class PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleResult;
 
+
+
+  /**
+   * @param {CalculatorConfig} cfg
+   */
+  constructor(cfg = {}) {
+    // Set default configuration first and then override with passed-through values.
+    this.#permanentConfig = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.restorePermanentConfig();
+  }
+
+  // ----- NOTE: Configuration ----- //
+
+  /** @type {CalculatorConfig} */
   static defaultConfiguration = {
     blocking: {
       walls: true,
@@ -210,19 +225,47 @@ export class PercentVisibleCalculatorAbstract {
     radius: null, // Default is to use the viewer's vision lightRadius or ∞.
   };
 
-  constructor(cfg = {}) {
-    // Set default configuration first and then override with passed-through values.
-    this._config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
-    this.occlusionTester._config = this._config; // Sync the configs.
-  }
+  /** @type {CalculatorConfig} */
+  #permanentConfig = {};
 
-  _config = {};
+  /** @type {boolean} */
+  #hasTmpConfig = true; // True to start so the permanent config gets copied over.
+
+  get hasTemporaryConfig() { return this.#hasTmpConfig; }
+
+  /** @type {CalculatorConfig} */
+  _config = {}; // Not private so subclasses can access without structuredClone copy.
 
   get config() { return structuredClone(this._config); }
 
-  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
+  set config(cfg = {}) {
+    foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false });
+    this.#hasTmpConfig = true;
+  }
+
+  /**
+   * Modify one or more settings of the permanent config.
+   * Also causes the temp config to be reset.
+   * @param {CalculatorConfig} cfg
+   */
+  set permanentConfig(cfg) {
+    foundry.utils.mergeObject(this.#permanentConfig, cfg, { inplace: true, insertKeys: false });
+    this.#hasTmpConfig = true;
+    this.restorePermanentConfig();
+  }
+
+  restorePermanentConfig() {
+    if ( !this.#hasTmpConfig ) return;
+    this._config = structuredClone(this.#permanentConfig);
+    this.occlusionTester._config = this._config; // Sync the configs.
+    this.#hasTmpConfig = false;
+  }
 
   get radius() { return this._config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
+
+  get tokensBlock() { return this._config.blocking.tokens.dead || this._config.blocking.tokens.live; }
+
+  get nonTokensBlock() { return this._config.blocking.walls || this._config.blocking.tiles || this._config.blocking.regions; }
 
   // ----- NOTE: Basic property getters / setters ---- //
 
@@ -319,13 +362,28 @@ export class PercentVisibleCalculatorAbstract {
    * Return the visibility result for the current calculator state.
    * Use _initializeView to set state or set individually.
    * Also depends on config.
+   * @param {CalculatorConfig} cfg
    * @returns {PercentVisibleResult}
    */
-  calculate() {
+  calculate(cfg) {
     // console.debug("PercentVisibleCalculator|calculate");
-    this.occlusionTester._initialize(this);
+    this.restorePermanentConfig();
+    if ( cfg ) this.config = cfg;
+    this._initializeCalculation();
     return this._calculate();
   }
+
+  /**
+   * Prepare portions of the calculation that require the current position of the viewer and target.
+   * But not necessarily the precise target point, where applicable.
+   * This method for the abstract class initializes the occlusion tester.
+   * It is assumed that a user could call _initializeCalculation and then _calculate (possibly repeatedly)
+   * instead of calculate.
+   */
+  _initializeCalculation() {
+    this.occlusionTester._initialize(this);
+  }
+
 
   _calculate() {
     // console.debug("PercentVisibleCalculator|_calculate");
