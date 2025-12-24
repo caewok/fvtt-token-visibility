@@ -428,7 +428,7 @@ export class DrawableObjectsWebGL2Abstract {
    * Track when each placeable was last updated.
    * @type {Map<PlaceableObject, number>}
    */
-  placeableLastUpdated = new foundry.utils.IterableWeakMap();
+  placeableLastUpdated = new WeakMap();
 
   getPlaceableFromId(id) {
     // const suffix = ".preview$";
@@ -450,7 +450,6 @@ export class DrawableObjectsWebGL2Abstract {
   hasPlaceable(placeable) { return this.placeableLastUpdated.has(placeable); }
 
   _initializePlaceableHandler() {
-    this.placeableLastUpdated.clear();
     for ( const placeable of this.placeables ) {
       this.placeableLastUpdated.set(placeable, placeable[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId);
     }
@@ -474,7 +473,11 @@ export class DrawableObjectsWebGL2Abstract {
     if ( this.rebuildNeeded ) return this.updateAllPlaceableData();
 
     // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
-    for ( const [placeable, updateId] of this.placeableLastUpdated.entries() ) {
+    for ( const placeable of this.placeables ) {
+      const updateId = this.placeableLastUpdated.get(placeable);
+      if ( typeof updateId === "undefined" ) return this.updateAllPlaceableData(); // Missing a placeable in the map.
+
+      // Check when the placeable was last updated in the renderer.
       const lastUpdate = placeable[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId;
       if ( lastUpdate <= updateId ) continue; // No changes for this instance since last update.
       if ( !this.updatePlaceableData(placeable) ) return this.updateAllPlaceableData(); // If _updateInstance set rebuildNeeded to true.

@@ -73,6 +73,14 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   get placeables() { return canvas.tokens.placeables; }
 
+  hasPlaceable(placeable) {
+    return this.drawables.instanced.hasPlaceable(placeable)
+      || this.drawables.constrained.hasPlaceable(placeable)
+      || this.drawables.lit.hasPlaceable(placeable)
+      || this.drawables.spherical.hasPlaceable(placeable)
+      || this.drawables.custom.values.some(d => d.hasPlaceable(placeable));
+  }
+
   drawCustom(token) {
     return this.constructor.isCustom(token)
       && this.drawables.custom.has(token.sourceId)
@@ -196,7 +204,7 @@ export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Ab
   renderTarget(target) {
     if ( CONFIG[MODULE_ID].debug ) {
       const i = this._indexForPlaceable(target);
-      log(`${this.constructor.name}|renderTarget ${target.name}, ${target.sourceId}|${i}`);
+      log(`${this.constructor.name}|renderTarget ${target.name} (${target.sourceId})|${i}`);
       if ( this.trackers.vi ) {
         const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
         console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
@@ -269,7 +277,11 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
 
   validateInstances() {
     // If the tracker has been updated, check for new token hex types.
-    for ( const [token, updateId] of this.placeableLastUpdated.entries() ) {
+    for ( const token of this.placeables ) {
+      const updateId = this.placeableLastUpdated.get(placeable);
+      if ( typeof updateId === "undefined" ) return this.updateAllPlaceableData(); // Missing a placeable in the map.
+
+      // Check when the token was last updated in the renderer.
       const lastUpdate = placeable[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].updateId;
       if ( lastUpdate <= updateId ) continue; // No changes for this instance since last update.
       const hexKey = Hex3dVertices.hexKeyForToken(token);
@@ -279,11 +291,8 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
         drawable.initialize(); // Async; see DrawableHexShape#filterObjects for handling.
       }
     }
-
     this.drawables.forEach(drawable => drawable.validateInstances());
   }
-
-
 
   renderTarget(target) {
     if ( !(this.hasPlaceable(target)) ) return;
