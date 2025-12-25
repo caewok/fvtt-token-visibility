@@ -74,11 +74,12 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
   get placeables() { return canvas.tokens.placeables; }
 
   hasPlaceable(placeable) {
-    return this.drawables.instanced.hasPlaceable(placeable)
-      || this.drawables.constrained.hasPlaceable(placeable)
-      || this.drawables.lit.hasPlaceable(placeable)
-      || this.drawables.spherical.hasPlaceable(placeable)
-      || this.drawables.custom.values.some(d => d.hasPlaceable(placeable));
+    const d = this.drawables;
+    return (d.instanced && d.instanced.hasPlaceable(placeable))
+      || (d.constrained && d.constrained.hasPlaceable(placeable))
+      || (d.lit && d.lit.hasPlaceable(placeable))
+      || (d.spherical && d.spherical.hasPlaceable(placeable))
+      || d.custom.values().some(d => d.hasPlaceable(placeable));
   }
 
   drawCustom(token) {
