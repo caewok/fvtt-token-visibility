@@ -8,7 +8,6 @@ PIXI,
 
 import { EPSILON, MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-import { gridUnitsToPixels } from "../geometry/util.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
@@ -345,23 +344,6 @@ export function minMaxPolygonCoordinates(polygons) {
 }
 
 /**
- * Efficiently combine multiple typed arrays.
- * @param {TypedArray[]} args
- * @returns {TypedArray}
- */
-export function combineTypedArrays(arrs) {
-  const len = arrs.reduce((acc, curr) => acc + curr.length, 0);
-  const out = new arrs[0].constructor(len);
-  out.set(arrs[0]);
-  let idx = 0;
-  for ( let i = 0, n = arrs.length; i < n; i += 1 ) {
-    out.set(arrs[i], idx);
-    idx += arrs[i].length;
-  }
-  return out;
-}
-
-/**
  * From http://webgpufundamentals.org/webgpu/lessons/webgpu-importing-textures.html
  * Load an image bitmap from a url.
  * @param {string} url
@@ -495,84 +477,6 @@ export function flipObjectKeyValues(obj) {
   return newObj;
 }
 
-export function isTypedArray(obj) {
-  return ArrayBuffer.isView(obj) && !(obj instanceof DataView);
-}
-
-/**
- * Determine elevation of a region, specific to LOS considerations.
- * If terrain mapper is present, returns the top of the plateau or ramp.
- * Ensures top and bottom have a defined MIN/MAX, not null or infinity.
- * @param {Region} region
- * @returns {object<topZ: {number}, bottomZ: {number}>}
- */
-export function regionElevation(region) {
-  const tm = region.terrainmapper;
-  let topZ = (tm && tm.isElevated)
-    ? gridUnitsToPixels(tm.plateauElevation) : region.topZ;
-  let bottomZ = region.bottomZ;
-  if ( !(topZ && isFinite(topZ)) ) topZ = 1e06;
-  if ( !(bottomZ && isFinite(bottomZ)) ) bottomZ = -1e06;
-  const rampFloor = (tm && tm.isRamp) ? gridUnitsToPixels(tm.rampFloor) : null;
-  return { topZ, bottomZ, rampFloor };
-}
-
-
-/**
- * Converts region shape to a temporary PIXI shape.
- * Must clone the shape if needed more than just temporarily.
- * @param {RegionShape} regionShape
- * @returns {PIXI.Rectangle|PIXI.Circle|PIXI.Polygon|Ellipse}
- */
-const tmpRectangle = new PIXI.Rectangle();
-const tmpCircle = new PIXI.Circle();
-const tmpPolygon = new PIXI.Polygon();
-const tmpEllipse = new PIXI.Ellipse(); // No need for rotation right now?
-
-export function convertRegionShapeToPIXI(regionShape) {
-  const shapeData = regionShape.data;
-  switch ( shapeData.type ) {
-    case "rectangle": {
-      // TODO: What about the shape data rotation parameter? Is it actually used?
-      tmpRectangle.copyFrom(shapeData);
-      return tmpRectangle;
-    }
-    case "polygon": {
-      tmpPolygon.points = shapeData.points;
-      return tmpPolygon;
-    }
-    case "circle": {
-      tmpCircle.x = shapeData.x;
-      tmpCircle.y = shapeData.y;
-      tmpCircle.radius = shapeData.radius;
-      return tmpCircle;
-    }
-    case "ellipse": {
-      // TODO: What about the shape data rotation parameter? Is it actually used?
-      tmpEllipse.x = shapeData.x;
-      tmpEllipse.y = shapeData.y;
-      tmpEllipse.width = shapeData.radiusX;
-      tmpEllipse.height = shapeData.radiusY;
-      // tmpEllipse.rotation = shapeData.rotation;
-      return tmpEllipse;
-    }
-    default: console.error(`Shape ${shapeData.type} not recognized.`, regionShape);
-  }
-}
-
-/**
- * Sets a typed array to the values of another, in place if possible.
- * If the source length differs from the destination, a new destination is created.
- * @param {TypedArray} dst
- * @param {TypedArray} src
- * @returns {TypedArray} dst, possibly new
- */
-export function setTypedArray(dst, src) {
-  if ( src.length !== dst.length ) dst = new dst.constructor(src);
-  else dst.set(src);
-  return dst;
-}
-
 export function isString(obj) { return typeof obj === "string" || obj instanceof String; }
 
 /**
@@ -614,25 +518,9 @@ export function approximateClamp(num, min, max, epsilon = 1e-08) {
   return Math.clamp(num, min, max);
 }
 
-/**
- * How many spherical points are necessary to achieve a given spacing for a given sphere radius?
- * @param {number} [radius=1]
- * @param {number} [spacing]        Defaults to the module spacing default for per-pixel calculator.
- * @returns {number}
- */
-export function numberOfSphericalPointsForSpacing(r = 1, l = CONFIG[MODULE_ID].perPixelSpacing || 10) {
-  // Surface area of a sphere is 4πr^2.
-  // With N points, divide by N to get average area per point.
-  // Assuming perfectly equidistant points, consider side length of a square with average area.
-  // l = sqrt(4πr^2/N) = 2r*sqrt(π/N)
-  // To get N, square both sides and simplify.
-  // N = (4πr^2) / l^2
-  // l = 2 * r * Math.sqrt(Math.PI / N);
-  return (4 * Math.PI * (r ** 2)) / (l ** 2);
-}
 
 /**
- * Map mean to link arbitrary ids to index integers.
+ * Map to link arbitrary ids to index integers.
  * Allows reverse lookup and tracking of used indices.
  */
 export class IndexMap extends Map {

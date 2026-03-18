@@ -53,8 +53,8 @@ export class Camera {
 
   /** @type {object<Float32Array(16)|mat4>} */
   #M = {
-    perspective: new MatrixFloat32(new Float32Array(this.#arrayBuffer, 0, 16), 4, 4),
-    lookAt: new MatrixFloat32(new Float32Array(this.#arrayBuffer, 16 * Float32Array.BYTES_PER_ELEMENT, 16), 4, 4),
+    perspective: new MatrixFloat32(4, 4, this.#arrayBuffer, 0),
+    lookAt: new MatrixFloat32(4, 4, this.#arrayBuffer, 16),
   };
 
   /** @type {Float32Array(32)} */
