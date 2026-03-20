@@ -1,5 +1,4 @@
 /* globals
-ClipperLib,
 CONFIG,
 foundry,
 PIXI,
@@ -13,15 +12,14 @@ import { Settings } from "../../settings.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { TRACKER_IDS, TILE_THRESHOLD_SHAPE_OPTIONS } from "../const.js";
+import { TILE_THRESHOLD_SHAPE_OPTIONS } from "../const.js";
 import { Camera } from "../Camera.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
-import { TokenGeometryTracker } from "../../geometry/placeable_tracking/TokenGeometryTracker.js";
 
 // Geometry
 import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
-import { Circle3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
+import { Circle3d, Ellipse3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
 
 // Debug
 import { Draw } from "../../geometry/Draw.js";
@@ -158,7 +156,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _combineObstaclePolys() {
     const blockingPolys = this.blockingPolys;
 
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths || CONFIG.GeometryLib.ClipperPaths;
+    const ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths;
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const n = blockingPolys.length;
     if ( !n ) return new ClipperPaths(undefined, { scalingFactor });
@@ -215,7 +213,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * @returns {ClipperPaths}
    */
   _combineTerrainPolys() {
-    const ClipperPaths = CONFIG[MODULE_ID].ClipperPaths || CONFIG.GeometryLib.ClipperPaths;
+    const ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths;
     const blockingTerrainPolys = this.blockingTerrainPolys;
     const scalingFactor = this.constructor.SCALING_FACTOR;
     const blockingTerrainPaths = new ClipperPaths()
@@ -321,16 +319,16 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Construct target polygons.
    */
   _targetPolygons() {
-    const atv = this.target[TRACKER_IDS.BASE];
-    let geometry;
+    const geom = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID];
+    let iter;
     switch ( this._config.tokenShapeType ) {
-      case "tokenBorder": geometry = atv[TokenGeometryTracker.ID]; break;
-      case "constrainedTokenBorder": geometry = atv[TokenGeometryTracker.ID]; break;
-      case "litTokenBorder": geometry = atv[LitTokenGeometryTracker.ID]; break;
-      case "brightLitTokenBorder": geometry = atv[BrightLitTokenGeometryTracker.ID]; break;
+      case "tokenBorder": iter = geom.iterateFaces(); break;
+      case "constrainedTokenBorder": iter = geom.iterateConstrainedFaces(); break;
+      case "litTokenBorder": iter = geom.iterateConstrainedLitFaces(); break;
+      case "brightLitTokenBorder": iter = geom.iterateConstrainedBrightLitFaces(); break;
       default: console.error(`_targetPolygons|tokenShapeType ${this._config.tokenShapeType} not recognized.`);
     }
-    return [...geometry.iterateFaces()];
+    return [...iter];
   }
 
   _lookAtObjectWithPerspective(object) {
@@ -358,9 +356,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
+
+
+
     return polys
       .map(poly => {
         poly = poly.transform(lookAtM).clipZ();
+        // if ( !poly.points.length ) return poly; // Will filter using isValid below.
         poly.transform(perspectiveM, poly);
         return poly;
       })
@@ -405,8 +407,8 @@ Draw = CONFIG.GeometryLib.Draw
 Point3d = CONFIG.GeometryLib.threeD.Point3d
 api = game.modules.get("tokenvisibility").api
 Plane = CONFIG.GeometryLib.threeD.Plane
-ClipperPaths = CONFIG.GeometryLib.ClipperPaths
-Clipper2Paths = CONFIG.GeometryLib.Clipper2Paths
+ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths
+Clipper2Paths = CONFIG.GeometryLib.CONFIG.Clipper2Paths
 
 QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;
 QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn;
