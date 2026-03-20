@@ -347,7 +347,7 @@ export class PercentVisibleCalculatorAbstract {
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
 
-    this.occlusionTester.initialize({ subjectToken: viewer, tokensToExclude: [target] });
+    this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
     this.occlusionTester.frustum.rebuild({
       viewpoint: this.viewpoint,
       target: this.target,

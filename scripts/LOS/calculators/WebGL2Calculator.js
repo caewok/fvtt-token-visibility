@@ -347,7 +347,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
   initializeView(opts) {
     super.initializeView(opts);
-    this.renderer.setCamera(opts.viewpoint, opts.target, { targetLocation: opts.targetLocation });
+    this.renderer.setCamera(this.viewpoint, this.target, { targetLocation: this.targetLocation });
   }
 
   updateDebugForPercentVisible(percentVisible) {

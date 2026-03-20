@@ -40,8 +40,8 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   /** @type {boolean} */
   get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
-  initializeView() {
-    super.initializeView();
+  initializeView(opts) {
+    super.initializeView(opts);
     this._initializeCamera();
   }
 
