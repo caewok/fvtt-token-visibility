@@ -60,7 +60,7 @@ export class DebugVisibilityViewerAbstract {
     const { viewer, target } = this;
     if ( !(viewer && target) ) return false;
     this.viewerLOS = this._viewerLOSFn(this.viewer);
-    this.viewerLOS.target = target;
+    this.viewerLOS.initializeView({ target });
     return true;
   }
 

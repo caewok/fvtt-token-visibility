@@ -40,20 +40,20 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   /** @type {boolean} */
   get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
 
-  _initializeCalculation() {
+  initializeView() {
+    super.initializeView();
     this._initializeCamera();
-    super._initializeCalculation();
   }
 
   /** @type {Point3d[][]} */
   get targetPoints() {
-    if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSpherePoints];
+    // if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSpherePoints];
     return super.targetPoints;
   }
 
   /** @type {Polygon3d[]|[Sphere]} */
   get targetSurfaces() {
-    if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSphere];
+    // if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSphere];
     return super.targetSurfaces;
   }
 

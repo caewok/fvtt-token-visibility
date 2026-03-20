@@ -345,6 +345,11 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     await this.renderer.initialize();
   }
 
+  initializeView(opts) {
+    super.initializeView(opts);
+    this.renderer.setCamera(opts.viewpoint, opts.target, { targetLocation: opts.targetLocation });
+  }
+
   updateDebugForPercentVisible(percentVisible) {
     this.renderer.config = { senseType: this.viewerLOS?.config.senseType ?? "sight" };
     const calc = this.viewerLOS.calculator;
@@ -361,8 +366,6 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
       const clear = i === 0;
 
       calc.initializeView({ viewer, target, viewpoint, targetLocation });
-      calc._initializeCalculation();
-      this.renderer.setCamera(viewpoint, target, { targetLocation });
       calc._renderTarget({ frame, clear }, this.renderer);
       calc._renderObstacles({ frame }, this.renderer);
     }

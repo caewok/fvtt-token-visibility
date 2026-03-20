@@ -4,22 +4,21 @@ canvas,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
-import { TRACKER_IDS } from "../const.js";
+import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
 import { DrawableObjectsWebGL2Abstract, DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import {
-  GeometryRegion,
-  GeometryPolygonRegionShape,
-  GeometryCircleRegionShape,
-  GeometryEllipseRegionShape,
-  GeometryRectangleRegionShape } from "../geometry/GeometryRegion.js";
+  RegionRectangleInstancedVertices,
+  RegionCircleInstancedVertices,
+  RegionEllipseInstancedVertices,
+  RegionVertices,
+} from "../../geometry/placeable_vertices/RegionVertices.js";
+
 import {
-  RegionGeometryTracker,
-  CircleRegionShapeGeometryTracker,
-  EllipseRegionShapeGeometryTracker,
-  RectangleRegionShapeGeometryTracker,
-  PolygonRegionShapeGeometryTracker,
-} from "../placeable_tracking/RegionGeometryTracker.js";
+  RegionGeometry,
+  RegionRectangleShapeGeometry,
+  RegionEllipseShapeGeometry,
+  RegionCircleShapeGeometry,
+} from "../../geometry/placeable_geometry/RegionGeometry.js";
 import { log } from "../util.js";
 
 const RegionShapeMixin = function(Base) {
@@ -39,22 +38,7 @@ const RegionShapeMixin = function(Base) {
   return DrawableRegionShape;
 }
 
-const TRACKER_TYPES = {
-  ellipse: EllipseRegionShapeGeometryTracker,
-  circle: CircleRegionShapeGeometryTracker,
-  rectangle: RectangleRegionShapeGeometryTracker,
-  polygon: PolygonRegionShapeGeometryTracker,
-};
-
 export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
-  /** @type {class} */
-  static trackerClass = RegionGeometryTracker;
-
-  _initializeOffsetTrackers() {
-    // Don't need indices or vertices trackers.
-    // Model matrices stored in placeableTracker.
-    this.trackers.model = TRACKER_TYPES[this.constructor.TYPE].modelMatrixTracker;
-  }
 
   _updateModelBufferForInstance(region) {
     if ( this.trackers.model.arraySize > this.bufferSizes.model ) {
@@ -83,7 +67,7 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
   addPlaceableToInstanceSet(shape) {
     if ( shape.data.hole ) return; // NOTE: Could check if frustum contains region shape. But that would require accessing the occlusion tester frustum.
 
-    const id = shape[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
+    const id = shape[GEOMETRY_LIB_ID][GEOMETRY_ID].placeableId;
     const idx = this.trackers.model.facetIdMap.get(id);
     if ( typeof idx === "undefined" ) return;
     this.instanceSet.add(idx);
@@ -91,41 +75,34 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
 }
 
 export class DrawableRegionEllipseShapeWebGL2 extends DrawableRegionInstanceShapeWebGL2 {
-  /** @type {class<GeometryInstanced>} */
-  static geomClass = GeometryEllipseRegionShape;
+  static vertexClass = RegionEllipseInstancedVertices;
 
-  /** @type {foundry.data.BaseShapeData.TYPES} */
-  static TYPE = "ellipse";
+  /** @type {class<GeometryInstanced>} */
+  static geomClass = RegionEllipseShapeGeometry;
 
   _initializeGeoms(opts = {}) {
-    opts.density ??= GeometryRegion.CIRCLE_DENSITY;
+    opts.density ??= RegionGeometry.CIRCLE_DENSITY;
     super._initializeGeoms(opts);
   }
 }
 
 export class DrawableRegionCircleShapeWebGL2 extends DrawableRegionEllipseShapeWebGL2 {
-  /** @type {class<GeometryInstanced>} */
-  static geomClass = GeometryCircleRegionShape;
+  static vertexClass = RegionCircleInstancedVertices;
 
-  /** @type {foundry.data.BaseShapeData.TYPES} */
-  static TYPE = "circle";
+  /** @type {class<GeometryInstanced>} */
+  static geomClass = RegionCircleShapeGeometry;
 }
 
 export class DrawableRegionRectangleShapeWebGL2 extends DrawableRegionInstanceShapeWebGL2 {
-  /** @type {class<GeometryInstanced>} */
-  static geomClass = GeometryRectangleRegionShape;
+  static vertexClass = RegionRectangleInstancedVertices;
 
-  /** @type {foundry.data.BaseShapeData.TYPES} */
-  static TYPE = "rectangle";
+  /** @type {class<GeometryInstanced>} */
+  static geomClass = RegionRectangleShapeGeometry;
 }
 
 
 export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableObjectsWebGL2Abstract) {
-  /** @type {class<GeometryInstanced>} */
-  static geomClass = GeometryPolygonRegionShape;
-
-  /** @type {foundry.data.BaseShapeData.TYPES} */
-  static TYPE = "polygon";
+  static vertexClass = RegionVertices;
 
   constructor(renderer, regionDrawableObject) {
     super(renderer, regionDrawableObject);
@@ -139,7 +116,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
   addPlaceableToInstanceSet(shape) {
     if ( shape.data.hole  ) return;
 
-    const id = shape[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].placeableId;
+    const id = shape[GEOMETRY_LIB_ID][GEOMETRY_ID].placeableId;
     const idx = this.trackers.model.facetIdMap.get(id); // TODO: This is probably wrong.
     if ( typeof idx === "undefined" ) return;
     this.instanceSet.add(idx);
@@ -190,7 +167,7 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
  */
 export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static geomClass = GeometryRegion;
+  static geomClass = RegionGeometry;
 
   get placeables() { return canvas.regions.placeables; }
 
@@ -261,7 +238,7 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
    */
   addPlaceableToInstanceSet(region) {
     // Group region shapes by whether they overlap.
-    const geomRegion = region[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    const geomRegion = region[GEOMETRY_LIB_ID][GEOMETRY_ID];
     for ( const shapeGroup of geomRegion.combineRegionShapes() ) {
       // If any holes in the shape group, pass the group to the polygon handler.
       if ( shapeGroup.some(shape => shape.isHole) ) this.drawables.polygon._filterShapeGroup(region, shapeGroup);

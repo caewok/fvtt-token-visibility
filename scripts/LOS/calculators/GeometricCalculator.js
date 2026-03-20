@@ -16,9 +16,10 @@ import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./Percen
 import { TRACKER_IDS, TILE_THRESHOLD_SHAPE_OPTIONS } from "../const.js";
 import { Camera } from "../Camera.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
-import { TokenGeometryTracker, LitTokenGeometryTracker, BrightLitTokenGeometryTracker } from "../placeable_tracking/TokenGeometryTracker.js";
+import { TokenGeometryTracker } from "../../geometry/placeable_tracking/TokenGeometryTracker.js";
 
 // Geometry
+import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Circle3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
 
@@ -94,8 +95,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    */
   static SCALING_FACTOR = 100;
 
-  _initializeCalculation() {
-    super._initializeCalculation();
+  initializeView(opts) {
+    super.initializeView(opts);
     this._initializeCamera();
   }
 
@@ -333,7 +334,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _lookAtObjectWithPerspective(object) {
-    const geom = object[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
+    const geom = object[GEOMETRY_LIB_ID][GEOMETRY_ID];
     let polys;
     if ( object instanceof foundry.canvas.placeables.Tile ) {
       let label;
@@ -342,7 +343,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
         case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: /* eslint-disable-line no-fallthrough */
           label ??= "alphaThresholdPolygons";
           polys = [geom[label].top.clone(), geom[label].bottom.clone()];
-          polys.forEach(polygons3d => polygons3d.polygons = this.occlusionTester.filterPolys3d(polygons3d.polygons));
+          polys.forEach(polygons3d => polygons3d.polygons = this.occlusionTester.frustum.filterPolys3d(polygons3d.polygons));
           break;
         default: polys = [...geom.iterateFaces()]; break;
       }

@@ -13,15 +13,15 @@ export const FLAGS = {
 };
 
 export const TRACKER_IDS = {
-  BASE: "tokenvisibility",
+  BASE: "GeometryLib",
   GEOMETRY: {
     PLACEABLE: "geometry",
-    TOKEN: {
-      NORMAL: "geometry",
-      LIT: "litGeometry",
-      BRIGHT: "brightLitGeometry",
-      SPHERICAL: "sphericalGeometry",
-    }
+    // TOKEN: {
+      // NORMAL: "geometry",
+      // LIT: "litGeometry",
+      // BRIGHT: "brightLitGeometry",
+      // SPHERICAL: "sphericalGeometry",
+    // }
   },
   VISIBILITY: "visibility",
   LIGHT_METER: "lightMeter",

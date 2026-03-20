@@ -185,8 +185,6 @@ export class ViewerLOS {
     });
   }
 
-  _initializeCalculation() { this.calculator._initializeCalculation(); }
-
   /**
    * Set up the viewpoints for this viewer.
    */
@@ -386,10 +384,10 @@ export class ViewerLOS {
     // Or maybe just check orientation of ray to each point?
     const edges = targetShape.toPolygon().iterateEdges();
     for ( const edge of edges ) {
-      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return 2;
-      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return 2;
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.A, rMin, rMax, angle) ) return targetWithin();
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.B, rMin, rMax, angle) ) return targetWithin();
+      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.a, edge.b) ) return 2;
+      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.a, edge.b) ) return 2;
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
     }
 
     return 0;

@@ -69,11 +69,9 @@ export class ATVTokenHandler {
    */
   setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight) {
     const calcConfig = {
-      blocking: {
-        walls: dm.walls,
-        tiles: dm.walls,
-        regions: dm.walls,
-      },
+      walls: dm.walls,
+      tiles: dm.walls,
+      regions: dm.walls,
       senseType: DM_SENSE_TYPES[dm.type],
       sourceType: DM_SOURCE_TYPES[dm.type],
     };

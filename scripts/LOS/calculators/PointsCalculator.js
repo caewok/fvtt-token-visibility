@@ -10,6 +10,7 @@ PIXI,
 import { MODULE_ID } from "../../const.js";
 import { TRACKER_IDS } from "../const.js";
 import { Settings } from "../../settings.js";
+import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
@@ -220,13 +221,13 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   /** @type {Polygon3d[]} */
   get targetSurfaces() {
-    const faces = this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].faces;
+    const faces = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID].faces;
     return [faces.top, faces.bottom, ...faces.sides];
   }
 
   /** @type {Point3d[][]} */
   get targetPoints() {
-    const facePoints = this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE].facePoints;
+    const facePoints = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID].facePoints;
     return [facePoints.top, facePoints.bottom, ...facePoints.sides];
   }
 
@@ -263,8 +264,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   pointIsOccluded(pt) {
     // Is it occluded from the camera/viewer?
     pt.subtract(this.viewpoint, this.#rayDirection);
-    // this.#rayDirection = pt.subtract(this.viewpoint);
-    return this.occlusionTester._rayIsOccluded(this.#rayDirection);
+    return this.occlusionTester.rayIsOccluded(this.viewpoint, this.#rayDirection);
   }
 
   // ----- NOTE: Debug ----- //
@@ -367,7 +367,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     this._initializeCamera();
 
     // Draw the token border for reference.
-    const faces = this.target.tokenvisibility.geometry.faces;
+    const faces = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID].faces;
     const viewpoint = this.viewpoint
     const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
     for ( const face of [faces.top, faces.bottom, ...faces.sides] ) {

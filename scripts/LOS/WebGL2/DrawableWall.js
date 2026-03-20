@@ -6,16 +6,15 @@ CONST,
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
-import { GeometryWall } from "../geometry/GeometryWall.js";
-import { WallGeometryTracker } from "../placeable_tracking/WallGeometryTracker.js";
-
+import { WallInstancedVertices } from "../../geometry/placeable_vertices/WallVertices.js";
+import { WallGeometry } from "../../geometry/placeable_geometry/WallGeometry.js";
 
 export class DrawableWallWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
-  static trackerClass = WallGeometryTracker;
+  static vertexClass = WallInstancedVertices;
 
   /** @type {class} */
-  static geomClass = GeometryWall;
+  static geomClass = WallGeometry;
 
   get placeables() { return canvas.walls.placeables; }
 

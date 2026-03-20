@@ -1,4 +1,5 @@
 /* globals
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -7,14 +8,12 @@ import { MODULE_ID } from "./const.js";
 import { Settings } from "./settings.js";
 
 // Trackers
-import {
-  TokenGeometryTracker,
-  LitTokenGeometryTracker,
-  BrightLitTokenGeometryTracker,
-  SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
-import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
-import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
-import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
+import { WallGeometryTracker } from "./geometry/placeable_tracking/WallGeometryTracker.js";
+import { TileGeometryTracker } from "./geometry/placeable_tracking/TileGeometryTracker.js";
+import { TokenGeometryTracker } from "./geometry/placeable_tracking/TokenGeometryTracker.js";
+import { RegionGeometryTracker } from "./geometry/placeable_tracking/RegionGeometryTracker.js";
+import { PlaceableUpdateWatcher } from "./geometry/placeable_tracking/PlaceableUpdateWatcher.js";
+
 
 
 
@@ -35,13 +34,55 @@ function canvasReady(_canvas) {
   console.debug(`${MODULE_ID}|canvasReady`);
   if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
 
-  WallGeometryTracker.registerExistingPlaceables();
-  TileGeometryTracker.registerExistingPlaceables();
-  TokenGeometryTracker.registerExistingPlaceables();
-  SphericalTokenGeometryTracker.registerExistingPlaceables();
-  LitTokenGeometryTracker.registerExistingPlaceables();
-  BrightLitTokenGeometryTracker.registerExistingPlaceables();
-  RegionGeometryTracker.registerExistingPlaceables();
+  // Register basic watchers for placeables.
+  const updateFn = placeable => {
+    const obj = placeable[MODULE_ID] ??= {}
+    obj.updateId ??= 0;
+    obj.updateId += 1;
+  }
+  const docKeys = {
+    Wall: [
+      ...WallGeometryTracker.TRACKER_TYPES.position,
+      ...WallGeometryTracker.TRACKER_TYPES.direction,
+      ...WallGeometryTracker.TRACKER_TYPES.restriction,
+      ...WallGeometryTracker.TRACKER_TYPES.door,
+      ...WallGeometryTracker.TRACKER_TYPES.threshold,
+    ],
+    Tile: [
+      ...TileGeometryTracker.TRACKER_TYPES.position,
+      ...TileGeometryTracker.TRACKER_TYPES.scale,
+      ...TileGeometryTracker.TRACKER_TYPES.rotation,
+    ],
+    Token: [
+      ...TokenGeometryTracker.TRACKER_TYPES.position,
+      ...TokenGeometryTracker.TRACKER_TYPES.scale,
+      ...TokenGeometryTracker.TRACKER_TYPES.shape,
+    ],
+    Region: [
+      ...RegionGeometryTracker.TRACKER_TYPES.elevation,
+      ...RegionGeometryTracker.TRACKER_TYPES.shapes,
+    ],
+  };
+  for ( const [docName, keys] of Object.entries(docKeys) ) {
+    const watcher = PlaceableUpdateWatcher.create(docName);
+    watcher.register(keys, updateFn);
+    watcher.activate();
+  }
+
+  // Placeable Geometry for collision testing.
+  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
+  const geometryTypes = [
+    "Tile",
+    "Wall",
+    "Token",
+    "Region",
+  ];
+  for ( const type of geometryTypes ) {
+    const cl = geometryTracking[`${type}GeometryTracker`];
+    const tracker = cl.create();
+    tracker.activate();
+    tracker.registerExistingPlaceables();
+  }
 
   // Must be after the trackers are ready.
   Settings.updateLightMonitor(Settings.get(Settings.KEYS.LIGHT_MONITOR.ALGORITHM));
@@ -65,6 +106,21 @@ function canvasTearDown(canvas) {
     losCalc.destroy();
     token[MODULE_ID].losCalc = undefined;
   });
+
+  // Placeable Geometry for collision testing.
+  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
+  const geometryTypes = [
+    "Tile",
+    "Wall",
+    "Token",
+    "Region",
+  ];
+  for ( const type of geometryTypes ) {
+    const cl = geometryTracking[`${type}GeometryTracker`];
+    const tracker = cl.create();
+    tracker.deactivate();
+    tracker.deRegisterExistingPlaceables();
+  }
 }
 
 PATCHES.BASIC.HOOKS = { canvasReady, canvasTearDown };

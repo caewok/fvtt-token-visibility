@@ -6,7 +6,7 @@
 
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Quad3d } from "../geometry/3d/Polygon3d.js";
-import { MatrixFloat32 } from "../geometry/MatrixFlat.js";
+import { MatrixFloat32 } from "../geometry/Matrix.js";
 
 import { MODULE_ID } from "../const.js";
 import { TRACKER_IDS } from "./const.js";

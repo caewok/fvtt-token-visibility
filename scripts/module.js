@@ -11,27 +11,12 @@ PIXI,
 import { MODULE_ID } from "./const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 
-import { geoVoronoi, geoDelaunay } from "./LOS/d3-geo-voronoi-bundled.js";
-// import { geoDelaunay, geoVoronoi } from "https://cdn.skypack.dev/d3-geo-voronoi@2";
-
 // Hooks and method registration
-import { registerGeometry } from "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import { Settings, SETTINGS } from "./settings.js";
-import { getObjectProperty } from "./LOS/util.js";
 
 // Trackers
-import {
-  TokenGeometryTracker,
-  LitTokenGeometryTracker,
-  BrightLitTokenGeometryTracker,
-  SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
-import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
-import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
-import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
 import { LightStatusTracker } from "./LightStatusTracker.js";
-
-
 
 // For API
 import * as bench from "./benchmark.js";
@@ -52,13 +37,12 @@ import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./L
 import { TokenLightMeter } from "./TokenLightMeter.js";
 
 import * as twgl from "./LOS/WebGL2/twgl-full.js";
-import * as MarchingSquares from "./LOS/marchingsquares-esm.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 
-// Geometry
-import { ClipperPaths } from "./geometry/ClipperPaths.js";
-import { Clipper2Paths } from "./geometry/Clipper2Paths.js";
+// Load the geometry library.
+import "./geometry/registration.js";
+
 
 // Other self-executing hooks
 import "./changelog.js";
@@ -78,7 +62,6 @@ Hooks.once("init", function() {
     chars: [['0', '9'], ' .%']
   });
 
-  registerGeometry();
   initializePatching();
 
   // Set CONFIGS used by this module.
@@ -218,14 +201,11 @@ Hooks.once("init", function() {
       perPixel: DebugVisibilityViewerPerPixel,
     },
 
-    MarchingSquares,
     SmallBitSet,
     FastBitSet,
 
     PATCHER,
 
-    geoDelaunay,
-    geoVoronoi,
     LightStatusTracker,
     twgl,
   };
@@ -259,16 +239,6 @@ Hooks.once("ready", function() {
   Settings.migrate(); // Cannot be set until world is ready.
   Settings.initializeDebugGraphics();
   LightStatusTracker.loadLightIcons(); // Async.
-
-  // Register the placeable geometry hooks.
-  WallGeometryTracker.registerPlaceableHooks();
-  TileGeometryTracker.registerPlaceableHooks();
-  TokenGeometryTracker.registerPlaceableHooks();
-  SphericalTokenGeometryTracker.registerPlaceableHooks();
-  LitTokenGeometryTracker.registerPlaceableHooks();
-  BrightLitTokenGeometryTracker.registerPlaceableHooks();
-  RegionGeometryTracker.registerPlaceableHooks();
-
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
