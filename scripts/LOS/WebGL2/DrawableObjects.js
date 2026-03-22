@@ -757,7 +757,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   _drawFilteredInstances(instanceSet) {
     // To draw select instances, modify the buffer offset.
     // log(`Buffer size is ${tmp.length} x ${tmp.BYTES_PER_ELEMENT} = ${tmp.byteLength} for ${this.placeableTracker.numInstances} placeables`);
-    const nVertices = this.geoms.indices.length; // Number of vertices to draw.
+    const nVertices = this.indices.length; // Number of vertices to draw.
 
     if ( CONFIG[MODULE_ID].debug ) {
       log(`${this.constructor.name}|_drawFilteredInstances`);
@@ -785,7 +785,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   _drawUnfilteredInstances() {
     // Draw every instance
     const n = this.trackers.model.numFacets;
-    const nVertices = this.geoms.indices.length; // Number of vertices to draw.
+    const nVertices = this.indices.length; // Number of vertices to draw.
 
     if ( CONFIG[MODULE_ID].debug ) {
       log(`${this.constructor.name}|_drawUnfilteredInstances`);

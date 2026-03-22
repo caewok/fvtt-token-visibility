@@ -64,11 +64,11 @@ export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(Drawable
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
   }
 
-  addPlaceableToInstanceSet(shape) {
-    if ( shape.data.hole ) return; // NOTE: Could check if frustum contains region shape. But that would require accessing the occlusion tester frustum.
+  addPlaceableToInstanceSet(region) {
+    const geom = region[GEOMETRY_LIB_ID][GEOMETRY_ID].placeableId;
+    if ( !geom ) return;
 
-    const id = shape[GEOMETRY_LIB_ID][GEOMETRY_ID].placeableId;
-    const idx = this.trackers.model.facetIdMap.get(id);
+    const idx = this.trackers.model.facetIdMap.get(geom.placeableId);
     if ( typeof idx === "undefined" ) return;
     this.instanceSet.add(idx);
   }
@@ -112,20 +112,6 @@ export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableO
   get geoms() { return []; } // return this.placeableTracker.polygons; }
 
   _initializeGeoms(_opts) { return; }
-
-  addPlaceableToInstanceSet(shape) {
-    if ( shape.data.hole  ) return;
-
-    const id = shape[GEOMETRY_LIB_ID][GEOMETRY_ID].placeableId;
-    const idx = this.trackers.model.facetIdMap.get(id); // TODO: This is probably wrong.
-    if ( typeof idx === "undefined" ) return;
-    this.instanceSet.add(idx);
-  }
-
-  _filterShapeGroup(region, shapeGroup) {
-    // TODO: Fix.
-
-  }
 
   /**
    * Update the vertex data for an instance.
@@ -213,14 +199,6 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   _initializeUniforms() { return; }
 
-
-  getPlaceableFromId(id) {
-    const regex = /^.*?(?=_)/; // Capture everything before the first underscore ("_").
-    const res = id.match(regex);
-    if ( res ) id = res[0];
-    return super.getPlaceableFromId(id);
-  }
-
   validateInstances() {
     for ( const drawable of Object.values(this.drawables) ) drawable.validateInstances();
   }
@@ -234,27 +212,21 @@ export class DrawableRegionWebGL2 extends DrawableObjectsWebGL2Abstract {
   }
 
   /**
-   * Add a specific placeable to the set of placeables to draw.
+   * Add the region to either the polygon set or one of the instance shape sets.
    */
   addPlaceableToInstanceSet(region) {
-    // Group region shapes by whether they overlap.
     const geomRegion = region[GEOMETRY_LIB_ID][GEOMETRY_ID];
-    for ( const shapeGroup of geomRegion.combineRegionShapes() ) {
-      // If any holes in the shape group, pass the group to the polygon handler.
-      if ( shapeGroup.some(shape => shape.isHole) ) this.drawables.polygon._filterShapeGroup(region, shapeGroup);
-
-      // Otherwise, add the region shape to its corresponding drawable.
-
-      for ( const shape of shapeGroup ) {
-        switch ( shape.data.type ) {
-          case "rectangle": this.drawables.rectangle.addPlaceableToInstanceSet(shape); break;
-          case "ellipse": this.drawables.ellipse.addPlaceableToInstanceSet(shape); break;
-          case "circle": this.drawables.circle.addPlaceableToInstanceSet(shape); break;
-          case "polygon": this.drawables.polygon.addPlaceableToInstanceSet(shape); break;
-          default: this.drawables.polygon.addPlaceableToInstanceSet(shape);
-        }
-      }
+    const ST = geomRegion.constructor.SHAPE_TYPES;
+    let type;
+    switch ( geomRegion.type ) {
+      case ST.EMPTY: return;
+      case ST.HOLE: return;
+      case ST.RECTANGLE: type = "rectangle"; break;
+      case ST.ELLIPSE: type = "ellipse"; break;
+      case ST.CIRCLE: type = "circle"; break;
+      default: type = "polygon";
     }
+    this.drawables[type].addPlaceableToInstanceSet(region)
   }
 
   render() {
