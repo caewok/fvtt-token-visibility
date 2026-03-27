@@ -17,25 +17,12 @@ PATCHES.DEBUG = {};
 
 // ----- NOTE: Hooks ----- //
 
-function updateToken(tokenD) {
-  const token = tokenD.object;
-  console.log(`updateToken|${token.isPreview ? "Preview" : "Original"} Token ${tokenD.x},${tokenD.y}\tsource ${tokenD._source.x},${tokenD._source.y}`)
-}
-
-function moveToken(tokenD) {
-  const token = tokenD.object;
-  console.log(`moveToken|${token.isPreview ? "Preview" : "Original"} Token ${tokenD.x},${tokenD.y}\tsource ${tokenD._source.x},${tokenD._source.y}`)
-}
-
 /**
  * Hook: refreshToken
  * @param {PlaceableObject} object    The object instance being refreshed
  * @param {RenderFlags} flags         Flags being refreshed
  */
 function refreshToken(token, flags) {
-  const tokenD = token.document;
-  if ( flags.refreshPosition ) console.log(`refreshToken|${token.isPreview ? "Preview" : "Original"} Token ${tokenD.x},${tokenD.y}\tsource ${tokenD._source.x},${tokenD._source.y}`)
-
   if ( !(flags.refreshSize || flags.refreshRotation) ) return;
   const losViewer = token[MODULE_ID]?.[ATVTokenHandler.ID].losViewer;
   if ( !losViewer ) return;
@@ -78,7 +65,7 @@ export function initializeVisionSources(sources) {
   }
 }
 
-PATCHES.BASIC.HOOKS = { initializeVisionSources, drawToken, refreshToken, updateToken, moveToken };
+PATCHES.BASIC.HOOKS = { initializeVisionSources, drawToken, refreshToken };
 
 // ----- NOTE: Debug Hooks ----- //
 
