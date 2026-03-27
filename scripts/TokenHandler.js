@@ -60,7 +60,7 @@ export class ATVTokenHandler {
     this.viewer = token;
   }
 
-  get losCalc() { return this.losViewer.losCalc; }
+  get losCalc() { return this.losViewer.calculator; }
 
   /**
    * Set this LOS configuration to match a detection mode's settings.
