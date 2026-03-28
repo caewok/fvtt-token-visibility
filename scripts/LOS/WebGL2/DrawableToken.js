@@ -16,6 +16,7 @@ import {
   BrightLitTokenModelVertices,
 } from "../../geometry/placeable_vertices/TokenVertices.js";
 import { TokenGeometry } from "../../geometry/placeable_geometry/TokenGeometry.js";
+import { MatrixFloat32 } from "../../geometry/Matrix.js";
 
 import * as twgl from "./twgl.js";
 import { log, getFlagFast } from "../util.js";
@@ -200,7 +201,7 @@ export class DrawableTokenShapesWebGL2 extends DrawableObjectsInstancingWebGL2Ab
       if ( this.trackers.model ) {
         const model = this.trackers.model.viewFacetAtIndex(i);
         console.table({ vertices: [...this.verticesArray], indices: [...this.indicesArray] });
-        const mat = new CONFIG.GeometryLib.MatrixFloat32(model, 4, 4);
+        const mat = new MatrixFloat32(4, 4, model.buffer, model.byteOffset / model.BYTES_PER_ELEMENT);
         mat.print()
       }
     }

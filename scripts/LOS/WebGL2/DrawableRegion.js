@@ -41,10 +41,10 @@ const RegionShapeMixin = function(Base) {
 export class DrawableRegionInstanceShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
 
   _updateModelBufferForInstance(region) {
-    if ( this.trackers.model.arraySize > this.bufferSizes.model ) {
-      this.rebuildNeeded = true;
-      return;
-    }
+//     if ( this.trackers.model.arraySize > this.bufferSizes.model ) {
+//       this.rebuildNeeded = true;
+//       return;
+//     }
 
     // Update each shape of this type in the region.
     log(`${this.constructor.name}|_updateModelBufferForInstance ${region.sourceId}`);

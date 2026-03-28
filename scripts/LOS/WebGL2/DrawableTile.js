@@ -22,6 +22,8 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   /** @type {class} */
   static geomClass = TileGeometry;
 
+  static addUVs = true;
+
   get placeables() { return canvas.tiles.placeables; }
 
   // ----- NOTE: Program ----- //
@@ -47,6 +49,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     super._initializeGeoms(opts);
   }
 
+  /*
   _defineAttributeProperties() {
     const vertexProps = super._defineAttributeProperties();
     const debugViewNormals = this.debugViewNormals;
@@ -66,6 +69,7 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
     }
     return vertexProps;
   }
+  */
 
   // ----- NOTE: Tile texture ----- //
 

@@ -38,7 +38,7 @@ void main() {
     vec3 surfaceColor = (color.rgb * ambientColor) + (color.rgb * NDotL);
     fragColor = vec4(surfaceColor, color.a);
   #else
-    fragColor = uColor;
+    fragColor = color; // We want color, not uColor; otherwise tiles render as solids.
   #endif
 
   #if ${isTile}

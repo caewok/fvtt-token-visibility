@@ -277,15 +277,11 @@ export class RenderObstaclesWebGL2 {
   _setMaterial(type = "obstacle") {
     if ( this.#currentMaterial === type ) return;
 
-    let offset = 0;
-    switch ( type ) {
-      case "target": offset = 0; break;
-      case "obstacle": offset = Float32Array.BYTES_PER_ELEMENT * 4; break;
-      case "terrain": offset = Float32Array.BYTES_PER_ELEMENT * 4 * 2; break;
-      default: console.error("_setMaterial|Material type not recognized.");
-    }
-    // gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.material);
-    this.gl.bindBufferRange(this.gl.UNIFORM_BUFFER, this.constructor.MATERIAL_BIND_POINT, this.buffer.material, offset, Float32Array.BYTES_PER_ELEMENT * 4);
+    // Upload only the 16 bytes of the selected color to the UBO at offset 0.
+    this.gl.bindBuffer(this.gl.UNIFORM_BUFFER, this.buffer.material);
+    this.gl.bufferSubData(this.gl.UNIFORM_BUFFER, 0, this.constructor.MATERIAL_COLORS[type]);
+
+    // Update the type.
     this.#currentMaterial = type;
   }
 
@@ -333,16 +329,23 @@ export class RenderObstaclesWebGL2 {
     const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
+    if ( clear ) {
+      // Force masks to true so clear actually functions.
+      webGL2.setColorMask(WebGL2.allColorMask);
+      gl.depthMask(true);
+      if ( useStencil ) gl.stencilMask(0xFF);
+      webGL2.setClearColor(WebGL2.blackClearColor);
+      let clearBits = gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT;
+      if ( useStencil ) clearBits |= gl.STENCIL_BUFFER_BIT;
+      gl.clear(clearBits);
+    }
+
     // Set WebGL2 state.
     webGL2.setViewport(frame);
     webGL2.setDepthTest(true);
     webGL2.setBlending(false);
     webGL2.setCulling(true);
     webGL2.setCullFace("BACK");
-
-    // Clear.
-    webGL2.setClearColor(WebGL2.blackClearColor);
-    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // If colorCoded, will not be drawing the floor b/c debugViewNormals is false.
     if ( colorCoded ) webGL2.setColorMask(WebGL2.redAlphaMask); // Red, alpha channels for the target object.
@@ -395,15 +398,22 @@ export class RenderObstaclesWebGL2 {
     const colorCoded = !this.debugViewNormals;
     frame ??= new PIXI.Rectangle(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
+    if ( clear ) {
+      // Force masks to true so clear actually functions.
+      webGL2.setColorMask(WebGL2.allColorMask);
+      gl.depthMask(true);
+      if ( useStencil ) gl.stencilMask(0xFF);
+      webGL2.setClearColor(WebGL2.blackClearColor);
+      let clearBits = gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT;
+      if ( useStencil ) clearBits |= gl.STENCIL_BUFFER_BIT;
+      gl.clear(clearBits);
+    }
+
     // Set WebGL2 state.
     webGL2.setViewport(frame);
     webGL2.setCulling(true);
     webGL2.setStencilTest(useStencil);
     webGL2.setCullFace("BACK");
-
-    // Clear.
-    webGL2.setClearColor(WebGL2.blackClearColor);
-    if ( clear ) gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
     // Performance: Use the stencil buffer to discard pixels outside the target shape.
     if ( useStencil && colorCoded ) {

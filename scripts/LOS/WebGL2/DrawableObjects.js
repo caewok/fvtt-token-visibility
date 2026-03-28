@@ -8,6 +8,7 @@ CONFIG,
 import { MODULE_ID } from "../../const.js";
 import { WebGL2 } from "./WebGL2.js";
 import { VerticesIndicesTrackingBuffer } from "../../geometry/placeable_tracking/TrackingBuffer.js";
+import { MatrixFloat32 } from "../../geometry/Matrix.js";
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
 
@@ -124,10 +125,13 @@ export class DrawableObjectsWebGL2Abstract {
     vertices: null,
   };
 
+  /*
   bufferSizes = {
     indices: 0,
     vertices: 0,
+    model: 0,
   };
+  */
 
   /** @type {ArrayBuffer} */
   get verticesBuffer() { return this.trackers.vertices.buffer; }
@@ -170,17 +174,14 @@ export class DrawableObjectsWebGL2Abstract {
    */
   _initializeGeoms() {
     const vertexClass = this.constructor.vertexClass;
-    this.placeables.forEach(token => this.geoms.set(token.sourceId, new vertexClass(token)));
-
-
-    console.error("_initializeGeoms must be overriden by child class.");
+    this.placeables.forEach(placeable => this.geoms.set(placeable.sourceId, new vertexClass(placeable)));
   }
 
   _initializeOffsetTrackers() {
     // TODO: Use VariableLengthAbstractBuffer and don't copy over the geometry indices and vertices.
     const stride = this.debugViewNormals ? 6 : 3;
     this.trackers.vi = new VerticesIndicesTrackingBuffer({ stride });
-    const opts = { addNormals: this.debugViewNormal, addUVs: this.constructor.addUVs };
+    const opts = { addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs };
     for ( const [id, geom] of this.geoms.entries() ) {
       const vo = geom.calculateModel(opts);
       this.trackers.vi.addFacet({
@@ -238,7 +239,7 @@ export class DrawableObjectsWebGL2Abstract {
 
     // Update the geometry and rebuild the trackers.
     // TODO: Can this be done elsewhere to avoid updating all geometry here?
-    const opts = { addNormals: this.debugViewNormal, addUVs: this.constructor.addUVs };
+    const opts = { addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs };
     for ( const [id, geom] of this.geoms.entries() ) {
       const vo = geom.calculateModel(opts);
       vi.updateFacet(id, { newVertices: vo.vertices, newIndices: vo.indices });
@@ -255,60 +256,6 @@ export class DrawableObjectsWebGL2Abstract {
     }
   }
 
-  /*
-  _updateAllVertices() {
-    const { indices, vertices } = this.trackers;
-    const pt = this.placeableTracker;
-
-    // Remove missing/deleted ids from the trackers.
-    // Can assume id set is same in indices and vertices.
-    for ( const id of indices.facetIdMap.keys() ) {
-      const placeable = pt.getPlaceableFromId(id);
-      if ( pt.hasPlaceable(placeable) ) continue;
-      indices.deleteFacet(id);
-      vertices.deleteFacet(id);
-    }
-
-    // Update the geometry and rebuild the trackers.
-    // TODO: Can this be done elsewhere to avoid updating all geometry here?
-    for ( const [id, geom] of this.geoms.entries() ) {
-      geom.calculateModel();
-      indices.updateFacet(id, { newValues: geom.modelIndices });
-      vertices.updateFacet(id, { newValues: geom.modelVertices });
-    }
-
-    // Copy to JS buffer first to avoid calling bufferSubData repeatedly.
-    const iArrayBuffer = new ArrayBuffer(indices.arraySize);
-    const vArrayBuffer = new ArrayBuffer(vertices.arraySize);
-    for ( const [id, geom] of this.geoms.entries() ) {
-      // Update the index numbers based on the location in the index and update the geometry.
-      geom.indices.offset = indices.facetOffsetAtId(id);
-
-      // Copy the index data to the temporary JS buffer.
-      const iView = indices.viewFacetById(id, iArrayBuffer);
-      iView.set(geom.modelIndices);
-
-      // Copy the vertex data to the temporary JS buffer.
-      const vView = vertices.viewFacetById(id, vArrayBuffer);
-      vView.set(geom.modelVertices);
-    }
-
-    // Redo the GPU buffers, whose size may have changed.
-    const gl = this.gl;
-    const iWebGLBuffer = this.buffers.indices = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iWebGLBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices.viewBuffer(iArrayBuffer), gl[this.constructor.vertexDrawType]);
-
-    const vWebGLBuffer = this.buffers.vertices = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vWebGLBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices.viewBuffer(vArrayBuffer), gl[this.constructor.vertexDrawType]);
-
-    this.vertexProps.aPos.buffer = this.buffers.vertices;
-    this.vertexProps.indices.buffer = this.buffers.indices;
-    if ( this.debugViewNormals ) this.vertexProps.aNorm.buffer = this.buffers.vertices;
-  }
-  */
-
   /**
    * Build the vertex and index buffers along with any other attributes.
    * @returns {object} The attribute property object passed to twgl.createBufferInfoFromArrays.
@@ -316,67 +263,43 @@ export class DrawableObjectsWebGL2Abstract {
   _defineAttributeProperties() {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
-    const vSize = Float32Array.BYTES_PER_ELEMENT;
-    const debugViewNormals = this.debugViewNormals;
     const gl = this.gl;
     const vBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     log (`${this.constructor.name}|_defineAttributeProperties`, { vertices: this.verticesArray });
     gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.vertexDrawType]);
 
+    const stride = Float32Array.BYTES_PER_ELEMENT * (3 + (this.debugViewNormals * 3) + (this.constructor.addUVs * 2));
     const vertexProps = {
       aPos: {
         numComponents: 3,
         buffer: vBuffer,
         drawType: this.constructor.vertexDrawType,
-        stride: vSize * (debugViewNormals ? 6 : 3),
+        stride,
         offset: 0,
       },
       indices: this.indicesArray,
     };
 
-    if ( debugViewNormals ) vertexProps.aNorm = {
+    if ( this.debugViewNormals ) vertexProps.aNorm = {
       numComponents: 3,
       buffer: vBuffer,
-      stride: vSize * 6,
-      offset: 3 * vSize,
+      stride,
+      offset: Float32Array.BYTES_PER_ELEMENT * 3,
     };
 
-    this.bufferSizes.vertices = this.verticesArray.byteLength;
-    this.bufferSizes.indices = this.indicesArray.byteLength;
+    if ( this.constructor.addUVs ) vertexProps.aUV = {
+      numComponents: 2,
+      buffer: vBuffer,
+      stride,
+      offset: Float32Array.BYTES_PER_ELEMENT * (this.debugViewNormals ? 6 : 3),
+    }
+
+    // this.bufferSizes.vertices = this.verticesArray.byteLength;
+    // this.bufferSizes.indices = this.indicesArray.byteLength;
 
     return vertexProps;
   }
-
-  /*
-  _defineAttributeProperties() {
-    // Define a vertex buffer to be shared.
-    // https://github.com/greggman/twgl.js/issues/132.
-    log (`${this.constructor.name}|_defineAttributeProperties`);
-    const vSize = Float32Array.BYTES_PER_ELEMENT;
-    const debugViewNormals = this.debugViewNormals;
-    const vertexProps = {
-      aPos: {
-        numComponents: 3,
-        buffer: this.buffers.vertices,
-        drawType: this.constructor.vertexDrawType,
-        stride: vSize * (debugViewNormals ? 6 : 3),
-        offset: 0,
-      },
-      indices: {
-        buffer: this.buffers.indices,
-      },
-    };
-
-    if ( debugViewNormals ) vertexProps.aNorm = {
-      numComponents: 3,
-      buffer: this.buffers.vertices,
-      stride: vSize * 6,
-      offset: 3 * vSize,
-    };
-    return vertexProps;
-  }
-  */
 
   /**
    * Update the vertex data for an instance.
@@ -385,7 +308,7 @@ export class DrawableObjectsWebGL2Abstract {
    */
   _updateInstanceVertex(placeable) {
     const geom = this.geoms.get(placeable.sourceId);
-    const opts = { addNormals: this.debugViewNormal, addUVs: this.constructor.addUVs };
+    const opts = { addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs };
     const vo = geom.calculateModel(opts);
 
     const vi = this.trackers.vi;
@@ -401,18 +324,18 @@ export class DrawableObjectsWebGL2Abstract {
     // Copy the vertices and adjusted indices to their webGL buffers.
     const { vertices, indicesAdj } = vi.viewFacetById(id);
     if ( !vertices || !indicesAdj ) console.error(`${this.constructor.name}|_updateAttributeBuffersForId|${id} id not found`);
-    const vOffset = vi.vertices.facetOffsetAtId(id);
-    const iOffset = vi.indices.facetOffsetAtId(id);
 
     // Vertices.
-    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
+    const vOffset = vi.vertices.facetOffsetAtId(id);
+    const vOffsetBytes = vOffset * vi.vertices.type.BYTES_PER_ELEMENT;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.attributeBufferInfo.attribs.aPos.buffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, vOffsetBytes, vertices);
 
     // Indices.
-    const iBuffer = this.attributeBufferInfo.indices;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, indicesAdj);
+    const iOffset = vi.indices.facetOffsetAtId(id);
+    const iOffsetBytes = iOffset * vi.indices.type.BYTES_PER_ELEMENT;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.attributeBufferInfo.indices);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffsetBytes, indicesAdj);
     log (`${this.constructor.name}|_updateAttributeBuffersForId ${id} with vOffset ${vOffset} and iOffset ${iOffset}`, { vertices, indicesAdj });
   }
 
@@ -495,7 +418,7 @@ export class DrawableObjectsWebGL2Abstract {
 
   _updateAllPlaceableData() {
     // TODO: Can we keep some of the original, and call _rebuildAttributes instead?
-    // this._initializeGeoms();
+    this._initializeGeoms();
     this._initializeOffsetTrackers();
     this._initializeAttributes();
     this._updateAllVertices();
@@ -571,10 +494,17 @@ export class DrawableObjectsWebGL2Abstract {
 
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
-    twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
+
+    // Bind the VAO instead of resetting attributes from scratch.
+    // twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
+    gl.bindVertexArray(this.vertexArrayInfo.vertexArrayObject);
+
+    // Render
     log(`${this.constructor.name}|render`);
     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
     else this._drawUnfilteredInstances();
+
+    // Unbind
     gl.bindVertexArray(null);
     this.gl.finish(); // For debugging
   }
@@ -595,7 +525,7 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   _drawUnfilteredInstances() {
-    const n = this.tracker.vi.numFacets;
+    const n = this.trackers.vi.numFacets;
 
     // Debug: what model are we rendering?
     if ( CONFIG[MODULE_ID].debug ) {
@@ -634,7 +564,10 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   }
 
   // ----- NOTE: Attributes ----- //
-  _initializeGeoms() { }
+  _initializeGeoms() {
+      const vertexClass = this.constructor.vertexClass;
+    this.placeables.forEach(token => this.geoms.set(token.sourceId, new vertexClass(token)));
+  }
 
   _initializeOffsetTrackers() {
     // Don't need indices or vertices trackers.
@@ -651,11 +584,11 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       numComponents: 16,
       data,
       drawType: this.gl.DYNAMIC_DRAW,
-      // stride: this.placeableHandler.instanceArrayValues.BYTES_PER_ELEMENT * 16,
-      offset: 0,
+      // stride: data.BYTES_PER_ELEMENT * 16, // Handled by TWGL
+      // offset: 0, // Handled by TWGL
       divisor: 1,
     };
-    this.bufferSizes.model = data.byteLength;
+    // this.bufferSizes.model = data.byteLength;
 
     return vertexProps;
   }
@@ -768,7 +701,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       for ( const i of instanceSet ) {
         log(`${this.constructor.name}|_drawFilteredInstances|${i}`);
         const model = this.trackers.model.viewFacetAtIndex(i);
-        const mat = new CONFIG.GeometryLib.MatrixFloat32(model, 4, 4);
+        const mat = new MatrixFloat32(4, 4, model.buffer, model.byteOffset / model.BYTES_PER_ELEMENT);
         mat.print()
       }
     }
@@ -796,7 +729,7 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
       for ( const i of this.instanceSet ) {
         log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
         const model = this.trackers.model.viewFacetAtIndex(i);
-        const mat = new CONFIG.GeometryLib.MatrixFloat32(model, 4, 4);
+        const mat = new MatrixFloat32(4, 4, model.buffer, model.byteOffset / model.BYTES_PER_ELEMENT);
         mat.print()
       }
     }
