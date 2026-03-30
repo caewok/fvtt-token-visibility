@@ -4,7 +4,7 @@ canvas
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
+import { DrawableObjectsInstancingWebGL2 } from "./DrawableObjects.js";
 import { TileInstancedVertices } from "../../geometry/placeable_vertices/TileVertices.js";
 import { TileGeometry } from "../../geometry/placeable_geometry/TileGeometry.js";
 
@@ -14,7 +14,7 @@ import * as twgl from "./twgl.js";
 // Not guaranteed to have any specific value.
 const TMP_SET = new Set();
 
-export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
+export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2 {
 
   /** @type {class} */
   static vertexClass = TileInstancedVertices;

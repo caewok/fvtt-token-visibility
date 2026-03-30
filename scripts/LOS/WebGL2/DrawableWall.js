@@ -5,11 +5,11 @@ CONST,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
+import { DrawableObjectsInstancingWebGL2 } from "./DrawableObjects.js";
 import { WallInstancedVertices } from "../../geometry/placeable_vertices/WallVertices.js";
 import { WallGeometry } from "../../geometry/placeable_geometry/WallGeometry.js";
 
-class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2Abstract {
+export class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2 {
   /** @type {class} */
   static vertexClass = WallInstancedVertices;
 

@@ -5,7 +5,7 @@ canvas,
 "use strict";
 
 import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
-import { DrawableObjectsWebGL2Abstract, DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
+import { DrawableObjectsNonInstancingWebGL2, DrawableObjectsInstancingWebGL2 } from "./DrawableObjects.js";
 import {
   RegionRectangleInstancedVertices,
   RegionCircleInstancedVertices,
@@ -21,32 +21,31 @@ import {
   RegionCircleShapeGeometry,
 } from "../../geometry/placeable_geometry/RegionGeometry.js";
 import { log } from "../util.js";
+import { mix } from "../../geometry/mixwith.js";
 
-const RegionShapeMixin = function(Base) {
-  class DrawableRegionShape extends Base {
+/**
+ * Common methods for region shapes.
+ */
+const RegionShapeMixin = superclass => class extends superclass {
 
-    get placeables() { return canvas.regions.placeables;}
+  get placeables() { return canvas.regions.placeables;}
 
-    get numInstances() { return this.trackers.model.numFacets; }
-
-    static regionType(region) {
-      const geom = region[GEOMETRY_LIB_ID][GEOMETRY_ID];
-      return geom.type;
-    }
-
-    filterObjects(regions) {
-      const regionType = this.constructor.regionType;
-      const TYPE = this.constructor.TYPE;
-      regions = regions.filter(region => regionType(region) === TYPE);
-      return super.filterObjects(regions)
-    }
-
-    static TYPE = RegionGeometry.SHAPE_TYPES.POLYGON;
+  static regionType(region) {
+    const geom = region[GEOMETRY_LIB_ID][GEOMETRY_ID];
+    return geom.type;
   }
-  return DrawableRegionShape;
+
+  filterObjects(regions) {
+    const regionType = this.constructor.regionType;
+    const TYPE = this.constructor.TYPE;
+    regions = regions.filter(region => regionType(region) === TYPE);
+    return super.filterObjects(regions)
+  }
+
+  static TYPE = RegionGeometry.SHAPE_TYPES.POLYGON;
 }
 
-export class DrawableRegionRectangleShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
+export class DrawableRegionRectangleShapeWebGL2 extends mix(DrawableObjectsInstancingWebGL2).with(RegionShapeMixin) {
   /** @type {class<RegionVertices>} */
   static vertexClass = RegionRectangleInstancedVertices;
 
@@ -56,7 +55,7 @@ export class DrawableRegionRectangleShapeWebGL2 extends RegionShapeMixin(Drawabl
   static TYPE = RegionGeometry.SHAPE_TYPES.RECTANGLE;
 }
 
-export class DrawableRegionCircleShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
+export class DrawableRegionCircleShapeWebGL2 extends mix(DrawableObjectsInstancingWebGL2).with(RegionShapeMixin)  {
   /** @type {class<RegionVertices>} */
   static vertexClass = RegionCircleInstancedVertices;
 
@@ -66,7 +65,7 @@ export class DrawableRegionCircleShapeWebGL2 extends RegionShapeMixin(DrawableOb
   static TYPE = RegionGeometry.SHAPE_TYPES.CIRCLE;
 }
 
-export class DrawableRegionEllipseShapeWebGL2 extends RegionShapeMixin(DrawableObjectsInstancingWebGL2Abstract) {
+export class DrawableRegionEllipseShapeWebGL2 extends mix(DrawableObjectsInstancingWebGL2).with(RegionShapeMixin)  {
   /** @type {class<RegionVertices>} */
   static vertexClass = RegionEllipseInstancedVertices;
 
@@ -76,12 +75,9 @@ export class DrawableRegionEllipseShapeWebGL2 extends RegionShapeMixin(DrawableO
   static TYPE = RegionGeometry.SHAPE_TYPES.ELLIPSE;
 }
 
-export class DrawableRegionPolygonShapeWebGL2 extends RegionShapeMixin(DrawableObjectsWebGL2Abstract) {
+export class DrawableRegionPolygonShapeWebGL2 extends mix(DrawableObjectsNonInstancingWebGL2).with(RegionShapeMixin)  {
   /** @type {class<RegionVertices>} */
   static vertexClass = RegionPolygonModelVertices;
-
-  /** @type {class<PlaceableGeometry>} */
-  static geomClass = RegionPolygonShapeGeometry;
 
   static TYPE = RegionGeometry.SHAPE_TYPES.POLYGON;
 }
