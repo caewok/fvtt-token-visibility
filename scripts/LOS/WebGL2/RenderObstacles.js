@@ -21,7 +21,12 @@ import {
   DrawableTokenWebGL2,
   DrawableGridShape,
 } from "./DrawableToken.js";
-import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
+import {
+  DrawableRegionRectangleShapeWebGL2,
+  DrawableRegionCircleShapeWebGL2,
+  DrawableRegionEllipseShapeWebGL2,
+  DrawableRegionPolygonShapeWebGL2,
+ } from "./DrawableRegion.js";
 import { log } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 
@@ -76,17 +81,19 @@ export class RenderObstaclesWebGL2 {
   _buildDrawableObjects(useSceneBackground = false) {
     this.drawableObjects.length = 0;
     this.drawableFloor = undefined;
-    let obj;
 
     const drawableClasses = [
       DrawableTileWebGL2,
       DrawableGridShape,
-      DrawableRegionWebGL2,
       DrawableTokenWebGL2,
       DrawableWallWebGL2,
       DrawableTerrainWallWebGL2,
       DrawableDirectionalWallWebGL2,
       DrawableDirectionalTerrainWallWebGL2,
+      DrawableRegionRectangleShapeWebGL2,
+      DrawableRegionCircleShapeWebGL2,
+      DrawableRegionEllipseShapeWebGL2,
+      DrawableRegionPolygonShapeWebGL2,
     ];
 
     // if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
