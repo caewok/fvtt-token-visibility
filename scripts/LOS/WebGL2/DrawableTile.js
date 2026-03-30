@@ -44,11 +44,6 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
   /** @type {Map<string, WebGLTexture>} */
   textures = new Map();
 
-  _initializeGeoms(opts = {}) {
-    opts.addUVs = true;
-    super._initializeGeoms(opts);
-  }
-
   /*
   _defineAttributeProperties() {
     const vertexProps = super._defineAttributeProperties();

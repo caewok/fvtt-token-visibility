@@ -66,7 +66,6 @@ export class DrawableObjectsWebGL2Abstract {
     log(`${this.constructor.name}|initialize`);
     await this._initializeProgram();
     this._initializePlaceableHandler();
-    this._initializeGeoms();
     this._initializeOffsetTrackers();
     this._initializeAttributes();
     this._initializeUniforms();
@@ -157,14 +156,6 @@ export class DrawableObjectsWebGL2Abstract {
 
   async _initializeProgram() {
     this.programInfo = await this._createProgram();
-  }
-
-  /**
-   * Populate the geoms array.
-   * Either define a single geom or define an array.
-   */
-  _initializeGeoms() {
-    console.error("_initializeGeoms must be overriden by child class.");
   }
 
   get stride() {
@@ -404,7 +395,6 @@ export class DrawableObjectsWebGL2Abstract {
 
   _updateAllPlaceableData() {
     // TODO: Can we keep some of the original, and call _rebuildAttributes instead?
-    this._initializeGeoms();
     this._initializeOffsetTrackers();
     this._initializeAttributes();
     this._updateAllVertices();
@@ -541,9 +531,6 @@ export class DrawableObjectsInstancingWebGL2Abstract extends DrawableObjectsWebG
   }
 
   // ----- NOTE: Attributes ----- //
-  _initializeGeoms(opts = {}) {
-    // Unused.
-  }
 
   _initializeOffsetTrackers() {
     // Don't need indices or vertices trackers.

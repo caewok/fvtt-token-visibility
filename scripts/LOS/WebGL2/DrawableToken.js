@@ -137,8 +137,6 @@ export class DrawableTokenWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   // _initializePlaceableHandler() { return; }
 
-  _initializeGeoms(_opts) { return; }
-
   _initializeOffsetTrackers() { return; }
 
   _initializeAttributes() { return; }
@@ -255,7 +253,6 @@ export class DrawableHexTokenShapesWebGL2 extends DrawableTokenShapesWebGL2 {
 
   // _initializePlaceableHandler() { return; }
 
-  _initializeGeoms(_opts) { return; }
 
   _initializeOffsetTrackers() { return; }
 
@@ -308,11 +305,6 @@ export class DrawableHexShape extends DrawableTokenShapesWebGL2 {
 //   get numInstances() { return this.placeableTracker.trackers[this.TYPE].numFacets; }
 
   _initializePlaceableHandler() { return; } // Can skip b/c the region drawable controls the handler.
-
-  _initializeGeoms(opts = {}) {
-    opts.hexKey = this.hexKey;
-    super._initializeGeoms(opts);
-  }
 
   validateInstances() {
     if ( !this.initialized ) return; // Possible that this geometry was just added.

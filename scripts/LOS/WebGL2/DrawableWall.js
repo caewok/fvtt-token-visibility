@@ -9,7 +9,7 @@ import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
 import { WallInstancedVertices } from "../../geometry/placeable_vertices/WallVertices.js";
 import { WallGeometry } from "../../geometry/placeable_geometry/WallGeometry.js";
 
-export class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2Abstract {
+class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2Abstract {
   /** @type {class} */
   static vertexClass = WallInstancedVertices;
 
@@ -45,14 +45,11 @@ export class DrawableWallWebGL2 extends DrawableWallWebGL2Abstract {
   /** @type {boolean} */
   static directional = false;
 
-  _initializeGeoms() {
-    super._initializeGeoms({ type: "double"});
-  }
-
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
-    return super.filterObjects(walls)
-      .filter(wall => !(this.constructor.isTerrain(wall, opts) || this.constructor.isDirectional(wall)));
+    const { isTerrain, isDirectional } = this.constructor;
+    walls = walls.filter(wall => !(isTerrain(wall, opts) || isDirectional(wall)));
+    return super.filterObjects(walls);
   }
 }
 
@@ -63,14 +60,11 @@ export class DrawableTerrainWallWebGL2 extends DrawableWallWebGL2Abstract {
   /** @type {boolean} */
   static directional = false;
 
-  _initializeGeoms() {
-    super._initializeGeoms({ type: "double"});
-  }
-
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
-    return super.filterObjects(walls)
-      .filter(wall => this.constructor.isTerrain(wall, opts) && !this.constructor.isDirectional(wall));
+    const { isTerrain, isDirectional } = this.constructor;
+    walls = walls.filter(wall => isTerrain(wall, opts) && !isDirectional(wall));
+    return super.filterObjects(walls);
   }
 }
 
@@ -81,15 +75,11 @@ export class DrawableDirectionalWallWebGL2 extends DrawableWallWebGL2Abstract {
   /** @type {boolean} */
   static directional = true;
 
-
-  _initializeGeoms() {
-    super._initializeGeoms({ type: "directional"});
-  }
-
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
-    return super.filterObjects(walls)
-      .filter(wall => !this.constructor.isTerrain(wall, opts) && this.constructor.isDirectional(wall));
+    const { isTerrain, isDirectional } = this.constructor;
+    walls = walls.filter(wall => !isTerrain(wall, opts) && isDirectional(wall));
+    return super.filterObjects(walls);
   }
 }
 
@@ -100,13 +90,10 @@ export class DrawableDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2Abst
   /** @type {boolean} */
   static directional = true;
 
-  _initializeGeoms() {
-    super._initializeGeoms({ type: "directional"});
-  }
-
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
-    return super.filterObjects(walls)
-      .filter(wall => this.constructor.isTerrain(wall, opts) && this.constructor.isDirectional(wall));
+    const { isTerrain, isDirectional } = this.constructor;
+    walls = walls.filter(wall => isTerrain(wall, opts) && isDirectional(wall));
+    return super.filterObjects(walls);
   }
 }
