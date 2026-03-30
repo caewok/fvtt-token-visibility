@@ -7,7 +7,12 @@ PIXI,
 
 import { WebGL2 } from "./WebGL2.js";
 import { Camera } from "../Camera.js";
-import { DrawableWallWebGL2 } from "./DrawableWall.js";
+import {
+  DrawableWallWebGL2,
+  DrawableTerrainWallWebGL2,
+  DrawableDirectionalWallWebGL2,
+  DrawableDirectionalTerrainWallWebGL2,
+} from "./DrawableWall.js";
 import {
   DrawableTileWebGL2,
   // DrawableSceneBackgroundWebGL2,
@@ -78,36 +83,15 @@ export class RenderObstaclesWebGL2 {
       DrawableGridShape,
       DrawableRegionWebGL2,
       DrawableTokenWebGL2,
+      DrawableWallWebGL2,
+      DrawableTerrainWallWebGL2,
+      DrawableDirectionalWallWebGL2,
+      DrawableDirectionalTerrainWallWebGL2,
     ];
 
     // if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
 
     for ( const cl of drawableClasses ) this.drawableObjects.push(new cl(this));
-
-    // Walls: Need normal, directional, terrain, terrain directional
-    // Normal
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = false;
-    obj.limitedWall = false;
-    this.drawableObjects.push(obj);
-
-    // Terrain
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = false;
-    obj.limitedWall = true;
-    this.drawableObjects.push(obj);
-
-    // Directional
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = true;
-    obj.limitedWall = false;
-    this.drawableObjects.push(obj);
-
-    // Terrain && Directional
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = true;
-    obj.limitedWall = true;
-    this.drawableObjects.push(obj);
 
     // Regions (use senseType?)
 
