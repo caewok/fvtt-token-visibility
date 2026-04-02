@@ -1,9 +1,9 @@
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-#if ${debugViewNormals}
-  in vec3 vNorm;
-#endif
+in vec3 vNorm;
+
+uniform bool uDebugViewNormals;
 
 layout (std140) uniform Material {
   vec4 uColor;
@@ -39,14 +39,14 @@ void main() {
   #endif
 
   // Extremely simple directional lighting model to give the model some shape.
-  #if ${debugViewNormals}
+  if ( uDebugViewNormals ) {
     vec3 N = normalize(vNorm);
     float NDotL = max(dot(N, lightDir), 0.0);
     vec3 surfaceColor = (color.rgb * ambientColor) + (color.rgb * NDotL);
     fragColor = vec4(surfaceColor, color.a);
-  #else
+  } else {
     fragColor = uColor; // We want uColor, not color. Render using the obstacle material color.
-  #endif
+  }
 
   #if ${isTile}
     fragColor.a = color.a; // Use the tile alpha channel to capture transparent portions.

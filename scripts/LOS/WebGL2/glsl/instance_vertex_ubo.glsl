@@ -2,18 +2,15 @@
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 in vec3 aPos;
-
 in mat4 aModel;
+in vec3 aNorm;
 
 layout (std140) uniform Camera {
   mat4 uPerspectiveMatrix;
   mat4 uLookAtMatrix;
 };
 
-#if ${debugViewNormals}
-  in vec3 aNorm;
-  out vec3 vNorm;
-#endif
+out vec3 vNorm;
 
 #if ${isTile}
   in vec2 aUV;
@@ -25,10 +22,7 @@ void main() {
   gl_Position = uPerspectiveMatrix * cameraPos;
 
   // instance: gl_InstanceID
-
-  #if ${debugViewNormals}
-    vNorm = normalize((uLookAtMatrix * aModel * vec4(aNorm, 0.0)).xyz);
-  #endif
+  vNorm = normalize((uLookAtMatrix * aModel * vec4(aNorm, 0.0)).xyz);
 
   #if ${isTile}
     uv0 = aUV;

@@ -3,12 +3,11 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 // Or PIXI.settings.PRECISION_FRAGMENT, which may be lower.
 
-#if ${debugViewNormals}
 in vec3 vNorm;
-#endif
 
 uniform vec4 uColor;
 uniform sampler2D uTileTexture;
+uniform bool uDebugViewNormals;
 
 in vec2 uv0;
 
@@ -34,15 +33,15 @@ void main() {
 
   // Extremely simple directional lighting model to give the model some shape.
 
-  #if ${debugViewNormals}
+  if ( debugViewNormals ) {
     vec3 N = normalize(vNorm);
     float NDotL = max(dot(N, lightDir), 0.0);
     vec3 surfaceColor = (texColor.rgb * ambientColor) + (texColor.rgb * NDotL);
     fragColor = vec4(surfaceColor, texColor.a);
-  #else
+   } else {
     fragColor = uColor;
     // fragColor.a = step(alphaValue, texColor.a);
     fragColor.a = texColor.a;
-  #endif
+  }
 }
 

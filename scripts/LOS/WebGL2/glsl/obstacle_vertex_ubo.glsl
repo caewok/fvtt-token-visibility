@@ -8,10 +8,8 @@ layout (std140) uniform Camera {
   mat4 uLookAtMatrix;
 };
 
-#if ${debugViewNormals}
-  in vec3 aNorm;
-  out vec3 vNorm;
-#endif
+in vec3 aNorm;
+out vec3 vNorm;
 
 #if ${isTile}
   in vec2 aUV;
@@ -24,9 +22,7 @@ void main() {
 
   // instance: gl_InstanceID
 
-  #if ${debugViewNormals}
-    vNorm = normalize((uLookAtMatrix * vec4(aNorm, 0.0)).xyz);
-  #endif
+  vNorm = normalize((uLookAtMatrix * vec4(aNorm, 0.0)).xyz);
 
   #if ${isTile}
     uv0 = aUV;

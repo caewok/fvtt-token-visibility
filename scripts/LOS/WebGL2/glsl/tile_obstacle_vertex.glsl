@@ -7,10 +7,8 @@ in vec2 aUV;
 uniform mat4 uPerspectiveMatrix;
 uniform mat4 uLookAtMatrix;
 
-#if ${debugViewNormals}
-  in vec3 aNorm;
-  out vec3 vNorm;
-#endif
+in vec3 aNorm;
+out vec3 vNorm;
 
 out vec2 uv0;
 
@@ -21,9 +19,6 @@ void main() {
   uv0 = aUV;
 
   // instance: gl_InstanceID
-
-  #if ${debugViewNormals}
-    vNorm = normalize((uLookAtMatrix * vec4(aNorm, 0.0)).xyz);
-  #endif
+  vNorm = normalize((uLookAtMatrix * vec4(aNorm, 0.0)).xyz);
 }
 

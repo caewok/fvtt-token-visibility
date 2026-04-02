@@ -76,7 +76,6 @@ export class DrawableObjectsWebGL2Abstract {
 
   async _createProgram(opts = {}) {
     // Must include all parameters that could be in the glsl file.
-    opts.debugViewNormals ??= this.debugViewNormals;
     opts.isTile ??= false;
     return this.webGL2.cacheProgram(
       this.constructor.vertexFile,
@@ -143,7 +142,7 @@ export class DrawableObjectsWebGL2Abstract {
   }
 
   get stride() {
-    return 3 + (this.debugViewNormals * 3) + (this.constructor.addUVs * 2);
+    return 3 + 3 /* Normals */ + (this.constructor.addUVs * 2);
   }
 
   _initializeOffsetTrackers() { }
@@ -164,7 +163,9 @@ export class DrawableObjectsWebGL2Abstract {
     // Define a vertex buffer to be shared.
     // https://github.com/greggman/twgl.js/issues/132.
     const gl = this.gl;
-    const vBuffer = gl.createBuffer();
+
+    // Reuse existing buffer if possible to avoid memory exhaustion and leaks.
+    const vBuffer = this.attributeBufferInfo?.attribs?.aPos?.buffer || gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     log (`${this.constructor.name}|_defineAttributeProperties`, { vertices: this.verticesArray });
     gl.bufferData(gl.ARRAY_BUFFER, this.verticesArray, gl[this.constructor.vertexDrawType]);
@@ -181,7 +182,7 @@ export class DrawableObjectsWebGL2Abstract {
       indices: this.indicesArray,
     };
 
-    if ( this.debugViewNormals ) vertexProps.aNorm = {
+    vertexProps.aNorm = {
       numComponents: 3,
       buffer: vBuffer,
       stride,
@@ -192,7 +193,7 @@ export class DrawableObjectsWebGL2Abstract {
       numComponents: 2,
       buffer: vBuffer,
       stride,
-      offset: Float32Array.BYTES_PER_ELEMENT * (this.debugViewNormals ? 6 : 3),
+      offset: Float32Array.BYTES_PER_ELEMENT * 6, /* Position + Normals */
     }
 
     // this.bufferSizes.vertices = this.verticesArray.byteLength;
@@ -351,6 +352,10 @@ export class DrawableObjectsWebGL2Abstract {
 
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
+    twgl.setUniforms(this.programInfo, {
+      uDebugViewNormals: this.debugViewNormals
+    });
+
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
     log(`${this.constructor.name}|render`);
     if ( CONFIG[MODULE_ID].filterInstances ) this._drawFilteredInstances(this.instanceSet);
@@ -434,11 +439,12 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
     if ( !obj ) return false;
 
     // Obtain the (updated) vertex data.
-    const opts = { addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs };
+    const opts = { addNormals: true, addUVs: this.constructor.addUVs };
     const vo = obj.calculateModel(opts);
 
     // Update the vertex tracker and determine if the size of the vertex data changed.
     const vi = this.trackers.vi;
+    if ( vi.stride !== vo.stride ) throw Error(`${this.constructor.name}|_updatePlaceableData|Vertex object stride does not match tracker.`);
     const expanded = vi.updateFacet(placeable.sourceId, { newVertices: vo.vertices, newIndices: vo.indices });
     return !expanded;
   }
@@ -483,9 +489,10 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
     }
 
     // Rebuild the trackers.
-    const opts = { addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs };
+    const opts = { addNormals: true, addUVs: this.constructor.addUVs };
     for ( const [id, vData] of this.vertexDataMap.entries() ) {
       const vo = vData.calculateModel(opts);
+      if ( vi.stride !== vo.stride ) throw Error(`${this.constructor.name}|_updatePlaceableData|Vertex object stride does not match tracker.`);
       vi.updateFacet(id, { newVertices: vo.vertices, newIndices: vo.indices });
     }
   }
@@ -573,12 +580,12 @@ export class DrawableObjectsInstancingWebGL2 extends DrawableObjectsWebGL2Abstra
   }
 
   get verticesArray() {
-    const vo = this.constructor.vertexClass.getVertexObject({ addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs });
+    const vo = this.constructor.vertexClass.getVertexObject({ addNormals: true, addUVs: this.constructor.addUVs });
     return vo.vertices;
   }
 
   get indicesArray() {
-    const vo = this.constructor.vertexClass.getVertexObject({ addNormals: this.debugViewNormals, addUVs: this.constructor.addUVs });
+    const vo = this.constructor.vertexClass.getVertexObject({ addNormals: true, addUVs: this.constructor.addUVs });
     return vo.indices;
   }
 

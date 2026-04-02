@@ -118,6 +118,11 @@ const TokenShapeMixin = superclass => class extends superclass {
 
     const gl = this.gl;
     this.webGL2.useProgram(this.programInfo);
+
+    twgl.setUniforms(this.programInfo, {
+      uDebugViewNormals: this.debugViewNormals
+    });
+
     twgl.setBuffersAndAttributes(gl, this.programInfo, this.attributeBufferInfo);
     // twgl.setBuffersAndAttributes(gl, this.programInfo, this.vertexArrayInfo);
     // twgl.bindUniformBlock(gl, this.programInfo, this.renderer.uboInfo.camera);

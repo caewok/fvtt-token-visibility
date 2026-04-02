@@ -61,11 +61,11 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
   atv.setConfigForDetectionMode(this);
 
   // Turn off debug. This ensures that the print-out is only for the viewed/targeted pair, not all.
-  const oldDebug = CONFIG[MODULE_ID].debug;
-  CONFIG[MODULE_ID].debug = false;
+  // const oldDebug = CONFIG[MODULE_ID].debug;
+  // CONFIG[MODULE_ID].debug = false;
   hasLOS = atv.hasLOSToToken(target);
-  CONFIG[MODULE_ID].debug = oldDebug;
-  test.los.set(visionSource, hasLOS);
+  // CONFIG[MODULE_ID].debug = oldDebug;
+  // test.los.set(visionSource, hasLOS);
   return hasLOS;
 }
 
