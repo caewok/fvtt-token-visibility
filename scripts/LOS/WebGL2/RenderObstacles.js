@@ -397,7 +397,13 @@ export class RenderObstaclesWebGL2 {
     }
 
     this._setMaterial("target");
-    this.drawableTokens.forEach(drawable => drawable.renderTarget(target, testLighting));
+
+    // One of the drawables should be used to draw the target. Use first available.
+    for ( const drawable of this.drawableTokens ) {
+      if ( !drawable.filterObjects([target]).length ) continue;
+      drawable.renderTarget(target, testLighting);
+      break;
+    }
     // this.gl.flush();
   }
 

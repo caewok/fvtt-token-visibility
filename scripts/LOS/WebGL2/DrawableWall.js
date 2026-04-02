@@ -48,8 +48,8 @@ export class DrawableWallWebGL2 extends DrawableWallWebGL2Abstract {
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
     const { isTerrain, isDirectional } = this.constructor;
-    walls = walls.filter(wall => !(isTerrain(wall, opts) || isDirectional(wall)));
-    return super.filterObjects(walls);
+    walls = super.filterObjects(walls)
+    return walls.filter(wall => !(isTerrain(wall, opts) || isDirectional(wall)));
   }
 }
 
@@ -63,8 +63,8 @@ export class DrawableTerrainWallWebGL2 extends DrawableWallWebGL2Abstract {
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
     const { isTerrain, isDirectional } = this.constructor;
-    walls = walls.filter(wall => isTerrain(wall, opts) && !isDirectional(wall));
-    return super.filterObjects(walls);
+    walls = super.filterObjects(walls)
+    return walls.filter(wall => isTerrain(wall, opts) && !isDirectional(wall));
   }
 }
 
@@ -78,8 +78,8 @@ export class DrawableDirectionalWallWebGL2 extends DrawableWallWebGL2Abstract {
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
     const { isTerrain, isDirectional } = this.constructor;
-    walls = walls.filter(wall => !isTerrain(wall, opts) && isDirectional(wall));
-    return super.filterObjects(walls);
+    walls = super.filterObjects(walls)
+    return walls.filter(wall => !isTerrain(wall, opts) && isDirectional(wall));
   }
 }
 
@@ -93,7 +93,7 @@ export class DrawableDirectionalTerrainWallWebGL2 extends DrawableWallWebGL2Abst
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
     const { isTerrain, isDirectional } = this.constructor;
-    walls = walls.filter(wall => isTerrain(wall, opts) && isDirectional(wall));
-    return super.filterObjects(walls);
+    walls = super.filterObjects(walls)
+    return walls.filter(wall => isTerrain(wall, opts) && isDirectional(wall));
   }
 }

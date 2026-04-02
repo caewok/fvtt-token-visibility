@@ -61,10 +61,12 @@ export class DrawableObjectsWebGL2Abstract {
     if ( this.#initialized ) return;
     log(`${this.constructor.name}|initialize`);
     await this._initializeProgram();
-    this._initializePlaceableHandler();
-    this._initializeOffsetTrackers();
-    this._initializeAttributes();
     this._initializeUniforms();
+    this._initializeOffsetTrackers();
+
+    this._initializePlaceableHandler();
+    this._initializeAttributes();
+    this._updateAllPlaceableData();
     this.#initialized = true;
   }
 
@@ -277,7 +279,8 @@ export class DrawableObjectsWebGL2Abstract {
     if ( this.rebuildNeeded ) return this.updateAllPlaceableData();
 
     // Checks for updates for multiple instances but does not rebuild; assumes num instances not changed.
-    for ( const placeable of this.placeables ) {
+    const placeables = this.filterObjects(this.placeables);
+    for ( const placeable of placeables ) {
       const updateId = this.placeableLastUpdated.get(placeable);
       if ( typeof updateId === "undefined" ) return this.updateAllPlaceableData(); // Missing a placeable in the map.
 
@@ -416,27 +419,16 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
   /** @type {string} */
   static fragmentFile = "obstacle_fragment_ubo";
 
-  async initialize() {
-    this._initializePlaceableData();
-    await super.initialize();
-  }
-
   trackers = {
     vi: null,
   };
 
   vertexDataMap = new Map();
 
-  _updateAllPlaceableData() {
-    this._initializePlaceableData();
-    this._initializeOffsetTrackers();
-    this._initializeAttributes();
-    this._updateAllVertices();
-  }
-
   _initializePlaceableData() {
     this.vertexDataMap.clear();
-    for ( const placeable of this.placeables ) {
+    const placeables = this.filterObjects(this.placeables);
+    for ( const placeable of placeables ) {
       const obj = new this.constructor.vertexClass(placeable);
       this.vertexDataMap.set(placeable.sourceId, obj);
     }
@@ -445,6 +437,13 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
   _initializeOffsetTrackers() {
     // TODO: Use VariableLengthAbstractBuffer and don't copy over the geometry indices and vertices.
     this.trackers.vi = new VerticesIndicesTrackingBuffer({ stride: this.stride });
+  }
+
+  _updateAllPlaceableData() {
+    this._initializePlaceableData();
+    this._initializeOffsetTrackers();
+    this._initializeAttributes();
+    this._updateAllVertices();
   }
 
   /**
@@ -465,7 +464,6 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
     const expanded = vi.updateFacet(placeable.sourceId, { newVertices: vo.vertices, newIndices: vo.indices });
     return !expanded;
   }
-
 
   /**
    * Construct and update data arrays representing vertices and indices.

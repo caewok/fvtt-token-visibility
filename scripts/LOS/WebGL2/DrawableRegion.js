@@ -38,8 +38,8 @@ const RegionShapeMixin = superclass => class extends superclass {
   filterObjects(regions) {
     const regionType = this.constructor.regionType;
     const TYPE = this.constructor.TYPE;
-    regions = regions.filter(region => regionType(region) === TYPE);
-    return super.filterObjects(regions)
+    regions = super.filterObjects(regions)
+    return regions.filter(region => regionType(region) === TYPE);
   }
 
   static TYPE = RegionGeometry.SHAPE_TYPES.POLYGON;

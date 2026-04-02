@@ -143,8 +143,8 @@ export class DrawableRectangularTokenWebGL2 extends  mix(DrawableObjectsInstanci
 
   filterObjects(tokens) {
     const { isConstrained, isRectangle } = this.constructor;
-    tokens = tokens.filter(token => !isConstrained(token) && isRectangle(token));
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filter(token => !isConstrained(token) && isRectangle(token));
   }
 }
 
@@ -157,8 +157,8 @@ export class DrawableInstancedHexTokenWebGL2 extends  mix(DrawableObjectsInstanc
 
   filterObjects(tokens) {
     const isConstrained = this.constructor.isConstrained;
-    tokens = tokens.filter(token => !isConstrained(token));
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filter(token => !isConstrained(token));
   }
 }
 
@@ -171,8 +171,8 @@ export class DrawableEllipseTokenWebGL2 extends  mix(DrawableObjectsInstancingWe
 
   filterObjects(tokens) {
     const { isConstrained, isEllipse } = this.constructor;
-    tokens = tokens.filter(token => !isConstrained(token) && isEllipse(token));
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filter(token => !isConstrained(token) && isEllipse(token));
   }
 }
 
@@ -185,8 +185,8 @@ export class DrawableSphericalTokenWebGL2 extends  mix(DrawableObjectsInstancing
 
   filterObjects(tokens) {
     const isConstrained = this.constructor.isConstrained;
-    tokens = tokens.filter(token => !isConstrained(token));
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filterObjects(token => !isConstrained(token));
   }
 }
 
@@ -200,8 +200,8 @@ export class DrawableConstrainedTokenWebGL2 extends  mix(DrawableObjectsNonInsta
 
   filterObjects(tokens) {
     const isConstrained = this.constructor.isConstrained;
-    tokens = tokens.filter(token => isConstrained(token));
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filter(token => isConstrained(token));
   }
 }
 
@@ -215,8 +215,8 @@ export class DrawableLitTokenWebGL2 extends  mix(DrawableObjectsNonInstancingWeb
 
   filterObjects(tokens) {
     const isLit = this.constructor.isLit;
-    tokens = tokens.filter(token => isLit(token));
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filter(token => isLit(token));
   }
 }
 
@@ -229,8 +229,8 @@ export class DrawableBrightLitTokenWebGL2 extends  mix(DrawableObjectsNonInstanc
 
   filterObjects(tokens) {
     const isBrightLit = this.constructor.isBrightLit;
-    tokens = tokens.filter(token => isBrightLit(token));
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filter(token => isBrightLit(token));
   }
 }
 
@@ -243,8 +243,8 @@ export class DrawableLargeHexTokenWebGL2 extends  mix(DrawableObjectsNonInstanci
 
   filterObjects(tokens) {
     const { isInstanced, isBrightLit, isLit, isConstrained } = this.constructor;
-    tokens = tokens.filter(token => !(isInstanced(token) || isBrightLit || isLit || isConstrained(token)) );
-    return super.filterObjects(tokens);
+    tokens = super.filterObjects(tokens)
+    return tokens.filter(token => !(isInstanced(token) || isBrightLit || isLit || isConstrained(token)) );
   }
 }
 
