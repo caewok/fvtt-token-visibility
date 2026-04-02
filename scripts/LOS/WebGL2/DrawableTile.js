@@ -44,28 +44,6 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2 {
   /** @type {Map<string, WebGLTexture>} */
   textures = new Map();
 
-  /*
-  _defineAttributeProperties() {
-    const vertexProps = super._defineAttributeProperties();
-    const debugViewNormals = this.debugViewNormals;
-
-    // coords (3), normal (3), uv (2)
-    let stride = Float32Array.BYTES_PER_ELEMENT * 5;
-    if ( debugViewNormals ) {
-      stride = Float32Array.BYTES_PER_ELEMENT * 8;
-      vertexProps.aNorm.stride = stride;
-    }
-    vertexProps.aPos.stride = stride;
-    vertexProps.aUV = {
-      numComponents: 2,
-      buffer: vertexProps.aPos.buffer,
-      stride,
-      offset: Float32Array.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
-    }
-    return vertexProps;
-  }
-  */
-
   // ----- NOTE: Tile texture ----- //
 
   static textureOptions(gl) {

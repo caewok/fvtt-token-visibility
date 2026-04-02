@@ -66,7 +66,6 @@ export class DrawableObjectsWebGL2Abstract {
 
     this._initializePlaceableHandler();
     this._initializeAttributes();
-    this._updateAllPlaceableData();
     this.#initialized = true;
   }
 
@@ -202,28 +201,7 @@ export class DrawableObjectsWebGL2Abstract {
     return vertexProps;
   }
 
-  _updateAttributeBuffersForId(id) {
-    // See twgl.setAttribInfoBufferFromArray.
-    const gl = this.gl;
-    const vi = this.trackers.vi;
-
-    // Copy the vertices and adjusted indices to their webGL buffers.
-    const { vertices, indicesAdj } = vi.viewFacetById(id);
-    if ( !vertices || !indicesAdj ) console.error(`${this.constructor.name}|_updateAttributeBuffersForId|${id} id not found`);
-    const vOffset = vi.vertices.facetOffsetAtId(id);
-    const iOffset = vi.indices.facetOffsetAtId(id);
-
-    // Vertices.
-    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
-
-    // Indices.
-    const iBuffer = this.attributeBufferInfo.indices;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, indicesAdj);
-    log (`${this.constructor.name}|_updateAttributeBuffersForId ${id} with vOffset ${vOffset} and iOffset ${iOffset}`, { vertices, indicesAdj });
-  }
+  _updateAttributeBuffersForId(id) {}
 
   // ----- NOTE: Placeable handler ----- //
 
@@ -265,7 +243,7 @@ export class DrawableObjectsWebGL2Abstract {
    * Mark that a rebuild of all instances is necessary.
    * Used to track when a change to a specific instances causes the need to rebuild the entire array.
    */
-  #rebuildNeeded = false
+  #rebuildNeeded = true;
 
   get rebuildNeeded() { return this.#rebuildNeeded; }
 
@@ -319,7 +297,7 @@ export class DrawableObjectsWebGL2Abstract {
 
   _updatePlaceableData(_placeable) { return true; } // Expect to be overridden by subclass.
 
-  updatePlaceableBuffer(placeable) { this._updateAttributeBuffersForId(placeable.sourceId); }
+  updatePlaceableBuffer(placeable) { }
 
   // ----- NOTE: Render ----- //
 
@@ -442,8 +420,8 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
   _updateAllPlaceableData() {
     this._initializePlaceableData();
     this._initializeOffsetTrackers();
-    this._initializeAttributes();
     this._updateAllVertices();
+    this._initializeAttributes();
   }
 
   /**
@@ -463,6 +441,31 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
     const vi = this.trackers.vi;
     const expanded = vi.updateFacet(placeable.sourceId, { newVertices: vo.vertices, newIndices: vo.indices });
     return !expanded;
+  }
+
+  updatePlaceableBuffer() { this._updateAttributeBuffersForId(placeable.sourceId); }
+
+  _updateAttributeBuffersForId(id) {
+    // See twgl.setAttribInfoBufferFromArray.
+    const gl = this.gl;
+    const vi = this.trackers.vi;
+
+    // Copy the vertices and adjusted indices to their webGL buffers.
+    const { vertices, indicesAdj } = vi.viewFacetById(id);
+    if ( !vertices || !indicesAdj ) console.error(`${this.constructor.name}|_updateAttributeBuffersForId|${id} id not found`);
+    const vOffset = vi.vertices.facetOffsetAtId(id) * Float32Array.BYTES_PER_ELEMENT;
+    const iOffset = vi.indices.facetOffsetAtId(id) * Uint16Array.BYTES_PER_ELEMENT;
+
+    // Vertices.
+    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
+
+    // Indices.
+    const iBuffer = this.attributeBufferInfo.indices;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
+    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, indicesAdj);
+    log (`${this.constructor.name}|_updateAttributeBuffersForId ${id} with vOffset ${vOffset} and iOffset ${iOffset}`, { vertices, indicesAdj });
   }
 
   /**
@@ -485,6 +488,23 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
       const vo = vData.calculateModel(opts);
       vi.updateFacet(id, { newVertices: vo.vertices, newIndices: vo.indices });
     }
+  }
+
+  _drawUnfilteredInstances() {
+    const gl = this.gl;
+    const nIndices = this.indicesArray.length;
+    if ( !nIndices ) return;
+
+    // Debug: what model are we rendering?
+    if ( CONFIG[MODULE_ID].debug ) {
+      for ( let i = 0; i < n; i += 1 ) {
+        const { vertices, indices, indicesAdj } = this.trackers.vi.viewFacetAtIndex(i);
+        log(`${this.constructor.name}|_drawUnfilteredInstances|${i}`);
+        console.table({ vertices: [...vertices], indices: [...indices], indicesAdj: [...indicesAdj] });
+      }
+    }
+
+    WebGL2.draw(this.gl, nIndices, gl.UNSIGNED_SHORT, 0);
   }
 }
 
@@ -566,7 +586,7 @@ export class DrawableObjectsInstancingWebGL2 extends DrawableObjectsWebGL2Abstra
 
   _rebuildModelBuffer() {
     // Update the model attribute with a new buffer.
-    const attribs = this.attributeBufferInfo;
+    const attribs = this.attributeBufferInfo.attribs;
     attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.vertexProps.aModel });
 
     // Update the VAO with the new model buffer information.
