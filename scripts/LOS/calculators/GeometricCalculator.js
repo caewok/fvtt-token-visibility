@@ -246,7 +246,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   blockingTerrainPolys = [];
 
   _constructPerspectiveTargetPolygons() {
-    if ( CONFIG[MODULE_ID].useTokenSphere ) {
+    if ( CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere ) {
       this.targetPolys = this._constructPerspectiveTargetSphere();
       // this.targetPolys[0].radius *= 100;
       return;

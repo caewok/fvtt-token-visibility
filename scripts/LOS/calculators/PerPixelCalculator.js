@@ -7,6 +7,7 @@ CONFIG,
 // Base folder
 import { MODULE_ID } from "../../const.js";
 import { Settings } from "../../settings.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 // Calculator
 import { PercentVisiblePointsResultAbstract, PercentVisibleCalculatorPointsAbstract } from "./PointsCalculator.js";
@@ -38,7 +39,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   }
 
   /** @type {boolean} */
-  get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
+  get spherical() { return this._config.spherical ?? CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere; }
 
   initializeView(opts) {
     super.initializeView(opts);

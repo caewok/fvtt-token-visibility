@@ -257,7 +257,7 @@ export class WebGL2 {
       min[idx % 4] = Math.min(px, min[idx % 4])
     });
     let redBlocked = 0;
-    const terrainThreshold = 255 * 0.75;
+    const terrainThreshold = 255 * CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold;
     for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
       const r = pixels[i];
       const g = pixels[i + 1];

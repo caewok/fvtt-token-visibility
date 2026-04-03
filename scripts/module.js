@@ -11,6 +11,9 @@ PIXI,
 import { MODULE_ID } from "./const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 
+// Load the geometry library.
+// import "./geometry/registration.js";
+
 // Hooks and method registration
 import { initializePatching, PATCHER } from "./patching.js";
 import { Settings, SETTINGS } from "./settings.js";
@@ -40,8 +43,7 @@ import * as twgl from "./LOS/WebGL2/twgl-full.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 
-// Load the geometry library.
-import "./geometry/registration.js";
+
 
 
 // Other self-executing hooks

@@ -40,6 +40,7 @@ import {
  } from "./DrawableRegion.js";
 import { log } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 export class RenderObstaclesWebGL2 {
 
@@ -147,7 +148,7 @@ export class RenderObstaclesWebGL2 {
     // Define token drawables.
     // TODO: Handle using lit or bright lit tokens.
     const drawableTokenClasses = []
-    if ( CONFIG[MODULE_ID].useTokenSphere ) drawableTokenClasses.push(
+    if ( CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere ) drawableTokenClasses.push(
       DrawableSphericalTokenWebGL2,
       DrawableConstrainedTokenWebGL2
     );

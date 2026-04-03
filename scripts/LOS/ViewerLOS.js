@@ -12,6 +12,7 @@ Ray,
 import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 
 // LOS folder
 import { tokensOverlap, insetPoints } from "./util.js";
@@ -691,7 +692,7 @@ export class ViewerLOS {
 
     // Fill in the target border on canvas
     if ( this.target ) {
-      const border = CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
+      const border = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
       draw.shape(border, { color, fill: color, fillAlpha: 0.2});
     }
   }

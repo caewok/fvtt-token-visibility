@@ -7,6 +7,7 @@ foundry,
 "use strict";
 
 import { MODULE_ID } from "../../const.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
 import { NULL_SET } from "../../geometry/util.js";
 import { ObstacleOcclusionTest } from "../../geometry/ObstacleOcclusionTest.js";
@@ -355,7 +356,7 @@ export class PercentVisibleCalculatorAbstract {
     this.occlusionTester.update();
   }
 
-  get targetBorder() { return CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
+  get targetBorder() { return CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
 
   get targetShape() { return this.target[this._config.tokenShapeType]; }
 
@@ -378,7 +379,7 @@ export class PercentVisibleCalculatorAbstract {
     switch ( type ) {
       case TYPES.DIM: tokenShapeType = "litTokenBorder"; break;
       case TYPES.BRIGHT: tokenShapeType = "brightLitTokenBorder"; break;
-      default: tokenShapeType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
+      default: tokenShapeType = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
     }
     this.config = { tokenShapeType };
   }

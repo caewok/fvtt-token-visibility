@@ -7,11 +7,6 @@ CONFIG,
 import { MODULE_ID } from "./const.js";
 import { Settings } from "./settings.js";
 
-import { WallGeometry } from "./geometry/placeable_geometry/WallGeometry.js";
-import { TokenGeometry } from "./geometry/placeable_geometry/TokenGeometry.js";
-import { RegionGeometry } from "./geometry/placeable_geometry/RegionGeometry.js";
-import { TileGeometry } from "./geometry/placeable_geometry/TileGeometry.js";
-
 // Patches for the Canvas class
 export const PATCHES = {};
 PATCHES.BASIC = {};
@@ -29,57 +24,7 @@ function canvasReady(_canvas) {
   console.debug(`${MODULE_ID}|canvasReady`);
   if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
 
-  // Register basic watchers for placeables.
-  const updateFn = placeable => {
-    const obj = placeable[MODULE_ID] ??= {}
-    obj.updateId ??= 0;
-    obj.updateId += 1;
-  }
-  const docKeys = {
-    Wall: new Set([
-      ...WallGeometry.TRACKER_TYPES.position,
-      ...WallGeometry.TRACKER_TYPES.direction,
-      ...WallGeometry.TRACKER_TYPES.restriction,
-      ...WallGeometry.TRACKER_TYPES.door,
-      ...WallGeometry.TRACKER_TYPES.threshold,
-    ]),
-    Tile: new Set([
-      ...TileGeometry.TRACKER_TYPES.position,
-      ...TileGeometry.TRACKER_TYPES.scale,
-      ...TileGeometry.TRACKER_TYPES.rotation,
-    ]),
-    Token: new Set([
-      ...TokenGeometry.TRACKER_TYPES.position,
-      ...TokenGeometry.TRACKER_TYPES.scale,
-      ...TokenGeometry.TRACKER_TYPES.shape,
-    ]),
-    Region: new Set([
-      ...RegionGeometry.TRACKER_TYPES.elevation,
-      ...RegionGeometry.TRACKER_TYPES.shapes,
-    ]),
-  };
-  const id = "updateCounter";
-  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
-  const PlaceableUpdateWatcher = geometryTracking.PlaceableUpdateWatcher;
-  for ( const [docName, keys] of Object.entries(docKeys) ) {
-    const watcher = PlaceableUpdateWatcher.getWatcher(docName);
-    watcher.register("update", id, updateFn, keys);
-    watcher.activate();
-  }
 
-  // Placeable Geometry for collision testing.
-  const geometryTypes = [
-    "Tile",
-    "Wall",
-    "Token",
-    "Region",
-  ];
-  for ( const type of geometryTypes ) {
-    const cl = geometryTracking[`${type}GeometryTracker`];
-    cl.registerHooks();
-    cl.registerExistingPlaceables();
-    cl.activate();
-  }
 
   // Must be after the trackers are ready.
   Settings.updateLightMonitor(Settings.get(Settings.KEYS.LIGHT_MONITOR.ALGORITHM));
