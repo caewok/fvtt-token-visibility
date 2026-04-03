@@ -226,8 +226,9 @@ export class Camera {
     // to see the whole sphere. Handle as a special case.
     const fov = cameraDist <= boxRadius ? Math.PI
       : 2 * Math.asin(boxRadius / cameraDist); // Radians
+    const near = canvas.grid.size * 0.1;
 
-    this.perspectiveParameters = { fov, zFar };
+    this.perspectiveParameters = { fov, zFar, near };
     return this.perspectiveParameters;
   }
 
@@ -290,7 +291,7 @@ export class Camera {
   #perspectiveParameters = {
     fov: Math.toRadians(90),
     aspect: 1,
-    zNear: 1,
+    zNear: canvas.grid.size || 1,
     zFar: Infinity,
   }
 
