@@ -217,14 +217,16 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( useRenderTexture ) {
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
-      this._renderTarget({ frame });
+
       this._renderObstacles({ frame });
+      this._renderTarget({ frame });
       res = this.redPixelCounter[pixelCounterType](this.renderTexture);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this._renderTarget();
+
       this._renderObstacles();
+      this._renderTarget();
       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2"
         ? pixelCounterType : "readPixelsCount" ;
       res = this.redPixelCounter[type]();
