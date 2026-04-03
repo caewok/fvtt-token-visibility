@@ -69,6 +69,7 @@ export class RenderObstaclesWebGL2 {
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
+  // camera = new Camera({ glType: "webGL2", perspectiveType: "orthogonal" });
 
   /** @type {object} */
   #debugViewNormals = false;

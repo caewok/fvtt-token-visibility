@@ -8,7 +8,6 @@ import { Point3d } from "../geometry/3d/Point3d.js";
 import { Quad3d } from "../geometry/3d/Polygon3d.js";
 import { MatrixFloat32 } from "../geometry/Matrix.js";
 
-import { MODULE_ID } from "../const.js";
 import { TRACKER_IDS } from "./const.js";
 
 export class Camera {
@@ -243,18 +242,23 @@ export class Camera {
     // Determine the minimum and maximum for each coordinate in the camera view.
     const lookAtM = this.lookAtMatrix;
     const iter = aabb3d.iterateVertices();
-    const p0 = lookAtM.multiplyPoint3d(iter.next().value);
-    let xMinMax = Math.minMax(p0.x);
-    let yMinMax = Math.minMax(p0.y);
-    let zMinMax = Math.minMax(p0.z);
-    p0.release();
-    for ( const pt of iter ) {
-      const txPt = lookAtM.multiplyPoint3d(pt);
-      xMinMax = Math.minMax(xMinMax.min, xMinMax.max, txPt.x);
-      yMinMax = Math.minMax(yMinMax.min, yMinMax.max, txPt.y);
-      zMinMax = Math.minMax(zMinMax.min, zMinMax.max, txPt.z);
-      txPt.release();
-      pt.release();
+
+    let xMin = Number.POSITIVE_INFINITY;
+    let yMin = Number.POSITIVE_INFINITY;
+    let zMin = Number.POSITIVE_INFINITY;
+    let xMax = Number.NEGATIVE_INFINITY;
+    let yMax = Number.NEGATIVE_INFINITY;
+    let zMax = Number.NEGATIVE_INFINITY;
+
+    using txPt = Point3d.tmp;
+    for ( using pt of iter ) {
+      lookAtM.multiplyPoint3d(pt, txPt);
+      xMin = Math.min(xMin, txPt.x);
+      yMin = Math.min(yMin, txPt.y);
+      zMin = Math.min(zMin, -txPt.z);
+      xMax = Math.max(xMax, txPt.x);
+      yMax = Math.max(yMax, txPt.y);
+      zMax = Math.max(zMax, -txPt.z);
     }
 
     // The min/max projected values define the clipping planes.
@@ -263,11 +267,12 @@ export class Camera {
     // However, for constructing a projection matrix, we typically need the distances
     // along the forward vector, so we keep them as they are.
     this.orthogonalParameters = {
-      left: xMinMax.min,
-      right: xMinMax.max,
-      top: yMinMax.max,
-      bottom: yMinMax.min,
-      far: zMinMax.max,
+      left: xMin,
+      right: xMax,
+      top: yMax,
+      bottom: yMin,
+      // near: zMin, // Always set to 1.
+      far: zMax,
       // Near would be zMinMax.min but we also want obstacles in view, so it should be left to something small, like 1.
     };
   }
@@ -310,10 +315,12 @@ export class Camera {
   /** @type {MatrixFloat32<4x4>} */
   get perspectiveMatrix() {
     if ( this.dirtyPerspective ) {
-      // mat4.perspective or perspectiveZO?
-      // const { fov, aspect, zNear, zFar } = this.#perspectiveParameters;
-      // MatrixFloat32.perspectiveZO(fov, aspect, zNear, zFar, this.#M.perspective);
-      this.#perspectiveFn(...Object.values(this.#internalParams), this.#M.perspective);
+      const p = this.#internalParams;
+      if ( this.perspectiveType === "orthogonal" ) {
+        this.#perspectiveFn(p.left, p.right, p.bottom, p.top, p.near, p.far, this.#M.perspective);
+      } else {
+        this.#perspectiveFn(p.fov, p.aspect, p.zNear, p.zFar, this.#M.perspective);
+      }
       this.#M.perspective.multiply4x4(this.mirrorMatrix, this.#M.perspective);
       this.#dirtyPerspective = false;
     }
@@ -333,12 +340,12 @@ export class Camera {
   }
 
   #orthogonalParameters = {
-    left: 100,
+    left: -100,
     right: 100,
     top: 100,
-    bottom: 100,
+    bottom: -100,
     near: 1,
-    far: 1000,
+    far: -1000,
   };
 
   get orthogonalParameters() {
