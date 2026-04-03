@@ -21,6 +21,12 @@ export class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   get senseType() { return this.renderer.senseType; }
 
+  filterObjects(walls, opts = {}) {
+    opts.senseType ??= "sight";
+    walls = super.filterObjects(walls);
+    return walls.filter(wall => !(wall.isOpen || wall.document[opts.senseType] === CONST.WALL_SENSE_TYPES.NONE));
+  }
+
   /**
    * Is this a terrain (limited) edge?
    * @param {Edge} edge
