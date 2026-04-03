@@ -96,18 +96,6 @@ export const LOS_CONFIG = {
   tileThresholdShape: "alphaThresholdPolygons",
 
   /**
-   * Function to determine if a token is alive.
-   * @type {function}
-   */
-  tokenIsAlive,
-
-  /**
-   * Function to determine if a token is dead
-   * @type {function}
-   */
-  tokenIsDead,
-
-  /**
    * WebGL2. Whether to use a render texture to count pixels.
    * @type {boolean}
    */
@@ -144,25 +132,3 @@ export const LOS_CONFIG = {
 Object.defineProperty(LOS_CONFIG, "ClipperPaths", {
   get: () => CONFIG[MODULE_ID].clipperVersion === 1 ? ClipperPaths : Clipper2Paths
 });
-
-/**
- * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsDead.
- * @param {Token} token
- * @returns {boolean} True if dead.
- */
-function tokenIsAlive(token) { return !tokenIsDead(token); }
-
-/**
- * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsAlive.
- * @param {Token} token
- * @returns {boolean} True if dead.
- */
-function tokenIsDead(token) {
-  const deadStatus = CONFIG.statusEffects.find(status => status.id === "dead");
-  if ( deadStatus && token.actor.statuses.has(deadStatus.id) ) return true;
-
-  const tokenHPAttribute = CONFIG.GeometryLib.tokenHPId;
-  const hp = getObjectProperty(token.actor, tokenHPAttribute);
-  if ( typeof hp !== "number" ) return false;
-  return hp <= 0;
-}
