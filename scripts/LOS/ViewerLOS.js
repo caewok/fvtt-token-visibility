@@ -338,7 +338,7 @@ export class ViewerLOS {
     const constrainedBorder = token.constrainedTokenBorder;
     if ( constrainedBorder.equals(token.tokenBorder) ) return false;
     if ( inset > 0 ) return true;
-    return constrainedBorder.pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
+    return !constrainedBorder.clone().pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
   }
 
   /**
@@ -614,7 +614,7 @@ export class ViewerLOS {
 
     // Constrained is polygon. Only use corners of polygon
     // Scale down polygon to avoid adjacent walls.
-    const padShape = tokenShape.pad(PAD, { scalingFactor: 100, miterType: "jtSquare" });
+    const padShape = tokenShape.clone().pad(PAD, { scalingFactor: 100, miterType: "jtSquare" });
     return [...padShape.iteratePoints()].map(pt => new Point3d(pt.x, pt.y, elevation));
   }
 
