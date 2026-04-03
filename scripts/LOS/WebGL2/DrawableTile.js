@@ -4,7 +4,7 @@ canvas
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { DrawableObjectsInstancingWebGL2Abstract } from "./DrawableObjects.js";
+import { DrawableObjectsInstancingWebGL2 } from "./DrawableObjects.js";
 import { TileInstancedVertices } from "../../geometry/placeable_vertices/TileVertices.js";
 import { TileGeometry } from "../../geometry/placeable_geometry/TileGeometry.js";
 
@@ -14,13 +14,15 @@ import * as twgl from "./twgl.js";
 // Not guaranteed to have any specific value.
 const TMP_SET = new Set();
 
-export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract {
+export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2 {
 
   /** @type {class} */
   static vertexClass = TileInstancedVertices;
 
   /** @type {class} */
   static geomClass = TileGeometry;
+
+  static addUVs = true;
 
   get placeables() { return canvas.tiles.placeables; }
 
@@ -41,31 +43,6 @@ export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2Abstract 
 
   /** @type {Map<string, WebGLTexture>} */
   textures = new Map();
-
-  _initializeGeoms(opts = {}) {
-    opts.addUVs = true;
-    super._initializeGeoms(opts);
-  }
-
-  _defineAttributeProperties() {
-    const vertexProps = super._defineAttributeProperties();
-    const debugViewNormals = this.debugViewNormals;
-
-    // coords (3), normal (3), uv (2)
-    let stride = Float32Array.BYTES_PER_ELEMENT * 5;
-    if ( debugViewNormals ) {
-      stride = Float32Array.BYTES_PER_ELEMENT * 8;
-      vertexProps.aNorm.stride = stride;
-    }
-    vertexProps.aPos.stride = stride;
-    vertexProps.aUV = {
-      numComponents: 2,
-      buffer: vertexProps.aPos.buffer,
-      stride,
-      offset: Float32Array.BYTES_PER_ELEMENT * (debugViewNormals ? 6 : 3),
-    }
-    return vertexProps;
-  }
 
   // ----- NOTE: Tile texture ----- //
 

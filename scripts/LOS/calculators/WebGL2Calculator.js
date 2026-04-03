@@ -217,14 +217,16 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( useRenderTexture ) {
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
-      this._renderTarget({ frame });
+
       this._renderObstacles({ frame });
+      this._renderTarget({ frame });
       res = this.redPixelCounter[pixelCounterType](this.renderTexture);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      this._renderTarget();
+
       this._renderObstacles();
+      this._renderTarget();
       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2"
         ? pixelCounterType : "readPixelsCount" ;
       res = this.redPixelCounter[type]();
@@ -345,11 +347,6 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     await this.renderer.initialize();
   }
 
-  initializeView(opts) {
-    super.initializeView(opts);
-    this.renderer.setCamera(this.viewpoint, this.target, { targetLocation: this.targetLocation });
-  }
-
   updateDebugForPercentVisible(percentVisible) {
     this.renderer.config = { senseType: this.viewerLOS?.config.senseType ?? "sight" };
     const calc = this.viewerLOS.calculator;
@@ -366,6 +363,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
       const clear = i === 0;
 
       calc.initializeView({ viewer, target, viewpoint, targetLocation });
+      this.renderer.setCamera(viewpoint, target, { targetLocation });
       calc._renderTarget({ frame, clear }, this.renderer);
       calc._renderObstacles({ frame }, this.renderer);
     }

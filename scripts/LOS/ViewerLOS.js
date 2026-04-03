@@ -613,8 +613,8 @@ export class ViewerLOS {
 
     // Constrained is polygon. Only use corners of polygon
     // Scale down polygon to avoid adjacent walls.
-    const padShape = tokenShape.pad(PAD, { scalingFactor: 100 });
-    return [...padShape.iteratePoints({close: false})].map(pt => new Point3d(pt.x, pt.y, elevation));
+    const padShape = tokenShape.pad(PAD, { scalingFactor: 100, miterType: "jtSquare" });
+    return [...padShape.iteratePoints()].map(pt => new Point3d(pt.x, pt.y, elevation));
   }
 
 

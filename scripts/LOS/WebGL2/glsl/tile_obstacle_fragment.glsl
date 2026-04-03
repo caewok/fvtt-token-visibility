@@ -1,6 +1,5 @@
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
-precision ${PIXI.settings.PRECISION_VERTEX} usampler2D;
 
 // Or PIXI.settings.PRECISION_FRAGMENT, which may be lower.
 

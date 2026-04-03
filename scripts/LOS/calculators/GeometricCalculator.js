@@ -258,7 +258,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     // Test if the transformed polys are all getting clipped.
     const txPolys = facingPolys.map(poly => poly.transform(this.camera.lookAtMatrix));
-    if ( txPolys.every(poly => poly.iteratePoints({close: false}).every(pt => pt.z > 0)) ) {
+    if ( txPolys.every(poly => poly.iteratePoints().every(pt => pt.z > 0)) ) {
       console.warn(`_applyPerspective|All target z values are positive for ${this.viewer.name} --> ${this.target.name}`);
     }
   }
