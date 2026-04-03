@@ -443,7 +443,7 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
     return !expanded;
   }
 
-  updatePlaceableBuffer() { this._updateAttributeBuffersForId(placeable.sourceId); }
+  updatePlaceableBuffer(placeable) { this._updateAttributeBuffersForId(placeable.sourceId); }
 
   _updateAttributeBuffersForId(id) {
     // See twgl.setAttribInfoBufferFromArray.
