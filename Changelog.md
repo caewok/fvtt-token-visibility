@@ -1,3 +1,6 @@
+## 0.8.3
+Fix missing geometry lib import.
+
 ## 0.8.2
 Increase near-z for the Camera in WebGL2 to limit target bleed-through when adjacent to walls.
 
