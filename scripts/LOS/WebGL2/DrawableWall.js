@@ -1,20 +1,20 @@
 /* globals
 canvas,
+CONFIG,
 CONST,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2 } from "./DrawableObjects.js";
-import { WallInstancedVertices } from "../../geometry/placeable_vertices/WallVertices.js";
-import { WallGeometry } from "../../geometry/placeable_geometry/WallGeometry.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 export class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2 {
   /** @type {class} */
-  static vertexClass = WallInstancedVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.WallInstancedVertices; }
 
   /** @type {class} */
-  static geomClass = WallGeometry;
+  static get geomClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableGeometry.WallGeometry; }
 
   get placeables() { return canvas.walls.placeables; }
 

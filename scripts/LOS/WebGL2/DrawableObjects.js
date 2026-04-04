@@ -18,7 +18,7 @@ import { log } from "../util.js";
  */
 export class DrawableObjectsWebGL2Abstract {
   /** @type {class} */
-  static vertexClass;
+  static get vertexClass() { throw Error(`${this.name}|vertexClass must be defined by child class.`); };
 
   /** @type {string} */
   static vertexFile;
@@ -514,7 +514,7 @@ export class DrawableObjectsNonInstancingWebGL2 extends DrawableObjectsWebGL2Abs
 export class DrawableObjectsInstancingWebGL2 extends DrawableObjectsWebGL2Abstract {
 
   /** @type {class} */
-  static geomClass;
+  static get geomClass() { throw Error(`${this.name}|geomClass getter must be defined by child class.`); };
 
   /** @type {string} */
   static vertexFile = "instance_vertex_ubo";

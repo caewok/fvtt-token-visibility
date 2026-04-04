@@ -8,16 +8,9 @@ CONST,
 
 import { DrawableObjectsInstancingWebGL2, DrawableObjectsNonInstancingWebGL2 } from "./DrawableObjects.js";
 import { MODULE_ID } from "../../const.js";
-import { Hex3dVertices } from "../../geometry/placeable_vertices/BasicVertices.js";
-import {
-  TokenInstancedVertices,
-  ConstrainedTokenModelVertices,
-  LitTokenModelVertices,
-  BrightLitTokenModelVertices,
-} from "../../geometry/placeable_vertices/TokenVertices.js";
-import { TokenGeometry } from "../../geometry/placeable_geometry/TokenGeometry.js";
 import { MatrixFloat32 } from "../../geometry/Matrix.js";
 import { mix } from "../../geometry/mixwith.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 import * as twgl from "./twgl.js";
 import { log } from "../util.js";
@@ -58,7 +51,7 @@ It is assumed that:
  */
 const TokenShapeMixin = superclass => class extends superclass {
   /** @type {class} */
-  static geomClass = TokenGeometry;
+  static get geomClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableGeometry.TokenGeometry; }
 
   get placeables() { return canvas.tokens.placeables; }
 
@@ -139,7 +132,7 @@ export class DrawableRectangularTokenWebGL2 extends  mix(DrawableObjectsInstanci
   static vertexDrawType = "STATIC_DRAW";
 
   /** @type {class} */
-  static vertexClass = TokenInstancedVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.TokenInstancedVertices; }
 
   filterObjects(tokens) {
     const { isConstrained, isRectangle } = this.constructor;
@@ -153,7 +146,7 @@ export class DrawableInstancedHexTokenWebGL2 extends  mix(DrawableObjectsInstanc
   static vertexDrawType = "STATIC_DRAW";
 
   /** @type {class} */
-  static vertexClass = Hex3dVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.Hex3dVertices; }
 
   filterObjects(tokens) {
     const isConstrained = this.constructor.isConstrained;
@@ -167,7 +160,7 @@ export class DrawableEllipseTokenWebGL2 extends  mix(DrawableObjectsInstancingWe
   static vertexDrawType = "STATIC_DRAW";
 
   /** @type {class} */
-  static vertexClass = TokenInstancedVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.TokenInstancedVertices; }
 
   filterObjects(tokens) {
     const { isConstrained, isEllipse } = this.constructor;
@@ -181,7 +174,7 @@ export class DrawableSphericalTokenWebGL2 extends  mix(DrawableObjectsInstancing
   static vertexDrawType = "STATIC_DRAW";
 
   /** @type {class} */
-  static vertexClass = TokenInstancedVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.TokenInstancedVertices; }
 
   filterObjects(tokens) {
     const isConstrained = this.constructor.isConstrained;
@@ -195,7 +188,7 @@ export class DrawableConstrainedTokenWebGL2 extends  mix(DrawableObjectsNonInsta
   static vertexDrawType = "DYNAMIC_DRAW";
 
   /** @type {class} */
-  static vertexClass = ConstrainedTokenModelVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.ConstrainedTokenModelVertices; }
 
 
   filterObjects(tokens) {
@@ -210,7 +203,7 @@ export class DrawableLitTokenWebGL2 extends  mix(DrawableObjectsNonInstancingWeb
 
   static vertexDrawType = "DYNAMIC_DRAW";
 
-  static vertexClass = LitTokenModelVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.LitTokenModelVertices; }
 
 
   filterObjects(tokens) {
@@ -224,7 +217,7 @@ export class DrawableBrightLitTokenWebGL2 extends  mix(DrawableObjectsNonInstanc
 
   static vertexDrawType = "DYNAMIC_DRAW";
 
-  static vertexClass = BrightLitTokenModelVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.BrightLitTokenModelVertices; }
 
 
   filterObjects(tokens) {
@@ -239,7 +232,7 @@ export class DrawableLargeHexTokenWebGL2 extends  mix(DrawableObjectsNonInstanci
   static vertexDrawType = "STATIC_DRAW";
 
   /** @type {class} */
-  static vertexClass = Hex3dVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.RegionPolygonModelVertices; } Hex3dVertices;
 
   filterObjects(tokens) {
     const { isInstanced, isBrightLit, isLit, isConstrained } = this.constructor;
@@ -250,10 +243,10 @@ export class DrawableLargeHexTokenWebGL2 extends  mix(DrawableObjectsNonInstanci
 
 export class DrawableGridShape extends DrawableObjectsInstancingWebGL2 {
   /** @type {class} */
-  static vertexClass = TokenInstancedVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.TokenInstancedVertices; }
 
   /** @type {class} */
-  static geomClass = TokenGeometry;
+  static get geomClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableGeometry.TokenGeometry; }
 
   static vertexDrawType = "STATIC_DRAW";
 

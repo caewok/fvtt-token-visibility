@@ -2,7 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-LimitedAnglePolygon,
 PIXI,
 Ray,
 */
@@ -378,8 +377,8 @@ export class ViewerLOS {
 
     // Probably worth checking the target center first
     const center = targetShape.center;
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+    if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+    if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
 
     // TODO: Would it be more performant to assign an angle to each target point?
     // Or maybe just check orientation of ray to each point?
@@ -387,8 +386,8 @@ export class ViewerLOS {
     for ( const edge of edges ) {
       if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.a, edge.b) ) return 2;
       if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.a, edge.b) ) return 2;
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
+      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
+      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
     }
 
     return 0;

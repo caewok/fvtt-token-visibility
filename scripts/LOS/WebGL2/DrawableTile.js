@@ -1,13 +1,12 @@
 /* globals
-canvas
+canvas,
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { DrawableObjectsInstancingWebGL2 } from "./DrawableObjects.js";
-import { TileInstancedVertices } from "../../geometry/placeable_vertices/TileVertices.js";
-import { TileGeometry } from "../../geometry/placeable_geometry/TileGeometry.js";
-
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import * as twgl from "./twgl.js";
 
 // Set that is used for temporary values.
@@ -17,10 +16,10 @@ const TMP_SET = new Set();
 export class DrawableTileWebGL2 extends DrawableObjectsInstancingWebGL2 {
 
   /** @type {class} */
-  static vertexClass = TileInstancedVertices;
+  static get vertexClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableVertices.TileInstancedVertices; }
 
   /** @type {class} */
-  static geomClass = TileGeometry;
+  static get geomClass() { return CONFIG[GEOMETRY_LIB_ID].lib.placeableGeometry.TileGeometry; }
 
   static addUVs = true;
 
