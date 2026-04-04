@@ -7,9 +7,12 @@ foundry,
 "use strict";
 
 import { MODULE_ID } from "../../const.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
-import { ObstacleOcclusionTest } from "../ObstacleOcclusionTest.js";
+import { NULL_SET } from "../../geometry/util.js";
+import { ObstacleOcclusionTest } from "../../geometry/ObstacleOcclusionTest.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Frustum } from "../../geometry/3d/Frustum.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -194,39 +197,49 @@ export class PercentVisibleResult {
 export class PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleResult;
 
-
-
   /**
    * @param {CalculatorConfig} cfg
    */
   constructor(cfg = {}) {
     // Set default configuration first and then override with passed-through values.
     this.#permanentConfig = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.#permanentBlockingConfig = foundry.utils.mergeObject(this.constructor.defaultBlockingConfiguration, cfg, { inplace: false, insertKeys: false });
     this.restorePermanentConfig();
+    this.occlusionTester.frustum = new Frustum();
   }
 
   // ----- NOTE: Configuration ----- //
 
   /** @type {CalculatorConfig} */
   static defaultConfiguration = {
-    blocking: {
-      walls: true,
-      tiles: true,
-      regions: true,
-      tokens: {
-        dead: true,
-        live: true,
-        prone: true,
-      }
-    },
     tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
-    senseType: "sight",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
     largeTarget: false,
     radius: null, // Default is to use the viewer's vision lightRadius or ∞.
+    debug: false,
   };
+
+  /** @type {BlockingConfig} */
+  static defaultBlockingConfiguration = {
+    senseType: "sight", /** @type {CONST.WALL_RESTRICTION_TYPES} */
+    walls: true,
+    tiles: true,
+    regions: true,
+    tokens: {
+      dead: true,
+      live: true,
+
+      // If live, token may block when:
+      prone: true,
+      enemies: true,
+      allies: true,
+      excludedStatuses: NULL_SET, // If token has status, it does not block
+    }
+  }
 
   /** @type {CalculatorConfig} */
   #permanentConfig = {};
+
+  #permanentBlockingConfig = {};
 
   /** @type {boolean} */
   #hasTmpConfig = true; // True to start so the permanent config gets copied over.
@@ -240,6 +253,7 @@ export class PercentVisibleCalculatorAbstract {
 
   set config(cfg = {}) {
     foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false });
+    this.occlusionTester.config = cfg;
     this.#hasTmpConfig = true;
   }
 
@@ -250,6 +264,7 @@ export class PercentVisibleCalculatorAbstract {
    */
   set permanentConfig(cfg) {
     foundry.utils.mergeObject(this.#permanentConfig, cfg, { inplace: true, insertKeys: false });
+    foundry.utils.mergeObject(this.#permanentBlockingConfig, cfg, { inplace: true, insertKeys: false });
     this.#hasTmpConfig = true;
     this.restorePermanentConfig();
   }
@@ -257,15 +272,21 @@ export class PercentVisibleCalculatorAbstract {
   restorePermanentConfig() {
     if ( !this.#hasTmpConfig ) return;
     this._config = structuredClone(this.#permanentConfig);
-    this.occlusionTester._config = this._config; // Sync the configs.
+    this.occlusionTester.config = this.#permanentBlockingConfig;
     this.#hasTmpConfig = false;
   }
 
   get radius() { return this._config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
 
-  get tokensBlock() { return this._config.blocking.tokens.dead || this._config.blocking.tokens.live; }
+  get tokensBlock() {
+    const cfg = this.occlusionTester._config
+    return cfg.tokens.dead || cfg.tokens.live;
+  }
 
-  get nonTokensBlock() { return this._config.blocking.walls || this._config.blocking.tiles || this._config.blocking.regions; }
+  get nonTokensBlock() {
+    const cfg = this.occlusionTester._config
+    return cfg.walls || cfg.tiles || cfg.regions;
+  }
 
   // ----- NOTE: Basic property getters / setters ---- //
 
@@ -326,9 +347,16 @@ export class PercentVisibleCalculatorAbstract {
     if ( target ) this.target = target;
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
+
+    this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
+    this.occlusionTester.frustum.rebuild({
+      viewpoint: this.viewpoint,
+      target: this.target,
+    });
+    this.occlusionTester.update();
   }
 
-  get targetBorder() { return CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
+  get targetBorder() { return CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
 
   get targetShape() { return this.target[this._config.tokenShapeType]; }
 
@@ -351,7 +379,7 @@ export class PercentVisibleCalculatorAbstract {
     switch ( type ) {
       case TYPES.DIM: tokenShapeType = "litTokenBorder"; break;
       case TYPES.BRIGHT: tokenShapeType = "brightLitTokenBorder"; break;
-      default: tokenShapeType = CONFIG[MODULE_ID].constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
+      default: tokenShapeType = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
     }
     this.config = { tokenShapeType };
   }
@@ -369,21 +397,8 @@ export class PercentVisibleCalculatorAbstract {
     // console.debug("PercentVisibleCalculator|calculate");
     this.restorePermanentConfig();
     if ( cfg ) this.config = cfg;
-    this._initializeCalculation();
     return this._calculate();
   }
-
-  /**
-   * Prepare portions of the calculation that require the current position of the viewer and target.
-   * But not necessarily the precise target point, where applicable.
-   * This method for the abstract class initializes the occlusion tester.
-   * It is assumed that a user could call _initializeCalculation and then _calculate (possibly repeatedly)
-   * instead of calculate.
-   */
-  _initializeCalculation() {
-    this.occlusionTester._initialize(this);
-  }
-
 
   _calculate() {
     // console.debug("PercentVisibleCalculator|_calculate");
@@ -399,23 +414,22 @@ export class PercentVisibleCalculatorAbstract {
    */
   calculateLightingTypeForTarget() {
     const oldConfig = this.config;
+    const oldBlockingConfig = this.occlusionTester.config;
     const oldViewer = this.viewer;
     const oldViewpoint = this.viewpoint.clone();
     this.config = {
-      blocking: {
-        walls: true,
-        tiles: true,
-        regions: true,
-        tokens: {
-          dead: true,
-          live: true,
-          prone: true,
-        }
-      },
+      senseType: "light",
       radius: Number.POSITIVE_INFINITY,
-      senseType: "light",  /** @type {CONST.WALL_RESTRICTION_TYPES} */
       largeTarget: false,
-    }
+      walls: true,
+      tiles: true,
+      regions: true,
+      tokens: {
+        dead: true,
+        live: true,
+        prone: true,
+      },
+    };
     this.setLightingTest(this.constructor.LIGHTING_TEST_TYPES.NONE);
     let dimResult = new this.constructor.resultClass(this);
     let brightResult = new this.constructor.resultClass(this);
@@ -433,6 +447,7 @@ export class PercentVisibleCalculatorAbstract {
     }
 
     this.config = oldConfig;
+    this.occlusionTester.config = oldBlockingConfig;
     this.viewer = oldViewer;
     this.viewpoint = oldViewpoint;
     return { dim: dimResult, bright: brightResult };

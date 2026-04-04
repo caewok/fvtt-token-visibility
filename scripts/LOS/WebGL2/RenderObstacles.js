@@ -1,24 +1,46 @@
 /* globals
+canvas,
+CONFIG,
+CONST,
 foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../../const.js";
 import { WebGL2 } from "./WebGL2.js";
 import { Camera } from "../Camera.js";
-import { DrawableWallWebGL2 } from "./DrawableWall.js";
+import {
+  DrawableWallWebGL2,
+  DrawableTerrainWallWebGL2,
+  DrawableDirectionalWallWebGL2,
+  DrawableDirectionalTerrainWallWebGL2,
+} from "./DrawableWall.js";
 import {
   DrawableTileWebGL2,
   // DrawableSceneBackgroundWebGL2,
 } from "./DrawableTile.js";
 import {
-  DrawableTokenWebGL2,
+  DrawableRectangularTokenWebGL2,
+  DrawableInstancedHexTokenWebGL2,
+  DrawableEllipseTokenWebGL2,
+  DrawableSphericalTokenWebGL2,
+  DrawableConstrainedTokenWebGL2,
+  // DrawableLitTokenWebGL2,
+  // DrawableBrightLitTokenWebGL2,
+  DrawableLargeHexTokenWebGL2,
   DrawableGridShape,
 } from "./DrawableToken.js";
-import { DrawableRegionWebGL2 } from "./DrawableRegion.js";
+import {
+  DrawableRegionRectangleShapeWebGL2,
+  DrawableRegionCircleShapeWebGL2,
+  DrawableRegionEllipseShapeWebGL2,
+  DrawableRegionPolygonShapeWebGL2,
+ } from "./DrawableRegion.js";
 import { log } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 export class RenderObstaclesWebGL2 {
 
@@ -38,7 +60,7 @@ export class RenderObstaclesWebGL2 {
   drawableTerrain = [];
 
   /** @type {DrawableTokenWebGL2} */
-  drawableTokens;
+  drawableTokens = [];
 
   /** @type {DrawableObjectsAbstract} */
   drawableFloor;
@@ -48,6 +70,7 @@ export class RenderObstaclesWebGL2 {
 
   /** @type {Camera} */
   camera = new Camera({ glType: "webGL2", perspectiveType: "perspective" });
+  // camera = new Camera({ glType: "webGL2", perspectiveType: "orthogonal" });
 
   /** @type {object} */
   #debugViewNormals = false;
@@ -68,81 +91,94 @@ export class RenderObstaclesWebGL2 {
     this._buildDrawableObjects(useSceneBackground);
   }
 
-  _buildDrawableObjects(useSceneBackground = false) {
+  _buildDrawableObjects(_useSceneBackground = false) {
     this.drawableObjects.length = 0;
+    this.drawableTokens.length = 0;
     this.drawableFloor = undefined;
-    let obj;
 
-    const drawableClasses = [
-      DrawableTileWebGL2,
-      DrawableGridShape,
-      DrawableRegionWebGL2,
-      DrawableTokenWebGL2,
+    // Define wall drawables.
+    const drawableWallClasses = [
+      DrawableWallWebGL2,
+      DrawableTerrainWallWebGL2,
+      DrawableDirectionalWallWebGL2,
+      DrawableDirectionalTerrainWallWebGL2,
     ];
+    for ( const cl of drawableWallClasses ) {
+      const drawableObj = new cl(this);
+      this.drawableObjects.push(drawableObj);
 
-    // if ( useSceneBackground ) drawableClasses.push(DrawableSceneBackgroundWebGL2);
-
-    for ( const cl of drawableClasses ) this.drawableObjects.push(new cl(this));
-
-    // Walls: Need normal, directional, terrain, terrain directional
-    // Normal
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = false;
-    obj.limitedWall = false;
-    this.drawableObjects.push(obj);
-
-    // Terrain
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = false;
-    obj.limitedWall = true;
-    this.drawableObjects.push(obj);
-
-    // Directional
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = true;
-    obj.limitedWall = false;
-    this.drawableObjects.push(obj);
-
-    // Terrain && Directional
-    obj = new DrawableWallWebGL2(this);
-    obj.directional = true;
-    obj.limitedWall = true;
-    this.drawableObjects.push(obj);
-
-    // Regions (use senseType?)
-
-    // Categorize each drawable object.
-    for ( const drawableObj of this.drawableObjects) {
-      switch ( drawableObj.constructor.name ) {
-        // Lit tokens not used as obstacles; only targets.
-        case "DrawableTokenWebGL2":
-          this.drawableTokens = drawableObj;
-          this.drawableObstacles.push(drawableObj);
-          break;
-
-        // Scene background not an obstacle; handled separately.
-        case "DrawableSceneBackgroundWebGL2":
-          this.drawableFloor = drawableObj;
-          break;
-
-        // Grid shape not an obstacle; handled separately.
-        case "DrawableGridShape":
-          this.drawableGridShape = drawableObj;
-          break;
-
-        // Terrain walls have special rendering considerations.
-        case "DrawableWallWebGL2":{
-          if ( drawableObj.terrain ) this.drawableTerrain.push(drawableObj);
-          else {
-            this.drawableNonTerrainWalls.push(drawableObj);
-            this.drawableObstacles.push(drawableObj);
-          }
-          break;
-        }
-
-        default:
-          this.drawableObstacles.push(drawableObj);
+      // Terrain walls have special rendering considerations.
+      if ( drawableObj.terrain ) this.drawableTerrain.push(drawableObj);
+      else {
+        this.drawableNonTerrainWalls.push(drawableObj);
+        this.drawableObstacles.push(drawableObj);
       }
+    }
+
+    // Define tile drawables.
+    const drawableTileObj = new DrawableTileWebGL2(this);
+    this.drawableObjects.push(drawableTileObj);
+    this.drawableObstacles.push(drawableTileObj);
+
+    // Define region drawables.
+    const drawableRegionClasses = [
+      DrawableRegionRectangleShapeWebGL2,
+      DrawableRegionCircleShapeWebGL2,
+      DrawableRegionEllipseShapeWebGL2,
+      DrawableRegionPolygonShapeWebGL2,
+    ];
+    for ( const cl of drawableRegionClasses ) {
+      const drawableObj = new cl(this);
+      this.drawableObjects.push(drawableObj);
+      this.drawableObstacles.push(drawableObj);
+    }
+
+    // Define scene background.
+    /* TODO: Implement.
+    if ( useSceneBackground ) {
+      const drawableObj = new cl(DrawableSceneBackgroundWebGL2);
+      this.drawableFloor = drawableObj;
+    }
+    */
+
+    // Define grid shape.
+    const drawableObj = new DrawableGridShape(this);
+    this.drawableGridShape = drawableObj
+
+    // Define token drawables.
+    // TODO: Handle using lit or bright lit tokens.
+    const drawableTokenClasses = []
+    if ( CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere ) drawableTokenClasses.push(
+      DrawableSphericalTokenWebGL2,
+      DrawableConstrainedTokenWebGL2
+    );
+    else switch ( canvas.grid.type ) {
+      case CONST.GRID_TYPES.GRIDLESS:
+        drawableTokenClasses.push(
+          DrawableRectangularTokenWebGL2,
+          DrawableEllipseTokenWebGL2,
+          DrawableConstrainedTokenWebGL2,
+        );
+        break;
+
+      case CONST.GRID_TYPES.SQUARE:
+        drawableTokenClasses.push(
+          DrawableRectangularTokenWebGL2,
+          DrawableConstrainedTokenWebGL2,
+        );
+        break;
+      default:
+        drawableTokenClasses.push(
+          DrawableInstancedHexTokenWebGL2,
+          DrawableLargeHexTokenWebGL2,
+          DrawableConstrainedTokenWebGL2,
+        );
+    }
+    for ( const cl of drawableTokenClasses ) {
+      const drawableObj = new cl(this);
+      this.drawableObjects.push(drawableObj);
+      this.drawableTokens.push(drawableObj);
+      this.drawableObstacles.push(drawableObj)
     }
   }
 
@@ -363,7 +399,13 @@ export class RenderObstaclesWebGL2 {
     }
 
     this._setMaterial("target");
-    this.drawableTokens.renderTarget(target, testLighting);
+
+    // One of the drawables should be used to draw the target. Use first available.
+    for ( const drawable of this.drawableTokens ) {
+      if ( !drawable.filterObjects([target]).length ) continue;
+      drawable.renderTarget(target, testLighting);
+      break;
+    }
     // this.gl.flush();
   }
 

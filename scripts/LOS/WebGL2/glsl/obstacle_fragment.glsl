@@ -38,11 +38,11 @@ void main() {
     vec3 surfaceColor = (color.rgb * ambientColor) + (color.rgb * NDotL);
     fragColor = vec4(surfaceColor, color.a);
   #else
-    fragColor = uColor;
+    fragColor = uColor; // We want uColor, not color. Render using the obstacle material color.
   #endif
 
   #if ${isTile}
-    fragColor.a = color.a;
+    fragColor.a = color.a; // Use the tile alpha channel to capture transparent portions.
   #endif
 }
 

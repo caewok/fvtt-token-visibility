@@ -1,46 +1,20 @@
 /* globals
-game,
+CONFIG,
 Hooks
 */
 "use strict";
 
 import { MODULE_ID } from "../const.js";
-import { getObjectProperty } from "./util.js";
+
+import { WallGeometry } from "../geometry/placeable_geometry/WallGeometry.js";
+import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
+import { RegionGeometry } from "../geometry/placeable_geometry/RegionGeometry.js";
+import { TileGeometry } from "../geometry/placeable_geometry/TileGeometry.js";
+
+// Load the geometry library.
+import "../geometry/registration.js";
 
 export const LOS_CONFIG = {
-
-  /**
-   * When constructing a region geometry, whether to include walls that are interior to the region.
-   * E.g., when two shapes that form a region overlap.
-   * @type {boolean}
-   */
-  allowInteriorWalls: true,
-
-  /**
-   * Limit the tile alpha pixels by contiguous area.
-   * Limits when a portion of the tile is considered an obstacle.
-   * For points or geometric algorithm, this will not be considered blocking.
-   */
-  alphaAreaThreshold: 25, // Area in pixels, e.g. 5x5 or ~ 8 x 3
-
-  /**
-   * The percent threshold under which a tile should be considered transparent at that pixel.
-   * @type {number}
-   */
-  alphaThreshold: 0.75,
-
-  /**
-   * Which clipper version to use: 1 or 2.
-   */
-  clipperVersion: 1,
-
-  /**
-   * Whether to constrain token shapes that overlap walls.
-   * When enabled, reshape the token border to fit within the overlapping walls (based on token center).
-   * Performance-intensive for custom token shapes. Used for obstructing tokens and target tokens.
-   * @type {boolean}
-   */
-  constrainTokens: false,
 
   /**
    * WebGL2. Filter the various placeable instances in Javascript, as opposed to
@@ -96,28 +70,10 @@ export const LOS_CONFIG = {
   tileThresholdShape: "alphaThresholdPolygons",
 
   /**
-   * Function to determine if a token is alive.
-   * @type {function}
-   */
-  tokenIsAlive,
-
-  /**
-   * Function to determine if a token is dead
-   * @type {function}
-   */
-  tokenIsDead,
-
-  /**
    * WebGL2. Whether to use a render texture to count pixels.
    * @type {boolean}
    */
   useRenderTexture: false,
-
-  /**
-   * WebGL2. Use the stencil buffer to identify target pixels.
-   * @type {boolean}
-   */
-  useStencil: false,
 
   /**
    * Combine multiple viewpoints into one view by overlapping the views.
@@ -130,39 +86,66 @@ export const LOS_CONFIG = {
   useStereoBlending: false,
 
   /**
-   * Use spheres to represent token shapes.
-   * Sphere radius will be the maximum of half of width, height, vertical height.
-   * Circular token shapes will be treated as cylinders if this is false.
+   * WebGL2. Use the stencil buffer to identify target pixels.
    * @type {boolean}
    */
-  useTokenSphere: false,
+  useStencil: false,
 
   // Handled at base level: debug
 }
 
+Hooks.once("canvasReady", function() {
 
-Object.defineProperty(LOS_CONFIG, "ClipperPaths", {
-  get: () => CONFIG[MODULE_ID].clipperVersion === 1 ? ClipperPaths : Clipper2Paths
+  // Register basic watchers for placeables.
+  const updateFn = placeable => {
+    const obj = placeable[MODULE_ID] ??= {}
+    obj.updateId ??= 0;
+    obj.updateId += 1;
+  }
+  const docKeys = {
+    Wall: new Set([
+      ...WallGeometry.TRACKER_TYPES.position,
+      ...WallGeometry.TRACKER_TYPES.direction,
+      ...WallGeometry.TRACKER_TYPES.restriction,
+      ...WallGeometry.TRACKER_TYPES.door,
+      ...WallGeometry.TRACKER_TYPES.threshold,
+    ]),
+    Tile: new Set([
+      ...TileGeometry.TRACKER_TYPES.position,
+      ...TileGeometry.TRACKER_TYPES.scale,
+      ...TileGeometry.TRACKER_TYPES.rotation,
+    ]),
+    Token: new Set([
+      ...TokenGeometry.TRACKER_TYPES.position,
+      ...TokenGeometry.TRACKER_TYPES.scale,
+      ...TokenGeometry.TRACKER_TYPES.shape,
+    ]),
+    Region: new Set([
+      ...RegionGeometry.TRACKER_TYPES.elevation,
+      ...RegionGeometry.TRACKER_TYPES.shapes,
+    ]),
+  };
+  const id = "updateCounter";
+  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
+  const PlaceableUpdateWatcher = geometryTracking.PlaceableUpdateWatcher;
+  for ( const [docName, keys] of Object.entries(docKeys) ) {
+    const watcher = PlaceableUpdateWatcher.getWatcher(docName);
+    watcher.register("update", id, updateFn, keys);
+    watcher.activate();
+  }
+
+  // Placeable Geometry for collision testing.
+  const geometryTypes = [
+    "Tile",
+    "Wall",
+    "Token",
+    "Region",
+  ];
+  for ( const type of geometryTypes ) {
+    const cl = geometryTracking[`${type}GeometryTracker`];
+    cl.registerHooks();
+    cl.registerExistingPlaceables();
+    cl.activate();
+  }
+
 });
-
-/**
- * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsDead.
- * @param {Token} token
- * @returns {boolean} True if dead.
- */
-function tokenIsAlive(token) { return !tokenIsDead(token); }
-
-/**
- * Test if a token is dead. Usually, but not necessarily, the opposite of tokenIsAlive.
- * @param {Token} token
- * @returns {boolean} True if dead.
- */
-function tokenIsDead(token) {
-  const deadStatus = CONFIG.statusEffects.find(status => status.id === "dead");
-  if ( deadStatus && token.actor.statuses.has(deadStatus.id) ) return true;
-
-  const tokenHPAttribute = CONFIG.GeometryLib.tokenHPId;
-  const hp = getObjectProperty(token.actor, tokenHPAttribute);
-  if ( typeof hp !== "number" ) return false;
-  return hp <= 0;
-}

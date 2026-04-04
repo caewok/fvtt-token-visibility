@@ -7,6 +7,7 @@ CONFIG,
 // Base folder
 import { MODULE_ID } from "../../const.js";
 import { Settings } from "../../settings.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 // Calculator
 import { PercentVisiblePointsResultAbstract, PercentVisibleCalculatorPointsAbstract } from "./PointsCalculator.js";
@@ -38,22 +39,22 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   }
 
   /** @type {boolean} */
-  get spherical() { return this._config.spherical ?? CONFIG[MODULE_ID].useTokenSphere; }
+  get spherical() { return this._config.spherical ?? CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere; }
 
-  _initializeCalculation() {
+  initializeView(opts) {
+    super.initializeView(opts);
     this._initializeCamera();
-    super._initializeCalculation();
   }
 
   /** @type {Point3d[][]} */
   get targetPoints() {
-    if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSpherePoints];
+    // if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSpherePoints];
     return super.targetPoints;
   }
 
   /** @type {Polygon3d[]|[Sphere]} */
   get targetSurfaces() {
-    if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSphere];
+    // if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSphere];
     return super.targetSurfaces;
   }
 

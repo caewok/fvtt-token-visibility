@@ -6,6 +6,7 @@ CONFIG
 
 import * as twgl from "./twgl-full.js";
 import { MODULE_ID } from "../../const.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { readPixelsAsync, getBufferSubDataAsync } from "./read_pixels_async.js";
 import { WebGL2 } from "./WebGL2.js";
 import { FastBitSet } from "../FastBitSet/FastBitSet.js";
@@ -452,7 +453,7 @@ export class RedPixelCounter {
     const nPixels = pixels.length;
     const red = new FastBitSet();
     const redBlocked = new FastBitSet();
-    const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
+    const terrainThreshold = CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold * 255;
     for ( let i = 0; i < nPixels; i += 4 ) {
       const r = pixels[i];
       // const g = pixels[i + 1];
@@ -696,7 +697,7 @@ out vec4 fragColor;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
 
 void main() {
   vec4 sumColor = vec4(0.0);
@@ -755,7 +756,7 @@ in vec4 texColor;
 out vec4 fragColor;
 
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
 
 void main() {
   float hasR = step(colorThreshold, texColor.r);
@@ -792,7 +793,7 @@ out vec4 fragColor;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
 
 void main() {
   ivec2 size = textureSize(uTexture, mipLevel);
@@ -871,7 +872,7 @@ uniform sampler2D uTexture;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
 
 out float red;
 out float redBlocked;

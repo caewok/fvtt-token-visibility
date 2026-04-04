@@ -4,9 +4,9 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { BasicVertices } from "./BasicVertices.js";
+import { BasicVertices } from "../../geometry/placeable_vertices/BasicVertices.js";
 import { setTypedArray } from "../util.js";
-import { MatrixFloat32 } from "../../geometry/MatrixFlat.js";
+import { MatrixFloat32 } from "../../geometry/Matrix.js";
 
 const STATIC_VERTEX_KEY = {
   0: "position",

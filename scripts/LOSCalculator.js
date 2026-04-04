@@ -8,6 +8,8 @@ import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { Settings } from "./settings.js";
 import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
 import { pointIndexForSet } from "./LOS/SmallBitSet.js";
+import { NULL_SET } from "./geometry/util.js";
+
 
 // ViewerLOS = CachedViewerLOS;
 
@@ -34,6 +36,11 @@ function TokenBlockingConfig() {
     dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true,
     live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true,
     prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true,
+
+    // No settings enabled for now.
+    enemies: true,
+    allies: true,
+    excludedStatuses: NULL_SET,
   };
 }
 
@@ -42,6 +49,7 @@ function TokenBlockingConfig() {
  */
 function BlockingConfig() {
   return {
+    senseType: "sight",
     tokens: TokenBlockingConfig(),
     walls: true,
     tiles: true,
@@ -54,11 +62,10 @@ function BlockingConfig() {
  */
 export function CalculatorConfig() {
   return {
-    blocking: BlockingConfig(),
+    ...BlockingConfig(),
     largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false,
     debug: false,
     testLighting: true,
-    senseType: "sight",
     sourceType: "lighting",
 
     // Points algorithm

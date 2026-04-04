@@ -2,7 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-LimitedAnglePolygon,
 PIXI,
 Ray,
 */
@@ -12,6 +11,7 @@ Ray,
 import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 
 // LOS folder
 import { tokensOverlap, insetPoints } from "./util.js";
@@ -185,8 +185,6 @@ export class ViewerLOS {
     });
   }
 
-  _initializeCalculation() { this.calculator._initializeCalculation(); }
-
   /**
    * Set up the viewpoints for this viewer.
    */
@@ -339,7 +337,7 @@ export class ViewerLOS {
     const constrainedBorder = token.constrainedTokenBorder;
     if ( constrainedBorder.equals(token.tokenBorder) ) return false;
     if ( inset > 0 ) return true;
-    return constrainedBorder.pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
+    return !constrainedBorder.clone().pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
   }
 
   /**
@@ -379,17 +377,17 @@ export class ViewerLOS {
 
     // Probably worth checking the target center first
     const center = targetShape.center;
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
-    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+    if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+    if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
 
     // TODO: Would it be more performant to assign an angle to each target point?
     // Or maybe just check orientation of ray to each point?
     const edges = targetShape.toPolygon().iterateEdges();
     for ( const edge of edges ) {
-      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.A, edge.B) ) return 2;
-      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.A, edge.B) ) return 2;
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.A, rMin, rMax, angle) ) return targetWithin();
-      if ( LimitedAnglePolygon.pointBetweenRays(edge.B, rMin, rMax, angle) ) return targetWithin();
+      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.a, edge.b) ) return 2;
+      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.a, edge.b) ) return 2;
+      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
+      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
     }
 
     return 0;
@@ -615,8 +613,8 @@ export class ViewerLOS {
 
     // Constrained is polygon. Only use corners of polygon
     // Scale down polygon to avoid adjacent walls.
-    const padShape = tokenShape.pad(PAD, { scalingFactor: 100 });
-    return [...padShape.iteratePoints({close: false})].map(pt => new Point3d(pt.x, pt.y, elevation));
+    const padShape = tokenShape.clone().pad(PAD, { scalingFactor: 100, miterType: "jtSquare" });
+    return [...padShape.iteratePoints()].map(pt => new Point3d(pt.x, pt.y, elevation));
   }
 
 
@@ -693,7 +691,7 @@ export class ViewerLOS {
 
     // Fill in the target border on canvas
     if ( this.target ) {
-      const border = CONFIG[MODULE_ID].constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
+      const border = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
       draw.shape(border, { color, fill: color, fillAlpha: 0.2});
     }
   }

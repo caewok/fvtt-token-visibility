@@ -8,7 +8,7 @@ export const PATCHES = {};
 PATCHES.BASIC = {};
 
 /* Benchmark light intersection
-ClipperPaths = CONFIG.GeometryLib.ClipperPaths
+ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths
 api = game.modules.get("tokenvisibility").api
 QBenchmarkLoopFn = api.bench.QBenchmarkLoopFn
 

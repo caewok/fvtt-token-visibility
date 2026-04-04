@@ -1,22 +1,11 @@
 /* globals
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { MODULE_ID } from "./const.js";
 import { Settings } from "./settings.js";
-
-// Trackers
-import {
-  TokenGeometryTracker,
-  LitTokenGeometryTracker,
-  BrightLitTokenGeometryTracker,
-  SphericalTokenGeometryTracker, } from "./LOS/placeable_tracking/TokenGeometryTracker.js";
-import { WallGeometryTracker } from "./LOS/placeable_tracking/WallGeometryTracker.js";
-import { TileGeometryTracker } from "./LOS/placeable_tracking/TileGeometryTracker.js";
-import { RegionGeometryTracker } from "./LOS/placeable_tracking/RegionGeometryTracker.js";
-
-
 
 // Patches for the Canvas class
 export const PATCHES = {};
@@ -35,13 +24,7 @@ function canvasReady(_canvas) {
   console.debug(`${MODULE_ID}|canvasReady`);
   if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
 
-  WallGeometryTracker.registerExistingPlaceables();
-  TileGeometryTracker.registerExistingPlaceables();
-  TokenGeometryTracker.registerExistingPlaceables();
-  SphericalTokenGeometryTracker.registerExistingPlaceables();
-  LitTokenGeometryTracker.registerExistingPlaceables();
-  BrightLitTokenGeometryTracker.registerExistingPlaceables();
-  RegionGeometryTracker.registerExistingPlaceables();
+
 
   // Must be after the trackers are ready.
   Settings.updateLightMonitor(Settings.get(Settings.KEYS.LIGHT_MONITOR.ALGORITHM));
@@ -65,6 +48,21 @@ function canvasTearDown(canvas) {
     losCalc.destroy();
     token[MODULE_ID].losCalc = undefined;
   });
+
+  // Placeable Geometry for collision testing.
+  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
+  const geometryTypes = [
+    "Tile",
+    "Wall",
+    "Token",
+    "Region",
+  ];
+  for ( const type of geometryTypes ) {
+    const cl = geometryTracking[`${type}GeometryTracker`];
+    const tracker = cl.create();
+    tracker.deactivate();
+    tracker.deRegisterExistingPlaceables();
+  }
 }
 
 PATCHES.BASIC.HOOKS = { canvasReady, canvasTearDown };
