@@ -1,3 +1,10 @@
+## 0.8.2
+Increase near-z for the Camera in WebGL2 to limit target bleed-through when adjacent to walls.
+
+Update libGeometry to v0.5.0.
+Move basic vertex calculations and placeable geometry calculations to libGeometry.
+Move tokenIsDead / tokenIsAlive functionality to libGeometry.
+
 ## 0.8.1
 Updates to support Token Cover module.
 WebGL algorithm now uses the same occlusion tester as other algorithms.
