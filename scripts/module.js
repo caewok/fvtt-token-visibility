@@ -12,7 +12,7 @@ import { MODULE_ID } from "./const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 
 // Load the geometry library.
-// import "./geometry/registration.js";
+import "./geometry/registration.js";
 
 // Hooks and method registration
 import { initializePatching, PATCHER } from "./patching.js";

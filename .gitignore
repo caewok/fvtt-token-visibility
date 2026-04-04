@@ -24,3 +24,5 @@ v10_sync_to_module.sh
 .windsurf/
 
 sync_module.js
+
+hgeom/
