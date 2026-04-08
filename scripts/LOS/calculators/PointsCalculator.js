@@ -166,6 +166,26 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
   }
 }
 
+export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstract {
+  get percentVisible() {
+    // If CONFIG is set, take any unobscured point rather than testing all. Makes it all/none.
+    const singlePointWins = CONFIG[MODULE_ID].pointsCalculatorSinglePointWins;
+
+    // For points, the maximum unobscured points divided by points for a given area.
+    const { unobscured, numPoints } = this.data;
+    let maxPercent = 0;
+    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
+      const bs = unobscured[i];
+      if ( !bs ) continue; // Skipped this face/group.
+
+      const unobscuredCount = bs.cardinality;
+      maxPercent = Math.max(maxPercent, unobscuredCount / numPoints[i], singlePointWins * unobscuredCount);
+      if ( maxPercent >= 1 ) break;
+    }
+    return maxPercent;
+  }
+}
+
 /**
  * @typedef {object} PointsCalculatorConfig
  * ...{CalculatorConfig}
@@ -403,20 +423,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   }
 }
 
-export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstract {
-   get percentVisible() {
-    // For points, the maximum unobscured points divided by points for a given area.
-    const { unobscured, numPoints } = this.data;
-    let maxPercent = 0;
-    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
-      const bs = unobscured[i];
-      if ( !bs ) continue; // Skipped this face/group.
-      maxPercent = Math.max(maxPercent, bs.cardinality / numPoints[i]);
-      if ( maxPercent >= 1 ) break;
-    }
-    return maxPercent;
-  }
-}
+
 
 
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPointsAbstract {

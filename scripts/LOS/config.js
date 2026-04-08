@@ -91,6 +91,12 @@ export const LOS_CONFIG = {
    */
   useStencil: false,
 
+  /**
+   * When using the points algorithm, does any point make the target visible?
+   * I.e., do not calculate percentage; this is all or none.
+   */
+  pointsCalculatorSinglePointWins: false,
+
   // Handled at base level: debug
 }
 

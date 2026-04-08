@@ -75,7 +75,8 @@ export const SETTINGS = {
       POINT_OPTIONS: {
         POINTS: "los-points-options-target",
         INSET: "los-inset-target",
-      }
+        SINGLE_POINT_WINS: "los-points-options-single-point-wins",
+      },
     }
   },
 
@@ -351,9 +352,9 @@ export class Settings extends ModuleSettingsAbstract {
       onChange: value => this.losSettingChange(TARGET.LARGE, value)
     });
 
-    register(TARGET.POINT_OPTIONS.POINTS, {
-      name: localize(`${TARGET.POINT_OPTIONS.POINTS}.Name`),
-      hint: localize(`${TARGET.POINT_OPTIONS.POINTS}.Hint`),
+    register(PT_OPTS.POINTS, {
+      name: localize(`${PT_OPTS.POINTS}.Name`),
+      hint: localize(`${PT_OPTS.POINTS}.Hint`),
       scope: "world",
       config: false,
       tab: "losTarget",
@@ -378,6 +379,21 @@ export class Settings extends ModuleSettingsAbstract {
       onChange: value => this.losSettingChange(TARGET.POINT_OPTIONS.POINTS, value)
     });
 
+    // TODO: Handle all settings like this, using CONFIG to set?
+    // Would allow temporary deviations from the CONFIG by temporarily changing CONFIG value.
+    // Avoids having the integration with multiple module settings.
+    register(PT_OPTS.SINGLE_POINT_WINS, {
+      name: localize(`${PT_OPTS.SINGLE_POINT_WINS}.Name`),
+      hint: localize(`${PT_OPTS.SINGLE_POINT_WINS}.Hint`),
+      scope: "world",
+      config: false,
+      type: Boolean,
+      default: false,
+      tab: "losTarget",
+      onChange: value => CONFIG[MODULE_ID].pointsCalculatorSinglePointWins = value,
+    });
+    CONFIG[MODULE_ID].pointsCalculatorSinglePointWins = this.get(PT_OPTS.SINGLE_POINT_WINS);
+
     register(PT_OPTS.INSET, {
       name: localize(`${PT_OPTS.INSET}.Name`),
       hint: localize(`${PT_OPTS.INSET}.Hint`),
@@ -393,6 +409,8 @@ export class Settings extends ModuleSettingsAbstract {
       tab: "losTarget",
       onChange: value => this.losSettingChange(PT_OPTS.INSET, value)
     });
+
+
 
     // ----- NOTE: Other tab ----- //
 

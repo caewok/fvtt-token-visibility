@@ -46,6 +46,7 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
         [LOS.TARGET.LARGE]: true,
 
         [LOS.TARGET.POINT_OPTIONS.POINTS]: [PI.CORNERS.FACING, PI.CORNERS.BACK],
+        [LOS.TARGET.POINT_OPTIONS.SINGLE_POINT_WINS]: false,
         [LOS.TARGET.POINT_OPTIONS.INSET]: 0,
       },
       losViewer: {
@@ -88,14 +89,21 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     ui.notifications.notify(`${moduleName} | ${message}`);
   }
 
+  /**
+   * When an algorithm is selected, show or hide algorithm-specific settings.
+   */
   static async _onAlgorithmSelect() {
     const losTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
     if ( losTab ) {
-    // Add data action to the algorithm selector.
+      // Add data action to the algorithm selector.
       const algSelector = losTab.querySelector('[name="tokenvisibility.los-algorithm"]');
       const isPoints = algSelector.value === "los-algorithm-points";
+
       const targetOptionsElem = losTab.querySelector('[name="tokenvisibility.los-points-options-target"]');
       targetOptionsElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
+
+      const targetSinglePointWinsElem = losTab.querySelector('[name="tokenvisibility.los-points-options-single-point-wins"]');
+      targetSinglePointWinsElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
 
       const targetInsetElem = losTab.querySelector('[name="tokenvisibility.los-inset-target"]');
       targetInsetElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
