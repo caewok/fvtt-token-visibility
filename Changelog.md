@@ -1,3 +1,6 @@
+## 0.8.4
+Update libGeometry to v0.5.3.
+
 ## 0.8.3
 Fix missing geometry lib import.
 
