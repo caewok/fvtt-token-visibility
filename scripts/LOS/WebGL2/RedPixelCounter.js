@@ -453,7 +453,7 @@ export class RedPixelCounter {
     const nPixels = pixels.length;
     const red = new FastBitSet();
     const redBlocked = new FastBitSet();
-    const terrainThreshold = CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold * 255;
+    const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
     for ( let i = 0; i < nPixels; i += 4 ) {
       const r = pixels[i];
       // const g = pixels[i + 1];
@@ -697,7 +697,7 @@ out vec4 fragColor;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
 void main() {
   vec4 sumColor = vec4(0.0);
@@ -756,7 +756,7 @@ in vec4 texColor;
 out vec4 fragColor;
 
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
 void main() {
   float hasR = step(colorThreshold, texColor.r);
@@ -793,7 +793,7 @@ out vec4 fragColor;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
 void main() {
   ivec2 size = textureSize(uTexture, mipLevel);
@@ -872,7 +872,7 @@ uniform sampler2D uTexture;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[GEOMETRY_LIB_ID].CONFIG.alphaThreshold};
+const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
 out float red;
 out float redBlocked;
