@@ -2,8 +2,6 @@
 Change version numbering to follow Foundry versions.
 Update for Foundry v14.
 
-
-
 ## 0.8.4
 Update libGeometry to v0.5.3.
 
