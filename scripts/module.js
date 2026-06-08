@@ -44,11 +44,8 @@ import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 
 
-
-
 // Other self-executing hooks
 import "./changelog.js";
-import "./geometry/tests/AABB.test.js";
 
 
 Hooks.once("init", function() {

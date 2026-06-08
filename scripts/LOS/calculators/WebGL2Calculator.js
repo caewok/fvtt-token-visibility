@@ -104,9 +104,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   /** @type {number} */
   static HEIGHT = 128;
 
-  /** @type {Uint8Array} */
-  bufferData;
-
   /** @type {OffscreenCanvas} */
   static glCanvas;
 
@@ -124,7 +121,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
     const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
     const gl = this.gl;
-    this.bufferData = new Uint8Array(gl.canvas.width * gl.canvas.height * 4);
     this.redPixelCounter = new RedPixelCounter(webGL2); // Width and heigh tset later
   }
 
@@ -218,15 +214,19 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
       const { fbInfo, frame } = this;
       twgl.bindFramebufferInfo(gl, fbInfo);
 
-      this._renderObstacles({ frame });
+      // Always render target first.
       this._renderTarget({ frame });
+      this._renderObstacles({ frame });
+
       res = this.redPixelCounter[pixelCounterType](this.renderTexture);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     } else {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-      this._renderObstacles();
+      // Always render target first.
       this._renderTarget();
+      this._renderObstacles();
+
       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2"
         ? pixelCounterType : "readPixelsCount" ;
       res = this.redPixelCounter[type]();

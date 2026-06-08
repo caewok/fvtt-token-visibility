@@ -5,8 +5,8 @@
   "library": "false",
   "socket": "false",
   "compatibility": {
-    "minimum": "13",
-    "verified": "13.351"
+    "minimum": "14",
+    "verified": "14.363"
   },
   "authors": [
     {
