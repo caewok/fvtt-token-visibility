@@ -17,6 +17,17 @@ import "../geometry/registration.js";
 export const LOS_CONFIG = {
 
   /**
+   * Threshold for transparent pixels.
+   * @type {number}
+   */
+  alphaThreshold: 0.75,
+
+  /**
+   * Whether to use instancing in WebGL2 calculation.
+   */
+  useInstancing: true,
+
+  /**
    * WebGL2. Filter the various placeable instances in Javascript, as opposed to
    * drawing all of them and letting the GPU filter them out.
    * @type {boolean}
@@ -94,7 +105,7 @@ export const LOS_CONFIG = {
   // Handled at base level: debug
 }
 
-Hooks.once("canvasReady", function() {
+Hooks.on("canvasReady", function() {
 
   // Register basic watchers for placeables.
   const updateFn = placeable => {
@@ -147,5 +158,20 @@ Hooks.once("canvasReady", function() {
     cl.registerExistingPlaceables();
     cl.activate();
   }
+});
 
+Hooks.on("canvasTearDown", function(canvas) {
+  // Placeable Geometry for collision testing.
+  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
+  const geometryTypes = [
+    "Tile",
+    "Wall",
+    "Token",
+    "Region",
+  ];
+  for ( const type of geometryTypes ) {
+    const cl = geometryTracking[`${type}GeometryTracker`];
+    cl.deactivate();
+    cl.deRegisterExistingPlaceables();
+  }
 });

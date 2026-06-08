@@ -67,17 +67,6 @@ Hooks.once("init", function() {
   CONFIG[MODULE_ID] = {
 
     /**
-     * Threshold for transparent pixels.
-     * @type {number}
-     */
-    alphaThreshold: 0.75,
-
-    /**
-     * Whether to use instancing in WebGL2 calculation.
-     */
-    useInstancing: true,
-
-    /**
      * Number of points to measure in one dimension for light type calculation.
      * Will be used for all 3 dimensions. E.g., 3 --> 3x3x3 in a cube, or 18 points total.
      * @type {number}
