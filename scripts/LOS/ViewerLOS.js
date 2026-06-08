@@ -230,7 +230,7 @@ export class ViewerLOS {
   _percentVisible;
 
   get percentVisible() {
-    if ( typeof this._percentVisible === "undefined" ) this.calculate();
+    if ( !Number.isNumeric(this._percentVisible) ) this.calculate();
     return this._percentVisible;
   }
 
