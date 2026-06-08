@@ -24,7 +24,7 @@ export class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2 
   filterObjects(walls, opts = {}) {
     opts.senseType ??= "sight";
     walls = super.filterObjects(walls);
-    return walls.filter(wall => !(wall.isOpen || wall.document[opts.senseType] === CONST.WALL_SENSE_TYPES.NONE));
+    return walls.filter(wall => !(wall.isOpen || wall.document[opts.senseType] === CONST.EDGE_SENSE_TYPES.NONE));
   }
 
   /**
@@ -33,7 +33,7 @@ export class DrawableWallWebGL2Abstract extends DrawableObjectsInstancingWebGL2 
    * @returns {boolean}
    */
   static isTerrain(edge, { senseType = "sight" } = {}) {
-    return edge[senseType] === CONST.WALL_SENSE_TYPES.LIMITED;
+    return edge[senseType] === CONST.EDGE_SENSE_TYPES.LIMITED;
   }
 
   /**

@@ -793,7 +793,7 @@ out vec4 fragColor;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+const float terrainThreshold = 0.75;
 
 void main() {
   ivec2 size = textureSize(uTexture, mipLevel);
@@ -872,7 +872,7 @@ uniform sampler2D uTexture;
 
 const int mipLevel = 0;
 const float colorThreshold = 0.95;
-const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
+const float terrainThreshold = 0.75;
 
 out float red;
 out float redBlocked;
