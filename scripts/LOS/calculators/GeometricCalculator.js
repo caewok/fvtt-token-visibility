@@ -235,6 +235,44 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     return blockingTerrainPaths.union();
   }
 
+  /* ----- NOTE: 3d geometric faces ----- */
+
+  *solidObstacleFaces() {
+
+
+  }
+
+  proximateObstacleFaces() {
+
+  }
+
+  reverseProximateObstacleFaces() {
+
+  }
+
+  /**
+   * Iterate each transparent face (terrain wall).
+   * Ignore if not  at the current level.
+   */
+  *transparentObstacleFaces() {
+    for ( const terrainWall of this.occlusionTester.obstacles.terrainWalls ) {
+      const geom = terrainWall[GEOMETRY_LIB_ID]?.[GEOMETRY_ID];
+      if ( !geom ) {
+        console.warn(`Terrain wall ${terrainWall.id} does not have a libGeometry geom.`);
+        continue;
+      }
+      const levelId =
+
+      yield* geom.iterateFaces({ })
+    }
+
+
+  }
+
+
+
+
+  /* ----- NOTE: Perspective polygons ----- */
 
   /**
    * Construct polygons that are used to form the 2d perspective.

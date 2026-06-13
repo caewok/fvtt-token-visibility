@@ -1,10 +1,12 @@
 /* globals
 CONFIG,
+foundry,
 Hooks
 */
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 
 import { WallGeometry } from "../geometry/placeable_geometry/WallGeometry.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
@@ -144,34 +146,6 @@ Hooks.on("canvasReady", function() {
     watcher.register("update", id, updateFn, keys);
     watcher.activate();
   }
-
-  // Placeable Geometry for collision testing.
-  const geometryTypes = [
-    "Tile",
-    "Wall",
-    "Token",
-    "Region",
-  ];
-  for ( const type of geometryTypes ) {
-    const cl = geometryTracking[`${type}GeometryTracker`];
-    cl.registerHooks();
-    cl.registerExistingPlaceables();
-    cl.activate();
-  }
 });
 
-Hooks.on("canvasTearDown", function(canvas) {
-  // Placeable Geometry for collision testing.
-  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
-  const geometryTypes = [
-    "Tile",
-    "Wall",
-    "Token",
-    "Region",
-  ];
-  for ( const type of geometryTypes ) {
-    const cl = geometryTracking[`${type}GeometryTracker`];
-    cl.deactivate();
-    cl.deRegisterExistingPlaceables();
-  }
-});
+
