@@ -54,6 +54,10 @@ function BlockingConfig() {
     walls: true,
     tiles: true,
     regions: true,
+    levels: {
+      background: true,
+      foreground: true,
+    },
   };
 }
 

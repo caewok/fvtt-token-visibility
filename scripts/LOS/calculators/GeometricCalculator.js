@@ -1,6 +1,5 @@
 /* globals
 CONFIG,
-foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -19,7 +18,7 @@ import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 // Geometry
 import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
-import { Circle3d, Ellipse3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
+import { Circle3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
 
 // Debug
 import { Draw } from "../../geometry/Draw.js";
@@ -235,43 +234,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     return blockingTerrainPaths.union();
   }
 
-  /* ----- NOTE: 3d geometric faces ----- */
-
-  *solidObstacleFaces() {
-
-
-  }
-
-  proximateObstacleFaces() {
-
-  }
-
-  reverseProximateObstacleFaces() {
-
-  }
-
-  /**
-   * Iterate each transparent face (terrain wall).
-   * Ignore if not  at the current level.
-   */
-  *transparentObstacleFaces() {
-    for ( const terrainWall of this.occlusionTester.obstacles.terrainWalls ) {
-      const geom = terrainWall[GEOMETRY_LIB_ID]?.[GEOMETRY_ID];
-      if ( !geom ) {
-        console.warn(`Terrain wall ${terrainWall.id} does not have a libGeometry geom.`);
-        continue;
-      }
-      const levelId =
-
-      yield* geom.iterateFaces({ })
-    }
-
-
-  }
-
-
-
-
   /* ----- NOTE: Perspective polygons ----- */
 
   /**
@@ -335,29 +297,25 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _constructPerspectiveObstaclePolygons() {
-    // Construct polygons representing the perspective view of the blocking objects.
-    const lookAtM = this.camera.lookAtMatrix;
-    const perspectiveM = this.camera.perspectiveMatrix;
-    const { walls, terrainWalls, proximateWalls, reverseProximateWalls, tokens, tiles, regions } = this.occlusionTester.obstacles;
-
-    // If the proximity threshold is met, this edge excluded from perception calculations.
-    const senseType = this._config.senseType;
-    const viewpoint = this.viewpoint;
-    proximateWalls.forEach(w => { if ( w.edge.applyThreshold(senseType, viewpoint) ) proximateWalls.delete(w); });
-    reverseProximateWalls.forEach(w => { if ( w.edge.applyThreshold(senseType, viewpoint) ) proximateWalls.delete(w); });
+    this.blockingPolys.length = 0;
+    this.blockingTerrainPolys.length = 0;
 
     // Convert each blocking object shape to a perspective view from point-of-view of viewer's viewpoint.
-    this.blockingPolys = [...walls, ...tiles, ...tokens, ...regions, ...proximateWalls, ...reverseProximateWalls].flatMap(obj =>
-      this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
-    this.blockingTerrainPolys = [...terrainWalls].flatMap(obj =>
-       this._lookAtObjectWithPerspective(obj, lookAtM, perspectiveM));
+    for ( const [type, geoms] of Object.entries(this.occlusionTester.obstacles ) ) {
+      if ( !geoms.size ) continue;
+      const arr = type === "terrainWalls" ? this.blockingTerrainPolys : this.blockingPolys;
+      for ( const geom of geoms ) {
+        const polys = this._lookAtGeometryWithPerspective(geom);
+        arr.push(...polys);
+      }
+    }
   }
 
   /**
    * Construct target polygons.
    */
   _targetPolygons() {
-    const geom = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID];
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
     let iter;
     switch ( this._config.tokenShapeType ) {
       case "tokenBorder": iter = geom.iterateFaces(); break;
@@ -369,42 +327,43 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     return [...iter];
   }
 
-  _lookAtObjectWithPerspective(object) {
-    const geom = object[GEOMETRY_LIB_ID][GEOMETRY_ID];
-    let polys;
-    if ( object instanceof foundry.canvas.placeables.Tile ) {
-      let label;
+  _lookAtGeometryWithPerspective(geom) {
+    let iter;
+    if ( geom.constructor.PLACEABLE_NAME === "Tile" ) {
       switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
-        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: label = "alphaThresholdTriangles";
-        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: /* eslint-disable-line no-fallthrough */
-          label ??= "alphaThresholdPolygons";
-          polys = [geom[label].top.clone(), geom[label].bottom.clone()];
-          polys.forEach(polygons3d => polygons3d.polygons = this.occlusionTester.frustum.filterPolys3d(polygons3d.polygons));
-          break;
-        default: polys = [...geom.iterateFaces()]; break;
+        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: iter = geom.alphaThresholdTriangles.values(); break;
+        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: iter = geom.alphaThresholdPolygons.values(); break;
+        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: iter = geom.alphaBoundingPolygon.values(); break;
+        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: iter = geom.alphaBoundingBox.values(); break;
+        default: geom.iterateFaces();
       }
-    } else polys = [...geom.iterateFaces()];
+    } else iter = geom.iterateFaces();
 
-    polys = polys.filter(poly => poly.isFacing(this.viewpoint));
-    return this._applyPerspective(polys);
+    const out = [];
+    const vp = this.viewpoint;
+    for ( let poly of iter ) {
+      if ( !poly.isFacing(vp) ) continue;
+
+      // If multiple polygons, filter.
+      if ( poly instanceof Polygons3d ) {
+        poly = poly.clone();
+        poly.polygons = poly.polygons.filter(poly => this.occlusionTester.frustum.poly3dWithinFrustum(poly));
+      }
+
+      // Apply the perspective transforming to polygon 2d.
+      poly = this._applyPerspective(poly);
+      if ( poly.isValid() ) out.push(poly);
+    }
+    return out;
   }
 
-  _applyPerspective(polys) {
+  _applyPerspective(poly) {
     // Save a bit of time by reusing the poly after the clipZ transform.
     // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
-    const lookAtM = this.camera.lookAtMatrix;
-    const perspectiveM = this.camera.perspectiveMatrix;
-
-
-
-    return polys
-      .map(poly => {
-        poly = poly.transform(lookAtM).clipZ();
-        // if ( !poly.points.length ) return poly; // Will filter using isValid below.
-        poly.transform(perspectiveM, poly);
-        return poly;
-      })
-      .filter(poly => poly.isValid());
+    const { lookAtM, perspectiveM }  = this.camera;
+    poly = poly.transform(lookAtM).clipZ();
+    poly.transform(perspectiveM, poly);
+    return poly;
   }
 
   /* ----- NOTE: Debugging methods ----- */

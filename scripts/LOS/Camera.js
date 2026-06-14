@@ -1,14 +1,14 @@
 /* globals
-
+canvas,
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Quad3d } from "../geometry/3d/Polygon3d.js";
 import { MatrixFloat32 } from "../geometry/Matrix.js";
-
-import { TRACKER_IDS } from "./const.js";
 
 export class Camera {
 
@@ -176,9 +176,8 @@ export class Camera {
   }
 
   setTargetTokenFrustum(targetToken) {
-    const geometry = targetToken[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
-    const aabb3d = geometry.aabb;
-    this.setFrustumForAABB3d(aabb3d);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(targetToken);
+    this.setFrustumForAABB3d(geom.aabb);
   }
 
   /**
