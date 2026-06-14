@@ -41,15 +41,6 @@ function canvasReady(_canvas) {
 function canvasTearDown(canvas) {
   Settings.toggleLOSDebugGraphics(false);
   Settings.updateLightMonitor(Settings.KEYS.LIGHT_MONITOR.TYPES.NONE);
-
-  canvas.tokens.placeables.forEach(token => {
-    const losCalc = token[MODULE_ID]?.losCalc;
-    if ( !losCalc ) return;
-    losCalc.destroy();
-    token[MODULE_ID].losCalc = undefined;
-  });
-
-
 }
 
 PATCHES.BASIC.HOOKS = { canvasReady, canvasTearDown };
