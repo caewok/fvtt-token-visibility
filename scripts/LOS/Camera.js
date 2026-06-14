@@ -223,11 +223,10 @@ export class Camera {
     // fov = 2 * asin(radius / distan
     // If the camera is inside the bounding sphere, the FOV would need to be 180 degrees
     // to see the whole sphere. Handle as a special case.
-    const fov = cameraDist <= boxRadius ? Math.PI
-      : 2 * Math.asin(boxRadius / cameraDist); // Radians
-    const near = canvas.grid.size * 0.1;
+    const fov = 2 * Math.atan(boxRadius / cameraDist); // Radians.
+    const zNear = canvas.grid.size * 0.1;
 
-    this.perspectiveParameters = { fov, zFar, near };
+    this.perspectiveParameters = { fov, zFar, zNear };
     return this.perspectiveParameters;
   }
 
