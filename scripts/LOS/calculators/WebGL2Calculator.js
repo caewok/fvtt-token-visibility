@@ -268,7 +268,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     opts.useStencil = CONFIG[MODULE_ID].useStencil;
 
     // For loop or flatMap appears to make little difference in performance
-    const obstacles = Object.values(this.occlusionTester.obstacles).flatMap(obstacleSet => [...obstacleSet]);
+    const obstacles = Object.values(this.occlusionTester.obstacleGeometries).flatMap(obstacleSet => [...obstacleSet]);
     renderer.renderObstacles(obstacles, opts);
   }
 

@@ -254,7 +254,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     const viewpoint = this.viewpoint
     const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
-    this.targetPolys = this._applyPerspective(facingPolys);
+    this.targetPolys = facingPolys.map(poly => this._applyPerspective(poly));
 
     // Test if the transformed polys are all getting clipped.
     const txPolys = facingPolys.map(poly => poly.transform(this.camera.lookAtMatrix));
@@ -301,7 +301,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.blockingTerrainPolys.length = 0;
 
     // Convert each blocking object shape to a perspective view from point-of-view of viewer's viewpoint.
-    for ( const [type, geoms] of Object.entries(this.occlusionTester.obstacles ) ) {
+    for ( const [type, geoms] of Object.entries(this.occlusionTester.obstacleGeometries ) ) {
       if ( !geoms.size ) continue;
       const arr = type === "terrainWalls" ? this.blockingTerrainPolys : this.blockingPolys;
       for ( const geom of geoms ) {
@@ -360,9 +360,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _applyPerspective(poly) {
     // Save a bit of time by reusing the poly after the clipZ transform.
     // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
-    const { lookAtM, perspectiveM }  = this.camera;
-    poly = poly.transform(lookAtM).clipZ();
-    poly.transform(perspectiveM, poly);
+    const { lookAtMatrix, perspectiveMatrix}  = this.camera;
+    poly = poly.transform(lookAtMatrix).clipZ();
+    poly.transform(perspectiveMatrix, poly);
     return poly;
   }
 
