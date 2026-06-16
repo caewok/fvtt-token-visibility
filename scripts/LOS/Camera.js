@@ -9,6 +9,7 @@ import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Quad3d } from "../geometry/3d/Polygon3d.js";
 import { MatrixFloat32 } from "../geometry/Matrix.js";
+import { Frustum } from "../geometry/3d/Frustum.js";
 
 export class Camera {
 
@@ -414,6 +415,32 @@ export class Camera {
   }
 
   // ----- NOTE: Debug ----- //
+
+  /**
+   * Construct a true 3d geometric canvas frustum from the current camera properties.
+   * @returns {Frustum}
+   */
+  toCanvasFrustum(frustum) {
+    const Minv = this.inverseModelMatrix;
+
+    // Define the 4 corners of the far clipping plane in Normalized Device Coordinates (z = 1).
+    const minCoord = this.glType === "webGPU" ? 0 : -1;
+    const corners = {
+      // NDC space
+      TL: Point3d.tmp.set(minCoord, minCoord, 1),
+      TR: Point3d.tmp.set(1, minCoord, 1),
+      BR: Point3d.tmp.set(1, 1, 1),
+      BL: Point3d.tmp.set(minCoord, 1, 1),
+      frustum,
+    };
+
+    // Transform the NDC corners into canvas (world) space.
+    Object.values(corners).forEach(corner => Minv.multiplyPoint3d(corner, corner));
+
+    // Create a canvas frustrum.
+    const viewpoint = this.cameraPosition;
+    return Frustum.fromCorners(viewpoint, corners);
+  }
 
   invertFrustum() {
     const M = this.lookAtMatrix.multiply4x4(this.perspectiveMatrix);

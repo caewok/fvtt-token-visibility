@@ -12,11 +12,10 @@ import { Settings } from "../../settings.js";
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { TILE_THRESHOLD_SHAPE_OPTIONS } from "../const.js";
-import { Camera } from "../Camera.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 
 // Geometry
-import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Circle3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
 
@@ -78,24 +77,10 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
 export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleGeometricResult;
 
-  /** @type {Camera} */
-  camera = new Camera({
-    glType: "webGL2",
-    perspectiveType: "perspective",
-    up: new Point3d(0, 0, -1),
-    mirrorMDiag: new Point3d(1, 1, 1),
-  });
-
-
   /**
    * Scaling factor used with Clipper
    */
   static SCALING_FACTOR = 100;
-
-  initializeView(opts) {
-    super.initializeView(opts);
-    this._initializeCamera();
-  }
 
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
@@ -108,12 +93,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     result.data.targetPaths = this._constructTargetPath();
     result.data.blockingPaths = this._constructObstaclePaths();
     return result;
-  }
-
-  _initializeCamera() {
-    this.camera.cameraPosition = this.viewpoint;
-    this.camera.targetPosition = this.targetLocation;
-    this.camera.setTargetTokenFrustum(this.target);
   }
 
   blockingTerrainPaths;

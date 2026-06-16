@@ -120,7 +120,6 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     const { WIDTH, HEIGHT } = this.constructor;
     this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
     const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
-    const gl = this.gl;
     this.redPixelCounter = new RedPixelCounter(webGL2); // Width and heigh tset later
   }
 

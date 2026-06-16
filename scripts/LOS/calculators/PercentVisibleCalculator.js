@@ -6,12 +6,12 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
 import { NULL_SET } from "../../geometry/util.js";
 import { ObstacleOcclusionTest } from "../../geometry/ObstacleOcclusionTest.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
 
 /**
@@ -348,11 +348,9 @@ export class PercentVisibleCalculatorAbstract {
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
 
+    this._initializeCamera();
     this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
-    this.occlusionTester.frustum.rebuild({
-      viewpoint: this.viewpoint,
-      target: this.target,
-    });
+    this.camera.toCanvasFrustum(this.occlusionTester.frustum);
     this.occlusionTester.update();
   }
 
@@ -360,6 +358,29 @@ export class PercentVisibleCalculatorAbstract {
 
   get targetShape() { return this.target[this._config.tokenShapeType]; }
 
+  // ----- NOTE: Camera ----- //
+
+  /** @type {Camera} */
+  #camera;
+
+  get camera() {
+    return this.#camera || (this.#camera = new Camera({
+      glType: "webGL2",
+      perspectiveType: "perspective",
+      up: new Point3d(0, 0, -1),
+      mirrorMDiag: new Point3d(1, 1, 1),
+    }));
+  }
+
+  /**
+   * Set the camera's position and look at position.
+   */
+  _initializeCamera() {
+    const camera = this.camera;
+    camera.cameraPosition = this.viewpoint;
+    camera.targetPosition = this.targetLocation;
+    camera.setTargetTokenFrustum(this.target);
+  }
 
   // ----- NOTE: Visibility testing ----- //
 

@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 CONST,
 PIXI,
 */
@@ -7,10 +8,8 @@ PIXI,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../../const.js";
-import { TRACKER_IDS } from "../const.js";
 import { Settings } from "../../settings.js";
-import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
