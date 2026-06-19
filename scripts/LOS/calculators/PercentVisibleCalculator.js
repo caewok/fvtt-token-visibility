@@ -13,6 +13,7 @@ import { ObstacleOcclusionTest } from "../../geometry/ObstacleOcclusionTest.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
+import { Draw } from "../../geometry/Draw.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -276,7 +277,7 @@ export class PercentVisibleCalculatorAbstract {
     this.#hasTmpConfig = false;
   }
 
-  get radius() { return this._config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
+  get radius() { return this._config.radius ?? this.viewer.vision?.radius ?? Number.POSITIVE_INFINITY; }
 
   get tokensBlock() {
     const cfg = this.occlusionTester._config
@@ -487,7 +488,22 @@ export class PercentVisibleCalculatorAbstract {
    */
   _drawCanvasDebug(result, debugDraw) {
     // this._drawLineOfSight(debugDraw);
+
+    // Draw the viewer vision radius to the token, accounting for 3d distance.
+    // Use Pythagorean to get the 2d radius = sqrt(radius3d^2 - deltaZ^2)
+    const visionRadius = this.radius;
+    const vp = this.viewpoint;
+    const deltaZ = Math.abs(vp.z - this.targetLocation.z);
+    if ( deltaZ < visionRadius && isFinite(visionRadius) ) {
+      const radius2d = Math.sqrt(visionRadius ** 2 - deltaZ ** 2);
+      debugDraw ??= draw;
+      debugDraw.shape(new PIXI.Circle(vp.x, vp.y, radius2d), { fill: Draw.COLORS.white, fillAlpha: 0.1 });
+    }
+
+    // Draw obstacle outlines.
     this.occlusionTester._drawDetectedObjects(debugDraw);
+
+    // Draw frustum shape between viewer and target.
     this.occlusionTester._drawFrustum(debugDraw);
   }
 

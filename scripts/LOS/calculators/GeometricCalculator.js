@@ -98,15 +98,15 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   blockingTerrainPaths;
 
   _constructTargetPath() {
-    // Once perspective-transformed, the token array of polygons are on the same plane, with z ~ 1.
+    // Once perspective-transformed, the token array of polygons are approximately on the same plane, with z ~ 1.
+    // But not exactly, so don't use Polygons3d to combine.
     // Can combine to Polygons3d.
+    const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths
     const scalingFactor = this.constructor.SCALING_FACTOR;
-    const targetPolys3d = Polygons3d.from3dPolygons(this.targetPolys);
 
     // For spheres, need to determine density of the points based on the actual radius.
     const density = PIXI.Circle.approximateVertexDensity(this.targetRadius)
-
-    return targetPolys3d.toClipperPaths({ omitAxis: "z", scalingFactor, density });
+    return ClipperPaths.combinePaths(this.targetPolys.map(poly3d => poly3d.toClipperPaths({ omitAxis: "z", scalingFactor, density })));
   }
 
   /**
@@ -144,45 +144,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
     const solution = ClipperPaths.joinPaths(blockingPolys.map(poly => poly.toClipperPaths(opts)));
     return solution.union();
-
-    /* Below does not work well with regions.
-    // All the simple polygons can be unioned as one.
-    const simplePolys = [];
-    const complexPolys = [];
-    blockingPolys.forEach(poly => {
-      const arr = (poly instanceof Polygons3d) ? complexPolys : simplePolys;
-      arr.push(poly);
-    });
-    const nSimple = simplePolys.length;
-    const nComplex = complexPolys.length;
-
-    let solution;
-    let i = 0;
-    if ( !nSimple ) {
-      // Must be at least one polygon here.
-      i += 1;
-      solution = ClipperPaths.clip(
-      blockingPolys[0].toClipperPaths(opts),
-      blockingPolys[1].toClipperPaths(opts),
-      { clipType: ClipperLib.ClipType.ctUnion,
-        subjFillType: ClipperLib.PolyFillType.pftPositive,
-        clipFillType: ClipperLib.PolyFillType.pftPositive
-      });
-    }
-    else if ( nSimple === 1 ) solution = simplePolys[0].toClipperPaths(opts);
-    else solution = ClipperPaths.joinPaths(simplePolys.map(poly => poly.toClipperPaths(opts)));
-
-    for ( ; i < nComplex; i += 1 ) {
-     solution = ClipperPaths.clip(
-      solution,
-      complexPolys[i].toClipperPaths(opts),
-      { clipType: ClipperLib.ClipType.ctUnion,
-        subjFillType: ClipperLib.PolyFillType.pftPositive,
-        clipFillType: ClipperLib.PolyFillType.pftPositive
-      });
-    }
-    return solution.union();
-    */
   }
 
   /**

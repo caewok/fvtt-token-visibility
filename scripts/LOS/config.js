@@ -117,19 +117,22 @@ Hooks.on("canvasReady", function() {
   }
   const docKeys = {
     Wall: new Set([
-      ...WallGeometry.TRACKER_TYPES.position,
+      ...WallGeometry.TRACKER_TYPES.position2d,
+      ...WallGeometry.TRACKER_TYPES.elevation,
       ...WallGeometry.TRACKER_TYPES.direction,
       ...WallGeometry.TRACKER_TYPES.restriction,
       ...WallGeometry.TRACKER_TYPES.door,
       ...WallGeometry.TRACKER_TYPES.threshold,
     ]),
     Tile: new Set([
-      ...TileGeometry.TRACKER_TYPES.position,
+      ...TileGeometry.TRACKER_TYPES.position2d,
+      ...TileGeometry.TRACKER_TYPES.elevation,
       ...TileGeometry.TRACKER_TYPES.scale,
       ...TileGeometry.TRACKER_TYPES.rotation,
     ]),
     Token: new Set([
-      ...TokenGeometry.TRACKER_TYPES.position,
+      ...TokenGeometry.TRACKER_TYPES.position2d,
+      ...TokenGeometry.TRACKER_TYPES.elevation,
       ...TokenGeometry.TRACKER_TYPES.scale,
       ...TokenGeometry.TRACKER_TYPES.shape,
     ]),
