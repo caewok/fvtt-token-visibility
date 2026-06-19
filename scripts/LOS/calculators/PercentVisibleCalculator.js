@@ -6,13 +6,14 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
 import { NULL_SET } from "../../geometry/util.js";
 import { ObstacleOcclusionTest } from "../../geometry/ObstacleOcclusionTest.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
+import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
+import { Draw } from "../../geometry/Draw.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -276,7 +277,7 @@ export class PercentVisibleCalculatorAbstract {
     this.#hasTmpConfig = false;
   }
 
-  get radius() { return this._config.radius ?? this.viewer.vision?.lightRadius ?? Number.POSITIVE_INFINITY; }
+  get radius() { return this._config.radius ?? this.viewer.vision?.radius ?? Number.POSITIVE_INFINITY; }
 
   get tokensBlock() {
     const cfg = this.occlusionTester._config
@@ -348,11 +349,9 @@ export class PercentVisibleCalculatorAbstract {
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
 
+    this._initializeCamera();
     this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
-    this.occlusionTester.frustum.rebuild({
-      viewpoint: this.viewpoint,
-      target: this.target,
-    });
+    this.camera.toCanvasFrustum(this.occlusionTester.frustum);
     this.occlusionTester.update();
   }
 
@@ -360,6 +359,29 @@ export class PercentVisibleCalculatorAbstract {
 
   get targetShape() { return this.target[this._config.tokenShapeType]; }
 
+  // ----- NOTE: Camera ----- //
+
+  /** @type {Camera} */
+  #camera;
+
+  get camera() {
+    return this.#camera || (this.#camera = new Camera({
+      glType: "webGL2",
+      perspectiveType: "perspective",
+      up: new Point3d(0, 0, -1),
+      mirrorMDiag: new Point3d(1, 1, 1),
+    }));
+  }
+
+  /**
+   * Set the camera's position and look at position.
+   */
+  _initializeCamera() {
+    const camera = this.camera;
+    camera.cameraPosition = this.viewpoint;
+    camera.targetPosition = this.targetLocation;
+    camera.setTargetTokenFrustum(this.target);
+  }
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -424,6 +446,10 @@ export class PercentVisibleCalculatorAbstract {
       walls: true,
       tiles: true,
       regions: true,
+      levels: {
+        foreground: true,
+        background: true,
+      },
       tokens: {
         dead: true,
         live: true,
@@ -462,7 +488,22 @@ export class PercentVisibleCalculatorAbstract {
    */
   _drawCanvasDebug(result, debugDraw) {
     // this._drawLineOfSight(debugDraw);
+
+    // Draw the viewer vision radius to the token, accounting for 3d distance.
+    // Use Pythagorean to get the 2d radius = sqrt(radius3d^2 - deltaZ^2)
+    const visionRadius = this.radius;
+    const vp = this.viewpoint;
+    const deltaZ = Math.abs(vp.z - this.targetLocation.z);
+    if ( deltaZ < visionRadius && isFinite(visionRadius) ) {
+      const radius2d = Math.sqrt(visionRadius ** 2 - deltaZ ** 2);
+      debugDraw ??= draw;
+      debugDraw.shape(new PIXI.Circle(vp.x, vp.y, radius2d), { fill: Draw.COLORS.white, fillAlpha: 0.1 });
+    }
+
+    // Draw obstacle outlines.
     this.occlusionTester._drawDetectedObjects(debugDraw);
+
+    // Draw frustum shape between viewer and target.
     this.occlusionTester._drawFrustum(debugDraw);
   }
 

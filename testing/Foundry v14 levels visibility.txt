@@ -1,0 +1,79 @@
+Foundry v14 Vision:
+
+Levels options:
+Elevation: top/bottom. Levels can overlap in elevation, partially or full.
+- There is a base elevation value that has no UI and is set to 0. Presumably used to calculate the elevation display.
+- A token on a level has elevation displayed measured from the base. This is cosmetic only.
+Visible levels: Set. If added, those levels are viewable from this level.
+
+Key variables:
+canvas.scene.levels: Embedded collection of levels
+
+
+Repeated for all placeable types:
+wall.document.level: Level of the wall.
+canvas.walls.placeables: Walls *only* for the current level of the user.
+canvas.walls.quadtree: Walls *only* for the current level of the user.
+canvas.scene.walls: *All* wall documents for the scene at all levels.
+
+Every document in the scene is at canvas.scene.walls | canvas.scene.tokens | etc.
+Only placeables that may be viewable for a scene will be at canvas.walls.placeables | canvas.tokens.placeables | etc.
+Example: If a level is not viewable, tokens on that level will not have an associated placeable when on a different level.
+--> So to track geometries, it is preferable to tie them to documents, not placeables.
+
+
+Level textures can be found at:
+canvas.primary.levelTextures
+
+Only textures currently viewable are present.
+The name is "Level.#.background" and "Level.#.foreground".
+The # corresponds to the number of the level in the canvas.scene.levels embedded collection.
+
+
+Example:
+Basement not viewable by other levels.
+Ground: Cannot view first floor
+First floor: Can view ground.
+
+Imagine a first floor rectangular balcony with a series of walls/doors under it. From the far balcony, first floor should see the ground unless the door under the balcony is shut.
+
+Also, standing over the ground level on the first floor should block visibility if on a solid tile. (This does not happen in base Foundry.)
+
+Visibility plan:
+
+1. A given walls should be divided into levels. If it is not present on that level, the face for that level should be dropped. If it is not present on a level but present on another level that partially overlaps, remove any portion that contains the non-present level. E.g.:
+- Level 0: 0–15
+- Level 1: 10–25
+- Level 2: 20–30
+All potential wall intervals: -∞–0, 0–10 (#0), 10–15 (#0, #1), 15–20 (#1), 20–25 (#1, #2), 25–30 (#2), 30–∞
+If wall is not present on 1, it would go -∞–0, 0–10, 25–30, 30–∞
+
+2. Likely need to use canvas.scene.walls and create different quadtree to access all walls.
+
+3. Default assumption is that the entire scene should be drawn/modeled regardless of level. Wall gaps will handle when walls are not present on a level.
+
+4. If the viewer token is on a level that cannot view another level, all placeable portions *for that non-viewed level only* should be removed.
+
+5. Only regions and walls have placeable portions per-level.
+- Tiles are viewed on multiple levels but have a single elevation. If a tile is not on a level, it is dropped *only for that level*.
+- Tokens are on only one level at a time. Tokens on a non-viewable level are dropped *only for that level.*
+
+
+To prepare obstacles:
+- Walls: Segment by level.
+- Regions: Segment by level.
+
+Thus, to test obstacles:
+Identify the token (viewer) and its current level. Identify non-viewable levels.
+
+1. Filter out tiles exclusive to a non-viewable level(s). If on both viewable and non-viewable, keep.
+2. Filter out tokens that are on a non-viewable level(s). Tokens can only be on one level at a time.
+3. Filter out wall portions exclusive to a non-viewable level(s). (Same for region-created walls.)
+4. Terrain mapper: Filter out region portions exclusive to a non-viewable level.
+
+For remaining, do intersection tests or create geometry as needed.
+
+
+
+
+

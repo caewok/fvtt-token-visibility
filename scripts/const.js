@@ -15,3 +15,18 @@ export const TRACKER_IDS = {
 };
 
 export const FALLBACK_ICON = "icons/svg/hazard.svg";
+
+/**
+ * Checks for libGeometery.
+ * @type {object}
+ */
+export const GEOMETRY_LIB_OPTS = {
+  // What geometries we need to track.
+  placeableGeometries: [
+    "Tile",
+    "Token",
+    "Region",
+    "Wall",
+    "Level",
+  ],
+};

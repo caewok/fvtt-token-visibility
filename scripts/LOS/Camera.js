@@ -1,14 +1,15 @@
 /* globals
-
+canvas,
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Quad3d } from "../geometry/3d/Polygon3d.js";
 import { MatrixFloat32 } from "../geometry/Matrix.js";
-
-import { TRACKER_IDS } from "./const.js";
+import { Frustum } from "../geometry/3d/Frustum.js";
 
 export class Camera {
 
@@ -176,9 +177,8 @@ export class Camera {
   }
 
   setTargetTokenFrustum(targetToken) {
-    const geometry = targetToken[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
-    const aabb3d = geometry.aabb;
-    this.setFrustumForAABB3d(aabb3d);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(targetToken);
+    this.setFrustumForAABB3d(geom.aabb);
   }
 
   /**
@@ -207,28 +207,31 @@ export class Camera {
    * @returns {object} Parameters, for convenience; also set internally.
    */
   _setPerspectiveFrustumForAABB3d(aabb3d, boxCenter) {
-
     // Calculate the radius of a sphere that encloses the bounding box.
     // This is the distance from the center to one of the corners (e.g., the max corner).
     const boxRadius = Point3d.distanceBetween(aabb3d.max, boxCenter);
     const cameraDist = Point3d.distanceBetween(this.cameraPosition, boxCenter);
-
-    // Distance from the viewpoint to the farthest point on the bounding sphere.
-    // Ignore zNear, which would be Math.max(0.01, cameraDist - boxRadius) if only concerned with rendering the box.
     const zFar = cameraDist + boxRadius;
+    const zNear = canvas.grid.size * 0.1;
 
-    // Calculate the Field of View (FOV).
-    // Use trigonometry: the sine of half the FOV angle is the ratio of the
-    // sphere's radius to the distance from the camera to the sphere's center.
-    // sin(fov/2) = rad ius / distance
-    // fov = 2 * asin(radius / distan
-    // If the camera is inside the bounding sphere, the FOV would need to be 180 degrees
-    // to see the whole sphere. Handle as a special case.
-    const fov = cameraDist <= boxRadius ? Math.PI
-      : 2 * Math.asin(boxRadius / cameraDist); // Radians
-    const near = canvas.grid.size * 0.1;
+    // Transform AABB corners to find the exact required FOV.
+    const lookAtM = this.lookAtMatrix;
+    using tmpPt = Point3d.tmp;
+    let maxTan = 0;
+    for ( const pt of aabb3d.iterateVertices(tmpPt) ) {
+      lookAtM.multiplyPoint3d(pt, pt);
+      const z = -pt.z; // Distance from camera along the viewing axis.
+      if ( z > 0 ) {
+        // Find maximum tangent (angle) needed to fit x or y coordinates.
+        const tanX = Math.abs(pt.x) / z;
+        const tanY = Math.abs(pt.y) / z;
+        maxTan = Math.max(maxTan, tanX, tanY);
+      }
+    }
 
-    this.perspectiveParameters = { fov, zFar, near };
+    // Calculate FOV. Fallback to 180º (π) if inside the geometry.
+    const fov = maxTan > 0 ? 2 * Math.atan(maxTan) : Math.PI;
+    this.perspectiveParameters = { fov, zFar, zNear };
     return this.perspectiveParameters;
   }
 
@@ -412,6 +415,32 @@ export class Camera {
   }
 
   // ----- NOTE: Debug ----- //
+
+  /**
+   * Construct a true 3d geometric canvas frustum from the current camera properties.
+   * @returns {Frustum}
+   */
+  toCanvasFrustum(frustum) {
+    const Minv = this.inverseModelMatrix;
+
+    // Define the 4 corners of the far clipping plane in Normalized Device Coordinates (z = 1).
+    const minCoord = this.glType === "webGPU" ? 0 : -1;
+    const corners = {
+      // NDC space
+      TL: Point3d.tmp.set(minCoord, minCoord, 1),
+      TR: Point3d.tmp.set(1, minCoord, 1),
+      BR: Point3d.tmp.set(1, 1, 1),
+      BL: Point3d.tmp.set(minCoord, 1, 1),
+      frustum,
+    };
+
+    // Transform the NDC corners into canvas (world) space.
+    Object.values(corners).forEach(corner => Minv.multiplyPoint3d(corner, corner));
+
+    // Create a canvas frustrum.
+    const viewpoint = this.cameraPosition;
+    return Frustum.fromCorners(viewpoint, corners);
+  }
 
   invertFrustum() {
     const M = this.lookAtMatrix.multiply4x4(this.perspectiveMatrix);

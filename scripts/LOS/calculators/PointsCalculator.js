@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 CONST,
 PIXI,
 */
@@ -7,10 +8,8 @@ PIXI,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../../const.js";
-import { TRACKER_IDS } from "../const.js";
 import { Settings } from "../../settings.js";
-import { GEOMETRY_LIB_ID, GEOMETRY_ID } from "../../geometry/const.js";
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
@@ -221,14 +220,14 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   /** @type {Polygon3d[]} */
   get targetSurfaces() {
-    const faces = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID].faces;
-    return [faces.top, faces.bottom, ...faces.sides];
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
+    return geom.faces;
   }
 
   /** @type {Point3d[][]} */
   get targetPoints() {
-    const facePoints = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID].facePoints;
-    return [facePoints.top, facePoints.bottom, ...facePoints.sides];
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
+    return geom.facePoints;
   }
 
   _testPointsForSurface(targetSurface, targetPoints) {
@@ -236,7 +235,6 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     const unobscured = new this.constructor.BitSetClass();
     const visible = new this.constructor.BitSetClass();
     const radius2 = this.radius ** 2;
-    //this.occlusionTester._initialize(this);
     for ( let i = 0, n = targetPoints.length; i < n; i += 1 ) {
       // console.debug(`${this.target.name}: ${this.target.x}, ${this.target.y}`);
       const pt = targetPoints[i];
@@ -367,10 +365,10 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     this._initializeCamera();
 
     // Draw the token border for reference.
-    const faces = this.target[GEOMETRY_LIB_ID][GEOMETRY_ID].faces;
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
     const viewpoint = this.viewpoint
     const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
-    for ( const face of [faces.top, faces.bottom, ...faces.sides] ) {
+    for ( const face of geom.faces) {
       if ( !face.isFacing(viewpoint) ) {
         drawOpts.alpha = 0.3;
         drawOpts.color = Draw.COLORS.gray;

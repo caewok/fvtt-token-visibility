@@ -1,10 +1,12 @@
 /* globals
 CONFIG,
+foundry,
 Hooks
 */
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 
 import { WallGeometry } from "../geometry/placeable_geometry/WallGeometry.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
@@ -115,19 +117,22 @@ Hooks.on("canvasReady", function() {
   }
   const docKeys = {
     Wall: new Set([
-      ...WallGeometry.TRACKER_TYPES.position,
+      ...WallGeometry.TRACKER_TYPES.position2d,
+      ...WallGeometry.TRACKER_TYPES.elevation,
       ...WallGeometry.TRACKER_TYPES.direction,
       ...WallGeometry.TRACKER_TYPES.restriction,
       ...WallGeometry.TRACKER_TYPES.door,
       ...WallGeometry.TRACKER_TYPES.threshold,
     ]),
     Tile: new Set([
-      ...TileGeometry.TRACKER_TYPES.position,
+      ...TileGeometry.TRACKER_TYPES.position2d,
+      ...TileGeometry.TRACKER_TYPES.elevation,
       ...TileGeometry.TRACKER_TYPES.scale,
       ...TileGeometry.TRACKER_TYPES.rotation,
     ]),
     Token: new Set([
-      ...TokenGeometry.TRACKER_TYPES.position,
+      ...TokenGeometry.TRACKER_TYPES.position2d,
+      ...TokenGeometry.TRACKER_TYPES.elevation,
       ...TokenGeometry.TRACKER_TYPES.scale,
       ...TokenGeometry.TRACKER_TYPES.shape,
     ]),
@@ -144,34 +149,6 @@ Hooks.on("canvasReady", function() {
     watcher.register("update", id, updateFn, keys);
     watcher.activate();
   }
-
-  // Placeable Geometry for collision testing.
-  const geometryTypes = [
-    "Tile",
-    "Wall",
-    "Token",
-    "Region",
-  ];
-  for ( const type of geometryTypes ) {
-    const cl = geometryTracking[`${type}GeometryTracker`];
-    cl.registerHooks();
-    cl.registerExistingPlaceables();
-    cl.activate();
-  }
 });
 
-Hooks.on("canvasTearDown", function(canvas) {
-  // Placeable Geometry for collision testing.
-  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
-  const geometryTypes = [
-    "Tile",
-    "Wall",
-    "Token",
-    "Region",
-  ];
-  for ( const type of geometryTypes ) {
-    const cl = geometryTracking[`${type}GeometryTracker`];
-    cl.deactivate();
-    cl.deRegisterExistingPlaceables();
-  }
-});
+
