@@ -86,7 +86,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
     if ( this.data.target ) out.data.target.or(other.data.target);
     if ( this.data.blocked ) out.data.blocked.and(other.data.target);
     if ( this.data.blockedCount != null ) out.data.blockedCount = Math.min(this.data.blockedCount, other.data.blockedCount);
-    if ( this.data.targetCount != null ) out.data.blockedCount = Math.max(this.data.targetCount, other.data.targetCount);
+    if ( this.data.targetCount != null ) out.data.targetCount = Math.max(this.data.targetCount, other.data.targetCount);
     return out;
   }
 }

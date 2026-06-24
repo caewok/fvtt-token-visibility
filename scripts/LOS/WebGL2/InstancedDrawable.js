@@ -155,7 +155,11 @@ class AbstractDrawable {
 
   // ----- NOTE: Uniforms ----- //
 
-  _initializeUniforms(_geoms) { }
+  _initializeUniforms(_geoms) {
+    // Material only used to color the shapes in the debug view.
+    const matBlockIdx = gl.getUniformBlockIndex(this.debugProgramInfo, "Material");
+    if ( matBlockIdx !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.debugProgramInfo, matBlockIdx, 1);
+  }
 
   // ----- NOTE: Attributes ----- //
 

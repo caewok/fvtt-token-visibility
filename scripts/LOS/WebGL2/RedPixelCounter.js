@@ -473,8 +473,8 @@ export class RedPixelCounter {
       const hasR = r >> 7; // Threshold of 128 given Uint8Array.
       const hasB = b >> 7;
       const isBlocked = hasR * (hasB || pixels[i + 1] > terrainThreshold);
-      red.set(i, hasR);
-      redBlocked.set(i, isBlocked);
+      red.set(i / 4, hasR);
+      redBlocked.set(i / 4, isBlocked);
     }
     return { red, redBlocked };
   }
@@ -486,7 +486,7 @@ export class RedPixelCounter {
     const red = new FastBitSet();
     for ( let i = 0; i < nPixels; i += 4 ) {
       const r = pixels[i];
-      red.set(i, r >> 7); // Threshold of 128 given Uint8Array.
+      red.set(i / 4, r >> 7); // Threshold of 128 given Uint8Array.
     }
     return { red, redBlocked };
   }

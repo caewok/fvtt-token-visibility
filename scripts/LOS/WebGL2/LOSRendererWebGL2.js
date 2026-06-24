@@ -164,6 +164,13 @@ export class LOSRendererWebGL2 {
     target: new Float32Array(this.MATERIAL_BUFFER, 0, 4),
     obstacle: new Float32Array(this.MATERIAL_BUFFER, Float32Array.BYTES_PER_ELEMENT * 4, 4),
     terrain: new Float32Array(this.MATERIAL_BUFFER, Float32Array.BYTES_PER_ELEMENT * 4 * 2, 4),
+  };
+
+  // Run on class load
+  static {
+    this.MATERIAL_COLORS.target.set([1.0, 0.0, 0.0, 1.0]); // Red.
+    this.MATERIAL_COLORS.obstacle.set([0.0, 0.0, 1.0, 1.0]); // Blue.
+    this.MATERIAL_COLORS.terrain.set([0.0, 0.5, 0.0, 0.5]); // Green, transparent.
   }
 
   _initializeMaterialBuffer() {
@@ -264,6 +271,7 @@ export class LOSRendererWebGL2 {
     webGL2.setCulling(true);
     webGL2.setCullFace("BACK");
     if ( clear ) { // Clear = false used for rendering debug multiple viewpoints.
+      webGL2.setColorMask(WebGL2.noColorMask); // Force all channels true.
       webGL2.setClearColor(WebGL2.blackClearColor);  // Clear everything to black.
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     }
@@ -323,6 +331,7 @@ export class LOSRendererWebGL2 {
     ];
     this.drawables.walls.instanceSet.clear()
     this.#addWallInstances(hardWalls, targetGeom);
+    this.drawables.walls.render(debug);
 
     // Add tokens
     // TODO: Handle constrained tokens.
@@ -342,11 +351,11 @@ export class LOSRendererWebGL2 {
     // Add levels
     this.drawables.levels.foreground.instanceSet.clear();
     for ( const geom of geoms.foregroundLevels ) this.drawables.levels.foreground.addGeomToInstanceSet(geom);
-    this.drawables.levels.foreground.render();
+    this.drawables.levels.foreground.render(debug);
 
     this.drawables.levels.background.instanceSet.clear();
     for ( const geom of geoms.backgroundLevels ) this.drawables.levels.background.addGeomToInstanceSet(geom);
-    this.drawables.levels.foreground
+    this.drawables.levels.background.render(debug);
   }
 
   #addWallInstances(wallGeoms, targetGeom) {
@@ -366,7 +375,7 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.blueAlphaMask);
     webGL2.setBlending(false);
 
-    this.#setAndRenderHardObstacles(occlusionTester), debug;
+    this.#setAndRenderHardObstacles(occlusionTester, targetGeom, debug);
   }
 
   /**
