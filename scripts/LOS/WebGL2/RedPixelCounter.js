@@ -141,12 +141,12 @@ export class RedPixelCounter {
       internalFormat: gl.RGBA32F,
       minMag: gl.NEAREST,
       wrap: gl.CLAMP_TO_EDGE
-    }], 128, 128);
+    }], this.#width, this.#height);
     const fb1 = twgl.createFramebufferInfo(gl, [{
         internalFormat: gl.RGBA32F,
         minMag: gl.NEAREST,
         wrap: gl.CLAMP_TO_EDGE
-      }], 128, 128);
+      }], this.#width, this.#height);
     this.fbInfos.reductionCount = [fb0, fb1];
     const NUM_CHANNELS = 4;
     this.pixelBuffers.reductionCount = new Float32Array(NUM_CHANNELS); // Width, height of 1.
@@ -167,12 +167,12 @@ export class RedPixelCounter {
       internalFormat: gl.RG32F,
       minMag: gl.NEAREST,
       wrap: gl.CLAMP_TO_EDGE
-    }], 128, 128);
+    }], this.#width, this.#height);
     const fb1 = twgl.createFramebufferInfo(gl, [{
         internalFormat: gl.RG32F,
         minMag: gl.NEAREST,
         wrap: gl.CLAMP_TO_EDGE
-      }], 128, 128);
+      }], this.#width, this.#height);
     this.fbInfos.reductionCount2 = [fb0, fb1];
     const NUM_CHANNELS = 2;
     this.pixelBuffers.reductionCount2 = new Float32Array(NUM_CHANNELS); // Width, height of 1.
@@ -310,24 +310,28 @@ export class RedPixelCounter {
   }
 
   loopCount(tex) {
+    if ( !tex ) return this.readPixelsCount();
     const type = "loopCount";
     this.#loopCount(tex, type);
     return this.#readSinglePixel(this.pixelBuffers[type], this.gl.RGBA, this.gl.FLOAT);
   }
 
   loopCount2(tex) {
+    if ( !tex ) return this.readPixelsCount();
     const type = "loopCount2";
     this.#loopCount(tex, type);
     return this.#readSinglePixel(this.pixelBuffers[type], this.gl.RG, this.gl.FLOAT);
   }
 
   async loopCountAsync(tex) {
+    if ( !tex ) return this.readPixelsCountAsync();
     const type = "loopCount";
     this.#loopCount(tex, type);
     return this.#readSinglePixelAsync(this.pixelBuffers[type], this.gl.RGBA, this.gl.FLOAT);
   }
 
   async loopCount2Async(tex) {
+    if ( !tex ) return this.readPixelsCountAsync();
     const type = "loopCount2";
     this.#loopCount(tex, type);
     return this.#readSinglePixelAsync(this.pixelBuffers[type], this.gl.RG, this.gl.FLOAT);
@@ -357,24 +361,28 @@ export class RedPixelCounter {
   }
 
   blendCount(tex) {
+    if ( !tex ) return this.readPixelsCount();
     const type = "blendCount";
     this.#blendCount(tex, type);
     return this.#readSinglePixel(this.pixelBuffers[type], this.gl.RGBA, this.gl.FLOAT)
   }
 
   blendCount2(tex) {
+    if ( !tex ) return this.readPixelsCount();
     const type = "blendCount2";
     this.#blendCount(tex, type);
     return this.#readSinglePixel(this.pixelBuffers[type], this.gl.RG, this.gl.FLOAT)
   }
 
   async blendCountAsync(tex) {
+    if ( !tex ) return this.readPixelsCountAsync();
     const type = "blendCount";
     this.#blendCount(tex, type);
     return this.#readSinglePixelAsync(this.pixelBuffers[type], this.gl.RGBA, this.gl.FLOAT)
   }
 
   async blendCount2Async(tex) {
+    if ( !tex ) return this.readPixelsCountAsync();
     const type = "blendCount2";
     this.#blendCount(tex, type);
     return this.#readSinglePixelAsync(this.pixelBuffers[type], this.gl.RG, this.gl.FLOAT)
@@ -425,24 +433,28 @@ export class RedPixelCounter {
   }
 
   reductionCount(tex) {
+    if ( !tex ) return this.readPixelsCount();
     const type = "reductionCount";
     this.#reductionCount(tex, type);
     return this.#readSinglePixel(this.pixelBuffers[type], this.gl.RGBA, this.gl.FLOAT);
   }
 
   reductionCount2(tex) {
+    if ( !tex ) return this.readPixelsCount();
     const type = "reductionCount2";
     this.#reductionCount(tex, type);
     return this.#readSinglePixel(this.pixelBuffers[type], this.gl.RG, this.gl.FLOAT);
   }
 
   async reductionCountAsync(tex) {
+    if ( !tex ) return this.readPixelsCountAsync();
     const type = "reductionCount";
     this.#reductionCount(tex, type);
     return this.#readSinglePixelAsync(this.pixelBuffers[type], this.gl.RGBA, this.gl.FLOAT);
   }
 
   async reductionCount2Async(tex) {
+    if ( !tex ) return this.readPixelsCountAsync();
     const type = "reductionCount2";
     this.#reductionCount(tex, type);
     return this.#readSinglePixelAsync(this.pixelBuffers[type], this.gl.RG, this.gl.FLOAT);
