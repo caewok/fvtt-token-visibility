@@ -438,7 +438,7 @@ export class AbstractModelDrawable extends AbstractDrawable {
 
   get verticesArray() { return this.viTracker.vertices.viewBuffer(); }
 
-  get indicesArray() { return this.viTracker.indicesAdjBuffer; }
+  get indicesArray() { return this.viTracker.indices.viewBuffer(this.viTracker.indicesAdjBuffer); }
 
 
   // ----- NOTE: Attributes ----- //
@@ -459,7 +459,7 @@ export class AbstractModelDrawable extends AbstractDrawable {
     const iOffset = vi.indices.facetOffsetAtId(id) * Uint16Array.BYTES_PER_ELEMENT;
 
     // Vertices.
-    const vBuffer = this.attributeBufferInfo.attribs.aPos.buffer;
+    const vBuffer = this.attributeBufferInfo.attribs.aPosition.buffer;
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
 
@@ -568,11 +568,11 @@ export class AbstractTexturedModelDrawable extends AbstractModelDrawable {
 
   _initializeTexture(geom) {
     const textureOpts = this.constructor.textureOptions(this.gl);
-    const old = this.textures.get(geom.sourceId);
+    const old = this.textures.get(geom.placeableId);
     if ( old ) old.destroy();
     textureOpts.src = this.constructor.textureSource(geom);
     this.textureSourceMap.set(geom.placeableId, textureOpts.src);
-    this.textures.set(geom.sourceId, twgl.createTexture(this.gl, textureOpts));
+    this.textures.set(geom.placeableId, twgl.createTexture(this.gl, textureOpts));
   }
 
   _rebuildAttributeBuffers() {
@@ -599,7 +599,7 @@ export class AbstractTexturedModelDrawable extends AbstractModelDrawable {
     for ( const idx of this.instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      const id = this.viTracker.facetIdMap.getKeyAtIndex(idx);
+      const id = this.viTracker.indices.facetIdMap.getKeyAtIndex(idx);
       if ( !id ) continue;
       gl.bindTexture(gl.TEXTURE_2D, this.textures.get(id));
 
@@ -672,7 +672,12 @@ export class DrawableSquareTokens extends AbstractInstancedDrawable {
     if ( TokenGeometry.shapeTypeForToken(geom.placeableDocument) !== TokenGeometry.SHAPE_TYPES.CUBE ) return;
     super.addGeomToInstanceSet(geom);
   }
+
+
 }
+
+
+
 
 export class DrawableEllipseTokens extends AbstractInstancedDrawable {
 
