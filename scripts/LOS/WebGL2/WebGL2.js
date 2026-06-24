@@ -93,6 +93,8 @@ export class WebGL2 {
     cullFace: "BACK",
     colorMask: this.constructor.noColorMask,
     clearColor: this.constructor.blackClearColor,
+    blendFuncSeparate: this.constructor.defaultBlendFuncSeparate,
+    depthMask: true,
   }
 
   /**
@@ -104,6 +106,7 @@ export class WebGL2 {
     gl.cullFace(gl[glState.cullFace]);
     gl.colorMask(...glState.colorMask);
     gl.clearColor(...glState.clearColor);
+    gl.depthMask(glState.depthMask);
     for ( const name of ["DEPTH_TEST", "STENCIL_TEST", "BLEND", "CULL_FACE"] ) {
       if ( glState[name] ) gl.enable(gl[name]);
       else gl.disable(gl[name]);
@@ -179,6 +182,18 @@ export class WebGL2 {
     this.glState.clearColor = color;
   }
 
+  setBlendFuncSeparate(...args) {
+    if ( this.glState.blendFuncSeparate.equals(args) ) return;
+    this.gl.blendFuncSeparate(...args);
+    this.glState.blendFuncSeparate = args;
+  }
+
+  setDepthMask(enabled) {
+    if ( !(this.glState.depthMask ^ enabled) ) return;
+    this.gl.depthMask(enabled);
+    this.glState.depthMask = enabled;
+  }
+
   static blackClearColor = [0, 0, 0, 0];
 
   static redAlphaMask = [true, false, false, true];
@@ -188,6 +203,8 @@ export class WebGL2 {
   static greenAlphaMask = [false, true, false, true];
 
   static noColorMask = [true, true, true, true];
+
+  static defaultBlendFuncSeparate = [1, 0, 1, 0]; // [gl.ONE, gl.ZERO, gl.ONE, gl.ZERO]
 
 
   // ----- NOTE: Static methods ----- //
