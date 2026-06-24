@@ -220,13 +220,13 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   /** @type {Polygon3d[]} */
   get targetSurfaces() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
     return geom.faces;
   }
 
   /** @type {Point3d[][]} */
   get targetPoints() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
     return geom.facePoints;
   }
 
@@ -365,7 +365,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     this._initializeCamera();
 
     // Draw the token border for reference.
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
     const viewpoint = this.viewpoint
     const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
     for ( const face of geom.faces) {

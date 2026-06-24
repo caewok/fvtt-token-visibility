@@ -177,7 +177,7 @@ export class Camera {
   }
 
   setTargetTokenFrustum(targetToken) {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(targetToken);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(targetToken);
     this.setFrustumForAABB3d(geom.aabb);
   }
 
