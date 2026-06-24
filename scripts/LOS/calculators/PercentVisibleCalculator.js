@@ -351,6 +351,7 @@ export class PercentVisibleCalculatorAbstract {
 
     this._initializeCamera();
     this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
+    this.camera.setTargetTokenFrustum(this.target);
     this.camera.toCanvasFrustum(this.occlusionTester.frustum);
     this.occlusionTester.update();
   }
@@ -380,8 +381,7 @@ export class PercentVisibleCalculatorAbstract {
     const camera = this.camera;
     camera.cameraPosition = this.viewpoint;
     camera.targetPosition = this.targetLocation;
-    camera.setTargetTokenFrustum(this.target);
-  }
+   }
 
   // ----- NOTE: Visibility testing ----- //
 
