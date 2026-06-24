@@ -265,11 +265,13 @@ export class LOSRendererWebGL2 {
     const webGL2 = this.webGL2;
     frame ??= this.frame;
 
-    // Set WebGL2 state.
+    // Set default WebGL2 state.
     webGL2.setViewport(frame);
     webGL2.setDepthTest(true);
     webGL2.setCulling(true);
     webGL2.setCullFace("BACK");
+    webGL2.setDepthMask(true);
+    webGL2.setColorMask(WebGL2.noColorMask);
     if ( clear ) { // Clear = false used for rendering debug multiple viewpoints.
       webGL2.setColorMask(WebGL2.noColorMask); // Force all channels true.
       webGL2.setClearColor(WebGL2.blackClearColor);  // Clear everything to black.
@@ -306,6 +308,9 @@ export class LOSRendererWebGL2 {
       this.setMaterial("target");
     } else webGL2.setColorMask(WebGL2.redAlphaMask);
     webGL2.setBlending(false);
+
+
+    webGL2.setColorMask(WebGL2.noColorMask);
 
     // Add the target instance.
     for ( const drawable of this.drawables.tokens ) {
@@ -366,7 +371,6 @@ export class LOSRendererWebGL2 {
   _renderHardObstacles(occlusionTester, targetGeom, debug = false) {
     const webGL2 = this.webGL2;
 
-
     // Set color mask to BLUE only.
     // Set WebGL2 state.
     if ( debug ) {
@@ -375,24 +379,16 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.blueAlphaMask);
     webGL2.setBlending(false);
 
+    webGL2.setColorMask(WebGL2.noColorMask);
     this.#setAndRenderHardObstacles(occlusionTester, targetGeom, debug);
   }
 
-  /**
-   * Set the drawables to the terrain obstacles in preparation for rendering.
-   * Walls.
-   * @param {ObstacleOcclusionTester} occlusionTester
-   */
-  #setTerrainObstacles(occlusionTester) {
-    const geoms = occlusionTester.obstacleGeometries;
-    this.drawables.walls.instanceSet.clear();
-    for ( const geom of geoms.terrainWalls ) this.drawables.walls.addGeomToInstanceSet(geom);
-  }
-
-  _renderTerrainObstacles(occlusionTester, debug = false) {
+  _renderTerrainObstacles(occlusionTester, targetGeom, debug = false) {
     const gl = this.gl;
     const webGL2 = this.webGL2;
-    this.#setTerrainObstacles(occlusionTester);
+    this.drawables.walls.instanceSet.clear()
+    this.#addWallInstances(occlusionTester.obstacleGeometries.terrainWalls, targetGeom);
+    if ( !this.drawables.walls.instanceSet.size ) return;
 
     // Set WebGL state.
     webGL2.setBlending(true); // Enable Additive Blending

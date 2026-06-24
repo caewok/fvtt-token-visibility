@@ -57,6 +57,9 @@ class AbstractDrawable {
   /** @type {number} */
   static CAMERA_BIND_POINT = 0;
 
+  /** @type {number} */
+  static MATERIAL_BIND_POINT = 1;
+
   /** @type {boolean} */
   static INSTANCED = true;
 
@@ -156,9 +159,18 @@ class AbstractDrawable {
   // ----- NOTE: Uniforms ----- //
 
   _initializeUniforms(_geoms) {
+    const gl = this.gl;
+
+    // Camera used in both debug and regular views.
+    const cameraBlockIndex = gl.getUniformBlockIndex(this.programInfo.program, "Camera");
+    if ( cameraBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.programInfo.program, cameraBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+
+    const cameraDebugBlockIndex = gl.getUniformBlockIndex(this.debugProgramInfo.program, "Camera");
+    if ( cameraDebugBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.debugProgramInfo.program, cameraDebugBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+
     // Material only used to color the shapes in the debug view.
-    const matBlockIdx = gl.getUniformBlockIndex(this.debugProgramInfo, "Material");
-    if ( matBlockIdx !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.debugProgramInfo, matBlockIdx, 1);
+    const matBlockIdx = gl.getUniformBlockIndex(this.debugProgramInfo.program, "Material");
+    if ( matBlockIdx !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.debugProgramInfo.program, matBlockIdx, this.constructor.MATERIAL_BIND_POINT); // 1
   }
 
   // ----- NOTE: Attributes ----- //

@@ -114,6 +114,10 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     const size = CONFIG[MODULE_ID].renderTextureSize || 128;
     this.constructor.glCanvas ??= new OffscreenCanvas(size, size);
 
+    // Fix the camera values.
+    this.camera.UP = this.camera.constructor.UP;
+    this.camera.mirrorM = this.camera.constructor.MIRRORM_DIAG;
+
     const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
     this.renderer = new LOSRendererWebGL2({
       webGL2,

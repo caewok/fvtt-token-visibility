@@ -34,6 +34,7 @@ void main() {
 
   // Extremely simple directional lighting model to give the model some shape.
   #if ${debugViewNormals}
+    // Either use the texture color defined above or if no texture, use the material color.
     #if ${!hasTexture}
       color = uColor;
     #endif
@@ -43,11 +44,13 @@ void main() {
     vec3 surfaceColor = (color.rgb * ambientColor) + (color.rgb * NDotL);
     fragColor = vec4(surfaceColor, color.a);
   #else
-    fragColor = vec4(1.0); // Output solid white; relies on color mask in the renderer.
+    // fragColor = vec4(1.0); // Output solid white; relies on color mask in the renderer.
+    fragColor = vec4(0.0, 0.0, 1.0, 1.0);
   #endif
 
   #if ${hasTexture}
-    fragColor.a = color.a; // Use the tile alpha channel to capture transparent portions.
+    // Use the texture alpha channel to capture semi-transparent portions.
+    fragColor.a = color.a;
   #endif
 }
 
