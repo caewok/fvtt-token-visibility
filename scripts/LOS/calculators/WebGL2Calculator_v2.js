@@ -134,11 +134,9 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( this.#initialized ) return;
     await super.initialize();
 
-
+    const size = CONFIG[MODULE_ID].renderTextureSize || 128;
     await this.renderer.initialize();
-    const size = this.renderer.renderTextureSize;
     this.redPixelCounter.initialize(size, size);
-
     this.#initialized = true;
   }
 
@@ -219,7 +217,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
       const frame = frames[i];
       const clear = i === 0;
       this.renderer.setCamera(viewpoint, target, { targetLocation });
-      this.renderer.render(calc.occlusionTester, targetGeom, { frame, clear, debug: true });
+      this.renderer.render(calc.occlusionTester, targetGeom, { frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
     }
   }
 

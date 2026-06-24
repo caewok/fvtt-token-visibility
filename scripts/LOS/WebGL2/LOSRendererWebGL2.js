@@ -309,9 +309,6 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.redAlphaMask);
     webGL2.setBlending(false);
 
-
-    webGL2.setColorMask(WebGL2.noColorMask);
-
     // Add the target instance.
     for ( const drawable of this.drawables.tokens ) {
       drawable.instanceSet.clear();
@@ -378,8 +375,6 @@ export class LOSRendererWebGL2 {
       webGL2.setColorMask(WebGL2.noColorMask);
     } else webGL2.setColorMask(WebGL2.blueAlphaMask);
     webGL2.setBlending(false);
-
-    webGL2.setColorMask(WebGL2.noColorMask);
     this.#setAndRenderHardObstacles(occlusionTester, targetGeom, debug);
   }
 

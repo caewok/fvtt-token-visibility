@@ -44,8 +44,7 @@ void main() {
     vec3 surfaceColor = (color.rgb * ambientColor) + (color.rgb * NDotL);
     fragColor = vec4(surfaceColor, color.a);
   #else
-    // fragColor = vec4(1.0); // Output solid white; relies on color mask in the renderer.
-    fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+    fragColor = vec4(1.0); // Output solid white; relies on color mask in the renderer.
   #endif
 
   #if ${hasTexture}
