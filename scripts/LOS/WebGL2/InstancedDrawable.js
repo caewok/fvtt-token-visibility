@@ -395,7 +395,7 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
   _rebuildAttributeBuffers() {
     // Update the model attribute with a new buffer.
     this.attributeProperties.aModel.data = this.modelMatrixArray;
-    const attribs = this.attributeBufferInfo.attrib;
+    const attribs = this.attributeBufferInfo.attribs;
     attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.attributeProperties.aModel });
 
     // Update the VAO with the new model buffer information.
@@ -478,10 +478,8 @@ export class AbstractModelDrawable extends AbstractDrawable {
     this.attributeProperties.aNormal.data = this.verticesArray;
     this.attributeProperties.indices.data = this.indicesArray;
 
-    const attribs = this.attributeBufferInfo.attrib;
-    attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.attributeProperties.aModel });
-
     // Update the VAO with the new model buffer information.
+    const attribs = this.attributeBufferInfo.attribs;
     this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
   }
 
@@ -517,8 +515,8 @@ export class AbstractTexturedModelDrawable extends AbstractModelDrawable {
     const attrProps = super._defineAttributeProperties();
     attrProps.aTexCoord = {
       numComponents: 2,
-      buffer: attrProps.buffer, // Shared vBuffer
-      stride: this.constructor.stride,
+      buffer: attrProps.aPosition.buffer, // Shared vBuffer
+      stride: this.constructor.stride * Float32Array.BYTES_PER_ELEMENT,
       offset: Float32Array.BYTES_PER_ELEMENT * 6, // Position (3) + Normals (3)
     }
     return attrProps;
