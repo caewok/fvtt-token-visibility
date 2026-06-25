@@ -2,6 +2,8 @@
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
 layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aTexCoord; // aUV
 
 layout (std140) uniform Camera {
   mat4 uPerspectiveMatrix; // Projection.
@@ -9,25 +11,13 @@ layout (std140) uniform Camera {
 };
 
 #if ${isInstanced}
-  layout(location = 1) in mat4 aModel; // Takes up four consecutive locations
-
+  layout(location = 3) in mat4 aModel; // Takes up four consecutive locations
 #else
   uniform mat4 aModel;
-
-  // Tiles are not instanced
-  #if ${hasTexture}
-    layout(location = 1) in vec2 aTexCoord; // aUV
-    out vec2 vTexCoord;
-  #endif
-
 #endif
 
-#if ${debugViewNormals}
-  in vec3 aNormal;
-  out vec3 vNormal;
-#endif
-
-
+out vec3 vNormal;
+out vec2 vTexCoord;
 
 void main() {
   vec4 cameraPos = uLookAtMatrix * aModel * vec4(aPosition, 1.0);

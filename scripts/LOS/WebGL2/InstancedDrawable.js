@@ -233,6 +233,7 @@ class AbstractDrawable {
     vertexProps.aNormal = {
       numComponents: 3,
       buffer: vBuffer,
+      drawType: this.constructor.VERTEX_DRAW_TYPE,
       stride,
       offset: Float32Array.BYTES_PER_ELEMENT * 3,
     };
@@ -492,17 +493,13 @@ export class AbstractModelDrawable extends AbstractDrawable {
   }
 }
 
-// Set that is used for temporary values.
-// Not guaranteed to have any specific value.
-const TMP_SET = new Set();
-
-export class AbstractTexturedModelDrawable extends AbstractModelDrawable {
+export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable {
 
   /** @type {boolean} */
   static TEXTURED = true;
 
   /** @type {number} */
-  static stride = 8; // Postion (3) + Normal (3) + UV (2)
+  static stride = 8; // Position (3) + Normal (3) + UV (2)
 
   // ----- NOTE: Attributes ----- //
 
@@ -516,6 +513,7 @@ export class AbstractTexturedModelDrawable extends AbstractModelDrawable {
     attrProps.aTexCoord = {
       numComponents: 2,
       buffer: attrProps.aPosition.buffer, // Shared vBuffer
+      drawType: this.constructor.VERTEX_DRAW_TYPE,
       stride: this.constructor.stride * Float32Array.BYTES_PER_ELEMENT,
       offset: Float32Array.BYTES_PER_ELEMENT * 6, // Position (3) + Normals (3)
     }
@@ -586,29 +584,6 @@ export class AbstractTexturedModelDrawable extends AbstractModelDrawable {
     // Check if the source changed.
     const src = this.constructor.textureSource(geom);
     if ( this.textureSourceMap.get(geom.placeableId) !== src ) this._initializeTexture(geom);
-  }
-
-  _draw(alphaThreshold = 0.75) {
-    // Same as super._draw.
-    const gl = this.gl;
-    const { facetLength, facetLengths, byteOffsets } = this.viTracker.indices;
-
-    // Draw each one individually so we can bind the correct texture.
-    for ( const idx of this.instanceSet ) {
-      TMP_SET.clear();
-      TMP_SET.add(idx);
-      const id = this.viTracker.indices.facetIdMap.getKeyAtIndex(idx);
-      if ( !id ) continue;
-      gl.bindTexture(gl.TEXTURE_2D, this.textures.get(id));
-
-      twgl.setUniforms(this.program, { uAlphaThreshold: alphaThreshold }); // TODO: Should be able to bind the texture as well using setUniforms.
-
-      // uniforms.uTexture = this.textures.get(idx);
-      // twgl.setUniforms(this.programInfo, uniforms);
-
-      // Same as super.draw, using the TMP_SET
-      WebGL2.drawSet(gl, TMP_SET, byteOffsets, facetLength || facetLengths);
-    }
   }
 }
 
@@ -757,48 +732,43 @@ export class DrawablePolygonTokens extends AbstractModelDrawable {
 
 // TODO: Regions
 
-export class DrawableTiles extends AbstractTexturedModelDrawable {
+export class DrawableTiles extends AbstractTexturedInstancedDrawable {
   /** @type {class<PlaceableGeometry>} */
   static GEOMETRY_CLASS = TileGeometry;
 
   static textureSource(geom) { return geom.placeableDocument.texture.src; }
 
   static create(opts = {}) {
-    opts.viTracker ??= TileGeometry.viTracker;
+    opts.instanceVO ??= TileGeometry.instanceVO;
+    opts.modelMatrixTracker ??= TileGeometry.modelMatrixTracker;
     return new this(opts);
   }
 
   _draw() {
-    // Same as super._draw.
-    const gl = this.gl;
-    const { facetLength, facetLengths, byteOffsets } = this.viTracker.indices;
+    const instances = new Set(this.instanceSet);
 
     // Draw each one individually so we can bind the correct texture.
-    for ( const idx of this.instanceSet ) {
-      TMP_SET.clear();
-      TMP_SET.add(idx);
-      const id = this.viTracker.indices.facetIdMap.getKeyAtIndex(idx);
+    for ( const idx of instances ) {
+      this.instanceSet.clear();
+      this.instanceSet.add(idx);
+      const id = this.modelMatrixTracker.facetIdMap.getKeyAtIndex(idx);
       if ( !id ) continue;
       // gl.bindTexture(gl.TEXTURE_2D, this.textures.get(id));
 
-      // Bind the uniforms specific to this tile (or level) texture.
+      // twgl.setUniforms(this.program, { uAlphaThreshold: alphaThreshold }); // TODO: Should be able to bind the texture as well using setUniforms.
       const geom = this.constructor.geometryManager.geomForPlaceableId(id);
       const uniforms = {
-        uAlphaThreshold: geom.alphaThreshold,
         uTexture: this.textures.get(id),
-      }
+        uAlphaThreshold: geom.alphaThreshold,
+      };
       twgl.setUniforms(this.program, uniforms);
 
-      // uniforms.uTileTexture = this.textures.get(idx);
-      // twgl.setUniforms(this.programInfo, uniforms);
-
-      // Same as super.draw, using the TMP_SET
-      WebGL2.drawSet(gl, TMP_SET, byteOffsets, facetLength || facetLengths);
+      super._draw(); // Draw the single instance.
     }
   }
 }
 
-export class DrawableLevelsForeground extends AbstractTexturedModelDrawable {
+export class DrawableLevelsForeground extends AbstractTexturedInstancedDrawable {
   /** @type {class<PlaceableGeometry>} */
   static GEOMETRY_CLASS = LevelForegroundGeometry;
 
@@ -807,12 +777,13 @@ export class DrawableLevelsForeground extends AbstractTexturedModelDrawable {
   static textureSource(geom) { return geom.placeableDocument.foreground.src; }
 
   static create(opts = {}) {
-    opts.viTracker ??= LevelForegroundGeometry.viTracker;
+    opts.instanceVO ??= LevelForegroundGeometry.instanceVO;
+    opts.modelMatrixTracker ??= LevelForegroundGeometry.modelMatrixTracker;
     return new this(opts);
   }
 }
 
-export class DrawableLevelsBackground extends AbstractTexturedModelDrawable {
+export class DrawableLevelsBackground extends AbstractTexturedInstancedDrawable {
   /** @type {class<PlaceableGeometry>} */
   static GEOMETRY_CLASS = LevelBackgroundGeometry;
 
@@ -821,7 +792,8 @@ export class DrawableLevelsBackground extends AbstractTexturedModelDrawable {
   static textureSource(geom) { return geom.placeableDocument.background.src; }
 
   static create(opts = {}) {
-    opts.viTracker ??= LevelBackgroundGeometry.viTracker;
+    opts.instanceVO ??= LevelBackgroundGeometry.instanceVO;
+    opts.modelMatrixTracker ??= LevelBackgroundGeometry.modelMatrixTracker;
     return new this(opts);
   }
 }

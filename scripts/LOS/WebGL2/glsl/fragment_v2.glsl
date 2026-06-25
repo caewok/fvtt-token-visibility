@@ -1,24 +1,20 @@
 #version 300 es
 precision ${PIXI.settings.PRECISION_VERTEX} float;
 
-#if ${debugViewNormals}
-  layout (std140) uniform Material {
-    vec4 uColor;
-  };
+in vec3 vNormal;
+in vec2 vTexCoord;
 
-  in vec3 vNormal;
+uniform sampler2D uTexture;
+uniform float uAlphaThreshold; // Mark tile pixels less than this alpha as clear.
 
-  // Some hardcoded lighting
-  const vec3 lightDir = normalize(vec3(0.25, 0.5, 1.0));
-  const vec3 lightColor = vec3(1.0, 1.0, 1.0);
-  const vec3 ambientColor = vec3(0.2, 0.2, 0.2);
-#endif
+layout (std140) uniform Material {
+  vec4 uColor;
+};
 
-#if ${hasTexture}
-  in vec2 vTexCoord;
-  uniform sampler2D uTexture;
-  uniform float uAlphaThreshold; // Mark tile pixels less than this alpha as clear.
-#endif
+// Some hardcoded lighting
+const vec3 lightDir = normalize(vec3(0.25, 0.5, 1.0));
+const vec3 lightColor = vec3(1.0, 1.0, 1.0);
+const vec3 ambientColor = vec3(0.2, 0.2, 0.2);
 
 out vec4 fragColor;
 
@@ -27,6 +23,7 @@ void main() {
 
   #if ${hasTexture}
     vec4 texColor = texture(uTexture, vTexCoord);
+
     // Use discard so we don't have to deal with transparency for the textures.
     if ( texColor.a < uAlphaThreshold ) { discard; }
     color = texColor;
