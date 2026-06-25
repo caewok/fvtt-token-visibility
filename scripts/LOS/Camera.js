@@ -431,7 +431,6 @@ export class Camera {
       TR: Point3d.tmp.set(1, minCoord, 1),
       BR: Point3d.tmp.set(1, 1, 1),
       BL: Point3d.tmp.set(minCoord, 1, 1),
-      frustum,
     };
 
     // Transform the NDC corners into canvas (world) space.
@@ -439,7 +438,7 @@ export class Camera {
 
     // Create a canvas frustrum.
     const viewpoint = this.cameraPosition;
-    return Frustum.fromCorners(viewpoint, corners);
+    return Frustum.fromCorners(viewpoint, corners, frustum);
   }
 
   invertFrustum() {
