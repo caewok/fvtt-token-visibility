@@ -779,14 +779,17 @@ export class DrawableTiles extends AbstractTexturedModelDrawable {
     for ( const idx of this.instanceSet ) {
       TMP_SET.clear();
       TMP_SET.add(idx);
-      const id = this.viTracker.facetIdMap.getKeyAtIndex(idx);
+      const id = this.viTracker.indices.facetIdMap.getKeyAtIndex(idx);
       if ( !id ) continue;
-      gl.bindTexture(gl.TEXTURE_2D, this.textures.get(id));
+      // gl.bindTexture(gl.TEXTURE_2D, this.textures.get(id));
 
-      // Get the geom for the placeable.
+      // Bind the uniforms specific to this tile (or level) texture.
       const geom = this.constructor.geometryManager.geomForPlaceableId(id);
-
-      twgl.setUniforms(this.program, { uAlphaThreshold: geom.alphaThreshold }); // TODO: Should be able to bind the texture as well using setUniforms.
+      const uniforms = {
+        uAlphaThreshold: geom.alphaThreshold,
+        uTexture: this.textures.get(id),
+      }
+      twgl.setUniforms(this.program, uniforms);
 
       // uniforms.uTileTexture = this.textures.get(idx);
       // twgl.setUniforms(this.programInfo, uniforms);

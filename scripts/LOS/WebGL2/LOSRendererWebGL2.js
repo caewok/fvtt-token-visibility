@@ -246,8 +246,7 @@ export class LOSRendererWebGL2 {
       }
     ], width, height);
 
-    // Check if framebuffer is complete.
-    checkFramebufferStatus(this.gl, this.fbInfo.framebuffer);
+    // Check if framebuffer is complete is done by twgl.createFramebufferInfo.
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
