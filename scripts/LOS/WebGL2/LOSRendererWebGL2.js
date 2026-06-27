@@ -16,17 +16,25 @@ import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 // WebGL2
 import * as twgl from "./twgl.js";
 import { WebGL2 } from "./WebGL2.js";
-import { checkFramebufferStatus } from "../util.js";
 
 // TODO: Add regions.
 import {
   DrawableWalls,
+
   DrawableSquareTokens,
   DrawableEllipseTokens,
   DrawableHexagonTokens,
   DrawableSphereTokens,
   DrawablePolygonTokens,
+
+  DrawableSquareTarget,
+  DrawableEllipseTarget,
+  DrawableHexagonTarget,
+  DrawableSphereTarget,
+  DrawablePolygonTarget,
+
   DrawableTiles,
+
   DrawableLevelsForeground,
   DrawableLevelsBackground
   // DrawableRegions,
@@ -62,6 +70,7 @@ export class LOSRendererWebGL2 {
     tiles: null,
     regions: null,
     tokens: [],
+    targets: [],
     levels: {
       foreground: null,
       background: null,
@@ -79,6 +88,9 @@ export class LOSRendererWebGL2 {
     for ( const cl of this.constructor._tokenDrawableClasses() ) {
       this.drawables.tokens.push(cl.create({ webGL2: this.webGL2 }));
     };
+    for ( const cl of this.constructor._targetDrawableClasses() ) {
+      this.drawables.targets.push(cl.create({ webGL2: this.webGL2 }));
+    }
 
     this.drawables.walls = DrawableWalls.create({ webGL2: this.webGL2 });
     this.drawables.tiles = DrawableTiles.create({ webGL2: this.webGL2 });
@@ -94,6 +106,7 @@ export class LOSRendererWebGL2 {
     promises.push(this.drawables.levels.foreground.initialize());
     promises.push(this.drawables.levels.background.initialize());
     this.drawables.tokens.forEach(drawable => promises.push(drawable.initialize()));
+    this.drawables.targets.forEach(drawable => promises.push(drawable.initialize()));
 
     await Promise.allSettled(promises);
   }
@@ -105,6 +118,16 @@ export class LOSRendererWebGL2 {
       case GRID.SQUARE: return [DrawableSquareTokens];
       case GRID.GRIDLESS: return [DrawableSquareTokens, DrawableEllipseTokens];
       default: return [DrawableHexagonTokens, DrawablePolygonTokens];
+    }
+  }
+
+  static _targetDrawableClasses() {
+    if ( CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere )  return [DrawableSphereTarget];
+    const GRID = CONST.GRID_TYPES;
+    switch ( canvas.grid.type ) {
+      case GRID.SQUARE: return [DrawableSquareTarget];
+      case GRID.GRIDLESS: return [DrawableSquareTarget, DrawableEllipseTarget];
+      default: return [DrawableHexagonTarget, DrawablePolygonTarget];
     }
   }
 
@@ -309,7 +332,7 @@ export class LOSRendererWebGL2 {
     webGL2.setBlending(false);
 
     // Add the target instance.
-    for ( const drawable of this.drawables.tokens ) {
+    for ( const drawable of this.drawables.targets ) {
       drawable.instanceSet.clear();
       drawable.addGeomToInstanceSet(targetGeom);
       drawable.render(debug);

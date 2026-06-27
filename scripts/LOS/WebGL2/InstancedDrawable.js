@@ -1,5 +1,8 @@
 /* globals
+canvas,
 CONFIG,
+foundry,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -22,6 +25,7 @@ import {
 import { TileGeometry } from "../../geometry/placeable_geometry/TileGeometry.js";
 import { LevelForegroundGeometry, LevelBackgroundGeometry } from "../../geometry/placeable_geometry/LevelGeometry.js";
 import { RegionGeometry } from "../../geometry/placeable_geometry/RegionGeometry.js";
+import { mix } from "../../geometry/mixwith.js";
 
 /* Drawables
 
@@ -60,18 +64,6 @@ class AbstractDrawable {
   /** @type {number} */
   static MATERIAL_BIND_POINT = 1;
 
-  /** @type {boolean} */
-  static INSTANCED = true;
-
-  /** @type {boolean} */
-  static TEXTURED = false;
-
-  /** @type {string} */
-  static VERTEX_FILE = "instance_vertex_ubo_v2";
-
-  /** @type {string} */
-  static FRAGMENT_FILE = "fragment_v2";
-
   /** @type {number} */
   static stride = 6; // 3d position + 3d normal
 
@@ -101,8 +93,8 @@ class AbstractDrawable {
    */
   async initialize(geoms = []) {
     if ( this.#initialized ) return;
-    this.programInfo = await this._createProgram();
-    this.debugProgramInfo = await this._createDebugProgram();
+
+    await this._createPrograms();
     this._initializeAttributes();
 
     geoms ??= this.constructor.activeGeoms();
@@ -124,6 +116,22 @@ class AbstractDrawable {
 
   // ----- NOTE: Program ----- //
 
+  /** @type {string} */
+  static VERTEX_FILE = "instance_vertex_ubo_v2";
+
+  /** @type {string} */
+  static FRAGMENT_FILE = "fragment_v2";
+
+  // Triggers for enabling pieces of the glsl code.
+
+  /** @type {boolean} */
+  static INSTANCED = true;
+
+  /** @type {boolean} */
+  static TEXTURED = false;
+
+  /** @type {boolean} */
+
   /** @type {twgl.ProgramInfo} */
   programInfo;
 
@@ -132,28 +140,22 @@ class AbstractDrawable {
 
   get program() { return this.debugView ? this.debugProgramInfo : this.programInfo; }
 
-  async _createProgram(opts = {}) {
-    // Must include all parameters that could be in the glsl file.
-    opts.debugViewNormals = false;
-    opts.hasTexture ??= this.constructor.TEXTURED;
-    opts.isInstanced ??= this.constructor.INSTANCED;
-    return this.webGL2.cacheProgram(
-      this.constructor.VERTEX_FILE,
-      this.constructor.FRAGMENT_FILE,
-      opts,
-    );
+  async _createPrograms() {
+    this.programInfo = await this._createProgram({ debugViewNormals: false });
+    this.debugProgramInfo = await this._createProgram({ debugViewNormals: true });
   }
 
-  async _createDebugProgram(opts = {}) {
+  async _createProgram({ vertexFile, fragmentFile, ...opts } = {}) {
     // Must include all parameters that could be in the glsl file.
-    opts.debugViewNormals = true;
-    opts.hasTexture ??= this.constructor.TEXTURED;
-    opts.isInstanced ??= this.constructor.INSTANCED;
-    return this.webGL2.cacheProgram(
-      this.constructor.VERTEX_FILE,
-      this.constructor.FRAGMENT_FILE,
-      opts,
-    );
+    const { VERTEX_FILE, FRAGMENT_FILE, TEXTURED, INSTANCED } = this.constructor;
+    vertexFile ??= VERTEX_FILE;
+    fragmentFile ??= FRAGMENT_FILE;
+    opts.debugViewNormals ??= false;
+    opts.hasTexture ??= TEXTURED;
+    opts.isInstanced ??= INSTANCED
+    opts.constrainTarget ??= false;
+    opts.maxConstrainingWalls ??= 1;
+    return await this.webGL2.cacheProgram(vertexFile, fragmentFile, opts);
   }
 
   // ----- NOTE: Uniforms ----- //
@@ -406,6 +408,8 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
   }
 
   _indexForId(id) { return this.modelMatrixTracker.facetIdMap.get(id); }
+
+  _placeableIdForInstanceIndex(idx) { return this.modelMatrixTracker.facetIdMap.getKeyAtIndex(idx); }
 
   _draw() {
     const nVertices = this.indicesArray.length;
@@ -751,7 +755,7 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     for ( const idx of instances ) {
       this.instanceSet.clear();
       this.instanceSet.add(idx);
-      const id = this.modelMatrixTracker.facetIdMap.getKeyAtIndex(idx);
+      const id = this._placeableIdForInstanceIndex(idx);
       if ( !id ) continue;
       // gl.bindTexture(gl.TEXTURE_2D, this.textures.get(id));
 
@@ -796,4 +800,211 @@ export class DrawableLevelsBackground extends AbstractTexturedInstancedDrawable 
     opts.modelMatrixTracker ??= LevelBackgroundGeometry.modelMatrixTracker;
     return new this(opts);
   }
+}
+
+/**
+ * Handle constrained token target drawing.
+ * Uses a separate fragment shader to test whether a wall segment blocks the viewpoint.
+ */
+const TokenTargetMixin = superclass => class extends superclass {
+  /** @type {number} */
+  static NUM_CONSTRAINING_WALLS = 5;
+
+  /**
+   * Locate walls that intersect the token border.
+   * @param {TokenGeometry} tokenGeom
+   * @returns {WallGeometry[]}
+   */
+  static intersectingWalls(tokenGeom) {
+    // For speed, take everything that crosses the token aabb.
+    // Shrink by two pixels to avoid walls that simply are on the edge.
+    using aabb = tokenGeom.aabb.clone();
+    aabb.min.x += 2;
+    aabb.min.y += 2;
+    aabb.min.z += 2;
+    aabb.max.x -= 2;
+    aabb.max.y -= 2;
+    aabb.max.z -= 2;
+
+    const wallMgr = CONFIG[GEOMETRY_LIB_ID].geometryManager.walls;
+    const levelId = tokenGeom.placeableDocument.level;
+    const out = [];
+    canvas.scene.walls.forEach(wallD => {
+      const wallGeom = wallMgr.geomForDocument(wallD);
+      if ( wallGeom.segmentGeoms.some(segmentGeom => segmentGeom.isActiveForLevel(levelId)
+          && aabb.overlapsConvexPolygon3d(segmentGeom.faces[0])) ) out.push(wallGeom);
+    });
+
+    // Sort by closest 2d segment to the 2d center.
+    using ctr = tokenGeom.constructor.tokenCenter(tokenGeom.placeableDocument).to2d();
+    out.sort((geom0, geom1) => {
+      using s0 = WallGeometry.wallSegment2d(geom0.placeableDocument);
+      using s1 = WallGeometry.wallSegment2d(geom1.placeableDocument);
+      const distA = distanceSquaredToSegment(ctr, s0.a, s0.b);
+      const distB = distanceSquaredToSegment(ctr, s1.a, s1.b);
+      return distA - distB;
+    });
+
+    return out;
+  }
+
+  /** @type {twgl.ProgramInfo} */
+  targetProgramInfo;
+
+  /** @type {twgl.ProgramInfo} */
+  targetDebugProgramInfo;
+
+  async _createPrograms() {
+    await super._createPrograms();
+    this.targetProgramInfo = await this._createProgram({
+      debugViewNormals: false,
+      constrainTarget: true,
+      maxConstrainingWalls: this.constructor.NUM_CONSTRAINING_WALLS
+    });
+    this.targetDebugProgramInfo = await this._createProgram({
+      debugViewNormals: true,
+      constrainTarget: true,
+      maxConstrainingWalls: this.constructor.NUM_CONSTRAINING_WALLS
+    });
+  }
+
+  _initializeUniforms(_geoms) {
+    super._initializeUniforms(_geoms);
+    const gl = this.gl;
+
+    // Camera used in both debug and regular views.
+    const cameraBlockIndex = gl.getUniformBlockIndex(this.targetProgramInfo.program, "Camera");
+    if ( cameraBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.targetProgramInfo.program, cameraBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+
+    const cameraDebugBlockIndex = gl.getUniformBlockIndex(this.targetDebugProgramInfo.program, "Camera");
+    if ( cameraDebugBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.targetDebugProgramInfo.program, cameraDebugBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+
+    // Material only used to color the shapes in the debug view.
+    const matBlockIdx = gl.getUniformBlockIndex(this.targetDebugProgramInfo.program, "Material");
+    if ( matBlockIdx !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.targetDebugProgramInfo.program, matBlockIdx, this.constructor.MATERIAL_BIND_POINT); // 1
+  }
+
+  /** @type {twgl.VertexArrayInfo} */
+  targetVertexArrayInfo = {};
+
+  /** @type {twgl.VertexArrayInfo} */
+  targetDebugVertexArrayInfo = {};
+
+  _initializeAttributes() {
+    super._initializeAttributes();
+    this.targetVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.targetProgramInfo, this.attributeBufferInfo);
+    this.targetDebugVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.targetDebugProgramInfo, this.attributeBufferInfo);
+  }
+
+  get program() {
+    return this.#intersectingWallGeoms.length
+      ? (this.debugView ? this.targetDebugProgramInfo : this.targetProgramInfo)
+        : super.program;
+  }
+
+  #intersectingWallGeoms = [];
+
+  _locateIntersectingWalls() {
+    this.#intersectingWallGeoms.length = 0;
+
+    // Find the target geom.
+    const id = this._placeableIdForInstanceIndex(this.instanceSet.first());
+    if ( !id ) return;
+    const targetGeom = this.constructor.geometryManager.geomForPlaceableId(id);
+
+    // Find intersecting walls.
+    this.#intersectingWallGeoms = this.constructor.intersectingWalls(targetGeom);
+  }
+
+  render(debug = false) {
+    if ( !this.instanceSet.size ) return;
+
+    // Determine if walls potentially block the token.
+    // Because this is a target, there is only a single instance.
+    if ( this.instanceSet.size !== 1 ) console.error("More than one target token instance.");
+
+    this._locateIntersectingWalls();
+
+    super.render(debug);
+  }
+
+  _draw() {
+    if ( !this.#intersectingWallGeoms.length ) return super._draw();
+
+    // Need the target center.
+    const id = this._placeableIdForInstanceIndex(this.instanceSet.first());
+    if ( !id ) return;
+    const targetGeom = this.constructor.geometryManager.geomForPlaceableId(id);
+    using ctr = targetGeom.constructor.tokenCenter(targetGeom.placeableDocument);
+
+    // Set the uniform normals representing planes.
+    // All wall segment geoms share the same plane.
+    const maxWalls = this.constructor.NUM_CONSTRAINING_WALLS;
+    const uNumClipPlanes =  Math.min(maxWalls, this.#intersectingWallGeoms.length);
+    const uClipPlanes = new Float32Array(maxWalls * 4);
+    for ( let i = 0; i < uNumClipPlanes; i += 1 ) {
+      const wallGeom = this.#intersectingWallGeoms[i];
+      const plane = wallGeom.segmentGeoms[0].faces[0].plane;
+      const n = plane.normal;
+      const d = plane.constant;
+
+      // Force the plane to face the token center.
+      const mult = -Math.sign(plane.whichSide(ctr)) || -1;
+      const j = i * 4;
+      uClipPlanes[j] = n.x * mult;
+      uClipPlanes[j + 1] = n.y * mult;
+      uClipPlanes[j + 2] = n.z * mult;
+      uClipPlanes[j + 3] = d;
+    }
+
+    const uniforms = {
+      uClipPlanes,
+      uNumClipPlanes,
+    };
+    twgl.setUniforms(this.program, uniforms);
+    super._draw();
+  }
+}
+
+export class DrawableSquareTarget extends mix(DrawableSquareTokens).with(TokenTargetMixin) {}
+
+export class DrawableEllipseTarget extends mix(DrawableEllipseTokens).with(TokenTargetMixin) {}
+
+export class DrawableHexagonTarget extends mix(DrawableHexagonTokens).with(TokenTargetMixin) {}
+
+export class DrawableSphereTarget extends mix(DrawableSphereTokens).with(TokenTargetMixin) {}
+
+export class DrawablePolygonTarget extends mix(DrawablePolygonTokens).with(TokenTargetMixin) {}
+
+
+/**
+ * Identify the t-value on segment A|B closest to C.
+ * @param {Point} c     The reference point C
+ * @param {Point} a     Point A on segment AB
+ * @param {Point} b     Point B on segment AB
+ * @returns {number}    T-value, where 0 is a and 1 is b. Negative numbers are before a; >1 is after b.
+ * @see {@link https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points}
+ */
+/*
+function closestPointToSegmentT(c, a, b) {
+  using d = b.subtract(a);
+  if ( d.x === 0 && d.y === 0 ) return 0;
+
+  using ca = c.subtract(a);
+  return ca.dot(d) / d.dot(d);
+}
+*/
+
+/**
+ * Distance squared to a segment A|B.
+ * @param {Point} c     The reference point C
+ * @param {Point} a     Point A on segment AB
+ * @param {Point} b     Point B on segment AB
+ * @returns {number}
+ */
+
+function distanceSquaredToSegment(c, a, b) {
+  if ( a.almostEqual(b) ) return PIXI.Point.distanceBetweenSquared(a, c);
+  const x = a.almostEqual(b) ? a : foundry.utils.closestPointToSegment(c, a, b);
+  return PIXI.Point.distanceSquaredBetween(x, c);
 }

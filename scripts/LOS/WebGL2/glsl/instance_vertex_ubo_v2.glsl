@@ -18,10 +18,12 @@ layout (std140) uniform Camera {
 
 out vec3 vNormal;
 out vec2 vTexCoord;
+out vec3 vWorldPosition;
 
 void main() {
-  vec4 cameraPos = uLookAtMatrix * aModel * vec4(aPosition, 1.0);
-  gl_Position = uPerspectiveMatrix * cameraPos;
+  vec4 worldPosition = aModel * vec4(aPosition, 1.0);
+  vec4 cameraPosition = uLookAtMatrix * worldPosition;
+  gl_Position = uPerspectiveMatrix * cameraPosition;
 
   // instance: gl_InstanceID
 
@@ -31,6 +33,10 @@ void main() {
 
   #if ${hasTexture}
     vTexCoord = aTexCoord;
+  #endif
+
+  #if ${constrainTarget}
+    vWorldPosition = worldPosition.xyz;
   #endif
 
 }

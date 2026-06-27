@@ -4,14 +4,23 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 in vec3 vNormal;
 in vec2 vTexCoord;
 
+
+// Clipping planes used by constrain target.
+in vec3 vWorldPosition;
+
+uniform int uNumClipPlanes;
+uniform vec4 uClipPlanes[${maxConstrainingWalls}]; // Max intersecting walls.
+
+// Used by textures
 uniform sampler2D uTexture;
 uniform float uAlphaThreshold; // Mark tile pixels less than this alpha as clear.
 
+// Color used by debug view.
 layout (std140) uniform Material {
   vec4 uColor;
 };
 
-// Some hardcoded lighting
+// Some hardcoded lighting used by debug view
 const vec3 lightDir = normalize(vec3(0.25, 0.5, 1.0));
 const vec3 lightColor = vec3(1.0, 1.0, 1.0);
 const vec3 ambientColor = vec3(0.2, 0.2, 0.2);
@@ -19,6 +28,15 @@ const vec3 ambientColor = vec3(0.2, 0.2, 0.2);
 out vec4 fragColor;
 
 void main() {
+  #if ${constrainTarget}
+    for ( int i = 0; i < uNumClipPlanes; i++ ) {
+      float dist = dot(uClipPlanes[i].xyz, vWorldPosition) + uClipPlanes[i].w;
+
+      // If distance is greater than 0, the pixel is "behind" the wall.
+      if ( dist > 0.0 ) { discard; }
+    }
+  #endif
+
   vec4 color = vec4(1.0);
 
   #if ${hasTexture}
