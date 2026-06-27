@@ -309,7 +309,10 @@ class AbstractDrawable {
     const gl = this.gl;
     const programInfo = this.program;
     this.webGL2.useProgram(programInfo);
-    twgl.setBuffersAndAttributes(gl, programInfo, this.attributeBufferInfo);
+
+    gl.bindVertexArray(this.VAI.vertexArrayObject);
+
+    // twgl.setBuffersAndAttributes(gl, programInfo, this.attributeBufferInfo);
 
     this._draw();
     gl.bindVertexArray(null);
@@ -901,6 +904,13 @@ const TokenTargetMixin = superclass => class extends superclass {
       ? (this.debugView ? this.targetDebugProgramInfo : this.targetProgramInfo)
         : super.program;
   }
+
+  get VAI() {
+    return this.#intersectingWallGeoms.length
+      ? (this.debugView ? this.targetDebugVertexArrayInfo : this.targetVertexArrayInfo)
+        : super.VAI;
+  }
+
 
   #intersectingWallGeoms = [];
 
