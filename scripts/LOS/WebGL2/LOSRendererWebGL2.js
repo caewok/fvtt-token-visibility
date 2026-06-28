@@ -35,8 +35,6 @@ import {
 
   DrawableTiles,
 
-  DrawableLevelsForeground,
-  DrawableLevelsBackground
   // DrawableRegions,
 } from "./InstancedDrawable.js";
 
@@ -71,10 +69,6 @@ export class LOSRendererWebGL2 {
     regions: null,
     tokens: [],
     targets: [],
-    levels: {
-      foreground: null,
-      background: null,
-    },
   }
 
   async initialize() {
@@ -94,8 +88,7 @@ export class LOSRendererWebGL2 {
 
     this.drawables.walls = DrawableWalls.create({ webGL2: this.webGL2 });
     this.drawables.tiles = DrawableTiles.create({ webGL2: this.webGL2 });
-    this.drawables.levels.foreground = DrawableLevelsForeground.create({ webGL2: this.webGL2 });
-    this.drawables.levels.background = DrawableLevelsBackground.create({ webGL2: this.webGL2 });
+
     // this.drawables.regions = DrawableRegions.create({ this.webGL2 });
 
     // Initialize each drawable
@@ -103,8 +96,6 @@ export class LOSRendererWebGL2 {
     promises.push(this.drawables.walls.initialize());
     promises.push(this.drawables.tiles.initialize());
     // promises.push(this.drawables.regions.initialize());
-    promises.push(this.drawables.levels.foreground.initialize());
-    promises.push(this.drawables.levels.background.initialize());
     this.drawables.tokens.forEach(drawable => promises.push(drawable.initialize()));
     this.drawables.targets.forEach(drawable => promises.push(drawable.initialize()));
 
@@ -365,21 +356,14 @@ export class LOSRendererWebGL2 {
        drawable.render(debug);
     }
 
-    // Add tiles
+    // Add tiles and levels
     this.drawables.tiles.instanceSet.clear();
     for ( const geom of geoms.tiles ) this.drawables.tiles.addGeomToInstanceSet(geom);
+    for ( const geom of geoms.foregroundLevels ) this.drawables.tiles.addGeomToInstanceSet(geom);
+    for ( const geom of geoms.backgroundLevels ) this.drawables.tiles.addGeomToInstanceSet(geom);
     this.drawables.tiles.render(debug);
 
     // TODO: Add regions.
-
-    // Add levels
-    this.drawables.levels.foreground.instanceSet.clear();
-    for ( const geom of geoms.foregroundLevels ) this.drawables.levels.foreground.addGeomToInstanceSet(geom);
-    this.drawables.levels.foreground.render(debug);
-
-    this.drawables.levels.background.instanceSet.clear();
-    for ( const geom of geoms.backgroundLevels ) this.drawables.levels.background.addGeomToInstanceSet(geom);
-    this.drawables.levels.background.render(debug);
   }
 
   #addWallInstances(wallGeoms, targetGeom) {

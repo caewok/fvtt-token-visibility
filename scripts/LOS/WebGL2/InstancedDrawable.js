@@ -23,7 +23,6 @@ import {
   TokenPolygonGeometry,
 } from "../../geometry/placeable_geometry/TokenGeometry.js";
 import { TileGeometry } from "../../geometry/placeable_geometry/TileGeometry.js";
-import { LevelForegroundGeometry, LevelBackgroundGeometry } from "../../geometry/placeable_geometry/LevelGeometry.js";
 import { RegionGeometry } from "../../geometry/placeable_geometry/RegionGeometry.js";
 import { mix } from "../../geometry/mixwith.js";
 
@@ -289,9 +288,10 @@ class AbstractDrawable {
     const idx = this._indexForId(geom.placeableId);
     if ( !~idx ) {
       console.warn(`Geometry index not found for ${geom.placeableId}.`, geom);
-      return;
+      return -1;
     }
     this.instanceSet.add(idx);
+    return idx;
   }
 
   /**
@@ -316,7 +316,7 @@ class AbstractDrawable {
 
     this._draw();
     gl.bindVertexArray(null);
-    gl.finish(); // For debugging.
+    // gl.finish(); // For debugging.
   }
 
   _draw() { console.error("_draw should be defined by child class."); }
@@ -421,7 +421,8 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
       this.instanceSet,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
-      this.aModelAttribLoc,);
+      this.aModelAttribLoc,
+    );
 
   }
 }
@@ -531,7 +532,7 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
 
   // ----- NOTE: Textures ----- //
 
-  /** @type {Map<string, WebGLTexture>} */
+  /** @type {Map<url, WebGLTexture>} */
   textures = new Map();
 
   static textureOptions(gl) {
@@ -547,12 +548,6 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
   }
 
   static textureSource(_geom) { console.error("textureSource getter must be defined by child class."); }
-
-  /**
-   * Store texture sources so we know when they change.
-   * @type {Map<string, string>} placeable id, url
-   */
-  textureSourceMap = new Map();
 
   // TODO: Can we get the texture url from the textures map (WebGLTexture)?
   // Should we store an object there?
@@ -570,12 +565,12 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
   }
 
   _initializeTexture(geom) {
+    const src = this.constructor.textureSource(geom);
+    if ( this.textures.has(src) ) return;
+
     const textureOpts = this.constructor.textureOptions(this.gl);
-    const old = this.textures.get(geom.placeableId);
-    if ( old ) old.destroy();
-    textureOpts.src = this.constructor.textureSource(geom);
-    this.textureSourceMap.set(geom.placeableId, textureOpts.src);
-    this.textures.set(geom.placeableId, twgl.createTexture(this.gl, textureOpts));
+    textureOpts.src = src;
+    this.textures.set(src, twgl.createTexture(this.gl, textureOpts));
   }
 
   _rebuildAttributeBuffers() {
@@ -589,8 +584,7 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
     if ( !updated ) return;
 
     // Check if the source changed.
-    const src = this.constructor.textureSource(geom);
-    if ( this.textureSourceMap.get(geom.placeableId) !== src ) this._initializeTexture(geom);
+    this._initializeTexture(geom);
   }
 }
 
@@ -649,8 +643,8 @@ export class DrawableSquareTokens extends AbstractInstancedDrawable {
    * Don't add if not square.
    */
   addGeomToInstanceSet(geom) {
-    if ( TokenGeometry.shapeTypeForToken(geom.placeableDocument) !== TokenGeometry.SHAPE_TYPES.CUBE ) return;
-    super.addGeomToInstanceSet(geom);
+    if ( TokenGeometry.shapeTypeForToken(geom.placeableDocument) !== TokenGeometry.SHAPE_TYPES.CUBE ) return -1;
+    return super.addGeomToInstanceSet(geom);
   }
 
 
@@ -675,8 +669,8 @@ export class DrawableEllipseTokens extends AbstractInstancedDrawable {
    * Don't add if not ellipse.
    */
   addGeomToInstanceSet(geom) {
-    if ( TokenGeometry.shapeTypeForToken(geom.placeableDocument) !== TokenGeometry.SHAPE_TYPES.ELLIPSE ) return;
-    super.addGeomToInstanceSet(geom);
+    if ( TokenGeometry.shapeTypeForToken(geom.placeableDocument) !== TokenGeometry.SHAPE_TYPES.ELLIPSE ) return -1;
+    return super.addGeomToInstanceSet(geom);
   }
 }
 
@@ -697,9 +691,9 @@ export class DrawableHexagonTokens extends AbstractInstancedDrawable {
    */
   addGeomToInstanceSet(geom) {
     const tokenD = geom.placeableDocument;
-    if ( TokenGeometry.shapeTypeForToken(tokenD) !== TokenGeometry.SHAPE_TYPES.HEXAGONAL ) return;
-    if ( tokenD.w > 1 || tokenD.w !== tokenD.h ) return;
-    super.addGeomToInstanceSet(geom);
+    if ( TokenGeometry.shapeTypeForToken(tokenD) !== TokenGeometry.SHAPE_TYPES.HEXAGONAL ) return -1;
+    if ( tokenD.w > 1 || tokenD.w !== tokenD.h ) return -1;
+    return super.addGeomToInstanceSet(geom);
   }
 }
 
@@ -732,18 +726,25 @@ export class DrawablePolygonTokens extends AbstractModelDrawable {
   addGeomToInstanceSet(geom) {
     const tokenD = geom.placeableDocument;
     if ( TokenGeometry.shapeTypeForToken(tokenD) === TokenGeometry.SHAPE_TYPES.HEXAGONAL
-      && !(tokenD.w > 1 || tokenD.w !== tokenD.h) ) return;
-    super.addGeomToInstanceSet(geom);
+      && !(tokenD.w > 1 || tokenD.w !== tokenD.h) ) return -1;
+    return super.addGeomToInstanceSet(geom);
   }
 }
 
 // TODO: Regions
 
+/**
+ * Handles tiles and levels.
+ */
 export class DrawableTiles extends AbstractTexturedInstancedDrawable {
   /** @type {class<PlaceableGeometry>} */
   static GEOMETRY_CLASS = TileGeometry;
 
-  static textureSource(geom) { return geom.placeableDocument.texture.src; }
+  static textureSource(geom) {
+    return geom.constructor.LAYER === "levels"
+      ? geom.placeableDocument[geom.constructor.LEVEL_TYPE].src
+        : geom.placeableDocument.texture.src;
+  }
 
   static create(opts = {}) {
     opts.instanceVO ??= TileGeometry.instanceVO;
@@ -751,59 +752,212 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     return new this(opts);
   }
 
-  _draw() {
-    const instances = new Set(this.instanceSet);
+  #fallbackTexture;
 
-    // Draw each one individually so we can bind the correct texture.
-    for ( const idx of instances ) {
-      this.instanceSet.clear();
-      this.instanceSet.add(idx);
-      const id = this._placeableIdForInstanceIndex(idx);
-      if ( !id ) continue;
-      // gl.bindTexture(gl.TEXTURE_2D, this.textures.get(id));
+  _initializeUniforms(geoms) {
+    super._initializeUniforms(geoms);
 
-      // twgl.setUniforms(this.program, { uAlphaThreshold: alphaThreshold }); // TODO: Should be able to bind the texture as well using setUniforms.
-      const geom = this.constructor.geometryManager.geomForPlaceableId(id);
-      const uniforms = {
-        uTexture: this.textures.get(id),
-        uAlphaThreshold: geom.alphaThreshold,
-      };
-      twgl.setUniforms(this.program, uniforms);
+    // Set a fallback texture.
+    const gl = this.gl;
+    this.#fallbackTexture ??= twgl.createTexture(gl, { src: [0, 0, 0, 0] });
 
-      super._draw(); // Draw the single instance.
+    // Array of hardware texture units we will use for batching.
+    const textureUnits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+    // Tell the normal shader program to map the uTextures array to texture units 0–15.
+    const uTexturesLoc = gl.getUniformLocation(this.programInfo.program, "uTextures");
+    if ( uTexturesLoc !== null ) {
+      gl.useProgram(this.programInfo.program);
+      gl.uniform1iv(uTexturesLoc, textureUnits);
     }
+
+    /* Doesn't work:
+    twgl.setUniforms(this.programInfo, {
+      uTextures: textureUnits,
+    });
+    */
+
+    // Same for debug program.
+    const uTexturesDebugLoc = gl.getUniformLocation(this.debugProgramInfo.program, "uTextures");
+    if ( uTexturesDebugLoc !== null ) {
+      gl.useProgram(this.debugProgramInfo.program);
+      gl.uniform1iv(uTexturesDebugLoc, textureUnits);
+    }
+
+    // Reset program state.
+    gl.useProgram(null);
+  }
+
+  /** @type {Float32Array} */
+  textureIndicesArray = new Int32Array(16);
+
+  /** @type {Float32Array} */
+  alphaThresholdArray = new Float32Array(16);
+
+  /** @type {number} */
+  aTextureIndexLoc = 0;
+
+  /** @type {number} */
+  aAlphaThresholdLoc = 0;
+
+  _defineAttributeProperties() {
+    const attrProps = super._defineAttributeProperties();
+    attrProps.aTextureIndex = {
+      numComponents: 1, // It's just a single float (0.0 to 15.0)
+      data: this.textureIndicesArray,
+      drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
+      divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
+    };
+
+    attrProps.aAlphaThreshold = {
+      numComponents: 1, // It's just a single float (0.0 to 1.0)
+      data: this.alphaThresholdArray,
+      drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
+      divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
+    }
+
+    // For use in _draw method.
+    this.aTextureIndexLoc = this.gl.getAttribLocation(this.programInfo.program, 'aTextureIndex');
+    this.aAlphaThresholdLoc = this.gl.getAttribLocation(this.programInfo.program, 'aAlphaThreshold');
+
+    return attrProps;
+  }
+
+  _resizeTextureAttributeArrays(requiredSize) {
+    let newSize = this.textureIndicesArray.length * 2;
+    while ( newSize < requiredSize ) newSize *= 2;
+    if ( this.textureIndicesArray.length >= requiredSize ) return;
+
+    const newIndicesArray = new Int32Array(newSize);
+    newIndicesArray.set(this.textureIndicesArray);
+    this.textureIndicesArray = newIndicesArray;
+
+    const newAlphaArray = new Float32Array(newSize);
+    newAlphaArray.set(this.alphaThresholdArray);
+    this.alphaThresholdArray = newAlphaArray;
+
+    this.#resizeNeeded = true;
+  }
+
+  #resizeNeeded = false;
+
+  _ensureBufferCapacity(requiredSize) {
+    // Resize the CPU array if necessary.
+    this._resizeTextureAttributeArrays(requiredSize);
+
+    if ( !this.#resizeNeeded ) return;
+
+    // Resize the GPU buffer.
+    const gl = this.gl;
+    const tBuffer = this.attributeBufferInfo.attribs.aTextureIndex.buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, tBuffer);
+
+    // Use gl.bufferData instead of subData to reallocate the GPU memory to the new size.
+    gl.bufferData(gl.ARRAY_BUFFER, this.textureIndicesArray, gl.DYNAMIC_DRAW);
+
+    const aBuffer = this.attributeBufferInfo.attribs.aAlphaThreshold.buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, aBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.alphaThresholdArray, gl.DYNAMIC_DRAW);
+
+    this.#resizeNeeded = false;
+  }
+
+
+  /** @type {{ textureUnits: url[], instances: Set<number> }[]} */
+  textureBatches = []; // Arrays of urls, each array no longer than 16.
+
+  /**
+   * When adding a placeable to the instance set, track its texture.
+   */
+  addGeomToInstanceSet(geom) {
+    const idx = super.addGeomToInstanceSet(geom);
+    if ( !~idx ) return -1;
+
+    // Assign the index to a texture url.
+    const src = this.constructor.textureSource(geom);
+    let texUnit = -1;
+    for ( const { textureUnits, instances } of this.textureBatches ) {
+      texUnit = textureUnits.indexOf(src);
+      if ( !~texUnit ) {
+        if ( textureUnits.length < 16 ) {
+          // Add the geom's texture to this batch.
+          texUnit = textureUnits.length;
+          textureUnits.push(src);
+        } else continue;
+      }
+      instances.add(idx);
+      break;
+    }
+    if ( !~texUnit ) {
+      texUnit = 0;
+      this.textureBatches.push({ instances: new Set([idx]), textureUnits: [src] });
+    }
+
+    // Update the CPU array size if necessary.
+    // (Save the GPU upload for later.)
+    this._resizeTextureAttributeArrays(idx + 1); // Add 1 to account for 0-indexing.
+
+    // Update the texture arrays.
+    this.alphaThresholdArray[idx] = geom.alphaThreshold;
+    this.textureIndicesArray[idx] = texUnit;
+  }
+
+  _draw() {
+    const maxInstance = Math.max(...this.instanceSet);
+    this._ensureBufferCapacity(maxInstance + 1); // Add 1 to account for 0-indexing.
+
+    // Upload the updated texture indices.
+    const gl = this.gl;
+    const tBuffer = this.attributeBufferInfo.attribs.aTextureIndex.buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, tBuffer);
+
+    // Only the portion relevant for these instances.
+    const tDataSubArray = this.textureIndicesArray.subarray(0, maxInstance + 1);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, tDataSubArray);
+
+    // Same for alpha threshold.
+    const aBuffer = this.attributeBufferInfo.attribs.aAlphaThreshold.buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, aBuffer);
+    const aDataSubArray = this.alphaThresholdArray.subarray(0, maxInstance + 1);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, aDataSubArray);
+
+    // Construct the functions needed to advance the instance attributes.
+    const advanceFns = [
+      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aModel, this.aModelAttribLoc),
+      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aTextureIndex, this.aTextureIndexLoc),
+      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aAlphaThreshold, this.aAlphaThresholdLoc),
+    ];
+    const nVertices = this.indicesArray.length;
+
+    // Draw the textures in batches.
+    for ( const { instances, textureUnits } of this.textureBatches ) {
+      // Bind the texture units for the batch.
+      for ( let i = 0, iMax = textureUnits.length; i < iMax; i += 1 ) {
+        const url = textureUnits[i];
+        gl.activeTexture(gl.TEXTURE0 + i);
+
+        // Use cached texture or an initialized fallback.
+        const tex = this.textures.get(url) || this.#fallbackTexture;
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+      }
+
+      // Draw all the instances for this batch.
+      const batchInstances = this.instanceSet.intersection(instances);
+
+      // From super._draw.
+      WebGL2.drawInstancedSet(
+        gl,
+        batchInstances,
+        nVertices,
+        advanceFns,
+      );
+    }
+    this.textureBatches.length = 0;
+    this.textureIndicesArray.fill(0);
+    this.alphaThresholdArray.fill(0);
   }
 }
 
-export class DrawableLevelsForeground extends AbstractTexturedInstancedDrawable {
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = LevelForegroundGeometry;
-
-  static LEVEL_TYPE = "foreground";
-
-  static textureSource(geom) { return geom.placeableDocument.foreground.src; }
-
-  static create(opts = {}) {
-    opts.instanceVO ??= LevelForegroundGeometry.instanceVO;
-    opts.modelMatrixTracker ??= LevelForegroundGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-}
-
-export class DrawableLevelsBackground extends AbstractTexturedInstancedDrawable {
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = LevelBackgroundGeometry;
-
-  static LEVEL_TYPE = "background";
-
-  static textureSource(geom) { return geom.placeableDocument.background.src; }
-
-  static create(opts = {}) {
-    opts.instanceVO ??= LevelBackgroundGeometry.instanceVO;
-    opts.modelMatrixTracker ??= LevelBackgroundGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-}
 
 /**
  * Handle constrained token target drawing.

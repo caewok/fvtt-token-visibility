@@ -4,6 +4,9 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aTexCoord; // aUV
+layout(location = 3) in int aTextureIndex;
+layout(location = 4) in float aAlphaThreshold;
+
 
 layout (std140) uniform Camera {
   mat4 uPerspectiveMatrix; // Projection.
@@ -11,7 +14,7 @@ layout (std140) uniform Camera {
 };
 
 #if ${isInstanced}
-  layout(location = 3) in mat4 aModel; // Takes up four consecutive locations
+  layout(location = 5) in mat4 aModel; // Takes up four consecutive locations
 #else
   uniform mat4 aModel;
 #endif
@@ -19,6 +22,8 @@ layout (std140) uniform Camera {
 out vec3 vNormal;
 out vec2 vTexCoord;
 out vec3 vWorldPosition;
+flat out int vTextureIndex;
+flat out float vAlphaThreshold;
 
 void main() {
   vec4 worldPosition = aModel * vec4(aPosition, 1.0);
@@ -33,11 +38,11 @@ void main() {
 
   #if ${hasTexture}
     vTexCoord = aTexCoord;
+    vTextureIndex = aTextureIndex;
+    vAlphaThreshold = aAlphaThreshold;
   #endif
 
   #if ${constrainTarget}
     vWorldPosition = worldPosition.xyz;
   #endif
-
 }
-
