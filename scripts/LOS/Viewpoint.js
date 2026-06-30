@@ -6,6 +6,7 @@ canvas,
 
 // Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 
 /**
  * An eye belong to a specific viewer.
@@ -63,12 +64,16 @@ export class Viewpoint {
     if ( this.passesSimpleVisibilityTest() ) {
       this.lastResult ??= this.calculator._createResult();
       this.lastResult.makeFullyVisible();
-    } else this.lastResult = this.calculator.calculate();
+    } else {
+      this.calculator.initializeView(this);
+      this.lastResult = this.calculator.calculate();
+    }
     return this.lastResult;
   }
 
   targetOverlapsViewpoint() {
-    const bounds = this.calculator.targetShape;
+    const tokenShapeType = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
+    const bounds = this.target[tokenShapeType];
     if ( !bounds.contains(this.viewpoint.x, this.viewpoint.y) ) return false;
     return this.viewpoint.z.between(this.target.bottomZ, this.target.topZ);
   }

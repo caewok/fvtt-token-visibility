@@ -255,7 +255,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Construct target polygons.
    */
   _targetPolygons() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.token.geomForPlaceable(this.target);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
     let iter;
     switch ( this._config.tokenShapeType ) {
       case "tokenBorder": iter = geom.iterateFaces(); break;

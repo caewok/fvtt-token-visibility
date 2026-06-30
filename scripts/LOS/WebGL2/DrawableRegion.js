@@ -18,7 +18,7 @@ const RegionShapeMixin = superclass => class extends superclass {
   get placeables() { return canvas.regions.placeables;}
 
   static regionType(region) {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.region.geomForPlaceable(region);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.regions.geomForPlaceable(region);
     return geom.type;
   }
 

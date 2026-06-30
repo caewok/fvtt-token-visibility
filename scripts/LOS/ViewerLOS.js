@@ -169,23 +169,6 @@ export class ViewerLOS {
   viewpoints = [];
 
   /**
-   * Initialize the view for the underlying calculator.
-   * Also set viewpoints if necessary.
-   */
-  initializeView(opts = {}) {
-    if ( opts.viewer ) this.viewer = opts.viewer;
-    if ( opts.target ) this.target = opts.target;
-    if ( opts.targetLocation ) this.targetLocation = opts.targetLocation;
-    if ( this.dirty ) this._clean();
-    this.calculator.initializeView({
-      ...opts,
-      viewer: this.viewer,
-      target: this.target,
-      targetLocation: this.targetLocation,
-    });
-  }
-
-  /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
@@ -262,7 +245,6 @@ export class ViewerLOS {
    */
   calculate(cfg) {
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
-    this.calculator.initializeView(this);
     if ( this.dirty ) this._clean();
 
     this._percentVisible = 0;
