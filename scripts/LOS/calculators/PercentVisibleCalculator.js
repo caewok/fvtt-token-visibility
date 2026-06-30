@@ -297,11 +297,10 @@ export class PercentVisibleCalculatorAbstract {
   get viewer() { return this.#viewer; }
 
   set viewer(value) {
-    this.#viewer = value;
+    if ( this.#viewer === value ) return;
 
-    // Default the viewpoint to the center of the token.
-    const method = value instanceof foundry.canvas.placeables.Token ? "fromTokenCenter" : "fromPointSource";
-    Point3d[method](value, this.#viewpoint);
+    this.#viewer = value;
+    this.#calculateViewpoint();
   }
 
   /** @type {Token} */
@@ -310,10 +309,10 @@ export class PercentVisibleCalculatorAbstract {
   get target() { return this.#target; }
 
   set target(value) {
-    this.#target = value;
+    if ( this.#target === value ) return;
 
-    // Default the target location to the center of the token.
-    Point3d.fromTokenCenter(value, this.#targetLocation);
+    this.#target = value;
+    this.#calculateTargetLocation();
   }
 
   /** @type {Point3d} */
@@ -325,12 +324,19 @@ export class PercentVisibleCalculatorAbstract {
 
   set viewpoint(value) { this.#viewpoint.copyFrom(value); }
 
+  #calculateViewpoint() {
+    const method = this.viewer instanceof foundry.canvas.placeables.Token ? "fromTokenCenter" : "fromPointSource";
+    Point3d[method](this.viewer, this.#viewpoint);
+  }
+
   /** @type {Point3d} */
   #targetLocation = new Point3d();
 
   get targetLocation() { return this.#targetLocation; }
 
   set targetLocation(value) { this.#targetLocation.copyFrom(value); }
+
+  #calculateTargetLocation() { Point3d.fromTokenCenter(this.target, this.#targetLocation); }
 
   async initialize() { return; }
 
@@ -350,9 +356,9 @@ export class PercentVisibleCalculatorAbstract {
     if ( targetLocation ) this.targetLocation = targetLocation;
 
     this._initializeCamera();
-    this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
     this.camera.setTargetTokenFrustum(this.target);
     this.camera.toCanvasFrustum(this.occlusionTester.frustum);
+    this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
     this.occlusionTester.update();
   }
 

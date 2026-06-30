@@ -297,28 +297,6 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     }
   }
 
-  /** @type {Camera} */
-  #camera;
-
-  get camera() {
-    return this.#camera || (this.#camera = new Camera({
-      glType: "webGL2",
-      perspectiveType: "perspective",
-      up: new Point3d(0, 0, -1),
-      mirrorMDiag: new Point3d(1, 1, 1),
-    }));
-  }
-
-  /**
-   * Set the camera's position and look at position.
-   */
-  _initializeCamera() {
-    const camera = this.camera;
-    camera.cameraPosition = this.viewpoint;
-    camera.targetPosition = this.targetLocation;
-    camera.setTargetTokenFrustum(this.target);
-  }
-
   /**
    * Transform a 3d point to a 2d perspective for point of view of viewpoint.
    * @param {Point3d} pt

@@ -157,7 +157,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     const { viewpoint, target, targetLocation } = this;
     const tokenMgr = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens;
     const targetGeom = tokenMgr.geomForDocument(target.document);
-    this.renderer.setCamera(viewpoint, target, { targetLocation });
+    this.renderer.updateCameraBuffer();
     this.renderer.bindFramebuffer();
     this.renderer.render(this.occlusionTester, targetGeom);
 
@@ -212,11 +212,13 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     log("WebGL2Calc|Rendering Debug");
     const frames = this._canvasDimensionsForViewpoints();
     for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
-      const { target, viewpoint, targetLocation } = this.viewerLOS.viewpoints[i];
-      const targetGeom = tokenMgr.geomForDocument(target.document);
+      const vp = this.viewerLOS.viewpoints[i];
+      calc.initializeView(vp);
+
+      const targetGeom = tokenMgr.geomForDocument(this.viewerLOS.target.document);
       const frame = frames[i];
       const clear = i === 0;
-      this.renderer.setCamera(viewpoint, target, { targetLocation });
+      this.renderer.updateCameraBuffer();
       this.renderer.render(calc.occlusionTester, targetGeom, { frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
     }
   }

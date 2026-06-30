@@ -151,16 +151,8 @@ export class LOSRendererWebGL2 {
   /**
    * Set camera for a given render.
    */
-  setCamera(viewerLocation, target, { targetLocation } = {}) {
-    // Move the camera.
-    targetLocation ??= Point3d.fromTokenCenter(target);
-    const camera = this.camera;
-    camera.cameraPosition = viewerLocation;
-    camera.targetPosition = targetLocation;
-    camera.setTargetTokenFrustum(target);
-
-    // Update the associated camera buffer.
-    camera.refresh();
+  updateCameraBuffer() {
+    this.camera.refresh(); // Ensure the camera buffer is up-to-date.
     const gl = this.gl;
     const cameraData = this.camera.arrayView;
     gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.camera);
