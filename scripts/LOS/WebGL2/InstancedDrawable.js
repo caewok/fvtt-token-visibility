@@ -402,7 +402,7 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
     // Update the model attribute with a new buffer.
     this.attributeProperties.aModel.data = this.modelMatrixArray;
     const attribs = this.attributeBufferInfo.attribs;
-    attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.attributeProperties.aModel });
+    attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.attributeProperties.aModel }).aModel;
 
     // Update the VAO with the new model buffer information.
     this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
@@ -569,7 +569,19 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
     if ( this.textures.has(src) ) return;
 
     const textureOpts = this.constructor.textureOptions(this.gl);
-    textureOpts.src = src;
+
+    // Attempt to pull the pre-loaded image from Foundry's PIXI cache.
+    const pixiTexture = PIXI.Assets.get(src);
+
+    // Pass the HTMLImageElement directly for a synchronous upload.
+    // This avoids the blue solid image when the texture is first displayed.
+    if ( pixiTexture
+      && pixiTexture.baseTexture.resource.source ) textureOpts.src = pixiTexture.baseTexture.resource.source;
+
+    // Fallback to async URL loading.
+    else textureOpts.src = src;
+
+    // Could pass a third callback argument to createTexture to rerender if async loading, but challenging to implement here.
     this.textures.set(src, twgl.createTexture(this.gl, textureOpts));
   }
 
@@ -762,10 +774,11 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     this.#fallbackTexture ??= twgl.createTexture(gl, { src: [0, 0, 0, 0] });
 
     // Array of hardware texture units we will use for batching.
-    const textureUnits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    // Use Int32 to match what gl.uniform1iv expects.
+    const textureUnits = new Int32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 
     // Tell the normal shader program to map the uTextures array to texture units 0–15.
-    const uTexturesLoc = gl.getUniformLocation(this.programInfo.program, "uTextures");
+    const uTexturesLoc = gl.getUniformLocation(this.programInfo.program, "uTextures[0]");
     if ( uTexturesLoc !== null ) {
       gl.useProgram(this.programInfo.program);
       gl.uniform1iv(uTexturesLoc, textureUnits);
@@ -778,7 +791,7 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     */
 
     // Same for debug program.
-    const uTexturesDebugLoc = gl.getUniformLocation(this.debugProgramInfo.program, "uTextures");
+    const uTexturesDebugLoc = gl.getUniformLocation(this.debugProgramInfo.program, "uTextures[0]");
     if ( uTexturesDebugLoc !== null ) {
       gl.useProgram(this.debugProgramInfo.program);
       gl.uniform1iv(uTexturesDebugLoc, textureUnits);
@@ -803,8 +816,9 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
   _defineAttributeProperties() {
     const attrProps = super._defineAttributeProperties();
     attrProps.aTextureIndex = {
-      numComponents: 1, // It's just a single float (0.0 to 15.0)
+      numComponents: 1, // It's just a single int (0 to 15)
       data: this.textureIndicesArray,
+      type: this.gl.INT, // Force WebGL to use vertexAttribIPointer,
       drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
       divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
     };
@@ -812,6 +826,7 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     attrProps.aAlphaThreshold = {
       numComponents: 1, // It's just a single float (0.0 to 1.0)
       data: this.alphaThresholdArray,
+      type: this.gl.FLOAT,
       drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
       divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
     }
@@ -870,6 +885,9 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
    * When adding a placeable to the instance set, track its texture.
    */
   addGeomToInstanceSet(geom) {
+    // DEBUG: Ignore the ground texture for the moment.
+    // if ( this.constructor.textureSource(geom) === "modules/levels/sample-maps/baileywiki/barn-lvl1.webp" ) return;
+
     const idx = super.addGeomToInstanceSet(geom);
     if ( !~idx ) return -1;
 
