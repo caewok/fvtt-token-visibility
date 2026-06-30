@@ -367,8 +367,8 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
       numComponents: 16,
       data: this.modelMatrixArray,
       drawType: this.gl.DYNAMIC_DRAW,
-      // stride: this.placeableHandler.instanceArrayValues.BYTES_PER_ELEMENT * 16,
-      // offset: 0,
+      stride: Float32Array.BYTES_PER_ELEMENT * 16,
+      offset: 0,
       divisor: 1,
     };
 
