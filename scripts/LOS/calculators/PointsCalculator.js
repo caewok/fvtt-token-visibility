@@ -1,6 +1,5 @@
 /* globals
 canvas,
-CONFIG,
 CONST,
 PIXI,
 */
@@ -9,7 +8,6 @@ PIXI,
 
 // Base folder
 import { Settings } from "../../settings.js";
-import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
@@ -18,7 +16,6 @@ import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 import { SmallBitSet } from "../SmallBitSet.js";
 import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 import { squaresUnderToken, hexesUnderToken } from "../shapes_under_token.js";
-import { Camera } from "../Camera.js";
 
 // Placeable tracking
 
@@ -39,78 +36,39 @@ Dim and bright lighting test options:
 
 /*
 Points lattice:
+1. Internal points (inset from surface corners, edges) comparable to FoundryVTT 9-point default.
+2. Face points.
 
-Normal:
-Some faces (surface) not visible; null
-Each visible (facing) face:
-- all points for face are either visible or not visible
-- point within radius
-- point visible = true
-- point not occluded
-Percent visible = Total across visible faces: counted points / total points
+No handling of large targets. Those are handled by ViewpointLOS, which determines the primitive shape
+to give to the given calculator.
 
-Spherical:
-Single face (surface)
-All points:
-- point within radius
-- point visible (facing)
-- point not occluded
-Percent visible = counted visible points / visible points
-
-PointsCalc:
-Each face (surface) is a large token grid space.
-All faces visible
-Each face:
-- point within radius
-- point visible = true
-- point not occluded
-Percent visible = maximum for each face: counted points / total points
-
+Percent visible = counted points / total points
 
 */
 
 export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
 
-  // Which faces or large token portions are represented?
-  // Non-facing faces or non-tested faces/groups will be empty in the array.
   data = {
-    unobscured: [],       // Visible and unobscured.
-    visible: [],          // Visible at this viewpoint but possibly obscured.
-    numPoints: [],        // Total points for this surface.
+    all: new FastBitSet(),
+    potentiallyVisible: new FastBitSet(),
+    unobscured: new FastBitSet(),
   };
 
   logData() {
-    console.table({
-      numPoints: this.data.numPoints,
-      visible: this.data.visible.map(bs => bs?.cardinality),
-      unobscured: this.data.unobscured.map(bs => bs?.cardinality),
-    });
+    console.log(`${this.data.visible.cardinality} visible and ${this.data.unobscured.cardinality} unobscured. ${this.data.totalPoints} total points.`);
   }
 
   clone() {
     const out = super.clone();
-    for ( let i = 0, iMax = this.data.unobscured.length; i < iMax; i += 1 ) {
-      if ( !this.data.unobscured[i] ) continue;
-      out.data.unobscured[i] = this.data.unobscured[i].clone();
-      out.data.visible[i] = this.data.visible[i].clone();
-      // Points should have already been cloned.
-    }
+    out.data.unobscured = this.data.unobscured.clone();
+    out.data.visible = this.data.visible.clone();
+    // totalPoints already cloned by super.
     return out;
   }
 
-  get totalTargetArea() {
-    // Skip empty faces.
-    let total = 0;
-    const { unobscured, numPoints } = this.data;
-    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
-      if ( unobscured[i] ) total += numPoints[i];
-    }
-    return total || 1;
-  }
+  get totalTargetArea() { return this.data.visible.cardinality; }
 
-  get largeTargetArea() { return this.totalTargetArea; }
-
-  get visibleArea() { return this.data.unobscured.reduce((acc, curr) => acc + (curr?.cardinality || 0), 0); }
+  get visibleArea() { return this.data.unobscured.cardinality; }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.
@@ -122,19 +80,9 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     let out = super.blendMaximize(other);
     if ( out ) return out;
     out = this.clone();
-    for ( let i = 0, iMax = out.data.numPoints.length; i < iMax; i += 1 ) {
-      // Combine each face in turn.
-      if ( out.data.unobscured[i] && other.data.unobscured[i] ) {
-        out.data.unobscured[i].union(other.data.unobscured[i]);
-        out.data.visible[i].union(other.data.visible[i]);
-        out.data.numPoints[i] = Math.max(out.data.numPoints[i], other.data.numPoints[i]);
-      }
-      else if ( other.data.unobscured[i] ) { // this.data for index i is empty.
-        out.data.unobscured[i] = other.data.unobscured[i].clone();
-        out.data.visible[i] = other.data.visible[i].clone();
-        out.data.numPoints[i] = other.data.numPoints[i];
-      } // Else other.data for index i is empty.
-    }
+    out.data.unobscured = this.data.unobscured.union(other.data.unobscured);
+    out.data.visible = this.data.visible.union(other.data.visible);
+    out.data.numPoints = Math.max(this.data.numPoints, other.data.numPoints);
     return out;
   }
 
@@ -145,22 +93,12 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMinimize(other) {
-    let out = super.blendMinimize(other);
+    let out = super.blendMaximize(other);
     if ( out ) return out;
     out = this.clone();
-    for ( let i = 0, iMax = out.data.numPoints.length; i < iMax; i += 1 ) {
-      // Combine each face in turn.
-      if ( out.data.unobscured[i] && other.data.unobscured[i] ) {
-        out.data.unobscured[i].intersection(other.data.unobscured[i]);
-        out.data.visible[i].intersection(other.data.visible[i]);
-        out.data.numPoints[i] = Math.min(out.data.numPoints[i], other.data.numPoints[i]);
-
-      } else if ( this.data.unobscured[i] ) {
-        // Other data slot is empty, so this one should be made empty as well.
-        out.data.unobscured[i] = other.data.unobscured[i];
-        out.data.visible[i] = other.data.visible[i];
-      } // Otherwise this data slot is empty; keep.
-    }
+    out.data.unobscured = this.data.unobscured.intersection(other.data.unobscured);
+    out.data.visible = this.data.visible.intersection(other.data.visible);
+    out.data.numPoints = Math.min(this.data.numPoints, other.data.numPoints);
     return out;
   }
 }
@@ -170,7 +108,6 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
  * ...{CalculatorConfig}
  * @property {number} [targetPointIndex=1]  	    					Points configuration for the target
  * @property {number} [targetInset=0.75]                    Offset target points from target border
- * @property {number} [radius=Infinity]                     Distance at which visibility stops
  */
 
 /**
@@ -179,90 +116,60 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
 export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePointsResultAbstract;
 
-  static BitSetClass = FastBitSet;
-
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    testSurfaceVisibility: true,
-  };
-
   _calculate() {
     // console.debug("PointsCalculator|_calculate");
-    return this._testAllSurfaces(this.targetPoints, this.targetSurfaces);
+    return this._testPoints();
   }
 
-  /**
-   * @param {Point3d[][]} points
-   * @param {(Polygon3d|Sphere)[]} surfaces
-   */
-  _testAllSurfaces(points, surfaces) {
-    // console.debug("PointsCalculator|_testAllSurfaces");
-    surfaces ??= Array(points.length);
-    const testSurfaceVisibility = this._config.testSurfaceVisibility;
+  _testPoints() {
     const result = this._createResult();
-    const n = points.length;
-    result.data.numPoints = points.map(pts => pts.length);
-    result.data.unobscured.length = n;
-    result.data.visible.length = n;
-    for ( let i = 0; i < n; i += 1 ) {
-      const surface = surfaces[i];
-      if ( testSurfaceVisibility && !this.surfaceIsVisible(surface) ) continue;
-      const { unobscured, visible } = this._testPointsForSurface(surface, points[i]);
-      result.data.unobscured[i] = unobscured;
-      result.data.visible[i] = visible;
-    }
-    return result;
-  }
+    const { unobscured, potentiallyVisible, all } = result.data;
+    const radius2 = this.config.radius ** 2;
+    let i = -1;
+    for ( const pt of this.iterateTargetPoints() ) {
+      i += 1;
+      all.add(i);
 
-  surfaceIsVisible(_surface) { return true; }
+      if ( this.pointNotCounted(pt) ) continue;
+      potentiallyVisible.add(i);
+
+      if ( this.pointOutsideRange(pt, radius2) || this.pointIsOccluded(pt) ) continue;
+      unobscured.add(i);
+    }
+  }
 
   /* ----- NOTE: Target points ----- */
 
-  /** @type {Polygon3d[]} */
-  get targetSurfaces() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
-    return geom.faces;
+  /** @type {Point3d} */
+  *iterateTargetPoints() {
+    for ( const facePts of this.targetShape.facePoints ) yield* facePts;
   }
 
-  /** @type {Point3d[][]} */
-  get targetPoints() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
-    return geom.facePoints;
-  }
+  /**
+   * Should this point be counted as part of the visibility calculation?
+   * For example, if the point is part of the back of the token it would not count.
+   * @param {Point3d} pt
+   * @param {boolean} True if the point should not be counted.
+   */
+  pointNotCounted(_pt) { return false; }
 
-  _testPointsForSurface(targetSurface, targetPoints) {
-    // console.debug("PointsCalculator|_testPointsForSurface");
-    const unobscured = new this.constructor.BitSetClass();
-    const visible = new this.constructor.BitSetClass();
-    const radius2 = this.radius ** 2;
-    for ( let i = 0, n = targetPoints.length; i < n; i += 1 ) {
-      // console.debug(`${this.target.name}: ${this.target.x}, ${this.target.y}`);
-      const pt = targetPoints[i];
-      if ( !this.pointIsVisible(pt, radius2) ) continue;
-      visible.add(i);
-
-      if ( this.pointIsOccluded(pt) ) continue;
-      unobscured.add(i);
-    }
-
-    return { unobscured, visible };
-  }
-
-  pointIsVisible(pt, radius2 = this.radius ** 2) {
-    return Point3d.distanceSquaredBetween(this.viewpoint, pt) <= radius2;
+  /**
+   * Preliminary test to exclude points that should count as part of the visibility calculation
+   * but can be immediately rejected. For example, due to distance from viewer.
+   * @returns {boolean} True if not within range.
+   */
+  pointOutsideRange(pt, radius2 = this.config.radius ** 2) {
+    return Point3d.distanceSquaredBetween(this.viewpoint, pt) > radius2;
   }
 
   /**
    * Given a point in 3d space (presumably on a token face), test for occlusion between it and viewpoint.
-   * @param {Point3d} fragmentPoint
+   * @param {Point3d} pt
    * @returns {boolean} True if occluded.
    */
-  #rayDirection = new Point3d();
-
-  pointIsOccluded(pt) {
+  pointOccluded(pt) {
     // Is it occluded from the camera/viewer?
-    pt.subtract(this.viewpoint, this.#rayDirection);
-    return this.occlusionTester.rayIsOccluded(this.viewpoint, this.#rayDirection);
+    return this.occlusionTester.segmentIsOccluded(this.viewpoint, pt);
   }
 
   // ----- NOTE: Debug ----- //
@@ -275,25 +182,23 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   _drawDebugPoints(result, debugDraw) {
     const colors = Draw.COLORS;
     const targetPoints = this.targetPoints;
-    const { unobscured, numPoints } = result.data;
+    const { unobscured, visible, all } = result.data;
     const vp = this.viewpoint;
     const segment = { a: vp, b: null };
-    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
-      const bs = unobscured[i];
-      const pts = targetPoints[i];
-      const n = numPoints[i];
-      for ( let j = 0; j < n; j += 1 ) {
-        segment.b = pts[j];
-        if ( !bs ) {
-          // Point never tested.
-          const color = colors.orange;
-          debugDraw.segment(segment, { color, dashLength: 10, gapLength: 10 });
-          continue;
-        }
-        const isVisible = bs.has(j);
-        const color = isVisible ? colors.blue : colors.red;
-        debugDraw.segment(segment, { color });
+    const n = all.cardinality;
+    for ( let i = 0; i < n; i += 1 ) {
+      segment.b = targetPoints[i];
+      const isVisible = visible.has(i);
+      const isUnobscured = unobscured.has(i);
+      const color = isVisible && isUnobscured ? colors.blue
+        : isVisible ? colors.red
+          :  colors.orange; // Not tested b/c not w/in radius or otherwise not part of shape.
+      const opts = { color };
+      if ( !isVisible ) {
+        opts.dashLength = 10;
+        opts.gapLength = 10;
       }
+      debugDraw.segment(segment, { color });
     }
   }
 
@@ -302,21 +207,11 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    * @param {Point3d} pt
    * @returns {PIXI.Point|null} pt or null if the point is positive z after look at transform.
    */
-  _applyPerspectiveToPoints(pts) {
-    const lookAtM = this.camera.lookAtMatrix;
-    const perspectiveM = this.camera.perspectiveMatrix;
-    pts = pts.map(pt => lookAtM.multiplyPoint3d(pt));
-
-    /*
-    if ( filter ) {
-      pts = pts.filter(pt => pt.z < 0);
-      return pts.map(pt => perspectiveM.multiplyPoint3d(pt, pt));
-    }
-    */
-    return pts.map(pt => {
-      if ( pt.z >= 0 ) return null;
-      return perspectiveM.multiplyPoint3d(pt, pt);
-    });
+  _applyPerspectiveToPoint(pt) {
+    this.camera.lookAtMatrix.multiplyPoint3d(pt, pt);
+    if ( pt.z >= 0 ) return null;
+    this.camera.perspectiveMatrix.multiplyPoint3d(pt, pt);
+    return pt;
   }
 
   _applyPerspectiveToPolygon(poly) {
@@ -340,13 +235,12 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
       alpha: 0.5,
     };
 
-    this._initializeCamera();
+    this.setView(); // In case the camera has been moved.
 
-    // Draw the token border for reference.
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
+    // Draw the border for reference.
     const viewpoint = this.viewpoint
     const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
-    for ( const face of geom.faces) {
+    for ( const face of this.targetShape.iterateFaces()) {
       if ( !face.isFacing(viewpoint) ) {
         drawOpts.alpha = 0.3;
         drawOpts.color = Draw.COLORS.gray;
@@ -360,80 +254,59 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     }
 
     // Draw the token points.
-    const targetPoints = this.targetPoints;
-    const unobscured = result.data.unobscured;
-    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
-      const bs = unobscured[i];
-      if ( !bs ) continue;
+    const { unobscured, potentiallyVisible } = result.data;
+    let i = -1;
+    for ( using pt of this.iterateTargetPoints() ) {
+      i += 1;
+      if ( !potentiallyVisible.has(i) ) continue;
 
-      const pts = this._applyPerspectiveToPoints(targetPoints[i]);
-      for ( let j = 0, jMax = pts.length; j < jMax; j += 1 ) {
-        const pt = pts[j];
-        if ( !pt ) continue;
-        opts.color = bs.has(j) ? Draw.COLORS.blue : Draw.COLORS.red;
-        draw.point(pt.multiply(mult, a), opts);
-      }
+      const res = this._applyPerspectiveToPoint(pt);
+      if ( !res ) continue;
+
+      opts.color = unobscured.has(i) ? Draw.COLORS.blue : Draw.COLORS.red;
+      draw.point(pt.multiply(mult, a), opts);
     }
+
     mult.release();
     a.release();
   }
 }
 
 export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstract {
-   get percentVisible() {
-    // For points, the maximum unobscured points divided by points for a given area.
-    const { unobscured, numPoints } = this.data;
-    let maxPercent = 0;
-    for ( let i = 0, iMax = unobscured.length; i < iMax; i += 1 ) {
-      const bs = unobscured[i];
-      if ( !bs ) continue; // Skipped this face/group.
-      maxPercent = Math.max(maxPercent, bs.cardinality / numPoints[i]);
-      if ( maxPercent >= 1 ) break;
-    }
-    return maxPercent;
-  }
+
+  data = {
+    all: new SmallBitSet(),
+    unobscured: new SmallBitSet(),
+    visible: new SmallBitSet(),
+  };
+
+  // TODO: Handle multiple areas (e.g., for large targets) in the Viewpoint class.
 }
 
 
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPointsAbstract {
+
+  /** @type {class<PercentVisibleResult>} */
   static resultClass = PercentVisiblePointsResult
 
-  static BitSetClass = SmallBitSet;
-
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
+  config = {
+    ...super.config,
     targetPointIndex: 1, // Center only
     targetInset: 0.75,
-  }
-
-  get config() { return super.config; } // Must call parent to avoid having no getter here.
-
-  set config(cfg = {}) {
-    if ( Object.hasOwn(cfg, "targetPointIndex")
-      && cfg.targetPointIndex instanceof SmallBitSet ) cfg.targetPointIndex = cfg.targetPointIndex.word;
-    super.config = cfg;
-  }
+  };
 
   /**
    * Build a set of 3d points on a given token shape, dependent on settings and shape.
-   * @type {Point3d[][]}
+   * @type {Point3d[]}
    */
   get targetPoints() {
-    const target = this.target;
-    const { targetPointIndex, targetInset } = this.config;
     const cfg = {
-      pointKey: targetPointIndex,
-      inset: targetInset,
+      pointKey: this.config.targetPointIndex,
+      insetPercentage: this.config.targetInset,
       viewpoint: this.viewpoint,
-      tokenShape: null,
     };
-    const targetShapes = this._config.largeTarget // Construct points for each target subshape, defined by grid spaces under the target.
-      ? this.constructor.gridShapesUnderToken(this.target) : [this.target.tokenBorder];
-    if ( !targetShapes.length ) targetShapes.push(this.targetShape);
-    return targetShapes.map(shape => {
-      cfg.tokenShape = shape;
-      return ViewerLOS.constructTokenPoints(target, cfg);
-    });
+    const dir = this.targetLocation.subtract(this.viewpoint);
+    return ViewerLOS.constructTokenPoints(this.targetShape, dir, cfg);
   }
 
   /**

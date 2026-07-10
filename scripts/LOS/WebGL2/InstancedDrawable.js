@@ -13,18 +13,11 @@ import * as twgl from "./twgl.js";
 import { WebGL2 } from "./WebGL2.js";
 
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
+import { QuadPrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
+import { ModelGeometricPrimitive } from "../../geometry/placeable_geometry/ModelGeometricPrimitive.js";
 import { WallGeometry } from "../../geometry/placeable_geometry/WallGeometry.js";
-import {
-  TokenGeometry,
-  TokenSquareGeometry,
-  TokenEllipseGeometry,
-  TokenHexagonGeometry,
-  TokenSphereGeometry,
-  TokenPolygonGeometry,
-} from "../../geometry/placeable_geometry/TokenGeometry.js";
-import { TileGeometry } from "../../geometry/placeable_geometry/TileGeometry.js";
-import { RegionGeometry } from "../../geometry/placeable_geometry/RegionGeometry.js";
 import { mix } from "../../geometry/mixwith.js";
+
 
 /* Drawables
 
@@ -54,6 +47,14 @@ Requires:
 
 class AbstractDrawable {
 
+  static SHADER_FLAGS = {
+    NONE:         0,
+    DEBUG:        1 << 0, // 1
+    INSTANCED:    1 << 1, // 2
+    TEXTURED:     1 << 2, // 4
+    CONSTRAINED:  1 << 3, // 8
+  };
+
   /** @type {string} */
   static VERTEX_DRAW_TYPE = "STATIC_DRAW";
 
@@ -66,9 +67,6 @@ class AbstractDrawable {
   /** @type {number} */
   static stride = 6; // 3d position + 3d normal
 
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = null; // Must be defined by child class
-
   /** @type {WebGL2} */
   webGL2;
 
@@ -78,8 +76,10 @@ class AbstractDrawable {
   /** @type {boolean} */
   debugView = false;
 
-  constructor({ webGL2 } = {}) {
+  constructor({ webGL2, programInfo, debugProgramInfo } = {}) {
     this.webGL2 = webGL2;
+    this.programInfo = programInfo;
+    this.debugProgramInfo = debugProgramInfo;
   }
 
   // ----- NOTE: Initialization ----- //
@@ -88,78 +88,21 @@ class AbstractDrawable {
 
   /**
    * Initialize the drawables.
-   * Optionally pass geoms to record their last update.
    */
-  async initialize(geoms = []) {
+  initialize() {
     if ( this.#initialized ) return;
-
-    await this._createPrograms();
     this._initializeAttributes();
-
-    geoms ??= this.constructor.activeGeoms();
-    this._initializeUniforms(geoms);
-    this._recordPlaceableUpdates(geoms);
+    this._initializeUniforms();
     this.#initialized = true;
-  }
-
-  static get geometryManager() {
-    const mgr = CONFIG[GEOMETRY_LIB_ID].geometryManager[this.GEOMETRY_CLASS.LAYER];
-    if ( this.GEOMETRY_CLASS.LAYER === "levels" ) return mgr[this.LEVEL_TYPE];
-    return mgr;
-  }
-
-  static get activeGeoms() {
-    if ( !this.GEOMETRY_CLASS ) return [];
-    return this.geometryManager.geometryMap.values();
   }
 
   // ----- NOTE: Program ----- //
 
-  /** @type {string} */
-  static VERTEX_FILE = "instance_vertex_ubo_v2";
-
-  /** @type {string} */
-  static FRAGMENT_FILE = "fragment_v2";
-
-  // Triggers for enabling pieces of the glsl code.
-
-  /** @type {boolean} */
-  static INSTANCED = true;
-
-  /** @type {boolean} */
-  static TEXTURED = false;
-
-  /** @type {boolean} */
-
-  /** @type {twgl.ProgramInfo} */
-  programInfo;
-
-  /** @type {twgl.ProgramInfo} */
-  debugProgramInfo;
-
   get program() { return this.debugView ? this.debugProgramInfo : this.programInfo; }
-
-  async _createPrograms() {
-    this.programInfo = await this._createProgram({ debugViewNormals: false });
-    this.debugProgramInfo = await this._createProgram({ debugViewNormals: true });
-  }
-
-  async _createProgram({ vertexFile, fragmentFile, ...opts } = {}) {
-    // Must include all parameters that could be in the glsl file.
-    const { VERTEX_FILE, FRAGMENT_FILE, TEXTURED, INSTANCED } = this.constructor;
-    vertexFile ??= VERTEX_FILE;
-    fragmentFile ??= FRAGMENT_FILE;
-    opts.debugViewNormals ??= false;
-    opts.hasTexture ??= TEXTURED;
-    opts.isInstanced ??= INSTANCED
-    opts.constrainTarget ??= false;
-    opts.maxConstrainingWalls ??= 1;
-    return await this.webGL2.cacheProgram(vertexFile, fragmentFile, opts);
-  }
 
   // ----- NOTE: Uniforms ----- //
 
-  _initializeUniforms(_geoms) {
+  _initializeUniforms() {
     const gl = this.gl;
 
     // Camera used in both debug and regular views.
@@ -242,33 +185,21 @@ class AbstractDrawable {
     return vertexProps;
   }
 
-  /** @type {Map<string, number>} */
-  geomLastUpdated = new Map();
-
-  /**
-   * Record when geoms were last updated. Run after initialization to capture state of the
-   * canvas at first initialization.
-   * @param {PlaceableGeometry[]} geoms
-   */
-  _recordPlaceableUpdates(geoms = []) {
-    for ( const geom of geoms ) this.geomLastUpdated.set(geom.placeableId, geom.updateCount);
-  }
-
   /**
    * Update attributes for specific placeable geometry.
    * @param {PlaceableGeometry} geom
    * @returns {boolean} True if updated.
    */
-  updateAttributeBuffersForGeom(geom) {
-    const id = geom.placeableId;
-    const lastUpdate = this.geomLastUpdated.get(id) ?? Number.NEGATIVE_INFINITY;
-    if ( lastUpdate >= geom.updateCount ) return false;
-    this.geomLastUpdated.set(id, geom.updateCount);
-    this._updateAttributeBuffersForId(id);
-    return true;
+  updateAttributeBuffersForShape(_shape) {
+//     const idx = shape.trackerIndex;
+//     const lastUpdate = this.geomLastUpdated.get(id) ?? Number.NEGATIVE_INFINITY;
+//     if ( lastUpdate >= geom.updateCount ) return false;
+//     this.geomLastUpdated.set(id, geom.updateCount);
+//     this._updateAttributeBuffersForShape(shape);
+//     return true;
   }
 
-  _updateAttributeBuffersForId(_id) { console.error("_updateAttributeBuffersForId must be defined by child class.");}
+  _updateAttributeBuffersForShape(_shape) { console.error("_updateAttributeBuffersForId must be defined by child class.");}
 
   /**
    * Update attributes for all placeables.
@@ -279,20 +210,6 @@ class AbstractDrawable {
 
   /** @type {Set<number>} */
   instanceSet = new Set();
-
-  /**
-   * Add a specific placeable to the set of placeables to draw.
-   */
-  addGeomToInstanceSet(geom) {
-    this.updateAttributeBuffersForGeom(geom);
-    const idx = this._indexForId(geom.placeableId);
-    if ( !~idx ) {
-      console.warn(`Geometry index not found for ${geom.placeableId}.`, geom);
-      return -1;
-    }
-    this.instanceSet.add(idx);
-    return idx;
-  }
 
   /**
    * Pull id index for a given geom id.
@@ -307,8 +224,11 @@ class AbstractDrawable {
     this.debugView = debug;
 
     const gl = this.gl;
+    const webGL2 = this.webGL2;
     const programInfo = this.program;
-    this.webGL2.useProgram(programInfo);
+    webGL2.useProgram(programInfo);
+    webGL2.setCulling(true);
+    webGL2.setCullFace("BACK");
 
     gl.bindVertexArray(this.VAI.vertexArrayObject);
 
@@ -319,38 +239,33 @@ class AbstractDrawable {
     // gl.finish(); // For debugging.
   }
 
+  clearInstances() { this.instanceSet.clear(); }
+
   _draw() { console.error("_draw should be defined by child class."); }
 
-  destroy() { }
-
-}
-export class AbstractInstancedDrawable extends AbstractDrawable {
-
-  /** @type {ModelMatrixTracker} */
-  modelMatrixTracker;
-
-  /** @type {VertexObject} */
-  instanceVO;
-
-  /**
-   * @param {WebGL2} webGL2                               WebGL2 context
-   * @param {twgl.ProgramInfo} shaderProgramInfo          Shader program information
-   * @param {VertexObject} instanceVO                     Vertex object containing the vertices and indices for the instance
-   * @param {ModelMatrixTracker} modelMatrixTracker       Tracker for all the model matrices.
-   */
-  constructor({ instanceVO, modelMatrixTracker, ...opts } = {}) {
-    super(opts);
-    this.instanceVO = instanceVO;
-    this.modelMatrixTracker = modelMatrixTracker;
+  destroy() {
+    this.clearInstances();
   }
 
-  // ----- NOTE: Attributes ----- //
+}
 
-  get verticesArray() { return this.instanceVO.vertices; }
+export class InstancedDrawable extends AbstractDrawable {
 
-  get indicesArray() { return this.instanceVO.indices; }
+  static SHADER_VARIANT = this.SHADER_FLAGS.INSTANCED;
 
-  get modelMatrixArray() { return this.modelMatrixTracker.viewBuffer(); }
+  /** @type {class<GeometricPrimitive>} */
+  primitiveClass;
+
+  constructor({ primitiveClass, ...opts }) {
+    super(opts);
+    this.primitiveClass = primitiveClass;
+  }
+
+  get verticesArray() { return this.primitiveClass.instanceVO.vertices; }
+
+  get indicesArray() { return this.primitiveClass.instanceVO.indices; }
+
+  get modelMatrixArray() { return this.primitiveClass.modelMatrixTracker.viewBuffer(); }
 
   /** @type {number} */
   aModelAttribLoc = 0;
@@ -378,26 +293,52 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
     return attrProps;
   }
 
+
+  updateTracker = new Map();
+
+  addGeometricShape(shape) {
+    if ( !(shape instanceof this.primitiveClass ) ) return false;
+    this.instanceSet.add(shape.trackerIndex);
+    return true;
+  }
+
+  updateAttributeBuffers() {
+    this.instanceSet.forEach(idx => this._updateAttributeBufferForIndex(idx));
+
+    // TODO: What if the total buffer size changed?
+  }
+
   /**
-   * Update the model matrix attribute for specific placeable.
+   * Update the attributes for a specific index of this geometry.
    */
-  _updateAttributeBuffersForId(id) {
+  _updateAttributeBufferForIndex(idx) {
+    const tracker = this.primitiveClass.modelMatrixTracker;
+    const facetChangeTracker = tracker.facetChangeTracker;
+    if ( !facetChangeTracker.has(idx) ) {
+      console.error("_updateAttributeBufferForIndex|Index not found in the geometry buffer.");
+      return;
+    }
+
+    // If not changed since last time, skip.
+    if ( !this.updateTracker.has(idx) ) this.updateTracker.set(idx, -1);
+    const curr = facetChangeTracker.get(idx);
+    if ( this.updateTracker.get(idx) >= curr ) return;
+
+    // TODO: Use applyConsecutively to update in larger chunks.
     const gl = this.gl;
     const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
-
-    // See twgl.setAttribInfoBufferFromArray.
-    const tracker = this.modelMatrixTracker;
-    const modelArr = tracker.viewFacetById(id);
-    if ( !modelArr ) console.error(`${this.constructor.name}|_updateModelBufferForInstance|Placeable ${id} not found in model tracker.`);
-
-    const mOffset = tracker.facetOffsetAtId(id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    const mOffset = tracker.facetOffsetAtIndex(idx) + tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
+    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetAtIndex(idx));
+
+    // Log the update.
+    this.updateTracker.set(idx, curr);
   }
 
   /**
    * Rebuild attributes.
    */
+  /*
   _rebuildAttributeBuffers() {
     // Update the model attribute with a new buffer.
     this.attributeProperties.aModel.data = this.modelMatrixArray;
@@ -407,14 +348,11 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
     // Update the VAO with the new model buffer information.
     this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
     this.debugVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.debugProgramInfo, attribs);
-
   }
-
-  _indexForId(id) { return this.modelMatrixTracker.facetIdMap.get(id); }
-
-  _placeableIdForInstanceIndex(idx) { return this.modelMatrixTracker.facetIdMap.getKeyAtIndex(idx); }
+  */
 
   _draw() {
+    this.updateAttributeBuffers(); // TODO: Move to a prerender step?
     const nVertices = this.indicesArray.length;
     WebGL2.drawInstancedMatrixSet(
       this.gl,
@@ -427,53 +365,68 @@ export class AbstractInstancedDrawable extends AbstractDrawable {
   }
 }
 
-export class AbstractModelDrawable extends AbstractDrawable {
+export class ModelDrawable extends AbstractDrawable {
 
-  /** @type {boolean} */
-  static INSTANCED = false;
+  static SHADER_VARIANT = this.SHADER_FLAGS.NONE;
 
-  viTracker;
+  /** @type {class<GeometricPrimitive>} */
+  primitiveClass = ModelGeometricPrimitive;
 
-  /**
-   * @param {WebGL2} webGL2                               WebGL2 context
-   * @param {twgl.ProgramInfo} shaderProgramInfo          Shader program information
-   * @param {VertexObject} instanceVO                     Vertex object containing the vertices and indices for the instance
-   * @param {ModelMatrixTracker} modelMatrixTracker       Tracker for all the model matrices.
-   */
-  constructor({ viTracker, ...opts } = {}) {
-    super(opts);
-    this.viTracker = viTracker;
-  }
+  get verticesArray() { return this.primitiveClass.viTracker.vertices.viewBuffer(); }
 
-  get verticesArray() { return this.viTracker.vertices.viewBuffer(); }
-
-  get indicesArray() { return this.viTracker.indices.viewBuffer(this.viTracker.indicesAdjBuffer); }
-
+  get indicesArray() { return this.primitiveClass.viTracker.indices.viewBuffer(this.primitiveClass.viTracker.indicesAdjBuffer); }
 
   // ----- NOTE: Attributes ----- //
 
+  updateTracker = new Map();
+
+  addGeometricShape(shape) {
+    if ( !(shape instanceof this.constructor.primitiveClass ) ) return;
+    this.instanceSet.add(shape.trackerIndex);
+  }
+
+  updateAttributeBuffers() {
+    this.instanceSet.forEach(idx => this._updateAttributeBufferForIndex(idx));
+
+    // TODO: What if the total buffer size changed? Or the buffers get moved?
+  }
+
+
   /**
-   * Update the vertices/indices attributes for a specific placeable.
+   * Update the vertices/indices attributes for a specific geometry index.
    * Does not handle if the vertices or indices array has changed length.
    */
-  _updateAttributeBuffersForId(id) {
+  _updateAttributeBufferForIndex(idx) {
+     const tracker = this.constructor.primitiveClass.viTracker;
+     const facetChangeTracker = tracker.vertices.facetChangeTracker;
+     if ( !facetChangeTracker.has(idx) ) {
+      console.error("_updateAttributeBufferForIndex|Index not found in the geometry buffer.");
+      return;
+    }
+
+    // If not changed since last time, skip.
+    if ( !this.updateTracker.has(idx) ) this.updateTracker.set(idx, -1);
+    const curr = facetChangeTracker.get(idx);
+    if ( this.updateTracker.get(idx) >= curr ) return;
+
+    // TODO: Use applyConsecutively to update in larger chunks.
     // See twgl.setAttribInfoBufferFromArray.
     const gl = this.gl;
-    const vi = this.viTracker;
+    const vi = this.constructor.primitiveClass.viTracker;
 
     // Copy the vertices and adjusted indices to their webGL buffers.
-    const { vertices, indicesAdj } = vi.viewFacetById(id);
-    if ( !vertices || !indicesAdj ) console.error(`${this.constructor.name}|_updateAttributeBuffersForId|${id} id not found`);
-    const vOffset = vi.vertices.facetOffsetAtId(id) * Float32Array.BYTES_PER_ELEMENT;
-    const iOffset = vi.indices.facetOffsetAtId(id) * Uint16Array.BYTES_PER_ELEMENT;
+    const { vertices, indicesAdj } = vi.viewFacetAtIndex(idx);
+    if ( !vertices || !indicesAdj ) console.error(`${this.constructor.name}|_updateAttributeBuffersForIdx|${idx} idx not found`);
 
     // Vertices.
     const vBuffer = this.attributeBufferInfo.attribs.aPosition.buffer;
+    const vOffset = vi.vertices.facetOffsetAtIndex(idx) * tracker.type.BYTES_PER_ELEMENT;
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
 
     // Indices.
     const iBuffer = this.attributeBufferInfo.indices;
+    const iOffset = vi.indices.facetOffsetAtIndex(idx) * tracker.type.BYTES_PER_ELEMENT;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, indicesAdj);
   }
@@ -482,26 +435,27 @@ export class AbstractModelDrawable extends AbstractDrawable {
    * Rebuild attributes.
    */
   _rebuildAttributeBuffers() {
-    // Update the model attribute with a new buffer.
-    this.attributeProperties.aPosition.data = this.verticesArray;
-    this.attributeProperties.aNormal.data = this.verticesArray;
-    this.attributeProperties.indices.data = this.indicesArray;
+      // Update the model attribute with a new buffer.
+      this.attributeProperties.aPosition.data = this.verticesArray;
+      this.attributeProperties.aNormal.data = this.verticesArray;
+      this.attributeProperties.indices.data = this.indicesArray;
 
-    // Update the VAO with the new model buffer information.
-    const attribs = this.attributeBufferInfo.attribs;
-    this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
+      // Update the VAO with the new model buffer information.
+      const attribs = this.attributeBufferInfo.attribs;
+      this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
   }
 
-  _indexForId(id) { return this.viTracker.indices.facetIdMap.get(id); }
-
-
   _draw() {
+    this.updateAttributeBuffers();
     const { facetLength, facetLengths, byteOffsets } = this.viTracker.indices;
     WebGL2.drawSet(this.gl, this.instanceSet, byteOffsets, facetLength || facetLengths);
   }
+
 }
 
-export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable {
+export class TexturedInstancedDrawable extends InstancedDrawable {
+
+  static SHADER_VARIANT = super.SHADER_VARIANT | this.SHADER_FLAGS.TEXTURED;
 
   /** @type {boolean} */
   static TEXTURED = true;
@@ -511,6 +465,11 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
 
   // ----- NOTE: Attributes ----- //
 
+  /** @type {Float32Array} */
+  textureIndicesArray = new Int32Array(16);
+
+  get alphaThresholdArray() { return this.primitiveClass.alphaThresholdTracker.viewBuffer(); }
+
   /**
    * Build the vertex and index buffers along with any other attributes.
    * Add UVs for textures.
@@ -518,6 +477,8 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
    */
   _defineAttributeProperties() {
     const attrProps = super._defineAttributeProperties();
+
+    // UV coordinates.
     attrProps.aTexCoord = {
       numComponents: 2,
       buffer: attrProps.aPosition.buffer, // Shared vBuffer
@@ -525,12 +486,37 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
       stride: this.constructor.stride * Float32Array.BYTES_PER_ELEMENT,
       offset: Float32Array.BYTES_PER_ELEMENT * 6, // Position (3) + Normals (3)
     }
+
+    // Alpha threshold.
+    attrProps.aAlphaThreshold = {
+      numComponents: 1, // It's just a single float (0.0 to 1.0)
+      data: this.alphaThresholdArray,
+      type: this.gl.FLOAT,
+      drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
+      divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
+    }
+
+    // Texture index, handled by this class.
+    attrProps.aTextureIndex = {
+      numComponents: 1, // It's just a single int (0 to 15)
+      data: this.textureIndicesArray,
+      type: this.gl.INT, // Force WebGL to use vertexAttribIPointer,
+      drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
+      divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
+    };
+
+    // For use in _draw method.
+    this.aTextureIndexLoc = this.gl.getAttribLocation(this.programInfo.program, 'aTextureIndex');
+    this.aAlphaThresholdLoc = this.gl.getAttribLocation(this.programInfo.program, 'aAlphaThreshold');
+
     return attrProps;
   }
 
   // Because tiles are always quads, don't need to worry about expanding model vertices/indices.
 
   // ----- NOTE: Textures ----- //
+
+  #fallbackTexture;
 
   /** @type {Map<url, WebGLTexture>} */
   textures = new Map();
@@ -547,227 +533,14 @@ export class AbstractTexturedInstancedDrawable extends AbstractInstancedDrawable
     };
   }
 
-  static textureSource(_geom) { console.error("textureSource getter must be defined by child class."); }
 
   // TODO: Can we get the texture url from the textures map (WebGLTexture)?
   // Should we store an object there?
 
   // TODO: Can we store one texture using static because we are reusing this.gl throughout?
 
-  _initializeUniforms(geoms) {
+  _initializeUniforms() {
     super._initializeUniforms();
-    this._initializeTextures(geoms);
-  }
-
-  _initializeTextures(geoms) {
-    geoms ??= this.activeGeoms();
-    for ( const geom of geoms ) this._initializeTexture(geom);
-  }
-
-  _initializeTexture(geom) {
-    const src = this.constructor.textureSource(geom);
-    if ( this.textures.has(src) ) return;
-
-    const textureOpts = this.constructor.textureOptions(this.gl);
-
-    // Attempt to pull the pre-loaded image from Foundry's PIXI cache.
-    const pixiTexture = PIXI.Assets.get(src);
-
-    // Pass the HTMLImageElement directly for a synchronous upload.
-    // This avoids the blue solid image when the texture is first displayed.
-    if ( pixiTexture
-      && pixiTexture.baseTexture.resource.source ) textureOpts.src = pixiTexture.baseTexture.resource.source;
-
-    // Fallback to async URL loading.
-    else textureOpts.src = src;
-
-    // Could pass a third callback argument to createTexture to rerender if async loading, but challenging to implement here.
-    this.textures.set(src, twgl.createTexture(this.gl, textureOpts));
-  }
-
-  _rebuildAttributeBuffers() {
-    this.attributeProperties.aTexCoord.data = this.verticesArray;
-    super._rebuildAttributeBuffers();
-    this._initializeTextures();
-  }
-
-  updateAttributeBuffersForGeom(geom) {
-    const updated = super.updateAttributeBuffersForGeom(geom);
-    if ( !updated ) return;
-
-    // Check if the source changed.
-    this._initializeTexture(geom);
-  }
-}
-
-export class DrawableWalls extends AbstractInstancedDrawable {
-
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = WallGeometry;
-
-  static create(opts = {}) {
-    opts.instanceVO ??= WallGeometry.instanceVO;
-    opts.modelMatrixTracker ??= WallGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-
-  /**
-   * Add a specific placeable to the set of placeables to draw.
-   * Add wall segments separately.
-   */
-  addGeomToInstanceSet(geom, levelId) {
-    for ( const segmentGeom of geom.segmentGeoms ) {
-      if ( !segmentGeom.isActiveForLevel(levelId) ) continue;
-      super.addGeomToInstanceSet(segmentGeom);
-    }
-  }
-
-  /**
-   * Record when geoms were last updated. Run after initialization to capture state of the
-   * canvas at first initialization.
-   * @param {PlaceableGeometry[]} geoms
-   */
-  _recordPlaceableUpdates(geoms = []) {
-    for ( const geom of geoms ) {
-      for ( const segmentGeom of geom.segmentGeoms ) {
-        this.geomLastUpdated.set(segmentGeom.placeableId, segmentGeom.updateCount);
-      }
-    }
-  }
-
-
-
-}
-
-export class DrawableSquareTokens extends AbstractInstancedDrawable {
-
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = TokenSquareGeometry;
-
-  static create(opts = {}) {
-    opts.instanceVO ??= TokenSquareGeometry.instanceVO;
-    opts.modelMatrixTracker ??= TokenSquareGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-
-  /**
-   * Add a specific placeable to the set of placeables to draw.
-   * Don't add if not square.
-   */
-  addGeomToInstanceSet(geom) {
-    if ( TokenGeometry.shapeTypeForToken(geom.placeableDocument) !== TokenGeometry.SHAPE_TYPES.CUBE ) return -1;
-    return super.addGeomToInstanceSet(geom);
-  }
-
-
-}
-
-
-
-
-export class DrawableEllipseTokens extends AbstractInstancedDrawable {
-
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = TokenEllipseGeometry;
-
-  static create(opts = {}) {
-    opts.instanceVO ??= TokenEllipseGeometry.instanceVO;
-    opts.modelMatrixTracker ??= TokenEllipseGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-
-  /**
-   * Add a specific placeable to the set of placeables to draw.
-   * Don't add if not ellipse.
-   */
-  addGeomToInstanceSet(geom) {
-    if ( TokenGeometry.shapeTypeForToken(geom.placeableDocument) !== TokenGeometry.SHAPE_TYPES.ELLIPSE ) return -1;
-    return super.addGeomToInstanceSet(geom);
-  }
-}
-
-export class DrawableHexagonTokens extends AbstractInstancedDrawable {
-
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = TokenHexagonGeometry;
-
-  static create(opts = {}) {
-    opts.instanceVO ??= TokenHexagonGeometry.instanceVO;
-    opts.modelMatrixTracker ??= TokenHexagonGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-
-  /**
-   * Add a specific placeable to the set of placeables to draw.
-   * Don't add if not simple hex.
-   */
-  addGeomToInstanceSet(geom) {
-    const tokenD = geom.placeableDocument;
-    if ( TokenGeometry.shapeTypeForToken(tokenD) !== TokenGeometry.SHAPE_TYPES.HEXAGONAL ) return -1;
-    if ( tokenD.w > 1 || tokenD.w !== tokenD.h ) return -1;
-    return super.addGeomToInstanceSet(geom);
-  }
-}
-
-export class DrawableSphereTokens extends AbstractInstancedDrawable {
-
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = TokenSphereGeometry;
-
-  static create(opts = {}) {
-    opts.instanceVO ??= TokenSphereGeometry.instanceVO;
-    opts.modelMatrixTracker ??= TokenSphereGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-}
-
-export class DrawablePolygonTokens extends AbstractModelDrawable {
-
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = TokenPolygonGeometry;
-
-  static create(opts = {}) {
-    opts.viTracker ??= TokenPolygonGeometry.viTracker;
-    return new this(opts);
-  }
-
-  /**
-   * Add a specific placeable to the set of placeables to draw.
-   * Don't add if simple hexagon.
-   */
-  addGeomToInstanceSet(geom) {
-    const tokenD = geom.placeableDocument;
-    if ( TokenGeometry.shapeTypeForToken(tokenD) === TokenGeometry.SHAPE_TYPES.HEXAGONAL
-      && !(tokenD.w > 1 || tokenD.w !== tokenD.h) ) return -1;
-    return super.addGeomToInstanceSet(geom);
-  }
-}
-
-// TODO: Regions
-
-/**
- * Handles tiles and levels.
- */
-export class DrawableTiles extends AbstractTexturedInstancedDrawable {
-  /** @type {class<PlaceableGeometry>} */
-  static GEOMETRY_CLASS = TileGeometry;
-
-  static textureSource(geom) {
-    return geom.constructor.LAYER === "levels"
-      ? geom.placeableDocument[geom.constructor.LEVEL_TYPE].src
-        : geom.placeableDocument.texture.src;
-  }
-
-  static create(opts = {}) {
-    opts.instanceVO ??= TileGeometry.instanceVO;
-    opts.modelMatrixTracker ??= TileGeometry.modelMatrixTracker;
-    return new this(opts);
-  }
-
-  #fallbackTexture;
-
-  _initializeUniforms(geoms) {
-    super._initializeUniforms(geoms);
 
     // Set a fallback texture.
     const gl = this.gl;
@@ -801,11 +574,26 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     gl.useProgram(null);
   }
 
-  /** @type {Float32Array} */
-  textureIndicesArray = new Int32Array(16);
+  _initializeTexture(shape) {
+    const src = shape.textureURL;
+    if ( this.textures.has(src) ) return;
 
-  /** @type {Float32Array} */
-  alphaThresholdArray = new Float32Array(16);
+    const textureOpts = this.constructor.textureOptions(this.gl);
+
+    // Attempt to pull the pre-loaded image from Foundry's PIXI cache.
+    const pixiTexture = PIXI.Assets.get(src);
+
+    // Pass the HTMLImageElement directly for a synchronous upload.
+    // This avoids the blue solid image when the texture is first displayed.
+    if ( pixiTexture
+      && pixiTexture.baseTexture.resource.source ) textureOpts.src = pixiTexture.baseTexture.resource.source;
+
+    // Fallback to async URL loading.
+    else textureOpts.src = src;
+
+    // Could pass a third callback argument to createTexture to rerender if async loading, but challenging to implement here.
+    this.textures.set(src, twgl.createTexture(this.gl, textureOpts));
+  }
 
   /** @type {number} */
   aTextureIndexLoc = 0;
@@ -813,29 +601,22 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
   /** @type {number} */
   aAlphaThresholdLoc = 0;
 
-  _defineAttributeProperties() {
-    const attrProps = super._defineAttributeProperties();
-    attrProps.aTextureIndex = {
-      numComponents: 1, // It's just a single int (0 to 15)
-      data: this.textureIndicesArray,
-      type: this.gl.INT, // Force WebGL to use vertexAttribIPointer,
-      drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
-      divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
-    };
+  _rebuildAttributeBuffers() {
+    /*
+    this.attributeProperties.aTexCoord.data = this.verticesArray;
+    super._rebuildAttributeBuffers();
+    this._initializeTextures();
+    */
+  }
 
-    attrProps.aAlphaThreshold = {
-      numComponents: 1, // It's just a single float (0.0 to 1.0)
-      data: this.alphaThresholdArray,
-      type: this.gl.FLOAT,
-      drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
-      divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
-    }
+  updateAttributeBuffersForShape(_shape) {
+    /*
+    const updated = super.updateAttributeBuffersForGeom(geom);
+    if ( !updated ) return;
 
-    // For use in _draw method.
-    this.aTextureIndexLoc = this.gl.getAttribLocation(this.programInfo.program, 'aTextureIndex');
-    this.aAlphaThresholdLoc = this.gl.getAttribLocation(this.programInfo.program, 'aAlphaThreshold');
-
-    return attrProps;
+    // Check if the source changed.
+    this._initializeTexture(geom);
+    */
   }
 
   _resizeTextureAttributeArrays(requiredSize) {
@@ -877,22 +658,14 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     this.#resizeNeeded = false;
   }
 
+  addGeometricShape(shape) {
+    super.addGeometricShape(shape);
 
-  /** @type {{ textureUnits: url[], instances: Set<number> }[]} */
-  textureBatches = []; // Arrays of urls, each array no longer than 16.
-
-  /**
-   * When adding a placeable to the instance set, track its texture.
-   */
-  addGeomToInstanceSet(geom) {
-    // DEBUG: Ignore the ground texture for the moment.
-    // if ( this.constructor.textureSource(geom) === "modules/levels/sample-maps/baileywiki/barn-lvl1.webp" ) return;
-
-    const idx = super.addGeomToInstanceSet(geom);
-    if ( !~idx ) return -1;
+    // Need direction, texture url, texture alphaThreshold
+    const idx = shape.trackerIndex;
 
     // Assign the index to a texture url.
-    const src = this.constructor.textureSource(geom);
+    const src = shape.textureURL;
     let texUnit = -1;
     for ( const { textureUnits, instances } of this.textureBatches ) {
       texUnit = textureUnits.indexOf(src);
@@ -916,7 +689,6 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     this._resizeTextureAttributeArrays(idx + 1); // Add 1 to account for 0-indexing.
 
     // Update the texture arrays.
-    this.alphaThresholdArray[idx] = geom.alphaThreshold;
     this.textureIndicesArray[idx] = texUnit;
   }
 
@@ -947,6 +719,9 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
     ];
     const nVertices = this.indicesArray.length;
 
+    // No culling b/c the tile is viewable from both sides.
+    this.webGL2.setCulling(false);
+
     // Draw the textures in batches.
     for ( const { instances, textureUnits } of this.textureBatches ) {
       // Bind the texture units for the batch.
@@ -970,6 +745,10 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
         advanceFns,
       );
     }
+  }
+
+  clearInstances() {
+    super.clearInstances();
     this.textureBatches.length = 0;
     this.textureIndicesArray.fill(0);
     this.alphaThresholdArray.fill(0);
@@ -978,22 +757,75 @@ export class DrawableTiles extends AbstractTexturedInstancedDrawable {
 
 
 /**
+ * Handle directional walls
+ */
+const DirectionalWallMixin = superclass => class extends superclass {
+
+  /** @type {Set<number>} */
+  frontDirectional = new Set();
+
+  /** @type {Set<number>} */
+  backDirectional = new Set();
+
+  addGeometricShape(shape) {
+    if ( !super.addGeometricShape(shape) ) return false;
+    if ( shape.direction === QuadPrimitive.CULL_FACES.FRONT ) this.frontDirectional.add(shape.trackerIndex);
+    else if ( shape.direction === QuadPrimitive.CULL_FACES.BACK ) this.backDirectional.add(shape.trackerIndex);
+  }
+
+  _draw() {
+    const webGL2 = this.webGL2;
+    const fullSet = this.instanceSet;
+    const { frontDirectional, backDirectional } = this;
+
+    const bidirectional = this.instanceSet.difference(frontDirectional).difference(backDirectional);
+    if ( bidirectional.size ) {
+      webGL2.setCulling(false);
+      this.instanceSet = bidirectional;
+      super._draw();
+    }
+    if ( frontDirectional.size ) {
+      webGL2.setCulling(true);
+      webGL2.setCullFace("BACK");
+      this.instanceSet = frontDirectional;
+      super._draw();
+    }
+    if ( backDirectional.size ) {
+      webGL2.setCulling(true);
+      webGL2.setCullFace("FRONT");
+      this.instanceSet = backDirectional;
+      super._draw();
+    }
+    this.instanceSet = fullSet;
+  }
+
+  clearInstances() {
+    super.clearInstances();
+    this.frontDirectional.clear();
+    this.backDirectional.clear();
+  }
+}
+
+/**
  * Handle constrained token target drawing.
  * Uses a separate fragment shader to test whether a wall segment blocks the viewpoint.
  */
-const TokenTargetMixin = superclass => class extends superclass {
+const ConstrainedTokenMixin = superclass => class extends superclass {
+
+  static SHADER_VARIANT = super.SHADER_VARIANT | this.SHADER_FLAGS.CONSTRAINED;
+
   /** @type {number} */
   static NUM_CONSTRAINING_WALLS = 5;
 
   /**
    * Locate walls that intersect the token border.
-   * @param {TokenGeometry} tokenGeom
+   * @param {GeometricPrimitive} tokenShape
    * @returns {WallGeometry[]}
    */
-  static intersectingWalls(tokenGeom) {
+  static intersectingWalls(tokenShape, levelId) {
     // For speed, take everything that crosses the token aabb.
     // Shrink by two pixels to avoid walls that simply are on the edge.
-    using aabb = tokenGeom.aabb.clone();
+    using aabb = tokenShape.aabb.clone();
     aabb.min.x += 2;
     aabb.min.y += 2;
     aabb.min.z += 2;
@@ -1002,7 +834,6 @@ const TokenTargetMixin = superclass => class extends superclass {
     aabb.max.z -= 2;
 
     const wallMgr = CONFIG[GEOMETRY_LIB_ID].geometryManager.walls;
-    const levelId = tokenGeom.placeableDocument.level;
     const out = [];
     canvas.scene.walls.forEach(wallD => {
       const wallGeom = wallMgr.geomForDocument(wallD);
@@ -1011,7 +842,7 @@ const TokenTargetMixin = superclass => class extends superclass {
     });
 
     // Sort by closest 2d segment to the 2d center.
-    using ctr = tokenGeom.constructor.tokenCenter(tokenGeom.placeableDocument).to2d();
+    using ctr = tokenShape.center;
     out.sort((geom0, geom1) => {
       using s0 = WallGeometry.wallSegment2d(geom0.placeableDocument);
       using s1 = WallGeometry.wallSegment2d(geom1.placeableDocument);
@@ -1020,112 +851,34 @@ const TokenTargetMixin = superclass => class extends superclass {
       return distA - distB;
     });
 
+    // TODO: Return QuadPrimitive instead of GEOM.
     return out;
   }
 
-  /** @type {twgl.ProgramInfo} */
-  targetProgramInfo;
+  /** @type {Float32Array} */
+  uClipPlanes = new Float32Array(this.constructor.NUM_CONSTRAINING_WALLS * 4);
 
-  /** @type {twgl.ProgramInfo} */
-  targetDebugProgramInfo;
+  /** @type {number} */
+  uNumClipPlanes = 0;
 
-  async _createPrograms() {
-    await super._createPrograms();
-    this.targetProgramInfo = await this._createProgram({
-      debugViewNormals: false,
-      constrainTarget: true,
-      maxConstrainingWalls: this.constructor.NUM_CONSTRAINING_WALLS
-    });
-    this.targetDebugProgramInfo = await this._createProgram({
-      debugViewNormals: true,
-      constrainTarget: true,
-      maxConstrainingWalls: this.constructor.NUM_CONSTRAINING_WALLS
-    });
+  levelId = "";
+
+  addGeometricShape(targetShape) {
+    if ( !super.addGeometricShape(targetShape) ) return false;
+    const wallGeoms = this.constructor.intersectingWalls(targetShape, this.levelId);
+    this._setClippingWallPlanes(targetShape, wallGeoms);
   }
 
-  _initializeUniforms(_geoms) {
-    super._initializeUniforms(_geoms);
-    const gl = this.gl;
-
-    // Camera used in both debug and regular views.
-    const cameraBlockIndex = gl.getUniformBlockIndex(this.targetProgramInfo.program, "Camera");
-    if ( cameraBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.targetProgramInfo.program, cameraBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
-
-    const cameraDebugBlockIndex = gl.getUniformBlockIndex(this.targetDebugProgramInfo.program, "Camera");
-    if ( cameraDebugBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.targetDebugProgramInfo.program, cameraDebugBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
-
-    // Material only used to color the shapes in the debug view.
-    const matBlockIdx = gl.getUniformBlockIndex(this.targetDebugProgramInfo.program, "Material");
-    if ( matBlockIdx !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.targetDebugProgramInfo.program, matBlockIdx, this.constructor.MATERIAL_BIND_POINT); // 1
-  }
-
-  /** @type {twgl.VertexArrayInfo} */
-  targetVertexArrayInfo = {};
-
-  /** @type {twgl.VertexArrayInfo} */
-  targetDebugVertexArrayInfo = {};
-
-  _initializeAttributes() {
-    super._initializeAttributes();
-    this.targetVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.targetProgramInfo, this.attributeBufferInfo);
-    this.targetDebugVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.targetDebugProgramInfo, this.attributeBufferInfo);
-  }
-
-  get program() {
-    return this.#intersectingWallGeoms.length
-      ? (this.debugView ? this.targetDebugProgramInfo : this.targetProgramInfo)
-        : super.program;
-  }
-
-  get VAI() {
-    return this.#intersectingWallGeoms.length
-      ? (this.debugView ? this.targetDebugVertexArrayInfo : this.targetVertexArrayInfo)
-        : super.VAI;
-  }
-
-
-  #intersectingWallGeoms = [];
-
-  _locateIntersectingWalls() {
-    this.#intersectingWallGeoms.length = 0;
-
-    // Find the target geom.
-    const id = this._placeableIdForInstanceIndex(this.instanceSet.first());
-    if ( !id ) return;
-    const targetGeom = this.constructor.geometryManager.geomForPlaceableId(id);
-
-    // Find intersecting walls.
-    this.#intersectingWallGeoms = this.constructor.intersectingWalls(targetGeom);
-  }
-
-  render(debug = false) {
-    if ( !this.instanceSet.size ) return;
-
-    // Determine if walls potentially block the token.
-    // Because this is a target, there is only a single instance.
-    if ( this.instanceSet.size !== 1 ) console.error("More than one target token instance.");
-
-    this._locateIntersectingWalls();
-
-    super.render(debug);
-  }
-
-  _draw() {
-    if ( !this.#intersectingWallGeoms.length ) return super._draw();
-
-    // Need the target center.
-    const id = this._placeableIdForInstanceIndex(this.instanceSet.first());
-    if ( !id ) return;
-    const targetGeom = this.constructor.geometryManager.geomForPlaceableId(id);
-    using ctr = targetGeom.constructor.tokenCenter(targetGeom.placeableDocument);
+  _setClippingWallPlanes(targetShape, wallGeoms) {
+    using ctr = targetShape.center;
 
     // Set the uniform normals representing planes.
     // All wall segment geoms share the same plane.
     const maxWalls = this.constructor.NUM_CONSTRAINING_WALLS;
-    const uNumClipPlanes =  Math.min(maxWalls, this.#intersectingWallGeoms.length);
-    const uClipPlanes = new Float32Array(maxWalls * 4);
+    const uNumClipPlanes = this.uNumClipPlanes = Math.min(maxWalls, wallGeoms.length);
+    const uClipPlanes = this.uClipPlanes;
     for ( let i = 0; i < uNumClipPlanes; i += 1 ) {
-      const wallGeom = this.#intersectingWallGeoms[i];
+      const wallGeom = wallGeoms[i];
       const plane = wallGeom.segmentGeoms[0].faces[0].plane;
       const n = plane.normal;
       const d = plane.constant;
@@ -1138,26 +891,24 @@ const TokenTargetMixin = superclass => class extends superclass {
       uClipPlanes[j + 2] = n.z * mult;
       uClipPlanes[j + 3] = d;
     }
+  }
 
+  _draw() {
+    // Set the uniform normals representing planes.
     const uniforms = {
-      uClipPlanes,
-      uNumClipPlanes,
+      uClipPlanes: this.uClipPlanes,
+      uNumClipPlanes: this.uNumClipPlanes,
     };
     twgl.setUniforms(this.program, uniforms);
     super._draw();
   }
 }
 
-export class DrawableSquareTarget extends mix(DrawableSquareTokens).with(TokenTargetMixin) {}
+export class ConstrainedInstancedDrawable extends mix(InstancedDrawable).with(ConstrainedTokenMixin) {}
 
-export class DrawableEllipseTarget extends mix(DrawableEllipseTokens).with(TokenTargetMixin) {}
+export class ConstrainedModelDrawable extends mix(ModelDrawable).with(ConstrainedTokenMixin) {}
 
-export class DrawableHexagonTarget extends mix(DrawableHexagonTokens).with(TokenTargetMixin) {}
-
-export class DrawableSphereTarget extends mix(DrawableSphereTokens).with(TokenTargetMixin) {}
-
-export class DrawablePolygonTarget extends mix(DrawablePolygonTokens).with(TokenTargetMixin) {}
-
+export class DirectionalInstancedDrawable extends mix(InstancedDrawable).with(DirectionalWallMixin) {}
 
 /**
  * Identify the t-value on segment A|B closest to C.

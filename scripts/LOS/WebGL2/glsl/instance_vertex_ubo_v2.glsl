@@ -42,7 +42,7 @@ void main() {
     vAlphaThreshold = aAlphaThreshold;
   #endif
 
-  #if ${constrainTarget}
+  #if ${maxConstrainingWalls}
     vWorldPosition = worldPosition.xyz;
   #endif
 }

@@ -12,9 +12,10 @@ import { MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
 import { GEOMETRY_LIB_ID } from "../geometry/const.js";
+import { GeometricPrimitive } from "../geometry/placeable_geometry/GeometricPrimitive.js";
 
 // LOS folder
-import { tokensOverlap, insetPoints } from "./util.js";
+import { tokensOverlap } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 import { SmallBitSet } from "./SmallBitSet.js";
 
@@ -48,26 +49,7 @@ export class ViewerLOS {
    * E.g., more than half the width/height.
    * @type {enum<number>}
    */
-  static POINT_INDICES = {
-    CENTER: 0,	    			// e.g., 00000001
-    CORNERS: {
-      FACING: 1,				  // e.g., 00000010
-      MID: 2,
-      BACK: 3,
-    },
-    SIDES: {
-      FACING: 4,
-      MID: 5,
-      BACK: 6,
-    },
-    D3: {
-      // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
-      // Otherwise, MID may be omitted.
-      TOP: 7,
-      MID: 8,
-      BOTTOM: 9,
-    }
-  };
+  static POINT_INDICES = GeometricPrimitive.POINT_INDICES;
 
   static POINT_OPTIONS = {}; // Filled in below.
 
@@ -164,6 +146,11 @@ export class ViewerLOS {
     this.dirty = true;
   }
 
+  get viewerShape() {
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.getGeomForPlaceable(this.viewer);
+    return geom.shapes[0];
+  }
+
   // ----- NOTE: Viewpoints ----- //
   /** @type {Viewpoint} */
   viewpoints = [];
@@ -173,10 +160,12 @@ export class ViewerLOS {
    */
   initializeViewpoints() {
     if ( !this.viewer ) return false;
-    const pts = this.constructor.constructTokenPoints(this.viewer, {
+
+    const dir = this.targetLocation.subtract(this.viewpoint);
+    const pts = this.constructor.constructTokenPoints(this.viewerShape, dir, {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
-      // tokenShape defaults to this.viewer.tokenBorder.
+      viewer: this.viewer,
     });
 
     // Destroy existing viewpoints
@@ -377,20 +366,24 @@ export class ViewerLOS {
 
   /**
    * Build points for a given token.
-   * @param {Token} token
+   * @param {Token|GeometricPrimitive} token
    * @param {object} [opts]
-   * @param {PIXI.Polygon|PIXI.Rectangle} [opts.tokenShape]
    * @param {number|BitSet} [opts.pointKey]
    * @param {number} [opts.inset]
    * @param {Point3d} [opts.viewpoint]
    * @returns {Point3d[]}
    */
-  static constructTokenPoints(token, { pointKey = 1, tokenShape, inset, viewpoint } = {}) {
-    tokenShape ??= token.tokenBorder;
-    const tokenPoints = [];
+  static constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage, viewer } = {}) {
+    if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
+      const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape);
+      tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
+    }
+
     const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
     const PI = this.POINT_INDICES;
+    const center = tokenShape.center;
 
+    // Filter
     // Are there any corners?
     const cornersMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK]);
     const cornersIx = bs.intersectionNew(cornersMask);
@@ -399,10 +392,12 @@ export class ViewerLOS {
     const sidesMask = SmallBitSet.fromIndices([PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK]);
     const sidesIx = bs.intersectionNew(sidesMask);
 
+    const tokenPoints = [];
     if ( !(cornersIx.isEmpty && sidesIx.isEmpty) ) {
-      const pointCategories = viewpoint
-        ? this._facingTargetPoints(token, tokenShape, viewpoint)
-        : this._facingViewerPoints(token, tokenShape);
+      using dir = viewpoint.subtract(tokenShape.center);
+      const pointCategories = viewer
+        ? this._facingViewerPoints(tokenShape, dir, viewer)
+          : this._facingTokenPoints(tokenShape, dir);
 
       // Add corners.
       const corners = pointCategories.corners;
@@ -418,8 +413,7 @@ export class ViewerLOS {
     }
 
     // Inset all corner and side points.
-    const center = Point3d.fromTokenCenter(token);
-    insetPoints(tokenPoints, center, inset);
+    GeometricPrimitive.insetPoints(tokenPoints, center, insetPercentage);
 
     // Add center point last, b/c it is not inset nor rotated. Add to front of queue for consistency.
     if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(center);
@@ -465,21 +459,20 @@ export class ViewerLOS {
    * Determine the corner- and midpoints for a given viewer that faces a given direction.
    * Viewer points should not change in number based on rotation. Instead,
    * the points are set based on a south-facing target (rotation = 0). Then points are rotated.
-   * @param {Point3d[]} pts
-   * @param {Token} viewer
-   * @param {Point3d} viewpoint
+   * @param {GeometricPrimitive} tokenShape
+   * @param {Point3d} Direction from center point that indicates the token front.
    * @returns {FacingPoints}
    */
-  static _facingViewerPoints(token, tokenShape) {
+  static _facingViewerPoints(tokenShape, dir, viewer) {
     // Rotate by the token rotation.
     // First shift so the token center is 0,0,0.
     // Then rotate.
     // Then translate back.
     // Note: Point.rotate and Point.translate does not currently affect z values.
-    const out = this._facingTokenPoints(token, tokenShape);
-    const rad = Math.toRadians(token.document.rotation);
+    const out = this._facingTokenPoints(tokenShape, dir);
+    const rad = Math.toRadians(viewer.document.rotation);
     if ( !rad ) return out; // No rotation.
-    const ctr = token.center;
+    const ctr = tokenShape.center;
     const fn = pt => pt
       .translate(-ctr.x, -ctr.y, pt)
       .rotate(rad, pt)
@@ -495,30 +488,30 @@ export class ViewerLOS {
   /**
    * Sort given token points into front, mid, back.
    * @param {Point3d[]} pts
-   * @param {Token} token
-   * @param {Point3d} [dir]     Direction from center point that indicates the token front. Defaults to due south.
+   * @param {GeometricPrimitive} tokenShape
+   * @param {Point3d} [dir]     Direction from center point that indicates the token front.
    * @returns {object}
    * - @prop {Point3d[]} facing
    * - @prop {Point3d[]} mid
    * - @prop {Point3d[]} back
    */
-  static sortFacingPoints(pts, token, dir) {
-    dir = dir ? dir.clone() : Point3d.tmp.set(0, 1, 0);
-    const dirPerp = Point3d.tmp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
-    const dist2d = Math.min(token.w, token.h) * 0.25; // Divide at the 0.25 and 0.75 marks
-    dir.normalize(dir).multiplyScalar(dist2d, dir);
+  static _sortFacingPoints(pts, tokenShape, dir) {
+    using dirN = Point3d.tmp;
+    using dirPerp = Point3d.tmp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
+    const dist2d = Math.min(tokenShape.aabb.width, tokenShape.aabb.height) * 0.25; // Divide at the 0.25 and 0.75 marks
+    dir.normalize(dirN).multiplyScalar(dist2d, dirN);
     dirPerp.normalize(dirPerp);
 
-    const center = Point3d.fromTokenCenter(token);
+    const center = tokenShape.center;
     const out = {
       facing: [],
       mid: [],
       back: [],
     };
-    const aFront = center.add(dir);
-    const aBack = center.subtract(dir);
-    const bFront = aFront.add(dirPerp);
-    const bBack = aBack.add(dirPerp);
+    using aFront = center.add(dirN);
+    using aBack = center.subtract(dirN);
+    using bFront = aFront.add(dirPerp);
+    using bBack = aBack.add(dirPerp);
     const orient2d = foundry.utils.orient2dFast;
     const oCenterFront = orient2d(aFront, bFront, center);
     const oCenterBack = orient2d(aBack, bBack, center);
@@ -527,83 +520,31 @@ export class ViewerLOS {
         : (orient2d(aBack, bBack, pt) * oCenterBack) < 0 ? out.back : out.mid;
       arr.push(pt);
     });
-    Point3d.release(aFront, aBack, bFront, bBack, dir, dirPerp, center);
     return out;
-  }
-
-  /**
-   * Determine which corner- or mid-points are facing and which are back for a target.
-   * Based on points in front of the token's (target's) center point relative to a viewpoint.
-   * E.g., same side as viewpoint relative to a line perpendicular to the center-->viewpoint line from center.
-   * @param {Point3d[]} pts
-   * @param {Token} viewer
-   * @param {Point3d} viewpoint
-   * @returns {FacingPoints}
-   */
-  static _facingTargetPoints(token, tokenShape, viewpoint) {
-    // Determine the line perpendicular to the center --> viewpoint line and use to sort the points.
-    const center = Point3d.fromTokenCenter(token);
-    const dir = viewpoint.subtract(center);
-    return this._facingTokenPoints(token, tokenShape, dir);
   }
 
   /**
    * Determine which corner- or mid-points are facing and which are back for a token facing a given direction.
    * Based on points in front of the token's (target's) center point relative to a viewpoint.
    * E.g., same side as viewpoint relative to a line perpendicular to the center-->viewpoint line from center.
-   * @param {Point3d[]} pts
-   * @param {Token} viewer
-   * @param {Point3d} viewpoint
+   * @param {GeometricPrimitive} tokenShape
+   * @param {Point3d} dir
    * @returns {FacingPoints}
    */
-  static _facingTokenPoints(token, tokenShape, dir) {
+  static _facingTokenPoints(tokenShape, dir) {
     // Divide the token into thirds : front third, mid third (sides), back third.
     // Target points don't shift with rotation. But what is considered "front", "mid", "back" can change
     // based on viewpoint perspective
-    const midZ = token.bottomZ + ((token.topZ - token.bottomZ) * 0.5);
-    const corners = this.getCorners(tokenShape, midZ);
-    const sides = midpoints(corners);
+    const pts = tokenShape.internalPoints();
+    const corners = [...pts.top.corners, ...pts.middle.corners, ...pts.bottom.corners];
+    const sides = [...pts.top.mids, ...pts.middle.mids, ...pts.bottom.mids];
     return {
-      corners: this.sortFacingPoints(corners, token, dir),
-      sides: this.sortFacingPoints(sides, token, dir),
+      corners: this._sortFacingPoints(corners, tokenShape, dir),
+      sides: this._sortFacingPoints(sides, tokenShape, dir),
     };
   }
 
-  /**
-   * Helper that constructs 3d points for the points of a token shape (rectangle or polygon).
-   * Uses the elevation provided as the z-value.
-   * @param {PIXI.Polygon|PIXI.Rectangle} tokenShape
-   * @parma {number} elevation
-   * @returns {Point3d[]} Array of corner points.
-   */
-  static getCorners(tokenShape, elevation) {
-    const PAD = -1;
-    // Rectangle is easier to pad, so handle separately.
-    if ( tokenShape instanceof PIXI.Rectangle ) {
-      // Token unconstrained by walls.
-      // Use corners 1 pixel in to ensure collisions if there is an adjacent wall.
-      // PIXI.Rectangle.prototype.pad modifies in place.
-      tokenShape = tokenShape.clone().pad(PAD);
-      return [
-        Point3d.tmp.set(tokenShape.left, tokenShape.top, elevation),
-        Point3d.tmp.set(tokenShape.right, tokenShape.top, elevation),
-        Point3d.tmp.set(tokenShape.right, tokenShape.bottom, elevation),
-        Point3d.tmp.set(tokenShape.left, tokenShape.bottom, elevation)
-      ];
-    } else if ( tokenShape instanceof PIXI.Polygon ) tokenShape = tokenShape.clone(); // Avoid modifying the underlying shape with pad.
-    else tokenShape = tokenShape.toPolygon();
-
-    // Constrained is polygon. Only use corners of polygon
-    // Scale down polygon to avoid adjacent walls.
-    const padShape = tokenShape.clone().pad(PAD, { scalingFactor: 100, miterType: "jtSquare" });
-    return [...padShape.iteratePoints()].map(pt => new Point3d(pt.x, pt.y, elevation));
-  }
-
-
-
-
   /* ----- NOTE: Debug ----- */
-
 
   /**
    * For debugging.
@@ -837,6 +778,7 @@ export class CachedViewerLOS extends ViewerLOS {
  * @param {Point3d[]} pts
  * @returns {Point3d[]}
  */
+/*
 function midpoints(pts) {
   const nPts = pts.length;
   const out = Array(nPts);
@@ -848,6 +790,7 @@ function midpoints(pts) {
   }
   return out;
 }
+*/
 
 
 /**

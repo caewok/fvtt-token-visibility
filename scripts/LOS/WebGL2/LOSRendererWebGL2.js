@@ -1,7 +1,5 @@
 /* globals
-canvas,
 CONFIG,
-CONST,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -9,35 +7,20 @@ PIXI,
 
 import { MODULE_ID } from "../../const.js";
 
-// LibGeometry
-import { Point3d } from "../../geometry/3d/Point3d.js";
-import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
-
 // WebGL2
 import * as twgl from "./twgl.js";
 import { WebGL2 } from "./WebGL2.js";
 
-// TODO: Add regions.
 import {
-  DrawableWalls,
-
-  DrawableSquareTokens,
-  DrawableEllipseTokens,
-  DrawableHexagonTokens,
-  DrawableSphereTokens,
-  DrawablePolygonTokens,
-
-  DrawableSquareTarget,
-  DrawableEllipseTarget,
-  DrawableHexagonTarget,
-  DrawableSphereTarget,
-  DrawablePolygonTarget,
-
-  DrawableTiles,
-
-  // DrawableRegions,
+  InstancedDrawable,
+  ModelDrawable,
+  DirectionalInstancedDrawable,
+  TexturedInstancedDrawable,
+  ConstrainedModelDrawable,
+  ConstrainedInstancedDrawable,
 } from "./InstancedDrawable.js";
 
+import { InstancedGeometricPrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
 
 export class LOSRendererWebGL2 {
 
@@ -63,63 +46,81 @@ export class LOSRendererWebGL2 {
     this.webGL2 = webGL2;
   }
 
-  drawables = {
-    walls: null,
-    tiles: null,
-    regions: null,
-    tokens: [],
-    targets: [],
-  }
+
+
 
   async initialize() {
+    await this._initializePrograms();
     this._initializeCameraBuffer();
     this._initializeMaterialBuffer();
     this.resize();
+  }
 
-    // Initialize handlers to draw different canvas placeables.
-    // Keep each parameter object separate so they don't get mixed up between calls.
+   // ----- NOTE: Program ----- //
 
-    for ( const cl of this.constructor._tokenDrawableClasses() ) {
-      this.drawables.tokens.push(cl.create({ webGL2: this.webGL2 }));
-    };
-    for ( const cl of this.constructor._targetDrawableClasses() ) {
-      this.drawables.targets.push(cl.create({ webGL2: this.webGL2 }));
-    }
+  /** @type {string} */
+  static VERTEX_FILE = "instance_vertex_ubo_v2";
 
-    this.drawables.walls = DrawableWalls.create({ webGL2: this.webGL2 });
-    this.drawables.tiles = DrawableTiles.create({ webGL2: this.webGL2 });
+  /** @type {string} */
+  static FRAGMENT_FILE = "fragment_v2";
 
-    // this.drawables.regions = DrawableRegions.create({ this.webGL2 });
+  static SHADER_FLAGS = InstancedDrawable.SHADER_FLAGS;
 
-    // Initialize each drawable
-    const promises = [];
-    promises.push(this.drawables.walls.initialize());
-    promises.push(this.drawables.tiles.initialize());
-    // promises.push(this.drawables.regions.initialize());
-    this.drawables.tokens.forEach(drawable => promises.push(drawable.initialize()));
-    this.drawables.targets.forEach(drawable => promises.push(drawable.initialize()));
+  /** @type {number} */
+  static MAX_CONSTRAINING_WALLS = 5;
 
+  /** @type {Map<number, twgl.ProgramInfo>} */
+  // Because gl (and webGL2) change for debug vs regular canvas, programs cannot be static.
+  programs = new Map();
+
+  async _initializePrograms() {
+    const SHADER_FLAGS = this.constructor.SHADER_FLAGS;
+
+    // Programs used.
+    const requiredVariants = [
+      SHADER_FLAGS.NONE, // Non-instanced
+      SHADER_FLAGS.INSTANCED,
+      SHADER_FLAGS.INSTANCED | SHADER_FLAGS.TEXTURED, // Tiles
+      SHADER_FLAGS.INSTANCED | SHADER_FLAGS.CONSTRAINED, // Tokens
+      SHADER_FLAGS.CONSTRAINED, // Polygon tokens
+    ]
+    // Plus, need debug versions of each.
+
+    // Compile each.
+    const promises = requiredVariants.map(flags => this.compileVariant(flags));
+    promises.push(...requiredVariants.map(flags => this.compileVariant(flags | SHADER_FLAGS.DEBUG)));
     await Promise.allSettled(promises);
   }
 
-  static _tokenDrawableClasses() {
-    if ( CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere )  return [DrawableSphereTokens];
-    const GRID = CONST.GRID_TYPES;
-    switch ( canvas.grid.type ) {
-      case GRID.SQUARE: return [DrawableSquareTokens];
-      case GRID.GRIDLESS: return [DrawableSquareTokens, DrawableEllipseTokens];
-      default: return [DrawableHexagonTokens, DrawablePolygonTokens];
-    }
+  async compileVariant(flags) {
+    if ( this.programs.has(flags) ) return;
+
+    // Bitwise AND to identify if a specific flag is active.
+    const SHADER_FLAGS = this.constructor.SHADER_FLAGS;
+    const isDebug     = (flags & SHADER_FLAGS.DEBUG) !== 0;
+    const isInstanced = (flags & SHADER_FLAGS.INSTANCED) !== 0;
+    const isTextured = (flags & SHADER_FLAGS.TEXTURED) !== 0;
+    const isConstrained = (flags & SHADER_FLAGS.CONSTRAINED) !== 0;
+
+    // Compile the program and store for later use, keyed to the flags.
+    const programInfo = await this._createProgram({
+      debugViewNormals: isDebug,
+      isInstanced: isInstanced,
+      hasTexture: isTextured,
+      maxConstrainingWalls: isConstrained ? this.constructor.MAX_CONSTRAINING_WALLS : 0,
+    });
+    this.programs.set(flags, programInfo);
   }
 
-  static _targetDrawableClasses() {
-    if ( CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere )  return [DrawableSphereTarget];
-    const GRID = CONST.GRID_TYPES;
-    switch ( canvas.grid.type ) {
-      case GRID.SQUARE: return [DrawableSquareTarget];
-      case GRID.GRIDLESS: return [DrawableSquareTarget, DrawableEllipseTarget];
-      default: return [DrawableHexagonTarget, DrawablePolygonTarget];
-    }
+  async _createProgram({ vertexFile, fragmentFile, ...opts } = {}) {
+    // Must include all parameters that could be in the glsl file.
+    vertexFile ??= this.constructor.VERTEX_FILE;
+    fragmentFile ??= this.constructor.FRAGMENT_FILE;
+    opts.debugViewNormals ??= false;
+    opts.hasTexture ??= false;
+    opts.isInstanced ??= false;
+    opts.maxConstrainingWalls ??= 0;
+    return await this.webGL2.cacheProgram(vertexFile, fragmentFile, opts);
   }
 
   // ----- NOTE: Camera uniform buffer object ----- //
@@ -236,7 +237,7 @@ export class LOSRendererWebGL2 {
    */
   _initializeFramebuffer() {
     const gl = this.gl;
-    const width = this.renderTextureSize;
+    const width = CONFIG[MODULE_ID].renderTextureSize || 128;
     const height = width;
     this.frame.width = width;
     this.frame.height = height;
@@ -258,14 +259,142 @@ export class LOSRendererWebGL2 {
 
   // ----- NOTE: Render pipeline ----- //
 
+  /**
+   * Caches of active drawables mapped to lookup keys based on the primitive and shader flags.
+   * Because the renderer gl changes for the debug popout canvas vs regular canvas, the cache
+   * cannot be static.
+   * @type {Map<string, AbstractDrawable>}
+   */
+  drawableCaches = new Map();
 
+  drawables = {
+    target: new Set(),
+    solidObstacles: new Set(),
+    terrainObstacles: new Set(),
+  }
 
+  /**
+   * Create and initialize drawables as needed.
+   */
+  prerender(targetShape, occlusionTester) {
+    // Constrain the target.
+    this.#cacheDrawableForPrimitive(targetShape, true);
+
+    const tokenObstacles = new Set("tokens");
+    let includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS.difference(tokenObstacles);
+    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles }) ) {
+      this.#cacheDrawableForPrimitive(shape, false);
+    }
+
+    // All token obstacles should be constrained.
+    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles: tokenObstacles }) ) {
+      this.#cacheDrawableForPrimitive(shape, true);
+    }
+
+    // Clear the drawables of any old instances.
+    this.drawableCaches.forEach(drawable => drawable.clearInstances());
+    Object.values(this.drawables).forEach(s => s.clear());
+
+    // Set up the drawables.
+    // Target.
+    const targetKey = this.#drawableKeyForPrimitive(targetShape, true);
+    const drawable = this.drawableCaches.get(targetKey);
+    this.drawables.target.add(drawable);
+    drawable.addGeometricShape(targetShape);
+
+    // Solid obstacles.
+    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles }) ) {
+      const key = this.#drawableKeyForPrimitive(shape, true);
+      const drawable = this.drawableCaches.get(key);
+      this.drawables.solidObstacles.add(drawable);
+      drawable.addGeometricShape(shape);
+    }
+
+    // Terrain obstacles.
+    const terrainObstacles = new Set("terrainWalls");
+    includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS.difference(terrainObstacles);
+    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles: terrainObstacles }) ) {
+      const key = this.#drawableKeyForPrimitive(shape, true);
+      const drawable = this.drawableCaches.get(key);
+      this.drawables.terrainObstacles.add(drawable);
+      drawable.addGeometricShape(shape);
+    }
+  }
+
+  #cacheDrawableForPrimitive(primitive, constrained = false) {
+    /* Drawables:
+    InstancedDrawable -- per primitive
+    ModelDrawable
+    TexturedInstancedDrawable -- per primitive but really only TexturedQuadPrimitive
+    ConstrainedInstancedDrawable -- per primitive
+    ConstrainedModelDrawable
+    DirectionalInstancedDrawable -- per primitive but really only TexturedQuadPrimitive, VerticalQuadPrimitive
+    */
+    const key = this.#drawableKeyForPrimitive(primitive, constrained);
+    if ( this.drawableCaches.has(key) ) return;
+
+    const programFlags = this.#drawableProgramFlagsForPrimitive(primitive, constrained);
+    const drawableClass = this.#drawableClassForPrimitive(primitive, constrained);
+    const drawable = new drawableClass({
+      webGL2: this.webGL2,
+      programInfo: this.programs.get(programFlags),
+      debugProgramInfo: this.programs.get(programFlags | this.constructor.SHADER_FLAGS.DEBUG),
+      primitiveClass: primitive.constructor,
+    });
+    drawable.initialize();
+    this.drawableCaches.set(key, drawable);
+  }
+
+  #drawableProgramFlagsForPrimitive(primitive, constrained = false) {
+    const SHADER_FLAGS = this.constructor.SHADER_FLAGS;
+    const isInstanced = primitive instanceof InstancedGeometricPrimitive;
+    let programFlags = isInstanced ? SHADER_FLAGS.INSTANCED : SHADER_FLAGS.NONE;
+    if ( primitive.constructor.TEXTURED ) programFlags |= SHADER_FLAGS.TEXTURED;
+    if ( constrained ) programFlags |= SHADER_FLAGS.CONSTRAINED;
+    return programFlags;
+  }
+
+  #drawableClassForPrimitive(primitive, constrained = false) {
+    const isInstanced = primitive instanceof InstancedGeometricPrimitive;
+    const isDirectional = Object.hasOwn(primitive, "direction");
+    let drawableClass;
+    if ( isInstanced ) {
+      drawableClass = InstancedDrawable;
+      if ( primitive.constructor.TEXTURED ) drawableClass = TexturedInstancedDrawable;
+      else if ( constrained ) drawableClass = ConstrainedInstancedDrawable;
+      else if ( isDirectional ) drawableClass = DirectionalInstancedDrawable;
+    } else {
+      drawableClass = ModelDrawable;
+      if ( constrained ) drawableClass = ConstrainedModelDrawable;
+    }
+    return drawableClass;
+  }
+
+  #drawableKeyForPrimitive(primitive, constrained = false) {
+    let key;
+    const isInstanced = primitive instanceof InstancedGeometricPrimitive;
+    const isDirectional = Object.hasOwn(primitive, "direction");
+
+    if ( !isInstanced ) key = "ModelDrawable";
+    else {
+      // Instance drawables are split by primitive type.
+      key = `InstancedDrawable_${primitive.constructor.name}`;
+
+      // For now, directional is only applied to instance drawables.
+      if ( isDirectional ) key += `_directional`;
+
+      // For now, textured is only applied to instance drawables.
+      else if ( primitive.constructor.TEXTURED ) key += `_textured`;
+    }
+    if ( constrained ) key += `_constrained`;
+    return key;
+  }
 
   /**
    * Core rendering method.
-   * Should first set the camera.
+   * NOTE: user should first set the camera.
    */
-  render(occlusionTester, targetGeom, { clear = true, debug = false, frame } = {}) {
+  render({ clear = true, debug = false, frame } = {}) {
     const gl = this.gl;
     const webGL2 = this.webGL2;
     frame ??= this.frame;
@@ -284,13 +413,13 @@ export class LOSRendererWebGL2 {
     }
 
     // Pass 1: Render target.
-    this._renderTarget(targetGeom, debug);
+    this._renderTarget(debug);
 
     // Pass 2: Render hard obstacles
-    this._renderHardObstacles(occlusionTester, targetGeom, debug);
+    this._renderHardObstacles(debug);
 
     // Pass 3: Render terrain (limited wall) obstacle.
-    this._renderTerrainObstacles(occlusionTester, targetGeom, debug);
+    this._renderTerrainObstacles(debug);
   }
 
   bindFramebuffer() {
@@ -304,7 +433,7 @@ export class LOSRendererWebGL2 {
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
   }
 
-  _renderTarget(targetGeom, debug = false) {
+  _renderTarget(debug = false) {
     const webGL2 = this.webGL2;
 
     // Set WebGL2 state.
@@ -314,56 +443,11 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.redAlphaMask);
     webGL2.setBlending(false);
 
-    // Add the target instance.
-    for ( const drawable of this.drawables.targets ) {
-      drawable.instanceSet.clear();
-      drawable.addGeomToInstanceSet(targetGeom);
-      drawable.render(debug);
-    }
+    this.drawables.target.forEach(drawable => drawable.render(debug));
   }
 
-  /**
-   * Set the drawables to the hard obstacles in preparation for rendering.
-   * Walls, tiles, regions, levels, tokens.
-   * @param {ObstacleOcclusionTester} occlusionTester
-   */
-  #setAndRenderHardObstacles(occlusionTester, targetGeom, debug) {
-    const geoms = occlusionTester.obstacleGeometries;
-
-    // Add walls
-    const hardWalls = [
-      ...geoms.walls,
-      ...geoms.proximateWalls,
-      ...geoms.reverseProximateWalls
-    ];
-    this.drawables.walls.instanceSet.clear()
-    this.#addWallInstances(hardWalls, targetGeom);
-    this.drawables.walls.render(debug);
-
-    // Add tokens
-    // TODO: Handle constrained tokens.
-    for ( const drawable of this.drawables.tokens ) {
-       drawable.instanceSet.clear();
-       for ( const geom of geoms.tokens ) drawable.addGeomToInstanceSet(geom);
-       drawable.render(debug);
-    }
-
-    // Add tiles and levels
-    this.drawables.tiles.instanceSet.clear();
-    for ( const geom of geoms.tiles ) this.drawables.tiles.addGeomToInstanceSet(geom);
-    for ( const geom of geoms.foregroundLevels ) this.drawables.tiles.addGeomToInstanceSet(geom);
-    for ( const geom of geoms.backgroundLevels ) this.drawables.tiles.addGeomToInstanceSet(geom);
-    this.drawables.tiles.render(debug);
-
-    // TODO: Add regions.
-  }
-
-  #addWallInstances(wallGeoms, targetGeom) {
-    const levelId = targetGeom ? targetGeom.placeableDocument.level : null;
-    for ( const wallGeom of wallGeoms ) this.drawables.walls.addGeomToInstanceSet(wallGeom, levelId);
-  }
-
-  _renderHardObstacles(occlusionTester, targetGeom, debug = false) {
+  _renderHardObstacles(debug = false) {
+    if ( !this.drawables.solidObstacles.size ) return;
     const webGL2 = this.webGL2;
 
     // Set color mask to BLUE only.
@@ -373,15 +457,13 @@ export class LOSRendererWebGL2 {
       webGL2.setColorMask(WebGL2.noColorMask);
     } else webGL2.setColorMask(WebGL2.blueAlphaMask);
     webGL2.setBlending(false);
-    this.#setAndRenderHardObstacles(occlusionTester, targetGeom, debug);
+    this.drawables.solidObstacles.forEach(drawable => drawable.render(debug));
   }
 
-  _renderTerrainObstacles(occlusionTester, targetGeom, debug = false) {
+  _renderTerrainObstacles(debug = false) {
+    if ( !this.drawables.terrainObstacles.size ) return;
     const gl = this.gl;
     const webGL2 = this.webGL2;
-    this.drawables.walls.instanceSet.clear()
-    this.#addWallInstances(occlusionTester.obstacleGeometries.terrainWalls, targetGeom);
-    if ( !this.drawables.walls.instanceSet.size ) return;
 
     // Set WebGL state.
     webGL2.setBlending(true); // Enable Additive Blending
@@ -400,13 +482,11 @@ export class LOSRendererWebGL2 {
     webGL2.setDepthMask(false);
 
     // Draw terrain geometry
-    this.drawables.walls.render(debug);
+    this.drawables.terrainObstacles.forEach(drawable => drawable.render(debug));
 
     // Restore depth mask
     webGL2.setDepthMask(true);
   }
 
   destroy() {}
-
-
 }

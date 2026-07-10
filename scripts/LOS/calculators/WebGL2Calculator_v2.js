@@ -154,7 +154,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
     // Render the target and obstacles.
-    const { viewpoint, target, targetLocation } = this;
+    const target = this.target;
     const tokenMgr = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens;
     const targetGeom = tokenMgr.geomForDocument(target.document);
     this.renderer.updateCameraBuffer();
