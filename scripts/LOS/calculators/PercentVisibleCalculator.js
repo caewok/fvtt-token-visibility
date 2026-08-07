@@ -14,6 +14,7 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
 import { Draw } from "../../geometry/Draw.js";
+import { ConfigHandler } from "../../geometry/ConfigHandler.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -184,12 +185,12 @@ export class PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleResult;
 
   /** @type {CalculatorConfig} */
-  config = {
+  config = new ConfigHandler({
     radius: Number.POSITIVE_INFINITY,
     tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
     largeTarget: false,
     debug: false,
-  };
+  });
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   get senseType() {
@@ -197,16 +198,6 @@ export class PercentVisibleCalculatorAbstract {
   }
 
   // ----- NOTE: Basic property getters / setters ---- //
-
-  /** @type {GeometricPrimitive} */
-  #viewerShape;
-
-  get viewerShape() { return this.#viewerShape; }
-
-  set viewerShape(value) {
-    this.#viewerShape = value;
-    this.targetLocation = value.center;
-  };
 
   /** @type {GeometricPrimitive} */
   #targetShape;
@@ -233,6 +224,8 @@ export class PercentVisibleCalculatorAbstract {
    */
   targetLocation = new Point3d();
 
+  occlusionTester;
+
   // ----- NOTE: Initialization ----- //
 
   async initialize() { }
@@ -248,12 +241,13 @@ export class PercentVisibleCalculatorAbstract {
    * @param {Point3d} [opts.targetLocation]
    * @param {ObstacleOcclusionTest} [opts.occlusionTester]
    */
-  setView({ viewerShape, targetShape, viewpoint, targetLocation, occlusionTester } = {}) {
+  setView({ targetShape, viewpoint, targetLocation, occlusionTester } = {}) {
     // console.debug("PercentVisibleCalculator|initializeView");
-    if ( viewer ) this.viewer = viewer;
     if ( target ) this.target = target;
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
+    if ( targetShape ) this.targetShape = targetShape;
+    if ( occlusionTester ) this.occlusionTester = occlusionTester;
 
     const camera = this.camera;
     camera.cameraPosition = this.viewpoint;
@@ -293,7 +287,7 @@ export class PercentVisibleCalculatorAbstract {
 
   /**
    * Return the visibility result for the current calculator state.
-   * Use _initializeView to set state or set individually.
+   * Use setView to set state or set individually.
    * Also depends on config.
    * @param {CalculatorConfig} cfg
    * @returns {PercentVisibleResult}

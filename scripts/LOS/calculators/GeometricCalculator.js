@@ -319,7 +319,7 @@ buildDebugViewer = api.buildDebugViewer
 
 calc = new api.calcs.geometric();
 
-calc.initializeView({ viewer: randal, target: zanna, viewpoint: Point3d.fromTokenCenter(randal), targetLocation: Point3d.fromTokenCenter(zanna) })
+calc.setView({ viewer: randal, target: zanna, viewpoint: Point3d.fromTokenCenter(randal), targetLocation: Point3d.fromTokenCenter(zanna) })
 calc.calculate()
 calc.percentVisible
 

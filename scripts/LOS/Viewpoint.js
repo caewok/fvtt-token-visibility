@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -50,9 +51,6 @@ export class Viewpoint {
   /** @type {PercentVisibileCalculatorAbstract} */
   get calculator() { return this.viewerLOS.calculator; }
 
-  get config() { return this.viewerLOS.calculator.config; }
-
-
   // ----- NOTE: Visibility Percentages ----- //
 
   /** @type {PercentVisibleResult} */
@@ -65,7 +63,12 @@ export class Viewpoint {
       this.lastResult ??= this.calculator._createResult();
       this.lastResult.makeFullyVisible();
     } else {
-      this.calculator.initializeView(this);
+      const targetGeom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
+      this.calculator.setView({
+        viewpoint: this.viewpoint,
+        targetShape: targetGeom.shapes[0],
+        targetLocation: this.targetLocation,
+      });
       this.lastResult = this.calculator.calculate();
     }
     return this.lastResult;
@@ -100,13 +103,13 @@ export class Viewpoint {
    * @param {Draw} debugDraw
    */
   _drawCanvasDebug(debugDraw) {
-    this.calculator.initializeView(this);
+    this.calculator.setView(this);
     const result = this.calculator.calculate();
     this.calculator._drawCanvasDebug(result, debugDraw);
   }
 
   _draw3dDebug(debugDraw, opts = {}) { // opts incl width, height
-    this.calculator.initializeView(this);
+    this.calculator.setView(this);
     const result = this.calculator.calculate();
     this.calculator._draw3dDebug(result, debugDraw, opts);
   }

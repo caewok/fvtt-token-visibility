@@ -9,10 +9,15 @@ Ray,
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+
+// Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Draw } from "../geometry/Draw.js";
 import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { GeometricPrimitive } from "../geometry/placeable_geometry/GeometricPrimitive.js";
+import { Frustum } from "../geometry/3d/Frustum.js";
+import { ConfigHandler } from "../geometry/ConfigHandler.js";
+import { AABB3d } from "../geometry/3d/AABB3d.js";
 
 // LOS folder
 import { tokensOverlap } from "./util.js";
@@ -33,6 +38,28 @@ const DM_SENSE_TYPES = {
   "move": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE,
   "light": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
 }
+
+/**
+
+ViewerLOS
+- viewpoint
+  - needs calculator (from parent viewerLOS)
+- calculator
+  - Needs occlusionTester
+- occlusionTester
+
+ViewerLOS should not be responsible for defining the calculator or the occlusion tester.
+ViewerLOS must set the subjectToken and initialize the occlusion tester before each calculation.
+ViewerLOS defines the frustum for the occlusion tester.
+- Use MultiViewFrustum to define for multiple viewpoints.
+- Set frustum before calculating.
+- Frustum defined and stored in ViewerLOS
+Occlusion tester can share a global config object for the module.
+
+
+
+*/
+
 
 /**
  * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
@@ -68,38 +95,37 @@ export class ViewerLOS {
   /** @type {PercentVisibleCalculator} */
   calculator;
 
+  /** @type {MultiViewFrustum} */
+  frustum = new MultiViewFrustum();
+
+  /** @type {ObstacleOcclusionTest} */
+  get occlusionTester() { return this.calculator.occlusionTester; }
+
   /**
    * @param {Token} viewer      					The token whose LOS should be tested
-   * @param {PercentVisibleCalculator} 		The visibility calculator to use.
    */
-  constructor(viewer, calculator, cfg = {}) {
+  constructor(viewer, cfg = {}) {
     this.viewer = viewer;
-    this.calculator = calculator;
-    // Dirty variable already set for constructor.
-
-    this.#config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
+    this.#config = cfg;
   }
 
   // ----- NOTE: Configuration ---- //
 
-  static defaultConfiguration = {
+  #config = new ConfigHandler({
     // Viewpoint configuration
     viewpointIndex: 1, // Center point only.
     viewpointInset: 0, // Percentage inset
     angle: true, // If constrained by the viewer vision angle
     threshold: 0.75, // Percent used for LOS
-  };
+  });
 
-  /** @type {ViewerLOSConfig} */
-  #config = { ...this.constructor.defaultConfiguration };
-
-  get config() { return structuredClone(this.#config); }
+  get config() { return this.#config; }
 
   set config(cfg = {}) {
     if ( Object.hasOwn(cfg, "viewpointIndex")
       && cfg.viewpointIndex instanceof SmallBitSet ) cfg.viewpointIndex = cfg.viewpointIndex.word;
+    this.#config.set(cfg);
     this.#dirty ||= Object.hasOwn(cfg, "viewpointIndex") || Object.hasOwn(cfg, "viewpointInset");
-    foundry.utils.mergeObject(this.#config, cfg, { inplace: true, insertKeys: false });
   }
 
   get viewpointInset() { return this.#config.viewpointInset; }
@@ -147,7 +173,7 @@ export class ViewerLOS {
   }
 
   get viewerShape() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.getGeomForPlaceable(this.viewer);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.viewer);
     return geom.shapes[0];
   }
 
@@ -161,11 +187,13 @@ export class ViewerLOS {
   initializeViewpoints() {
     if ( !this.viewer ) return false;
 
-    const dir = this.targetLocation.subtract(this.viewpoint);
+    const dir = this.targetLocation.subtract(this.viewerCenter);
     const pts = this.constructor.constructTokenPoints(this.viewerShape, dir, {
       pointKey: this.config.viewpointIndex,
       inset: this.config.viewpointInset,
       viewer: this.viewer,
+      topZ: this.target.topZ,
+      bottomZ: this.target.bottomZ,
     });
 
     // Destroy existing viewpoints
@@ -173,6 +201,7 @@ export class ViewerLOS {
 
     // Build new viewpoints.
     pts.forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
+
     return true;
   }
 
@@ -194,6 +223,12 @@ export class ViewerLOS {
 
   /** @type {Point3d} */
   get targetLocation() { return Point3d.fromTokenCenter(this.target); }
+
+  /** @type {Point3d} */
+  get viewerCenter() { return Point3d.fromTokenCenter(this.viewer); }
+
+  /** @type {PlaceableGeometry} */
+  get targetGeometry() { return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target); }
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -232,7 +267,7 @@ export class ViewerLOS {
    * Calculate the line-of-sight for a set of viewpoints.
    * @param {CalculatorConfig} cfg
    */
-  calculate(cfg) {
+  calculate() {
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
     if ( this.dirty ) this._clean();
 
@@ -243,8 +278,9 @@ export class ViewerLOS {
       return;
     }
 
-    // Set the calculator config here to avoid doing it repeatedly in the loop.
-    if ( cfg ) this.calculator.config = cfg;
+    // Set up the calculator frustum.
+    this._setFrustum();
+    this.calculator.frustum = this.frustum;
 
     // Test each viewpoint until unobscured is 1.
     for ( const vp of this.viewpoints ) {
@@ -259,6 +295,20 @@ export class ViewerLOS {
     }
     if ( CONFIG[MODULE_ID].useStereoBlending
       && this._percentVisible < this.config.threshold ) this._calculateStereo();
+  }
+
+  _setFrustum() {
+    // Remove all viewpoints from the frustum that are not in the current viewpoint list.
+    const keys = new Set(this.viewpoints.map(vp => vp.viewpoint.key));
+    this.frustum.frustums.keys().forEach(key => {
+      if ( !keys.has(key) ) this.frustum.frustums.delete(key);
+    });
+
+    // Add in viewpoints. (Repeats will be ignored)
+    this.viewpoints.forEach(vp => this.frustum.addViewpoint(vp));
+
+    // Add the target bounds.
+    this.frustum.targetAABB = this.targetGeometry.aabb;
   }
 
   /** @type {PercentVisibleResult} */
@@ -373,7 +423,7 @@ export class ViewerLOS {
    * @param {Point3d} [opts.viewpoint]
    * @returns {Point3d[]}
    */
-  static constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage, viewer } = {}) {
+  static constructTokenPoints(tokenShape, dir, { topZ = 1, bottomZ = 0, pointKey = 1, insetPercentage, viewer } = {}) {
     if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
       const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape);
       tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
@@ -394,7 +444,6 @@ export class ViewerLOS {
 
     const tokenPoints = [];
     if ( !(cornersIx.isEmpty && sidesIx.isEmpty) ) {
-      using dir = viewpoint.subtract(tokenShape.center);
       const pointCategories = viewer
         ? this._facingViewerPoints(tokenShape, dir, viewer)
           : this._facingTokenPoints(tokenShape, dir);
@@ -426,7 +475,6 @@ export class ViewerLOS {
     if ( d3Ix.isEmpty ) return tokenPoints;
 
     // Create top, mid, or bottom points as needed.
-    const { topZ, bottomZ } = token;
     const out = [];
     if ( d3Ix.hasIndex(PI.D3.MID) ) out.push(...tokenPoints);
     if ( d3Ix.hasIndex(PI.D3.TOP) ) out.push(...tokenPoints.map(pt => {
@@ -535,7 +583,7 @@ export class ViewerLOS {
     // Divide the token into thirds : front third, mid third (sides), back third.
     // Target points don't shift with rotation. But what is considered "front", "mid", "back" can change
     // based on viewpoint perspective
-    const pts = tokenShape.internalPoints();
+    const pts = tokenShape.internalPoints;
     const corners = [...pts.top.corners, ...pts.middle.corners, ...pts.bottom.corners];
     const sides = [...pts.top.mids, ...pts.middle.mids, ...pts.bottom.mids];
     return {
@@ -768,6 +816,174 @@ export class CachedViewerLOS extends ViewerLOS {
       super.calculate();
       this.setCache();
     }
+  }
+
+}
+
+class MultiViewFrustum {
+
+  /**
+   * Store frustums by the key of the viewpoint.
+   * @type {Map<BigInt, Frustum}
+   */
+  frustums = new Map();
+
+  /**
+   * Frustum target aabb
+   * @type {AABB3d}
+   */
+  #targetAABB = new AABB3d();
+
+  get targetAABB() { return this.#targetAABB; }
+
+  set targetAABB(value) {
+    if ( this.#targetAABB.almostEqual(value) ) return;
+    this.#targetAABB.copyFrom(value);
+    this.updateTargetAABB();
+  }
+
+  /**
+   * Define the bounding box for this frustum.
+   */
+  setAABB() {
+    const aabbs = this.frustums.values().map(f => f.aabb);
+    AABB3d.union(aabbs, this.aabb);
+  }
+
+  /**
+   * Update or add a viewpoint.
+   * @param {Point3d} viewpoint
+   * @returns {this}
+   */
+  addViewpoint(viewpoint, infiniteDistance = false) {
+    const key = viewpoint.key;
+    if ( this.frustums.has(key) ) return this;
+    let frustum = null;
+    const targetAABB = this.#targetAABB;
+    if ( targetAABB ) {
+      frustum = this.frustums.get(key) ?? new Frustum();
+      frustum = Frustum.fromAABB(targetAABB, { frustum, viewpoint, infiniteDistance });
+    }
+    this.frustums.set(key, frustum);
+    return this;
+  }
+
+  removeViewpoint(viewpoint) { this.frustums.delete(viewpoint.key); }
+
+  /**
+   * Update the target aabb for each frustum, keeping the viewpoint.
+   * @param {AABB3d} [aabb]
+   */
+  updateTargetAABB(aabb, infiniteDistance = false) {
+    if ( aabb ) this.#targetAABB.copyFrom(aabb);
+    aabb = this.targetAABB;
+    const opts = { infiniteDistance };
+    for ( const [key, frustum] of this.frustums.entries() ) {
+      opts.frustum = frustum;
+      opts.viewpoint = null;
+      if ( !frustum ) {
+        opts.viewpoint = Point3d.invertKey(key);
+        opts.frustum = new Frustum();
+      }
+      Frustum.fromAABB(aabb, opts);
+    }
+  }
+
+  /**
+   * Create a frustum from a target token.
+   * @param {Token} target
+   * @param {object} [opts]
+   * @param {Point3d[]} [opts.viewpoints=[]]
+   * @returns {MultiViewFrustum}
+   */
+  static fromTarget(target, { viewpoints, ...opts } = {}) {
+    const out = new this();
+    if ( !viewpoints & opts.viewpoint ) viewpoints = [opts.viewpoint];
+    for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
+    out.targetAABB = target.aabb;
+    return out;
+  }
+
+  /**
+   * Create a frustum from a bounding box.
+   * @param {AABB3d} aabb
+   * @param {object} [opts]
+   * @param {Point3d[]} [opts.viewpoints=[]]
+   * @returns {MultiViewFrustum}
+   */
+  static fromAABB(aabb, { viewpoints, ...opts } = {}) {
+    const out = new this();
+    if ( !viewpoints & opts.viewpoint ) viewpoints = [opts.viewpoint];
+    for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
+    out.targetAABB = aabb;
+    return out;
+  }
+
+  // ----- NOTE: Iteration ----- //
+
+  *iteratePoints() {
+    for ( const frustum of this.frustums.values() ) yield* frustum.iteratePoints();
+  }
+
+  *iterateFaces(opts) {
+    for ( const frustum of this.frustums.values() ) yield* frustum.iterateFaces(opts);
+  }
+
+  #overlapTest(methodName, ...args) {
+    for ( const frustum of this.frustums.values() ) {
+      if ( frustum[methodName](...args) ) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Test if a point is contained within the frustrum.
+   * @param {Point3d} p
+   * @returns {boolean}
+   */
+  containsPoint(p, testBottom) { return this.#overlapTest("containsPoint", p, testBottom); }
+
+  /**
+   * Does the segment cross the frustum or contained within?
+   * @param {Point3d} a
+   * @param {Point3d} b
+   * @returns {boolean}
+   */
+  overlapsSegment(a, b) { return this.#overlapTest("overlapsSegment", a, b); }
+
+  /**
+   * Test if a sphere is contained within the frustum.
+   * @param {Sphere} sphere
+   * @returns {boolean}
+   */
+  overlapsSphere(sphere) { return this.#overlapTest("overlapsSphere", sphere); }
+
+  /**
+   * Test if a given AABB overlaps this frustrum
+   * @param {AABB} aabb
+   * @returns {boolean}
+   */
+  overlapsAABB(aabb) { return this.#overlapTest("overlapsAABB", aabb); }
+
+  poly3dWithinFrustum(poly3d) { return this.#overlapTest("poly3dWithinFrustum", poly3d); }
+
+  overlapsGeometry(geom) { return this.#overlapTest("overlapsGeometry", geom); }
+
+  overlapsDocument(doc, foregroundType) { return this.#overlapTest("overlapsDocument", doc, foregroundType); }
+
+  overlapsRegionDocument(regionD) { return this.#overlapTest("overlapsRegionDocument", regionD); }
+
+  _overlapsRegionShapeGeom(geom) { return this.#overlapTest("_overlapsRegionShapeGeom", geom); }
+
+  outsideElevation(...args) {
+    for ( const frustum of this.frustums.values() ) {
+      if ( !frustum.outsideElevation(...args) ) return false;
+    }
+    return true;
+  }
+
+  draw2d(opts) {
+    for ( const frustum of this.frustums.values() ) frustum.draw2d(opts);
   }
 
 }

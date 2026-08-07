@@ -13,11 +13,7 @@ import { NULL_SET } from "./geometry/util.js";
 
 // ViewerLOS = CachedViewerLOS;
 
-
-export function currentCalculator() {
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
-  return CONFIG[MODULE_ID].losCalculators[calcName];
-}
+export function currentCalculator() { return CONFIG[MODULE_ID].losCalculator(); }
 
 export function currentDebugViewerClass(type) {
   const KEYS = Settings.KEYS;
@@ -33,9 +29,9 @@ export function currentDebugViewerClass(type) {
  */
 function TokenBlockingConfig() {
   return {
-    dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true,
-    live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true,
-    prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true,
+    dead: () => Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true,
+    live: () => Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true,
+    prone: () => Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true,
 
     // No settings enabled for now.
     enemies: true,
@@ -47,7 +43,7 @@ function TokenBlockingConfig() {
 /**
  * @returns {BlockingConfig}  See PercentVisibleCalculator.js
  */
-function BlockingConfig() {
+export function BlockingConfig() {
   return {
     senseType: "sight",
     tokens: TokenBlockingConfig(),
@@ -66,15 +62,14 @@ function BlockingConfig() {
  */
 export function CalculatorConfig() {
   return {
-    ...BlockingConfig(),
-    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false,
+    largeTarget: () => Settings.get(Settings.KEYS.LOS.TARGET.LARGE) || false,
     debug: false,
-    testLighting: true,
     sourceType: "lighting",
+    tokenShapeType: "tokenBorder",
 
     // Points algorithm
-    targetInset: Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75,
-    targetPointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS)),
+    targetInset: () => Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75,
+    targetPointIndex: () => pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS)),
 
     // WebGL2 Calc
     alphaThreshold: CONFIG[MODULE_ID].alphaThreshold,
@@ -87,9 +82,9 @@ export function CalculatorConfig() {
  */
 export function LOSViewerConfig() {
   return {
-    viewpointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.VIEWER.POINTS)),
-    viewpointInset: Settings.get(Settings.KEYS.LOS.VIEWER.INSET),
-    threshold: Settings.get(Settings.KEYS.LOS.TARGET.PERCENT),
+    viewpointIndex: () => pointIndexForSet(Settings.get(Settings.KEYS.LOS.VIEWER.POINTS)),
+    viewpointInset: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSET),
+    threshold: () => Settings.get(Settings.KEYS.LOS.TARGET.PERCENT),
     angle: true,
   };
 }
@@ -100,12 +95,10 @@ export function LOSViewerConfig() {
  */
 export function buildLOSCalculator() {
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
-  const calcs = CONFIG[MODULE_ID].losCalculators;
-  if ( !calcs[calcName] ) {
-    calcs[calcName] ??= new CONFIG[MODULE_ID].calculatorClasses[calcName](CalculatorConfig());
-    calcs[calcName].initialize(); // Async.
-  }
-  return calcs[calcName];
+  const calc = new CONFIG[MODULE_ID].calculatorClasses[calcName]();
+  calc.config = CalculatorConfig();
+  calc.occlusionTester = CONFIG[MODULE_ID].occlusionTester;
+  return calc;
 }
 
 /**
@@ -131,6 +124,7 @@ export function buildCustomLOSCalculator(calcClass, calcCfg = {}) {
  */
 export function buildLOSViewer(viewer) {
   const calculator = buildLOSCalculator();
+  calculator.initialize(); // Async.
   const viewerLOS = new ViewerLOS(viewer, calculator, LOSViewerConfig());
   return viewerLOS;
 }

@@ -289,11 +289,15 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
   /** @type {class<PercentVisibleResult>} */
   static resultClass = PercentVisiblePointsResult
 
-  config = {
-    ...super.config,
-    targetPointIndex: 1, // Center only
-    targetInset: 0.75,
-  };
+  constructor() {
+    super();
+
+    // Add specific configuration.
+    this.config.add({
+      targetPointIndex: 1, // Center only
+      targetInset: 0.75,
+    })
+  }
 
   /**
    * Build a set of 3d points on a given token shape, dependent on settings and shape.
