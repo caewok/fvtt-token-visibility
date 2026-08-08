@@ -96,7 +96,7 @@ export function LOSViewerConfig() {
 export function buildLOSCalculator() {
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
   const calc = new CONFIG[MODULE_ID].calculatorClasses[calcName]();
-  calc.config = CalculatorConfig();
+  calc.config.set(CalculatorConfig());
   calc.occlusionTester = CONFIG[MODULE_ID].occlusionTester;
   return calc;
 }
@@ -113,7 +113,10 @@ export function buildCustomLOSCalculator(calcClass, calcCfg = {}) {
     calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
   }
   calcCfg = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  return new calcClass(calcCfg);
+  const calc = new calcClass();
+  calc.config.set(calcCfg);
+  calc.occlusionTester.config.set(BlockingConfig());
+  return calc;
 }
 
 

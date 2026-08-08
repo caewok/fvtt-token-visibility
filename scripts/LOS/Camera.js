@@ -177,7 +177,8 @@ export class Camera {
   }
 
   setTargetTokenFrustum(targetToken) {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(targetToken);
+    // Set the frustum based on the full token. Faster, more consistent.
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(targetToken).full;
     this.setFrustumForAABB3d(geom.aabb);
   }
 

@@ -1,15 +1,13 @@
 /* globals
 canvas,
 CONFIG,
-foundry,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
-import { NULL_SET } from "../../geometry/util.js";
-import { ObstacleOcclusionTest } from "../../geometry/ObstacleOcclusionTest.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
@@ -52,8 +50,6 @@ export class PercentVisibleResult {
     MEASURED: -1,
   };
 
-  target;
-
   data = {};
 
   visibility = this.constructor.VISIBILITY.MEASURED;
@@ -88,8 +84,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get totalTargetArea() {
-    const { width, height } = this.target.document;
-    return width * height;
+    return 1;
   }
 
   /**
@@ -98,8 +93,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get largeTargetArea() {
-    const { width, height } = this.target.document;
-    return this.totalTargetArea / (width * height);
+    return 1;
   }
 
   /**
@@ -107,7 +101,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get targetArea() {
-    if ( this._config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
+    if ( this.config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
     return this.totalTargetArea;
   }
 
@@ -224,8 +218,6 @@ export class PercentVisibleCalculatorAbstract {
    */
   targetLocation = new Point3d();
 
-  occlusionTester;
-
   // ----- NOTE: Initialization ----- //
 
   async initialize() { }
@@ -243,7 +235,6 @@ export class PercentVisibleCalculatorAbstract {
    */
   setView({ targetShape, viewpoint, targetLocation, occlusionTester } = {}) {
     // console.debug("PercentVisibleCalculator|initializeView");
-    if ( target ) this.target = target;
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
     if ( targetShape ) this.targetShape = targetShape;
@@ -333,6 +324,8 @@ export class PercentVisibleCalculatorAbstract {
   calculateLightingTypeForTarget() {
     // TODO: Fix for use with GeometricPrimitives.
 
+
+
     const oldConfig = this.config;
     const oldBlockingConfig = this.occlusionTester.config;
     const oldViewer = this.viewer;
@@ -355,8 +348,8 @@ export class PercentVisibleCalculatorAbstract {
       },
     };
     this.setLightingTest(this.constructor.LIGHTING_TEST_TYPES.NONE);
-    let dimResult = new this.constructor.resultClass(this);
-    let brightResult = new this.constructor.resultClass(this);
+    let dimResult = new this.constructor.resultClass();
+    let brightResult = new this.constructor.resultClass();
     for ( const src of canvas.lighting.placeables ) {
       this.viewer = src;
 
@@ -394,7 +387,7 @@ export class PercentVisibleCalculatorAbstract {
     const deltaZ = Math.abs(vp.z - this.targetLocation.z);
     if ( deltaZ < visionRadius && isFinite(visionRadius) ) {
       const radius2d = Math.sqrt(visionRadius ** 2 - deltaZ ** 2);
-      debugDraw ??= draw;
+      debugDraw ??= new Draw();
       debugDraw.shape(new PIXI.Circle(vp.x, vp.y, radius2d), { fill: Draw.COLORS.white, fillAlpha: 0.1 });
     }
 

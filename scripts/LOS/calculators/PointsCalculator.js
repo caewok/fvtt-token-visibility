@@ -55,18 +55,18 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
   };
 
   logData() {
-    console.log(`${this.data.visible.cardinality} visible and ${this.data.unobscured.cardinality} unobscured. ${this.data.totalPoints} total points.`);
+    console.log(`${this.data.potentiallyVisible.cardinality} potentially visible and ${this.data.unobscured.cardinality} unobscured. ${this.data.totalPoints} total points.`);
   }
 
   clone() {
     const out = super.clone();
     out.data.unobscured = this.data.unobscured.clone();
-    out.data.visible = this.data.visible.clone();
+    out.data.potentiallyVisible = this.data.potentiallyVisible.clone();
     // totalPoints already cloned by super.
     return out;
   }
 
-  get totalTargetArea() { return this.data.visible.cardinality; }
+  get totalTargetArea() { return this.data.potentiallyVisible.cardinality; }
 
   get visibleArea() { return this.data.unobscured.cardinality; }
 
@@ -81,7 +81,7 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     if ( out ) return out;
     out = this.clone();
     out.data.unobscured = this.data.unobscured.union(other.data.unobscured);
-    out.data.visible = this.data.visible.union(other.data.visible);
+    out.data.potentiallyVisible = this.data.potentiallyVisible.union(other.data.potentiallyVisible);
     out.data.numPoints = Math.max(this.data.numPoints, other.data.numPoints);
     return out;
   }
@@ -97,7 +97,7 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     if ( out ) return out;
     out = this.clone();
     out.data.unobscured = this.data.unobscured.intersection(other.data.unobscured);
-    out.data.visible = this.data.visible.intersection(other.data.visible);
+    out.data.potentiallyVisible = this.data.potentiallyVisible.intersection(other.data.potentiallyVisible);
     out.data.numPoints = Math.min(this.data.numPoints, other.data.numPoints);
     return out;
   }
@@ -136,13 +136,14 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
       if ( this.pointOutsideRange(pt, radius2) || this.pointIsOccluded(pt) ) continue;
       unobscured.add(i);
     }
+    return result;
   }
 
   /* ----- NOTE: Target points ----- */
 
-  /** @type {Point3d} */
+  /** @yield {Point3d} */
   *iterateTargetPoints() {
-    for ( const facePts of this.targetShape.facePoints ) yield* facePts;
+    yield* this.targetShape.iterateFacePoints();
   }
 
   /**
@@ -167,7 +168,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    * @param {Point3d} pt
    * @returns {boolean} True if occluded.
    */
-  pointOccluded(pt) {
+  pointIsOccluded(pt) {
     // Is it occluded from the camera/viewer?
     return this.occlusionTester.segmentIsOccluded(this.viewpoint, pt);
   }
@@ -181,14 +182,15 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   _drawDebugPoints(result, debugDraw) {
     const colors = Draw.COLORS;
-    const targetPoints = this.targetPoints;
-    const { unobscured, visible, all } = result.data;
+    const { unobscured, potentiallyVisible, all } = result.data;
     const vp = this.viewpoint;
     const segment = { a: vp, b: null };
     const n = all.cardinality;
-    for ( let i = 0; i < n; i += 1 ) {
-      segment.b = targetPoints[i];
-      const isVisible = visible.has(i);
+    let i = -1;
+    for ( const pt of this.iterateTargetPoints() ) {
+      i += 1;
+      segment.b = pt;
+      const isVisible = potentiallyVisible.has(i);
       const isUnobscured = unobscured.has(i);
       const color = isVisible && isUnobscured ? colors.blue
         : isVisible ? colors.red
@@ -277,7 +279,7 @@ export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstra
   data = {
     all: new SmallBitSet(),
     unobscured: new SmallBitSet(),
-    visible: new SmallBitSet(),
+    potentiallyVisible: new SmallBitSet(),
   };
 
   // TODO: Handle multiple areas (e.g., for large targets) in the Viewpoint class.
@@ -301,16 +303,16 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
 
   /**
    * Build a set of 3d points on a given token shape, dependent on settings and shape.
-   * @type {Point3d[]}
+   * @yield {Point3d}
    */
-  get targetPoints() {
+  *iterateTargetPoints() {
     const cfg = {
       pointKey: this.config.targetPointIndex,
       insetPercentage: this.config.targetInset,
       viewpoint: this.viewpoint,
     };
     const dir = this.targetLocation.subtract(this.viewpoint);
-    return ViewerLOS.constructTokenPoints(this.targetShape, dir, cfg);
+    yield* ViewerLOS.constructTokenPoints(this.targetShape, dir, cfg);
   }
 
   /**

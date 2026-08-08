@@ -63,12 +63,7 @@ export class Viewpoint {
       this.lastResult ??= this.calculator._createResult();
       this.lastResult.makeFullyVisible();
     } else {
-      const targetGeom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
-      this.calculator.setView({
-        viewpoint: this.viewpoint,
-        targetShape: targetGeom.shapes[0],
-        targetLocation: this.targetLocation,
-      });
+      this.calculator.viewpoint = this.viewpoint;
       this.lastResult = this.calculator.calculate();
     }
     return this.lastResult;

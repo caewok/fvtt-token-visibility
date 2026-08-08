@@ -18,6 +18,7 @@ import { GeometricPrimitive } from "../geometry/placeable_geometry/GeometricPrim
 import { Frustum } from "../geometry/3d/Frustum.js";
 import { ConfigHandler } from "../geometry/ConfigHandler.js";
 import { AABB3d } from "../geometry/3d/AABB3d.js";
+import { MatrixFloat32 } from "../geometry/Matrix.js";
 
 // LOS folder
 import { tokensOverlap } from "./util.js";
@@ -106,7 +107,7 @@ export class ViewerLOS {
    */
   constructor(viewer, cfg = {}) {
     this.viewer = viewer;
-    this.#config = cfg;
+    this.#config.set(cfg);
   }
 
   // ----- NOTE: Configuration ---- //
@@ -173,7 +174,7 @@ export class ViewerLOS {
   }
 
   get viewerShape() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.viewer);
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.viewer).full; // Don't need the constrained shape here.
     return geom.shapes[0];
   }
 
@@ -228,7 +229,7 @@ export class ViewerLOS {
   get viewerCenter() { return Point3d.fromTokenCenter(this.viewer); }
 
   /** @type {PlaceableGeometry} */
-  get targetGeometry() { return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target); }
+  get targetGeometry() { return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target).constrained; }
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -282,6 +283,10 @@ export class ViewerLOS {
     this._setFrustum();
     this.calculator.frustum = this.frustum;
 
+    // Set the calculator target
+    this.calculator.targetShape = this.targetGeometry.shapes[0],
+    this.calculator.targetLocation = this.targetLocation;
+
     // Test each viewpoint until unobscured is 1.
     for ( const vp of this.viewpoints ) {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
@@ -298,6 +303,9 @@ export class ViewerLOS {
   }
 
   _setFrustum() {
+    // Set the target.
+    this.frustum.targetAABB = this.targetGeometry.aabb;
+
     // Remove all viewpoints from the frustum that are not in the current viewpoint list.
     const keys = new Set(this.viewpoints.map(vp => vp.viewpoint.key));
     this.frustum.frustums.keys().forEach(key => {
@@ -305,7 +313,7 @@ export class ViewerLOS {
     });
 
     // Add in viewpoints. (Repeats will be ignored)
-    this.viewpoints.forEach(vp => this.frustum.addViewpoint(vp));
+    this.viewpoints.forEach(vp => this.frustum.addViewpoint(vp.viewpoint));
 
     // Add the target bounds.
     this.frustum.targetAABB = this.targetGeometry.aabb;
@@ -425,7 +433,7 @@ export class ViewerLOS {
    */
   static constructTokenPoints(tokenShape, dir, { topZ = 1, bottomZ = 0, pointKey = 1, insetPercentage, viewer } = {}) {
     if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
-      const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape);
+      const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape).constrained;
       tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
     }
 
@@ -516,16 +524,22 @@ export class ViewerLOS {
     // First shift so the token center is 0,0,0.
     // Then rotate.
     // Then translate back.
-    // Note: Point.rotate and Point.translate does not currently affect z values.
     const out = this._facingTokenPoints(tokenShape, dir);
     const rad = Math.toRadians(viewer.document.rotation);
     if ( !rad ) return out; // No rotation.
-    const ctr = tokenShape.center;
-    const fn = pt => pt
-      .translate(-ctr.x, -ctr.y, pt)
-      .rotate(rad, pt)
-      .translate(ctr.x, ctr.y, pt);
+    const ctr2d = tokenShape.center;
+    using ctr = Point3d.tmp.set(ctr2d.x, ctr2d.y, 0);
+    using ctrInv = ctr.multiplyScalar(-1);
 
+    using M = MatrixFloat32.identity(4, 4);
+    using txMatInv = MatrixFloat32.translation(ctrInv);
+    using rotMat = MatrixFloat32.rotationZ(rad);
+    using txMat = MatrixFloat32.translation(ctr);
+    M.multiply3x3(txMatInv, M);
+    M.multiply3x3(rotMat, M);
+    M.multiply3x3(txMat, M);
+
+    const fn = pt => M.multiplyPoint3d(pt, pt)
     for ( const loc of ["facing", "mid", "back"] ) {
       out.corners[loc].forEach(fn);
       out.sides[loc].forEach(fn);
@@ -842,6 +856,8 @@ class MultiViewFrustum {
     this.updateTargetAABB();
   }
 
+  aabb = new AABB3d();
+
   /**
    * Define the bounding box for this frustum.
    */
@@ -898,7 +914,7 @@ class MultiViewFrustum {
    */
   static fromTarget(target, { viewpoints, ...opts } = {}) {
     const out = new this();
-    if ( !viewpoints & opts.viewpoint ) viewpoints = [opts.viewpoint];
+    if ( !viewpoints && opts.viewpoint ) viewpoints = [opts.viewpoint];
     for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
     out.targetAABB = target.aabb;
     return out;
@@ -913,7 +929,7 @@ class MultiViewFrustum {
    */
   static fromAABB(aabb, { viewpoints, ...opts } = {}) {
     const out = new this();
-    if ( !viewpoints & opts.viewpoint ) viewpoints = [opts.viewpoint];
+    if ( !viewpoints && opts.viewpoint ) viewpoints = [opts.viewpoint];
     for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
     out.targetAABB = aabb;
     return out;
