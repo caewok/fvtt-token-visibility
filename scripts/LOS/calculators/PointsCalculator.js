@@ -49,7 +49,6 @@ Percent visible = counted points / total points
 export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
 
   data = {
-    all: new FastBitSet(),
     potentiallyVisible: new FastBitSet(),
     unobscured: new FastBitSet(),
   };
@@ -123,14 +122,10 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   _testPoints() {
     const result = this._createResult();
-    const { unobscured, potentiallyVisible, all } = result.data;
+    const { unobscured, potentiallyVisible } = result.data;
     const radius2 = this.config.radius ** 2;
     let i = -1;
     for ( const pt of this.iterateTargetPoints() ) {
-      i += 1;
-      all.add(i);
-
-      if ( this.pointNotCounted(pt) ) continue;
       potentiallyVisible.add(i);
 
       if ( this.pointOutsideRange(pt, radius2) || this.pointIsOccluded(pt) ) continue;
@@ -145,14 +140,6 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
   *iterateTargetPoints() {
     yield* this.targetShape.iterateFacePoints();
   }
-
-  /**
-   * Should this point be counted as part of the visibility calculation?
-   * For example, if the point is part of the back of the token it would not count.
-   * @param {Point3d} pt
-   * @param {boolean} True if the point should not be counted.
-   */
-  pointNotCounted(_pt) { return false; }
 
   /**
    * Preliminary test to exclude points that should count as part of the visibility calculation
@@ -276,7 +263,6 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstract {
 
   data = {
-    all: new SmallBitSet(),
     unobscured: new SmallBitSet(),
     potentiallyVisible: new SmallBitSet(),
   };

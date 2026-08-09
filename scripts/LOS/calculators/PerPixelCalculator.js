@@ -55,17 +55,6 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
   }
 
   /**
-   * Should this point be counted as part of the visibility calculation?
-   * Here, points behind the viewing plane do not count (backside points).
-   * @param {Point3d} pt
-   * @param {boolean} True if the point should not be counted.
-   */
-//   pointNotCounted(pt) {
-//     const viewplane = this.viewplane;
-//     return viewplane.whichSide(pt) * viewplane.whichSide(this.viewpoint) < 0
-//   }
-
-  /**
    * Test visibility by constructing a plane perpendicular
    * to the viewpoint --> center line at center.
    * @type {Plane}
