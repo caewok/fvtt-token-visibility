@@ -380,10 +380,10 @@ export class ViewerLOS {
     if ( this.constructor.testPointOutsideConstrainedBorder(pt, this.viewer, this.config.inset) ) return true;
 
     // Viewpoint must be closer to the target center than the viewer center.
-    const ctr = this.viewerCenter;
-    if ( pt.almostEqual(ctr) ) return false; // Center point is special; not blocked.
-    const targetCtr = Point3d.fromTokenCenter(this.target);
-    return PIXI.Point.distanceSquaredBetween(ctr, targetCtr) < PIXI.Point.distanceSquaredBetween(pt, targetCtr); // Use a 2d distance test.
+    const viewerCtr = this.viewerShape.center;
+    if ( pt.almostEqual(viewerCtr) ) return false; // Center point is special; not blocked.
+    const targetCtr = this.targetShape.center;
+    return PIXI.Point.distanceSquaredBetween(viewerCtr, targetCtr) < PIXI.Point.distanceSquaredBetween(pt, targetCtr); // Use a 2d distance test.
   }
 
   /**
