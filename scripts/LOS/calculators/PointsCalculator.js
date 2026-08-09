@@ -182,10 +182,9 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
   _drawDebugPoints(result, debugDraw) {
     const colors = Draw.COLORS;
-    const { unobscured, potentiallyVisible, all } = result.data;
+    const { unobscured, potentiallyVisible } = result.data;
     const vp = this.viewpoint;
     const segment = { a: vp, b: null };
-    const n = all.cardinality;
     let i = -1;
     for ( const pt of this.iterateTargetPoints() ) {
       i += 1;
@@ -258,15 +257,15 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     // Draw the token points.
     const { unobscured, potentiallyVisible } = result.data;
     let i = -1;
-    for ( using pt of this.iterateTargetPoints() ) {
+    for ( const pt of this.iterateTargetPoints() ) {
       i += 1;
       if ( !potentiallyVisible.has(i) ) continue;
 
-      const res = this._applyPerspectiveToPoint(pt);
+      using res = this._applyPerspectiveToPoint(pt.clone());
       if ( !res ) continue;
 
       opts.color = unobscured.has(i) ? Draw.COLORS.blue : Draw.COLORS.red;
-      draw.point(pt.multiply(mult, a), opts);
+      draw.point(res.multiply(mult, a), opts);
     }
 
     mult.release();
