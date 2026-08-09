@@ -309,7 +309,6 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
     const cfg = {
       pointKey: this.config.targetPointIndex,
       insetPercentage: this.config.targetInset,
-      viewpoint: this.viewpoint,
     };
     const dir = this.targetLocation.subtract(this.viewpoint);
     yield* ViewerLOS.constructTokenPoints(this.targetShape, dir, cfg);

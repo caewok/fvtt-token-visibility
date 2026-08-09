@@ -19,6 +19,7 @@ import { Frustum } from "../geometry/3d/Frustum.js";
 import { ConfigHandler } from "../geometry/ConfigHandler.js";
 import { AABB3d } from "../geometry/3d/AABB3d.js";
 import { MatrixFloat32 } from "../geometry/Matrix.js";
+import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
 
 // LOS folder
 import { tokensOverlap } from "./util.js";
@@ -106,7 +107,7 @@ export class ViewerLOS {
    * @param {Token} viewer      					The token whose LOS should be tested
    */
   constructor(viewer, cfg = {}) {
-    this.viewer = viewer;
+    this.#viewer = viewer;
     this.#config.set(cfg);
   }
 
@@ -128,8 +129,6 @@ export class ViewerLOS {
     this.#config.set(cfg);
     this.#dirty ||= Object.hasOwn(cfg, "viewpointIndex") || Object.hasOwn(cfg, "viewpointInset");
   }
-
-  get viewpointInset() { return this.#config.viewpointInset; }
 
   get threshold() { return this.#config.threshold; }
 
@@ -154,7 +153,7 @@ export class ViewerLOS {
   // ----- NOTE: Viewer ----- //
 
   /** @type {Point3d} */
-  get center() { return this.viewer ? Point3d.fromTokenCenter(this.viewer) : undefined; }
+  viewerCenter = new Point3d();
 
   /** @type {number} */
   get visionAngle() { return this.viewer?.vision.data.angle ?? 360; }
@@ -167,34 +166,45 @@ export class ViewerLOS {
 
   get viewer() { return this.#viewer; }
 
-  set viewer(value) {
-    if ( this.#viewer === value ) return;
-    this.#viewer = value;
-    this.dirty = true;
-  }
-
+  /** @type {GeometricPrimitive} */
   get viewerShape() {
     const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.viewer).full; // Don't need the constrained shape here.
     return geom.shapes[0];
   }
+
+  /** @type {number<radians>} */
+  get viewerRotation() { return Math.toRadians(this.viewer.document.rotation); }
 
   // ----- NOTE: Viewpoints ----- //
   /** @type {Viewpoint} */
   viewpoints = [];
 
   /**
+   * Track viewer dimensions to determine if viewpoints need to be changed.
+   */
+  #viewerDims = new Point3d();
+
+  _viewerDimsChanged() {
+    using dims = TokenGeometry.tokenDimensions(this.viewer.document);
+    return !this.#viewerDims.equals(dims);
+  }
+
+  /**
+   * Used to rotate viewpoints around the viewer center.
+   * @type {MatrixFloat32}
+   */
+  rotationMatrix = MatrixFloat32.identity(4, 4);
+
+  /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
-    if ( !this.viewer ) return false;
-
+    Point3d.fromTokenCenter(this.viewer, this.viewerCenter);
+    Point3d.fromTokenCenter(this.target, this.targetLocation);
     const dir = this.targetLocation.subtract(this.viewerCenter);
     const pts = this.constructor.constructTokenPoints(this.viewerShape, dir, {
       pointKey: this.config.viewpointIndex,
-      inset: this.config.viewpointInset,
-      viewer: this.viewer,
-      topZ: this.target.topZ,
-      bottomZ: this.target.bottomZ,
+      insetPercentage: this.config.viewpointInset,
     });
 
     // Destroy existing viewpoints
@@ -202,6 +212,11 @@ export class ViewerLOS {
 
     // Build new viewpoints.
     pts.forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
+
+    // Cache the current viewer dimensions in case they change.
+    TokenGeometry.tokenDimensions(this.viewer.document, this.#viewerDims);
+
+    // TODO: Cache the current viewer shape type in case it changes?
 
     return true;
   }
@@ -223,13 +238,13 @@ export class ViewerLOS {
   set target(value) { this.#target = value; }
 
   /** @type {Point3d} */
-  get targetLocation() { return Point3d.fromTokenCenter(this.target); }
-
-  /** @type {Point3d} */
-  get viewerCenter() { return Point3d.fromTokenCenter(this.viewer); }
+  targetLocation = new Point3d();
 
   /** @type {PlaceableGeometry} */
   get targetGeometry() { return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target).constrained; }
+
+  /** @type {GeometricPrimitive} */
+  get targetShape() { return this.targetGeometry.shapes[0]; }
 
   // ----- NOTE: Visibility testing ----- //
 
@@ -241,7 +256,6 @@ export class ViewerLOS {
     if ( !Number.isNumeric(this._percentVisible) ) this.calculate();
     return this._percentVisible;
   }
-
 
   /**
    * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
@@ -269,15 +283,28 @@ export class ViewerLOS {
    * @param {CalculatorConfig} cfg
    */
   calculate() {
+    // Wipe the previous estimate.
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
-    if ( this.dirty ) this._clean();
+
+    // Lock in the current viewer and target location.
+    TokenGeometry.tokenCenter(this.viewer.document, this.viewerCenter);
+    TokenGeometry.tokenCenter(this.target.document, this.targetLocation);
+
+    console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
+    console.debug(`ViewerLOS|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
 
     this._percentVisible = 0;
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
       this._percentVisible = simpleTest;
+      console.debug(`\nViewerLOS simple visibility|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
       return;
     }
+
+    if ( this._viewerDimsChanged() || this.dirty ) this._clean();
+
+    // Set the rotation matrix for the viewer.
+    MatrixFloat32.rotationZ(this.viewerRotation, this.rotationMatrix);
 
     // Set up the calculator frustum.
     this._setFrustum();
@@ -292,14 +319,20 @@ export class ViewerLOS {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
         vp.lastResult = vp.calculator._createResult();
         vp.lastResult.makeFullyNotVisible();
+        console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: vp ${vp.viewpoint} blocked`);
         continue;
       }
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
-      if ( this._percentVisible >= 1 ) return;
+      if ( this._percentVisible >= 1 ) {
+        console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+        return;
+      }
     }
     if ( CONFIG[MODULE_ID].useStereoBlending
       && this._percentVisible < this.config.threshold ) this._calculateStereo();
+    if ( this._percentVisible.almostEqual(0) ) console.debug(`\nViewerLOS|viewer ${this.viewer.name}: target ${this.target.name} not visible.`);
+    console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
   }
 
   _setFrustum() {
@@ -347,7 +380,7 @@ export class ViewerLOS {
     if ( this.constructor.testPointOutsideConstrainedBorder(pt, this.viewer, this.config.inset) ) return true;
 
     // Viewpoint must be closer to the target center than the viewer center.
-    const ctr = this.center;
+    const ctr = this.viewerCenter;
     if ( pt.almostEqual(ctr) ) return false; // Center point is special; not blocked.
     const targetCtr = Point3d.fromTokenCenter(this.target);
     return PIXI.Point.distanceSquaredBetween(ctr, targetCtr) < PIXI.Point.distanceSquaredBetween(pt, targetCtr); // Use a 2d distance test.
@@ -431,7 +464,7 @@ export class ViewerLOS {
    * @param {Point3d} [opts.viewpoint]
    * @returns {Point3d[]}
    */
-  static constructTokenPoints(tokenShape, dir, { topZ = 1, bottomZ = 0, pointKey = 1, insetPercentage, viewer } = {}) {
+  static constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage = 0 } = {}) {
     if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
       const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape).constrained;
       tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
@@ -439,7 +472,6 @@ export class ViewerLOS {
 
     const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
     const PI = this.POINT_INDICES;
-    const center = tokenShape.center;
 
     // Filter
     // Are there any corners?
@@ -450,101 +482,45 @@ export class ViewerLOS {
     const sidesMask = SmallBitSet.fromIndices([PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK]);
     const sidesIx = bs.intersectionNew(sidesMask);
 
-    const tokenPoints = [];
-    if ( !(cornersIx.isEmpty && sidesIx.isEmpty) ) {
-      const pointCategories = viewer
-        ? this._facingViewerPoints(tokenShape, dir, viewer)
-          : this._facingTokenPoints(tokenShape, dir);
-
-      // Add corners.
-      const corners = pointCategories.corners;
-      if ( cornersIx.hasIndex(PI.CORNERS.FACING) ) tokenPoints.push(...corners.facing);
-      if ( cornersIx.hasIndex(PI.CORNERS.MID) ) tokenPoints.push(...corners.mid);
-      if ( cornersIx.hasIndex(PI.CORNERS.BACK) ) tokenPoints.push(...corners.back);
-
-      // Add sides.
-      const sides = pointCategories.sides;
-      if ( sidesIx.hasIndex(PI.SIDES.FACING) ) tokenPoints.push(...sides.facing);
-      if ( sidesIx.hasIndex(PI.SIDES.MID) ) tokenPoints.push(...sides.mid);
-      if ( sidesIx.hasIndex(PI.SIDES.BACK) ) tokenPoints.push(...sides.back);
-    }
-
-    // Inset all corner and side points.
-    GeometricPrimitive.insetPoints(tokenPoints, center, insetPercentage);
-
-    // Add center point last, b/c it is not inset nor rotated. Add to front of queue for consistency.
-    if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(center);
-
     // 3d
     const d3Mask = SmallBitSet.fromIndices([PI.D3.TOP, PI.D3.MID, PI.D3.BOTTOM]);
     const d3Ix = bs.intersectionNew(d3Mask);
+    if ( d3Ix.isEmpty ) d3Ix.add(PI.D3.MID);
 
-    // If none of TOP, MID, or BOTTOM, then midpoint is assumed.
-    if ( d3Ix.isEmpty ) return tokenPoints;
+    const allPoints = tokenShape.internalPoints;
 
-    // Create top, mid, or bottom points as needed.
-    const out = [];
-    if ( d3Ix.hasIndex(PI.D3.MID) ) out.push(...tokenPoints);
-    if ( d3Ix.hasIndex(PI.D3.TOP) ) out.push(...tokenPoints.map(pt => {
-      pt = pt.clone();
-      pt.z = topZ;
-      return pt;
-    }));
-    if ( d3Ix.hasIndex(PI.D3.BOTTOM) ) out.push(...tokenPoints.map(pt => {
-      pt = pt.clone();
-      pt.z = bottomZ;
-      return pt;
-    }));
-    return out;
-  }
+    const tokenPoints = [];
 
-  /**
-   * @typedef {object} FacingPoints
-   *
-   * @prop {object} corners
-   *   - @prop {Point3d[]} facing
-   *   - @prop {Point3d[]} mid
-   *   - @prop {Point3d[]} back
-   * @prop {object} sides
-   *   - @prop {Point3d[]} facing
-   *   - @prop {Point3d[]} mid
-   *   - @prop {Point3d[]} back
-   */
+    /**
+     * @param {number} index        The bitmask intersection (cornersIx or sidesIx)
+     * @param {"corners"|"sides"} type
+     * @returns {Point3d[]}
+     */
+    const sortFn = (index, type) => {
+      const typePoints = [];
+      if ( d3Ix.hasIndex(PI.D3.BOTTOM) ) typePoints.push(...allPoints.bottom[type]);
+      if ( d3Ix.hasIndex(PI.D3.MID) ) typePoints.push(...allPoints.middle[type]);
+      if ( d3Ix.hasIndex(PI.D3.TOP) ) typePoints.push(...allPoints.top[type]);
+      const pointCategories = this._sortFacingPoints(typePoints, tokenShape, dir);
 
-  /**
-   * Determine the corner- and midpoints for a given viewer that faces a given direction.
-   * Viewer points should not change in number based on rotation. Instead,
-   * the points are set based on a south-facing target (rotation = 0). Then points are rotated.
-   * @param {GeometricPrimitive} tokenShape
-   * @param {Point3d} Direction from center point that indicates the token front.
-   * @returns {FacingPoints}
-   */
-  static _facingViewerPoints(tokenShape, dir, viewer) {
-    // Rotate by the token rotation.
-    // First shift so the token center is 0,0,0.
-    // Then rotate.
-    // Then translate back.
-    const out = this._facingTokenPoints(tokenShape, dir);
-    const rad = Math.toRadians(viewer.document.rotation);
-    if ( !rad ) return out; // No rotation.
-    const ctr2d = tokenShape.center;
-    using ctr = Point3d.tmp.set(ctr2d.x, ctr2d.y, 0);
-    using ctrInv = ctr.multiplyScalar(-1);
-
-    using M = MatrixFloat32.identity(4, 4);
-    using txMatInv = MatrixFloat32.translation(ctrInv);
-    using rotMat = MatrixFloat32.rotationZ(rad);
-    using txMat = MatrixFloat32.translation(ctr);
-    M.multiply3x3(txMatInv, M);
-    M.multiply3x3(rotMat, M);
-    M.multiply3x3(txMat, M);
-
-    const fn = pt => M.multiplyPoint3d(pt, pt)
-    for ( const loc of ["facing", "mid", "back"] ) {
-      out.corners[loc].forEach(fn);
-      out.sides[loc].forEach(fn);
+      const out = [];
+      const indexType = type.toUpperCase();
+      if ( index.hasIndex(PI[indexType].FACING) ) out.push(...pointCategories.facing);
+      if ( index.hasIndex(PI[indexType].MID) ) out.push(...pointCategories.mid);
+      if ( index.hasIndex(PI[indexType].BACK) ) out.push(...pointCategories.back);
+      return out.map(pt => pt.clone()); // Copy points b/c they may be inset.
     }
-    return out;
+
+    if ( !cornersIx.isEmpty ) tokenPoints.push(...sortFn(cornersIx, "corners"));
+    if ( !sidesIx.isEmpty ) tokenPoints.push(...sortFn(sidesIx, "sides"));
+
+    // Inset all corner and side points.
+    GeometricPrimitive.insetPoints(tokenPoints, allPoints.center, insetPercentage);
+
+    // Add center point last, b/c it is not inset nor rotated. Add to front of queue for consistency.
+    if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(allPoints.center.clone());
+
+    return tokenPoints;
   }
 
   /**
@@ -585,27 +561,6 @@ export class ViewerLOS {
     return out;
   }
 
-  /**
-   * Determine which corner- or mid-points are facing and which are back for a token facing a given direction.
-   * Based on points in front of the token's (target's) center point relative to a viewpoint.
-   * E.g., same side as viewpoint relative to a line perpendicular to the center-->viewpoint line from center.
-   * @param {GeometricPrimitive} tokenShape
-   * @param {Point3d} dir
-   * @returns {FacingPoints}
-   */
-  static _facingTokenPoints(tokenShape, dir) {
-    // Divide the token into thirds : front third, mid third (sides), back third.
-    // Target points don't shift with rotation. But what is considered "front", "mid", "back" can change
-    // based on viewpoint perspective
-    const pts = tokenShape.internalPoints;
-    const corners = [...pts.top.corners, ...pts.middle.corners, ...pts.bottom.corners];
-    const sides = [...pts.top.mids, ...pts.middle.mids, ...pts.bottom.mids];
-    return {
-      corners: this._sortFacingPoints(corners, tokenShape, dir),
-      sides: this._sortFacingPoints(sides, tokenShape, dir),
-    };
-  }
-
   /* ----- NOTE: Debug ----- */
 
   /**
@@ -624,46 +579,16 @@ export class ViewerLOS {
    * Color red if fails LOS threshold test for that viewpoint.
    */
   _drawLineOfSightDebug(draw) {
-    const COLORS = Draw.COLORS;
+    console.debug(`\nViewerLOS debug|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
+    console.debug(`ViewerLOS debug|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
+
     const simpleTest = this.simpleVisibilityTest();
-    const seg = { a: null, b: this.targetLocation };
-    const opts = { color: null, alpha: 0.5, dashLength: 0, gapLength: 0 };
     if ( ~simpleTest ) {
       // No viewpoints used; color each with light green or light red line.
-      opts.color = simpleTest ? COLORS.lightgreen : COLORS.lightred;
-      opts.dashLength = 10;
-      opts.gapLength = 10;
-      for ( const vp of this.viewpoints ) {
-        seg.a = vp.viewpoint;
-        draw.segment(seg, opts);
-      }
+      const opts = { color: simpleTest ? Draw.COLORS.LIGHT.green : Draw.COLORS.LIGHT.red };
+      for ( const vp of this.viewpoints ) vp._drawLOSSegment(this.targetLocation, draw, opts);
       return;
-    }
-
-    for ( const vp of this.viewpoints ) {
-      seg.a = vp.viewpoint;
-      if ( !vp.lastResult ) {
-        // Viewpoint did not count.
-        opts.dashLength = 10;
-        opts.gapLength = 10;
-        opts.color = COLORS.orange;
-      } else if ( vp.lastResult.type === vp.lastResult.constructor.VISIBILITY.NONE ) {
-        opts.dashLength = 10;
-        opts.gapLength = 10;
-        opts.color = COLORS.red;
-      } else if ( vp.lastResult.type === vp.lastResult.constructor.VISIBILITY.FULL ) {
-        opts.dashLength = 10;
-        opts.gapLength = 10;
-        opts.color = COLORS.green;
-      } else {
-        opts.dashLength = 0;
-        opts.gapLength = 0;
-        const percentVis = vp.percentVisible;
-        opts.color = percentVis === 0 ? COLORS.red
-          : percentVis < this.threshold ? COLORS.orange : COLORS.green;
-      }
-      draw.segment(seg, opts);
-    }
+    } else for ( const vp of this.viewpoints ) vp._drawLOS(this.targetLocation, draw);
   }
 
 

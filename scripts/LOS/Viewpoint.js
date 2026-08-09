@@ -8,6 +8,7 @@ CONFIG,
 // Geometry
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { GEOMETRY_LIB_ID } from "../geometry/const.js";
+import { Draw } from "../geometry/Draw.js";
 
 /**
  * An eye belong to a specific viewer.
@@ -18,7 +19,7 @@ export class Viewpoint {
   viewerLOS;
 
   /** @type {Point3d} */
-  viewpointDiff = new Point3d();
+  viewpointOffset = new Point3d();
 
   /**
    * @param {ViewerLOS} viewerLOS      The viewer that controls this "eye"; handles most of the config
@@ -26,27 +27,37 @@ export class Viewpoint {
    */
   constructor(viewerLOS, viewpoint) {
     this.viewerLOS = viewerLOS;
-    this.viewpoint = viewpoint;
+
+    // Use the viewer shape center to calculate the difference.
+    // Because the viewpoint comes from viewerShape.internalPoints, which could be the center.
+    // vp - ctr = diff
+    // vp = diff + ctr
+    viewpoint.subtract(viewerLOS.viewerShape.center, this.viewpointOffset);
   }
 
   /** @type {Point3d} */
-  get viewpoint() { return this.viewerLOS.center.add(this.viewpointDiff); }
+  #viewpoint = new Point3d();
 
-  set viewpoint(value) { value.subtract(this.viewerLOS.center, this.viewpointDiff); }
+  /** @type {MatrixFloat32} */
+  get rotationMatrix() { return this.viewerLOS.rotationMatrix; }
 
-  /** @type {Point3d} */
-  get targetLocation() { return this.viewerLOS.targetLocation; }
+  /**
+   * Calculate this viewpoint based on the viewerLOS viewer center.
+   * @type {Point3d}
+   */
+  get viewpoint() {
+    // If simply at the center, return that value.
+    const offset = this.viewpointOffset;
+    const ctr = this.viewerLOS.viewerShape.center;
+    if ( !(offset.x || offset.y || offset.z) ) return offset.add(ctr, this.#viewpoint);
+    return this.rotationMatrix.multiplyPoint3d(offset, this.#viewpoint)
+      .add(ctr, this.#viewpoint);
+  }
 
-  /** @type {Token} */
-  get viewer() { return this.viewerLOS.viewer};
+  // ----- NOTE: References back to the viewerLOS ----- //
 
   /** @type {Token} */
   get target() { return this.viewerLOS.target; }
-
-  /** @type {WALL_RESTRICTION_TYPES} */
-  get senseType() { return this.viewerLOS.config.senseType; }
-
-  // set senseType(value) { this.calculator.senseType = senseType; }
 
   /** @type {PercentVisibileCalculatorAbstract} */
   get calculator() { return this.viewerLOS.calculator; }
@@ -59,21 +70,22 @@ export class Viewpoint {
   get percentVisible() { return this.lastResult?.percentVisible || 0; }
 
   calculate() {
-    if ( this.passesSimpleVisibilityTest() ) {
+    const vp = this.viewpoint;
+    if ( this.passesSimpleVisibilityTest(vp) ) {
       this.lastResult ??= this.calculator._createResult();
       this.lastResult.makeFullyVisible();
     } else {
-      this.calculator.viewpoint = this.viewpoint;
+      this.calculator.viewpoint = vp;
       this.lastResult = this.calculator.calculate();
     }
     return this.lastResult;
   }
 
-  targetOverlapsViewpoint() {
+  targetOverlapsViewpoint(viewpoint) {
     const tokenShapeType = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
     const bounds = this.target[tokenShapeType];
-    if ( !bounds.contains(this.viewpoint.x, this.viewpoint.y) ) return false;
-    return this.viewpoint.z.between(this.target.bottomZ, this.target.topZ);
+    if ( !bounds.contains(viewpoint.x, viewpoint.y) ) return false;
+    return viewpoint.z.between(this.target.bottomZ, this.target.topZ);
   }
 
   /**
@@ -81,14 +93,14 @@ export class Viewpoint {
    * @param {Token} target
    * @returns {0|1|undefined} 1.0 for visible; Undefined if obstacles present or target intersects the vision rays.
    */
-  passesSimpleVisibilityTest() {
+  passesSimpleVisibilityTest(viewpoint) {
     const target = this.target;
 
     // Treat the scene background as fully blocking, so basement tokens don't pop-up unexpectedly.
     const backgroundElevation = canvas.scene.flags?.levels?.backgroundElevation || 0;
-    if ( (this.viewpoint.z > backgroundElevation && target.topZ < backgroundElevation)
-      || (this.viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return true;
-    return this.targetOverlapsViewpoint();
+    if ( (viewpoint.z > backgroundElevation && target.topZ < backgroundElevation)
+      || (viewpoint.z < backgroundElevation && target.bottomZ > backgroundElevation) ) return true;
+    return this.targetOverlapsViewpoint(viewpoint);
   }
 
   /* ----- NOTE: Debug ----- */
@@ -98,14 +110,42 @@ export class Viewpoint {
    * @param {Draw} debugDraw
    */
   _drawCanvasDebug(debugDraw) {
-    this.calculator.setView(this);
     const result = this.calculator.calculate();
     this.calculator._drawCanvasDebug(result, debugDraw);
   }
 
   _draw3dDebug(debugDraw, opts = {}) { // opts incl width, height
-    this.calculator.setView(this);
     const result = this.calculator.calculate();
     this.calculator._draw3dDebug(result, debugDraw, opts);
+  }
+
+  _drawLOS(targetLocation, draw, opts = {}) {
+    opts.alpha = 0.5;
+    opts.color = Draw.COLORS.orange; // Viewpoint did not count.
+    opts.dashLength = 10;
+    opts.gapLength = 10;
+
+    const lastResult = this.lastResult;
+    if ( lastResult ) {
+      switch ( lastResult.type ) {
+        case lastResult.constructor.VISIBILITY.NONE:
+          opts.color = Draw.COLORS.red;
+          break;
+        case lastResult.constructor.VISIBILITY.FULL:
+          opts.color = Draw.COLORS.green;
+          break;
+        case lastResult.constructor.VISIBILITY.MEASURED:
+          opts.dashLength = 0;
+          opts.gapLength = 0;
+          opts.color = this.percentVisible === 0 ? Draw.COLORS.red
+            : this.percentVisible < this.viewerLOS.threshold ? Draw.COLORS.orange : Draw.COLORS.green;
+          break;
+      }
+    }
+    this._drawLOSSegment(targetLocation, draw, opts);
+  }
+
+  _drawLOSSegment(targetLocation, draw, opts = {}) {
+    draw.segment({ a: this.viewpoint, b: targetLocation }, opts)
   }
 }
