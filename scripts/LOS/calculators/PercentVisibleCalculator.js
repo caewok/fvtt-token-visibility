@@ -292,7 +292,7 @@ export class PercentVisibleCalculatorAbstract {
     // console.debug("PercentVisibleCalculator|_calculate");
     // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
     const result = this._createResult();
-    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.radius ** 2;
+    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.config.radius ** 2;
     return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
   }
 
@@ -382,7 +382,7 @@ export class PercentVisibleCalculatorAbstract {
 
     // Draw the viewer vision radius to the token, accounting for 3d distance.
     // Use Pythagorean to get the 2d radius = sqrt(radius3d^2 - deltaZ^2)
-    const visionRadius = this.radius;
+    const visionRadius = this.config.radius;
     const vp = this.viewpoint;
     const deltaZ = Math.abs(vp.z - this.targetLocation.z);
     if ( deltaZ < visionRadius && isFinite(visionRadius) ) {

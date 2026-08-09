@@ -87,10 +87,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
     this.constructPerspectivePolygons();
-    this.constructClipperPaths();
-
     result.data.targetPaths = this._constructTargetClipperPaths();
     result.data.blockingPaths = this._constructObstacleClipperPaths();
+
+    console.debug(`${this.constructor.name}|visibility ${result.percentVisible}`);
     return result;
   }
 
@@ -114,10 +114,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Handle tiles and levels, which vary based on shape type.
     let tileShapeIter;
     switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: tileShapeIter = "alphaThresholdTriangles"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: tileShapeIter = "alphaThresholdPolygons"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: tileShapeIter = "alphaBoundingPolygon"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: tileShapeIter = "alphaBoundingBox"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: tileShapeIter = "triangles"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: tileShapeIter = "polygons"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: tileShapeIter = "boundingPolygon"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: tileShapeIter = "boundingRect"; break;
       default: "faces";
     }
     includeObstacles = new Set(["tiles", "foregroundLevels", "backgroundLevels"]);
@@ -131,8 +131,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    */
   *iterateTerrainObstacleFaces() {
     const ot = this.occlusionTester;
-    const includedObstacles = new Set(["terrainWalls"]);
-    yield ot.iterateObstacleFaces({ includedObstacles });
+    const includeObstacles = new Set(["terrainWalls"]);
+    yield* ot.iterateObstacleFaces({ includeObstacles });
   }
 
   /**
@@ -149,7 +149,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     return poly;
   }
 
-
   /* ----- NOTE: Perspective polygons ----- */
 
   // Take target and obstacle shapes and transform to a 2d (flat) camera perspective view.
@@ -164,6 +163,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   terrainObstaclePolys = [];
 
   constructPerspectivePolygons() {
+    this.targetPolys.length = 0;
+    this.solidObstaclePolys.length = 0;
+    this.terrainObstaclePolys.length = 0;
+
     for ( const poly of this.iterateTargetFaces() ) {
       const txPoly = this.#transformFace(poly);
       if ( txPoly ) this.targetPolys.push(txPoly);
@@ -215,7 +218,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 
   _constructObstacleClipperPaths() {
-    const terrainObstaclePaths = this._combineTerrainPolys();
+    const terrainObstaclePaths = this._combineTerrainObstaclePolys();
     let solidObstaclePaths = this._combineObstaclePolys();
     if ( terrainObstaclePaths && !terrainObstaclePaths.area.almostEqual(0) ) {
       if ( !solidObstaclePaths ) {
@@ -266,7 +269,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Draw the 3d objects in the popout.
    */
   _draw3dDebug(result, draw, { width = 100, height = 100 } = {}) {
-    const { targetPolys, blockingPolys, blockingTerrainPolys } = this;
+    const { targetPolys, solidObstaclePolys, terrainObstaclePolys } = this;
     const colors = Draw.COLORS;
 
     // Draw the target in 3d, centered at 0,0.
@@ -281,8 +284,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     */
 
     // Draw the detected obstacles.
-    blockingPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
-    blockingTerrainPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
+    solidObstaclePolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
+    terrainObstaclePolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
   }
 }
 
