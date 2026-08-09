@@ -290,7 +290,6 @@ export class Settings extends ModuleSettingsAbstract {
           [PI.D3.BOTTOM]: "Bottom Elevation",
         },
       })),
-      onChange: value => this.losSettingChange(VIEWER.POINTS, value)
     });
 
     register(VIEWER.INSET, {
@@ -306,7 +305,6 @@ export class Settings extends ModuleSettingsAbstract {
       default: 0.75,
       type: Number,
       tab: "losViewer",
-      onChange: value => this.losSettingChange(VIEWER.INSET, value)
     });
 
     // ----- NOTE: Line-of-sight target tab ----- //
@@ -321,7 +319,7 @@ export class Settings extends ModuleSettingsAbstract {
       choices: losChoices,
       default: LTYPES.POINTS,
       tab: "losTarget",
-      onChange: value => this.losSettingChange(TARGET.ALGORITHM, value)
+      onChange: value => this.algorithmChange(value)
     });
 
     register(TARGET.PERCENT, {
@@ -337,7 +335,6 @@ export class Settings extends ModuleSettingsAbstract {
       default: 0,
       type: Number,
       tab: "losTarget",
-      onChange: value => this.losSettingChange(TARGET.PERCENT, value)
     });
 
     register(TARGET.LARGE, {
@@ -348,7 +345,6 @@ export class Settings extends ModuleSettingsAbstract {
       type: Boolean,
       default: false,
       tab: "losTarget",
-      onChange: value => this.losSettingChange(TARGET.LARGE, value)
     });
 
     register(TARGET.POINT_OPTIONS.POINTS, {
@@ -375,7 +371,6 @@ export class Settings extends ModuleSettingsAbstract {
           [PI.D3.BOTTOM]: "Bottom Elevation",
         },
       })),
-      onChange: value => this.losSettingChange(TARGET.POINT_OPTIONS.POINTS, value)
     });
 
     register(PT_OPTS.INSET, {
@@ -391,7 +386,6 @@ export class Settings extends ModuleSettingsAbstract {
       default: 0.75,
       type: Number,
       tab: "losTarget",
-      onChange: value => this.losSettingChange(PT_OPTS.INSET, value)
     });
 
     // ----- NOTE: Other tab ----- //
@@ -403,7 +397,6 @@ export class Settings extends ModuleSettingsAbstract {
       config: false,
       type: Boolean,
       default: false,
-      onChange: value => this.losSettingChange(KEYS.LIVE_TOKENS_BLOCK, value),
       tab: "other"
     });
 
@@ -414,7 +407,6 @@ export class Settings extends ModuleSettingsAbstract {
       config: false,
       type: Boolean,
       default: false,
-      onChange: value => this.losSettingChange(KEYS.DEAD_TOKENS_BLOCK, value),
       tab: "other"
     });
 
@@ -425,7 +417,6 @@ export class Settings extends ModuleSettingsAbstract {
       config: false,
       type: Boolean,
       default: false,
-      onChange: value => this.losSettingChange(KEYS.PRONE_TOKENS_BLOCK, value),
       tab: "other"
     });
 
@@ -572,55 +563,17 @@ export class Settings extends ModuleSettingsAbstract {
     }
   }
 
-  static losSettingChange(key, value) {
-    this.cache.delete(key);
-    const { TARGET, VIEWER } = SETTINGS.LOS;
+  static algorithmChange(value) {
+    // Update the shared calculator.
+    CONFIG[MODULE_ID].losCalculator.destroy();
+    CONFIG[MODULE_ID].losCalculator = null;
+    CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
+    CONFIG[MODULE_ID].losCalculator.initialize(); // Async.
 
-    switch ( key ) {
-      case TARGET.ALGORITHM: {
-        // Set a new shared calculator for all tokens.
-        const losCalc = buildLOSCalculator();
-        canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
-          if ( !handler ) return;
-          if ( handler.losViewer.calculator ) handler.losViewer.calculator.destroy();
-          handler.losViewer.calculator = losCalc;
-        });
-
-        // Start up a new debug viewer.
-        if ( this.get(this.KEYS.DEBUG.LOS) ) {
-          this.destroyDebugViewer();
-          this.initializeDebugViewer(value);
-        }
-        break;
-      }
-      case VIEWER.POINTS: value = pointIndexForSet(value);
-      case VIEWER.INSET: { /* eslint-disable-line no-fallthrough */
-        // Tell the los viewer to update the viewpoints.
-        canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
-          if ( !handler ) return;
-          handler.losViewer.dirty = true;
-        });
-      }
-      case TARGET.PERCENT: {  /* eslint-disable-line no-fallthrough */
-        // Update the viewpoints for all tokens.
-        const config = { [configKeyForSetting[key]]: value };
-        canvas.tokens.placeables.forEach(token => {
-          const handler = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
-          if ( !handler ) return;
-          handler.losViewer.config = config;
-        });
-        break;
-      }
-
-      // Changes to the calculator config.
-      case TARGET.POINT_OPTIONS.POINTS: value = pointIndexForSet(value);
-      default: { /* eslint-disable-line no-fallthrough */
-        const config = foundry.utils.expandObject({ [configKeyForSetting[key]]: value });
-        const currCalc = currentCalculator();
-        currCalc.permanentConfig = config;
-      }
+    // Start up a new debug viewer.
+    if ( this.get(this.KEYS.DEBUG.LOS) ) {
+      this.destroyDebugViewer();
+      this.initializeDebugViewer(value);
     }
   }
 }

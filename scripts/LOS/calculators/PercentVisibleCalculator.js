@@ -1,19 +1,18 @@
 /* globals
 canvas,
 CONFIG,
-foundry,
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
-import { NULL_SET } from "../../geometry/util.js";
-import { ObstacleOcclusionTest } from "../../geometry/ObstacleOcclusionTest.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
 import { Draw } from "../../geometry/Draw.js";
+import { ConfigHandler } from "../../geometry/ConfigHandler.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -51,40 +50,23 @@ export class PercentVisibleResult {
     MEASURED: -1,
   };
 
-  target;
-
   data = {};
 
   visibility = this.constructor.VISIBILITY.MEASURED;
 
-  static defaultConfiguration = {
+  config = {
     largeTarget: false,
   };
 
   logData() { }
-
-  _config = {}
-
-  get config() { return structuredClone(this._config); }
-
-  set config(cfg = {}) { foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false }); }
-
-  constructor(target, cfg = {}) {
-    this.target = target;
-    this._config = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
-  }
-
-  static fromCalculator(calc, opts = {}) {
-    opts.largeTarget ??= calc.config.largeTarget;
-    return new this(calc.target, opts);
-  }
 
   makeFullyNotVisible() { this.visibility = this.constructor.VISIBILITY.NONE; return this; }
 
   makeFullyVisible() { this.visibility = this.constructor.VISIBILITY.FULL; return this; }
 
   clone() {
-    const out = new this.constructor(this.target, this._config);
+    const out = new this();
+    out.config = structuredClone(this.config);
     Object.assign(out.data, structuredClone(this.data));
     out.visibility = this.visibility;
     return out;
@@ -102,8 +84,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get totalTargetArea() {
-    const { width, height } = this.target.document;
-    return width * height;
+    return 1;
   }
 
   /**
@@ -112,8 +93,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get largeTargetArea() {
-    const { width, height } = this.target.document;
-    return this.totalTargetArea / (width * height);
+    return 1;
   }
 
   /**
@@ -121,7 +101,7 @@ export class PercentVisibleResult {
    * @type {number}
    */
   get targetArea() {
-    if ( this._config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
+    if ( this.config.largeTarget ) return Math.min(this.totalTargetArea, this.largeTargetArea);
     return this.totalTargetArea;
   }
 
@@ -198,173 +178,76 @@ export class PercentVisibleResult {
 export class PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleResult;
 
-  /**
-   * @param {CalculatorConfig} cfg
-   */
-  constructor(cfg = {}) {
-    // Set default configuration first and then override with passed-through values.
-    this.#permanentConfig = foundry.utils.mergeObject(this.constructor.defaultConfiguration, cfg, { inplace: false, insertKeys: false });
-    this.#permanentBlockingConfig = foundry.utils.mergeObject(this.constructor.defaultBlockingConfiguration, cfg, { inplace: false, insertKeys: false });
-    this.restorePermanentConfig();
-    this.occlusionTester.frustum = new Frustum();
-  }
-
-  // ----- NOTE: Configuration ----- //
-
   /** @type {CalculatorConfig} */
-  static defaultConfiguration = {
+  config = new ConfigHandler({
+    radius: Number.POSITIVE_INFINITY,
     tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
     largeTarget: false,
-    radius: null, // Default is to use the viewer's vision lightRadius or ∞.
     debug: false,
-  };
+  });
 
-  /** @type {BlockingConfig} */
-  static defaultBlockingConfiguration = {
-    senseType: "sight", /** @type {CONST.WALL_RESTRICTION_TYPES} */
-    walls: true,
-    tiles: true,
-    regions: true,
-    tokens: {
-      dead: true,
-      live: true,
-
-      // If live, token may block when:
-      prone: true,
-      enemies: true,
-      allies: true,
-      excludedStatuses: NULL_SET, // If token has status, it does not block
-    }
-  }
-
-  /** @type {CalculatorConfig} */
-  #permanentConfig = {};
-
-  #permanentBlockingConfig = {};
-
-  /** @type {boolean} */
-  #hasTmpConfig = true; // True to start so the permanent config gets copied over.
-
-  get hasTemporaryConfig() { return this.#hasTmpConfig; }
-
-  /** @type {CalculatorConfig} */
-  _config = {}; // Not private so subclasses can access without structuredClone copy.
-
-  get config() { return structuredClone(this._config); }
-
-  set config(cfg = {}) {
-    foundry.utils.mergeObject(this._config, cfg, { inplace: true, insertKeys: false });
-    this.occlusionTester.config = cfg;
-    this.#hasTmpConfig = true;
-  }
-
-  /**
-   * Modify one or more settings of the permanent config.
-   * Also causes the temp config to be reset.
-   * @param {CalculatorConfig} cfg
-   */
-  set permanentConfig(cfg) {
-    foundry.utils.mergeObject(this.#permanentConfig, cfg, { inplace: true, insertKeys: false });
-    foundry.utils.mergeObject(this.#permanentBlockingConfig, cfg, { inplace: true, insertKeys: false });
-    this.#hasTmpConfig = true;
-    this.restorePermanentConfig();
-  }
-
-  restorePermanentConfig() {
-    if ( !this.#hasTmpConfig ) return;
-    this._config = structuredClone(this.#permanentConfig);
-    this.occlusionTester.config = this.#permanentBlockingConfig;
-    this.#hasTmpConfig = false;
-  }
-
-  get radius() { return this._config.radius ?? this.viewer.vision?.radius ?? Number.POSITIVE_INFINITY; }
-
-  get tokensBlock() {
-    const cfg = this.occlusionTester._config
-    return cfg.tokens.dead || cfg.tokens.live;
-  }
-
-  get nonTokensBlock() {
-    const cfg = this.occlusionTester._config
-    return cfg.walls || cfg.tiles || cfg.regions;
+  /** @type {CONST.WALL_RESTRICTION_TYPES} */
+  get senseType() {
+    return this.occlusionTester._config.senseType || "sight";
   }
 
   // ----- NOTE: Basic property getters / setters ---- //
 
-  /** @type {Token} */
-  #viewer;
+  /** @type {GeometricPrimitive} */
+  #targetShape;
 
-  get viewer() { return this.#viewer; }
+  get targetShape() { return this.#targetShape; }
 
-  set viewer(value) {
-    if ( this.#viewer === value ) return;
-
-    this.#viewer = value;
-    this.#calculateViewpoint();
+  set targetShape(value) {
+    this.#targetShape = value;
+    this.targetLocation = value.center;
   }
-
-  /** @type {Token} */
-  #target;
-
-  get target() { return this.#target; }
-
-  set target(value) {
-    if ( this.#target === value ) return;
-
-    this.#target = value;
-    this.#calculateTargetLocation();
-  }
-
-  /** @type {Point3d} */
-  #viewpoint = new Point3d();
-
-  get viewpoint() { return this.#viewpoint; }
-
-  get rayOrigin() { return this.#viewpoint; }
-
-  set viewpoint(value) { this.#viewpoint.copyFrom(value); }
-
-  #calculateViewpoint() {
-    const method = this.viewer instanceof foundry.canvas.placeables.Token ? "fromTokenCenter" : "fromPointSource";
-    Point3d[method](this.viewer, this.#viewpoint);
-  }
-
-  /** @type {Point3d} */
-  #targetLocation = new Point3d();
-
-  get targetLocation() { return this.#targetLocation; }
-
-  set targetLocation(value) { this.#targetLocation.copyFrom(value); }
-
-  #calculateTargetLocation() { Point3d.fromTokenCenter(this.target, this.#targetLocation); }
-
-  async initialize() { return; }
 
   /**
-   * Utility method to set all relevant viewing characteristics at once.
+   * Viewpoint can be set by user or defaults to the center of the viewer shape.
+   * @type {Point3d}
+   */
+  viewpoint = new Point3d();
+
+  // Synonym.
+  get rayOrigin() { return this.viewpoint; }
+
+  /**
+   * Target location can be set by user or defaults to the center of the target shape.
+   * @type {Point3d}
+   */
+  targetLocation = new Point3d();
+
+  // ----- NOTE: Initialization ----- //
+
+  async initialize() { }
+
+  /**
+   * Set the view for the camera and the occlusion tester.
+   * Optionally set relevant properties.
+   * NOTE: Occlusion tester viewer and target must be set elsewhere.
    * @param {object} [opts]
-   * @param {Token} [opts.viewer]
-   * @param {Token} [opts.target]
+   * @param {GeometricPrimitive} [opts.viewerShape]
+   * @param {GeometricPrimitive} [opts.targetShape]
    * @param {Point3d} [opts.viewpoint]
    * @param {Point3d} [opts.targetLocation]
+   * @param {ObstacleOcclusionTest} [opts.occlusionTester]
    */
-  initializeView({ viewer, target, viewpoint, targetLocation } = {}) {
+  setView({ targetShape, viewpoint, targetLocation, occlusionTester } = {}) {
     // console.debug("PercentVisibleCalculator|initializeView");
-    if ( viewer ) this.viewer = viewer;
-    if ( target ) this.target = target;
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
+    if ( targetShape ) this.targetShape = targetShape;
+    if ( occlusionTester ) this.occlusionTester = occlusionTester;
 
-    this._initializeCamera();
-    this.camera.setTargetTokenFrustum(this.target);
-    this.camera.toCanvasFrustum(this.occlusionTester.frustum);
-    this.occlusionTester.initialize({ subjectToken: this.viewer, tokensToExclude: this.target ? [this.target] : [] });
+    const camera = this.camera;
+    camera.cameraPosition = this.viewpoint;
+    camera.targetPosition = this.targetLocation;
+    camera.setFrustumForAABB3d(this.targetShape.aabb);
+    this.occlusionTester.frustum ??= new Frustum();
+    camera.toCanvasFrustum(this.occlusionTester.frustum);
     this.occlusionTester.update();
   }
-
-  get targetBorder() { return CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? this.target.constrainedTokenBorder: this.target.tokenBorder; }
-
-  get targetShape() { return this.target[this._config.tokenShapeType]; }
 
   // ----- NOTE: Camera ----- //
 
@@ -380,20 +263,42 @@ export class PercentVisibleCalculatorAbstract {
     }));
   }
 
-  /**
-   * Set the camera's position and look at position.
-   */
-  _initializeCamera() {
-    const camera = this.camera;
-    camera.cameraPosition = this.viewpoint;
-    camera.targetPosition = this.targetLocation;
-   }
-
   // ----- NOTE: Visibility testing ----- //
 
-  occlusionTester = new ObstacleOcclusionTest();
+  /** @type {ObstacleOcclusionTest} */
+  occlusionTester;
 
   percentVisible() { return this.calculate().percentVisible; }
+
+  _createResult() {
+    const res = new this.constructor.resultClass();
+    res.largeTarget = this.config.largeTarget;
+    return res;
+  }
+
+  /**
+   * Return the visibility result for the current calculator state.
+   * Use setView to set state or set individually.
+   * Also depends on config.
+   * @param {CalculatorConfig} cfg
+   * @returns {PercentVisibleResult}
+   */
+  calculate() {
+    this.setView();
+    return this._calculate();
+  }
+
+  _calculate() {
+    // console.debug("PercentVisibleCalculator|_calculate");
+    // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
+    const result = this._createResult();
+    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.config.radius ** 2;
+    return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
+  }
+
+  // ----- NOTE: Lighting test ----- //
+
+  // TODO: Update for GeometricPrimitives
 
   static LIGHTING_TEST_TYPES = {
     DARK: 0,
@@ -412,35 +317,15 @@ export class PercentVisibleCalculatorAbstract {
     this.config = { tokenShapeType };
   }
 
-  _createResult() { return this.constructor.resultClass.fromCalculator(this); }
-
-  /**
-   * Return the visibility result for the current calculator state.
-   * Use _initializeView to set state or set individually.
-   * Also depends on config.
-   * @param {CalculatorConfig} cfg
-   * @returns {PercentVisibleResult}
-   */
-  calculate(cfg) {
-    // console.debug("PercentVisibleCalculator|calculate");
-    this.restorePermanentConfig();
-    if ( cfg ) this.config = cfg;
-    return this._calculate();
-  }
-
-  _calculate() {
-    // console.debug("PercentVisibleCalculator|_calculate");
-    // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
-    const result = this._createResult();
-    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.radius ** 2;
-    return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
-  }
-
   /**
    * Using the available algorithm, test whether the target w/o/r/t other viewers is
    * in darkness, dim, or bright light based on threshold settings.
    */
   calculateLightingTypeForTarget() {
+    // TODO: Fix for use with GeometricPrimitives.
+
+
+
     const oldConfig = this.config;
     const oldBlockingConfig = this.occlusionTester.config;
     const oldViewer = this.viewer;
@@ -463,12 +348,12 @@ export class PercentVisibleCalculatorAbstract {
       },
     };
     this.setLightingTest(this.constructor.LIGHTING_TEST_TYPES.NONE);
-    let dimResult = new this.constructor.resultClass(this);
-    let brightResult = new this.constructor.resultClass(this);
+    let dimResult = new this.constructor.resultClass();
+    let brightResult = new this.constructor.resultClass();
     for ( const src of canvas.lighting.placeables ) {
       this.viewer = src;
 
-      Point3d.fromPointSource(src, this.#viewpoint);
+      Point3d.fromPointSource(src, this.viewpoint);
       this.config = { radius: src.radius };
       this.calculate();
       dimResult = dimResult.blendMaximums(this.lastResult);
@@ -497,12 +382,12 @@ export class PercentVisibleCalculatorAbstract {
 
     // Draw the viewer vision radius to the token, accounting for 3d distance.
     // Use Pythagorean to get the 2d radius = sqrt(radius3d^2 - deltaZ^2)
-    const visionRadius = this.radius;
+    const visionRadius = this.config.radius;
     const vp = this.viewpoint;
     const deltaZ = Math.abs(vp.z - this.targetLocation.z);
     if ( deltaZ < visionRadius && isFinite(visionRadius) ) {
       const radius2d = Math.sqrt(visionRadius ** 2 - deltaZ ** 2);
-      debugDraw ??= draw;
+      debugDraw ??= new Draw();
       debugDraw.shape(new PIXI.Circle(vp.x, vp.y, radius2d), { fill: Draw.COLORS.white, fillAlpha: 0.1 });
     }
 

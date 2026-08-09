@@ -17,7 +17,6 @@ import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 // Geometry
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
-import { Circle3d, Polygons3d } from "../../geometry/3d/Polygon3d.js";
 
 // Debug
 import { Draw } from "../../geometry/Draw.js";
@@ -87,223 +86,181 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
-    this._constructPerspectiveTargetPolygons();
-    this._constructPerspectiveObstaclePolygons();
-    this._constructObstaclePaths();
-    result.data.targetPaths = this._constructTargetPath();
-    result.data.blockingPaths = this._constructObstaclePaths();
+    this.constructPerspectivePolygons();
+    result.data.targetPaths = this._constructTargetClipperPaths();
+    result.data.blockingPaths = this._constructObstacleClipperPaths();
+
+    console.debug(`${this.constructor.name}|visibility ${result.percentVisible}`);
     return result;
   }
 
-  blockingTerrainPaths;
-
-  _constructTargetPath() {
-    // Once perspective-transformed, the token array of polygons are approximately on the same plane, with z ~ 1.
-    // But not exactly, so don't use Polygons3d to combine.
-    // Can combine to Polygons3d.
-    const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths
-    const scalingFactor = this.constructor.SCALING_FACTOR;
-
-    // For spheres, need to determine density of the points based on the actual radius.
-    const density = PIXI.Circle.approximateVertexDensity(this.targetRadius)
-    return ClipperPaths.combinePaths(this.targetPolys.map(poly3d => poly3d.toClipperPaths({ omitAxis: "z", scalingFactor, density })));
-  }
+  /**
+   * Iterate each face in the target shape.
+   * @yield {Polygon3d|Sphere}
+   */
+  *iterateTargetFaces() { yield* this.targetShape.iterateFaces(); }
 
   /**
-   *  Construct 2d perspective projection of each blocking points object.
+   * Iterate solid obstacle faces, including tiles but excluding terrain walls.
+   * Presumes the occlusion tester has been appropriately updated.
+   * @yield {Polygon3d|Sphere}
    */
-  _constructObstaclePaths() {
-    // Use Clipper to calculate area of the polygon shapes.
-    this.blockingTerrainPaths = this._combineTerrainPolys(this.blockingTerrainPolys);
-    let blockingPaths = this._combineObstaclePolys();
-    if ( this.blockingTerrainPaths && !this.blockingTerrainPaths.area.almostEqual(0) ) {
-      if ( !blockingPaths ) {
-        blockingPaths = this.blockingTerrainPaths.combine();
-        console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths for ${this.viewer.name} --> ${this.target.name}`);
-      }
-      else blockingPaths = blockingPaths.add(this.blockingTerrainPaths).union();
+  *iterateSolidObstacleFaces() {
+    const ot = this.occlusionTester;
+    const excludedObstacles = new Set(["terrainWalls", "tiles", "foregroundLevels", "backgroundLevels"]);
+    let includeObstacles = ot.constructor.OBSTACLE_KEYS.difference(excludedObstacles);
+    yield* ot.iterateObstacleFaces({ includeObstacles })
+
+    // Handle tiles and levels, which vary based on shape type.
+    let tileShapeIter;
+    switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: tileShapeIter = "triangles"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: tileShapeIter = "polygons"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: tileShapeIter = "boundingPolygon"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: tileShapeIter = "boundingRect"; break;
+      default: "faces";
     }
-    return blockingPaths;
+    includeObstacles = new Set(["tiles", "foregroundLevels", "backgroundLevels"]);
+    for ( const tileGeom of ot.iterateObstacleGeoms({ includeObstacles }) ) yield* tileGeom[tileShapeIter]
   }
 
   /**
-   * Each blocking polygon is either a Polygon3d or a Polygons3d.
-   * Union each in turn.
-   * @param {Polygon3d|Polygons3d} blockingPolys
+   * Iterate terrain (limited wall) faces.
+   * Presumes the occlusion tester has been appropriately updated.
+   * @yield {Quad3d}
    */
-  _combineObstaclePolys() {
-    const blockingPolys = this.blockingPolys;
-
-    const ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths;
-    const scalingFactor = this.constructor.SCALING_FACTOR;
-    const n = blockingPolys.length;
-    if ( !n ) return new ClipperPaths(undefined, { scalingFactor });
-
-    const opts = { omitAxis: "z", scalingFactor };
-    if ( n === 1 ) return blockingPolys[0].toClipperPaths(opts);
-
-    const solution = ClipperPaths.joinPaths(blockingPolys.map(poly => poly.toClipperPaths(opts)));
-    return solution.union();
+  *iterateTerrainObstacleFaces() {
+    const ot = this.occlusionTester;
+    const includeObstacles = new Set(["terrainWalls"]);
+    yield* ot.iterateObstacleFaces({ includeObstacles });
   }
 
   /**
-   * For each two polygons, find their intersection and return it as a clipper path.
-   * @param {Polygon3d} blockingTerrainPolys
-   * @returns {ClipperPaths}
+   * Apply the look at and transform matrix to a given face.
+   * @param {Polygon3d|Sphere}
+   * @returns {Polygon3d}
    */
-  _combineTerrainPolys() {
-    const ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths;
-    const blockingTerrainPolys = this.blockingTerrainPolys;
-    const scalingFactor = this.constructor.SCALING_FACTOR;
-    const blockingTerrainPaths = new ClipperPaths()
-
-    // The intersection of each two terrain polygons forms a blocking path.
-    // Only need to test each combination once.
-    const nBlockingPolys = blockingTerrainPolys.length;
-    if ( nBlockingPolys < 2 ) return null;
-    for ( let i = 0; i < nBlockingPolys; i += 1 ) {
-      const iPath = blockingTerrainPolys[i].toClipperPaths({ omitAxis: "z", scalingFactor });
-      for ( let j = i + 1; j < nBlockingPolys; j += 1 ) {
-        const jPath = blockingTerrainPolys[j].toClipperPaths({ omitAxis: "z", scalingFactor });
-        const newPath = iPath.intersectPaths(jPath);
-        if ( newPath.area.almostEqual(0) ) continue; // Skip very small intersections.
-        blockingTerrainPaths.add(newPath);
-      }
-    }
-    if ( !blockingTerrainPaths.paths.length ) return null;
-    return blockingTerrainPaths.union();
+  applyPerspectiveToFace(poly) {
+    // Save a bit of time by reusing the poly after the clipZ transform.
+    // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
+    const { lookAtMatrix, perspectiveMatrix} = this.camera;
+    poly = poly.transform(lookAtMatrix).clipZ();
+    poly.transform(perspectiveMatrix, poly);
+    return poly;
   }
 
   /* ----- NOTE: Perspective polygons ----- */
+
+  // Take target and obstacle shapes and transform to a 2d (flat) camera perspective view.
 
   /**
    * Construct polygons that are used to form the 2d perspective.
    */
   targetPolys = [];
 
-  blockingPolys = [];
+  solidObstaclePolys = [];
 
-  blockingTerrainPolys = [];
+  terrainObstaclePolys = [];
 
-  _constructPerspectiveTargetPolygons() {
-    if ( CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere ) {
-      this.targetPolys = this._constructPerspectiveTargetSphere();
-      // this.targetPolys[0].radius *= 100;
-      return;
+  constructPerspectivePolygons() {
+    this.targetPolys.length = 0;
+    this.solidObstaclePolys.length = 0;
+    this.terrainObstaclePolys.length = 0;
+
+    for ( const poly of this.iterateTargetFaces() ) {
+      const txPoly = this.#transformFace(poly);
+      if ( txPoly ) this.targetPolys.push(txPoly);
     }
 
-    const viewpoint = this.viewpoint
-    const facingPolys = this._targetPolygons().filter(poly => poly.isFacing(viewpoint));
-    this.targetPolys = facingPolys.map(poly => this._applyPerspective(poly));
-
-    // Test if the transformed polys are all getting clipped.
-    const txPolys = facingPolys.map(poly => poly.transform(this.camera.lookAtMatrix));
-    if ( txPolys.every(poly => poly.iteratePoints().every(pt => pt.z > 0)) ) {
-      console.warn(`_applyPerspective|All target z values are positive for ${this.viewer.name} --> ${this.target.name}`);
+    for ( const poly of this.iterateSolidObstacleFaces() ) {
+      const txPoly = this.#transformFace(poly);
+      if ( txPoly ) this.solidObstaclePolys.push(txPoly);
     }
+
+    for ( const poly of this.iterateTerrainObstacleFaces() ) {
+      const txPoly = this.#transformFace(poly);
+      if ( txPoly ) this.terrainObstaclePolys.push(txPoly);
+    }
+  }
+
+  #transformFace(poly) {
+    if ( !poly.isFacing(this.viewpoint) ) return null;
+    const txPoly = this.applyPerspectiveToFace(poly);
+    return txPoly.isValid() ? txPoly : null;
+  }
+
+  /* ----- NOTE: Clipper paths ----- */
+
+  // For the various polygons, combine into clipper paths so PercentVisibleGeometricResult
+  // can calculate area.
+  // Once perspective-transformed, the target array of polygons are approximately on the same plane, with z ~ 1.
+
+  get clipperOpts() {
+    // For spheres (transformed to circle3d/ellipse3d), set density based on target radius.
+    const density = PIXI.Circle.approximateVertexDensity(this.targetRadius);
+    return {
+      omitAxis: "z",
+      scalingFactor: this.constructor.SCALING_FACTOR,
+      density
+    };
   }
 
   get targetRadius() {
-    const { h, w, topZ, bottomZ } = this.target;
-    const xy = Math.max(h, w) * 0.5;
-    const height = (topZ - bottomZ) * 0.5;
-    return Math.sqrt(xy ** 2 + height ** 2);
+    const aabb = this.targetShape.aabb;
+    return Point3d.distanceBetween(aabb.max, aabb.min) * 0.5;
   }
 
-  _constructPerspectiveTargetSphere() {
-    // Perspective sphere is a circle in 2d (assuming a plane perpendicular to the camera view; otherwise ellipse).
-    // By definition, center is 0,0.
-    // Need to determine the radius.
-    // Get a point on the edge of the sphere at the viewplane (perpendicular to the viewpoint-->center line).
-    const radius = this.targetRadius;
-
-    const center = Point3d.fromTokenCenter(this.target);
-    const dirHorizontal = this.viewpoint.subtract(center);
-    const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, 0).normalize();
-    const perpB = center.add(dirB.multiplyScalar(radius));
-
-    // Translate the point to the perspective view to get the radius.
-    const lookAtM = this.camera.lookAtMatrix;
-    const perspectiveM = this.camera.perspectiveMatrix;
-    const perspectivePt = Point3d.tmp;
-    lookAtM.multiplyPoint3d(perpB, perspectivePt);
-    perspectiveM.multiplyPoint3d(perspectivePt, perspectivePt);
-
-    const centerPt = Point3d.tmp;
-    lookAtM.multiplyPoint3d(center, centerPt);
-    perspectiveM.multiplyPoint3d(centerPt, centerPt);
-
-    return [Circle3d.fromCircle(new PIXI.Circle(0, 0, PIXI.Point.distanceBetween(perspectivePt, centerPt)), centerPt.z)];
+  _constructTargetClipperPaths() {
+    const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths;
+    return ClipperPaths
+      .joinPaths(this.targetPolys.map(poly3d => poly3d.toClipperPaths(this.clipperOpts)))
+      .combine(); // Could use union, but the target has no holes so combine is preferable.
   }
 
-  _constructPerspectiveObstaclePolygons() {
-    this.blockingPolys.length = 0;
-    this.blockingTerrainPolys.length = 0;
+  _constructObstacleClipperPaths() {
+    const terrainObstaclePaths = this._combineTerrainObstaclePolys();
+    let solidObstaclePaths = this._combineObstaclePolys();
+    if ( terrainObstaclePaths && !terrainObstaclePaths.area.almostEqual(0) ) {
+      if ( !solidObstaclePaths ) {
+        solidObstaclePaths = terrainObstaclePaths.combine();
+        console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths.`);
+      }
+      else solidObstaclePaths = solidObstaclePaths.add(terrainObstaclePaths).union();
+    }
+    return solidObstaclePaths;
+  }
 
-    // Convert each blocking object shape to a perspective view from point-of-view of viewer's viewpoint.
-    for ( const [type, geoms] of Object.entries(this.occlusionTester.obstacleGeometries ) ) {
-      if ( !geoms.size ) continue;
-      const arr = type === "terrainWalls" ? this.blockingTerrainPolys : this.blockingPolys;
-      for ( const geom of geoms ) {
-        const polys = this._lookAtGeometryWithPerspective(geom);
-        arr.push(...polys);
+  _combineObstaclePolys() {
+    const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths
+    const n = this.solidObstaclePolys.length;
+    if ( !n ) return new ClipperPaths(undefined, { scalingFactor: this.constructor.SCALING_FACTOR });
+    if ( n === 1 ) return this.solidObstaclePolys[0].toClipperPaths(this.clipperOpts);
+    return ClipperPaths
+      .joinPaths(this.solidObstaclePolys.map(poly3d => poly3d.toClipperPaths(this.clipperOpts)))
+      .union();
+  }
+
+  _combineTerrainObstaclePolys() {
+    const ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths;
+    const opts = this.clipperOpts;
+    const terrainObstaclePolys = this.terrainObstaclePolys;
+    const terrainPaths = new ClipperPaths()
+
+    // The intersection of each two terrain polygons forms a blocking path.
+    // Only need to test each combination once.
+    const nBlockingPolys = terrainObstaclePolys.length;
+    if ( nBlockingPolys < 2 ) return null;
+    for ( let i = 0; i < nBlockingPolys; i += 1 ) {
+      const iPath = terrainObstaclePolys[i].toClipperPaths(opts);
+      for ( let j = i + 1; j < nBlockingPolys; j += 1 ) {
+        const jPath = terrainObstaclePolys[j].toClipperPaths(opts);
+        const newPath = iPath.intersectPaths(jPath);
+        if ( newPath.area.almostEqual(0) ) continue; // Skip very small intersections.
+        terrainPaths.add(newPath);
       }
     }
-  }
-
-  /**
-   * Construct target polygons.
-   */
-  _targetPolygons() {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target);
-    let iter;
-    switch ( this._config.tokenShapeType ) {
-      case "tokenBorder": iter = geom.iterateFaces(); break;
-      case "constrainedTokenBorder": iter = geom.iterateConstrainedFaces(); break;
-      case "litTokenBorder": iter = geom.iterateConstrainedLitFaces(); break;
-      case "brightLitTokenBorder": iter = geom.iterateConstrainedBrightLitFaces(); break;
-      default: console.error(`_targetPolygons|tokenShapeType ${this._config.tokenShapeType} not recognized.`);
-    }
-    return [...iter];
-  }
-
-  _lookAtGeometryWithPerspective(geom) {
-    let iter;
-    if ( geom.constructor.PLACEABLE_NAME === "Tile" ) {
-      switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
-        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: iter = geom.alphaThresholdTriangles.values(); break;
-        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: iter = geom.alphaThresholdPolygons.values(); break;
-        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: iter = geom.alphaBoundingPolygon.values(); break;
-        case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: iter = geom.alphaBoundingBox.values(); break;
-        default: geom.iterateFaces();
-      }
-    } else iter = geom.iterateFaces();
-
-    const out = [];
-    const vp = this.viewpoint;
-    for ( let poly of iter ) {
-      if ( !poly.isFacing(vp) ) continue;
-
-      // If multiple polygons, filter.
-      if ( poly instanceof Polygons3d ) {
-        poly = poly.clone();
-        poly.polygons = poly.polygons.filter(poly => this.occlusionTester.frustum.poly3dWithinFrustum(poly));
-      }
-
-      // Apply the perspective transforming to polygon 2d.
-      poly = this._applyPerspective(poly);
-      if ( poly.isValid() ) out.push(poly);
-    }
-    return out;
-  }
-
-  _applyPerspective(poly) {
-    // Save a bit of time by reusing the poly after the clipZ transform.
-    // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
-    const { lookAtMatrix, perspectiveMatrix}  = this.camera;
-    poly = poly.transform(lookAtMatrix).clipZ();
-    poly.transform(perspectiveMatrix, poly);
-    return poly;
+    if ( !terrainPaths.paths.length ) return null;
+    return terrainPaths.union();
   }
 
   /* ----- NOTE: Debugging methods ----- */
@@ -312,7 +269,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Draw the 3d objects in the popout.
    */
   _draw3dDebug(result, draw, { width = 100, height = 100 } = {}) {
-    const { targetPolys, blockingPolys, blockingTerrainPolys } = this;
+    const { targetPolys, solidObstaclePolys, terrainObstaclePolys } = this;
     const colors = Draw.COLORS;
 
     // Draw the target in 3d, centered at 0,0.
@@ -327,8 +284,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     */
 
     // Draw the detected obstacles.
-    blockingPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
-    blockingTerrainPolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
+    solidObstaclePolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.blue, fill: colors.lightblue, fillAlpha: 0.75 }));
+    terrainObstaclePolys.forEach(poly => poly.scale({ x: width, y: height }).draw2d({ draw, color: colors.green, fill: colors.lightgreen, fillAlpha: 0.5 }));
   }
 }
 
@@ -365,7 +322,7 @@ buildDebugViewer = api.buildDebugViewer
 
 calc = new api.calcs.geometric();
 
-calc.initializeView({ viewer: randal, target: zanna, viewpoint: Point3d.fromTokenCenter(randal), targetLocation: Point3d.fromTokenCenter(zanna) })
+calc.setView({ viewer: randal, target: zanna, viewpoint: Point3d.fromTokenCenter(randal), targetLocation: Point3d.fromTokenCenter(zanna) })
 calc.calculate()
 calc.percentVisible
 

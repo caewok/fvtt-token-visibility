@@ -11,7 +11,7 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
-import { buildLOSViewer } from "./LOSCalculator.js";
+import { LOSViewerConfig } from "./LOSCalculator.js";
 
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
@@ -48,7 +48,7 @@ export class ATVTokenHandler {
   };
 
   /** @type {Token} */
-  viewer;
+  get viewer() { return this.losViewer.viewer; };
 
   /** @type {ViewerLOS} */
   losViewer;
@@ -56,8 +56,7 @@ export class ATVTokenHandler {
   constructor(token) {
     token[MODULE_ID] ??= {};
     token[MODULE_ID][this.constructor.ID] = this;
-    this.losViewer = buildLOSViewer(token);
-    this.viewer = token;
+    this.losViewer = new ATVViewerLOS(token, LOSViewerConfig());
   }
 
   get losCalc() { return this.losViewer.calculator; }
@@ -167,4 +166,15 @@ export class ATVTokenHandler {
     if ( dim.percentVisible >= CONFIG[MODULE_ID].dimThreshold ) return TYPES.DIM;
     return TYPES.DARK;
   }
+}
+
+class ATVViewerLOS extends ViewerLOS {
+
+  get calculator() { return CONFIG[MODULE_ID].losCalculator; }
+
+  constructor(viewer, cfg) {
+    super(viewer, cfg);
+    delete this.calculator;
+  }
+
 }

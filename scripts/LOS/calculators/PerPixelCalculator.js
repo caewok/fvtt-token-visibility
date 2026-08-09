@@ -1,23 +1,21 @@
 /* globals
-CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 // Base folder
 import { Settings } from "../../settings.js";
-import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 // Calculator
 import { PercentVisiblePointsResultAbstract, PercentVisibleCalculatorPointsAbstract } from "./PointsCalculator.js";
 
 // LOS folder
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
-import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Plane } from "../../geometry/3d/Plane.js";
+import { SpherePrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
 
 export class PercentVisiblePerPixelResult extends PercentVisiblePointsResultAbstract {}
 
@@ -27,49 +25,42 @@ export class PercentVisiblePerPixelResult extends PercentVisiblePointsResultAbst
  *
  */
 export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPointsAbstract {
+
+  /** @type {class<PercentVisibleResult>} */
   static resultClass = PercentVisiblePerPixelResult;
-
-  static BitSetClass = FastBitSet;
-
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    spherical: null, // If null, use the configuration setting.
-  }
-
-  /** @type {boolean} */
-  get spherical() { return this._config.spherical ?? CONFIG[GEOMETRY_LIB_ID].CONFIG.useTokenSphere; }
-
-  /** @type {Point3d[][]} */
-  get targetPoints() {
-    // if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSpherePoints];
-    return super.targetPoints;
-  }
-
-  /** @type {Polygon3d[]|[Sphere]} */
-  get targetSurfaces() {
-    // if ( this.spherical ) return [this.target[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.TOKEN.SPHERICAL].tokenSphere];
-    return super.targetSurfaces;
-  }
-
-  surfaceIsVisible(surface) {
-    if ( this.spherical ) return true;
-    return surface.isFacing(this.viewpoint);
-  }
 
   /* ----- NOTE: Pixel testing ----- */
 
-  pointIsVisible(pt, radius2) {
-    // TODO: Cache testSurfaceVisibility and spherical.
-    if ( !super.pointIsVisible(pt, radius2) ) return false;
-    if ( !this.spherical || !this._config.testSurfaceVisibility ) return true;
-    const viewplane = this.viewplane;
-    return viewplane.whichSide(pt) * viewplane.whichSide(this.viewpoint) > 0
+  /** @yield {Point3d} */
+  *iterateTargetPoints() {
+    const vp = this.viewpoint;
+    if ( this.targetShape instanceof SpherePrimitive ) {
+      const sphere = this.targetShape.faces[0];
+
+      // The point must not be occluded by the sphere in relation to the viewer.
+      // Vieweable if: Occluded r^2 + (distance vp --> ctr)^2 > (distance vp --> pt) ^2.
+      const thresholdDistance = sphere.radiusSquared + Point3d.distanceSquaredBetween(vp, sphere.center);
+      for ( const pt of this.targetShape.iterateFacePoints() ) {
+        if ( thresholdDistance > Point3d.distanceSquaredBetween(vp, pt) ) yield pt;
+      }
+    }
+
+    // Only get points for faces that point toward the viewer.
+    const fp = this.targetShape.facePoints;
+    const faces = this.targetShape.faces;
+    for ( let i = 0, n = fp.length; i < n; i += 1 ) {
+      const face = faces[i];
+      if ( face.plane.whichSide(vp) > 0 ) yield* fp[i];
+    }
   }
 
-  // Test visibility by constructing a plane perpendicular to the viewpoint --> center line at center.
-  // TODO: Cache this for a given calculation. Also cache the viewplane side.
+  /**
+   * Test visibility by constructing a plane perpendicular
+   * to the viewpoint --> center line at center.
+   * @type {Plane}
+   */
   get viewplane() {
-    const center = Point3d.fromTokenCenter(this.target);
+    const center = this.targetShape.center;
     const dirHorizontal = this.viewpoint.subtract(center);
     const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, center.z);
     const perpB = center.add(dirB);
@@ -83,18 +74,4 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
 
 export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPIXI {
   algorithm = Settings.KEYS.LOS.TARGET.TYPES.PER_PIXEL;
-
-//   updatePopoutFooter(percentVisible) {
-//     super.updatePopoutFooter(percentVisible);
-//     const calc = this.viewerLOS.calculator;
-//
-//     const { RED, BRIGHT, DIM, DARK } = calc.constructor.OCCLUSION_TYPES;
-//     const area = calc.counts[RED];
-//     const bright = calc.counts[BRIGHT] / area;
-//     const dim = calc.counts[DIM] / area;
-//     const dark = calc.counts[DARK] / area;
-//
-//     const footer2 = this.popout.element[0].getElementsByTagName("p")[1];
-//     footer2.innerHTML = `${(bright * 100).toFixed(0)}% bright | ${(dim * 100).toFixed(0)}% dim | ${(dark * 100).toFixed(0)}% dark`;
-//   }
 }

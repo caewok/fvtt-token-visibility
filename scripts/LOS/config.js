@@ -108,6 +108,7 @@ export const LOS_CONFIG = {
 }
 
 Hooks.on("canvasReady", function() {
+  /*
 
   // Register basic watchers for placeables.
   const updateFn = placeable => {
@@ -149,6 +150,7 @@ Hooks.on("canvasReady", function() {
     watcher.register("update", id, updateFn, keys);
     watcher.activate();
   }
+  */
 });
 
 

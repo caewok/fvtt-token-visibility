@@ -13,6 +13,7 @@ import { LOS_CONFIG } from "./LOS/config.js";
 
 // Load the geometry library.
 import "./geometry/registration.js";
+import { ObstacleOcclusionTest } from "./geometry/ObstacleOcclusionTest.js";
 
 // Hooks and method registration
 import { initializePatching, PATCHER } from "./patching.js";
@@ -31,6 +32,7 @@ import {
   buildLOSViewer,
   buildCustomLOSViewer,
   buildDebugViewer,
+  BlockingConfig,
 } from "./LOSCalculator.js";
 
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/calculators/PointsCalculator.js";
@@ -76,6 +78,7 @@ Hooks.once("init", function() {
     /**
      * Classes and associated calculators that can determine percent visibility.
      * Each calculator can calculate visibility based on viewer, target, and optional viewer/target locations.
+     * @type {object}
      */
     calculatorClasses: {
       points: PercentVisibleCalculatorPoints,
@@ -86,14 +89,17 @@ Hooks.once("init", function() {
       "per-pixel": PercentVisibleCalculatorPerPixel,
     },
 
-    losCalculators: {
-      points: null,
-      geometric: null,
-      webgl2: null,
-      // webgpu: null,
-      // "webgpu-async": null,
-      "per-pixel": null,
-    },
+    /**
+     * Current occlusion tester for the given settings.
+     * @type {ObstacleOcclusionTest}
+     */
+    occlusionTester: new ObstacleOcclusionTest(),
+
+    /**
+     * Current calculator for the given settings.
+     * @type {PercentVisibleCalculatorAbstract}
+     */
+    losCalculator: null,
 
     /**
      * Classes used to view the debugger for different algorithms.
@@ -238,6 +244,20 @@ Hooks.once("ready", function() {
   Settings.migrate(); // Cannot be set until world is ready.
   Settings.initializeDebugGraphics();
   LightStatusTracker.loadLightIcons(); // Async.
+});
+
+Hooks.on("canvasReady", function() {
+  // Set the occlusion tester configuration.
+  const ot = CONFIG[MODULE_ID].occlusionTester;
+  ot.config = BlockingConfig();
+
+  // Create the calculator.
+  if ( CONFIG[MODULE_ID].losCalculator ) {
+    CONFIG[MODULE_ID].losCalculator.destroy();
+    CONFIG[MODULE_ID].losCalculator = null;
+  }
+  CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
+  CONFIG[MODULE_ID].losCalculator.initialize(); // Async.
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

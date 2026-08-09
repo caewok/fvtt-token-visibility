@@ -177,7 +177,8 @@ export class Camera {
   }
 
   setTargetTokenFrustum(targetToken) {
-    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(targetToken);
+    // Set the frustum based on the full token. Faster, more consistent.
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(targetToken).full;
     this.setFrustumForAABB3d(geom.aabb);
   }
 
@@ -412,6 +413,24 @@ export class Camera {
     if ( this.#positions.target.equals(value) ) return;
     this.#positions.target.copyPartial(value);
     this.dirtyLookAt = true;
+  }
+
+  /**
+   * Extract the camera's world space position from a view-projection matrix.
+   * Mostly for debugging.
+   * @param {Matrix} M        Combined view-projection matrix.
+   * @returns {Point3d|null}  Null if orthographic
+   */
+  static getCameraPositionFromVP(M) {
+    const vx = M.dropRow(0).dropColumn(0).determinant();
+    const vy = -M.dropRow(1).dropColumn(1).determinant();
+    const vz = M.dropRow(2).dropColumn(2).determinant();
+    const vw = -M.dropRow(3).dropColumn(3).determinant();
+
+    // If vw is near 0, the camera is at infinity, meaning orthographic projection.
+    // An orthographic camera can never be inside a finite sphere.
+    if ( vw.almostEqual(0) ) return null;
+    return Point3d.tmp.set(vx / vw, vy / vw, vz / vw);
   }
 
   // ----- NOTE: Debug ----- //
