@@ -14,7 +14,6 @@ import { WebGL2 } from "./WebGL2.js";
 
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { QuadPrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
-import { WallGeometry } from "../../geometry/placeable_geometry/WallGeometry.js";
 import { mix } from "../../geometry/mixwith.js";
 import { FixedLengthTrackingBuffer, VerticesIndicesAbstractTrackingBuffer } from "../../geometry/placeable_tracking/TrackingBuffer.js";
 
@@ -1255,14 +1254,14 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   static SHADER_VARIANT = super.SHADER_VARIANT | this.SHADER_FLAGS.CONSTRAINED;
 
   /** @type {number} */
-  static NUM_CONSTRAINING_WALLS = 4; // Should be 6 or less to fit with maximum number of attributes.
+  static NUM_CONSTRAINING_WALLS = 5; // Should be 6 or less to fit with maximum number of attributes.
 
   /**
    * Locate walls that intersect the token border.
    * @param {GeometricPrimitive} tokenShape
-   * @returns {WallGeometry[]}
+   * @returns {GeometricPrimitive[]}
    */
-  static intersectingWalls(tokenShape, levelId, senseType = "sight") {
+  static intersectingPlanes(tokenShape, levelId, senseType = "sight") {
     // For speed, take everything that crosses the token aabb.
     // Shrink by two pixels to avoid walls that simply are on the edge.
     using aabb = tokenShape.aabb.clone();
@@ -1278,21 +1277,20 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     canvas.scene.walls.forEach(wallD => {
       const wallGeom = wallMgr.geomForDocument(wallD);
       if ( !wallGeom.blocksFromLevel(levelId) ) return;
-      if ( wallGeom.iterateShapes({ senseType, levelId })
-        .some(shape => aabb.overlapsConvexPolygon3d(shape.faces[0])) ) out.push(wallGeom);
+
+      // For each wall, we ultimately only need the plane from the wall.
+      for ( const shape of wallGeom.iterateShapes({ senseType, levelId }) ) {
+        const testFace = shape.faces[0];
+        if ( aabb.overlapsConvexPolygon3d(testFace) ) {
+          out.push(testFace.plane);
+          break;
+        }
+      }
     });
 
-    // Sort by closest 2d segment to the 2d center.
+    // Sort by closest plane to the center of the token.
     using ctr = tokenShape.center;
-    out.sort((geom0, geom1) => {
-      using s0 = WallGeometry.wallSegment2d(geom0.placeableDocument);
-      using s1 = WallGeometry.wallSegment2d(geom1.placeableDocument);
-      const distA = distanceSquaredToSegment(ctr, s0.a, s0.b);
-      const distB = distanceSquaredToSegment(ctr, s1.a, s1.b);
-      return distA - distB;
-    });
-
-    // TODO: Return QuadPrimitive instead of GEOM.
+    out.sort((plane0, plane1) => plane0.distanceToPoint(ctr) - plane1.distanceToPoint(ctr));
     return out;
   }
 
@@ -1304,6 +1302,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     attrProps.aNumClipPlanes = {
       numComponents: 1,
       data: this.numClipPlanesArray,
+      type: this.gl.INT, // Force WebGL to use glVertexAttribIPointer.
       drawType: this.gl.DYNAMIC_DRAW,
       stride: Int32Array.BYTES_PER_ELEMENT * 1,
       offset: 0,
@@ -1366,7 +1365,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   get clipPlanesArray() { return this.clipPlanesTracker.viewWholeBuffer(); }
 
   /** @type {Int32Array} */
-  get numClipPlanesArray() { return this.clipPlanesTracker.viewWholeBuffer(); }
+  get numClipPlanesArray() { return this.numClipPlanesTracker.viewWholeBuffer(); }
 
   levelId = "";
 
@@ -1374,16 +1373,16 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
 
   _onShapeAdded(shape) {
     if ( !super._onShapeAdded(shape) ) return false;
-    const wallGeoms = this.constructor.intersectingWalls(shape, this.levelId, this.senseType);
-    this._setClippingWallPlanes(shape, wallGeoms);
+    const wallShapes = this.constructor.intersectingPlanes(shape, this.levelId, this.senseType);
+    this._setClippingWallPlanes(shape, wallShapes);
     this.idsToUpdateClipPlanes.add(shape.id);
     return true;
   }
 
   _onShapeUpdated(shape) {
     if ( !super._onShapeUpdated(shape) ) return false;
-    const wallGeoms = this.constructor.intersectingWalls(shape, this.levelId, this.senseType);
-    this._setClippingWallPlanes(shape, wallGeoms);
+    const wallShapes = this.constructor.intersectingPlanes(shape, this.levelId, this.senseType);
+    this._setClippingWallPlanes(shape, wallShapes);
     this.idsToUpdateClipPlanes.add(shape.id);
     return true;
   }
@@ -1396,18 +1395,21 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     return true;
   }
 
-  _setClippingWallPlanes(shape, wallGeoms) {
-    using ctr = shape.center;
+  /**
+   * @param {GeometricPrimitive} tokenShape
+   * @param {GeometricPrimitive[]} wallShapes
+   */
+  _setClippingWallPlanes(tokenShape, ixPlanes) {
+    using ctr = tokenShape.center;
 
     // Define the normals representing planes.
     // All wall segment geoms share the same plane.
     const maxWalls = this.constructor.NUM_CONSTRAINING_WALLS;
-    const numClipPlanes = Math.min(maxWalls, wallGeoms.length);
-    const id = shape.id;
+    const numClipPlanes = Math.min(maxWalls, ixPlanes.length);
+    const id = tokenShape.id;
     const clipPlanes = new Float32Array(4 * this.constructor.NUM_CONSTRAINING_WALLS);
     for ( let i = 0; i < numClipPlanes; i += 1 ) {
-      const wallGeom = wallGeoms[i];
-      const plane = wallGeom.segmentGeoms[0].faces[0].plane;
+      const plane = ixPlanes[i];
       const n = plane.normal;
       const d = plane.constant;
 
@@ -1417,7 +1419,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
       clipPlanes[j] = n.x * mult;
       clipPlanes[j + 1] = n.y * mult;
       clipPlanes[j + 2] = n.z * mult;
-      clipPlanes[j + 3] = d * mult;
+      clipPlanes[j + 3] = d;
     }
 
     // Update the trackers.
@@ -1435,7 +1437,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   updateClipPlanesBuffer() {
     if ( this.clipPlanesLayoutVersion !== this.clipPlanesTracker.layoutVersion ) {
       this._resizeClipPlanesBuffer();
-      this.clipPlanesLayoutVersion = this.clipPlanesUpdateTracker.layoutVersion;
+      this.clipPlanesLayoutVersion = this.clipPlanesTracker.layoutVersion;
     } else this.idsToUpdateClipPlanes.forEach(id => this._updateClipPlanesBufferForId(id));
     this.idsToUpdateClipPlanes.clear();
   }
@@ -1449,11 +1451,9 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     // Clip planes buffer
     // Resize the GPU buffer.
     // Use gl.bufferData instead of subData to reallocate the GPU memory to the new size.
-    for ( let i = 0; i < this.constructor.NUM_CONSTRAINING_WALLS; i += 1 ) {
-      const cBuffer = this.attributeBufferInfo.attribs[`aClipPlanes_${i}`].buffer;
-      gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, this.clipPlanesArray, gl.DYNAMIC_DRAW);
-    }
+    const cBuffer = this.attributeBufferInfo.attribs["aClipPlanes_0"].buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.clipPlanesArray, gl.DYNAMIC_DRAW);
 
     // Number of clip planes buffer
     const ncBuffer = this.attributeBufferInfo.attribs.aNumClipPlanes.buffer;
@@ -1483,12 +1483,9 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     // Clip planes buffer
     const cpTracker = this.clipPlanesTracker;
     const cpOffset = cpTracker.facetOffsetAtId(id) * cpTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    for ( let i = 0; i < this.constructor.NUM_CONSTRAINING_WALLS; i += 1 ) {
-      const cpBuffer = this.attributeBufferInfo.attribs[`aClipPlanes_${i}`].buffer;
-      gl.bindBuffer(gl.ARRAY_BUFFER, cpBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, cpOffset, cpTracker.viewFacetById(id));
-    }
-
+    const cpBuffer = this.attributeBufferInfo.attribs["aClipPlanes_0"].buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, cpBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, cpOffset, cpTracker.viewFacetById(id));
 
     // Number of clip planes buffer
     const ncTracker = this.numClipPlanesTracker;
@@ -1517,35 +1514,3 @@ export class ConstrainedInstancedDrawable extends mix(InstancedDrawable).with(Co
 // export class ConstrainedMultiModelDrawable extends mix(MultiModelDrawable).with(ConstrainedTokenMixin) {}
 
 export class DirectionalInstancedDrawable extends mix(InstancedDrawable).with(DirectionalWallMixin) {}
-
-/**
- * Identify the t-value on segment A|B closest to C.
- * @param {Point} c     The reference point C
- * @param {Point} a     Point A on segment AB
- * @param {Point} b     Point B on segment AB
- * @returns {number}    T-value, where 0 is a and 1 is b. Negative numbers are before a; >1 is after b.
- * @see {@link https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points}
- */
-/*
-function closestPointToSegmentT(c, a, b) {
-  using d = b.subtract(a);
-  if ( d.x === 0 && d.y === 0 ) return 0;
-
-  using ca = c.subtract(a);
-  return ca.dot(d) / d.dot(d);
-}
-*/
-
-/**
- * Distance squared to a segment A|B.
- * @param {Point} c     The reference point C
- * @param {Point} a     Point A on segment AB
- * @param {Point} b     Point B on segment AB
- * @returns {number}
- */
-
-function distanceSquaredToSegment(c, a, b) {
-  if ( a.almostEqual(b) ) return PIXI.Point.distanceBetweenSquared(a, c);
-  const x = a.almostEqual(b) ? a : foundry.utils.closestPointToSegment(c, a, b);
-  return PIXI.Point.distanceSquaredBetween(x, c);
-}
