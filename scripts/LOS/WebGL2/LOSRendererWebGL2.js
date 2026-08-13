@@ -270,8 +270,8 @@ export class LOSRendererWebGL2 {
    * Create and initialize drawables as needed.
    */
   prerender(targetShape, occlusionTester) {
-    const tokenObstacles = new Set("tokens");
-    const terrainObstacles = new Set("terrainWalls");
+    const tokenObstacles = new Set(["tokens"]);
+    const terrainObstacles = new Set(["terrainWalls"]);
     const drawableOpts = { constrained: false, senseType: occlusionTester.senseType, levelId: occlusionTester.levelId };
     const otOpts = { includeObstacles: tokenObstacles, geomSubtype: "full "};
 
@@ -279,50 +279,33 @@ export class LOSRendererWebGL2 {
     this.drawableCaches.forEach(drawable => drawable.clearRenderSet());
     Object.values(this.drawables).forEach(s => s.clear());
 
-    // Set up the drawables.
-
-    // Target, which will be constrained by GPU using 5 or less overlapping walls.
-    this.#cacheDrawableForPrimitive(targetShape, drawableOpts);
-    const targetKey = this.#drawableKeyForPrimitive(targetShape, drawableOpts.constrained);
-    const drawable = this.drawableCaches.get(targetKey);
-    this.drawables.target.add(drawable);
-    drawable.addToRenderSet(targetShape);
-
-    // Token obstacles.
-    // All token obstacles are constrained by the GPU using 5 or less overlapping walls.
-    // So request the full token geom subtype.
-    for ( const shape of occlusionTester.iterateObstacleShapes(otOpts) ) {
-      this.#cacheDrawableForPrimitive(shape, drawableOpts);
-      const key = this.#drawableKeyForPrimitive(shape, drawableOpts.constrained);
-      const drawable = this.drawableCaches.get(key);
-      this.drawables.solidObstacles.add(drawable);
-      drawable.addToRenderSet(shape);
+    // Helper to process any shape iteration.
+    const processShapes = (shapes, targetSet, opts) => {
+      for ( const shape of shapes ) {
+        const drawable = this.#getOrCacheDrawable(shape, opts);
+        targetSet.add(drawable);
+        drawable.addToRenderSet(shape);
+      }
     }
+
+    // Target, which may be constrained by GPU using 5 or less overlapping walls.
+    processShapes([targetShape], this.drawables.target, drawableOpts);
+
+    // Token obstacles. Also may be constrained by GPU.
+    processShapes(occlusionTester.iterateObstacleShapes(otOpts), this.drawables.solidObstacles, drawableOpts);
 
     // Solid obstacles.
-    // Request the full tile geom b/c the GPU handles applying the texture and blocking based on alpha.
     otOpts.includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS.difference(tokenObstacles).difference(terrainObstacles);
     drawableOpts.constrained = false;
-    for ( const shape of occlusionTester.iterateObstacleShapes(otOpts) ) {
-      this.#cacheDrawableForPrimitive(shape, drawableOpts);
-      const key = this.#drawableKeyForPrimitive(shape, drawableOpts.constrained);
-      const drawable = this.drawableCaches.get(key);
-      this.drawables.solidObstacles.add(drawable);
-      drawable.addToRenderSet(shape);
-    }
+    processShapes(occlusionTester.iterateObstacleShapes(otOpts), this.drawables.solidObstacles, drawableOpts);
 
     // Terrain obstacles.
     otOpts.includeObstacles = terrainObstacles;
-    for ( const shape of occlusionTester.iterateObstacleShapes(otOpts) ) {
-      this.#cacheDrawableForPrimitive(shape, drawableOpts);
-      const key = this.#drawableKeyForPrimitive(shape, drawableOpts.constrained);
-      const drawable = this.drawableCaches.get(key);
-      this.drawables.terrainObstacles.add(drawable);
-      drawable.addToRenderSet(shape);
-    }
+    drawableOpts.constrained = false;
+    processShapes(occlusionTester.iterateObstacleShapes(otOpts), this.drawables.terrainObstacles, drawableOpts);
   }
 
-  #cacheDrawableForPrimitive(primitive, { senseType = "sight", constrained = false, levelId = "" } = {}) {
+  #getOrCacheDrawable(primitive, { senseType = "sight", constrained = false, levelId = "" } = {}) {
     /* Drawables:
     InstancedDrawable -- per primitive
     ModelDrawable -- per object
@@ -333,7 +316,7 @@ export class LOSRendererWebGL2 {
     DirectionalInstancedDrawable -- per primitive but really only TexturedQuadPrimitive, VerticalQuadPrimitive
     */
     const key = this.#drawableKeyForPrimitive(primitive, constrained);
-    if ( this.drawableCaches.has(key) ) return;
+    if ( this.drawableCaches.has(key) ) return this.drawableCaches.get(key);
 
     const programFlags = this.#drawableProgramFlagsForPrimitive(primitive, constrained);
     const drawableClass = this.#drawableClassForPrimitive(primitive, constrained);
@@ -350,6 +333,7 @@ export class LOSRendererWebGL2 {
     }
     drawable.initialize();
     this.drawableCaches.set(key, drawable);
+    return drawable;
   }
 
   #drawableProgramFlagsForPrimitive(primitive, constrained = false) {
