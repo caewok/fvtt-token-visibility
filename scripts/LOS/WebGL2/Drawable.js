@@ -287,7 +287,7 @@ class AbstractDrawable {
     }
 
     // Otherwise, selectively update only the modified ids.
-    else idsToUpdate.forEach(id => this._updateBuffer(id, tracker));
+    else idsToUpdate.forEach(id => this._updateBufferForId(id, tracker));
     idsToUpdate.clear();
   }
 
@@ -331,7 +331,6 @@ class AbstractDrawable {
   render(debug = false) {
     if ( !this.renderSet.size ) return;
     this.prerender();
-    if ( !this.instanceSet.size ) return;
     this.debugView = debug;
 
     const gl = this.gl;
@@ -455,7 +454,7 @@ export class InstancedDrawable extends AbstractDrawable {
     this._syncTrackerToBuffer({
       tracker: this.modelMatrixTracker,
       layoutStateKey: "modelLayoutVersion",
-      ids: this.idsToUpdate,
+      idsToUpdate: this.idsToUpdate,
     });
     this.idsToUpdate.clear();
   }
@@ -602,13 +601,13 @@ export class MultiModelDrawable extends AbstractDrawable {
 
   viTracker = new VerticesIndicesAbstractTrackingBuffer({ stride: 6 }); // Stride is Position + Normal
 
-  modelMatrixTracker = new FixedLengthTrackingBuffer({ faceLengths: 16 });
+  modelMatrixTracker = new FixedLengthTrackingBuffer({ facetLengths: 16 });
 
   /** @type {Float32Array} */
   get verticesArray() { return this.viTracker.vertices.viewWholeBuffer(); }
 
   /** @type {Uint16Array} */
-  get indicesArray() { return this.viTracker.indices.viewWholeBuffer(this.vitracker.indicesAdjBuffer); }
+  get indicesArray() { return this.viTracker.indices.viewWholeBuffer(this.viTracker.indicesAdjBuffer); }
 
   /** @type {Float32Array} */
   get modelMatrixArray() { return this.modelMatrixTracker.viewWholeBuffer(); }
@@ -720,17 +719,17 @@ export class MultiModelDrawable extends AbstractDrawable {
     this._syncTrackerToBuffer({
       tracker: this.viTracker,
       layoutStateKey: "viLayoutVersion",
-      ids: this.idsToUpdateVI,
+      idsToUpdate: this.idsToUpdateVI,
     });
     this._syncTrackerToBuffer({
       tracker: this.modelMatrixTracker,
       layoutStateKey: "modelLayoutVersion",
-      ids: this.idsToUpdateModel,
+      idsToUpdate: this.idsToUpdateModel,
     });
   }
 
   _resizeBuffer(tracker) {
-    if ( tracker === this.viTracker ) this._resizeVIBuffer;
+    if ( tracker === this.viTracker ) this._resizeVIBuffer();
     else this._resizeModelBuffer();
   }
 
@@ -971,7 +970,7 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     }
 
     // Reset program state.
-    gl.useProgram(null);
+    this.webGL2.useProgram(null);
   }
 
   _initializeTexture(shape) {
@@ -1188,17 +1187,16 @@ const DirectionalWallMixin = superclass => class extends superclass {
   }
 
   _updateDirection(shape) {
-    const id = shape.id;
     this._removeDirection(shape);
-    if ( shape.direction === QuadPrimitive.CULL_FACES.FRONT ) this.frontDirectional.add(id);
-    else if ( shape.direction === QuadPrimitive.CULL_FACES.BACK ) this.backDirectional.add(id);
-    else this.biDirectional.add(id);
+    if ( shape.direction === QuadPrimitive.CULL_FACES.FRONT ) this.frontDirectional.add(shape);
+    else if ( shape.direction === QuadPrimitive.CULL_FACES.BACK ) this.backDirectional.add(shape);
+    else this.biDirectional.add(shape);
   }
 
   _removeDirection(shape) {
-    this.frontDirectional.delete(shape.id);
-    this.backDirectional.delete(shape.id);
-    this.biDirectional.delete(shape.id);
+    this.frontDirectional.delete(shape);
+    this.backDirectional.delete(shape);
+    this.biDirectional.delete(shape);
   }
 
   _draw() {
@@ -1310,7 +1308,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
       attrProps[`aClipPlanes_${i}`] = {
         numComponents: 4,                 // Each plane is a vec4.
         buffer: clipPlanesBuffer,         // Point to the shared buffer.
-        type: Float32Array,               // Required when passing a buffer instead instead of "data" property.
+        type: this.gl.FLOAT,              // Required when passing a buffer instead instead of "data" property.
         drawType: this.gl.DYNAMIC_DRAW,
         stride: Float32Array.BYTES_PER_ELEMENT * (this.constructor.NUM_CONSTRAINING_WALLS * 4),
         offset: Float32Array.BYTES_PER_ELEMENT * (i * 4),
@@ -1398,7 +1396,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
       clipPlanes[j] = n.x * mult;
       clipPlanes[j + 1] = n.y * mult;
       clipPlanes[j + 2] = n.z * mult;
-      clipPlanes[j + 3] = d;
+      clipPlanes[j + 3] = d * mult;
     }
 
     // Update the trackers.
@@ -1414,7 +1412,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
    * Otherwise will update the ids marked as requiring an update.
    */
   updateClipPlanesBuffer() {
-    if ( this.clipPlanesLayoutVersion !== this.clipPlanesUpdateTracker.layoutVersion ) {
+    if ( this.clipPlanesLayoutVersion !== this.clipPlanesTracker.layoutVersion ) {
       this._resizeClipPlanesBuffer();
       this.clipPlanesLayoutVersion = this.clipPlanesUpdateTracker.layoutVersion;
     } else this.idsToUpdateClipPlanes.forEach(id => this._updateClipPlanesBufferForId(id));
@@ -1430,9 +1428,11 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     // Clip planes buffer
     // Resize the GPU buffer.
     // Use gl.bufferData instead of subData to reallocate the GPU memory to the new size.
-    const cBuffer = this.attributeBufferInfo.attribs["aClipPlanes[0]"].buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.clipPlanesArray, gl.DYNAMIC_DRAW);
+    for ( let i = 0; i < this.constructor.NUM_CONSTRAINING_WALLS; i += 1 ) {
+      const cBuffer = this.attributeBufferInfo.attribs[`aClipPlanes_${i}`].buffer;
+      gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, this.clipPlanesArray, gl.DYNAMIC_DRAW);
+    }
 
     // Number of clip planes buffer
     const ncBuffer = this.attributeBufferInfo.attribs.aNumClipPlanes.buffer;
@@ -1461,10 +1461,13 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
 
     // Clip planes buffer
     const cpTracker = this.clipPlanesTracker;
-    const cpBuffer = this.attributeBufferInfo.attribs["aClipPlanes[0]"].buffer;
     const cpOffset = cpTracker.facetOffsetAtId(id) + cpTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    gl.bindBuffer(gl.ARRAY_BUFFER, cpBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, cpOffset, cpTracker.viewFacetById(id));
+    for ( let i = 0; i < this.constructor.NUM_CONSTRAINING_WALLS; i += 1 ) {
+      const cpBuffer = this.attributeBufferInfo.attribs[`aClipPlanes_${i}`].buffer;
+      gl.bindBuffer(gl.ARRAY_BUFFER, cpBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, cpOffset, cpTracker.viewFacetById(id));
+    }
+
 
     // Number of clip planes buffer
     const ncTracker = this.numClipPlanesTracker;
