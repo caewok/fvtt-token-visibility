@@ -276,7 +276,7 @@ export class LOSRendererWebGL2 {
     const otOpts = { includeObstacles: tokenObstacles, geomSubtype: "full "};
 
     // Clear the drawables of any old instances.
-    this.drawableCaches.forEach(drawable => drawable.renderSet.clear());
+    this.drawableCaches.forEach(drawable => drawable.clearRenderSet());
     Object.values(this.drawables).forEach(s => s.clear());
 
     // Set up the drawables.
@@ -286,8 +286,7 @@ export class LOSRendererWebGL2 {
     const targetKey = this.#drawableKeyForPrimitive(targetShape, drawableOpts.constrained);
     const drawable = this.drawableCaches.get(targetKey);
     this.drawables.target.add(drawable);
-    drawable.addGeometricShape(targetShape); // Could skip; will be triggered by drawable.render.
-    drawable.renderSet.add(targetShape);
+    drawable.addToRenderSet(targetShape);
 
     // Token obstacles.
     // All token obstacles are constrained by the GPU using 5 or less overlapping walls.
@@ -297,8 +296,7 @@ export class LOSRendererWebGL2 {
       const key = this.#drawableKeyForPrimitive(shape, drawableOpts.constrained);
       const drawable = this.drawableCaches.get(key);
       this.drawables.solidObstacles.add(drawable);
-      drawable.addGeometricShape(shape); // Could skip; will be triggered by drawable.render.
-      drawable.renderSet.add(shape);
+      drawable.addToRenderSet(shape);
     }
 
     // Solid obstacles.
@@ -310,8 +308,7 @@ export class LOSRendererWebGL2 {
       const key = this.#drawableKeyForPrimitive(shape, drawableOpts.constrained);
       const drawable = this.drawableCaches.get(key);
       this.drawables.solidObstacles.add(drawable);
-      drawable.addGeometricShape(shape); // Could skip; will be triggered by drawable.render.
-      drawable.renderSet.add(shape);
+      drawable.addToRenderSet(shape);
     }
 
     // Terrain obstacles.
@@ -321,8 +318,7 @@ export class LOSRendererWebGL2 {
       const key = this.#drawableKeyForPrimitive(shape, drawableOpts.constrained);
       const drawable = this.drawableCaches.get(key);
       this.drawables.terrainObstacles.add(drawable);
-      drawable.addGeometricShape(shape); // Could skip; will be triggered by drawable.render.
-      drawable.renderSet.add(shape);
+      drawable.addToRenderSet(shape);
     }
   }
 

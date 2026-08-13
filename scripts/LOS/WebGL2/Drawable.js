@@ -207,9 +207,9 @@ class AbstractDrawable {
 
   /**
    * The set of shape ids tracked by this drawable.
-   * @type {Set<string>}
+   * @type {Map<string, ids>}
    */
-  trackedIds = new Set();
+  trackedIds = new Map();
 
   /**
    * The set of shape ids that may require a WebGPU buffer update.
@@ -227,7 +227,7 @@ class AbstractDrawable {
     if ( this.trackedIds.has(id) ) return this.updateGeometricShape(shape);
 
     const added = this._onShapeAdded(shape);
-    if ( added ) this.trackedIds.add(id);
+    if ( added ) this.trackedIds.set(id, shape);
     return added;
   }
 
@@ -237,6 +237,7 @@ class AbstractDrawable {
    * @returns {boolean} True if successfully added or updated.
    */
   updateGeometricShape(shape) {
+    if ( !shape ) return; //
     const id = shape.id;
     if ( !this.trackedIds.has(id) ) return this.addGeometricShape(shape);
     return this._onShapeUpdated(shape);
@@ -313,15 +314,25 @@ class AbstractDrawable {
    * The render set stores shapes to be rendered.
    * When render is called, prerender will upload changes for the shape as needed.
    * To lock in the shape model, call prerender manually after adding shapes.
-   * @type {Set<GeometricPrimitive>}
+   * @type {Set<string>}
    */
-  renderSet = new Set();
+  _renderSet = new Set();
+
+  addToRenderSet(shape) {
+    this.addGeometricShape(shape);
+    this._renderSet.add(shape.id);
+  }
+
+  removeFromRenderSet(shape) { this._renderSet.delete(shape.id); }
+
+  clearRenderSet() { this._renderSet.clear(); }
 
   /**
    * Prerender triggers updates to the GPU data as needed prior to rendering.
    */
   prerender() {
-    this.renderSet.forEach(shape => this.updateGeometricShape(shape));
+    // Handled by addToRenderSet.
+    // this._renderSet.forEach(id => this.updateGeometricShape(this.trackedIds.get(id)));
     this.updateBuffers();
   }
 
@@ -329,7 +340,7 @@ class AbstractDrawable {
    * Draw all placeables in the instance set, using the current webGL settings.
    */
   render(debug = false) {
-    if ( !this.renderSet.size ) return;
+    if ( !this._renderSet.size ) return;
     this.prerender();
     this.debugView = debug;
 
@@ -492,7 +503,7 @@ export class InstancedDrawable extends AbstractDrawable {
     const tracker = this.modelMatrixTracker;
     const gl = this.gl;
     const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
-    const mOffset = tracker.facetOffsetAtId(id) + tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    const mOffset = tracker.facetOffsetAtId(id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
   }
@@ -502,9 +513,9 @@ export class InstancedDrawable extends AbstractDrawable {
   _draw() {
     // Get the indices for each shape in the render set.
     // Shapes that do not belong to this primitive are ignored.
-    const instanceSet = this.renderSet
-      .filter(shape => (shape instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(shape.id))
-      .map(shape => this.modelMatrixTracker.facetIdMap.get(shape.id))
+    const instanceSet = this._renderSet
+      .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
+      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
 
     const nVertices = this.indicesArray.length;
     WebGL2.drawInstancedMatrixSet(
@@ -780,12 +791,12 @@ export class MultiModelDrawable extends AbstractDrawable {
 
     // Vertices
     const vBuffer = this.attributeBufferInfo.attribs.aPosition.buffer;
-    const vOffset = tracker.vertices.facetOffsetAtId(id) + tracker.vertices.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    const vOffset = tracker.vertices.facetOffsetAtId(id) * tracker.vertices.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
 
     const iBuffer = this.attributeBufferInfo.indices;
-    const iOffset = tracker.indices.facetOffsetAtId(id) + tracker.indices.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    const iOffset = tracker.indices.facetOffsetAtId(id) * tracker.indices.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
     gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, indicesAdj);
   }
@@ -827,7 +838,7 @@ export class MultiModelDrawable extends AbstractDrawable {
     const tracker = this.modelMatrixTracker;
     const gl = this.gl;
     const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
-    const mOffset = tracker.facetOffsetAtId(id) + tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    const mOffset = tracker.facetOffsetAtId(id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
   }
@@ -837,9 +848,9 @@ export class MultiModelDrawable extends AbstractDrawable {
   _draw() {
     // Get the indices for each shape in the render set.
     // Shapes that do not belong to this primitive are ignored.
-    const instanceSet = this.renderSet
-      .filter(shape => this.modelMatrixTracker.hasId(shape.id))
-      .map(shape => this.modelMatrixTracker.facetIdMap.get(shape.id))
+    const instanceSet = this._renderSet
+      .filter(id => this.modelMatrixTracker.hasId(id))
+      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
 
     const nVertices = this.indicesArray.length;
     WebGL2.drawInstancedMatrixSet(
@@ -1083,9 +1094,9 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
   prerender() {
     super.prerender();
 
-    const instanceSet = this.renderSet
-      .filter(shape => (shape instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(shape.id))
-      .map(shape => this.modelMatrixTracker.facetIdMap.get(shape.id))
+    const instanceSet = this._renderSet
+      .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
+      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
 
     const maxInstance = Math.max(...instanceSet);
     this._ensureBufferCapacity(maxInstance + 1); // Add 1 to account for 0-indexing.
@@ -1108,9 +1119,9 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
 
   _draw() {
     const gl = this.gl;
-    const instanceSet = this.renderSet
-      .filter(shape => (shape instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(shape.id))
-      .map(shape => this.modelMatrixTracker.facetIdMap.get(shape.id))
+    const instanceSet = this._renderSet
+      .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
+      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
 
     // Construct the functions needed to advance the instance attributes.
     const advanceFns = [
@@ -1174,57 +1185,63 @@ const DirectionalWallMixin = superclass => class extends superclass {
   _onShapeAdded(shape) {
     if ( !super._onShapeAdded(shape) ) return false;
     this._updateDirection(shape);
+    return true;
   }
 
   _onShapeUpdated(shape) {
     if ( !super._onShapeUpdated(shape) ) return false;
     this._updateDirection(shape);
+    return true;
   }
 
   _onShapeRemoved(shape) {
     if ( !super._onShapeRemoved(shape) ) return false;
     this._removeDirection(shape);
+    return true;
   }
 
   _updateDirection(shape) {
-    this._removeDirection(shape);
-    if ( shape.direction === QuadPrimitive.CULL_FACES.FRONT ) this.frontDirectional.add(shape);
-    else if ( shape.direction === QuadPrimitive.CULL_FACES.BACK ) this.backDirectional.add(shape);
-    else this.biDirectional.add(shape);
+    const id = shape.id;
+    this._removeDirection(id);
+    if ( shape.direction === QuadPrimitive.CULL_FACES.FRONT ) this.frontDirectional.add(id);
+    else if ( shape.direction === QuadPrimitive.CULL_FACES.BACK ) this.backDirectional.add(id);
+    else this.biDirectional.add(id);
   }
 
   _removeDirection(shape) {
-    this.frontDirectional.delete(shape);
-    this.backDirectional.delete(shape);
-    this.biDirectional.delete(shape);
+    const id = shape.id;
+    this.frontDirectional.delete(id);
+    this.backDirectional.delete(id);
+    this.biDirectional.delete(id);
   }
 
   _draw() {
     const webGL2 = this.webGL2;
-    const { frontDirectional, backDirectional, biDirectional, renderSet } = this;
+    const { frontDirectional, backDirectional, biDirectional } = this;
 
-    const renderFront = this.renderSet.intersection(frontDirectional);
-    const renderBack = this.renderSet.intersection(backDirectional);
-    const renderBi = this.renderSet.intersection(biDirectional);
+    const renderFront = this._renderSet.intersection(frontDirectional);
+    const renderBack = this._renderSet.intersection(backDirectional);
+    const renderBi = this._renderSet.intersection(biDirectional);
+    const oldSet = this._renderSet;
 
     if ( renderBi.size ) {
       webGL2.setCulling(false);
-      this.renderSet = renderBi;
+      this._renderSet = renderBi;
       super._draw();
     }
     if ( renderFront.size ) {
       webGL2.setCulling(true);
       webGL2.setCullFace("BACK");
-      this.renderSet = renderFront;
+      this._renderSet = renderFront;
       super._draw();
     }
     if ( renderBack.size ) {
       webGL2.setCulling(true);
       webGL2.setCullFace("FRONT");
-      this.renderSet = renderBack;
+      this._renderSet = renderBack;
       super._draw();
     }
-    this.renderSet = renderSet;
+    this._renderSet = oldSet;
   }
 }
 
@@ -1461,7 +1478,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
 
     // Clip planes buffer
     const cpTracker = this.clipPlanesTracker;
-    const cpOffset = cpTracker.facetOffsetAtId(id) + cpTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    const cpOffset = cpTracker.facetOffsetAtId(id) * cpTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     for ( let i = 0; i < this.constructor.NUM_CONSTRAINING_WALLS; i += 1 ) {
       const cpBuffer = this.attributeBufferInfo.attribs[`aClipPlanes_${i}`].buffer;
       gl.bindBuffer(gl.ARRAY_BUFFER, cpBuffer);
@@ -1472,7 +1489,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     // Number of clip planes buffer
     const ncTracker = this.numClipPlanesTracker;
     const ncBuffer = this.attributeBufferInfo.attribs.aNumClipPlanes.buffer;
-    const ncOffset = ncTracker.facetOffsetAtId(id) + ncTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
+    const ncOffset = ncTracker.facetOffsetAtId(id) * ncTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     gl.bindBuffer(gl.ARRAY_BUFFER, ncBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, ncOffset, ncTracker.viewFacetById(id));
   }
