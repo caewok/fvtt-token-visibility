@@ -272,7 +272,7 @@ export class LOSRendererWebGL2 {
   prerender(targetShape, occlusionTester) {
     const tokenObstacles = new Set(["tokens"]);
     const terrainObstacles = new Set(["terrainWalls"]);
-    const drawableOpts = { constrained: false, senseType: occlusionTester.senseType, levelId: occlusionTester.levelId };
+    const drawableOpts = { constrained: true, senseType: occlusionTester.senseType, levelId: occlusionTester.levelId };
     const otOpts = { includeObstacles: tokenObstacles, geomSubtype: "full "};
 
     // Clear the drawables of any old instances.

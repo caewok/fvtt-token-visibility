@@ -573,7 +573,7 @@ export class ModelDrawable extends AbstractDrawable {
   _onShapeAdded(_shape) { return false; }
 
   _onShapeUpdated(shape) {
-    return this.modelVersion !== shape.modelMatrix.dataVersion
+    return this.modelVersion !== shape.modelMatrix.dataVersion;
   }
 
   /**
@@ -1083,6 +1083,7 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
 
     // Update the texture arrays.
     this.textureIndicesArray[idx] = texUnit;
+    return true;
   }
 
   // _onShapeUpdated(shape) {}
@@ -1376,6 +1377,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     const wallGeoms = this.constructor.intersectingWalls(shape, this.levelId, this.senseType);
     this._setClippingWallPlanes(shape, wallGeoms);
     this.idsToUpdateClipPlanes.add(shape.id);
+    return true;
   }
 
   _onShapeUpdated(shape) {
@@ -1383,6 +1385,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     const wallGeoms = this.constructor.intersectingWalls(shape, this.levelId, this.senseType);
     this._setClippingWallPlanes(shape, wallGeoms);
     this.idsToUpdateClipPlanes.add(shape.id);
+    return true;
   }
 
   _onShapeRemoved(shape) {
@@ -1390,6 +1393,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     const id = shape.id;
     this.numClipPlanesTracker.deleteFacet(id);
     this.clipPlanesTracker.deleteFacet(id);
+    return true;
   }
 
   _setClippingWallPlanes(shape, wallGeoms) {
