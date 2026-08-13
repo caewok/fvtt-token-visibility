@@ -25,6 +25,7 @@ import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
 import { tokensOverlap } from "./util.js";
 import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 import { SmallBitSet } from "./SmallBitSet.js";
+import { PercentVisibleCalculatorWebGL2 } from "./calculators/WebGL2Calculator.js";
 
 // Viewpoint algorithms.
 import { Viewpoint } from "./Viewpoint.js";
@@ -241,7 +242,10 @@ export class ViewerLOS {
   targetLocation = new Point3d();
 
   /** @type {PlaceableGeometry} */
-  get targetGeometry() { return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target).constrained; }
+  get targetGeometry() {
+    const type = this.calculator instanceof PercentVisibleCalculatorWebGL2 ? "full" : "constrained";
+    return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target)[type];
+  }
 
   /** @type {GeometricPrimitive} */
   get targetShape() { return this.targetGeometry.shapes[0]; }
