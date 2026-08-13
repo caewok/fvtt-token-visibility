@@ -126,6 +126,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     const radius2 = this.config.radius ** 2;
     let i = -1;
     for ( const pt of this.iterateTargetPoints() ) {
+      i += 1;
       potentiallyVisible.add(i);
 
       if ( this.pointOutsideRange(pt, radius2) || this.pointIsOccluded(pt) ) continue;
