@@ -7,16 +7,31 @@ layout(location = 2) in vec2 aTexCoord; // aUV
 layout(location = 3) in int aTextureIndex;
 layout(location = 4) in float aAlphaThreshold;
 
-
 layout (std140) uniform Camera {
   mat4 uPerspectiveMatrix; // Projection.
   mat4 uLookAtMatrix;      // View.
 };
 
-#if ${isInstanced}
-  layout(location = 5) in mat4 aModel; // Takes up four consecutive locations
-#else
-  uniform mat4 aModel;
+layout(location = 5) in mat4 aModel; // Takes up four consecutive locations
+
+#if ${maxConstrainingWalls}
+// Note: Currently using 9 slots before this (0–4 + 4 slots for location 5).
+// aNumClipPlanes uses 1 slot.
+// aClipPlanes is 1 slot per array element. Keep maxConstrainingWalls <= 6 to
+// stay within 16-attirbute limit across nearly all devices. (MAX_VERTEX_ATTRIBS)
+// Instanced clipping plane attributes
+layout(location = 9) in int aNumClipPlanes;
+
+// Unroll the array, to avoid error: 'in' : cannot declare arrays of this qualifier
+layout(location = 10) in vec4 aClipPlanes_0;
+layout(location = 11) in vec4 aClipPlanes_1;
+layout(location = 12) in vec4 aClipPlanes_2;
+layout(location = 13) in vec4 aClipPlanes_3;
+layout(location = 14) in vec4 aClipPlanes_4;
+
+// For fragment shader.
+flat out int vNumClipPlanes;
+flat out vec4 vClipPlanes[${maxConstrainingWalls}];
 #endif
 
 out vec3 vNormal;
@@ -43,6 +58,17 @@ void main() {
   #endif
 
   #if ${maxConstrainingWalls}
+    // Pack the unrolled attributes into the output array.
+    vClipPlanes[0] = aClipPlanes_0;
+    vClipPlanes[1] = aClipPlanes_1;
+    vClipPlanes[2] = aClipPlanes_2;
+    vClipPlanes[3] = aClipPlanes_3;
+    vClipPlanes[4] = aClipPlanes_4;
+
     vWorldPosition = worldPosition.xyz;
+
+    // Instance clipping data, passed to fragment shader.
+    vNumClipPlanes = aNumClipPlanes;
+
   #endif
 }

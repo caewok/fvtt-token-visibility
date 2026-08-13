@@ -10,8 +10,8 @@ in vec3 vWorldPosition;
 
 #if ${maxConstrainingWalls}
 // Pragma needed b/c GLSL does not allow uClipPlanes[0]. "Error: Array size must be greater than zero."
-uniform int uNumClipPlanes;
-uniform vec4 uClipPlanes[${maxConstrainingWalls}]; // Max intersecting walls.
+flat in int vNumClipPlanes;
+flat in vec4 vClipPlanes[${maxConstrainingWalls}]; // Max intersecting walls.
 #endif
 
 // Used by textures
@@ -56,8 +56,8 @@ vec4 texturePicker(int idx) {
 
 void main() {
   #if ${maxConstrainingWalls}
-    for ( int i = 0; i < uNumClipPlanes; i++ ) {
-      float dist = dot(uClipPlanes[i].xyz, vWorldPosition) + uClipPlanes[i].w;
+    for ( int i = 0; i < vNumClipPlanes; i++ ) {
+      float dist = dot(vClipPlanes[i].xyz, vWorldPosition) + vClipPlanes[i].w;
 
       // If distance is greater than 0, the pixel is "behind" the wall.
       if ( dist > 0.0 ) { discard; }
