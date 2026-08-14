@@ -113,7 +113,9 @@ export class PercentVisibleResult {
 
   get percentVisible() {
     if ( ~this.visibility ) return this.visibility;
-    return approximateClamp(this.visibleArea / this.targetArea, 0, 1, 1e-02);
+    const targetArea = this.targetArea;
+    if ( targetArea.almostEqual(0) ) return 0;
+    return approximateClamp(this.visibleArea / targetArea, 0, 1, 1e-02);
   }
 
   /**

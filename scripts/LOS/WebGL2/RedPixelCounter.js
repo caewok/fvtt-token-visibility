@@ -468,11 +468,17 @@ export class RedPixelCounter {
     const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
     for ( let i = 0; i < nPixels; i += 4 ) {
       const r = pixels[i];
-      // const g = pixels[i + 1];
+      // const g = pixels[i + 1]; // Handle in the OR test.
       const b = pixels[i + 2];
+      const a = pixels[i + 3];
+
       const hasR = r >> 7; // Threshold of 128 given Uint8Array.
       const hasB = b >> 7;
-      const isBlocked = hasR * (hasB || pixels[i + 1] > terrainThreshold);
+
+      // Blocked if red marked as blocked in fragment shader (hasR && alpha === 0).
+      // Blocked if blue pixel present (solid obstacle).
+      // Blocked if green pixel surpasses the terrain threshold.
+      const isBlocked = (hasR && a === 0) || (hasR * (hasB || pixels[i + 1] > terrainThreshold));
       red.set(i / 4, hasR);
       redBlocked.set(i / 4, isBlocked);
     }
@@ -500,10 +506,16 @@ export class RedPixelCounter {
       const r = pixels[i];
       // const g = pixels[i + 1];
       const b = pixels[i + 2];
+      const a = pixels[i + 3];
+
       const hasR = r >> 7; // Threshold of 128 given Uint8Array.
       const hasB = b >> 7;
       red += hasR;
-      redBlocked += hasR * (hasB || pixels[i + 1] > terrainThreshold);
+
+      // Blocked if red marked as blocked in fragment shader (hasR && alpha === 0).
+      // Blocked if blue pixel present (solid obstacle).
+      // Blocked if green pixel surpasses the terrain threshold.
+      redBlocked += (hasR && a === 0) || (hasR * (hasB || pixels[i + 1] > terrainThreshold));
     }
     return { red, redBlocked };
   }

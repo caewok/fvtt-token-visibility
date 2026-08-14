@@ -14,11 +14,11 @@ import { WebGL2 } from "./WebGL2.js";
 import {
   InstancedDrawable,
   ModelDrawable,
+  MultiModelDrawable,
   DirectionalInstancedDrawable,
   TexturedInstancedDrawable,
-  ConstrainedModelDrawable,
   ConstrainedInstancedDrawable,
-} from "./InstancedDrawable.js";
+} from "./Drawable.js";
 
 import { InstancedGeometricPrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
 
@@ -46,9 +46,6 @@ export class LOSRendererWebGL2 {
     this.webGL2 = webGL2;
   }
 
-
-
-
   async initialize() {
     await this._initializePrograms();
     this._initializeCameraBuffer();
@@ -59,15 +56,15 @@ export class LOSRendererWebGL2 {
    // ----- NOTE: Program ----- //
 
   /** @type {string} */
-  static VERTEX_FILE = "instance_vertex_ubo_v2";
+  static VERTEX_FILE = "drawable_vertex";
 
   /** @type {string} */
-  static FRAGMENT_FILE = "fragment_v2";
+  static FRAGMENT_FILE = "drawable_fragment";
 
   static SHADER_FLAGS = InstancedDrawable.SHADER_FLAGS;
 
   /** @type {number} */
-  static MAX_CONSTRAINING_WALLS = 5;
+  static MAX_CONSTRAINING_WALLS = 5; // Cannot be changed unless the glsl code is changed.
 
   /** @type {Map<number, twgl.ProgramInfo>} */
   // Because gl (and webGL2) change for debug vs regular canvas, programs cannot be static.
@@ -79,9 +76,8 @@ export class LOSRendererWebGL2 {
     // Programs used.
     const requiredVariants = [
       SHADER_FLAGS.NONE, // Non-instanced
-      SHADER_FLAGS.INSTANCED,
-      SHADER_FLAGS.INSTANCED | SHADER_FLAGS.TEXTURED, // Tiles
-      SHADER_FLAGS.INSTANCED | SHADER_FLAGS.CONSTRAINED, // Tokens
+      SHADER_FLAGS.TEXTURED, // Tiles
+      SHADER_FLAGS.CONSTRAINED, // Tokens
       SHADER_FLAGS.CONSTRAINED, // Polygon tokens
     ]
     // Plus, need debug versions of each.
@@ -98,14 +94,12 @@ export class LOSRendererWebGL2 {
     // Bitwise AND to identify if a specific flag is active.
     const SHADER_FLAGS = this.constructor.SHADER_FLAGS;
     const isDebug     = (flags & SHADER_FLAGS.DEBUG) !== 0;
-    const isInstanced = (flags & SHADER_FLAGS.INSTANCED) !== 0;
     const isTextured = (flags & SHADER_FLAGS.TEXTURED) !== 0;
     const isConstrained = (flags & SHADER_FLAGS.CONSTRAINED) !== 0;
 
     // Compile the program and store for later use, keyed to the flags.
     const programInfo = await this._createProgram({
       debugViewNormals: isDebug,
-      isInstanced: isInstanced,
       hasTexture: isTextured,
       maxConstrainingWalls: isConstrained ? this.constructor.MAX_CONSTRAINING_WALLS : 0,
     });
@@ -118,7 +112,6 @@ export class LOSRendererWebGL2 {
     fragmentFile ??= this.constructor.FRAGMENT_FILE;
     opts.debugViewNormals ??= false;
     opts.hasTexture ??= false;
-    opts.isInstanced ??= false;
     opts.maxConstrainingWalls ??= 0;
     return await this.webGL2.cacheProgram(vertexFile, fragmentFile, opts);
   }
@@ -277,61 +270,53 @@ export class LOSRendererWebGL2 {
    * Create and initialize drawables as needed.
    */
   prerender(targetShape, occlusionTester) {
-    // Constrain the target.
-    this.#cacheDrawableForPrimitive(targetShape, true);
-
-    const tokenObstacles = new Set("tokens");
-    let includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS.difference(tokenObstacles);
-    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles }) ) {
-      this.#cacheDrawableForPrimitive(shape, false);
-    }
-
-    // All token obstacles should be constrained.
-    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles: tokenObstacles }) ) {
-      this.#cacheDrawableForPrimitive(shape, true);
-    }
+    const tokenObstacles = new Set(["tokens"]);
+    const terrainObstacles = new Set(["terrainWalls"]);
+    const drawableOpts = { constrained: true, senseType: occlusionTester.senseType, levelId: occlusionTester.levelId };
+    const otOpts = { includeObstacles: tokenObstacles, geomSubtype: "full "};
 
     // Clear the drawables of any old instances.
-    this.drawableCaches.forEach(drawable => drawable.clearInstances());
+    this.drawableCaches.forEach(drawable => drawable.clearRenderSet());
     Object.values(this.drawables).forEach(s => s.clear());
 
-    // Set up the drawables.
-    // Target.
-    const targetKey = this.#drawableKeyForPrimitive(targetShape, true);
-    const drawable = this.drawableCaches.get(targetKey);
-    this.drawables.target.add(drawable);
-    drawable.addGeometricShape(targetShape);
+    // Helper to process any shape iteration.
+    const processShapes = (shapes, targetSet, opts) => {
+      for ( const shape of shapes ) {
+        const drawable = this.#getOrCacheDrawable(shape, opts);
+        targetSet.add(drawable);
+        drawable.addToRenderSet(shape);
+      }
+    }
+
+    // Target, which may be constrained by GPU using 5 or less overlapping walls.
+    processShapes([targetShape], this.drawables.target, drawableOpts);
+
+    // Token obstacles. Also may be constrained by GPU.
+    processShapes(occlusionTester.iterateObstacleShapes(otOpts), this.drawables.solidObstacles, drawableOpts);
 
     // Solid obstacles.
-    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles }) ) {
-      const key = this.#drawableKeyForPrimitive(shape, true);
-      const drawable = this.drawableCaches.get(key);
-      this.drawables.solidObstacles.add(drawable);
-      drawable.addGeometricShape(shape);
-    }
+    otOpts.includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS.difference(tokenObstacles).difference(terrainObstacles);
+    drawableOpts.constrained = false;
+    processShapes(occlusionTester.iterateObstacleShapes(otOpts), this.drawables.solidObstacles, drawableOpts);
 
     // Terrain obstacles.
-    const terrainObstacles = new Set("terrainWalls");
-    includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS.difference(terrainObstacles);
-    for ( const shape of occlusionTester.iterateObstacleShapes({ includeObstacles: terrainObstacles }) ) {
-      const key = this.#drawableKeyForPrimitive(shape, true);
-      const drawable = this.drawableCaches.get(key);
-      this.drawables.terrainObstacles.add(drawable);
-      drawable.addGeometricShape(shape);
-    }
+    otOpts.includeObstacles = terrainObstacles;
+    drawableOpts.constrained = false;
+    processShapes(occlusionTester.iterateObstacleShapes(otOpts), this.drawables.terrainObstacles, drawableOpts);
   }
 
-  #cacheDrawableForPrimitive(primitive, constrained = false) {
+  #getOrCacheDrawable(primitive, { senseType = "sight", constrained = false, levelId = "" } = {}) {
     /* Drawables:
     InstancedDrawable -- per primitive
-    ModelDrawable
+    ModelDrawable -- per object
+    MultiModelDrawable -- single drawable for all objects
     TexturedInstancedDrawable -- per primitive but really only TexturedQuadPrimitive
     ConstrainedInstancedDrawable -- per primitive
     ConstrainedModelDrawable
     DirectionalInstancedDrawable -- per primitive but really only TexturedQuadPrimitive, VerticalQuadPrimitive
     */
     const key = this.#drawableKeyForPrimitive(primitive, constrained);
-    if ( this.drawableCaches.has(key) ) return;
+    if ( this.drawableCaches.has(key) ) return this.drawableCaches.get(key);
 
     const programFlags = this.#drawableProgramFlagsForPrimitive(primitive, constrained);
     const drawableClass = this.#drawableClassForPrimitive(primitive, constrained);
@@ -340,15 +325,20 @@ export class LOSRendererWebGL2 {
       programInfo: this.programs.get(programFlags),
       debugProgramInfo: this.programs.get(programFlags | this.constructor.SHADER_FLAGS.DEBUG),
       primitiveClass: primitive.constructor,
+      shape: primitive, // For ModelDrawable
     });
+    if ( drawable instanceof ConstrainedInstancedDrawable ) {
+      drawable.levelId = levelId;
+      drawable.senseType = senseType;
+    }
     drawable.initialize();
     this.drawableCaches.set(key, drawable);
+    return drawable;
   }
 
   #drawableProgramFlagsForPrimitive(primitive, constrained = false) {
     const SHADER_FLAGS = this.constructor.SHADER_FLAGS;
-    const isInstanced = primitive instanceof InstancedGeometricPrimitive;
-    let programFlags = isInstanced ? SHADER_FLAGS.INSTANCED : SHADER_FLAGS.NONE;
+    let programFlags = SHADER_FLAGS.NONE;
     if ( primitive.constructor.TEXTURED ) programFlags |= SHADER_FLAGS.TEXTURED;
     if ( constrained ) programFlags |= SHADER_FLAGS.CONSTRAINED;
     return programFlags;
@@ -364,19 +354,23 @@ export class LOSRendererWebGL2 {
       else if ( constrained ) drawableClass = ConstrainedInstancedDrawable;
       else if ( isDirectional ) drawableClass = DirectionalInstancedDrawable;
     } else {
-      drawableClass = ModelDrawable;
-      if ( constrained ) drawableClass = ConstrainedModelDrawable;
+      if ( constrained ) new Error(`${this.constructor.name}##drawableClassForPrimitive|Constrained only uses instanced geometry.`);
+      drawableClass = this.constructor.USE_MULTI_MODEL ? MultiModelDrawable : ModelDrawable;
     }
     return drawableClass;
   }
+
+  static USE_MULTI_MODEL = false; // For now, just for debugging.
 
   #drawableKeyForPrimitive(primitive, constrained = false) {
     let key;
     const isInstanced = primitive instanceof InstancedGeometricPrimitive;
     const isDirectional = Object.hasOwn(primitive, "direction");
 
-    if ( !isInstanced ) key = "ModelDrawable";
-    else {
+    if ( !isInstanced ) {
+      if ( !this.constructor.USE_MULTI_MODEL ) return primitive; // Primitive shape is the key for single model.
+      key = "MultiModelDrawable";
+    } else {
       // Instance drawables are split by primitive type.
       key = `InstancedDrawable_${primitive.constructor.name}`;
 
