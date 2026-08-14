@@ -359,6 +359,8 @@ class AbstractDrawable {
     // gl.finish(); // For debugging.
   }
 
+  get instanceSet() { return this._renderSet(); }
+
   _draw() { console.error("_draw should be defined by child class."); }
 
   destroy() {}
@@ -509,17 +511,19 @@ export class InstancedDrawable extends AbstractDrawable {
 
   // ----- NOTE: Rendering ----- //
 
-  _draw() {
+  get instanceSet() {
     // Get the indices for each shape in the render set.
     // Shapes that do not belong to this primitive are ignored.
-    const instanceSet = this._renderSet
+    return super.instanceSet
       .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
-      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
+      .map(id => this.modelMatrixTracker.facetIdMap.get(id));
+  }
 
+  _draw() {
     const nVertices = this.indicesArray.length;
     WebGL2.drawInstancedMatrixSet(
       this.gl,
-      instanceSet,
+      this.instanceSet,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
       this.aModelAttribLoc,
@@ -843,18 +847,19 @@ export class MultiModelDrawable extends AbstractDrawable {
   }
 
   // ----- NOTE: Rendering ----- //
-
-  _draw() {
+  get instanceSet() {
     // Get the indices for each shape in the render set.
     // Shapes that do not belong to this primitive are ignored.
-    const instanceSet = this._renderSet
+    return super.instanceSet
       .filter(id => this.modelMatrixTracker.hasId(id))
       .map(id => this.modelMatrixTracker.facetIdMap.get(id))
+  }
 
+  _draw() {
     const nVertices = this.indicesArray.length;
     WebGL2.drawInstancedMatrixSet(
       this.gl,
-      instanceSet,
+      this.instanceSet,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
       this.aModelAttribLoc,
@@ -1094,11 +1099,7 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
   prerender() {
     super.prerender();
 
-    const instanceSet = this._renderSet
-      .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
-      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
-
-    const maxInstance = Math.max(...instanceSet);
+    const maxInstance = Math.max(...this.instanceSet);
     this._ensureBufferCapacity(maxInstance + 1); // Add 1 to account for 0-indexing.
 
     // Upload the updated texture indices.
@@ -1117,11 +1118,15 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, aDataSubArray);
   }
 
-  _draw() {
-    const gl = this.gl;
-    const instanceSet = this._renderSet
+  get instanceSet() {
+    return super.instanceSet
       .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
       .map(id => this.modelMatrixTracker.facetIdMap.get(id))
+  }
+
+  _draw() {
+    const gl = this.gl;
+    const instanceSet = this.instanceSet;
 
     // Construct the functions needed to advance the instance attributes.
     const advanceFns = [
