@@ -56,10 +56,10 @@ export class LOSRendererWebGL2 {
    // ----- NOTE: Program ----- //
 
   /** @type {string} */
-  static VERTEX_FILE = "instance_vertex_ubo_v2";
+  static VERTEX_FILE = "drawable_vertex";
 
   /** @type {string} */
-  static FRAGMENT_FILE = "fragment_v2";
+  static FRAGMENT_FILE = "drawable_fragment";
 
   static SHADER_FLAGS = InstancedDrawable.SHADER_FLAGS;
 
