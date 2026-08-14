@@ -1,7 +1,6 @@
 /* globals
 canvas,
 CONFIG,
-foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -359,7 +358,7 @@ class AbstractDrawable {
     // gl.finish(); // For debugging.
   }
 
-  get instanceSet() { return this._renderSet(); }
+  get instanceSet() { return this._renderSet; }
 
   _draw() { console.error("_draw should be defined by child class."); }
 
@@ -1264,9 +1263,9 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   /**
    * Locate walls that intersect the token border.
    * @param {GeometricPrimitive} tokenShape
-   * @returns {GeometricPrimitive[]}
+   * @returns {number[][]} Array of [x1, y1, x2, y2]
    */
-  static intersectingPlanes(tokenShape, levelId, senseType = "sight") {
+  static intersectingWallSegments(tokenShape, levelId, senseType = "sight") {
     // For speed, take everything that crosses the token aabb.
     // Shrink by two pixels to avoid walls that simply are on the edge.
     using aabb = tokenShape.aabb.clone();
@@ -1287,7 +1286,8 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
       for ( const shape of wallGeom.iterateShapes({ senseType, levelId }) ) {
         const testFace = shape.faces[0];
         if ( aabb.overlapsConvexPolygon3d(testFace) ) {
-          out.push(testFace.plane);
+          const wallD = wallGeom.placeableDocument;
+          out.push({ plane: testFace.plane, coords: wallD.c });
           break;
         }
       }
@@ -1296,7 +1296,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     // Sort by closest plane to the center of the token.
     using ctr = tokenShape.center;
     out.sort((plane0, plane1) => plane0.distanceToPoint(ctr) - plane1.distanceToPoint(ctr));
-    return out;
+    return out.map(obj => obj.coords);
   }
 
   _defineAttributeProperties() {
@@ -1312,7 +1312,17 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
       stride: Int32Array.BYTES_PER_ELEMENT * 1,
       offset: 0,
       divisor: 1,
-    }
+    };
+
+    attrProps.aTokenCenter = {
+      numComponents: 2,
+      data: this.tokenCenterArray,
+      type: this.gl.FLOAT,
+      drawType: this.gl.DYNAMIC_DRAW,
+      stride: Float32Array.BYTES_PER_ELEMENT * 2,
+      offset: 0,
+      divisor: 1,
+    };
 
     // To avoid duplicating the buffer used for this.clipPlanesArray,
     // create the buffer first.
@@ -1346,6 +1356,9 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   /** @type {FixedLengthTrackingBuffer} */
   numClipPlanesTracker = new FixedLengthTrackingBuffer({ type: Int32Array, facetLengths: 1 });
 
+  /** @type {FixedLengthTrackingBuffer} */
+  tokenCenterTracker = new FixedLengthTrackingBuffer({ facetLengths: 2 });
+
   /**
    * Track the ids whose clip tracker buffer must  be uploaded before rendering.
    * @type {Set<string>}
@@ -1372,22 +1385,25 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   /** @type {Int32Array} */
   get numClipPlanesArray() { return this.numClipPlanesTracker.viewWholeBuffer(); }
 
+  /** @type {Float32Array} */
+  get tokenCenterArray() { return this.tokenCenterTracker.viewWholeBuffer(); }
+
   levelId = "";
 
   senseType = "sight";
 
   _onShapeAdded(shape) {
     if ( !super._onShapeAdded(shape) ) return false;
-    const wallShapes = this.constructor.intersectingPlanes(shape, this.levelId, this.senseType);
-    this._setClippingWallPlanes(shape, wallShapes);
+    const wallSegments = this.constructor.intersectingWallSegments(shape, this.levelId, this.senseType);
+    this._setClippingWallPlanes(shape, wallSegments);
     this.idsToUpdateClipPlanes.add(shape.id);
     return true;
   }
 
   _onShapeUpdated(shape) {
     if ( !super._onShapeUpdated(shape) ) return false;
-    const wallShapes = this.constructor.intersectingPlanes(shape, this.levelId, this.senseType);
-    this._setClippingWallPlanes(shape, wallShapes);
+    const wallSegments = this.constructor.intersectingWallSegments(shape, this.levelId, this.senseType);
+    this._setClippingWallPlanes(shape, wallSegments);
     this.idsToUpdateClipPlanes.add(shape.id);
     return true;
   }
@@ -1397,6 +1413,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     const id = shape.id;
     this.numClipPlanesTracker.deleteFacet(id);
     this.clipPlanesTracker.deleteFacet(id);
+    this.tokenCenterTracker.deleteFacet(id);
     return true;
   }
 
@@ -1404,32 +1421,21 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
    * @param {GeometricPrimitive} tokenShape
    * @param {GeometricPrimitive[]} wallShapes
    */
-  _setClippingWallPlanes(tokenShape, ixPlanes) {
+  _setClippingWallPlanes(tokenShape, wallSegments) {
     using ctr = tokenShape.center;
 
     // Define the normals representing planes.
     // All wall segment geoms share the same plane.
     const maxWalls = this.constructor.NUM_CONSTRAINING_WALLS;
-    const numClipPlanes = Math.min(maxWalls, ixPlanes.length);
+    const numClipPlanes = Math.min(maxWalls, wallSegments.length);
     const id = tokenShape.id;
     const clipPlanes = new Float32Array(4 * this.constructor.NUM_CONSTRAINING_WALLS);
-    for ( let i = 0; i < numClipPlanes; i += 1 ) {
-      const plane = ixPlanes[i];
-      const n = plane.normal;
-      const d = plane.constant;
-
-      // Force the plane to face the token center.
-      const mult = -Math.sign(plane.whichSide(ctr)) || -1;
-      const j = i * 4;
-      clipPlanes[j] = n.x * mult;
-      clipPlanes[j + 1] = n.y * mult;
-      clipPlanes[j + 2] = n.z * mult;
-      clipPlanes[j + 3] = d;
-    }
+    for ( let i = 0; i < numClipPlanes; i += 1 ) clipPlanes.set(wallSegments[i], i * 4);
 
     // Update the trackers.
     this.numClipPlanesTracker.updateFacet(id, { newValues: [numClipPlanes] });
     this.clipPlanesTracker.updateFacet(id, { newValues: clipPlanes });
+    this.tokenCenterTracker.updateFacet(id, { newValues: [ctr.x, ctr.y] });
   }
 
   // ----- NOTE: numClipPlanes buffer updating ----- //
@@ -1460,10 +1466,15 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.clipPlanesArray, gl.DYNAMIC_DRAW);
 
-    // Number of clip planes buffer
+    // Number of clip planes buffer.
     const ncBuffer = this.attributeBufferInfo.attribs.aNumClipPlanes.buffer;
     gl.bindBuffer(gl.ARRAY_BUFFER, ncBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.numClipPlanesArray, gl.DYNAMIC_DRAW);
+
+    // Token center buffer.
+    const tcBuffer = this.attributeBufferInfo.attribs.aTokenCenter.buffer;
+    gl.bindBuffer(gl.ARRAY_BUFFER, tcBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.tokenCenterArray, gl.DYNAMIC_DRAW);
 
     /*
     // Update the model attribute with a new buffer.
@@ -1485,19 +1496,26 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   _updateClipPlanesBufferForId(id) {
     const gl = this.gl;
 
-    // Clip planes buffer
+    // Clip planes buffer.
     const cpTracker = this.clipPlanesTracker;
     const cpOffset = cpTracker.facetOffsetAtId(id) * cpTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     const cpBuffer = this.attributeBufferInfo.attribs["aClipPlanes_0"].buffer;
     gl.bindBuffer(gl.ARRAY_BUFFER, cpBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, cpOffset, cpTracker.viewFacetById(id));
 
-    // Number of clip planes buffer
+    // Number of clip planes buffer.
     const ncTracker = this.numClipPlanesTracker;
     const ncBuffer = this.attributeBufferInfo.attribs.aNumClipPlanes.buffer;
     const ncOffset = ncTracker.facetOffsetAtId(id) * ncTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
     gl.bindBuffer(gl.ARRAY_BUFFER, ncBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, ncOffset, ncTracker.viewFacetById(id));
+
+    // Token center buffer.
+    const tcTracker = this.tokenCenterTracker;
+    const tcBuffer = this.attributeBufferInfo.attribs.aTokenCenter.buffer;
+    const tcOffset = tcTracker.facetOffsetAtId(id) * tcTracker.type.BYTES_PER_ELEMENT;
+    gl.bindBuffer(gl.ARRAY_BUFFER, tcBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, tcOffset, tcTracker.viewFacetById(id));
   }
 
   // ----- NOTE: Rendering ----- //

@@ -4,14 +4,13 @@ precision ${PIXI.settings.PRECISION_VERTEX} float;
 in vec3 vNormal;
 in vec2 vTexCoord;
 
-
-// Clipping planes used by constrain target.
-in vec3 vWorldPosition;
-
 #if ${maxConstrainingWalls}
 // Pragma needed b/c GLSL does not allow uClipPlanes[0]. "Error: Array size must be greater than zero."
 flat in int vNumClipPlanes;
 flat in vec4 vClipPlanes[${maxConstrainingWalls}]; // Max intersecting walls.
+flat in vec2 vTokenCenter; // Token center in 2d canvas space.
+
+in vec3 vWorldPosition; // Fragment location in Foundry canvas coordinates.
 #endif
 
 // Used by textures
@@ -31,7 +30,28 @@ const vec3 ambientColor = vec3(0.2, 0.2, 0.2);
 
 out vec4 fragColor;
 
+/**
+ * Standard 2d orientation (cross product sign)
+ * What is the orientation of c with regard to segment a|b?
+ * Positive if ccw, 0 if collinear, negative if cw.
+ */
+float orient2d(vec2 a, vec2 b, vec2 c) {
+  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+}
 
+/**
+ * Test if a 2d segment a|b intersects 2d segment c|d
+ */
+bool lineSegmentsIntersect(vec2 a, vec2 b, vec2 c, vec2 d) {
+  return
+    ((orient2d(a, b, c) * orient2d(a, b, d)) <= 0.0) &&
+    ((orient2d(c, d, a) * orient2d(c, d, b)) <= 0.0);
+}
+
+
+/**
+ * Select a texture for a given texture index.
+ */
 vec4 texturePicker(int idx) {
   switch ( idx ) {
     case 0: return texture(uTextures[0], vTexCoord);
@@ -55,12 +75,16 @@ vec4 texturePicker(int idx) {
 }
 
 void main() {
-  #if ${maxConstrainingWalls}
-    for ( int i = 0; i < vNumClipPlanes; i++ ) {
-      float dist = dot(vClipPlanes[i].xyz, vWorldPosition) + vClipPlanes[i].w;
+  bool blocked = false;
 
-      // If distance is greater than 0, the pixel is "behind" the wall.
-      if ( dist > 0.0 ) { discard; }
+  #if ${maxConstrainingWalls}
+    // Test if the 2d ray from token center to fragment hits any wall.
+    vec2 rayStart = vTokenCenter;
+    vec2 rayEnd = vWorldPosition.xy;
+    for ( int i = 0; i < vNumClipPlanes; i++ ) {
+      vec2 wallStart = vClipPlanes[i].xy;
+      vec2 wallEnd = vClipPlanes[i].zw;
+      if ( lineSegmentsIntersect(rayStart, rayEnd, wallStart, wallEnd) ) blocked = true; // Fragment cannot see token center.
     }
   #endif
 
@@ -93,4 +117,9 @@ void main() {
     // Use the texture alpha channel to capture semi-transparent portions.
     fragColor.a = color.a;
   #endif
+
+  #if ${maxConstrainingWalls}
+    if ( blocked ) { fragColor.a = 0.0; }
+  #endif
+
 }

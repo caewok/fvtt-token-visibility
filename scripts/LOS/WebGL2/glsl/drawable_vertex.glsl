@@ -29,14 +29,19 @@ layout(location = 12) in vec4 aClipPlanes_2;
 layout(location = 13) in vec4 aClipPlanes_3;
 layout(location = 14) in vec4 aClipPlanes_4;
 
+// Token center in 2d canvas coordinates.
+layout(location = 15) in vec2 aTokenCenter;
+
 // For fragment shader.
+out vec3 vWorldPosition;
 flat out int vNumClipPlanes;
 flat out vec4 vClipPlanes[${maxConstrainingWalls}];
+flat out vec2 vTokenCenter;
 #endif
 
 out vec3 vNormal;
 out vec2 vTexCoord;
-out vec3 vWorldPosition;
+
 flat out int vTextureIndex;
 flat out float vAlphaThreshold;
 
@@ -58,17 +63,16 @@ void main() {
   #endif
 
   #if ${maxConstrainingWalls}
+    // Instance clipping data, passed to fragment shader.
+    vTokenCenter = aTokenCenter;
+    vWorldPosition = worldPosition.xyz;
+    vNumClipPlanes = aNumClipPlanes;
+
     // Pack the unrolled attributes into the output array.
     vClipPlanes[0] = aClipPlanes_0;
     vClipPlanes[1] = aClipPlanes_1;
     vClipPlanes[2] = aClipPlanes_2;
     vClipPlanes[3] = aClipPlanes_3;
     vClipPlanes[4] = aClipPlanes_4;
-
-    vWorldPosition = worldPosition.xyz;
-
-    // Instance clipping data, passed to fragment shader.
-    vNumClipPlanes = aNumClipPlanes;
-
   #endif
 }
