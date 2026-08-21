@@ -309,6 +309,7 @@ export class PercentVisibleCalculatorAbstract {
   };
 
   setLightingTest(type) {
+    console.error("setLightingTest not yet implemented.");
     const { TYPES } = this.constructor.LIGHTING_TEST_TYPES;
     let tokenShapeType;
     switch ( type ) {
@@ -325,7 +326,7 @@ export class PercentVisibleCalculatorAbstract {
    */
   calculateLightingTypeForTarget() {
     // TODO: Fix for use with GeometricPrimitives.
-
+    console.error("calculateLightingTypeForTarget not yet implemented.");
 
 
     const oldConfig = this.config;
