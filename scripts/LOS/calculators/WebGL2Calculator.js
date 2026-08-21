@@ -21,12 +21,6 @@ import { MODULE_ID } from "../../const.js";
 // Geometry folder
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
-/**
- * @typedef {object} WebGL2CalculatorConfig
- * ...{CalculatorConfig}
- * @property {number} alphaThreshold                    Threshold value for testing alpha of tiles
- * @property {boolean} useInstancing                    Use instancing with webGL2
- */
 
 
 export class PercentVisibleWebGL2Result extends PercentVisibleResult {

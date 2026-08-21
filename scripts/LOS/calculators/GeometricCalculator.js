@@ -90,7 +90,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     result.data.targetPaths = this._constructTargetClipperPaths();
     result.data.blockingPaths = this._constructObstacleClipperPaths();
 
-    console.debug(`${this.constructor.name}|visibility ${result.percentVisible}`);
+    // console.debug(`${this.constructor.name}|visibility ${result.percentVisible}`);
     return result;
   }
 

@@ -363,7 +363,7 @@ export class LightStatusTracker {
    * Refresh the display of icons, adjusting their position for token width and height.
    */
   static refreshIcons(token) {
-    console.debug(`refreshIcons|${token.name}`);
+    // console.debug(`refreshIcons|${token.name}`);
     token._refreshEffects();
   }
 

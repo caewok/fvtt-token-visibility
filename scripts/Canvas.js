@@ -21,7 +21,7 @@ PATCHES.BASIC = {};
  * @param {Canvas} canvas The Canvas which is now ready for use
  */
 function canvasReady(_canvas) {
-  console.debug(`${MODULE_ID}|canvasReady`);
+  // console.debug(`${MODULE_ID}|canvasReady`);
   if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) Settings.toggleLOSDebugGraphics(true);
 
 

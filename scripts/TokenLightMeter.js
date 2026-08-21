@@ -147,6 +147,7 @@ export class TokenLightMeter {
    * @param {PointLightSource[]} [lights]     If not provided, will test all light sources on canvas except Global.
    */
   updateLights(lights) {
+
     lights ??= canvas.effects.lightSources
     lights = lights.filter(l => !(l instanceof foundry.canvas.sources.GlobalLightSource));
     const calc = this.constructor.calculator;

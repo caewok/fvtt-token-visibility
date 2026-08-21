@@ -297,14 +297,14 @@ export class ViewerLOS {
     TokenGeometry.tokenCenter(this.viewer.document, this.viewerCenter);
     TokenGeometry.tokenCenter(this.target.document, this.targetLocation);
 
-    console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
-    console.debug(`ViewerLOS|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
+    // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
+    // console.debug(`ViewerLOS|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
 
     this._percentVisible = 0;
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
       this._percentVisible = simpleTest;
-      console.debug(`\nViewerLOS simple visibility|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+      // console.debug(`\nViewerLOS simple visibility|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
       return;
     }
 
@@ -326,20 +326,20 @@ export class ViewerLOS {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
         vp.lastResult = vp.calculator._createResult();
         vp.lastResult.makeFullyNotVisible();
-        console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: vp ${vp.viewpoint} blocked`);
+        // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: vp ${vp.viewpoint} blocked`);
         continue;
       }
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) {
-        console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+        // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
         return;
       }
     }
     if ( CONFIG[MODULE_ID].useStereoBlending
       && this._percentVisible < this.config.threshold ) this._calculateStereo();
-    if ( this._percentVisible.almostEqual(0) ) console.debug(`\nViewerLOS|viewer ${this.viewer.name}: target ${this.target.name} not visible.`);
-    console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+    // if ( this._percentVisible.almostEqual(0) ) console.debug(`\nViewerLOS|viewer ${this.viewer.name}: target ${this.target.name} not visible.`);
+    // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
   }
 
   _setFrustum() {
@@ -586,8 +586,8 @@ export class ViewerLOS {
    * Color red if fails LOS threshold test for that viewpoint.
    */
   _drawLineOfSightDebug(draw) {
-    console.debug(`\nViewerLOS debug|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
-    console.debug(`ViewerLOS debug|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
+    // console.debug(`\nViewerLOS debug|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
+    // console.debug(`ViewerLOS debug|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
 
     const simpleTest = this.simpleVisibilityTest();
     if ( ~simpleTest ) {
