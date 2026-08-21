@@ -7,6 +7,7 @@ Hooks
 
 import { MODULE_ID } from "../const.js";
 import { GEOMETRY_LIB_ID } from "../geometry/const.js";
+import { TILE_THRESHOLD_SHAPE_OPTIONS } from "./const.js";
 
 import { WallGeometry } from "../geometry/placeable_geometry/WallGeometry.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
@@ -18,16 +19,6 @@ import "../geometry/registration.js";
 
 export const LOS_CONFIG = {
 
-  /**
-   * Threshold for transparent pixels.
-   * @type {number}
-   */
-  alphaThreshold: 0.75,
-
-  /**
-   * Whether to use instancing in WebGL2 calculation.
-   */
-  useInstancing: true,
 
   /**
    * WebGL2. Filter the various placeable instances in Javascript, as opposed to
@@ -75,12 +66,9 @@ export const LOS_CONFIG = {
 
   /**
    * What to use when testing tiles for visibility.
-   * "rectangle": Trims the rectangular transparent border without considering holes or irregular shapes. Fast.
-   * "alphaThresholdTriangles": Triangles representing opaque parts of the tile texture (using earcut and marching squares). Slow.
-   * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares). Much faster than triangles.
    * @type {tileThresholdShapeOptions}
    */
-  tileThresholdShape: "alphaThresholdPolygons",
+  tileThresholdShape: TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS,
 
   /**
    * WebGL2. Whether to use a render texture to count pixels.
