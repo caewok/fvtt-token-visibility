@@ -6,6 +6,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { MODULE_ID } from "../../const.js";
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
@@ -246,8 +247,12 @@ export class PercentVisibleCalculatorAbstract {
     camera.cameraPosition = this.viewpoint;
     camera.targetPosition = this.targetLocation;
     camera.setFrustumForAABB3d(this.targetShape.aabb);
-    this.occlusionTester.frustum ??= new Frustum();
-    camera.toCanvasFrustum(this.occlusionTester.frustum);
+
+    if ( !this.occlusionTester.frustum ) {
+      this.occlusionTester.frustum ??= new Frustum();
+      camera.toCanvasFrustum(this.occlusionTester.frustum);
+    }
+
     this.occlusionTester.update();
   }
 
@@ -395,7 +400,7 @@ export class PercentVisibleCalculatorAbstract {
     }
 
     // Draw obstacle outlines.
-    this.occlusionTester._drawDetectedObjects(debugDraw);
+    this.occlusionTester._drawDetectedObjects(debugDraw, { tileSubtype: CONFIG[MODULE_ID].tileThresholdShape, tokenSubtype: "constrained" });
 
     // Draw frustum shape between viewer and target.
     this.occlusionTester._drawFrustum(debugDraw);
