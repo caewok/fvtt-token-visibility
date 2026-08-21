@@ -186,29 +186,39 @@ export class ViewerLOS {
   /**
    * Track viewer dimensions to determine if viewpoints need to be changed.
    */
-  #viewerDims = new Point3d();
+  #currentViewerDims = new Point3d();
 
   _viewerDimsChanged() {
     using dims = TokenGeometry.tokenDimensions(this.viewer.document);
-    return !this.#viewerDims.equals(dims);
+    return !this.#currentViewerDims.equals(dims);
   }
 
   /**
-   * Used to rotate viewpoints around the viewer center.
-   * @type {MatrixFloat32}
+   * Update the viewpoints if needed.
    */
-  rotationMatrix = MatrixFloat32.identity(4, 4);
+  _clean() {
+    this.initializeViewpoints();
+    this.#dirty = false;
+  }
 
   /**
    * Set up the viewpoints for this viewer.
    */
   initializeViewpoints() {
-    Point3d.fromTokenCenter(this.viewer, this.viewerCenter);
-    Point3d.fromTokenCenter(this.target, this.targetLocation);
-    const dir = this.targetLocation.subtract(this.viewerCenter);
+    this.viewerCenter.copyFrom(this.viewerShape.center);
+    this.targetLocation.copyFrom(this.targetShape.center);
+    using dir = this.targetLocation.subtract(this.viewerCenter);
+
+    // Adjust top viewpoints by token height.
+    const viewerD = this.viewer.document;
+    const tokenHeightPercentage = CONFIG[MODULE_ID].useViewerHeight
+      ? viewerD.visionHeightZ / (viewerD.topZ - viewerD.bottomZ)
+        : 1;
+
     const pts = this.constructor.constructTokenPoints(this.viewerShape, dir, {
       pointKey: this.config.viewpointIndex,
       insetPercentage: this.config.viewpointInset,
+      tokenHeightPercentage,
     });
 
     // Destroy existing viewpoints
@@ -217,10 +227,11 @@ export class ViewerLOS {
     // Build new viewpoints.
     pts.forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
 
-    // Cache the current viewer dimensions in case they change.
-    TokenGeometry.tokenDimensions(this.viewer.document, this.#viewerDims);
-
-    // TODO: Cache the current viewer shape type in case it changes?
+     // Cache the key viewpoint parameters so we know when to rebuild the viewpoints.
+    TokenGeometry.tokenDimensions(this.viewer.document, this.#currentViewerDims);
+    this.#currentViewerShape = this.viewerShape;
+    this.#currentViewpointInset = this.config.viewpointInset;
+    this.#currentViewpointIndex = this.config.viewpointIndex;
 
     return true;
   }
@@ -255,7 +266,7 @@ export class ViewerLOS {
 
   // ----- NOTE: Visibility testing ----- //
 
-  get hasLOS() { return this.percentVisible > 0 && this.percentVisible >= this.threshold; } // If threshold is 0, any part counts.
+  get hasLOS() { return this.percentVisible > 0 && this.percentVisible >= this.config.threshold; } // If threshold is 0, any part counts.
 
   _percentVisible;
 
@@ -308,18 +319,23 @@ export class ViewerLOS {
       return;
     }
 
-    if ( this._viewerDimsChanged() || this.dirty ) this._clean();
+    if ( this.dirty ) this._clean();
 
     // Set the rotation matrix for the viewer.
     MatrixFloat32.rotationZ(this.viewerRotation, this.rotationMatrix);
 
     // Set up the calculator frustum.
     this._setFrustum();
-    this.calculator.frustum = this.frustum;
+    this.calculator.occlusionTester.frustum = this.frustum;
 
     // Set the calculator target
     this.calculator.targetShape = this.targetGeometry.shapes[0],
     this.calculator.targetLocation = this.targetLocation;
+    this.occlusionTester.initialize({
+      subjectToken: this.target,
+      tokensToExclude: [this.viewer],
+      levelId: this.viewer.document.level,
+    });
 
     // Test each viewpoint until unobscured is 1.
     for ( const vp of this.viewpoints ) {
@@ -469,9 +485,10 @@ export class ViewerLOS {
    * @param {number|BitSet} [opts.pointKey]
    * @param {number} [opts.inset]
    * @param {Point3d} [opts.viewpoint]
+   * @param {boolean} [opts.tokenHeightPercentage]         Use a percentage of the token shape's total height for top values.
    * @returns {Point3d[]}
    */
-  static constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage = 0 } = {}) {
+  static constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage = 0, tokenHeightPercentage = 1 } = {}) {
     if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
       const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape).constrained;
       tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
@@ -507,7 +524,21 @@ export class ViewerLOS {
       const typePoints = [];
       if ( d3Ix.hasIndex(PI.D3.BOTTOM) ) typePoints.push(...allPoints.bottom[type]);
       if ( d3Ix.hasIndex(PI.D3.MID) ) typePoints.push(...allPoints.middle[type]);
-      if ( d3Ix.hasIndex(PI.D3.TOP) ) typePoints.push(...allPoints.top[type]);
+      if ( d3Ix.hasIndex(PI.D3.TOP) ) {
+        let pts = allPoints.top[type];
+        if ( tokenHeightPercentage !== 1 ) {
+          const topZ = allPoints.top[type][0].z;
+          const bottomZ = allPoints.bottom[type][0].z;
+          const newHeight = (topZ - bottomZ) * tokenHeightPercentage;
+          const newZ = bottomZ + newHeight;
+          pts = pts.map(pt => {
+            const adjPt = pt.clone();
+            adjPt.z = newZ;
+            return adjPt;
+          });
+        }
+        typePoints.push(...pts);
+      }
       const pointCategories = this._sortFacingPoints(typePoints, tokenShape, dir);
 
       const out = [];
@@ -794,7 +825,7 @@ class MultiViewFrustum {
    * Define the bounding box for this frustum.
    */
   setAABB() {
-    const aabbs = this.frustums.values().map(f => f.aabb);
+    const aabbs = [...this.frustums.values().map(f => f.aabb)];
     AABB3d.union(aabbs, this.aabb);
   }
 
@@ -813,6 +844,7 @@ class MultiViewFrustum {
       frustum = Frustum.fromAABB(targetAABB, { frustum, viewpoint, infiniteDistance });
     }
     this.frustums.set(key, frustum);
+    this.setAABB();
     return this;
   }
 
@@ -835,6 +867,7 @@ class MultiViewFrustum {
       }
       Frustum.fromAABB(aabb, opts);
     }
+    this.setAABB();
   }
 
   /**
@@ -849,6 +882,7 @@ class MultiViewFrustum {
     if ( !viewpoints && opts.viewpoint ) viewpoints = [opts.viewpoint];
     for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
     out.targetAABB = target.aabb;
+    out.setAABB();
     return out;
   }
 
@@ -864,6 +898,7 @@ class MultiViewFrustum {
     if ( !viewpoints && opts.viewpoint ) viewpoints = [opts.viewpoint];
     for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
     out.targetAABB = aabb;
+    out.setAABB();
     return out;
   }
 
