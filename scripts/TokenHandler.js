@@ -11,7 +11,7 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
-import { LOSViewerConfig } from "./LOSCalculator.js";
+import { LOSViewerConfig, buildLOSViewer } from "./LOSCalculator.js";
 
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
@@ -56,7 +56,7 @@ export class ATVTokenHandler {
   constructor(token) {
     token[MODULE_ID] ??= {};
     token[MODULE_ID][this.constructor.ID] = this;
-    this.losViewer = new ATVViewerLOS(token, LOSViewerConfig());
+    this.losViewer = buildLOSViewer(token)
   }
 
   get losCalc() { return this.losViewer.calculator; }
@@ -67,16 +67,24 @@ export class ATVTokenHandler {
    * @param {CONFIG.Canvas.detectionModes|CONFIG.Canvas.visionModes} [detectionMode]
    */
   setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight) {
-    const calcConfig = {
+    const blockingConfig = {
       walls: dm.walls,
       tiles: dm.walls,
       regions: dm.walls,
       senseType: DM_SENSE_TYPES[dm.type],
       sourceType: DM_SOURCE_TYPES[dm.type],
     };
-    this.losViewer.config = { angle: dm.angle };
-    this.losViewer.calculator.config = calcConfig;
+    this.losViewer.config.useTemporary = true;
+    this.losViewer.occlusionTester.config.useTemporary = true;
+    this.losViewer.config.set({ angle: dm.angle });
+    this.losViewer.occlusionTester.config.set(blockingConfig);
   }
+
+  resetConfig() {
+    this.losViewer.config.useTemporary = false;
+    this.losViewer.occlusionTester.config.useTemporary = false;
+  }
+
 
   /**
    * @param {Token} target
@@ -166,15 +174,4 @@ export class ATVTokenHandler {
     if ( dim.percentVisible >= CONFIG[MODULE_ID].dimThreshold ) return TYPES.DIM;
     return TYPES.DARK;
   }
-}
-
-class ATVViewerLOS extends ViewerLOS {
-
-  get calculator() { return CONFIG[MODULE_ID].losCalculator; }
-
-  constructor(viewer, cfg) {
-    super(viewer, cfg);
-    delete this.calculator;
-  }
-
 }

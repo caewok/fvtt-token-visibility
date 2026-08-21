@@ -16,7 +16,6 @@ import { Draw } from "../geometry/Draw.js";
 import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { GeometricPrimitive } from "../geometry/placeable_geometry/GeometricPrimitive.js";
 import { Frustum } from "../geometry/3d/Frustum.js";
-import { ConfigHandler } from "../geometry/ConfigHandler.js";
 import { AABB3d } from "../geometry/3d/AABB3d.js";
 import { MatrixFloat32 } from "../geometry/Matrix.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
@@ -107,49 +106,20 @@ export class ViewerLOS {
   /**
    * @param {Token} viewer      					The token whose LOS should be tested
    */
-  constructor(viewer, cfg = {}) {
+  constructor(viewer, calculator) {
     this.#viewer = viewer;
-    this.#config.set(cfg);
+    this.calculator = calculator;
   }
 
   // ----- NOTE: Configuration ---- //
 
-  #config = new ConfigHandler({
+  config = {
     // Viewpoint configuration
     viewpointIndex: 1, // Center point only.
     viewpointInset: 0, // Percentage inset
     angle: true, // If constrained by the viewer vision angle
     threshold: 0.75, // Percent used for LOS
-  });
-
-  get config() { return this.#config; }
-
-  set config(cfg = {}) {
-    if ( Object.hasOwn(cfg, "viewpointIndex")
-      && cfg.viewpointIndex instanceof SmallBitSet ) cfg.viewpointIndex = cfg.viewpointIndex.word;
-    this.#config.set(cfg);
-    this.#dirty ||= Object.hasOwn(cfg, "viewpointIndex") || Object.hasOwn(cfg, "viewpointInset");
-  }
-
-  get threshold() { return this.#config.threshold; }
-
-  set threshold(value) { this.#config.threshold = value; }
-
-  // ----- NOTE: Caching ----- //
-
-  /** @type {boolean} */
-  #dirty = true;
-
-  get dirty() { return this.#dirty; }
-
-  set dirty(value) { this.#dirty ||= value; }
-
-  /**
-   * Update the viewpoints.
-   */
-  _clean() {
-    this.#dirty = !this.initializeViewpoints();
-  }
+  };
 
   // ----- NOTE: Viewer ----- //
 
@@ -179,6 +149,39 @@ export class ViewerLOS {
   // ----- NOTE: Viewpoints ----- //
   /** @type {Viewpoint} */
   viewpoints = [];
+
+
+  /**
+   * Used to rotate viewpoints around the viewer center.
+   * @type {MatrixFloat32}
+   */
+  rotationMatrix = MatrixFloat32.identity(4, 4);
+
+  // ----- NOTE: Caching ----- //
+
+  /** @type {boolean} */
+  #dirty = true;
+
+  get dirty() {
+    this.#dirty ||= this.#currentViewpointInset !== this.config.viewpointInset
+                 || this.#currentViewpointIndex !== this.config.viewpointIndex
+                 || this.#currentViewerShape !== this.viewerShape
+                 || this._viewerDimsChanged();
+    return this.#dirty;
+  }
+
+  set dirty(value) { this.#dirty ||= value; }
+
+  // Track key viewpoint parameters.
+
+  /** @type {number} */
+  #currentViewpointInset = null;
+
+  /** @type {number} */
+  #currentViewpointIndex = null;
+
+  /** @type {class} */
+  #currentViewerShape = null;
 
   /**
    * Track viewer dimensions to determine if viewpoints need to be changed.

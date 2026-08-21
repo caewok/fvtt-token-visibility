@@ -13,7 +13,6 @@ import { LOS_CONFIG } from "./LOS/config.js";
 
 // Load the geometry library.
 import "./geometry/registration.js";
-import { ObstacleOcclusionTest } from "./geometry/ObstacleOcclusionTest.js";
 
 // Hooks and method registration
 import { initializePatching, PATCHER } from "./patching.js";
@@ -27,12 +26,11 @@ import * as bench from "./benchmark.js";
 import { OPEN_POPOUTS } from "./LOS/Area3dPopout.js";
 
 import {
+  buildOcclusionTester,
   buildLOSCalculator,
-  // buildCustomLOSCalculator,
   buildLOSViewer,
-  buildCustomLOSViewer,
   buildDebugViewer,
-  BlockingConfig,
+  getCurrentCalculatorClass,
 } from "./LOSCalculator.js";
 
 import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/calculators/PointsCalculator.js";
@@ -93,7 +91,7 @@ Hooks.once("init", function() {
      * Current occlusion tester for the given settings.
      * @type {ObstacleOcclusionTest}
      */
-    occlusionTester: new ObstacleOcclusionTest(),
+    occlusionTester: null,
 
     /**
      * Current calculator for the given settings.
@@ -103,6 +101,7 @@ Hooks.once("init", function() {
 
     /**
      * Classes used to view the debugger for different algorithms.
+     * @type {object<class>}
      */
     debugViewerClasses: {
       points: DebugVisibilityViewerPoints,
@@ -113,6 +112,12 @@ Hooks.once("init", function() {
       "per-pixel": DebugVisibilityViewerPerPixel,
     },
 
+    /**
+     * Should the line-of-sight calculator use the viewer height (as calculated in Wall Height)
+     * for any TOP viewpoint?
+     * @type {boolean}
+     */
+    useViewerHeight: true,
 
     /**
      * Configurations that affect the light meter.
@@ -189,10 +194,10 @@ Hooks.once("init", function() {
       perPixel: PercentVisibleCalculatorPerPixel,
     },
 
+    buildOcclusionTester,
+    getCurrentCalculatorClass,
     buildLOSCalculator,
-    // buildCustomLOSCalculator,
     buildLOSViewer,
-    buildCustomLOSViewer,
     buildDebugViewer,
 
     TokenLightMeter,
@@ -219,7 +224,7 @@ Hooks.once("init", function() {
 
 Hooks.once("setup", function() {
   Settings.registerAll();
-  console.debug(`${MODULE_ID}|registered settings`);
+  // console.debug(`${MODULE_ID}|registered settings`);
 
   // Add status effects for dim and no light.
   const dimLight = {
@@ -240,24 +245,24 @@ Hooks.once("setup", function() {
 });
 
 Hooks.once("ready", function() {
-  console.debug(`${MODULE_ID}|ready hook`);
+  // console.debug(`${MODULE_ID}|ready hook`);
   Settings.migrate(); // Cannot be set until world is ready.
   Settings.initializeDebugGraphics();
   LightStatusTracker.loadLightIcons(); // Async.
 });
 
 Hooks.on("canvasReady", function() {
-  // Set the occlusion tester configuration.
-  const ot = CONFIG[MODULE_ID].occlusionTester;
-  ot.config = BlockingConfig();
-
-  // Create the calculator.
+  // Destroy any old calculator.
   if ( CONFIG[MODULE_ID].losCalculator ) {
     CONFIG[MODULE_ID].losCalculator.destroy();
     CONFIG[MODULE_ID].losCalculator = null;
   }
+
+  // Create a shared occlusion tester.
+  CONFIG[MODULE_ID].occlusionTester = buildOcclusionTester();
+
+  // Create a shared los calculator.
   CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
-  CONFIG[MODULE_ID].losCalculator.initialize(); // Async.
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

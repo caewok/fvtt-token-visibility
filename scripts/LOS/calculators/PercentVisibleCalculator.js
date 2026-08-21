@@ -12,7 +12,7 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
 import { Draw } from "../../geometry/Draw.js";
-import { ConfigHandler } from "../../geometry/ConfigHandler.js";
+import { ConfigHandler } from "../../ConfigHandler.js"
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS

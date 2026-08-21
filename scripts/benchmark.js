@@ -11,7 +11,7 @@ PIXI
 import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
-import { buildCustomLOSViewer, buildCustomLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
+import { buildLOSViewer, buildLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { MODULE_ID } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
@@ -105,8 +105,10 @@ export async function benchTokenVisibility(n = 100, sleep = false) {
   const { targets } = getTokens();
   console.log(`\nBenchmarking visibility of ${targets.length} targets from user's current perspective and settings.`);
   console.log("\nBenchmarking token los");
+  console.log("Blocking Config");
+  console.table(foundry.utils.flattenObject(CONFIG[MODULE_ID].losCalculator.occlusionTester.config))
   console.log("Calculator Config");
-  console.table(foundry.utils.flattenObject(CalculatorConfig()));
+  console.table(foundry.utils.flattenObject(CONFIG[MODULE_ID].losCalculator.config));
   console.log(`\nViewer Config for algorithm ${Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)}`);
   console.table(LOSViewerConfig());
 
@@ -262,8 +264,8 @@ async function runLOSTest(n, viewers, targets, { algorithm, sleep = false, useAs
 
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
   const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
-  const calc = buildCustomLOSCalculator(calcClass);
-  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
+  const calculator = buildLOSCalculator({ calcClass });
+  const losViewers = viewers.map(viewer => buildLOSViewer(viewer, { calculator }));
 
   let label = (`LOS: ${algorithm}`);
   const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
@@ -302,8 +304,8 @@ async function runLOSTestWithMovement(n, viewers, targets, { algorithm, sleep = 
 
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
   const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
-  const calc = buildCustomLOSCalculator(calcClass);
-  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
+  const calculator = buildLOSCalculator({ calcClass });
+  const losViewers = viewers.map(viewer => buildLOSViewer(viewer, { calculator }));
 
   let label = (`LOS: ${algorithm}`);
   const tokens = new Set([...viewers, ...targets]);
