@@ -79,7 +79,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   /**
    * Scaling factor used with Clipper
    */
-  static SCALING_FACTOR = 100;
+  static SCALING_FACTOR = 1000;
 
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
@@ -107,9 +107,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    */
   *iterateSolidObstacleFaces() {
     const ot = this.occlusionTester;
-    const excludedObstacles = new Set(["terrainWalls", "tiles", "foregroundLevels", "backgroundLevels"]);
+    const excludedObstacles = new Set(["terrainWalls", "tiles", "foregroundLevels", "backgroundLevels", "tokens"]);
     let includeObstacles = ot.constructor.OBSTACLE_KEYS.difference(excludedObstacles);
     yield* ot.iterateObstacleFaces({ includeObstacles })
+
+    // Handle token obstacles, which vary based on constraint.
+    includeObstacles = new Set(["tokens"]);
+    for ( const tokenGeom of ot.iterateObstacleGeoms({ includeObstacles }) ) yield* tokenGeom.constrained.iterateFaces();
 
     // Handle tiles and levels, which vary based on shape type.
     let tileShapeIter;
@@ -118,10 +122,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
       case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: tileShapeIter = "polygons"; break;
       case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: tileShapeIter = "boundingPolygon"; break;
       case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: tileShapeIter = "boundingRect"; break;
-      default: "faces";
+      default: tileShapeIter = "full";
     }
     includeObstacles = new Set(["tiles", "foregroundLevels", "backgroundLevels"]);
-    for ( const tileGeom of ot.iterateObstacleGeoms({ includeObstacles }) ) yield* tileGeom[tileShapeIter]
+    for ( const tileGeom of ot.iterateObstacleGeoms({ includeObstacles }) ) yield* tileGeom[tileShapeIter].iterateFaces();
   }
 
   /**
@@ -145,6 +149,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
     const { lookAtMatrix, perspectiveMatrix} = this.camera;
     poly = poly.transform(lookAtMatrix).clipZ();
+    poly.clean();
+    if ( !poly.isValid() ) return poly;
+
     poly.transform(perspectiveMatrix, poly);
     return poly;
   }
@@ -214,6 +221,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths;
     return ClipperPaths
       .joinPaths(this.targetPolys.map(poly3d => poly3d.toClipperPaths(this.clipperOpts)))
+      .clean()
       .combine(); // Could use union, but the target has no holes so combine is preferable.
   }
 
@@ -237,6 +245,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     if ( n === 1 ) return this.solidObstaclePolys[0].toClipperPaths(this.clipperOpts);
     return ClipperPaths
       .joinPaths(this.solidObstaclePolys.map(poly3d => poly3d.toClipperPaths(this.clipperOpts)))
+      .clean()
       .union();
   }
 
@@ -260,7 +269,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
       }
     }
     if ( !terrainPaths.paths.length ) return null;
-    return terrainPaths.union();
+    return terrainPaths.clean().union();
   }
 
   /* ----- NOTE: Debugging methods ----- */
