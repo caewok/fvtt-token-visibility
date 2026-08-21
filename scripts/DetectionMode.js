@@ -66,6 +66,9 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
   hasLOS = atv.hasLOSToToken(target);
   CONFIG[MODULE_ID].debug = oldDebug;
   test.los.set(visionSource, hasLOS);
+
+  // Reset the line-of-sight calculator.
+  atv.resetConfig();
   return hasLOS;
 }
 
