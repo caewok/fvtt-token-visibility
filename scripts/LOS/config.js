@@ -19,6 +19,11 @@ import "../geometry/registration.js";
 
 export const LOS_CONFIG = {
 
+  /**
+   * Threshold for transparent pixels.
+   * @type {number}
+   */
+  alphaThreshold: 0.75,
 
   /**
    * WebGL2. Filter the various placeable instances in Javascript, as opposed to
