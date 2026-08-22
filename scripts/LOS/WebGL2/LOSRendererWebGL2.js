@@ -273,7 +273,7 @@ export class LOSRendererWebGL2 {
     const tokenObstacles = new Set(["tokens"]);
     const terrainObstacles = new Set(["terrainWalls"]);
     const drawableOpts = { constrained: true, senseType: occlusionTester.senseType, levelId: occlusionTester.levelId };
-    const otOpts = { includeObstacles: tokenObstacles, geomSubtype: "full "};
+    const otOpts = { includeObstacles: tokenObstacles, geomSubtype: "full" };
 
     // Clear the drawables of any old instances.
     this.drawableCaches.forEach(drawable => drawable.clearRenderSet());
