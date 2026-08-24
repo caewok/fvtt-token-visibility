@@ -98,7 +98,12 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Iterate each face in the target shape.
    * @yield {Polygon3d|Sphere}
    */
-  *iterateTargetFaces() { yield* this.targetShape.iterateFaces(); }
+  *iterateTargetFaces() {
+    const vp = this.viewpoint;
+    for ( const face of this.targetShape.iterateFaces() ) {
+      if ( face.isFacing(vp) ) yield face;
+    }
+  }
 
   /**
    * Iterate solid obstacle faces, including tiles but excluding terrain walls.
@@ -109,23 +114,23 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const ot = this.occlusionTester;
     const excludedObstacles = new Set(["terrainWalls", "tiles", "foregroundLevels", "backgroundLevels", "tokens"]);
     let includeObstacles = ot.constructor.OBSTACLE_KEYS.difference(excludedObstacles);
-    yield* ot.iterateObstacleFaces({ includeObstacles })
+    yield* this._iterateFacesForObstacles({ includeObstacles });
 
     // Handle token obstacles, which vary based on constraint.
     includeObstacles = new Set(["tokens"]);
-    for ( const tokenGeom of ot.iterateObstacleGeoms({ includeObstacles }) ) yield* tokenGeom.constrained.iterateFaces();
+    yield* this._iterateFacesForObstacles({ includeObstacles, geomSubType: "constrained" });
 
     // Handle tiles and levels, which vary based on shape type.
-    let tileShapeIter;
+    let geomSubType;
     switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: tileShapeIter = "triangles"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: tileShapeIter = "polygons"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: tileShapeIter = "boundingPolygon"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: tileShapeIter = "boundingRect"; break;
-      default: tileShapeIter = "full";
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: geomSubType = "triangles"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: geomSubType = "polygons"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: geomSubType = "boundingPolygon"; break;
+      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: geomSubType = "boundingRect"; break;
+      default: geomSubType = "full";
     }
     includeObstacles = new Set(["tiles", "foregroundLevels", "backgroundLevels"]);
-    for ( const tileGeom of ot.iterateObstacleGeoms({ includeObstacles }) ) yield* tileGeom[tileShapeIter].iterateFaces();
+    yield* this._iterateFacesForObstacles({ includeObstacles, geomSubType });
   }
 
   /**
@@ -134,9 +139,36 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * @yield {Quad3d}
    */
   *iterateTerrainObstacleFaces() {
-    const ot = this.occlusionTester;
     const includeObstacles = new Set(["terrainWalls"]);
-    yield* ot.iterateObstacleFaces({ includeObstacles });
+    yield* this._iterateFacesForObstacles({ includeObstacles });
+  }
+
+  /**
+   * Helper to iterate shapes for a given occlusion tester options.
+   * @param {object} opts     Passed to ot.iterateObstacleShapes
+   * @yields {Polygon3d} Face of each shape in turn
+   */
+  *_iterateFacesForObstacles(opts) {
+    for ( const shape of this.occlusionTester.iterateObstacleShapes(opts) ) {
+      yield* this._iterateFacesForObstacleShape(shape);
+    }
+  }
+
+  /**
+   * Helper to iterate faces, ignoring those facing away from the viewpoint.
+   * @param {GeometricPrimitive} shape
+   * @yields {Polygon3d}
+   */
+  *_iterateFacesForObstacleShape(shape) {
+    const dir = shape.direction;
+    if ( !dir ) yield* shape.iterateFaces();
+    else {
+      const vp = this.viewpoint;
+      for ( const face of shape.iterateFaces() ) {
+        if ( dir * face.plane.whichSide(vp) < 0 ) continue;
+        yield face;
+      }
+    }
   }
 
   /**
@@ -174,26 +206,20 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     this.solidObstaclePolys.length = 0;
     this.terrainObstaclePolys.length = 0;
 
-    for ( const poly of this.iterateTargetFaces() ) {
-      const txPoly = this.#transformFace(poly);
-      if ( txPoly ) this.targetPolys.push(txPoly);
+    for ( const face of this.iterateTargetFaces() ) {
+      const txPoly = this.applyPerspectiveToFace(face);
+      if ( txPoly.isValid() ) this.targetPolys.push(txPoly);
     }
 
-    for ( const poly of this.iterateSolidObstacleFaces() ) {
-      const txPoly = this.#transformFace(poly);
-      if ( txPoly ) this.solidObstaclePolys.push(txPoly);
+    for ( const face of this.iterateSolidObstacleFaces() ) {
+      const txPoly = this.applyPerspectiveToFace(face);
+      if ( txPoly.isValid() ) this.solidObstaclePolys.push(txPoly);
     }
 
-    for ( const poly of this.iterateTerrainObstacleFaces() ) {
-      const txPoly = this.#transformFace(poly);
-      if ( txPoly ) this.terrainObstaclePolys.push(txPoly);
+    for ( const face of this.iterateTerrainObstacleFaces() ) {
+      const txPoly = this.applyPerspectiveToFace(face);
+      if ( txPoly.isValid() ) this.terrainObstaclePolys.push(txPoly);
     }
-  }
-
-  #transformFace(poly) {
-    if ( !poly.isFacing(this.viewpoint) ) return null;
-    const txPoly = this.applyPerspectiveToFace(poly);
-    return txPoly.isValid() ? txPoly : null;
   }
 
   /* ----- NOTE: Clipper paths ----- */
