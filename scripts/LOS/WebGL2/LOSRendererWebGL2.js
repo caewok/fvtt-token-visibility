@@ -46,11 +46,15 @@ export class LOSRendererWebGL2 {
     this.webGL2 = webGL2;
   }
 
+  #initialized = false;
+
   async initialize() {
+    if ( this.#initialized ) return;
     await this._initializePrograms();
     this._initializeCameraBuffer();
     this._initializeMaterialBuffer();
     this.resize();
+    this.#initialized = true;
   }
 
    // ----- NOTE: Program ----- //
