@@ -14,7 +14,7 @@ import { WebGL2 } from "./WebGL2.js";
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { QuadPrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
 import { mix } from "../../geometry/mixwith.js";
-import { FixedLengthTrackingBuffer, VerticesIndicesAbstractTrackingBuffer } from "../../geometry/placeable_tracking/TrackingBuffer.js";
+import { FixedLengthTrackingBuffer, VerticesIndicesTrackingBuffer } from "../../geometry/placeable_tracking/TrackingBuffer.js";
 
 /* Drawables
 
@@ -612,7 +612,7 @@ export class MultiModelDrawable extends AbstractDrawable {
 
   // ----- NOTE: Tracking ----- //
 
-  viTracker = new VerticesIndicesAbstractTrackingBuffer({ stride: 6 }); // Stride is Position + Normal
+  viTracker = new VerticesIndicesTrackingBuffer({ stride: 6 }); // Stride is Position + Normal
 
   modelMatrixTracker = new FixedLengthTrackingBuffer({ facetLengths: 16 });
 
@@ -620,7 +620,7 @@ export class MultiModelDrawable extends AbstractDrawable {
   get verticesArray() { return this.viTracker.vertices.viewWholeBuffer(); }
 
   /** @type {Uint16Array} */
-  get indicesArray() { return this.viTracker.indices.viewWholeBuffer(this.viTracker.indicesAdjBuffer); }
+  get indicesArray() { return this.viTracker.indices.viewWholeBuffer(); }
 
   /** @type {Float32Array} */
   get modelMatrixArray() { return this.modelMatrixTracker.viewWholeBuffer(); }
