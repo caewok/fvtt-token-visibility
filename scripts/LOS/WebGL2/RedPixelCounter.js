@@ -24,11 +24,9 @@ export class RedPixelCounter {
   /** @type {WebGL2Context} */
   get gl() { return this.webGL2.gl; };
 
-  /** @type {number} */
-  #width = 0;
+  get width() { return this.gl.drawingBufferWidth; }
 
-  /** @type {number} */
-  #height = 0;
+  get height() { return this.gl.drawingBufferHeight; }
 
   /** @type {object<twgl.ProgramInfo>} */
   programInfos = {};
@@ -42,20 +40,21 @@ export class RedPixelCounter {
   /** @type {object<twgl.BufferInfo>} */
   bufferInfos = {};
 
-  constructor(webGL2, width, height) {
+  constructor(webGL2) {
     this.webGL2 = webGL2;
     const gl = this.gl;
 
     gl.getExtension("EXT_float_blend");
     gl.getExtension("EXT_color_buffer_float");
 
-    this.#width = width;
-    this.#height = height;
+    if ( !blendExt ) console.error("RedPixelCounter|EXT_float_blend not supported.");
+    if ( !colorExt ) console.error("RedPixelCounter|EXT_color_buffer_float not supported.");
   }
 
-  initialize(width, height) {
-    if ( width ) this.#width = width;
-    if ( height ) this.#height = height;
+  #initialized = false;
+
+  initialize() {
+    if ( this.#initialized ) return;
 
     // Used by both loop count and reduction count.
     this.bufferInfos.quad = twgl.primitives.createXYQuadBufferInfo(this.gl);
@@ -72,6 +71,8 @@ export class RedPixelCounter {
     this._initializeReadPixelsCount2();
 
     this._initializeLoopTransformCount();
+
+    this.#initialized = true;
   }
 
   _initializeLoopCount() {
@@ -141,12 +142,12 @@ export class RedPixelCounter {
       internalFormat: gl.RGBA32F,
       minMag: gl.NEAREST,
       wrap: gl.CLAMP_TO_EDGE
-    }], this.#width, this.#height);
+    }], this.width, this.height);
     const fb1 = twgl.createFramebufferInfo(gl, [{
         internalFormat: gl.RGBA32F,
         minMag: gl.NEAREST,
         wrap: gl.CLAMP_TO_EDGE
-      }], this.#width, this.#height);
+      }], this.width, this.height);
     this.fbInfos.reductionCount = [fb0, fb1];
     const NUM_CHANNELS = 4;
     this.pixelBuffers.reductionCount = new Float32Array(NUM_CHANNELS); // Width, height of 1.
@@ -167,12 +168,12 @@ export class RedPixelCounter {
       internalFormat: gl.RG32F,
       minMag: gl.NEAREST,
       wrap: gl.CLAMP_TO_EDGE
-    }], this.#width, this.#height);
+    }], this.width, this.height);
     const fb1 = twgl.createFramebufferInfo(gl, [{
         internalFormat: gl.RG32F,
         minMag: gl.NEAREST,
         wrap: gl.CLAMP_TO_EDGE
-      }], this.#width, this.#height);
+      }], this.width, this.height);
     this.fbInfos.reductionCount2 = [fb0, fb1];
     const NUM_CHANNELS = 2;
     this.pixelBuffers.reductionCount2 = new Float32Array(NUM_CHANNELS); // Width, height of 1.
@@ -186,8 +187,8 @@ export class RedPixelCounter {
       type: gl.UNSIGNED_BYTE,
       minMag: gl.NEAREST,
       wrap: gl.CLAMP_TO_EDGE
-    }], this.#width, this.#height);
-    this.pixelBuffers.readPixelsCount = new Uint8Array(this.#width * this.#height * NUM_CHANNELS);
+    }], this.width, this.height);
+    this.pixelBuffers.readPixelsCount = new Uint8Array(this.width * this.height * NUM_CHANNELS);
   }
 
   _initializeReadPixelsCount2() {
@@ -266,7 +267,7 @@ export class RedPixelCounter {
     // Allocate enough space for RGBA pixels
     gl.bufferData(
         gl.PIXEL_PACK_BUFFER,
-        this.#width * this.#height * numChannels,
+        this.width * this.height * numChannels,
         gl.DYNAMIC_READ
     );
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
@@ -353,7 +354,7 @@ export class RedPixelCounter {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
     // No buffer data needed in WebGL2 as we can use gl_VertexID.
-    gl.drawArrays(gl.POINTS, 0, this.#width * this.#height);
+    gl.drawArrays(gl.POINTS, 0, this.width * this.height);
 
     // Reset
     // gl.flush();
@@ -410,8 +411,8 @@ export class RedPixelCounter {
     // Ping-pong, reducing by x2 each time.
     let readFBO = 0;
     let writeFBO = 1;
-    let currentWidth = this.#width;
-    let currentHeight = this.#height;
+    let currentWidth = this.width;
+    let currentHeight = this.height;
     webGL2.useProgram(reducer);
     twgl.setBuffersAndAttributes(gl, reducer, bufferInfos.quad);
     while ( currentWidth > 1 || currentHeight > 1 ) {
@@ -539,7 +540,7 @@ export class RedPixelCounter {
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     }
-    this.gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
+    this.gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
     return redOnly ? this.countRedPixels() : this.countPixels();
   }
 
@@ -550,7 +551,7 @@ export class RedPixelCounter {
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     }
-    await readPixelsAsync (this.gl, 0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
+    await readPixelsAsync (this.gl, 0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
     return redOnly ? this.countRedPixels() : this.countPixels();
   }
 
@@ -565,7 +566,7 @@ export class RedPixelCounter {
     // Read pixels into PBO
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     // gl.readBuffer(gl.COLOR_ATTACHMENT0);
-    gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
 
     // gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this.pixelBuffers.readPixelsCount);
@@ -584,7 +585,7 @@ export class RedPixelCounter {
     // Read pixels into PBO
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     // gl.readBuffer(gl.COLOR_ATTACHMENT0);
-    gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
 
     // gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     await getBufferSubDataAsync(this.gl, gl.PIXEL_PACK_BUFFER, this.pbo, 0, this.pixelBuffers.readPixelsCount);
@@ -599,7 +600,7 @@ export class RedPixelCounter {
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     }
-    this.gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
+    this.gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
     return redOnly ? this.mapRedPixels() : this.mapPixels();
   }
 
@@ -610,7 +611,7 @@ export class RedPixelCounter {
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     }
-    await readPixelsAsync (this.gl, 0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
+    await readPixelsAsync (this.gl, 0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.pixelBuffers.readPixelsCount);
     return redOnly ? this.mapRedPixels() : this.mapPixels();
   }
 
@@ -625,7 +626,7 @@ export class RedPixelCounter {
     // Read pixels into PBO
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     // gl.readBuffer(gl.COLOR_ATTACHMENT0);
-    gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
 
     // gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this.pixelBuffers.readPixelsCount);
@@ -644,7 +645,7 @@ export class RedPixelCounter {
     // Read pixels into PBO
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     // gl.readBuffer(gl.COLOR_ATTACHMENT0);
-    gl.readPixels(0, 0, this.#width, this.#height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, 0);
 
     // gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.pbo);
     await getBufferSubDataAsync(this.gl, gl.PIXEL_PACK_BUFFER, this.pbo, 0, this.pixelBuffers.readPixelsCount);
