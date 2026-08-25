@@ -114,8 +114,10 @@ export class LOSRendererWebGL2 {
     // Must include all parameters that could be in the glsl file.
     vertexFile ??= this.constructor.VERTEX_FILE;
     fragmentFile ??= this.constructor.FRAGMENT_FILE;
-    opts.debugViewNormals ??= false;
-    opts.hasTexture ??= false;
+
+    // Convert booleans to GLSL-friendly integers
+    opts.debugViewNormals = opts.debugViewNormals ? 1 : 0;
+    opts.hasTexture = opts.hasTexture ? 1 : 0;
     opts.maxConstrainingWalls ??= 0;
     return await this.webGL2.cacheProgram(vertexFile, fragmentFile, opts);
   }
