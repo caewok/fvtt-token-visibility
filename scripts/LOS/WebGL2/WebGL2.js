@@ -155,8 +155,8 @@ export class WebGL2 {
 //       || this.glState.viewport.height !== param[3] ) console.error(`Viewport is incorrect. Should be`, param);
     if ( this.glState.viewport.equals(rect) ) return;
     const { gl, glState } = this;
-    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
     glState.viewport.copyFrom(rect);
+    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
   }
 
   setCullFace(face = "BACK") {
