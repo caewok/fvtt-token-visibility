@@ -367,29 +367,42 @@ export class WebGL2 {
   }
 
   static _advanceInstanceFn(gl, instanceBufferInfo, positionLoc) {
-    const { type = gl.FLOAT, stride = 0, normalize = false, buffer, numComponents } = instanceBufferInfo;
+    const {
+      type = gl.FLOAT,
+      stride = 0,
+      normalize = false,
+      buffer,
+      numComponents,
+      offset: baseOffset = 0 } = instanceBufferInfo;
+
+    // Calculate effective stride. If stride is 0, assume tightly packed data (4 bytes for FLOAT/INT).
+    const effectiveStride = stride || (numComponents * 4);
+
     switch ( numComponents ) {
       case 16: return firstInstance => {
-        const offset = (firstInstance * 16 * 4); // Instance size is 16 x 4 for a 4x4 matrix of floats.
+        const offset = baseOffset + (firstInstance * effectiveStride); // Instance size is 16 x 4 for a 4x4 matrix of floats.
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.vertexAttribPointer(positionLoc, 4, type, normalize, stride, offset);
-        gl.vertexAttribPointer(positionLoc+1, 4, type, normalize, stride, offset + 4*4);
-        gl.vertexAttribPointer(positionLoc+2, 4, type, normalize, stride, offset + 4*8);
-        gl.vertexAttribPointer(positionLoc+3, 4, type, normalize, stride, offset + 4*12);
+        gl.vertexAttribPointer(positionLoc, 4, type, normalize, effectiveStride, offset);
+        gl.vertexAttribPointer(positionLoc+1, 4, type, normalize, effectiveStride, offset + 16); // 4 elements * 4 bytes
+        gl.vertexAttribPointer(positionLoc+2, 4, type, normalize, effectiveStride, offset + 32); // 8 elements * 4 bytes
+        gl.vertexAttribPointer(positionLoc+3, 4, type, normalize, effectiveStride, offset + 48); // 12 elements * 4 bytes
       };
 
-      case 1: {
+      case 1:
+      case 2:
+      case 3:
+      case 4: {
         switch ( type ) {
           case gl.FLOAT: return firstInstance => {
-            const offset = (firstInstance * 4);
+            const offset = baseOffset + (firstInstance * effectiveStride);
             gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-            gl.vertexAttribPointer(positionLoc, 1, type, normalize, stride, offset);
+            gl.vertexAttribPointer(positionLoc, numComponents, type, normalize, effectiveStride, offset);
           }
 
           case gl.INT: return firstInstance => {
-            const offset = (firstInstance * 4);
+            const offset = baseOffset + (firstInstance * effectiveStride);
             gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-            gl.vertexAttribIPointer(positionLoc, 1, type, stride, offset); // Note the different signature from vertexAttribPointer.
+            gl.vertexAttribIPointer(positionLoc, numComponents, type, effectiveStride, offset); // Note the different signature from vertexAttribPointer.
           }
 
           default: throw Error(`_advanceInstanceFn ${type} type not yet implemented.`);
