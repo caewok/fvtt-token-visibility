@@ -40,9 +40,9 @@ export class WebGL2 {
   currentProgramInfo;
 
   useProgram(programInfo) {
-    if ( this.currentProgramInfo !== programInfo ) this.gl.useProgram(programInfo.program);
+    if ( this.currentProgramInfo !== programInfo ) this.gl.useProgram(programInfo?.program || null);
     this.currentProgramInfo = programInfo;
-    if ( this.currentProgramInfo.program !== this.gl.getParameter(this.gl.CURRENT_PROGRAM) ) console.error("Current program is incorrect.");
+    if ( programInfo && this.currentProgramInfo.program !== this.gl.getParameter(this.gl.CURRENT_PROGRAM) ) console.error("Current program is incorrect.");
     // else console.debug("Current program is correct.")
   }
 
