@@ -1038,7 +1038,7 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
       const shape = this.trackedIds.get(id);
       if ( !shape ) continue;
       const src = shape.textureURL;
-      if ( batchURLs.has(src) ) batchRenderSet.add(shape);
+      if ( batchURLs.has(src) ) batchRenderSet.add(id);
     }
     return super.getInstanceSet(batchRenderSet);
   }
