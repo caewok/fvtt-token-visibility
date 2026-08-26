@@ -224,6 +224,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   updateDebugForPercentVisible(percentVisible) {
     super.updateDebugForPercentVisible(percentVisible);
     const calc = this.viewerLOS.calculator;
+    const renderer = this.renderer;
 
     log("\n");
     log("WebGL2Calc|Rendering Debug");
@@ -234,10 +235,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
       const frame = frames[i];
       const clear = i === 0;
-      calc._render(renderer, { frame, clear, debug: true })
-      this.renderer.updateCameraBuffer();
-      this.renderer.prerender(calc.targetShape, calc.occlusionTester);
-      this.renderer.render({ frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
+      calc._render(renderer, { frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
     }
   }
 
