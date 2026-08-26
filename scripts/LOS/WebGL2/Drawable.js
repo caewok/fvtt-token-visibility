@@ -197,7 +197,8 @@ class AbstractDrawable {
     };
 
     // For use in _draw method.
-    this.aModelAttribLoc = this.gl.getAttribLocation(this.programInfo.program, 'aModel');
+    this.aModelAttribLoc.program = this.gl.getAttribLocation(this.programInfo.program, 'aModel');
+    this.aModelAttribLoc.debug = this.gl.getAttribLocation(this.debugProgramInfo.program, 'aModel');
     return attrProps;
   }
 
@@ -384,12 +385,13 @@ export class InstancedDrawable extends AbstractDrawable {
   /** @type {Uint16Array} */
   get indicesArray() { return this.primitiveClass.instanceVO.indices; }
 
+  get modelMatrixArray() { return this.modelMatrixTracker.viewWholeBuffer(); }
+
 
    // ----- NOTE: Shape and model tracking ----- //
 
   modelMatrixTracker = new FixedLengthTrackingBuffer({ facetLengths: 16 });
 
-  get modelMatrixArray() { return this.modelMatrixTracker.viewWholeBuffer(); }
 
   /**
    * Track the layoutVersion of the modelMatrixTracker.
@@ -520,12 +522,13 @@ export class InstancedDrawable extends AbstractDrawable {
 
   _draw() {
     const nVertices = this.indicesArray.length;
+    const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
     WebGL2.drawInstancedMatrixSet(
       this.gl,
       this.instanceSet,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
-      this.aModelAttribLoc,
+      aModelAttribLoc,
     );
 
   }
@@ -856,12 +859,13 @@ export class MultiModelDrawable extends AbstractDrawable {
 
   _draw() {
     const nVertices = this.indicesArray.length;
+    const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
     WebGL2.drawInstancedMatrixSet(
       this.gl,
       this.instanceSet,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
-      this.aModelAttribLoc,
+      aModelAttribLoc,
     );
   }
 }
@@ -919,8 +923,11 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     };
 
     // For use in _draw method.
-    this.aTextureIndexLoc = this.gl.getAttribLocation(this.programInfo.program, 'aTextureIndex');
-    this.aAlphaThresholdLoc = this.gl.getAttribLocation(this.programInfo.program, 'aAlphaThreshold');
+    this.aTextureIndexLoc.program = this.gl.getAttribLocation(this.programInfo.program, 'aTextureIndex');
+    this.aAlphaThresholdLoc.program = this.gl.getAttribLocation(this.programInfo.program, 'aAlphaThreshold');
+
+    this.aTextureIndexLoc.debug = this.gl.getAttribLocation(this.debugProgramInfo.program, 'aTextureIndex');
+    this.aAlphaThresholdLoc.debug = this.gl.getAttribLocation(this.debugProgramInfo.program, 'aAlphaThreshold');
 
     return attrProps;
   }
@@ -1008,11 +1015,9 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     this.textures.set(src, twgl.createTexture(this.gl, textureOpts));
   }
 
-  /** @type {number} */
-  aTextureIndexLoc = 0;
 
-  /** @type {number} */
-  aAlphaThresholdLoc = 0;
+  // ----- NOTE: Shape and model tracking ----- //
+
 
   _resizeTextureAttributeArrays(requiredSize) {
     let newSize = this.textureIndicesArray.length * 2;
@@ -1128,10 +1133,13 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     const instanceSet = this.instanceSet;
 
     // Construct the functions needed to advance the instance attributes.
+    const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
+    const aTextureIndexLoc = this.debugView ? this.aTextureIndexLoc.debug : this.aTextureIndexLoc.program;
+    const aAlphaThresholdLoc = this.debugView ? aAlphaThresholdLoc.debug : this.aAlphaThresholdLoc.program;
     const advanceFns = [
-      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aModel, this.aModelAttribLoc),
-      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aTextureIndex, this.aTextureIndexLoc),
-      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aAlphaThreshold, this.aAlphaThresholdLoc),
+      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aModel, aModelAttribLoc),
+      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aTextureIndex, aTextureIndexLoc),
+      WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aAlphaThreshold, aAlphaThresholdLoc),
     ];
     const nVertices = this.indicesArray.length;
 
@@ -1350,6 +1358,15 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     return attrProps;
   }
 
+  /** @type {object<number>} */
+  aTokenCenterLoc = { program: 0, debug: 0 };
+
+  /** @type {object<number>} */
+  aNumClipPlanesLoc = { program: 0, debug: 0 };
+
+  /** @type {object<number[]>} */
+  aClipPlanesLocs = { program: [], debug: [] };
+
   /** @type {FixedLengthTrackingBuffer} */
   clipPlanesTracker = new FixedLengthTrackingBuffer({ facetLengths: 4 * this.constructor.NUM_CONSTRAINING_WALLS });
 
@@ -1458,19 +1475,19 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
    */
   _resizeClipPlanesBuffer() {
     const gl = this.gl;
+    const advanceFns = Array(this.constructor.NUM_CONSTRAINING_WALLS + 3);
+    let i = 0;
+    const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
+    const aTokenCenterLoc = this.debugView ? this.aTokenCenterLoc.debug : this.aTokenCenterLoc.program;
+    const aNumClipPlanesLoc = this.debugView ? this.aNumClipPlanesLoc.debug : this.aNumClipPlanesLoc.program;
 
-    // Clip planes buffer
-    // Resize the GPU buffer.
-    // Use gl.bufferData instead of subData to reallocate the GPU memory to the new size.
-    const cBuffer = this.attributeBufferInfo.attribs["aClipPlanes_0"].buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.clipPlanesArray, gl.DYNAMIC_DRAW);
-
-    // Number of clip planes buffer.
-    const ncBuffer = this.attributeBufferInfo.attribs.aNumClipPlanes.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, ncBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.numClipPlanesArray, gl.DYNAMIC_DRAW);
-
+    advanceFns[i++] = WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aModel, aModelAttribLoc);
+    advanceFns[i++] = WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aTokenCenter, aTokenCenterLoc);
+    advanceFns[i++] = WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aNumClipPlanes, aNumClipPlanesLoc);
+    for ( let j = 0; j < this.constructor.NUM_CONSTRAINING_WALLS; j += 1 ) {
+      const aClipPlanesLocs = this.debugView ? this.aClipPlanesLocs.debug : this.aClipPlanesLocs.program;
+      advanceFns[i++] = WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs[`aClipPlanes_${j}`], aClipPlanesLocs[j]);
+    }
     // Token center buffer.
     const tcBuffer = this.attributeBufferInfo.attribs.aTokenCenter.buffer;
     gl.bindBuffer(gl.ARRAY_BUFFER, tcBuffer);
