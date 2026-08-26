@@ -25,25 +25,10 @@ export class WebGL2 {
    * @param {WebGL2RenderingContext} gl
    */
   constructor(gl) {
-    if ( this.constructor.glContextMap.has(gl) ) throw Error("WebGL2|Use the static create method!");
     this.gl = gl;
     this.glState.viewport.width = gl.canvas.width;
     this.glState.viewport.height = gl.canvas.height;
     this.initializeGLState();
-  }
-
-  // In order to cache gl state, must use a static creator and only create one instance per gl.
-  static glContextMap = new Map();
-
-  /**
-   * @param {WebGL2RenderingContext} gl
-   * @returns {WebGL2}
-   */
-  static create(gl) {
-    if ( this.glContextMap.has(gl)) return this.glContextMap.get(gl);
-    const out = new this(gl);
-    this.glContextMap.set(gl, out);
-    return out;
   }
 
   // ----- NOTE: Cache program ----- //

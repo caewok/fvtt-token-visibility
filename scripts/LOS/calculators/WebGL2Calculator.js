@@ -18,6 +18,8 @@ import { log } from "../util.js";
 // Base folder
 import { MODULE_ID } from "../../const.js";
 
+// Geometry folder
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 
 
 
@@ -83,66 +85,41 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   }
 }
 
-/* Calculator renderer creation and workflow:
-
-Calculator uses a default offscreen renderer for its calculations.
-- Static renderer, defined with any camera to define the buffer.
-- Defined static offscreen canvas controlled by this class.
-
-Calculator can take a different renderer to render either in debug or normal view.
-
-
-Renderer controls its set of drawables, b/c those are connected to the GL context of the renderer.
-
-
-*/
-
-
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleWebGL2Result;
 
+  /** @type {OffscreenCanvas} */
+  static glCanvas;
+
+  /** @type {WebGL2} */
+  static webGL2;
+
+  /** @type {WebGL2Context} */
+  get gl() { return this.constructor.webGL2.gl; };
+
   /** @type {LOSRendererWebGL2} */
-  get renderer() { return this.constructor.defaultRenderer; };
+  renderer;
 
   /** @type {RedPixelCounter} */
-  get redPixelCounter() { return this.constructor.redPixelCounter};
+  redPixelCounter
 
-  constructor() {
-    super();
+  constructor(opts) {
+    super(opts);
+    const size = CONFIG[MODULE_ID].renderTextureSize || 128;
+    this.constructor.glCanvas ??= new OffscreenCanvas(size, size);
 
     // Fix the camera values.
     this.camera.UP = this.camera.constructor.UP;
     this.camera.mirrorM = this.camera.constructor.MIRRORM_DIAG;
 
-    // Create the renderer and related objects, as needed.
-    this.constructor.createDefaultRenderer(this.camera);
-  }
-
-  // ----- NOTE: Default Renderer ----- //
-
-  /** @type {LOSRendererWebGL2} */
-  static defaultRenderer;
-
-  /** @type {OffscreenCanvas} */
-  static glCanvas;
-
-  /** @type {RedPixelCounter} */
-  static redPixelCounter;
-
-  static createOffscreenCanvas() {
-    if ( !this.glCanvas ) {
-      const size = CONFIG[MODULE_ID].renderTextureSize || 128;
-      this.glCanvas ??= new OffscreenCanvas(size, size);
-    }
-  }
-
-  static createDefaultRenderer(camera) {
-    if ( this.defaultRenderer ) return;
-    if ( !this.glCanvas ) this.createOffscreenCanvas();
-    const gl = this.glCanvas.getContext("webgl2");
-    const webGL2 = WebGL2.create(gl);
-    this.defaultRenderer = new LOSRendererWebGL2({ webGL2, camera });
-    this.redPixelCounter = new RedPixelCounter(webGL2);
+    const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
+    this.renderer = new LOSRendererWebGL2({
+      webGL2,
+      camera: this.camera,
+      width: size,
+      height: size,
+    });
+    this.redPixelCounter = new RedPixelCounter(webGL2); // Width and heigh set later
   }
 
   #initialized = false;
@@ -151,24 +128,17 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( this.#initialized ) return;
     await super.initialize();
 
+    const size = CONFIG[MODULE_ID].renderTextureSize || 128;
     await this.renderer.initialize();
-    this.redPixelCounter.initialize();
+    this.redPixelCounter.initialize(size, size);
     this.#initialized = true;
   }
 
-  /**
-   * Render the current view from the viewer.
-   * Used both for calculation and debugging views.
-   * @param {LOSRendererWebGL2}
-   * @param {object} [opts]       Options passed to the renderer
-   */
-  _render(renderer, opts) {
-    console.debug(`WebGL2Calc|Rendering`)
-    renderer ??= this.renderer;
-
-    renderer.updateCameraBuffer();
-    renderer.prerender(this.targetShape, this.occlusionTester);
-    renderer.render(opts);
+  resize(width, height) {
+    width ||= CONFIG[MODULE_ID].renderTextureSize || 128;
+    height ||= CONFIG[MODULE_ID].renderTextureSize || 128;
+    this.renderer.resize(width, height);
+    this.redPixelCounter.initialize(width, height);
   }
 
   _calculate() {
@@ -178,8 +148,10 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
     // Render the target and obstacles.
+    this.renderer.updateCameraBuffer();
     this.renderer.bindFramebuffer();
-    this._render(this.renderer);
+    this.renderer.prerender(this.targetShape, this.occlusionTester);
+    this.renderer.render();
 
     // Calculate the resulting area of the target and target with obstacles.
     const pixelCounterType = CONFIG[MODULE_ID].pixelCounterType
@@ -197,7 +169,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     return lastResult;
   }
 
-  static destroy() {
+  destroy() {
+    super.destroy();
     this.renderer.destroy();
   }
 }
@@ -217,7 +190,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     if ( this.renderer ) this.renderer.destroy();
     this.renderer = new LOSRendererWebGL2({
       camera: this.camera,
-      webGL2: WebGL2.create(this.gl),
+      webGL2: new WebGL2(this.gl),
     });
     await this.renderer.initialize();
   }
@@ -225,7 +198,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   updateDebugForPercentVisible(percentVisible) {
     super.updateDebugForPercentVisible(percentVisible);
     const calc = this.viewerLOS.calculator;
-    const renderer = this.renderer;
+    const tokenMgr = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens;
 
     log("\n");
     log("WebGL2Calc|Rendering Debug");
@@ -236,8 +209,9 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
       const frame = frames[i];
       const clear = i === 0;
-      console.debug(`WebGL2Calc|Rendering Debug viewpoint ${i}`)
-      calc._render(renderer, { frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
+      this.renderer.updateCameraBuffer();
+      this.renderer.prerender(calc.targetShape, calc.occlusionTester);
+      this.renderer.render({ frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
     }
   }
 
