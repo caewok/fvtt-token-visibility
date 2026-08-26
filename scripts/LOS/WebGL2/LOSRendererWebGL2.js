@@ -324,7 +324,7 @@ export class LOSRendererWebGL2 {
     DirectionalInstancedDrawable -- per primitive but really only TexturedQuadPrimitive, VerticalQuadPrimitive
     */
     const key = this.#drawableKeyForPrimitive(primitive, constrained);
-    if ( this.drawableCaches.has(key) ) return this.drawableCaches.get(key);
+    // if ( this.drawableCaches.has(key) ) return this.drawableCaches.get(key);
 
     const programFlags = this.#drawableProgramFlagsForPrimitive(primitive, constrained);
     const drawableClass = this.#drawableClassForPrimitive(primitive, constrained);
@@ -340,7 +340,7 @@ export class LOSRendererWebGL2 {
       drawable.senseType = senseType;
     }
     drawable.initialize();
-    this.drawableCaches.set(key, drawable);
+    // this.drawableCaches.set(key, drawable);
     return drawable;
   }
 
