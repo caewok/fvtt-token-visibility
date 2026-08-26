@@ -88,8 +88,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleWebGL2Result;
 
-  /** @type {OffscreenCanvas} */
-  static glCanvas;
+
 
   /** @type {WebGL2} */
   static webGL2;
@@ -105,15 +104,17 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 
   constructor(opts) {
     super(opts);
-    const size = CONFIG[MODULE_ID].renderTextureSize || 128;
-    this.constructor.glCanvas ??= new OffscreenCanvas(size, size);
+
 
     // Fix the camera values.
     this.camera.UP = this.camera.constructor.UP;
     this.camera.mirrorM = this.camera.constructor.MIRRORM_DIAG;
 
+    this.constructor.createOffscreenCanvas();
+
     const gl = this.constructor.glCanvas.getContext("webgl2");
     const webGL2 = this.constructor.webGL2 ??= WebGL2.create(gl);
+    const size = CONFIG[MODULE_ID].renderTextureSize || 128;
     this.renderer = new LOSRendererWebGL2({
       webGL2,
       camera: this.camera,
@@ -122,6 +123,20 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     });
     this.redPixelCounter = new RedPixelCounter(webGL2); // Width and heigh set later
   }
+
+  // ----- NOTE: Default Renderer ----- //
+
+  /** @type {OffscreenCanvas} */
+  static glCanvas;
+
+  static createOffscreenCanvas() {
+    if ( !this.glCanvas ) {
+      const size = CONFIG[MODULE_ID].renderTextureSize || 128;
+      this.glCanvas ??= new OffscreenCanvas(size, size);
+    }
+  }
+
+  // ----- NOTE: Initialize ----- //
 
   #initialized = false;
 
