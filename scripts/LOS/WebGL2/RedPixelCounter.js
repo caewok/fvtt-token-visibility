@@ -6,7 +6,6 @@ CONFIG
 
 import * as twgl from "./twgl-full.js";
 import { MODULE_ID } from "../../const.js";
-import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { readPixelsAsync, getBufferSubDataAsync } from "./read_pixels_async.js";
 import { WebGL2 } from "./WebGL2.js";
 import { FastBitSet } from "../FastBitSet/FastBitSet.js";
@@ -42,11 +41,11 @@ export class RedPixelCounter {
 
   constructor(webGL2) {
     this.webGL2 = webGL2;
+
+    // Activate required extensions.
     const gl = this.gl;
-
-    gl.getExtension("EXT_float_blend");
-    gl.getExtension("EXT_color_buffer_float");
-
+    const blendExt = gl.getExtension("EXT_float_blend");
+    const colorExt = gl.getExtension("EXT_color_buffer_float");
     if ( !blendExt ) console.error("RedPixelCounter|EXT_float_blend not supported.");
     if ( !colorExt ) console.error("RedPixelCounter|EXT_color_buffer_float not supported.");
   }
