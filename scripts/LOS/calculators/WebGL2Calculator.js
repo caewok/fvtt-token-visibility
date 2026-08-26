@@ -154,6 +154,22 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     this.#initialized = true;
   }
 
+  /**
+   * Render the current view from the viewer.
+   * Used both for calculation and debugging views.
+   * @param {LOSRendererWebGL2}
+   * @param {object} [opts]       Options passed to the renderer
+   */
+  _render(renderer, opts) {
+    console.debug(`WebGL2Calc|Rendering`)
+    renderer ??= this.renderer;
+    renderer.camera = this.camera;
+    renderer.updateCameraBuffer();
+    renderer.prerender(this.targetShape, this.occlusionTester);
+    renderer.render(opts);
+  }
+
+
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
@@ -161,11 +177,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
     // Render the target and obstacles.
-    this.renderer.camera = this.camera;
-    this.renderer.updateCameraBuffer();
     this.renderer.bindFramebuffer();
-    this.renderer.prerender(this.targetShape, this.occlusionTester);
-    this.renderer.render();
+    this._render(this.renderer);
 
     // Calculate the resulting area of the target and target with obstacles.
     const pixelCounterType = CONFIG[MODULE_ID].pixelCounterType
@@ -183,8 +196,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     return lastResult;
   }
 
-  destroy() {
-    super.destroy();
+  static destroy() {
     this.renderer.destroy();
   }
 }
@@ -222,6 +234,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
       const frame = frames[i];
       const clear = i === 0;
+      calc._render(renderer, { frame, clear, debug: true })
       this.renderer.updateCameraBuffer();
       this.renderer.prerender(calc.targetShape, calc.occlusionTester);
       this.renderer.render({ frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
