@@ -97,10 +97,10 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   get gl() { return this.constructor.webGL2.gl; };
 
   /** @type {LOSRendererWebGL2} */
-  renderer;
+  get renderer() { return this.constructor.defaultRenderer; };
 
   /** @type {RedPixelCounter} */
-  redPixelCounter
+  get redPixelCounter() { return this.constructor.redPixelCounter; }
 
   constructor(opts) {
     super(opts);
@@ -112,16 +112,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 
     this.constructor.createOffscreenCanvas();
 
-    const gl = this.constructor.glCanvas.getContext("webgl2");
-    const webGL2 = this.constructor.webGL2 ??= WebGL2.create(gl);
-    const size = CONFIG[MODULE_ID].renderTextureSize || 128;
-    this.renderer = new LOSRendererWebGL2({
-      webGL2,
-      camera: this.camera,
-      width: size,
-      height: size,
-    });
-    this.redPixelCounter = new RedPixelCounter(webGL2); // Width and heigh set later
+     // Create the renderer and related objects, as needed.
+    this.constructor.createDefaultRenderer(this.camera);
   }
 
   // ----- NOTE: Default Renderer ----- //
@@ -129,11 +121,23 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   /** @type {OffscreenCanvas} */
   static glCanvas;
 
+  /** @type {RedPixelCounter} */
+  static redPixelCounter;
+
   static createOffscreenCanvas() {
     if ( !this.glCanvas ) {
       const size = CONFIG[MODULE_ID].renderTextureSize || 128;
       this.glCanvas ??= new OffscreenCanvas(size, size);
     }
+  }
+
+  static createDefaultRenderer(camera) {
+    if ( this.defaultRenderer ) return;
+    if ( !this.glCanvas ) this.createOffscreenCanvas();
+    const gl = this.glCanvas.getContext("webgl2");
+    const webGL2 = WebGL2.create(gl);
+    this.defaultRenderer = new LOSRendererWebGL2({ webGL2, camera });
+    this.redPixelCounter = new RedPixelCounter(webGL2);
   }
 
   // ----- NOTE: Initialize ----- //
@@ -164,6 +168,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
     // Render the target and obstacles.
+    this.renderer.camera = this.camera;
     this.renderer.updateCameraBuffer();
     this.renderer.bindFramebuffer();
     this.renderer.prerender(this.targetShape, this.occlusionTester);
@@ -214,7 +219,6 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
   updateDebugForPercentVisible(percentVisible) {
     super.updateDebugForPercentVisible(percentVisible);
     const calc = this.viewerLOS.calculator;
-    const tokenMgr = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens;
 
     log("\n");
     log("WebGL2Calc|Rendering Debug");
