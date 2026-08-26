@@ -1049,7 +1049,7 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     // Construct the functions needed to advance the instance attributes.
     const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
     const aTextureIndexLoc = this.debugView ? this.aTextureIndexLoc.debug : this.aTextureIndexLoc.program;
-    const aAlphaThresholdLoc = this.debugView ? aAlphaThresholdLoc.debug : this.aAlphaThresholdLoc.program;
+    const aAlphaThresholdLoc = this.debugView ? this.aAlphaThresholdLoc.debug : this.aAlphaThresholdLoc.program;
     const advanceFns = [
       WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aModel, aModelAttribLoc),
       WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aTextureIndex, aTextureIndexLoc),
