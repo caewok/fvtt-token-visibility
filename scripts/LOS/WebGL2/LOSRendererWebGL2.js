@@ -354,13 +354,12 @@ export class LOSRendererWebGL2 {
 
   #drawableClassForPrimitive(primitive, constrained = false) {
     const isInstanced = primitive instanceof InstancedGeometricPrimitive;
-    const isDirectional = Object.hasOwn(primitive, "direction");
     let drawableClass;
     if ( isInstanced ) {
-      drawableClass = InstancedDrawable;
       if ( primitive.constructor.TEXTURED ) drawableClass = TexturedInstancedDrawable;
       else if ( constrained ) drawableClass = ConstrainedInstancedDrawable;
-      else if ( isDirectional ) drawableClass = DirectionalInstancedDrawable;
+      else if ( primitive.direction !== primitive.constructor.CULL_FACES.BACK ) drawableClass = DirectionalInstancedDrawable;
+      else drawableClass = InstancedDrawable;
     } else {
       if ( constrained ) new Error(`${this.constructor.name}##drawableClassForPrimitive|Constrained only uses instanced geometry.`);
       drawableClass = this.constructor.USE_MULTI_MODEL ? MultiModelDrawable : ModelDrawable;
@@ -373,7 +372,6 @@ export class LOSRendererWebGL2 {
   #drawableKeyForPrimitive(primitive, constrained = false) {
     let key;
     const isInstanced = primitive instanceof InstancedGeometricPrimitive;
-    const isDirectional = Object.hasOwn(primitive, "direction");
 
     if ( !isInstanced ) {
       if ( !this.constructor.USE_MULTI_MODEL ) return primitive; // Primitive shape is the key for single model.
@@ -382,11 +380,8 @@ export class LOSRendererWebGL2 {
       // Instance drawables are split by primitive type.
       key = `InstancedDrawable_${primitive.constructor.name}`;
 
-      // For now, directional is only applied to instance drawables.
-      if ( isDirectional ) key += `_directional`;
-
       // For now, textured is only applied to instance drawables.
-      else if ( primitive.constructor.TEXTURED ) key += `_textured`;
+      if ( primitive.constructor.TEXTURED ) key += `_textured`;
     }
     if ( constrained ) key += `_constrained`;
     return key;
