@@ -112,7 +112,8 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     this.camera.UP = this.camera.constructor.UP;
     this.camera.mirrorM = this.camera.constructor.MIRRORM_DIAG;
 
-    const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
+    const gl = this.constructor.glCanvas.getContext("webgl2");
+    const webGL2 = this.constructor.webGL2 ??= WebGL2.create(gl);
     this.renderer = new LOSRendererWebGL2({
       webGL2,
       camera: this.camera,
@@ -190,7 +191,7 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     if ( this.renderer ) this.renderer.destroy();
     this.renderer = new LOSRendererWebGL2({
       camera: this.camera,
-      webGL2: new WebGL2(this.gl),
+      webGL2: WebGL2.create(this.gl),
     });
     await this.renderer.initialize();
   }
