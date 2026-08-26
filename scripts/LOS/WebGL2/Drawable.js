@@ -36,10 +36,169 @@ Requires:
 - Variable aModel per INSTANCED
 - Uses modelMatrixTracker for buffer
 
-
-
-
 */
+
+
+/**
+ * Manage the state of a given webGL buffer and associated tracker.
+ */
+class BufferChannel {
+  /** @type {WebGL2RenderingContext} */
+  gl;
+
+  /** @type {string} */
+  attribName;
+
+  /** @type {VariableLengthTrackingBuffer} */
+  tracker;
+
+  /** @type {function} */
+  dataExtractor; // E.g., shape => ({ newValues: shape.modelMatrix.model.arr })
+
+  /** @type {function} */
+  bufferExtractor; // E.g., attributeBufferInfo => attributeBufferInfo.attribs.aModel.buffer
+
+  /** @type {number} */
+  layoutVersion = 0;
+
+  /** @type {Set<string>} */
+  dirtyIds = new Set();
+
+  /** @type {Map<string, number} */
+  dataVersions = new Map(); // shape.id : update counter
+
+  /** @type {gl.BUFFER_TYPE} */
+  bufferType;
+
+
+
+  /**
+   * @param {WebGL2RenderingContext} gl              WebGL2 context
+   * @param {string} attribName                      Attribute name; "indices" treated special
+   * @param {VariableLengthTrackingBuffer} tracker   Tracking buffer for this attribute's data
+   * @param {function} dataExtractor                 How to extract data from a tracked object
+   * @param {function} changeTest                    Test whether a tracked object has changed
+   */
+  constructor(gl, attribName, tracker, dataExtractor, dataChanged) {
+    this.gl = gl;
+    this.attribName = attribName;
+    this.tracker = tracker;
+    this.dataExtractor = dataExtractor;
+    if ( dataChanged ) this.dataChanged = dataChanged;
+
+    // Treat indices a bit differently due to the structure of the attributeInfo object.
+    if ( attribName === "indices" ) {
+      this.bufferExtractor = info => info.indices;
+      this.bufferType = this.gl.ELEMENT_ARRAY_BUFFER;
+    } else {
+      this.bufferExtractor = info => info.attribs[this.attribName].buffer;
+      this.bufferType = this.gl.ARRAY_BUFFER;
+    }
+
+    // Sync update counters for each id that is tracked.
+    this._syncAllIds();
+  }
+
+  /**
+   * @param {object} dataObject
+   * @returns {number[]|TypedArray|null} The new data if the data differs from what is in the tracker.
+   */
+  dataChanged(dataObject) {
+    const newData = this.dataExtractor(dataObject);
+    const storedData = this.tracker.viewFacetById(dataObject.id);
+    const n = storedData.length;
+    if ( newData.length !== n ) return newData;
+    for ( let i = 0; i < n; i += 1 ) {
+      if ( newData[i] !== storedData[i] ) return newData;
+    }
+    return null;
+  }
+
+  /**
+   * Add data from a specific data object to the tracker.
+   * @param {object} dataObject     Must have an id property and be understood by dataExtractor
+   */
+  addData(dataObject) {
+    this.tracker.addFacet({ id: dataObject.id, newValues: this.dataExtractor(dataObject) });
+  }
+
+  /**
+   * Update data from a specific data object to the tracker.
+   * @param {object} dataObject     Must have an id property and be understood by dataExtractor
+   */
+  updateData(dataObject) {
+    const newValues = this.dataChanged(dataObject, this);
+    if ( !newValues ) return;
+    this.tracker.updateFacet(dataObject.id, { newValues });
+  }
+
+  /**
+   * Remove data from a specific data object to the tracker.
+   * @param {object} dataObject     Must have an id property and be understood by dataExtractor
+   */
+  removeData(dataObject) {
+    const id = dataObject.id;
+    this.tracker.deleteFacet(dataObject.id);
+    this.dataVersions.delete(id);
+  }
+
+  /**
+   * Sync the provided buffer with this tracking data.
+   * @param {twgl.BufferInfo}
+   */
+  sync(attributeBufferInfo) {
+    if (this.layoutVersion !== this.tracker.layoutVersion) {
+      this.resizeBuffer(attributeBufferInfo);
+      this.layoutVersion = this.tracker.layoutVersion;
+    } else {
+      for ( const [id, updateCounter] of this.tracker.facetChangeTracker.entries() ) {
+        if ( updateCounter !== this.dataVersions.get(id) ) this.updateBufferForId(id, attributeBufferInfo);
+      }
+    }
+  }
+
+  /**
+   * Sync update counters for each id that is tracked.
+   */
+  _syncAllIds() {
+    for ( const [id, updateCounter] of this.tracker.facetChangeTracker.entries() ) {
+      this.dataVersions.set(id, updateCounter);
+    }
+  }
+
+  /**
+   * Resize the provided buffer with this tracking data.
+   * @param {twgl.BufferInfo}
+   */
+  resizeBuffer(attributeBufferInfo) {
+    const buffer = this.bufferExtractor(attributeBufferInfo);
+    const bufferType = this.bufferType;
+    this.gl.bindBuffer(bufferType, buffer);
+    this.gl.bufferData(bufferType, this.tracker.viewWholeBuffer(), this.gl.DYNAMIC_DRAW);
+    console.debug(`Resizing buffer for ${this.attribName}`, this.tracker.viewWholeBuffer());
+
+    // Entire buffer is updated, so every tracked id is updated.
+    this._syncAllIds();
+  }
+
+  /**
+   * Sync the provided buffer with this tracking data for a given id.
+   * @param {string} id
+   * @param {twgl.BufferInfo}
+   */
+  updateBufferForId(id, attributeBufferInfo) {
+    const buffer = this.bufferExtractor(attributeBufferInfo);
+    const bufferType = this.bufferType;
+    const offset = this.tracker.facetOffsetAtId(id) * this.tracker.type.BYTES_PER_ELEMENT;
+    this.gl.bindBuffer(bufferType, buffer);
+    this.gl.bufferSubData(bufferType, offset, this.tracker.viewFacetById(id));
+    console.debug(`Updating buffer for ${this.attribName} at ${id}`, this.tracker.viewFacetById(id));
+
+    // Mark this id as updated.
+    this.dataVersions.set(id, this.tracker.facetChangeTracker.get(id));
+  }
+}
+
 
 
 class AbstractDrawable {
@@ -69,8 +228,7 @@ class AbstractDrawable {
   /** @type {WebGL2RenderingContext} */
   get gl() { return this.webGL2.gl; }
 
-  /** @type {boolean} */
-  debugView = false;
+
 
   constructor({ webGL2, programInfo, debugProgramInfo } = {}) {
     this.webGL2 = webGL2;
@@ -95,6 +253,7 @@ class AbstractDrawable {
   // ----- NOTE: Program ----- //
 
   get program() { return this.debugView ? this.debugProgramInfo : this.programInfo; }
+
 
   // ----- NOTE: Uniforms ----- //
 
@@ -122,10 +281,10 @@ class AbstractDrawable {
   get indicesArray() { return new Error(`${this.constructor.name}|indicesArray getter must be defined by child class.`); }
 
   /** @type {Float32Array} */
-  get modelMatrixArray() { return new Error(`${this.constructor.name}|indicesArray getter must be defined by child class.`); }
+  get modelMatrixArray() { return new Error(`${this.constructor.name}|modelMatrix getter must be defined by child class.`); }
 
-  /** @type {number} */
-  aModelAttribLoc = 0;
+  /** @type {object<number>} */
+  aModelAttribLoc = { program: 0, debug: 0 };
 
   /** @type {object} */
   attributeProperties = {};
@@ -202,19 +361,13 @@ class AbstractDrawable {
     return attrProps;
   }
 
-  // ----- NOTE: Shape lifecycle hooks ----- //
+  // ----- NOTE: Shape lifecycle ----- //
 
   /**
    * The set of shape ids tracked by this drawable.
    * @type {Map<string, ids>}
    */
   trackedIds = new Map();
-
-  /**
-   * The set of shape ids that may require a WebGPU buffer update.
-   * @type {Set<string>}
-   */
-  idsToUpdate = new Set();
 
   /**
    * Add a geometric shape to this drawable.
@@ -224,6 +377,7 @@ class AbstractDrawable {
   addGeometricShape(shape) {
     const id = shape.id;
     if ( this.trackedIds.has(id) ) return this.updateGeometricShape(shape);
+    console.debug(`Adding shape ${shape.id}`);
 
     const added = this._onShapeAdded(shape);
     if ( added ) this.trackedIds.set(id, shape);
@@ -236,9 +390,10 @@ class AbstractDrawable {
    * @returns {boolean} True if successfully added or updated.
    */
   updateGeometricShape(shape) {
-    if ( !shape ) return; //
+    if ( !shape ) return;
     const id = shape.id;
     if ( !this.trackedIds.has(id) ) return this.addGeometricShape(shape);
+    console.debug(`Updating shape ${shape.id}`);
     return this._onShapeUpdated(shape);
   }
 
@@ -251,60 +406,69 @@ class AbstractDrawable {
     const id = shape.id;
     if ( !this.trackedIds.has(id) ) return false;
     this.trackedIds.delete(id);
+    console.debug(`Removing shape ${shape.id}`);
     return this._onShapeRemoved(shape);
   }
 
   /**
-   * Protected lifecycle hooks for subclasses/mixins to implement
+   * Add data from the shape to various tracking buffers, if any.
    * @param {GeometricPrimitive} shape
-   * @returns {boolean} True if it should be added/updated/deleted
+   * @returns {boolean} True if it was added
    */
-  _onShapeAdded(_shape) { console.error(`${this.constructor.name}#_onShapeAdded must be implemented by subclass.`); }
-  _onShapeUpdated(_shape) { console.error(`${this.constructor.name}#_onShapeAdded must be implemented by subclass.`); }
-  _onShapeRemoved(_shape) { console.error(`${this.constructor.name}#_onShapeAdded must be implemented by subclass.`); }
-
-  // ----- NOTE: Generic buffer synchronization ---- //
-
-  /**
-   * Trigger the update of GPU buffers from CPU trackers.
-   * Expected that child classes will update as needed.
-   */
-  updateBuffers() { }
-
-  /**
-   * Synchronize a CPU tracking buffer to its WebGL GPU buffer.
-   * Should be called by subclasses.
-   * @param {object} config
-   * @param {VariableLengthAbstractBuffer} config.tracker     The tracking buffer instance
-   * @param {Set<string>} config.idsToUpdate                  Set of shape ids requiring sub-data updates
-   * @param {string} config.layoutStateKey                    The property name tracking the layout version for this class
-   */
-  _syncTrackerToBuffer({ tracker, idsToUpdate, layoutStateKey } = {}) {
-    // If the layout version changed (e.g., buffer grew), resize and upload the whole buffer.
-    if ( this[layoutStateKey] !== tracker.layoutVersion ) {
-      this._resizeBuffer(tracker);
-      this[layoutStateKey] = tracker.layoutVersion;
+  _onShapeAdded(shape) {
+    let added = false;
+    for ( const channel of this.bufferChannels.values() ) {
+      channel.addData(shape);
+      added = true;
     }
-
-    // Otherwise, selectively update only the modified ids.
-    else idsToUpdate.forEach(id => this._updateBufferForId(id, tracker));
-    idsToUpdate.clear();
+    return added;
   }
 
   /**
-   * Resize a WebGL GPU buffer to match its CPU tracking buffer.
-   * To be implemented by subclass.
-   * @param {VariableLengthAbstractBuffer} tracker
+   * Update data from the shape in various tracking buffers, if any.
+   * @param {GeometricPrimitive} shape
+   * @returns {boolean} True if it was updated (or added)
    */
-  _resizeBuffer(_tracker) { new Error(`${this.constructor.name}#_onShapeAdded must be implemented by subclass.`); }
+  _onShapeUpdated(shape) {
+    let updated = false;
+    for ( const channel of this.bufferChannels.values() ) {
+      channel.updateData(shape);
+      updated = true;
+    }
+    return updated;
+  }
+  _onShapeRemoved(shape) {
+    let deleted = false;
+    for ( const channel of this.bufferChannels.values() ) {
+      channel.removeData(shape);
+      deleted = true;
+    }
+    return deleted;
+  }
+
+  // ----- NOTE: Generic buffer synchronization ---- //
+
+  /** @type {Map<string, BufferChannel>} */
+  bufferChannels = new Map();
 
   /**
-   * Update a WebGL GPU buffer for a specific id to match its CPU tracking buffer.
-   * To be implemented by subclass.
-   * @param {string} id
-   * @param {VariableLengthAbstractBuffer} tracker
+   * Register a buffer tracker for a given attribute.
+   * @param {string} attribName
+   * @param {VariableLengthTrackingBuffer} tracker
+   * @param {function} dataExtractor
+   * @param {function} dataVersionExtractor
    */
-  _updateBufferForId(_id, _tracker) { new Error(`${this.constructor.name}#_onShapeAdded must be implemented by subclass.`); }
+  registerBufferChannel(attribName, tracker, dataExtractor, dataChanged) {
+    const channel = new BufferChannel(this.gl, attribName, tracker, dataExtractor, dataChanged);
+    this.bufferChannels.set(attribName, channel);
+  }
+
+  /**
+   * Trigger the update of GPU buffers from CPU trackers.
+   */
+  updateBuffers() {
+    for ( const channel of this.bufferChannels.values() ) channel.sync(this.attributeBufferInfo);
+  }
 
 
   // ----- NOTE: Rendering ----- //
@@ -340,6 +504,9 @@ class AbstractDrawable {
    */
   render(debug = false) {
     if ( !this._renderSet.size ) return;
+
+    console.debug(`Drawable ${this.constructor.name}|Render. Debug? ${debug}`);
+
     this.prerender();
     this.debugView = debug;
 
@@ -359,7 +526,7 @@ class AbstractDrawable {
     // gl.finish(); // For debugging.
   }
 
-  get instanceSet() { return this._renderSet; }
+  get renderSet() { return this._renderSet; }
 
   _draw() { console.error("_draw should be defined by child class."); }
 
@@ -377,6 +544,16 @@ export class InstancedDrawable extends AbstractDrawable {
   constructor({ primitiveClass, ...opts }) {
     super(opts);
     this.primitiveClass = primitiveClass;
+
+    this.registerBufferChannel(
+      "aModel",
+      this.modelMatrixTracker,
+      shape => shape.modelMatrix.model.arr,
+      (shape, channel) => {
+        if ( channel.dataVersions.get(shape.id) === shape.modelMatrix.dataVersion ) return null;
+        return channel.dataExtractor(shape);
+      }
+    );
   }
 
   /** @type {Float32Array} */
@@ -388,30 +565,9 @@ export class InstancedDrawable extends AbstractDrawable {
   get modelMatrixArray() { return this.modelMatrixTracker.viewWholeBuffer(); }
 
 
-   // ----- NOTE: Shape and model tracking ----- //
+  // ----- NOTE: Shape and model tracking ----- //
 
   modelMatrixTracker = new FixedLengthTrackingBuffer({ facetLengths: 16 });
-
-
-  /**
-   * Track the layoutVersion of the modelMatrixTracker.
-   * When it changes, the entire model buffer must be updated.
-   * @type {number}
-   */
-  modelLayoutVersion = 0;
-
-  /**
-   * Track the data version of the model.
-   * When it changes, the model buffer for that id must be updated.
-   * @type {Map<string, number>}
-   */
-  modelUpdateTracker = new Map();
-
-  /**
-   * Track the ids whose model buffer must  be uploaded before rendering.
-   * @type {Set<string>}
-   */
-  idsToUpdate = new Set();
 
   /**
    * Add a geometric shape's model to this drawable.
@@ -420,112 +576,41 @@ export class InstancedDrawable extends AbstractDrawable {
    */
   _onShapeAdded(shape) {
     if ( !(shape instanceof this.primitiveClass ) ) return false;
-    const id = shape.id;
-
-    this.modelMatrixTracker.addFacet({ id, newValues: shape.modelMatrix.model.arr });
-    this.modelUpdateTracker.set(id, shape.modelMatrix.dataVersion);
-    this.idsToUpdate.add(id);
-    return true;
-  }
-
-  /**
-   * Update the geometric shape's model for this drawable.
-   * @param {GeometricPrimitive} shape
-   */
-  _onShapeUpdated(shape) {
-    const id = shape.id;
-
-    // If we already have this data, no need to update it.
-    if ( this.modelUpdateTracker.get(id) === shape.modelMatrix.dataVersion ) return false;
-
-    this.modelMatrixTracker.updateFacet(id, { newValues: shape.modelMatrix.model.arr });
-    this.modelUpdateTracker.set(id, shape.modelMatrix.dataVersion);
-    this.idsToUpdate.add(id);
-    return true;
-  }
-
-  /**
-   * Delete the geometric shape's model for this drawable.
-   * @param {GeometricPrimitive} shape
-   */
-  _onShapeRemoved(shape) {
-    const id = shape.id;
-    this.modelMatrixTracker.deleteFacet(id);
-    this.modelUpdateTracker.delete(id);
-    // this.idsToUpdate.add(id); Unneeded for deletion b/c it will get skipped by instancing.
-    return true;
-  }
-
-  // ----- NOTE: Model buffer updating ----- //
-
-  /**
-   * Update the buffer only as needed.
-   * May update the entire buffer if it needs to be resize.
-   * Otherwise will update the ids marked as requiring an update.
-   */
-  updateBuffers() {
-    this._syncTrackerToBuffer({
-      tracker: this.modelMatrixTracker,
-      layoutStateKey: "modelLayoutVersion",
-      idsToUpdate: this.idsToUpdate,
-    });
-    this.idsToUpdate.clear();
-  }
-
-  /**
-   * Resize and update the entire model buffer on the GPU.
-   */
-  _resizeBuffer() {
-    const gl = this.gl;
-    const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
-
-    // Resize the GPU buffer.
-    // Use gl.bufferData instead of subData to reallocate the GPU memory to the new size.
-    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.modelMatrixArray, gl.DYNAMIC_DRAW);
-
-    /*
-    // Update the model attribute with a new buffer.
-    this.attributeProperties.aModel.data = this.modelMatrixArray;
-    const attribs = this.attributeBufferInfo.attribs;
-    attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.attributeProperties.aModel }).aModel;
-
-    // Update the VAO with the new model buffer information.
-    this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
-    this.debugVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.debugProgramInfo, attribs);
-    */
-  }
-
-  /**
-   * Update the model buffer on the GPU for a specific id.
-   * TODO: Use applyConsecutively to update in larger chunks.
-   * @param {string} id
-   */
-  _updateBufferForId(id) {
-    const tracker = this.modelMatrixTracker;
-    const gl = this.gl;
-    const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
-    const mOffset = tracker.facetOffsetAtId(id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
+    return super._onShapeAdded(shape);
   }
 
   // ----- NOTE: Rendering ----- //
 
-  get instanceSet() {
-    // Get the indices for each shape in the render set.
+  /** @type {Set<GeometricPrimitive>} */
+  get renderSet() {
     // Shapes that do not belong to this primitive are ignored.
-    return super.instanceSet
+    return super.renderSet
       .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
-      .map(id => this.modelMatrixTracker.facetIdMap.get(id));
   }
 
-  _draw() {
+  /**
+   * Indices of the renderSet shapes.
+   * @param {Set<GeometricShape>} renderSet
+   * @returns {Set<number>}
+   */
+  getInstanceSet(renderSet) {
+    renderSet ??= this.renderSet;
+    return renderSet.map(id => this.modelMatrixTracker.facetIdMap.get(id));
+  }
+
+  /**
+   * Draw a specific set of instances.
+   * @param {Set<number>} instances
+   */
+  _draw(instances) {
+    instances ??= this.getInstanceSet();
+    if ( !instances.size ) return;
+
     const nVertices = this.indicesArray.length;
     const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
     WebGL2.drawInstancedMatrixSet(
       this.gl,
-      this.instanceSet,
+      instances,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
       aModelAttribLoc,
@@ -587,7 +672,6 @@ export class ModelDrawable extends AbstractDrawable {
    * Otherwise will update the ids marked as requiring an update.
    */
   updateBuffers() {
-    if ( !this.idsToUpdate.size ) return;
     this._updateModelBuffer();
     super.updateBuffers();
   }
@@ -613,6 +697,34 @@ export class ModelDrawable extends AbstractDrawable {
  */
 export class MultiModelDrawable extends AbstractDrawable {
 
+  constructor(opts) {
+    super(opts);
+
+    this.registerBufferChannel(
+      "aPosition", // Also the buffer for aNormal
+      this.viTracker.vertices,
+      shape => shape.modelVO.vertices,
+      (shape, channel) => channel.dataExtractor(shape), // Always update
+    );
+    this.registerBufferChannel(
+      "indices",
+      this.viTracker.indices,         // Tracker.
+      shape => shape.modelVO.indices, // Data.
+      (shape, channel) => channel.dataExtractor(shape), // Always update
+    );
+    this.registerBufferChannel(
+      "aModel",
+      this.modelMatrixTracker,
+      shape => shape.modelMatrix.model.arr,
+
+      // Use simpler test to check if the model data changed.
+      (shape, channel) => {
+        if ( channel.dataVersions.get(shape.id) === shape.modelMatrix.dataVersion ) return null;
+        return channel.dataExtractor(shape);
+      }
+    );
+  }
+
   // ----- NOTE: Tracking ----- //
 
   viTracker = new VerticesIndicesTrackingBuffer({ stride: 6 }); // Stride is Position + Normal
@@ -629,240 +741,50 @@ export class MultiModelDrawable extends AbstractDrawable {
   get modelMatrixArray() { return this.modelMatrixTracker.viewWholeBuffer(); }
 
   /**
-   * Track the layout version of the vertices tracker.
-   * When it changes, the entire model buffer must be updated.
-   * @type {number}
-   */
-  viLayoutVersion = 0;
-
-  /**
-   * Track the data version of the vertices.
-   * When it changes, the vi buffer for that id must be updated.
-   * @type {Map<string, number>}
-   */
-  viUpdateTracker = new Map();
-
-  /**
-   * Track the data version of the model.
-   * When it changes, the model buffer for that id must be updated.
-   * @type {Map<string, number>}
-   */
-  modelUpdateTracker = new Map();
-
-  /**
-   * Track the layout version of the model tracker.
-   * When it changes, the entire model buffer must be updated.
-   * @type {number}
-   */
-  modelLayoutVersion = 0;
-
-  /**
-   * Track the ids whose vi buffer must  be uploaded before rendering.
-   * @type {Set<string>}
-   */
-  idsToUpdateVI = new Set();
-
-  /**
-   * Track the ids whose model buffer must  be uploaded before rendering.
-   * @type {Set<string>}
-   */
-  idsToUpdateModel = new Set();
-
-  /**
-   * Add a geometric shape's model to this drawable.
-   * The modelUpdateTracker links ids to indices.
-   * @param {GeometricPrimitive} shape
-   */
-  _onShapeAdded(shape) {
-    // Add the shape id to vertices/indices tracking.
-    const id = shape.id;
-    const vo = shape.modelVO;
-    this.viTracker.addFacet({ id, newVertices: vo.vertices, newIndices: vo.indices });
-    this.viUpdateTracker.set(id, shape.modelVerticesVersion);
-    this.idsToUpdateVI.add(id);
-
-    // Add the shape id to model tracking.
-    this.modelMatrixTracker.addFacet({ id, newValues: shape.modelMatrix.model.arr });
-    this.modelUpdateTracker.set(id, shape.modelMatrix.dataVersion);
-    this.idsToUpdateModel.add(id);
-    return true;
-  }
-
-  /**
    * Update the geometric shape's model for this drawable.
    * @param {GeometricPrimitive} shape
    */
   _onShapeUpdated(shape) {
-    const id = shape.id;
-
     // Update vertices data. If we already have this data, no need to update it.
+    // Ensure these two are updated together.
     let res = false;
-    if ( this.viUpdateTracker.get(id) !== shape.modelVerticesVersion ) {
-      const vo = shape.modelVO;
-      this.viTracker.updateFacet(id, { newIndices: vo.indices, newVertices: vo.vertices });
-      this.viUpdateTracker.set(id, shape.modelVerticesVersion);
-      this.idsToUpdateVI.add(id);
+    if ( this.bufferChannels.aPosition.dataVersions.get(shape.id) !== shape.modelVerticesVersion ) {
+      this.bufferChannels.aPosition.updateData(shape);
+      this.bufferChannels.indices.updateData(shape);
       res = true;
     };
 
-    // Update model data. If we already have this data, no need to update it.
-    if ( this.modelUpdateTracker.get(id) !== shape.modelMatrix.dataVersion ) {
-      this.modelMatrixTracker.updateFacet(id, { newValues: shape.modelMatrix.model.arr });
-      this.modelUpdateTracker.set(id, shape.modelMatrix.dataVersion);
-      this.idsToUpdateModel.add(id);
-      res = true;
-    };
     return res;
   }
 
-  /**
-   * Delete the geometric shape's model for this drawable.
-   * @param {GeometricPrimitive} shape
-   */
-  _onShapeRemoved(shape) {
-    const id = shape.id;
-    this.viTracker.deleteFacet(id);
-    this.viUpdateTracker.delete(id);
-    this.modelMatrixTracker.deleteFacet(id);
-    this.modelUpdateTracker.delete(id);
-    return true;
-    // Don't need to update a deleted id; will be ignored by instancing.
-  }
-
-  // ----- NOTE: buffer updating ----- //
-
-  updateBuffers() {
-    this._syncTrackerToBuffer({
-      tracker: this.viTracker,
-      layoutStateKey: "viLayoutVersion",
-      idsToUpdate: this.idsToUpdateVI,
-    });
-    this._syncTrackerToBuffer({
-      tracker: this.modelMatrixTracker,
-      layoutStateKey: "modelLayoutVersion",
-      idsToUpdate: this.idsToUpdateModel,
-    });
-  }
-
-  _resizeBuffer(tracker) {
-    if ( tracker === this.viTracker ) this._resizeVIBuffer();
-    else this._resizeModelBuffer();
-  }
-
-  _updateBufferForId(id, tracker) {
-    if ( tracker === this.viTracker ) this._updateVIBufferForId(id);
-    else this._updateModelBufferForId(id);
-  }
-
-  /**
-   * Resize and update the entire model buffer on the GPU.
-   */
-  _resizeVIBuffer() {
-    const gl = this.gl;
-    const { vertices, indicesAdj } = this.viTracker.viewWholeBuffer();
-
-    // Resize the vertices buffer.
-    const vBuffer = this.attributeBufferInfo.attribs.aPosition.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
-
-    // Resize the indices buffer.
-    const iBuffer = this.attributeBufferInfo.indices;
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indicesAdj, gl.DYNAMIC_DRAW);
-
-    /*
-    // Update the model attribute with a new buffer.
-    this.attributeProperties.aPosition.data = this.verticesArray;
-    this.attributeProperties.aNormal.data = this.verticesArray;
-    this.attributeProperties.indices.data = this.indicesArray;
-
-    // Update the VAO with the new model buffer information.
-    this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
-    this.debugVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.debugProgramInfo, attribs);
-    */
-  }
-
-  /**
-   * Update the model buffer on the GPU for a specific id.
-   * TODO: Use applyConsecutively to update in larger chunks.
-   * @param {string} id
-   */
-  _updateVIBufferForId(id) {
-    const tracker = this.viTracker;
-    const gl = this.gl;
-    const vi = this.viTracker;
-    const { vertices, indicesAdj } = vi.viewFacetById(id);
-
-    // Vertices
-    const vBuffer = this.attributeBufferInfo.attribs.aPosition.buffer;
-    const vOffset = tracker.vertices.facetOffsetAtId(id) * tracker.vertices.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, vOffset, vertices);
-
-    const iBuffer = this.attributeBufferInfo.indices;
-    const iOffset = tracker.indices.facetOffsetAtId(id) * tracker.indices.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuffer);
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, iOffset, indicesAdj);
-  }
-
-
-  // ----- NOTE: Model buffer updating ----- //
-
-  /**
-   * Resize and update the entire model buffer on the GPU.
-   */
-  _resizeModelBuffer() {
-    const gl = this.gl;
-    const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
-    const mArray = this.modelMatrixTracker.viewWholeBuffer();
-
-    // Resize the GPU buffer.
-    // Use gl.bufferData instead of subData to reallocate the GPU memory to the new size.
-    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, mArray, gl.DYNAMIC_DRAW);
-
-    /*
-    // Update the model attribute with a new buffer.
-    this.attributeProperties.aModel.data = this.modelMatrixArray;
-    const attribs = this.attributeBufferInfo.attribs;
-    attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.attributeProperties.aModel }).aModel;
-
-    // Update the VAO with the new model buffer information.
-    this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
-    this.debugVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.debugProgramInfo, attribs);
-    */
-  }
-
-  /**
-   * Update the model buffer on the GPU for a specific id.
-   * TODO: Use applyConsecutively to update in larger chunks.
-   * @param {string} id
-   */
-  _updateModelBufferForId(id) {
-    const tracker = this.modelMatrixTracker;
-    const gl = this.gl;
-    const mBuffer = this.attributeBufferInfo.attribs.aModel.buffer;
-    const mOffset = tracker.facetOffsetAtId(id) * tracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, mOffset, tracker.viewFacetById(id));
-  }
 
   // ----- NOTE: Rendering ----- //
-  get instanceSet() {
+  get renderSet() {
     // Get the indices for each shape in the render set.
     // Shapes that do not belong to this primitive are ignored.
-    return super.instanceSet
+    return super.renderSet
       .filter(id => this.modelMatrixTracker.hasId(id))
-      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
   }
 
-  _draw() {
+  /**
+   * Indices of the renderSet shapes.
+   * @returns {number}
+   */
+  getInstanceSet() { return this.renderSet.map(id => this.modelMatrixTracker.facetIdMap.get(id));}
+
+  /**
+   * Draw a specific set of instances.
+   * @param {Set<number>} instances
+   */
+  _draw(instances) {
+    instances ??= this.getInstanceSet();
+    if ( !instances.size ) return;
+
     const nVertices = this.indicesArray.length;
     const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
     WebGL2.drawInstancedMatrixSet(
       this.gl,
-      this.instanceSet,
+      instances,
       nVertices,
       this.attributeBufferInfo.attribs.aModel,
       aModelAttribLoc,
@@ -880,12 +802,34 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
   /** @type {number} */
   static stride = 8; // Position (3) + Normal (3) + UV (2)
 
+  constructor(opts) {
+    super(opts);
+
+    this.registerBufferChannel(
+      "aAlphaThreshold",
+      this.alphaThresholdTracker,
+      shape => [shape.alphaThreshold],
+    );
+
+    this.registerBufferChannel(
+      "aTextureIndex",
+      this.textureIndexTracker,
+      shape => [this.textureData.indexMap.get(shape.textureURL)?.index || 0],
+    );
+  }
+
   // ----- NOTE: Attributes ----- //
 
   /** @type {Float32Array} */
   textureIndicesArray = new Int32Array(16);
 
-  get alphaThresholdArray() { return this.primitiveClass.alphaThresholdTracker.viewBuffer(); }
+  alphaThresholdTracker = new FixedLengthTrackingBuffer({ facetLengths: 1 });
+
+  get alphaThresholdArray() { return this.alphaThresholdTracker.viewWholeBuffer(); }
+
+  textureIndexTracker = new FixedLengthTrackingBuffer({ facetLengths: 1, type: Int32Array });
+
+  get textureIndexArray() { return this.textureIndexTracker.viewWholeBuffer(); }
 
   /**
    * Build the vertex and index buffers along with any other attributes.
@@ -910,13 +854,14 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
       data: this.alphaThresholdArray,
       type: this.gl.FLOAT,
       drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
+      stride: Float32Array.BYTES_PER_ELEMENT * 1,
       divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
     }
 
     // Texture index, handled by this class.
     attrProps.aTextureIndex = {
       numComponents: 1, // It's just a single int (0 to 15)
-      data: this.textureIndicesArray,
+      data: this.textureIndexArray,
       type: this.gl.INT, // Force WebGL to use vertexAttribIPointer,
       drawType: this.gl.DYNAMIC_DRAW, // We will update this every frame/batch
       divisor: 1, // CRITICAL: This tells WebGL it is a per-instance attribute
@@ -937,9 +882,6 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
   // ----- NOTE: Textures ----- //
 
   #fallbackTexture;
-
-  /** @type {Map<url, WebGLTexture>} */
-  textures = new Map();
 
   static textureOptions(gl) {
     return {
@@ -965,6 +907,7 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     // Set a fallback texture.
     const gl = this.gl;
     this.#fallbackTexture ??= twgl.createTexture(gl, { src: [0, 0, 0, 0] });
+    this.textureData.sourceMap.set("", this.#fallbackTexture);
 
     // Array of hardware texture units we will use for batching.
     // Use Int32 to match what gl.uniform1iv expects.
@@ -994,9 +937,66 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     this.webGL2.useProgram(null);
   }
 
-  _initializeTexture(shape) {
+  /** @type {object<number>} */
+  aTextureIndexLoc = { program: 0, debug: 0 };
+
+  /** @type {object<number>} */
+  aAlphaThresholdLoc = { program: 0, debug: 0 };
+
+  // ----- NOTE: Texture batching ------ //
+
+  /**
+   * Link a specific texture url to a specific batch index.
+   * @type {string[][]} Batch and index number.
+   */
+  textureData = {
+    batchIndices: [[]], /** @type {url[15][]} */
+    sourceMap: new Map(), /** @type {Map<url, WebGLTexture>} */
+    indexMap: new Map(), /** @type {Map<url, { batch: number, index: number}>} */
+    idMap: new Map(), /** @type {Map<string, url>} */
+  }
+
+  /**
+   * Add a texture to the tracking set.
+   * @param {GeometricPrimitive} shape
+   * @returns {object}
+   * - @prop {number} index
+   * - @prop {number} batch
+   */
+  trackTexture(shape) {
+    const id = shape.id;
+    if ( this.textureData.idMap.has(id) ) return;
+
     const src = shape.textureURL;
-    if ( this.textures.has(src) ) return;
+    this.textureData.idMap.set(id, src);
+    if ( this.textureData.indexMap.has(src) ) return;
+
+    this._initializeWebGLTexture(shape);
+    this.addToNextTextureSlot(src);
+  }
+
+  /**
+   * @returns {object<batch: {number}, index: {number}>}
+   */
+  addToNextTextureSlot(src) {
+    const batchIndices = this.textureData.batchIndices;
+    const numBatches = batchIndices.length;
+    for ( let batch = 0; batch < numBatches; batch += 1 ) {
+      const batchArr = batchIndices[batch];
+      const index = batchArr.length;
+      if ( index < 16 ) {
+        batchArr.push(src);
+        return;
+      }
+    }
+    batchIndices.push([src]);
+    const slot = { batch: numBatches, index: 0 };
+    this.textureData.indexMap.set(src, slot);
+  }
+
+  _initializeWebGLTexture(shape) {
+    const src = shape.textureURL;
+    if ( this.textureData.sourceMap.has(src) ) return;
 
     const textureOpts = this.constructor.textureOptions(this.gl);
 
@@ -1012,125 +1012,39 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     else textureOpts.src = src;
 
     // Could pass a third callback argument to createTexture to rerender if async loading, but challenging to implement here.
-    this.textures.set(src, twgl.createTexture(this.gl, textureOpts));
+    this.textureData.sourceMap.set(src, twgl.createTexture(this.gl, textureOpts));
   }
 
 
   // ----- NOTE: Shape and model tracking ----- //
 
-
-  _resizeTextureAttributeArrays(requiredSize) {
-    let newSize = this.textureIndicesArray.length * 2;
-    while ( newSize < requiredSize ) newSize *= 2;
-    if ( this.textureIndicesArray.length >= requiredSize ) return;
-
-    const newIndicesArray = new Int32Array(newSize);
-    newIndicesArray.set(this.textureIndicesArray);
-    this.textureIndicesArray = newIndicesArray;
-
-    const newAlphaArray = new Float32Array(newSize);
-    newAlphaArray.set(this.alphaThresholdArray);
-    this.alphaThresholdArray = newAlphaArray;
-
-    this.#resizeNeeded = true;
-  }
-
-  #resizeNeeded = false;
-
-  _ensureBufferCapacity(requiredSize) {
-    // Resize the CPU array if necessary.
-    this._resizeTextureAttributeArrays(requiredSize);
-
-    if ( !this.#resizeNeeded ) return;
-
-    // Resize the GPU buffer.
-    const gl = this.gl;
-    const tBuffer = this.attributeBufferInfo.attribs.aTextureIndex.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, tBuffer);
-
-    // Use gl.bufferData instead of subData to reallocate the GPU memory to the new size.
-    gl.bufferData(gl.ARRAY_BUFFER, this.textureIndicesArray, gl.DYNAMIC_DRAW);
-
-    const aBuffer = this.attributeBufferInfo.attribs.aAlphaThreshold.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, aBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.alphaThresholdArray, gl.DYNAMIC_DRAW);
-
-    this.#resizeNeeded = false;
-  }
-
   _onShapeAdded(shape) {
     if ( !super._onShapeAdded(shape) ) return false;
 
-    // Need direction, texture url, texture alphaThreshold
-    // TODO: Fix
-    const idx = shape.trackerIndex;
-
-    // Assign the index to a texture url.
-    const src = shape.textureURL;
-    let texUnit = -1;
-    for ( const { textureUnits, instances } of this.textureBatches ) {
-      texUnit = textureUnits.indexOf(src);
-      if ( !~texUnit ) {
-        if ( textureUnits.length < 16 ) {
-          // Add the geom's texture to this batch.
-          texUnit = textureUnits.length;
-          textureUnits.push(src);
-        } else continue;
-      }
-      instances.add(idx);
-      break;
-    }
-    if ( !~texUnit ) {
-      texUnit = 0;
-      this.textureBatches.push({ instances: new Set([idx]), textureUnits: [src] });
-    }
-
-    // Update the CPU array size if necessary.
-    // (Save the GPU upload for later.)
-    this._resizeTextureAttributeArrays(idx + 1); // Add 1 to account for 0-indexing.
-
-    // Update the texture arrays.
-    this.textureIndicesArray[idx] = texUnit;
-    return true;
+    // Track this shape's texture information, for batch drawing of the textures.
+    this.trackTexture(shape);
   }
 
-  // _onShapeUpdated(shape) {}
-
-  // _onShapeRemoved(shape) {}
-
-
-
-  prerender() {
-    super.prerender();
-
-    const maxInstance = Math.max(...this.instanceSet);
-    this._ensureBufferCapacity(maxInstance + 1); // Add 1 to account for 0-indexing.
-
-    // Upload the updated texture indices.
-    const gl = this.gl;
-    const tBuffer = this.attributeBufferInfo.attribs.aTextureIndex.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, tBuffer);
-
-    // Only the portion relevant for these instances.
-    const tDataSubArray = this.textureIndicesArray.subarray(0, maxInstance + 1);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, tDataSubArray);
-
-    // Same for alpha threshold.
-    const aBuffer = this.attributeBufferInfo.attribs.aAlphaThreshold.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, aBuffer);
-    const aDataSubArray = this.alphaThresholdArray.subarray(0, maxInstance + 1);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, aDataSubArray);
+  _onShapeUpdated(shape) {
+    // Did this source change? If so, its index likely changed.
+    if ( this.textureData.idMap.get(shape.id) !== shape.textureURL ) this.trackTexture(shape);
+    return super._onShapeUpdated(shape);
   }
 
-  get instanceSet() {
-    return super.instanceSet
-      .filter(id => (this.trackedIds.get(id) instanceof this.primitiveClass) && this.modelMatrixTracker.hasId(id))
-      .map(id => this.modelMatrixTracker.facetIdMap.get(id))
+  // _onShapeRemoved(shape) {} // Keep the indexed texture url indefinitely.
+
+  getInstanceSet(renderSet, batchURLs) {
+    const batchRenderSet = new Set();
+    for ( const shape of renderSet ) {
+      const src = shape.textureURL;
+      if ( batchURLs.has(src) ) batchRenderSet.add(shape);
+    }
+    return super.getInstanceSet(batchRenderSet);
   }
 
   _draw() {
     const gl = this.gl;
-    const instanceSet = this.instanceSet;
+    const renderSet = this.renderSet;
 
     // Construct the functions needed to advance the instance attributes.
     const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
@@ -1147,19 +1061,21 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     this.webGL2.setCulling(false);
 
     // Draw the textures in batches.
-    for ( const { instances, textureUnits } of this.textureBatches ) {
-      // Bind the texture units for the batch.
-      for ( let i = 0, iMax = textureUnits.length; i < iMax; i += 1 ) {
-        const url = textureUnits[i];
+    for ( let i = 0, n = this.textureData.batchIndices.length; i < n; i += 1 ) {
+      const batchURLArray = this.textureData.batchIndices[i];
+      for ( let i = 0, iMax = batchURLArray.length; i < iMax; i += 1 ) {
+        const url = batchURLArray[i];
         gl.activeTexture(gl.TEXTURE0 + i);
 
         // Use cached texture or an initialized fallback.
-        const tex = this.textures.get(url) || this.#fallbackTexture;
+        const tex = this.textureData.sourceMap.get(url) || this.#fallbackTexture;
         gl.bindTexture(gl.TEXTURE_2D, tex);
       }
 
-      // Draw all the instances for this batch.
-      const batchInstances = instanceSet.intersection(instances);
+      // Determine which instances, of the entire instance set, we can draw with this batch of textures.
+      const batchURLs = new Set(batchURLArray);
+      const batchInstances = this.getInstanceSet(renderSet, batchURLs);
+      if ( !batchInstances.size ) break;
 
       // From super._draw.
       WebGL2.drawInstancedSet(
@@ -1173,9 +1089,10 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
 
   clearInstances() {
     super.clearInstances();
-    this.textureBatches.length = 0;
-    this.textureIndicesArray.fill(0);
-    this.alphaThresholdArray.fill(0);
+    this.textureData.batchIndices.length = 0;
+    this.textureData.sourceMap.clear();
+    this.textureData.indexMap.clear();
+    this.textureData.idMap.clear();
   }
 }
 
@@ -1227,39 +1144,36 @@ const DirectionalWallMixin = superclass => class extends superclass {
     this.biDirectional.delete(id);
   }
 
-  _draw() {
+  getInstanceSet(directionSet) {
+    const renderSet = this.renderSet;
+    const ixSet = renderSet.intersection(directionSet);
+    return super.getInstanceSet(ixSet);
+  }
+
+  _draw(_instances) {
     const webGL2 = this.webGL2;
     const { frontDirectional, backDirectional, biDirectional } = this;
 
-    const renderFront = this._renderSet.intersection(frontDirectional);
-    const renderBack = this._renderSet.intersection(backDirectional);
-    const renderBi = this._renderSet.intersection(biDirectional);
-    const oldSet = this._renderSet;
+    // Bidirectional
+    webGL2.setCulling(false);
+    super._draw(this.getInstanceSet(biDirectional));
 
-    if ( renderBi.size ) {
-      webGL2.setCulling(false);
-      this._renderSet = renderBi;
-      super._draw();
-    }
-    if ( renderFront.size ) {
-      webGL2.setCulling(true);
-      webGL2.setCullFace("BACK");
-      this._renderSet = renderFront;
-      super._draw();
-    }
-    if ( renderBack.size ) {
-      webGL2.setCulling(true);
-      webGL2.setCullFace("FRONT");
-      this._renderSet = renderBack;
-      super._draw();
-    }
-    this._renderSet = oldSet;
+    // Front
+    webGL2.setCulling(true);
+    webGL2.setCullFace("BACK");
+    super._draw(this.getInstanceSet(frontDirectional));
+
+    // Back
+    webGL2.setCulling(true);
+    webGL2.setCullFace("FRONT");
+    super._draw(this.getInstanceSet(backDirectional));
   }
 }
 
 /**
  * Handle constrained token target drawing.
  * Uses a separate fragment shader to test whether a wall segment blocks the viewpoint.
+ * The shader tests if a 2d ray from the fragment location to the token center intersects the 2d wall.
  */
 const ConstrainedTokenMixin = superclass => class extends superclass {
 
@@ -1305,6 +1219,31 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     using ctr = tokenShape.center;
     out.sort((plane0, plane1) => plane0.distanceToPoint(ctr) - plane1.distanceToPoint(ctr));
     return out.map(obj => obj.coords);
+  }
+
+  constructor(opts) {
+    super(opts);
+
+    this.registerBufferChannel(
+      "aNumClipPlanes",
+      this.numClipPlanesTracker,
+      shape => [this._calculateNumberClippingPlanes(shape)],
+    );
+
+    this.registerBufferChannel(
+      "aClipPlanes_0",
+      this.clipPlanesTracker,
+      shape => this._calculateClippingWallPlanes(shape),
+    );
+
+    this.registerBufferChannel(
+      "aTokenCenter",
+      this.tokenCenterTracker,
+      shape => {
+        const ctr = shape.center;
+        return [ctr.x, ctr.y];
+      },
+    );
   }
 
   _defineAttributeProperties() {
@@ -1355,6 +1294,20 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
         divisor: 1,
       };
     }
+
+    this.aTokenCenterLoc.program = this.gl.getAttribLocation(this.programInfo.program, "aTokenCenter");
+    this.aNumClipPlanesLoc.program = this.gl.getAttribLocation(this.programInfo.program, "aNumClipPlanes");
+
+    this.aTokenCenterLoc.debug = this.gl.getAttribLocation(this.debugProgramInfo.program, "aTokenCenter");
+    this.aNumClipPlanesLoc.debug = this.gl.getAttribLocation(this.debugProgramInfo.program, "aNumClipPlanes");
+
+    this.aClipPlanesLocs.program.length = this.constructor.NUM_CONSTRAINING_WALLS;
+    this.aClipPlanesLocs.debug.length = this.constructor.NUM_CONSTRAINING_WALLS;
+    for ( let i = 0; i < this.constructor.NUM_CONSTRAINING_WALLS; i += 1 ) {
+      this.aClipPlanesLocs.program[i] = this.gl.getAttribLocation(this.programInfo.program, `aClipPlanes_${i}`);
+      this.aClipPlanesLocs.debug[i] = this.gl.getAttribLocation(this.debugProgramInfo.program, `aClipPlanes_${i}`);
+    }
+
     return attrProps;
   }
 
@@ -1376,26 +1329,6 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
   /** @type {FixedLengthTrackingBuffer} */
   tokenCenterTracker = new FixedLengthTrackingBuffer({ facetLengths: 2 });
 
-  /**
-   * Track the ids whose clip tracker buffer must  be uploaded before rendering.
-   * @type {Set<string>}
-   */
-  idsToUpdateClipPlanes = new Set();
-
-  /**
-   * Track the layoutVersion of the clipPlanesTracker.
-   * When it changes, the entire buffer must be updated.
-   * @type {number}
-   */
-  clipPlanesLayoutVersion = 0;
-
-  /**
-   * Track the data version of the clipPlanesTracker.
-   * When it changes, the buffer for that id must be updated.
-   * @type {Map<string, number>}
-   */
-  clipPlanesUpdateTracker = new Map();
-
   /** @type {Float32Array} */
   get clipPlanesArray() { return this.clipPlanesTracker.viewWholeBuffer(); }
 
@@ -1409,71 +1342,29 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
 
   senseType = "sight";
 
-  _onShapeAdded(shape) {
-    if ( !super._onShapeAdded(shape) ) return false;
-    const wallSegments = this.constructor.intersectingWallSegments(shape, this.levelId, this.senseType);
-    this._setClippingWallPlanes(shape, wallSegments);
-    this.idsToUpdateClipPlanes.add(shape.id);
-    return true;
+  _calculateNumberClippingPlanes(tokenShape, wallSegments) {
+    wallSegments ??= this.constructor.intersectingWallSegments(tokenShape, this.levelId, this.senseType);
+    return Math.min(this.constructor.NUM_CONSTRAINING_WALLS, wallSegments.length);
   }
 
-  _onShapeUpdated(shape) {
-    if ( !super._onShapeUpdated(shape) ) return false;
-    const wallSegments = this.constructor.intersectingWallSegments(shape, this.levelId, this.senseType);
-    this._setClippingWallPlanes(shape, wallSegments);
-    this.idsToUpdateClipPlanes.add(shape.id);
-    return true;
-  }
-
-  _onShapeRemoved(shape) {
-    if ( !super._onShapeRemoved(shape) ) return false;
-    const id = shape.id;
-    this.numClipPlanesTracker.deleteFacet(id);
-    this.clipPlanesTracker.deleteFacet(id);
-    this.tokenCenterTracker.deleteFacet(id);
-    return true;
-  }
-
-  /**
-   * @param {GeometricPrimitive} tokenShape
-   * @param {GeometricPrimitive[]} wallShapes
-   */
-  _setClippingWallPlanes(tokenShape, wallSegments) {
-    using ctr = tokenShape.center;
+  _calculateClippingWallPlanes(tokenShape) {
+    const wallSegments = this.constructor.intersectingWallSegments(tokenShape, this.levelId, this.senseType);
+    const numClipPlanes = this._calculateNumberClippingPlanes(tokenShape, wallSegments);
 
     // Define the normals representing planes.
     // All wall segment geoms share the same plane.
-    const maxWalls = this.constructor.NUM_CONSTRAINING_WALLS;
-    const numClipPlanes = Math.min(maxWalls, wallSegments.length);
-    const id = tokenShape.id;
     const clipPlanes = new Float32Array(4 * this.constructor.NUM_CONSTRAINING_WALLS);
     for ( let i = 0; i < numClipPlanes; i += 1 ) clipPlanes.set(wallSegments[i], i * 4);
-
-    // Update the trackers.
-    this.numClipPlanesTracker.updateFacet(id, { newValues: [numClipPlanes] });
-    this.clipPlanesTracker.updateFacet(id, { newValues: clipPlanes });
-    this.tokenCenterTracker.updateFacet(id, { newValues: [ctr.x, ctr.y] });
+    return clipPlanes;
   }
 
-  // ----- NOTE: numClipPlanes buffer updating ----- //
+  // ----- NOTE: Rendering ----- //
 
-  /**
-   * Update the model buffer only as needed.
-   * May update the entire buffer if it needs to be resize.
-   * Otherwise will update the ids marked as requiring an update.
-   */
-  updateClipPlanesBuffer() {
-    if ( this.clipPlanesLayoutVersion !== this.clipPlanesTracker.layoutVersion ) {
-      this._resizeClipPlanesBuffer();
-      this.clipPlanesLayoutVersion = this.clipPlanesTracker.layoutVersion;
-    } else this.idsToUpdateClipPlanes.forEach(id => this._updateClipPlanesBufferForId(id));
-    this.idsToUpdateClipPlanes.clear();
-  }
+  _draw(instances) {
+    instances ??= this.getInstanceSet();
+    if ( !instances.size ) return;
 
-  /**
-   * Resize and update the entire model buffer on the GPU.
-   */
-  _resizeClipPlanesBuffer() {
+    // Construct the functions needed to advance the instance attributes.
     const gl = this.gl;
     const advanceFns = Array(this.constructor.NUM_CONSTRAINING_WALLS + 3);
     let i = 0;
@@ -1488,61 +1379,16 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
       const aClipPlanesLocs = this.debugView ? this.aClipPlanesLocs.debug : this.aClipPlanesLocs.program;
       advanceFns[i++] = WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs[`aClipPlanes_${j}`], aClipPlanesLocs[j]);
     }
-    // Token center buffer.
-    const tcBuffer = this.attributeBufferInfo.attribs.aTokenCenter.buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, tcBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, this.tokenCenterArray, gl.DYNAMIC_DRAW);
+    const nVertices = this.indicesArray.length;
 
-    /*
-    // Update the model attribute with a new buffer.
-    this.attributeProperties.aModel.data = this.modelMatrixArray;
-    const attribs = this.attributeBufferInfo.attribs;
-    attribs.aModel = twgl.createAttribsFromArrays(this.gl, { aModel: this.attributeProperties.aModel }).aModel;
+    // From super._draw.
+    WebGL2.drawInstancedSet(
+      gl,
+      instances,
+      nVertices,
+      advanceFns,
+    );
 
-    // Update the VAO with the new model buffer information.
-    this.vertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.programInfo, attribs);
-    this.debugVertexArrayInfo = twgl.createVertexArrayInfo(this.gl, this.debugProgramInfo, attribs);
-    */
-  }
-
-  /**
-   * Update the model buffer on the GPU for a specific id.
-   * TODO: Use applyConsecutively to update in larger chunks.
-   * @param {string} id
-   */
-  _updateClipPlanesBufferForId(id) {
-    const gl = this.gl;
-
-    // Clip planes buffer.
-    const cpTracker = this.clipPlanesTracker;
-    const cpOffset = cpTracker.facetOffsetAtId(id) * cpTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    const cpBuffer = this.attributeBufferInfo.attribs["aClipPlanes_0"].buffer;
-    gl.bindBuffer(gl.ARRAY_BUFFER, cpBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, cpOffset, cpTracker.viewFacetById(id));
-
-    // Number of clip planes buffer.
-    const ncTracker = this.numClipPlanesTracker;
-    const ncBuffer = this.attributeBufferInfo.attribs.aNumClipPlanes.buffer;
-    const ncOffset = ncTracker.facetOffsetAtId(id) * ncTracker.type.BYTES_PER_ELEMENT; // 4 * 16 * idx
-    gl.bindBuffer(gl.ARRAY_BUFFER, ncBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, ncOffset, ncTracker.viewFacetById(id));
-
-    // Token center buffer.
-    const tcTracker = this.tokenCenterTracker;
-    const tcBuffer = this.attributeBufferInfo.attribs.aTokenCenter.buffer;
-    const tcOffset = tcTracker.facetOffsetAtId(id) * tcTracker.type.BYTES_PER_ELEMENT;
-    gl.bindBuffer(gl.ARRAY_BUFFER, tcBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, tcOffset, tcTracker.viewFacetById(id));
-  }
-
-  // ----- NOTE: Rendering ----- //
-
-  /**
-   * Prerender triggers updates to the GPU data for shapes in the render set.
-   */
-  prerender() {
-    super.prerender();
-    this.updateClipPlanesBuffer();
   }
 }
 
