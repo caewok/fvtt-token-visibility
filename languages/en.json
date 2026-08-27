@@ -125,6 +125,14 @@
     "tokenvisibility.settings.submenu.Hint": "Hint",
 
     "tokenvisibility.settings.submenu.notifyDND5e": "Changing settings to dnd5e.",
-    "tokenvisibility.settings.submenu.notify3d": "Changing settings to 3d."
+    "tokenvisibility.settings.submenu.notify3d": "Changing settings to 3d.",
 
+    "tokenvisibility.tile-config.tileAlphaShape.name": "Tile Visible Shape",
+    "tokenvisibility.tile-config.tileAlphaShape.hint": "Select how the tile should be treated for testing visibility.",
+    "tokenvisibility.tile-config.options.full": "Full Rectangle",
+    "tokenvisibility.tile-config.options.boundingBox": "Alpha Bounding Rectangle",
+    "tokenvisibility.tile-config.options.boundingPolygon": "Alpha Bounding Polygon",
+    "tokenvisibility.tile-config.options.polygons": "Polygon with Holes",
+    "tokenvisibility.tile-config.options.calculated": "Calculated",
+    "tokenvisibility.tile-config.options.ignore": "Does Not Block"
  }

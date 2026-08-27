@@ -1,0 +1,16 @@
+<fieldset>
+  <legend>Adv. Token Visibility / Adv. Token Cover</legend>
+
+    <!-- Select tile shape -->
+    <div class="form-group" id="tokenvisibility-tile-config-tileAlphaShape">
+      <label>{{ localize "tokenvisibility.tile-config.tileAlphaShape.name" }} </label>
+      <div class="form-fields">
+        <select id="tileAlphaShape" name="flags.tokenvisibility.tileAlphaShape" class="tokenvisibility">
+          {{ selectOptions tokenvisibility.tileAlphaShapeOptions selected=tokenvisibility.selectedTileAlphaShape localize=true }}
+        </select>
+      </div>
+      <p class="hint">{{ localize "tokenvisibility.tile-config.tileAlphaShape.hint" }}</p>
+    </div>
+
+  </legend>
+</fieldset>

@@ -10,6 +10,7 @@ PIXI,
 
 import { MODULE_ID } from "./const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
+import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
 
 // Load the geometry library.
 import "./geometry/registration.js";
@@ -219,6 +220,8 @@ Hooks.once("init", function() {
     LightStatusTracker,
     twgl,
   };
+
+  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(_value => console.debug(`${MODULE_ID}|Templates loaded.`));
 });
 
 

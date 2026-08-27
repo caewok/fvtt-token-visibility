@@ -12,6 +12,8 @@ import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasic
 import { PATCHES as PATCHES_Settings } from "./ModuleSettingsAbstract.js";
 import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
+import { PATCHES as PATCHES_TileConfig } from "./LOS/TileConfig.js";
+import { PATCHES as PATCHES_LevelConfig } from "./LOS/LevelConfig.js";
 
 const PATCHES = {
   Canvas: PATCHES_Canvas,
@@ -21,6 +23,8 @@ const PATCHES = {
   "foundry.helpers.ClientSettings": PATCHES_Settings,
   SettingsConfig: PATCHES_SettingsConfig,
   "foundry.canvas.placeables.Token": PATCHES_Token,
+  "foundry.applications.sheets.TileConfig": PATCHES_TileConfig,
+  "foundry.applications.sheets.LevelConfig": PATCHES_LevelConfig,
 };
 
 export const PATCHER = new Patcher();

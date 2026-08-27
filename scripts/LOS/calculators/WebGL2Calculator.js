@@ -18,10 +18,6 @@ import { log } from "../util.js";
 // Base folder
 import { MODULE_ID } from "../../const.js";
 
-// Geometry folder
-import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
-
-
 
 export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 
@@ -194,6 +190,12 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
       lastResult.data.targetCount = res.red
     }
     return lastResult;
+  }
+
+  _drawCanvasDebug(result, debugDraw, otOpts = {}) {
+    otOpts.tileSubtype ??= "boundarySubtype";
+    otOpts.levelSubtype ??= "boundarySubtype";
+    super._drawCanvasDebug(result, debugDraw, otOpts);
   }
 
   static destroy() {
