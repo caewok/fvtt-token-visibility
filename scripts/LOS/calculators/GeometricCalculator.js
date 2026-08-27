@@ -6,12 +6,10 @@ PIXI,
 "use strict";
 
 // Base folder
-import { MODULE_ID } from "../../const.js";
 import { Settings } from "../../settings.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { TILE_THRESHOLD_SHAPE_OPTIONS } from "../const.js";
 import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 
 // Geometry
@@ -112,25 +110,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    */
   *iterateSolidObstacleFaces() {
     const ot = this.occlusionTester;
-    const excludedObstacles = new Set(["terrainWalls", "tiles", "foregroundLevels", "backgroundLevels", "tokens"]);
+    const excludedObstacles = new Set(["terrainWalls"]);
     let includeObstacles = ot.constructor.OBSTACLE_KEYS.difference(excludedObstacles);
-    yield* this._iterateFacesForObstacles({ includeObstacles });
-
-    // Handle token obstacles, which vary based on constraint.
-    includeObstacles = new Set(["tokens"]);
-    yield* this._iterateFacesForObstacles({ includeObstacles, geomSubType: "constrained" });
-
-    // Handle tiles and levels, which vary based on shape type.
-    let geomSubType;
-    switch ( CONFIG[MODULE_ID].tileThresholdShape || TILE_THRESHOLD_SHAPE_OPTIONS.RECTANGLE ) {
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_TRIANGLES: geomSubType = "triangles"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS: geomSubType = "polygons"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_POLYGON: geomSubType = "boundingPolygon"; break;
-      case TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_BOUNDING_BOX: geomSubType = "boundingRect"; break;
-      default: geomSubType = "full";
-    }
-    includeObstacles = new Set(["tiles", "foregroundLevels", "backgroundLevels"]);
-    yield* this._iterateFacesForObstacles({ includeObstacles, geomSubType });
+    yield* this._iterateFacesForObstacles({ includeObstacles, geomSubType: "subtype" });
   }
 
   /**

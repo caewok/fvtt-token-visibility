@@ -4,11 +4,33 @@ Hooks
 */
 "use strict";
 
+import { MODULE_ID } from "../const.js";
+
+export const TEMPLATES = {
+  TILE: `modules/${MODULE_ID}/scripts/LOS/templates/tile-config.html`,
+};
+
+/** @type {enum<string>} */
+export const TILE_THRESHOLD_SHAPE_OPTIONS = {
+  RECTANGLE: "full", // Fastest, but only trims rectangular transparent border without considering holes or irregular shapes.
+  ALPHA_TRIANGLES: "triangles", // In testing, this seems very slow.
+  ALPHA_POLYGONS: "polygons", // Much faster than triangles.
+  ALPHA_BOUNDING_BOX: "boundingRect",   // Just the outer alpha box.
+  ALPHA_BOUNDING_POLYGON: "boundingPolygon", // The outer alpha polygon.
+};
+
 export const FLAGS = {
   CUSTOM_TOKENS: {
     FILE_LOC: "customShapeFile",
     NAME: "customShapeName",
     OFFSET: "customShapeOffset",
+  },
+
+  TILE_ALPHA_SHAPE: "tileAlphaShape",
+  TILE_ALPHA_SHAPE_OPTIONS: {
+    ...TILE_THRESHOLD_SHAPE_OPTIONS,
+    CALCULATED: "calculated",
+    IGNORE: "ignore",
   },
 };
 
@@ -27,14 +49,6 @@ export const TRACKER_IDS = {
   LIGHT_METER: "lightMeter",
 };
 
-/** @type {enum<string>} */
-export const TILE_THRESHOLD_SHAPE_OPTIONS = {
-  RECTANGLE: "full", // Fastest, but only trims rectangular transparent border without considering holes or irregular shapes.
-  ALPHA_TRIANGLES: "triangles", // In testing, this seems very slow.
-  ALPHA_POLYGONS: "polygons", // Much faster than triangles.
-  ALPHA_BOUNDING_BOX: "boundingRect",   // Just the outer alpha box.
-  ALPHA_BOUNDING_POLYGON: "boundingPolygon", // The outer alpha polygon.
-};
 
 // Track certain modules that complement features of this module.
 export const OTHER_MODULES = {

@@ -1,6 +1,7 @@
 /* globals
 CONFIG,
 foundry,
+Handlebars,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -8,6 +9,23 @@ PIXI,
 
 import { EPSILON, MODULE_ID } from "../const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
+
+
+/**
+ * Synchronous version of renderTemplate.
+ * Requires the template to be already loaded.
+ * @param {string} path             The file path to the target HTML template
+ * @param {Object} data             A data object against which to compile the template
+ * @returns {string|undefined}      Returns the compiled and rendered template as a string
+ */
+export function renderTemplateSync(path, data) {
+  if ( !Object.hasOwn(Handlebars.partials, path) ) return;
+  const template = Handlebars.partials[path];
+  return template(data || {}, {
+    allowProtoMethodsByDefault: true,
+    allowProtoPropertiesByDefault: true
+  });
+}
 
 /**
  * Define a null set class and null set which always contains 0 elements.

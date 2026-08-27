@@ -6,7 +6,6 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "../../const.js";
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { approximateClamp } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
@@ -385,7 +384,7 @@ export class PercentVisibleCalculatorAbstract {
    * Draw various debug guides on the canvas.
    * @param {Draw} draw
    */
-  _drawCanvasDebug(result, debugDraw) {
+  _drawCanvasDebug(result, debugDraw, otOpts = {}) {
     // this._drawLineOfSight(debugDraw);
 
     // Draw the viewer vision radius to the token, accounting for 3d distance.
@@ -400,7 +399,10 @@ export class PercentVisibleCalculatorAbstract {
     }
 
     // Draw obstacle outlines.
-    this.occlusionTester._drawDetectedObjects(debugDraw, { tileSubtype: CONFIG[MODULE_ID].tileThresholdShape, tokenSubtype: "constrained" });
+    otOpts.tokenSubtype ??= "constrained";
+    otOpts.tileSubtype ??= "subtype";
+    otOpts.levelSubtype ??= "subtype";
+    this.occlusionTester._drawDetectedObjects(debugDraw, otOpts);
 
     // Draw frustum shape between viewer and target.
     this.occlusionTester._drawFrustum(debugDraw);

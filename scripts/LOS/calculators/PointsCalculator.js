@@ -100,6 +100,12 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     out.data.numPoints = Math.min(this.data.numPoints, other.data.numPoints);
     return out;
   }
+
+  _drawCanvasDebug(result, debugDraw, otOpts = {}) {
+    otOpts.tileSubtype ??= "boundarySubtype";
+    otOpts.levelSubtype ??= "boundarySubtype";
+    super._drawCanvasDebug(result, debugDraw, otOpts);
+  }
 }
 
 /**

@@ -820,9 +820,6 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
 
   // ----- NOTE: Attributes ----- //
 
-  /** @type {Float32Array} */
-  textureIndicesArray = new Int32Array(16);
-
   alphaThresholdTracker = new FixedLengthTrackingBuffer({ facetLengths: 1 });
 
   get alphaThresholdArray() { return this.alphaThresholdTracker.viewWholeBuffer(); }
@@ -1023,6 +1020,8 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
 
     // Track this shape's texture information, for batch drawing of the textures.
     this.trackTexture(shape);
+
+    return true;
   }
 
   _onShapeUpdated(shape) {
@@ -1035,9 +1034,11 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
 
   getInstanceSet(renderSet, batchURLs) {
     const batchRenderSet = new Set();
-    for ( const shape of renderSet ) {
+    for ( const id of renderSet ) {
+      const shape = this.trackedIds.get(id);
+      if ( !shape ) continue;
       const src = shape.textureURL;
-      if ( batchURLs.has(src) ) batchRenderSet.add(shape);
+      if ( batchURLs.has(src) ) batchRenderSet.add(id);
     }
     return super.getInstanceSet(batchRenderSet);
   }
@@ -1049,7 +1050,7 @@ export class TexturedInstancedDrawable extends InstancedDrawable {
     // Construct the functions needed to advance the instance attributes.
     const aModelAttribLoc = this.debugView ? this.aModelAttribLoc.debug : this.aModelAttribLoc.program;
     const aTextureIndexLoc = this.debugView ? this.aTextureIndexLoc.debug : this.aTextureIndexLoc.program;
-    const aAlphaThresholdLoc = this.debugView ? aAlphaThresholdLoc.debug : this.aAlphaThresholdLoc.program;
+    const aAlphaThresholdLoc = this.debugView ? this.aAlphaThresholdLoc.debug : this.aAlphaThresholdLoc.program;
     const advanceFns = [
       WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aModel, aModelAttribLoc),
       WebGL2._advanceInstanceFn(gl, this.attributeBufferInfo.attribs.aTextureIndex, aTextureIndexLoc),
