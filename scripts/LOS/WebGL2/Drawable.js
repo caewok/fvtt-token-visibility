@@ -1218,7 +1218,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
 
     // Sort by closest plane to the center of the token.
     using ctr = tokenShape.center;
-    out.sort((plane0, plane1) => plane0.distanceToPoint(ctr) - plane1.distanceToPoint(ctr));
+    out.sort((obj0, obj1) => obj0.plane.distanceToPoint(ctr) - obj1.plane.distanceToPoint(ctr));
     return out.map(obj => obj.coords);
   }
 
