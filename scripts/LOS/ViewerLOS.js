@@ -257,7 +257,7 @@ export class ViewerLOS {
 
   /** @type {PlaceableGeometry} */
   get targetGeometry() {
-    const type = this.calculator instanceof PercentVisibleCalculatorWebGL2 ? "full" : "constrained";
+    const type = this.calculator instanceof PercentVisibleCalculatorWebGL2 ? "full" : "subtype";
     return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target)[type];
   }
 
@@ -490,7 +490,7 @@ export class ViewerLOS {
    */
   static constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage = 0, tokenHeightPercentage = 1 } = {}) {
     if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
-      const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape).constrained;
+      const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape).subtype; // Constrained or full.
       tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
     }
 

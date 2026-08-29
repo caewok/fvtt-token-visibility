@@ -223,7 +223,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    */
   _draw3dDebug(result, draw, { width = 100, height = 100 } = []) {
     const mult = PIXI.Point.tmp.set(width, height);
-    const a = PIXI.Point.tmp;
+    const a = Point3d.tmp;
     const opts = {
       color: Draw.COLORS.blue,
       radius: 2,
