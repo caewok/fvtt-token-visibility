@@ -40,6 +40,13 @@
       "description": "Alternative token visibility rules"
     }
   ],
+
+  "documentTypes": {
+    "RegionBehavior": {
+      "blockSight": {}
+    }
+  },
+
   "url": "#{URL}#",
   "manifest": "#{MANIFEST}#",
   "download": "#{DOWNLOAD}#",

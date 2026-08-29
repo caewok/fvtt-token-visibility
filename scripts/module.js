@@ -2,13 +2,14 @@
 canvas,
 CONFIG,
 CONST,
+foundry,
 game,
 Hooks,
 PIXI,
 */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "./const.js";
+import { MODULE_ID, TRACKER_IDS, FA_ICONS } from "./const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
 
@@ -21,6 +22,9 @@ import { Settings, SETTINGS } from "./settings.js";
 
 // Trackers
 import { LightStatusTracker } from "./LightStatusTracker.js";
+
+// Regions
+import { BlockSightRegionBehaviorType } from "./BlockSightRegionBehaviorType.js";
 
 // For API
 import * as bench from "./benchmark.js";
@@ -45,11 +49,19 @@ import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 
 
+
 // Other self-executing hooks
 import "./changelog.js";
 
 
 Hooks.once("init", function() {
+  // Register the region behavior to trigger region blocking of sight.
+  Object.assign(CONFIG.RegionBehavior.dataModels, {
+    [`${MODULE_ID}.blockSight`]: BlockSightRegionBehaviorType,
+  });
+  CONFIG.RegionBehavior.typeIcons[`${MODULE_ID}.blockSight`] = FA_ICONS.BLOCK_SIGHT;
+
+
   // Load bitmap font
   // See https://www.adammarcwilliams.co.uk/creating-bitmap-text-pixi/
   // https://pixijs.com/8.x/examples/text/bitmap-text
