@@ -134,5 +134,7 @@
     "tokenvisibility.tile-config.options.boundingPolygon": "Alpha Bounding Polygon",
     "tokenvisibility.tile-config.options.polygons": "Polygon with Holes",
     "tokenvisibility.tile-config.options.calculated": "Calculated",
-    "tokenvisibility.tile-config.options.ignore": "Does Not Block"
+    "tokenvisibility.tile-config.options.ignore": "Does Not Block",
+
+    "TYPES.RegionBehavior.tokenvisibility.blockSight": "Block Sight"
  }

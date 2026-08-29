@@ -32,6 +32,11 @@ export const FLAGS = {
     CALCULATED: "calculated",
     IGNORE: "ignore",
   },
+  REGION_BLOCKING: "regionBlocking",
+  REGION_BLOCKING_OPTIONS: {
+    COVER: "cover",
+    SIGHT: "sight",
+  },
 };
 
 export const TRACKER_IDS = {
