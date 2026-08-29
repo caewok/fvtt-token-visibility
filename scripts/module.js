@@ -8,7 +8,7 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
 
@@ -265,7 +265,14 @@ Hooks.on("canvasReady", function() {
   CONFIG[MODULE_ID].occlusionTester = buildOcclusionTester();
 
   // Create a shared los calculator.
-  CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
+  const calc = CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
+
+  // Replace for any tokens already in the scene.
+  canvas.tokens.placeables.forEach(token => {
+    const losViewer = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY].losViewer;
+    if ( !losViewer ) return;
+    losViewer.calculator = calc;
+  });
 });
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);

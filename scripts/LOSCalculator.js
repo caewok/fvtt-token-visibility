@@ -118,7 +118,6 @@ export function getCurrentCalculatorClass() {
 export function buildLOSCalculator({ calcClass, occlusionTester, ...calcCfg } = {}) {
   calcClass ??= getCurrentCalculatorClass();
   occlusionTester ??= CONFIG[MODULE_ID].occlusionTester ?? buildOcclusionTester();
-
   const calculator = new calcClass();
   calculator.config = CalculatorConfig();
   calculator.config.set(calcCfg)
