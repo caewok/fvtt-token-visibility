@@ -4,7 +4,7 @@ foundry,
 */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "./const.js";
+import { MODULE_ID, TRACKER_IDS, REGION_BEHAVIORS } from "./const.js";
 import { Settings } from "./settings.js";
 import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
 import { pointIndexForSet } from "./LOS/SmallBitSet.js";
@@ -41,6 +41,11 @@ function TokenBlockingConfig() {
   });
 }
 
+function regionBlocks(regionD) {
+  const typeKey = `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}`;
+  return regionD.behaviors.some(b => b.type === typeKey);
+}
+
 /**
  * @returns {BlockingConfig}  See PercentVisibleCalculator.js
  */
@@ -54,6 +59,14 @@ export function BlockingConfig() {
     levels: {
       background: true,
       foreground: true,
+    },
+
+    filters: {
+      regions: [regionBlocks],
+      tiles: [],
+      tokens: [],
+      walls: [],
+      levels: [],
     },
   });
 }

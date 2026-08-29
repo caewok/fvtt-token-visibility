@@ -35,3 +35,7 @@ export const GEOMETRY_LIB_OPTS = {
 export const FA_ICONS = {
   BLOCK_SIGHT: "fa-solid fa-eye-low-vision", // https://fontawesome.com/icons/classic/solid/eye-low-vision
 };
+
+export const REGION_BEHAVIORS = {
+  BLOCK_SIGHT: "blockSight",
+};
