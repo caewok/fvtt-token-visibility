@@ -98,7 +98,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    */
   *iterateTargetFaces() {
     const vp = this.viewpoint;
-    for ( const face of this.targetShape.iterateFaces() ) {
+    for ( const face of this.targetShape.faces ) {
       if ( face.isFacing(vp) ) yield face;
     }
   }
@@ -143,10 +143,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    */
   *_iterateFacesForObstacleShape(shape) {
     const dir = shape.direction;
-    if ( !dir ) yield* shape.iterateFaces();
+    if ( !dir ) yield* shape.faces;
     else {
       const vp = this.viewpoint;
-      for ( const face of shape.iterateFaces() ) {
+      for ( const face of shape.faces ) {
         if ( dir * face.plane.whichSide(vp) < 0 ) continue;
         yield face;
       }

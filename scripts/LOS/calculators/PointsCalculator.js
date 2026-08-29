@@ -235,7 +235,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     // Draw the border for reference.
     const viewpoint = this.viewpoint
     const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
-    for ( const face of this.targetShape.iterateFaces()) {
+    for ( const face of this.targetShape.faces ) {
       if ( !face.isFacing(viewpoint) ) {
         drawOpts.alpha = 0.3;
         drawOpts.color = Draw.COLORS.gray;
