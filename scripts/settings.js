@@ -10,8 +10,7 @@ PIXI
 import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { buildDebugViewer, currentDebugViewerClass, currentCalculator, buildLOSCalculator } from "./LOSCalculator.js";
-import { pointIndexForSet } from "./LOS/SmallBitSet.js";
+import { buildDebugViewer, currentDebugViewerClass, buildLOSCalculator } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { LightStatusTracker } from "./LightStatusTracker.js";
 
@@ -567,17 +566,27 @@ export class Settings extends ModuleSettingsAbstract {
     // Update the shared calculator.
     CONFIG[MODULE_ID].losCalculator.destroy();
     CONFIG[MODULE_ID].losCalculator = null;
-    CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
+    const calc = CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
     CONFIG[MODULE_ID].losCalculator.initialize(); // Async.
+
+    // Set the calculator for existing viewers.
+    canvas.tokens.placeables.forEach(token => {
+      const losViewer = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY].losViewer;
+      if ( !losViewer ) return;
+      losViewer.calculator = calc;
+    });
 
     // Start up a new debug viewer.
     if ( this.get(this.KEYS.DEBUG.LOS) ) {
       this.destroyDebugViewer();
       this.initializeDebugViewer(value);
     }
+
+
   }
 }
 
+/*
 const configKeyForSetting = {
   [SETTINGS.LOS.TARGET.LARGE]: "largeTarget",
   [SETTINGS.LOS.TARGET.PERCENT]: "threshold",
@@ -595,3 +604,5 @@ const configKeyForSetting = {
   [SETTINGS.DEAD_TOKENS_BLOCK]: "blocking.tokens.dead",
   [SETTINGS.PRONE_TOKENS_BLOCK]: "blocking.tokens.prone",
 }
+*/
+
