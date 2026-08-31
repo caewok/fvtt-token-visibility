@@ -45,13 +45,13 @@ function renderLevelConfig(app, html, data) {
 
   const myHTML = renderTemplateSync(TEMPLATES.TILE, data);
   if ( !myHTML ) return;
-  const divSet = html.querySelector("section[data-application-part='body']");
+
   const newFormGroup = document.createElement("div");
   newFormGroup.classList.add("form-group");
   newFormGroup.innerHTML = myHTML;
 
-  const formGroups = divSet.getElementsByClassName("form-group");
-  formGroups[formGroups.length - 1].appendChild(newFormGroup);
+  const divSet = html.querySelector("section[data-application-part='body']");
+  divSet.appendChild(newFormGroup);
   app.setPosition(app.position);
 }
 
