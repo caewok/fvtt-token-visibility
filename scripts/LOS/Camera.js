@@ -48,6 +48,18 @@ export class Camera {
     lookAt: null,
   };
 
+  /**
+   * The inverse transpose of the perspective and look at matrices.
+   * Used for transforming polygon3d
+   * @param {mat4x4f} perspectiveM          The perspective matrix
+   * @param {mat4x4f} lookAtM               Matrix to shift world around a camera location
+   */
+  /** @type {object<Float32Array(16)|mat4>} */
+  #invTransposeM = {
+    perspective: null,
+    lookAt: null,
+  };
+
   /** @type {Float32Array(32)} */
   #arrayView = null;
 
@@ -104,6 +116,10 @@ export class Camera {
 
   #dirtyLookAt = true;
 
+  #dirtyPerspectiveTranspose = true;
+
+  #dirtyLookAtTranspose = true;
+
   #dirtyModel = true;
 
   #dirtyInverse = true;
@@ -112,6 +128,7 @@ export class Camera {
 
   set dirtyPerspective(value) {
     this.#dirtyPerspective ||= value;
+    this.#dirtyPerspectiveTranspose ||= value;
     this.#dirtyModel ||= value;
     this.#dirtyInverse ||= value;
   }
@@ -120,9 +137,14 @@ export class Camera {
 
   set dirtyLookAt(value) {
     this.#dirtyLookAt ||= value;
+    this.#dirtyLookAtTranspose ||= value;
     this.#dirtyModel ||= value;
     this.#dirtyInverse ||= value;
   }
+
+  get dirtyPerspectiveTranpose() { return this.#dirtyPerspectiveTranspose; }
+
+  get dirtyLookAtTranspose() { return this.#dirtyLookAtTranspose; }
 
   get dirtyModel() { return this.#dirtyModel; }
 
@@ -213,26 +235,30 @@ export class Camera {
 
   /** @type {MatrixFloat32<4x4>} */
   get perspectiveMatrix() {
-    if ( this.dirtyPerspective ) {
-      const p = this.#internalParams;
-      if ( this.perspectiveType === "orthogonal" ) {
-        this.#perspectiveFn(p.left, p.right, p.bottom, p.top, p.near, p.far, this.#M.perspective);
-      } else {
-        this.#perspectiveFn(p.fov, p.aspect, p.zNear, p.zFar, this.#M.perspective);
-      }
-      this.#M.perspective.multiply4x4(this.mirrorMatrix, this.#M.perspective);
-      this.#dirtyPerspective = false;
-    }
+    if ( this.dirtyPerspective ) this.#calculatePerspective();
     return this.#M.perspective;
+  }
+
+  #calculatePerspective() {
+    const p = this.#internalParams;
+    if ( this.perspectiveType === "orthogonal" ) {
+      this.#perspectiveFn(p.left, p.right, p.bottom, p.top, p.near, p.far, this.#M.perspective);
+    } else {
+      this.#perspectiveFn(p.fov, p.aspect, p.zNear, p.zFar, this.#M.perspective);
+    }
+    this.#M.perspective.multiply4x4(this.mirrorMatrix, this.#M.perspective);
+    this.#dirtyPerspective = false;
   }
 
   /** @type {Float32Array|mat4} */
   get lookAtMatrix() {
-    if ( this.dirtyLookAt ) {
-      MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
-      this.#dirtyLookAt = false;
-    }
+    if ( this.dirtyLookAt ) this.#calculateLookAt();
     return this.#M.lookAt;
+  }
+
+  #calculateLookAt() {
+    MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
+    this.#dirtyLookAt = false;
   }
 
   get modelMatrix() {
@@ -243,6 +269,23 @@ export class Camera {
     }
     return this.#modelMatrix;
   }
+
+
+  get invTransposePerspectiveMatrix() {
+    if ( this.dirtyPerspectiveTranspose ) {
+      this.perspectiveMatrix.invert(this.#invTransposeM.perspective).transpose(this.#invTransposeM.perspective);
+    }
+    return this.#invTransposeM.perspective;
+  }
+
+
+  get invTransposeLookAtMatrix() {
+    if ( this.dirtyLookAtTranspose ) {
+      this.lookAtMatrix.invert(this.#invTransposeM.lookAt).transpose(this.#invTransposeM.lookAt);
+    }
+    return this.#invTransposeM.perspective;
+  }
+
 
   get inverseModelMatrix() {
     if ( this.dirtyInverse ) {
@@ -288,6 +331,11 @@ export class Camera {
     this.#M.lookAt = keyMatrices[1].identity();
     const cameraBuffer = this.#M.perspective.arr.buffer;
     this.#arrayView = new Float32Array(cameraBuffer, 0, 32);
+
+    // Allocate inverse transpose matrices, used for transforming Polygon3d.
+    const invTransposeMatrices = MatrixFloat32.allocate4x4(2);
+    this.#invTransposeM.perspective = invTransposeMatrices[0].identity();
+    this.#invTransposeM.lookAt = invTransposeMatrices[1].identity();
 
     // Allocate model and inverse model matrix.
     const modelMatrices = MatrixFloat32.allocate4x4(2);
