@@ -21,6 +21,7 @@ import {
 } from "./Drawable.js";
 
 import { InstancedGeometricPrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
+import { EmptyGeometricPrimitive } from "../../geometry/placeable_geometry/EmptyGeometricPrimitive.js";
 
 export class LOSRendererWebGL2 {
 
@@ -233,6 +234,7 @@ export class LOSRendererWebGL2 {
    * Initialize all required framebuffers.
    */
   _initializeFramebuffer() {
+    this.#deleteFramebuffer();
     const gl = this.gl;
     const width = CONFIG[MODULE_ID].renderTextureSize || 128;
     const height = width;
@@ -252,6 +254,18 @@ export class LOSRendererWebGL2 {
 
     // Check if framebuffer is complete is done by twgl.createFramebufferInfo.
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  #deleteFramebuffer() {
+    const fb = this.fbInfo;
+    if ( !fb ) return;
+    const gl = this.gl;
+    gl.deleteFramebuffer(fb.framebuffer);
+    for ( const attachment of fb.attachments ?? [] ) {
+      if ( attachment instanceof WebGLRenderbuffer ) gl.deleteRenderbuffer(attachment);
+      else gl.deleteTexture(attachment);
+    }
+    this.fbInfo = null;
   }
 
   // ----- NOTE: Render pipeline ----- //
@@ -290,6 +304,7 @@ export class LOSRendererWebGL2 {
     // Helper to process any shape iteration.
     const processShapes = (shapes, targetSet, opts) => {
       for ( const shape of shapes ) {
+        if ( !shape.faces.length ) continue; // Skip empty shapes.
         const drawable = this.#getOrCacheDrawable(shape, opts);
         targetSet.add(drawable);
         drawable.addToRenderSet(shape);
@@ -311,6 +326,19 @@ export class LOSRendererWebGL2 {
     otOpts.includeObstacles = terrainObstacles;
     drawableOpts.constrained = false;
     processShapes(occlusionTester.iterateObstacleShapes(otOpts), this.drawables.terrainObstacles, drawableOpts);
+  }
+
+  /**
+   * Destroy the active drawables that are not held in the cache, and empty the active sets.
+   */
+  #releaseDrawables() {
+    const cached = new Set(this.drawableCaches.values());
+    for ( const set of Object.values(this.drawables) ) {
+      for ( const drawable of set ) {
+        if ( !cached.has(drawable) ) drawable.destroy();
+      }
+      set.clear();
+    }
   }
 
   #getOrCacheDrawable(primitive, { senseType = "sight", constrained = false, levelId = "" } = {}) {
@@ -361,7 +389,7 @@ export class LOSRendererWebGL2 {
       else if ( primitive.direction !== primitive.constructor.CULL_FACES.BACK ) drawableClass = DirectionalInstancedDrawable;
       else drawableClass = InstancedDrawable;
     } else {
-      if ( constrained ) new Error(`${this.constructor.name}##drawableClassForPrimitive|Constrained only uses instanced geometry.`);
+      if ( constrained ) throw new Error(`${this.constructor.name}##drawableClassForPrimitive|Constrained only uses instanced geometry.`);
       drawableClass = this.constructor.USE_MULTI_MODEL ? MultiModelDrawable : ModelDrawable;
     }
     return drawableClass;
@@ -491,5 +519,17 @@ export class LOSRendererWebGL2 {
     webGL2.setDepthMask(true);
   }
 
-  destroy() {}
+  destroy() {
+    this.#releaseDrawables();
+    for ( const drawable of this.drawableCaches.values() ) drawable.destroy();
+    this.drawableCaches.clear();
+
+    const gl = this.gl;
+    if ( this.buffer.camera ) gl.deleteBuffer(this.buffer.camera);
+    if ( this.buffer.material ) gl.deleteBuffer(this.buffer.material);
+    this.buffer.camera = null;
+    this.buffer.material = null;
+    this.#deleteFramebuffer();
+
+  }
 }
