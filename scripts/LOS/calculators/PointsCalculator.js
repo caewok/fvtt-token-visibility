@@ -209,11 +209,18 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     return pt;
   }
 
+  /**
+   * @param {Polygon3d} poly
+   * @returns {Polygon3d} The newly transformed polygon.
+   */
   _applyPerspectiveToPolygon(poly) {
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
-    poly = poly.transform(lookAtM).clipZ();
-    poly.transform(perspectiveM, poly);
+    const lookAtInvTranspose = this.camera.invTransposeLookAtMatrix;
+    const perspectiveInvTranspose = this.camera.invTransposeLookAtMatrix;
+
+    poly = poly.transform(lookAtM, lookAtInvTranspose).clipZ();
+    poly = poly.transform(perspectiveM, perspectiveInvTranspose);
     return poly.isValid ? poly : null;
   }
 

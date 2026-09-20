@@ -159,15 +159,13 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * @returns {Polygon3d}
    */
   applyPerspectiveToFace(poly) {
-    // Save a bit of time by reusing the poly after the clipZ transform.
-    // Don't reuse the initial poly b/c not guaranteed to be a copy of the original.
-    const { lookAtMatrix, perspectiveMatrix} = this.camera;
-    poly = poly.transform(lookAtMatrix).clipZ();
+    const { lookAtMatrix, invTransposeLookAtMatrix} = this.camera;
+    poly = poly.transform(lookAtMatrix, invTransposeLookAtMatrix).clipZ();
     poly.clean();
     if ( !poly.isValid() ) return poly;
 
-    poly.transform(perspectiveMatrix, poly);
-    return poly;
+    const { perspectiveMatrix, invTransposePerspectiveMatrix } = this.camera;
+    return poly.transform(perspectiveMatrix, invTransposePerspectiveMatrix);
   }
 
   /* ----- NOTE: Perspective polygons ----- */
