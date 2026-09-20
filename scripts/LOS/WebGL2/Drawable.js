@@ -13,6 +13,7 @@ import { WebGL2 } from "./WebGL2.js";
 
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { QuadPrimitive } from "../../geometry/placeable_geometry/InstancedGeometricPrimitive.js";
+import { EmptyGeometricPrimitive } from "../../geometry/placeable_geometry/EmptyGeometricPrimitive.js";
 import { mix } from "../../geometry/mixwith.js";
 import { FixedLengthTrackingBuffer, VerticesIndicesTrackingBuffer } from "../../geometry/placeable_tracking/TrackingBuffer.js";
 
@@ -375,6 +376,7 @@ class AbstractDrawable {
    * @returns {boolean} True if successfully added or updated.
    */
   addGeometricShape(shape) {
+    if ( !shape.faces.length ) return; // Skip empty shapes.
     const id = shape.id;
     if ( this.trackedIds.has(id) ) return this.updateGeometricShape(shape);
     console.debug(`Adding shape ${shape.id}`);
@@ -390,7 +392,7 @@ class AbstractDrawable {
    * @returns {boolean} True if successfully added or updated.
    */
   updateGeometricShape(shape) {
-    if ( !shape ) return;
+    if ( !shape.faces.length ) return; // Skip empty shapes.
     const id = shape.id;
     if ( !this.trackedIds.has(id) ) return this.addGeometricShape(shape);
     console.debug(`Updating shape ${shape.id}`);
@@ -403,6 +405,7 @@ class AbstractDrawable {
    * @returns {boolean} True if successfully removed. If not present, returns false.
    */
   removeGeometricShape(shape) {
+    if ( !shape.faces.length) return; // Skip empty shapes.
     const id = shape.id;
     if ( !this.trackedIds.has(id) ) return false;
     this.trackedIds.delete(id);
@@ -641,10 +644,10 @@ export class ModelDrawable extends AbstractDrawable {
   }
 
   /** @type {Float32Array} */
-  get verticesArray() { return this.shape.modelVO.vertices; }
+  get verticesArray() { return this.shape.instanceVO.vertices; }
 
   /** @type {Float32Array} */
-  get indicesArray() { return this.shape.modelVO.indices; }
+  get indicesArray() { return this.shape.instanceVO.indices; }
 
   /** @type {Float32Array} */
   get modelMatrixArray() { return this.shape.modelMatrix.model.arr; }
@@ -656,14 +659,14 @@ export class ModelDrawable extends AbstractDrawable {
    * When it changes, the model buffer for that id must be updated.
    * @type {Map<string, number>}
    */
-  modelVersion = 0;
+  #modelVersion = -1;
 
   // ----- NOTE: Model buffer updating ----- //
 
   _onShapeAdded(_shape) { return false; }
 
   _onShapeUpdated(shape) {
-    return this.modelVersion !== shape.modelMatrix.dataVersion;
+    return this.#modelVersion !== shape.modelMatrix.dataVersion;
   }
 
   /**
@@ -703,13 +706,13 @@ export class MultiModelDrawable extends AbstractDrawable {
     this.registerBufferChannel(
       "aPosition", // Also the buffer for aNormal
       this.viTracker.vertices,
-      shape => shape.modelVO.vertices,
+      shape => shape.instanceVO.vertices,
       (shape, channel) => channel.dataExtractor(shape), // Always update
     );
     this.registerBufferChannel(
       "indices",
       this.viTracker.indices,         // Tracker.
-      shape => shape.modelVO.indices, // Data.
+      shape => shape.instanceVO.indices, // Data.
       (shape, channel) => channel.dataExtractor(shape), // Always update
     );
     this.registerBufferChannel(
@@ -1206,7 +1209,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
       if ( !wallGeom.constructor.couldBlock(wallD, { levelId, senseType: "move" }) ) return;
 
       // For each wall, we ultimately only need the plane from the wall.
-      for ( const shape of wallGeom.iterateShapes({ senseType, levelId }) ) {
+      for ( const shape of wallGeom.shapes ) {
         const testFace = shape.faces[0];
         if ( aabb.overlapsConvexPolygon3d(testFace) ) {
           const wallD = wallGeom.placeableDocument;
