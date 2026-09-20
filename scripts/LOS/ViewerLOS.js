@@ -322,7 +322,7 @@ export class ViewerLOS {
     if ( this.dirty ) this._clean();
 
     // Set the rotation matrix for the viewer.
-    MatrixFloat32.rotationZ(this.viewerRotation, this.rotationMatrix);
+    MatrixFloat32.rotationZ(this.viewerRotation, { outMatrix: this.rotationMatrix });
 
     // Set up the calculator frustum.
     this._setFrustum();
