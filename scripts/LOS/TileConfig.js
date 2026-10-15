@@ -24,23 +24,17 @@ PATCHES.BASIC = {};
  * Adds to the Overhead tab.
  */
 function renderTileConfig(app, html, data) {
-  // Add handler on close to store the group actors setting.
-//   const oldHandler = app.options.form.handler;
-//   app.options.form.handler = async (event, form, submitData) => {
-//     await saveSettings(event, form, submitData);
-//     await oldHandler(event, form, submitData);
-//   }
-
+  const MODULE_ID = "tokenvisibility"; // Always use ATV; may be called by ATC as well.
   data.tokenvisibility = {
     tileAlphaShapeOptions: {
-      full: "tokenvisibility.tile-config.options.full",
-      boundingBox: "tokenvisibility.tile-config.options.boundingBox",
-      boundingPolygon: "tokenvisibility.tile-config.options.boundingPolygon",
-      polygons: "tokenvisibility.tile-config.options.polygons",
-      calculated: "tokenvisibility.tile-config.options.calculated",
-      ignore: "tokenvisibility.tile-config.options.ignore",
+      full: `${MODULE_ID}.tile-config.options.full`,
+      boundingBox: `${MODULE_ID}.tile-config.options.boundingBox`,
+      boundingPolygon: `${MODULE_ID}.tile-config.options.boundingPolygon`,
+      polygons: `${MODULE_ID}.tile-config.options.polygons`,
+      calculated: `${MODULE_ID}.tile-config.options.calculated`,
+      ignore: `${MODULE_ID}.tile-config.options.ignore`,
     },
-    selectedTileAlphaShape: data.document.getFlag("tokenvisibility", FLAGS.TILE_ALPHA_SHAPE) || "calculated",
+    selectedTileAlphaShape: data.document.getFlag(MODULE_ID, FLAGS.TILE_ALPHA_SHAPE) || "calculated",
   };
 
   const myHTML = renderTemplateSync(TEMPLATES.TILE, data);

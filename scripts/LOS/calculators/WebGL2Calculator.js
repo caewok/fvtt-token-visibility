@@ -157,7 +157,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
    * @param {object} [opts]       Options passed to the renderer
    */
   _render(renderer, opts) {
-    console.debug(`WebGL2Calc|Rendering`)
+    // console.debug(`WebGL2Calc|Rendering`)
     renderer ??= this.renderer;
     renderer.camera = this.camera;
     renderer.updateCameraBuffer();

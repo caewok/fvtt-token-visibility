@@ -288,14 +288,14 @@ export class LOSRendererWebGL2 {
    * Create and initialize drawables as needed.
    */
   prerender(targetShape, occlusionTester) {
-    console.debug(`LOSRendererWebGL2#Prerender.`);
+    // console.debug(`LOSRendererWebGL2#Prerender.`);
 
     this.updateCameraBuffer();
 
     const tokenObstacles = new Set(["tokens"]);
     const terrainObstacles = new Set(["terrainWalls"]);
     const drawableOpts = { constrained: true, senseType: occlusionTester.senseType, levelId: occlusionTester.levelId };
-    const otOpts = { includeObstacles: tokenObstacles, geomSubtype: "full" };
+    const otOpts = { includeObstacles: tokenObstacles, geomSubtype: () => "full" };
 
     // Clear the drawables of any old instances.
     this.drawableCaches.forEach(drawable => drawable.clearRenderSet());
@@ -420,7 +420,7 @@ export class LOSRendererWebGL2 {
    * NOTE: user should first set the camera.
    */
   render({ clear = true, debug = false, frame } = {}) {
-    console.debug(`LOSRendererWebGL2#Render. Debug? ${debug}`);
+    // console.debug(`LOSRendererWebGL2#Render. Debug? ${debug}`);
 
     const gl = this.gl;
     const webGL2 = this.webGL2;
@@ -470,7 +470,7 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.redAlphaMask);
     webGL2.setBlending(false);
 
-    console.debug(`LOSRendererWebGL2#Rendering target. Debug? ${debug}`);
+    // console.debug(`LOSRendererWebGL2#Rendering target. Debug? ${debug}`);
     this.drawables.target.forEach(drawable => drawable.render(debug));
   }
 
@@ -486,7 +486,7 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.blueAlphaMask);
     webGL2.setBlending(false);
 
-    console.debug(`LOSRendererWebGL2#Rendering obstacles. Debug? ${debug}`);
+    // console.debug(`LOSRendererWebGL2#Rendering obstacles. Debug? ${debug}`);
     this.drawables.solidObstacles.forEach(drawable => drawable.render(debug));
   }
 
@@ -512,7 +512,7 @@ export class LOSRendererWebGL2 {
     webGL2.setDepthMask(false);
 
     // Draw terrain geometry
-    console.debug(`LOSRendererWebGL2#Rendering terrain. Debug? ${debug}`);
+    // console.debug(`LOSRendererWebGL2#Rendering terrain. Debug? ${debug}`);
     this.drawables.terrainObstacles.forEach(drawable => drawable.render(debug));
 
     // Restore depth mask

@@ -7,6 +7,7 @@ PIXI,
 "use strict";
 
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
+import { FLAGS } from "../const.js";
 import { approximateClamp } from "../util.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Camera } from "../Camera.js";
@@ -179,6 +180,13 @@ export class PercentVisibleResult {
  */
 export class PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisibleResult;
+
+  static geomSubtype(geom) {
+    const pg = CONFIG[GEOMETRY_LIB_ID].lib.placeableGeometry;
+    if ( geom instanceof pg.TokenGeometry ) return "calculated";
+    if ( geom instanceof pg.TileGeometry ) return geom.tile.getFlag("tokenvisibility", FLAGS.TILE_ALPHA_SHAPE) || "calculated";
+    return "full";
+  }
 
   /** @type {CalculatorConfig} */
   config = new ConfigHandler({
@@ -400,8 +408,8 @@ export class PercentVisibleCalculatorAbstract {
 
     // Draw obstacle outlines.
     otOpts.tokenSubtype ??= "constrained";
-    otOpts.tileSubtype ??= "subtype";
-    otOpts.levelSubtype ??= "subtype";
+    otOpts.tileSubtype ??= "calculated";
+    otOpts.levelSubtype ??= "calculated";
     this.occlusionTester._drawDetectedObjects(debugDraw, otOpts);
 
     // Draw frustum shape between viewer and target.

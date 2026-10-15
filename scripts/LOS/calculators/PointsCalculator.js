@@ -21,6 +21,7 @@ import { squaresUnderToken, hexesUnderToken } from "../shapes_under_token.js";
 
 
 // Geometry
+import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Draw } from "../../geometry/Draw.js";
 
@@ -157,6 +158,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     return Point3d.distanceSquaredBetween(this.viewpoint, pt) > radius2;
   }
 
+
   /**
    * Given a point in 3d space (presumably on a token face), test for occlusion between it and viewpoint.
    * @param {Point3d} pt
@@ -164,7 +166,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    */
   pointIsOccluded(pt) {
     // Is it occluded from the camera/viewer?
-    return this.occlusionTester.segmentIsOccluded(this.viewpoint, pt);
+    return this.occlusionTester.segmentIsOccluded(this.viewpoint, pt, this.constructor.geomSubtype);
   }
 
   // ----- NOTE: Debug ----- //
