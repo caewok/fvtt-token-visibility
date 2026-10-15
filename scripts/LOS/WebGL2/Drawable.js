@@ -176,7 +176,7 @@ class BufferChannel {
     const bufferType = this.bufferType;
     this.gl.bindBuffer(bufferType, buffer);
     this.gl.bufferData(bufferType, this.tracker.viewWholeBuffer(), this.gl.DYNAMIC_DRAW);
-    console.debug(`Resizing buffer for ${this.attribName}`, this.tracker.viewWholeBuffer());
+    // console.debug(`Resizing buffer for ${this.attribName}`, this.tracker.viewWholeBuffer());
 
     // Entire buffer is updated, so every tracked id is updated.
     this._syncAllIds();
@@ -193,7 +193,7 @@ class BufferChannel {
     const offset = this.tracker.facetOffsetAtId(id) * this.tracker.type.BYTES_PER_ELEMENT;
     this.gl.bindBuffer(bufferType, buffer);
     this.gl.bufferSubData(bufferType, offset, this.tracker.viewFacetById(id));
-    console.debug(`Updating buffer for ${this.attribName} at ${id}`, this.tracker.viewFacetById(id));
+    // console.debug(`Updating buffer for ${this.attribName} at ${id}`, this.tracker.viewFacetById(id));
 
     // Mark this id as updated.
     this.dataVersions.set(id, this.tracker.facetChangeTracker.get(id));
@@ -379,7 +379,7 @@ class AbstractDrawable {
     if ( !shape.faces.length ) return; // Skip empty shapes.
     const id = shape.id;
     if ( this.trackedIds.has(id) ) return this.updateGeometricShape(shape);
-    console.debug(`Adding shape ${shape.id}`);
+    // console.debug(`Adding shape ${shape.id}`);
 
     const added = this._onShapeAdded(shape);
     if ( added ) this.trackedIds.set(id, shape);
@@ -395,7 +395,7 @@ class AbstractDrawable {
     if ( !shape.faces.length ) return; // Skip empty shapes.
     const id = shape.id;
     if ( !this.trackedIds.has(id) ) return this.addGeometricShape(shape);
-    console.debug(`Updating shape ${shape.id}`);
+    // console.debug(`Updating shape ${shape.id}`);
     return this._onShapeUpdated(shape);
   }
 
@@ -409,7 +409,7 @@ class AbstractDrawable {
     const id = shape.id;
     if ( !this.trackedIds.has(id) ) return false;
     this.trackedIds.delete(id);
-    console.debug(`Removing shape ${shape.id}`);
+    // console.debug(`Removing shape ${shape.id}`);
     return this._onShapeRemoved(shape);
   }
 
@@ -508,7 +508,7 @@ class AbstractDrawable {
   render(debug = false) {
     if ( !this._renderSet.size ) return;
 
-    console.debug(`Drawable ${this.constructor.name}|Render. Debug? ${debug}`);
+    // console.debug(`Drawable ${this.constructor.name}|Render. Debug? ${debug}`);
 
     this.prerender();
     this.debugView = debug;
