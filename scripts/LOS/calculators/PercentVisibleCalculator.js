@@ -112,11 +112,22 @@ export class PercentVisibleResult {
    */
   get visibleArea() { return this.targetArea; }
 
+  #percentVisible = null;
+
   get percentVisible() {
     if ( ~this.visibility ) return this.visibility;
+    if ( Number.isNumeric(this.#percentVisible) ) return this.#percentVisible;
     const targetArea = this.targetArea;
     if ( targetArea.almostEqual(0) ) return 0;
     return approximateClamp(this.visibleArea / targetArea, 0, 1, 1e-02);
+  }
+
+  /**
+   * Override percent visible value.
+   * @type {number|null}
+   */
+  set percentVisible(value) {
+    this.#percentVisible = value ?? Math.clamp(value, 0, 1) : null;
   }
 
 
