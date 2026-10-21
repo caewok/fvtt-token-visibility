@@ -581,28 +581,7 @@ export class Settings extends ModuleSettingsAbstract {
       this.destroyDebugViewer();
       this.initializeDebugViewer(value);
     }
-
-
   }
 }
 
-/*
-const configKeyForSetting = {
-  [SETTINGS.LOS.TARGET.LARGE]: "largeTarget",
-  [SETTINGS.LOS.TARGET.PERCENT]: "threshold",
-
-  // Viewpoints.
-  [SETTINGS.LOS.VIEWER.POINTS]: "viewpointIndex",
-  [SETTINGS.LOS.VIEWER.INSET]: "viewpointInset",
-
-  // Points viewpoints.
-  [SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS]: "targetPointIndex",
-  [SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET]: "targetInset",
-
-  // Blocking
-  [SETTINGS.LIVE_TOKENS_BLOCK]: "blocking.tokens.live",
-  [SETTINGS.DEAD_TOKENS_BLOCK]: "blocking.tokens.dead",
-  [SETTINGS.PRONE_TOKENS_BLOCK]: "blocking.tokens.prone",
-}
-*/
 

@@ -101,18 +101,6 @@ Hooks.once("init", function() {
     },
 
     /**
-     * Current occlusion tester for the given settings.
-     * @type {ObstacleOcclusionTest}
-     */
-    occlusionTester: null,
-
-    /**
-     * Current calculator for the given settings.
-     * @type {PercentVisibleCalculatorAbstract}
-     */
-    losCalculator: null,
-
-    /**
      * Classes used to view the debugger for different algorithms.
      * @type {object<class>}
      */
@@ -124,6 +112,18 @@ Hooks.once("init", function() {
       // "webgpu-async": DebugVisibilityViewerWebGPUAsync,
       "per-pixel": DebugVisibilityViewerPerPixel,
     },
+
+    /**
+     * Current occlusion tester for the given settings.
+     * @type {ObstacleOcclusionTest}
+     */
+    occlusionTester: null,
+
+    /**
+     * Current calculator for the given settings.
+     * @type {PercentVisibleCalculatorAbstract}
+     */
+    losCalculator: null,
 
     /**
      * Should the line-of-sight calculator use the viewer height (as calculated in Wall Height)

@@ -119,6 +119,8 @@ export class PercentVisibleResult {
     return approximateClamp(this.visibleArea / targetArea, 0, 1, 1e-02);
   }
 
+
+
   /**
    * Blend this result with another result, taking the maximum values at each test location.
    * Used to treat viewpoints as "eyes" in which 2+ viewpoints are combined to view an object.
