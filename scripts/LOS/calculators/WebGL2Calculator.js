@@ -67,7 +67,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMaximize(other) {
-    let out = super.blendMaximize();
+    let out = super.blendMaximize(other);
     if ( out ) return out;
 
     // The target area could change, given the different views.

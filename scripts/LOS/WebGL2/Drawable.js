@@ -1206,7 +1206,7 @@ const ConstrainedTokenMixin = superclass => class extends superclass {
     const out = [];
     canvas.scene.walls.forEach(wallD => {
       const wallGeom = wallMgr.geomForDocument(wallD);
-      if ( !wallGeom.constructor.couldBlock(wallD, { levelId, senseType: "move" }) ) return;
+      if ( !wallGeom.couldBlock({ levelId, senseType: "move" }) ) return;
 
       // For each wall, we ultimately only need the plane from the wall.
       for ( const shape of wallGeom.shapes ) {

@@ -93,7 +93,7 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMinimize(other) {
-    let out = super.blendMaximize(other);
+    let out = super.blendMinimize(other);
     if ( out ) return out;
     out = this.clone();
     out.data.unobscured = this.data.unobscured.intersection(other.data.unobscured);

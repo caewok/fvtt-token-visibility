@@ -66,7 +66,7 @@ export class PercentVisibleResult {
   makeFullyVisible() { this.visibility = this.constructor.VISIBILITY.FULL; return this; }
 
   clone() {
-    const out = new this();
+    const out = new this.constructor();
     out.config = structuredClone(this.config);
     Object.assign(out.data, structuredClone(this.data));
     out.visibility = this.visibility;
@@ -127,10 +127,8 @@ export class PercentVisibleResult {
    * @type {number|null}
    */
   set percentVisible(value) {
-    this.#percentVisible = value ?? Math.clamp(value, 0, 1) : null;
+    this.#percentVisible = value == null ? null : Math.clamp(value, 0, 1);
   }
-
-
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.

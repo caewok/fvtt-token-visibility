@@ -73,8 +73,7 @@ export class Viewpoint {
   get percentVisible() { return this.lastResult?.percentVisible || 0; }
 
   calculate() {
-    const vp = this.viewpoint;
-    if ( this.passesSimpleVisibilityTest(vp) ) {
+    if ( this.passesSimpleVisibilityTest(this.viewpoint) ) {
       this.lastResult ??= this.calculator._createResult();
       this.lastResult.makeFullyVisible();
     } else this.lastResult = this._calculate();
@@ -152,10 +151,8 @@ export class Viewpoint {
   // ----- NOTE: Partially blocking obstacles ----- //
 
   /**
-   * Obstacles that may be marked transparent.
+   * Obstacles that may be marked partially opaque.
    * Tiles and levels currently excluded b/c those are handled via textures.
-   * Transparent obstacles are marked with a flag: tokenvisibility.transparency (0: opaque; 1: fully transparent)
-   * Transparency is per wall restriction type: { sight, sound, light, move }, where move is physical cover.
    * @type {string[]}
    */
   static TRANSPARENT_OBSTACLE_TYPES = ["tokens", "walls", "regions"];
@@ -168,7 +165,7 @@ export class Viewpoint {
    */
   _calculate() {
     const calc = this.calculator;
-    calc.viewpoint = vp;
+    calc.viewpoint = this.viewpoint;
     const { partial, nonBlocking } = this._partiallyBlockingObstacles();
     this._removeObstacles(nonBlocking);
 
@@ -178,7 +175,7 @@ export class Viewpoint {
       // Temporarily drop obstacles that grant no cover
       result = calc.calculate();
       percentVisible = result.percentVisible;
-      if ( partial.length ) percentVisible = this._calculatePartiallyBlockingCover(partial, coverPercent);
+      if ( partial.length ) percentVisible = this._calculatePartialOpacity(partial, result.percentVisible);
 
     } finally {
       // Always add back obstacles.
@@ -192,24 +189,22 @@ export class Viewpoint {
 
 
   /**
-   * Transparency level of an obstacle.
+   * Opacity level of an obstacle.
    * @param {Token|Wall|Region} obstacle
    * @returns number
-   *    0: fully opaque (default).
-   *    1: fully transparent.
+   *    1: fully opaque (default).
+   *    0: fully transparent.
    */
-  _obstacleTransparencyLevel(obstacle) {
+  _obstacleOpacity(obstacle) {
     const restrictionType = this.occlusionTester.config.senseType || "sight";
-    const doc = obstacle.document || obstacle;
-    const t = Number(doc.flags?.tokenvisibility?.transparency?.[restrictionType]);
-    return Number.isFinite(t) ? Math.clamp(t, 0, 1) : 0;
+    return obstacle.opacity(restrictionType);
   }
 
   /**
    * Locate all partially blocking and non-blocking obstacles.
    * @returns {object}
-   *   - @prop {{obstacle, transparency}[]} partial       Obstacles granting only partial cover
-   *   - @prop {{obstacle, transparency}[]} nonBlocking   Obstacles granting no cover
+   *   - @prop {{obstacle, opacity}[]} partial       Obstacles granting only partial cover
+   *   - @prop {{obstacle, opacity}[]} nonBlocking   Obstacles granting no cover
    */
   _partiallyBlockingObstacles() {
     const obstacles = this.occlusionTester.obstacleGeometries;
@@ -221,10 +216,10 @@ export class Viewpoint {
         const set = obstacles[subtype];
         if ( !set ) continue;
         for ( const obstacle of set ) {
-          const transparency = this._obstacleTransparencyLevel(obstacle);
-          if ( !transparency ) continue;
-          const entry = { obstacle, subtype, transparency };
-          if ( transparency === 1 ) nonBlocking.push(entry);
+          const opacity = this._obstacleOpacity(obstacle);
+          if ( opacity >= 1 ) continue;
+          const entry = { obstacle, subtype, opacity };
+          if ( opacity <= 0 ) nonBlocking.push(entry);
           else partial.push(entry);
         }
       }
@@ -258,13 +253,13 @@ export class Viewpoint {
    * Let V_all= all visibility with every obstacle opaque, and V_none be visibility with transparent obstacles
    * removed. Then lost = V_none - V_all is the visibility the partial obstacles take away.
    * Each obstacle's share is its marginal contribution, V_minusOne - V_all, normalized across obstacles.
-   * V = V_none - lost x ∑ share_i x opacity_i, where opacity = 1 - transparency.
+   * V = V_none - lost x ∑ share_i x opacity_i.
    *
-   * @param {{obstacle, subtype, transparency}} partial   Partially blocking obstacles
-   * @param {number} totalPercent                         Cover with all obstacles (except fully transparent)
+   * @param {{obstacle, subtype, opacity}} partial        Partially blocking obstacles
+   * @param {number} visibleAll                           Visibility treating all obstacles as solid (except fully transparent)
    * @returns {number} Percent between 0 and 1—the total visibility.
    */
-  _calculateTransparency(partial, totalPercent) {
+  _calculatePartialOpacity(partial, visibleAll) {
     const calc = this.calculator;
     let visibleNone;
     const contributions = [];
@@ -283,9 +278,9 @@ export class Viewpoint {
       // Marginal contribution of each obstacle: How much visibility returns when it alone is removed.
       for ( const entry of partial ) {
         this._removeObstacles([entry]);
-        const visibleMinusOne = losCalc.calculate().percentVisible;
+        const visibleMinusOne = calc.calculate().percentVisible;
         this._addObstacles([entry]);
-        constributions.push(Math.max(percentVisibleMinusOne - visibleAll, 0));
+        contributions.push(Math.max(visibleMinusOne - visibleAll, 0));
       }
 
     } finally {
@@ -293,7 +288,7 @@ export class Viewpoint {
       this._addObstacles(partial);
     }
 
-    // Prorate each obstacle's share of the visibility by its transparency.
+    // Prorate each obstacle's share of the visibility by its opacity.
     const lost = visibleNone - visibleAll;
     const n = partial.length;
     const denom = contributions.reduce((sum, x) => sum + x, 0);
@@ -301,9 +296,9 @@ export class Viewpoint {
     for ( let i = 0; i < n; i += 1 ) {
       // If no obstacle contributes individually (e.g., they fully overlap), split evenly.
       const share = denom ? contributions[i] / denom : 1 / n;
-      weighted += share * (1 - partial[i].transparency);
+      weighted += share * (partial[i].opacity);
     }
-    return Math.clamp(visibleNone - (weighted * diff), 0, 1);
+    return Math.clamp(visibleNone - (weighted * lost), 0, 1);
   }
 }
 
