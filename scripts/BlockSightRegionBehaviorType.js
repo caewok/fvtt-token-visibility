@@ -14,9 +14,9 @@ export class BlockSightRegionBehaviorType extends foundry.data.regionBehaviors.R
   static defineSchema() {
     return {
       opacity: new foundry.data.fields.NumberField({
-        label: `${MODULE_ID}.behavior.types.set-cover.fields.opacity.name`,
-        hint: `${MODULE_ID}.behavior.types.set-cover.fields.opacity.hint`,
-        initial: 0,
+        label: `${MODULE_ID}.behavior.types.blockSight.fields.opacity.name`,
+        hint: `${MODULE_ID}.behavior.types.blockSight.fields.opacity.hint`,
+        initial: 1,
         min: 0,
         max: 1,
         step: 0.05,

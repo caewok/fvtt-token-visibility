@@ -267,7 +267,7 @@ export class Viewpoint {
     try {
       // Visibility with only the solid obstacles.
       this._removeObstacles(partial);
-      visibleNone = calc.calculate().percentVisible;
+      visibleNone = calc._calculate().percentVisible; // Call _calculate directly to avoid resetting the obstacle tester.
 
       // Add back all transparent obstacles.
       this._addObstacles(partial);
@@ -278,7 +278,7 @@ export class Viewpoint {
       // Marginal contribution of each obstacle: How much visibility returns when it alone is removed.
       for ( const entry of partial ) {
         this._removeObstacles([entry]);
-        const visibleMinusOne = calc.calculate().percentVisible;
+        const visibleMinusOne = calc._calculate().percentVisible;
         this._addObstacles([entry]);
         contributions.push(Math.max(visibleMinusOne - visibleAll, 0));
       }
