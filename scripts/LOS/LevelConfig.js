@@ -5,7 +5,7 @@
 "use strict";
 
 import { TEMPLATES, FLAGS } from "./const.js";
-import { renderTemplateSync } from "./util.js";
+import { renderTemplateSync } from "../geometry/util.js";
 
 
 // Add settings to tile config to treat it like a "floor".

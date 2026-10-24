@@ -100,50 +100,6 @@ export const LOS_CONFIG = {
   // Handled at base level: debug
 }
 
-Hooks.on("canvasReady", function() {
-  /*
 
-  // Register basic watchers for placeables.
-  const updateFn = placeable => {
-    const obj = placeable[MODULE_ID] ??= {}
-    obj.updateId ??= 0;
-    obj.updateId += 1;
-  }
-  const docKeys = {
-    Wall: new Set([
-      ...WallGeometry.TRACKER_TYPES.position2d,
-      ...WallGeometry.TRACKER_TYPES.elevation,
-      ...WallGeometry.TRACKER_TYPES.direction,
-      ...WallGeometry.TRACKER_TYPES.restriction,
-      ...WallGeometry.TRACKER_TYPES.door,
-      ...WallGeometry.TRACKER_TYPES.threshold,
-    ]),
-    Tile: new Set([
-      ...TileGeometry.TRACKER_TYPES.position2d,
-      ...TileGeometry.TRACKER_TYPES.elevation,
-      ...TileGeometry.TRACKER_TYPES.scale,
-      ...TileGeometry.TRACKER_TYPES.rotation,
-    ]),
-    Token: new Set([
-      ...TokenGeometry.TRACKER_TYPES.position2d,
-      ...TokenGeometry.TRACKER_TYPES.elevation,
-      ...TokenGeometry.TRACKER_TYPES.scale,
-      ...TokenGeometry.TRACKER_TYPES.shape,
-    ]),
-    Region: new Set([
-      ...RegionGeometry.TRACKER_TYPES.elevation,
-      ...RegionGeometry.TRACKER_TYPES.shapes,
-    ]),
-  };
-  const id = "updateCounter";
-  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
-  const PlaceableUpdateWatcher = geometryTracking.PlaceableUpdateWatcher;
-  for ( const [docName, keys] of Object.entries(docKeys) ) {
-    const watcher = PlaceableUpdateWatcher.getWatcher(docName);
-    watcher.register("update", id, updateFn, keys);
-    watcher.activate();
-  }
-  */
-});
 
 
