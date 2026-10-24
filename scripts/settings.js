@@ -430,8 +430,8 @@ export class Settings extends ModuleSettingsAbstract {
         min: 0,  // Prone equivalent to (almost) not being there at all. Will set to a single pixel.
         step: 0.1
       },
-      default: CONFIG.GeometryLib.proneMultiplier ?? 0.33, // Same as Wall Height
-      onChange: value => CONFIG.GeometryLib.proneMultiplier = value,
+      default: CONFIG.GeometryLib.CONFIG.proneMultiplier ?? 0.33, // Same as Wall Height
+      onChange: value => CONFIG.GeometryLib.CONFIG.proneMultiplier = value,
       tab: "other"
     });
 
@@ -446,8 +446,8 @@ export class Settings extends ModuleSettingsAbstract {
         min: 0,  // At token bottom.
         step: 0.1
       },
-      default: CONFIG.GeometryLib.visionHeightMultiplier ?? 0.9,
-      onChange: value => CONFIG.GeometryLib.visionHeightMultiplier = value,
+      default: CONFIG.GeometryLib.CONFIG.visionHeightMultiplier ?? 0.9,
+      onChange: value => CONFIG.GeometryLib.CONFIG.visionHeightMultiplier = value,
       tab: "other"
     });
 
@@ -457,8 +457,8 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: String,
-      default: CONFIG.GeometryLib.proneStatusId || "prone",
-      onChange: value => CONFIG.GeometryLib.proneStatusId = value,
+      default: CONFIG.GeometryLib.CONFIG.proneStatusId || "prone",
+      onChange: value => CONFIG.GeometryLib.CONFIG.proneStatusId = value,
       tab: "other"
     });
 
@@ -468,16 +468,16 @@ export class Settings extends ModuleSettingsAbstract {
       scope: "world",
       config: false,
       type: String,
-      default: CONFIG.GeometryLib.tokenHPId || "system.attributes.hp.value",
+      default: CONFIG.GeometryLib.CONFIG.tokenHPId || "system.attributes.hp.value",
       tab: "other",
-      onChange: value => CONFIG.GeometryLib.tokenHPId = value
+      onChange: value => CONFIG.GeometryLib.CONFIG.tokenHPId = value
     });
 
     // Make sure these are linked at the start.
-    CONFIG.GeometryLib.proneMultiplier = this.get(KEYS.PRONE_MULTIPLIER);
-    CONFIG.GeometryLib.visionHeightMultiplier = this.get(KEYS.VISION_HEIGHT_MULTIPLIER);
-    CONFIG.GeometryLib.proneStatusId = this.get(KEYS.PRONE_STATUS_ID);
-    CONFIG.GeometryLib.tokenHPId = this.get(KEYS.TOKEN_HP_ATTRIBUTE);
+    CONFIG.GeometryLib.CONFIG.proneMultiplier = this.get(KEYS.PRONE_MULTIPLIER);
+    CONFIG.GeometryLib.CONFIG.visionHeightMultiplier = this.get(KEYS.VISION_HEIGHT_MULTIPLIER);
+    CONFIG.GeometryLib.CONFIG.proneStatusId = this.get(KEYS.PRONE_STATUS_ID);
+    CONFIG.GeometryLib.CONFIG.tokenHPId = this.get(KEYS.TOKEN_HP_ATTRIBUTE);
 
     // ----- NOTE: Hidden settings ----- //
 

@@ -14,6 +14,8 @@ import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_TileConfig } from "./LOS/TileConfig.js";
 import { PATCHES as PATCHES_LevelConfig } from "./LOS/LevelConfig.js";
+import { PATCHES as PATCHES_TokenConfig } from "./TokenConfig.js";
+import { PATCHES as PATCHES_WallConfig } from "./WallConfig.js";
 
 const PATCHES = {
   Canvas: PATCHES_Canvas,
@@ -25,6 +27,8 @@ const PATCHES = {
   "foundry.canvas.placeables.Token": PATCHES_Token,
   "foundry.applications.sheets.TileConfig": PATCHES_TileConfig,
   "foundry.applications.sheets.LevelConfig": PATCHES_LevelConfig,
+  "foundry.applications.sheets.TokenConfig": PATCHES_TokenConfig,
+  "foundry.applications.sheets.WallConfig": PATCHES_WallConfig,
 };
 
 export const PATCHER = new Patcher();

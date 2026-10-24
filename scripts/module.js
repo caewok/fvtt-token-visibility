@@ -9,9 +9,10 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS } from "./const.js";
+import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES } from "./const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
+import { log } from "./util.js";
 
 // Load the geometry library.
 import "./geometry/registration.js";
@@ -233,7 +234,8 @@ Hooks.once("init", function() {
     twgl,
   };
 
-  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(_value => console.debug(`${MODULE_ID}|Templates loaded.`));
+  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(_value => console.debug(`${MODULE_ID}|LOS Templates loaded.`));
+  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(_value => log("Templates loaded."));
 });
 
 
@@ -257,6 +259,13 @@ Hooks.once("setup", function() {
     reference: MODULE_ID,
   };
   CONFIG.statusEffects.push(dimLight, noLight);
+
+  // Opacity values for tokens, walls, regions for cover.
+  CONFIG[GEOMETRY_LIB_ID].CONFIG.opacity.register("sight", {
+    Token: tokenOpacity,
+    Region: regionOpacity,
+    Wall: wallOpacity,
+  });
 });
 
 Hooks.once("ready", function() {
@@ -268,6 +277,39 @@ Hooks.once("ready", function() {
 
 Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
 Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
+
+
+// ----- NOTE: Helper Functions ----- //
+
+/**
+ * Opacity for cover obstacle tokens.
+ * @param {TokenDocument} tokenD
+ * @returns {number}
+ */
+function tokenOpacity(tokenD) {
+  return Number(fastFlag(tokenD, FLAGS.OPACITY) ?? 1);
+}
+
+/**
+ * Opacity for cover obstacle walls.
+ * @param {WallDocument} wallD
+ * @returns {number}
+ */
+function wallOpacity(wallD) { return Number(fastFlag(wallD, FLAGS.OPACITY) ?? 1); }
+
+/**
+ * Opacity for cover obstacle regions.
+ * @param {RegionDocument} regionD
+ * @returns {number}
+ */
+function regionOpacity(regionD) {
+  for ( const b of regionD.behaviors ) {
+    if ( b.disabled || !b.type === `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}` ) continue;
+    return Number(b.system.opacity ?? 1);
+  }
+  return 0;
+}
+
 
 /**
  * Refresh vision for relevant active effect creation/deletion

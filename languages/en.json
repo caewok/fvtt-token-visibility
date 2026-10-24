@@ -114,6 +114,15 @@
     "tokenvisibility.template.settings-config.other": "Other Vision Settings",
     "tokenvisibility.template.settings-config.otherDescription": "Miscellaneous settings that affect how token line-of-sight is calculated.",
 
+    "tokenvisibility.tokenconfig.opacity.name": "Opacity",
+    "tokenvisibility.tokenconfig.opacity.hint": "How opaque (100%) or transparent (0%) this token is for purposes of sight. Example: A swarm of bees might be 50%. A ghost might be 0%.",
+
+    "tokenvisibility.wallconfig.opacity.name": "Opacity",
+    "tokenvisibility.wallconfig.opacity.hint": "How opaque (100%) or transparent (0%) this wall is for purposes of sight. Example: A wall representing jail cell bars might be 50%.",
+
+    "tokenvisibility.behavior.types.blockSight.fields.opacity.name": "Opacity",
+    "tokenvisibility.behavior.types.blockSight.fields.opacity.hint": "Is this region transparent (0) or opaque (1) for purposes of sight?" ,
+
     "tokenvisibility.settings-submenu.tabs.range": "Range",
     "tokenvisibility.settings-submenu.tabs.losViewer": "Viewer LOS",
     "tokenvisibility.settings-submenu.tabs.losTarget": "Target LOS",
