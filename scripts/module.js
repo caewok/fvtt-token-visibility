@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 CONST,
 foundry,
@@ -9,17 +8,18 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES } from "./const.js";
+import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES, FLAGS } from "./const.js";
+import { GEOMETRY_LIB_ID } from "./geometry/const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
-import { log } from "./util.js";
+import { log, fastFlag } from "./util.js";
 
 // Load the geometry library.
 import "./geometry/registration.js";
 
 // Hooks and method registration
 import { initializePatching, PATCHER } from "./patching.js";
-import { Settings, SETTINGS } from "./settings.js";
+import { Settings } from "./settings.js";
 
 // Trackers
 import { LightStatusTracker } from "./LightStatusTracker.js";
@@ -275,9 +275,6 @@ Hooks.once("ready", function() {
   LightStatusTracker.loadLightIcons(); // Async.
 });
 
-Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
-Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
-
 
 // ----- NOTE: Helper Functions ----- //
 
@@ -308,16 +305,4 @@ function regionOpacity(regionD) {
     return Number(b.system.opacity ?? 1);
   }
   return 0;
-}
-
-
-/**
- * Refresh vision for relevant active effect creation/deletion
- */
-function refreshVisionOnActiveEffect(activeEffect) {
-  const proneStatusId = CONFIG.GeometryLib.proneStatusId ?? Settings.get(SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE);
-  const isProne = activeEffect?.statuses.some(status => status === proneStatusId);
-  if ( !isProne ) return;
-
-  canvas.effects.visibility.refresh();
 }

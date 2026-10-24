@@ -5,6 +5,7 @@
 
 import { Patcher } from "./Patcher.js";
 
+import { PATCHES as PATCHES_ActiveEffect } from "./ActiveEffect.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
@@ -18,6 +19,7 @@ import { PATCHES as PATCHES_TokenConfig } from "./TokenConfig.js";
 import { PATCHES as PATCHES_WallConfig } from "./WallConfig.js";
 
 const PATCHES = {
+  ActiveEffect: PATCHES_ActiveEffect,
   Canvas: PATCHES_Canvas,
   "foundry.canvas.groups.CanvasVisibility": PATCHES_CanvasVisibility,
   "foundry.canvas.perception.DetectionMode": PATCHES_DetectionMode,
