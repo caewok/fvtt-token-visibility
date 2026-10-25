@@ -319,7 +319,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     }
 
     // Draw the token points.
-    const { unobscured, potentiallyVisible } = result.data;
+    const { unobscured, potentiallyVisible, transmittance} = result.data;
     let i = -1;
     for ( const pt of this.iterateTargetPoints() ) {
       i += 1;
@@ -329,6 +329,18 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
       if ( !res ) continue;
 
       opts.color = unobscured.has(i) ? Draw.COLORS.blue : Draw.COLORS.red;
+      opts.fillAlpha = 1.0;
+
+      if ( transmittance.has(i) ) {
+        const opacity = transmittance.get(i);
+        if ( opacity.almostEqual(0) ) opts.color = Draw.COLORS.blue;
+        else if ( opacity.almostEqual(1) ) opts.color = Draw.COLORS.red;
+        else {
+          opts.color = Draw.COLORS.orange;
+          opts.fillAlpha = opacity;
+        }
+      }
+
       draw.point(res.multiply(mult, a), opts);
     }
 
