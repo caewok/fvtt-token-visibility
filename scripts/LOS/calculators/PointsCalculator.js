@@ -21,7 +21,6 @@ import { squaresUnderToken, hexesUnderToken } from "../shapes_under_token.js";
 
 
 // Geometry
-import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
 import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Draw } from "../../geometry/Draw.js";
 
@@ -50,8 +49,9 @@ Percent visible = counted points / total points
 export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
 
   data = {
-    potentiallyVisible: new FastBitSet(),
-    unobscured: new FastBitSet(),
+    potentiallyVisible: new FastBitSet(),   // Target points.
+    unobscured: new FastBitSet(),           // Not blocked by any fully opaque obstacle.
+    transmittance: new Map(),               // Map<index, 0–1> for points seen through partial obstacles.
   };
 
   logData() {
@@ -62,13 +62,30 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     const out = super.clone();
     out.data.unobscured = this.data.unobscured.clone();
     out.data.potentiallyVisible = this.data.potentiallyVisible.clone();
-    // totalPoints already cloned by super.
+    out.data.transmittance = new Map(this.data.transmittance);
     return out;
   }
 
+
   get totalTargetArea() { return this.data.potentiallyVisible.cardinality; }
 
-  get visibleArea() { return this.data.unobscured.cardinality; }
+  get visibleArea() {
+    const { unobscured, transmittance } = this.data;
+    let area = unobscured.cardinality;
+    for ( const [i, t] of transmittance ) {
+      if ( unobscured.has(i) ) area -= 1 - t;
+    }
+    return area;
+  }
+  /**
+   * Visibility weight of 1 point.
+   * @param {number} i      Index of the point
+   * @returns {number} 0 is blocked, 1 is clear, between for partial.
+   */
+  weightAt(i) {
+    const { unobscured, transmittance } = this.data;
+    return unobscured.has(i) ? (transmittance.get(i) ?? 1) : 0;
+  }
 
   /**
    * Blend this result with another result, taking the maximum values at each test location.
@@ -80,9 +97,9 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     let out = super.blendMaximize(other);
     if ( out ) return out;
     out = this.clone();
-    out.data.unobscured = this.data.unobscured.union(other.data.unobscured);
-    out.data.potentiallyVisible = this.data.potentiallyVisible.union(other.data.potentiallyVisible);
-    out.data.numPoints = Math.max(this.data.numPoints, other.data.numPoints);
+    out.data.unobscured.union(other.data.unobscured);            // Mutate the clone, not this.
+    out.data.potentiallyVisible.union(other.data.potentiallyVisible);
+    out._blendWeights(this, other, Math.max);
     return out;
   }
 
@@ -96,10 +113,23 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     let out = super.blendMinimize(other);
     if ( out ) return out;
     out = this.clone();
-    out.data.unobscured = this.data.unobscured.intersection(other.data.unobscured);
-    out.data.potentiallyVisible = this.data.potentiallyVisible.intersection(other.data.potentiallyVisible);
-    out.data.numPoints = Math.min(this.data.numPoints, other.data.numPoints);
+    out.data.unobscured.intersection(other.data.unobscured);
+    out.data.potentiallyVisible.intersection(other.data.potentiallyVisible);
+    out._blendWeights(this, other, Math.min);
     return out;
+  }
+
+  _blendWeights(a, b, fn) {
+    if ( !a.data.transmittance.size && !b.data.transmittance.size ) {
+      this.data.transmittance.clear();
+      return;
+    }
+    const t = new Map();
+    for ( const i of this.data.unobscured ) {
+      const w = fn(a.weightAt(i), b.weightAt(i));
+      if ( w < 1 ) t.set(i, w);
+    }
+    this.data.transmittance = t;
   }
 
   _drawCanvasDebug(result, debugDraw, otOpts = {}) {
@@ -122,24 +152,55 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
 export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePointsResultAbstract;
 
-  _calculate() {
-    // console.debug("PointsCalculator|_calculate");
-    return this._testPoints();
-  }
+  static handlesOpacity = true;
 
-  _testPoints() {
+  _calculate() {
     const result = this._createResult();
     const { unobscured, potentiallyVisible } = result.data;
     const radius2 = this.config.radius ** 2;
-    let i = -1;
-    for ( const pt of this.iterateTargetPoints() ) {
-      i += 1;
-      potentiallyVisible.add(i);
+    const { partial, nonBlocking } = this.partiallyBlockingObstacles();
 
-      if ( this.pointOutsideRange(pt, radius2) || this.pointIsOccluded(pt) ) continue;
-      unobscured.add(i);
+    this.removeObstacles(partial);
+    this.removeObstacles(nonBlocking);
+    try {
+      // Pass 0: Solid obstacles only.
+      let i = -1;
+      for ( const pt of this.iterateTargetPoints() ) {
+        i += 1;
+        potentiallyVisible.add(i);
+        if ( this.pointOutsideRange(pt, radius2) || this.pointIsOccluded(pt) ) continue;
+        unobscured.add(i);
+      }
+
+      // Pass 1: Partially transparent obstacles.
+      if ( partial.length && unobscured.cardinality ) this._applyPartialObstacles(result, partial);
+    } finally {
+      this.addObstacles(partial);
+      this.addObstacles(nonBlocking);
     }
     return result;
+  }
+
+  /**
+   * Add each partial obstacle back alone.
+   * A surviving point that is now occluded is behind that obstacle, so
+   * multiply its transmittance by (1 - opacity).
+   */
+  _applyPartialObstacles(result, partial) {
+    const { unobscured, transmittance } = result.data;
+    for ( const entry of partial ) {
+      this.addObstacles([entry]);
+      try {
+        let i = -1;
+        for ( const pt of this.iterateTargetPoints() ) {
+          i += 1;
+          if ( !unobscured.has(i) || !this.pointIsOccluded(pt) ) continue;
+          transmittance.set(i, (transmittance.get(i) ?? 1) * (1 - entry.opacity));
+        }
+      } finally {
+        this.removeObstacles([entry]);
+      }
+    }
   }
 
   /* ----- NOTE: Target points ----- */
@@ -278,12 +339,12 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
 
 export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstract {
 
-  data = {
-    unobscured: new SmallBitSet(),
-    potentiallyVisible: new SmallBitSet(),
-  };
+  constructor() {
+    super();
+    this.data.unobscured = new SmallBitSet();
+    this.data.potentiallyVisible = new SmallBitSet();
+  }
 
-  // TODO: Handle multiple areas (e.g., for large targets) in the Viewpoint class.
 }
 
 

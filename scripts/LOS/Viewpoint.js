@@ -151,99 +151,40 @@ export class Viewpoint {
   // ----- NOTE: Partially blocking obstacles ----- //
 
   /**
-   * Obstacles that may be marked partially opaque.
-   * Tiles and levels currently excluded b/c those are handled via textures.
-   * @type {string[]}
-   */
-  static TRANSPARENT_OBSTACLE_TYPES = ["tokens", "walls", "regions"];
-
-  static WALL_TYPES = ["walls", "terrainWalls", "proximateWalls", "reverseProximateWalls"];
-
-  /**
    * Calculate percent visible for this viewpoint, accounting for transparent obstacles, if any.
    * @returns {PercentVisibleResult}
    */
   _calculate() {
     const calc = this.calculator;
     calc.viewpoint = this.viewpoint;
-    const { partial, nonBlocking } = this._partiallyBlockingObstacles();
-    this._removeObstacles(nonBlocking);
 
-    let result = this.calculator._createResult();
-    let percentVisible = 1;
+    // Let the calculator handle opacity weighting.
+    if ( calc.constructor.handlesOpacity ) return calc.calculate();
+
+    // Fallback: prorate: Build frustum and obstacle sets once, then collect obstacles.
+    calc.setView();
+    const { partial, nonBlocking } = calc.partiallyBlockingObstacles();
+    calc.removeObstacles(nonBlocking);
+
+    let result;
     try {
       // Temporarily drop obstacles that grant no cover
       result = calc.calculate();
-      percentVisible = result.percentVisible;
-      if ( partial.length ) percentVisible = this._calculatePartialOpacity(partial, result.percentVisible);
+      if ( partial.length ) result.percentVisible = this._calculatePartialOpacity(partial, result.percentVisible);
+      return result;
+    } catch ( err ) {
+      console.debug(err);
+
+      // Fallback on calculator result without opacity, or fully visible.
+      result ||= this.calculator._createResult().makeFullyVisible();
+      return result;
 
     } finally {
       // Always add back obstacles.
-      this._addObstacles(nonBlocking);
+      calc.addObstacles(nonBlocking);
     }
-
-    result ||= this.calculator._createResult().makeFullyVisible();
-    result.percentVisible = percentVisible;
-    return result;
   }
 
-
-  /**
-   * Opacity level of an obstacle.
-   * @param {Token|Wall|Region} obstacle
-   * @returns number
-   *    1: fully opaque (default).
-   *    0: fully transparent.
-   */
-  _obstacleOpacity(obstacle) {
-    const restrictionType = this.occlusionTester.config.senseType || "sight";
-    return obstacle.opacity(restrictionType);
-  }
-
-  /**
-   * Locate all partially blocking and non-blocking obstacles.
-   * @returns {object}
-   *   - @prop {{obstacle, opacity}[]} partial       Obstacles granting only partial cover
-   *   - @prop {{obstacle, opacity}[]} nonBlocking   Obstacles granting no cover
-   */
-  _partiallyBlockingObstacles() {
-    const obstacles = this.occlusionTester.obstacleGeometries;
-    const partial = [];
-    const nonBlocking = [];
-    for ( const type of this.constructor.TRANSPARENT_OBSTACLE_TYPES ) {
-      const subtypes = type === "walls" ? this.constructor.WALL_TYPES : [type];
-      for ( const subtype of subtypes ) {
-        const set = obstacles[subtype];
-        if ( !set ) continue;
-        for ( const obstacle of set ) {
-          const opacity = this._obstacleOpacity(obstacle);
-          if ( opacity >= 1 ) continue;
-          const entry = { obstacle, subtype, opacity };
-          if ( opacity <= 0 ) nonBlocking.push(entry);
-          else partial.push(entry);
-        }
-      }
-    }
-    return { partial, nonBlocking };
-  }
-
-  /**
-   * Remove obstacles from the tester.
-   * @param {{obstacle, subtype}[]} entries
-   */
-  _removeObstacles(entries) {
-    const obstacles = this.occlusionTester.obstacleGeometries;
-    for ( const { obstacle, subtype } of entries ) obstacles[subtype].delete(obstacle);
-  }
-
-  /**
-   * Add obstacles to the tester.
-   * @param {{obstacle, subtype}[]} entries
-   */
-  _addObstacles(entries) {
-    const obstacles = this.occlusionTester.obstacleGeometries;
-    for ( const { obstacle, subtype } of entries ) obstacles[subtype].add(obstacle);
-  }
 
   /**
    * Calculate when some obstacles are transparent.
@@ -266,26 +207,26 @@ export class Viewpoint {
 
     try {
       // Visibility with only the solid obstacles.
-      this._removeObstacles(partial);
+      calc.removeObstacles(partial);
       visibleNone = calc._calculate().percentVisible; // Call _calculate directly to avoid resetting the obstacle tester.
 
       // Add back all transparent obstacles.
-      this._addObstacles(partial);
+      calc.addObstacles(partial);
 
       // Partial obstacles block nothing, so there is nothing to prorate.
       if ( visibleNone <= visibleAll ) return visibleAll;
 
       // Marginal contribution of each obstacle: How much visibility returns when it alone is removed.
       for ( const entry of partial ) {
-        this._removeObstacles([entry]);
+        calc.removeObstacles([entry]);
         const visibleMinusOne = calc._calculate().percentVisible;
-        this._addObstacles([entry]);
+        calc.addObstacles([entry]);
         contributions.push(Math.max(visibleMinusOne - visibleAll, 0));
       }
 
     } finally {
       // Ensure full set is restored regardless of errors.
-      this._addObstacles(partial);
+      calc.addObstacles(partial);
     }
 
     // Prorate each obstacle's share of the visibility by its opacity.

@@ -112,7 +112,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const ot = this.occlusionTester;
     const excludedObstacles = new Set(["terrainWalls"]);
     let includeObstacles = ot.constructor.OBSTACLE_KEYS.difference(excludedObstacles);
-    yield* this._iterateFacesForObstacles({ includeObstacles, geomSubType: this.constructor.geomSubType });
+    yield* this._iterateFacesForObstacles({ includeObstacles, geomSubtype: this.constructor.geomSubtype });
   }
 
   /**

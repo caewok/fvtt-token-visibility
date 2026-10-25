@@ -128,6 +128,7 @@ export class PercentVisibleResult {
    */
   set percentVisible(value) {
     this.#percentVisible = value == null ? null : Math.clamp(value, 0, 1);
+    this.visibility = this.constructor.VISIBILITY.MEASURED;
   }
 
   /**
@@ -209,7 +210,7 @@ export class PercentVisibleCalculatorAbstract {
 
   /** @type {CONST.WALL_RESTRICTION_TYPES} */
   get senseType() {
-    return this.occlusionTester._config.senseType || "sight";
+    return this.occlusionTester.config.senseType || "sight";
   }
 
   // ----- NOTE: Basic property getters / setters ---- //
@@ -270,7 +271,6 @@ export class PercentVisibleCalculatorAbstract {
       this.occlusionTester.frustum ??= new Frustum();
       camera.toCanvasFrustum(this.occlusionTester.frustum);
     }
-
     this.occlusionTester.update();
   }
 
@@ -297,7 +297,7 @@ export class PercentVisibleCalculatorAbstract {
 
   _createResult() {
     const res = new this.constructor.resultClass();
-    res.largeTarget = this.config.largeTarget;
+    res.config.largeTarget = this.config.largeTarget;
     return res;
   }
 
@@ -394,6 +394,73 @@ export class PercentVisibleCalculatorAbstract {
     this.viewer = oldViewer;
     this.viewpoint = oldViewpoint;
     return { dim: dimResult, bright: brightResult };
+  }
+
+  /* ----- NOTE: Opacity / Transparency ----- */
+
+  /** @type {boolean} True if _calculate weights by obstacle opacity; false if Viewpoint must handle. */
+  static handlesOpacity = false;
+
+  /**
+   * @param {PlaceableGeometry} obstacle
+   * @returns {number} Between 0 (transparent) and 1 (opaque).
+   */
+  obstacleOpacity(obstacle) { return obstacle.opacity(this.senseType); }
+
+  /**
+   * Obstacles that may be marked partially opaque.
+   * Tiles and levels currently excluded b/c those are handled via textures.
+   * @type {string[]}
+   */
+  static TRANSPARENT_OBSTACLE_TYPES = ["tokens", "walls", "regions"];
+
+  static WALL_TYPES = ["walls", "terrainWalls", "proximateWalls", "reverseProximateWalls"];
+
+  /**
+   * Locate all partially blocking and non-blocking obstacles.
+   * @returns {object}
+   *   - @prop {{obstacle, opacity}[]} partial       Obstacles granting only partial cover
+   *   - @prop {{obstacle, opacity}[]} nonBlocking   Obstacles granting no cover
+   */
+  partiallyBlockingObstacles() {
+    const obstacles = this.occlusionTester.obstacleGeometries;
+    const partial = [];
+    const nonBlocking = [];
+    for ( const type of this.constructor.TRANSPARENT_OBSTACLE_TYPES ) {
+      const subtypes = type === "walls" ? this.constructor.WALL_TYPES : [type];
+      for ( const subtype of subtypes ) {
+        const set = obstacles[subtype];
+        if ( !set ) continue;
+        for ( const obstacle of set ) {
+          const opacity = this.obstacleOpacity(obstacle);
+          if ( opacity >= 1 ) continue;
+          const entry = { obstacle, subtype, opacity };
+          if ( opacity <= 0 ) nonBlocking.push(entry);
+          else partial.push(entry);
+        }
+      }
+    }
+    return { partial, nonBlocking };
+  }
+
+  /**
+   * Remove obstacles from the tester.
+   * @param {{obstacle, subtype}[]} entries
+   */
+  removeObstacles(entries) {
+    const obstacles = this.occlusionTester.obstacleGeometries;
+    for ( const { obstacle, subtype } of entries ) obstacles[subtype].delete(obstacle);
+    this.occlusionTester._constructObstacleTester(); // Tester depends on what obstacles are present.
+  }
+
+  /**
+   * Add obstacles to the tester.
+   * @param {{obstacle, subtype}[]} entries
+   */
+  addObstacles(entries) {
+    const obstacles = this.occlusionTester.obstacleGeometries;
+    for ( const { obstacle, subtype } of entries ) obstacles[subtype].add(obstacle);
+    this.occlusionTester._constructObstacleTester(); // Tester depends on what obstacles are present.
   }
 
   /* ----- NOTE: Debug ----- */

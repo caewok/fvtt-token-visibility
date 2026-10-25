@@ -43,6 +43,7 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
       for ( const pt of this.targetShape.iterateFacePoints() ) {
         if ( thresholdDistance > Point3d.distanceSquaredBetween(vp, pt) ) yield pt;
       }
+      return;
     }
 
     // Only get points for faces that point toward the viewer.
