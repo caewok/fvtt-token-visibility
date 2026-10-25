@@ -47,7 +47,7 @@ export class SmallBitSet {
   }
 
   clone() {
-    const out = new this();
+    const out = new this.constructor();
     out.word = this.word;
     return out;
   }
@@ -60,25 +60,19 @@ export class SmallBitSet {
 
   invert() { this.word = ~this.word; }
 
-  andNew(value) { return this.constructor.fromNumber(this.word & value); }
+  union(other) {
+    this.word |= other.word;
+    return this;
+  }
 
-  orNew(value) { return this.constructor.fromNumber(this.word | value); }
-
-  xorNew(value) { return this.constructor.fromNumber(this.word ^ value); }
-
-  invertNew() { return this.constructor.fromNumber(~this.word); }
+  intersection(other) {
+    this.word &= other.word;
+    return this;
+  }
 
   hasIndex(idx) { return (this.word & (1 << idx)) !== 0; }
 
-  union(other) { this.word ||= other.word; return this; }
-
-  unionNew(other) { return this.constructor.fromNumber(this.word | other.word); }
-
-  intersection(other) { this.word &= other.word; return this; }
-
-  intersectionNew(other) { return this.constructor.fromNumber(this.word & other.word); }
-
-  intersects(other) { return this.word & other.word !== 0; }
+  intersects(other) { return (this.word & other.word) !== 0; }
 
   equals(other) { return this.word === other.word; }
 
@@ -115,7 +109,7 @@ export class SmallBitSet {
     // Alt: n.toString(2).split('0').join('').length;
     let count = 0;
     let n = this.word;
-    while ( n > 0 ) {
+    while ( n !== 0 ) {
       n &= (n - 1); // Clears the least significant set bit
       count++;
     }
@@ -124,24 +118,17 @@ export class SmallBitSet {
 
   *[Symbol.iterator]() {
     let i = 0; // Represents the current bit position (0-indexed)
-
-    // Iterate while the number is greater than 0
     let num = this.word;
-    while ( num > 0 ) {
+    while ( num !== 0 ) {
       // Check if the rightmost bit is set (i.e., odd number)
       if ( (num & 1) === 1 ) yield i;
-
-      // Right-shift the number to check the next bit
-      num >>= 1;
+      num >>>= 1; // Zero-fill, so a negative word still reaches 0.
       i++;
     }
   }
 
   forEach(callback) { for ( const idx of this ) callback(idx); }
 }
-
-SmallBitSet.prototype.union = SmallBitSet.prototype.or;
-SmallBitSet.prototype.intersection = SmallBitSet.prototype.and;
 
 SmallBitSet.prototype.add = SmallBitSet.prototype.setIndex;
 SmallBitSet.prototype.remove = SmallBitSet.prototype.unsetIndex;
