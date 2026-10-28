@@ -223,6 +223,8 @@ export class WebGL2 {
 
   static disableColorMask = [false, false, false, false];
 
+  static alphaMask = [false, false, false, true];
+
   static defaultBlendFuncSeparate = [1, 0, 1, 0]; // [gl.ONE, gl.ZERO, gl.ONE, gl.ZERO]
 
 

@@ -297,6 +297,8 @@ export class RedPixelCounter {
     webGL2.setBlending(blending);
   }
 
+
+
   #loopCount(tex, type = "loopCount1") {
     const { gl, fbInfos, programInfos, bufferInfos } = this;
     this.setBasicGLState();
@@ -462,27 +464,35 @@ export class RedPixelCounter {
 
   mapPixels() {
     const pixels = this.pixelBuffers.readPixelsCount;
-    const nPixels = pixels.length;
     const red = new FastBitSet();
     const redBlocked = new FastBitSet();
+    const transmittance = new Map();
     const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
-    for ( let i = 0; i < nPixels; i += 4 ) {
+    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      // i: red, i+1: green, i+2: blue, i+3: alpha
       const r = pixels[i];
-      // const g = pixels[i + 1]; // Handle in the OR test.
-      const b = pixels[i + 2];
+      if ( !(r >> 7) ) continue; // Threshold of 128 given Uint8Array.
+      const idx = i / 4;
+      red.add(idx);
+
+      // Blocked if:
+      // - Red marked as blocked in the fragment shader (alpha 0).
+      // - Blue pixel is present (solid obstacle).
+      // - Green pixel surpasses the terrain threshold.
       const a = pixels[i + 3];
+      if ( a === 0
+        || (pixels[i + 2] >> 7)
+        || pixels[i + 1] > terrainThreshold ) {
 
-      const hasR = r >> 7; // Threshold of 128 given Uint8Array.
-      const hasB = b >> 7;
+        redBlocked.add(idx);
+        continue;
+      }
 
-      // Blocked if red marked as blocked in fragment shader (hasR && alpha === 0).
-      // Blocked if blue pixel present (solid obstacle).
-      // Blocked if green pixel surpasses the terrain threshold.
-      const isBlocked = (hasR && a === 0) || (hasR * (hasB || pixels[i + 1] > terrainThreshold));
-      red.set(i / 4, hasR);
-      redBlocked.set(i / 4, isBlocked);
+      // Otherwise alpha is the transmittance through partially opaque obstacles.
+      const t = pixelTransmittance(r, a);
+      if ( t < 1 ) transmittance.set(idx, t);
     }
-    return { red, redBlocked };
+    return { red, redBlocked, transmittance };
   }
 
   mapRedPixels() {
@@ -492,7 +502,7 @@ export class RedPixelCounter {
     const red = new FastBitSet();
     for ( let i = 0; i < nPixels; i += 4 ) {
       const r = pixels[i];
-      red.set(i / 4, r >> 7); // Threshold of 128 given Uint8Array.
+      if ( r >> 7 ) red.add(i / 4); // Threshold of 128 given Uint8Array.
     }
     return { red, redBlocked };
   }
@@ -503,19 +513,26 @@ export class RedPixelCounter {
     let redBlocked = 0;
     const terrainThreshold = CONFIG[MODULE_ID].alphaThreshold * 255;
     for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
+      // i: red, i+1: green, i+2: blue, i+3: alpha
       const r = pixels[i];
-      // const g = pixels[i + 1];
-      const b = pixels[i + 2];
+      if ( !(r >> 7) ) continue; // Threshold of 128 given Uint8Array.
+      red += 1;
+
+      // Blocked if:
+      // - Red marked as blocked in the fragment shader (alpha 0).
+      // - Blue pixel is present (solid obstacle).
+      // - Green pixel surpasses the terrain threshold.
       const a = pixels[i + 3];
+      if ( a === 0
+        || (pixels[i + 2] >> 7)
+        || pixels[i + 1] > terrainThreshold ) {
 
-      const hasR = r >> 7; // Threshold of 128 given Uint8Array.
-      const hasB = b >> 7;
-      red += hasR;
+        redBlocked += 1;
+        continue;
+      }
 
-      // Blocked if red marked as blocked in fragment shader (hasR && alpha === 0).
-      // Blocked if blue pixel present (solid obstacle).
-      // Blocked if green pixel surpasses the terrain threshold.
-      redBlocked += (hasR && a === 0) || (hasR * (hasB || pixels[i + 1] > terrainThreshold));
+      // Otherwise alpha is the transmittance through partially opaque obstacles.
+      redBlocked += 1 - pixelTransmittance(r, a);
     }
     return { red, redBlocked };
   }
@@ -723,6 +740,8 @@ const int mipLevel = 0;
 const float colorThreshold = 0.95;
 const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
+${BLOCKED_WEIGHT_GLSL}
+
 void main() {
   vec4 sumColor = vec4(0.0);
 
@@ -734,7 +753,7 @@ void main() {
       vec4 texColor = texelFetch(uTexture, uv, mipLevel);
       float hasR = step(colorThreshold, texColor.r);
       sumColor.r += hasR;
-      sumColor.g += hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
+      sumColor.g += hasR * blockedWeight(texColor);
     }
   }
   fragColor = sumColor;
@@ -782,11 +801,13 @@ out vec4 fragColor;
 const float colorThreshold = 0.95;
 const float terrainThreshold = ${CONFIG[MODULE_ID].alphaThreshold};
 
+${BLOCKED_WEIGHT_GLSL}
+
 void main() {
   float hasR = step(colorThreshold, texColor.r);
   fragColor = vec4(0.0);
   fragColor.r += hasR;
-  fragColor.g += hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
+  fragColor.g += hasR * blockedWeight(texColor);
 }
 `};
   }
@@ -819,6 +840,8 @@ const int mipLevel = 0;
 const float colorThreshold = 0.95;
 const float terrainThreshold = 0.75;
 
+${BLOCKED_WEIGHT_GLSL}
+
 void main() {
   ivec2 size = textureSize(uTexture, mipLevel);
   ivec2 uvI = ivec2(uv * vec2(size));
@@ -828,7 +851,7 @@ void main() {
   fragColor = vec4(0.0);
   float hasR = step(colorThreshold, texColor.r);
   fragColor.r = hasR;
-  fragColor.g = hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
+  fragColor.g = hasR * blockedWeight(texColor);
 }
 `,
 
@@ -898,6 +921,8 @@ const int mipLevel = 0;
 const float colorThreshold = 0.95;
 const float terrainThreshold = 0.75;
 
+${BLOCKED_WEIGHT_GLSL}
+
 out float red;
 out float redBlocked;
 
@@ -915,10 +940,27 @@ void main() {
       vec4 texColor = texelFetch(uTexture, uv, mipLevel);
       float hasR = step(colorThreshold, texColor.r);
       red += hasR;
-      redBlocked += hasR * float(texColor.b > colorThreshold || texColor.g > terrainThreshold);
+      redBlocked += hasR * blockedWeight(texColor);
     }
   }
 }
 `;
 }
 }
+
+/**
+ * Transmittance of a target pixel from its red and alpha bytes. Normalizing by red keeps antialiased
+ * edge pixels, where both are fractional, at 1. The tolerance absorbs 8-bit rounding.
+ */
+function pixelTransmittance(r, a) { return a >= r - 2 ? 1 : a / r; }
+
+
+const BLOCKED_WEIGHT_GLSL = `
+// Share of a red (target) pixel that is obscured: 1 blocked, 0 clear, between for partial obstacles.
+// Requires colorThreshold and terrainThreshold to be declared first.
+float blockedWeight(vec4 c) {
+  if ( c.b > colorThreshold || c.g > terrainThreshold || c.a == 0.0 ) return 1.0;
+  float t = c.a >= c.r - 0.01 ? 1.0 : c.a / c.r;
+  return 1.0 - t;
+}
+`;

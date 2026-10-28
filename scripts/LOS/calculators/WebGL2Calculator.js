@@ -18,6 +18,25 @@ import { log } from "../util.js";
 // Base folder
 import { MODULE_ID } from "../../const.js";
 
+/* Opacity / Transparency
+Handled in the shader.
+Red: target
+Green: terrain
+Blue: obstacle
+Alpha: transparency
+
+Target pass writes alpha = 1 on target pixels. (0 when constrained wall shader flags the pixel.)
+New last pass draws each partial obstacle with alpha blending to the alpha channel only: dst.a = dst.a x (1 - src.a),
+where src.a is the obstacle's opacity. Overlapping layers multiply, so two 50% layers leave 25%.
+The pass depth-tests agains tthe target and solid obstacles but does not write depth,
+so a layer behind a solid wall, or behind the target, contributes nothing and layers don’t hide each other.
+
+The pixel counter adds 1 − T to the blocked total for unblocked red pixels.
+A flagged pixel (alpha 0) is T = 0, so it is still fully blocked.
+
+The pass must run after the terrain pass, because the terrain pass writes alpha = 1 over the pixels it covers.
+*/
+
 
 export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 
@@ -26,6 +45,7 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
     target: null,
     blockedCount: null,
     targetCount: null,
+    transmittance: null,    // Map<pixel, 0–1> (map counters only): target pixels seen through partial obstacles.
   };
 
   logData() {
@@ -37,13 +57,17 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   }
 
   clone() {
-    const out = super.clone();
-    for ( let i = 0, iMax = this.data.blocked.length; i < iMax; i += 1 ) {
-      if ( !this.data.blocked[i] ) continue;
-      out.data.blocked[i] = this.data.blocked[i].clone();
-      out.data.target[i] = this.data.target[i].clone();
-      // blockedCount, targetCount should have already been cloned.
-    }
+    const out = new this.constructor();
+    out.config = structuredClone(this.config);
+    out.visibility = this.visibility;
+    const { blocked, target, blockedCount, targetCount, transmittance } = this.data;
+    Object.assign(out.data, {
+      blocked: blocked?.clone() ?? null,
+      target: target?.clone() ?? null,
+      blockedCount,
+      targetCount,
+      transmittance: transmittance ? new Map(transmittance) : null,
+    });
     return out;
   }
 
@@ -52,7 +76,15 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   }
 
   get blockedArea() {
-    return this.data.blockedCount ?? (this.data.blocked.cardinality || 0);
+    const { blocked, blockedCount, transmittance } = this.data;
+    if ( blockedCount != null ) return blockedCount; // Count type: already fractional.
+    let area = blocked?.cardinality || 0;
+    if ( transmittance ) {
+      for ( const [i, t] of transmittance ) {
+        if ( !blocked.has(i) ) area += 1 - t;
+      }
+    }
+    return area;
   }
 
   // Handled by the calculator, which combines multiple results.
@@ -70,11 +102,14 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
     let out = super.blendMaximize(other);
     if ( out ) return out;
 
-    // The target area could change, given the different views.
-    // Combine the visible target paths.
+    // Per-pixel weights cannot be merged with the bitset logic below. Keep whichever view sees more.
+    if ( this.data.transmittance?.size || other.data.transmittance?.size ) {
+      return PercentVisibleResult.max(this, other).clone();
+    }
+
     out = this.clone();
-    if ( this.data.target ) out.data.target.or(other.data.target);
-    if ( this.data.blocked ) out.data.blocked.and(other.data.blocked);
+    if ( this.data.target ) out.data.target.union(other.data.target);
+    if ( this.data.blocked ) out.data.blocked.intersection(other.data.blocked);
     if ( this.data.blockedCount != null ) out.data.blockedCount = Math.min(this.data.blockedCount, other.data.blockedCount);
     if ( this.data.targetCount != null ) out.data.targetCount = Math.max(this.data.targetCount, other.data.targetCount);
     return out;
@@ -82,9 +117,12 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
 }
 
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
+
+  /** @type {class} */
   static resultClass = PercentVisibleWebGL2Result;
 
-
+  /** @type {boolean> Partially opaque obstacles are weighted in the render (alpha channel), so Viewpoint need not prorate. */
+  static handlesOpacity = true;
 
   /** @type {WebGL2} */
   static webGL2;
@@ -157,11 +195,10 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
    * @param {object} [opts]       Options passed to the renderer
    */
   _render(renderer, opts) {
-    // console.debug(`WebGL2Calc|Rendering`)
     renderer ??= this.renderer;
     renderer.camera = this.camera;
     renderer.updateCameraBuffer();
-    renderer.prerender(this.targetShape, this.occlusionTester);
+    renderer.prerender(this.targetShape, this.occlusionTester, this.partiallyBlockingObstacles());
     renderer.render(opts);
   }
 
@@ -185,6 +222,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     if ( pixelCounterType.startsWith("map") ) {
       lastResult.data.blocked = res.redBlocked;
       lastResult.data.target = res.red;
+      lastResult.data.transmittance = res.transmittance ?? null;
     } else {
       lastResult.data.blockedCount = res.redBlocked;
       lastResult.data.targetCount = res.red

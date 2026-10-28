@@ -27,10 +27,9 @@ layout(location = 10) in vec4 aClipPlanes_0;
 layout(location = 11) in vec4 aClipPlanes_1;
 layout(location = 12) in vec4 aClipPlanes_2;
 layout(location = 13) in vec4 aClipPlanes_3;
-layout(location = 14) in vec4 aClipPlanes_4;
 
 // Token center in 2d canvas coordinates.
-layout(location = 15) in vec2 aTokenCenter;
+layout(location = 14) in vec2 aTokenCenter;
 
 // For fragment shader.
 out vec3 vWorldPosition;
@@ -39,11 +38,15 @@ flat out vec4 vClipPlanes[${maxConstrainingWalls}];
 flat out vec2 vTokenCenter;
 #endif
 
+// Opacity
+layout(location = 15) in float aOpacity;
+
 out vec3 vNormal;
 out vec2 vTexCoord;
 
 flat out int vTextureIndex;
 flat out float vAlphaThreshold;
+flat out float vOpacity;
 
 void main() {
   vec4 worldPosition = aModel * vec4(aPosition, 1.0);
@@ -62,6 +65,8 @@ void main() {
     vAlphaThreshold = aAlphaThreshold;
   #endif
 
+  vOpacity = aOpacity;
+
   #if ${maxConstrainingWalls}
     // Instance clipping data, passed to fragment shader.
     vTokenCenter = aTokenCenter;
@@ -73,6 +78,5 @@ void main() {
     vClipPlanes[1] = aClipPlanes_1;
     vClipPlanes[2] = aClipPlanes_2;
     vClipPlanes[3] = aClipPlanes_3;
-    vClipPlanes[4] = aClipPlanes_4;
   #endif
 }

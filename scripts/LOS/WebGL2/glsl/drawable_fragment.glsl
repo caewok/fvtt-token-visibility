@@ -23,6 +23,11 @@ layout (std140) uniform Material {
   vec4 uColor;
 };
 
+// Opacity of the obstacle being drawn.
+// 1.0 for target and solid obstacles.
+// Partially opaque obstacles scale the fragment alpha, which the renderer blends into the alpha channel.
+flat in float vOpacity;
+
 // Some hardcoded lighting used by debug view
 const vec3 lightDir = normalize(vec3(0.25, 0.5, 1.0));
 const vec3 lightColor = vec3(1.0, 1.0, 1.0);
@@ -119,7 +124,11 @@ void main() {
   #endif
 
   #if ${maxConstrainingWalls}
-    if ( blocked ) { fragColor.a = 0.0; }
+    // Flag a blocked target fragment with alpha 0.
+    // Partial obstacles (vOpacity < 1) keep their alpha, which is their attenuation.
+    if ( blocked && vOpacity >= 1.0 ) { fragColor.a = 0.0; }
   #endif
+
+  fragColor.a *= vOpacity;
 
 }
