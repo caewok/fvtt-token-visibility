@@ -11,7 +11,8 @@ import { rangeTestPointsForToken } from "./visibility_range.js";
 import { Settings, SETTINGS } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
-import { LOSViewerConfig, buildLOSViewer } from "./LOSCalculator.js";
+import { buildLOSViewer } from "./LOSCalculator.js";
+import { LOSCache } from "./LOSThrottle.js";
 
 /** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
 const DM_SENSE_TYPES = {
@@ -105,6 +106,39 @@ export class ATVTokenHandler {
     losViewer.calculate();
     return losViewer.hasLOS;
   }
+
+  // ----- NOTE: Throttled LOS for detection mode tests ----- //
+
+  /**
+   * Recent LOS results for the detection mode tests, which run for every viewer and target on every perception
+   * refresh. Direct callers (percentVisibilityToToken, hasLOSToToken) never use this.
+   * @type {LOSCache}
+   */
+  #losCache = new LOSCache();
+
+  /**
+   * Recent LOS result for a target and detection mode, if still valid.
+   * The vision angle test is cheap and depends on rotation, so it is always run live.
+   * @param {Token} target
+   * @param {string} detectionModeId
+   * @returns {boolean|undefined} undefined if the caller must calculate and then call cacheLOSToToken.
+   */
+  cachedLOSToToken(target, detectionModeId = "") {
+    if ( !this.tokenWithinLimitedAngleVision(target) ) return false;
+    return this.#losCache.get(`${target.id}|${detectionModeId}`, this.viewer, target);
+  }
+
+  /**
+   * Store a freshly calculated LOS result for use by cachedLOSToToken.
+   * @param {Token} target
+   * @param {string} detectionModeId
+   * @param {boolean} hasLOS
+   */
+  cacheLOSToToken(target, detectionModeId, hasLOS) {
+    this.#losCache.set(`${target.id}|${detectionModeId}`, hasLOS, this.viewer, target);
+  }
+
+  // ----- NOTE: Range Tests ----- //
 
   /**
    * Is a target token within the visible range of this viewer?

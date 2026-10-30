@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 CONST,
 foundry,
@@ -9,16 +8,19 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS, FA_ICONS, REGION_BEHAVIORS } from "./const.js";
+import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES, FLAGS } from "./const.js";
+import { GEOMETRY_LIB_ID } from "./geometry/const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
+import { log, fastFlag } from "./util.js";
 
 // Load the geometry library.
 import "./geometry/registration.js";
 
 // Hooks and method registration
 import { initializePatching, PATCHER } from "./patching.js";
-import { Settings, SETTINGS } from "./settings.js";
+import { Settings } from "./settings.js";
+import { LOSThrottle } from "./LOSThrottle.js";
 
 // Trackers
 import { LightStatusTracker } from "./LightStatusTracker.js";
@@ -101,18 +103,6 @@ Hooks.once("init", function() {
     },
 
     /**
-     * Current occlusion tester for the given settings.
-     * @type {ObstacleOcclusionTest}
-     */
-    occlusionTester: null,
-
-    /**
-     * Current calculator for the given settings.
-     * @type {PercentVisibleCalculatorAbstract}
-     */
-    losCalculator: null,
-
-    /**
      * Classes used to view the debugger for different algorithms.
      * @type {object<class>}
      */
@@ -124,6 +114,18 @@ Hooks.once("init", function() {
       // "webgpu-async": DebugVisibilityViewerWebGPUAsync,
       "per-pixel": DebugVisibilityViewerPerPixel,
     },
+
+    /**
+     * Current occlusion tester for the given settings.
+     * @type {ObstacleOcclusionTest}
+     */
+    occlusionTester: null,
+
+    /**
+     * Current calculator for the given settings.
+     * @type {PercentVisibleCalculatorAbstract}
+     */
+    losCalculator: null,
 
     /**
      * Should the line-of-sight calculator use the viewer height (as calculated in Wall Height)
@@ -182,6 +184,16 @@ Hooks.once("init", function() {
     },
 
     /**
+     * Limit the number of times line-of-sight is checked when dragging/moving tokens.
+     * @type {object}
+     */
+    losThrottle: {
+      enabled: true,    /** @type {boolean} */
+      interval: 200,    /** @type {number<milliseconds>} */
+      maxDistance: 5,   /** @type {number<grid distance>} */
+    },
+
+    /**
      * Turn on certain debug logging.
      * @type {boolean}
      */
@@ -233,7 +245,8 @@ Hooks.once("init", function() {
     twgl,
   };
 
-  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(_value => console.debug(`${MODULE_ID}|Templates loaded.`));
+  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(_value => console.debug(`${MODULE_ID}|LOS Templates loaded.`));
+  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(_value => log("Templates loaded."));
 });
 
 
@@ -257,6 +270,15 @@ Hooks.once("setup", function() {
     reference: MODULE_ID,
   };
   CONFIG.statusEffects.push(dimLight, noLight);
+
+  // Opacity values for tokens, walls, regions for cover.
+  CONFIG[GEOMETRY_LIB_ID].CONFIG.opacity.register("sight", {
+    Token: tokenOpacity,
+    Region: regionOpacity,
+    Wall: wallOpacity,
+  });
+
+  LOSThrottle.registerHooks();
 });
 
 Hooks.once("ready", function() {
@@ -266,37 +288,34 @@ Hooks.once("ready", function() {
   LightStatusTracker.loadLightIcons(); // Async.
 });
 
-Hooks.on("canvasReady", function() {
-  // Destroy any old calculator.
-  if ( CONFIG[MODULE_ID].losCalculator ) {
-    CONFIG[MODULE_ID].losCalculator.destroy();
-    CONFIG[MODULE_ID].losCalculator = null;
-  }
 
-  // Create a shared occlusion tester.
-  CONFIG[MODULE_ID].occlusionTester = buildOcclusionTester();
-
-  // Create a shared los calculator.
-  const calc = CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
-
-  // Replace for any tokens already in the scene.
-  canvas.tokens.placeables.forEach(token => {
-    const losViewer = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY].losViewer;
-    if ( !losViewer ) return;
-    losViewer.calculator = calc;
-  });
-});
-
-Hooks.on("createActiveEffect", refreshVisionOnActiveEffect);
-Hooks.on("deleteActiveEffect", refreshVisionOnActiveEffect);
+// ----- NOTE: Helper Functions ----- //
 
 /**
- * Refresh vision for relevant active effect creation/deletion
+ * Opacity for cover obstacle tokens.
+ * @param {TokenDocument} tokenD
+ * @returns {number}
  */
-function refreshVisionOnActiveEffect(activeEffect) {
-  const proneStatusId = CONFIG.GeometryLib.proneStatusId ?? Settings.get(SETTINGS.COVER.LIVE_TOKENS.ATTRIBUTE);
-  const isProne = activeEffect?.statuses.some(status => status === proneStatusId);
-  if ( !isProne ) return;
+function tokenOpacity(tokenD) {
+  return Number(fastFlag(tokenD, FLAGS.OPACITY) ?? 1);
+}
 
-  canvas.effects.visibility.refresh();
+/**
+ * Opacity for cover obstacle walls.
+ * @param {WallDocument} wallD
+ * @returns {number}
+ */
+function wallOpacity(wallD) { return Number(fastFlag(wallD, FLAGS.OPACITY) ?? 1); }
+
+/**
+ * Opacity for cover obstacle regions.
+ * @param {RegionDocument} regionD
+ * @returns {number}
+ */
+function regionOpacity(regionD) {
+  for ( const b of regionD.behaviors ) {
+    if ( b.disabled || !b.type === `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}` ) continue;
+    return Number(b.system.opacity ?? 1);
+  }
+  return 0;
 }

@@ -274,6 +274,7 @@ export class Camera {
   get invTransposePerspectiveMatrix() {
     if ( this.dirtyPerspectiveTranspose ) {
       this.perspectiveMatrix.invert(this.#invTransposeM.perspective).transpose(this.#invTransposeM.perspective);
+      this.#dirtyPerspectiveTranspose = false;
     }
     return this.#invTransposeM.perspective;
   }
@@ -282,8 +283,9 @@ export class Camera {
   get invTransposeLookAtMatrix() {
     if ( this.dirtyLookAtTranspose ) {
       this.lookAtMatrix.invert(this.#invTransposeM.lookAt).transpose(this.#invTransposeM.lookAt);
+      this.#dirtyLookAtTranspose = false;
     }
-    return this.#invTransposeM.perspective;
+    return this.#invTransposeM.lookAt;
   }
 
 

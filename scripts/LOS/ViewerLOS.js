@@ -500,15 +500,15 @@ export class ViewerLOS {
     // Filter
     // Are there any corners?
     const cornersMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK]);
-    const cornersIx = bs.intersectionNew(cornersMask);
+    const cornersIx = bs.clone().intersection(cornersMask);
 
     // Are there any sides?
     const sidesMask = SmallBitSet.fromIndices([PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK]);
-    const sidesIx = bs.intersectionNew(sidesMask);
+    const sidesIx = bs.clone().intersection(sidesMask);
 
     // 3d
     const d3Mask = SmallBitSet.fromIndices([PI.D3.TOP, PI.D3.MID, PI.D3.BOTTOM]);
-    const d3Ix = bs.intersectionNew(d3Mask);
+    const d3Ix = bs.clone().intersection(d3Mask);
     if ( d3Ix.isEmpty ) d3Ix.add(PI.D3.MID);
 
     const allPoints = tokenShape.internalPoints;

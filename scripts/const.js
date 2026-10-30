@@ -14,6 +14,10 @@ export const TRACKER_IDS = {
   LIGHT_METER: "lightMeter",
 };
 
+export const FLAGS = {
+  OPACITY: "opacity",
+};
+
 export const FALLBACK_ICON = "icons/svg/hazard.svg";
 
 /**
@@ -29,6 +33,9 @@ export const GEOMETRY_LIB_OPTS = {
     "Wall",
     "Level",
   ],
+
+  wallHeightRequired: true,
+  tokenHeightRequired: true,
 };
 
 // Font Awesome icons used in this module in controls or tabs.
@@ -38,4 +45,9 @@ export const FA_ICONS = {
 
 export const REGION_BEHAVIORS = {
   BLOCK_SIGHT: "blockSight",
+};
+
+export const TEMPLATES = {
+  TOKEN_CONFIG: `modules/${MODULE_ID}/templates/token-config.html`,
+  WALL_CONFIG: `modules/${MODULE_ID}/templates/wall-config.html`,
 };
