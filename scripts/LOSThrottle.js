@@ -7,6 +7,7 @@ Hooks,
 "use strict";
 
 import { MODULE_ID } from "./const.js";
+import { log } from "./util.js";
 import { gridUnitsToPixels } from "./geometry/util.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
@@ -111,9 +112,24 @@ export class LOSThrottle {
 
   /** May the entry still be used for this viewer and target? */
   static isFresh(entry, viewer, target) {
-    if ( LOSThrottle.bucket(entry.time) !== LOSThrottle.bucket(LOSThrottle.now()) ) return false;
-    return LOSThrottle.#within(entry.viewer, LOSThrottle.viewerState(viewer))
-      && LOSThrottle.#within(entry.target, LOSThrottle.targetState(target));
+    if ( LOSThrottle.bucket(entry.time) !== LOSThrottle.bucket(LOSThrottle.now()) ) {
+      log(`LOSThrottle.isFresh is false based on timing for ${viewer.name}(${viewer.id}) --> ${target.name}(${target.id})`);
+      return false;
+    }
+    if ( !LOSThrottle.#within(entry.viewer, LOSThrottle.viewerState(viewer)) ) {
+      log(`LOSThrottle.isFresh is false based on viewer move for ${viewer.name}(${viewer.id}) --> ${target.name}(${target.id})`);
+      return false;
+    }
+    if ( !LOSThrottle.#within(entry.target, LOSThrottle.targetState(target)) ) {
+      log(`LOSThrottle.isFresh is false based on target move for ${viewer.name}(${viewer.id}) --> ${target.name}(${target.id})`);
+      return false;
+    }
+    log(`LOSThrottle.isFresh is true for ${viewer.name}(${viewer.id}) --> ${target.name}(${target.id})`);
+
+    return true;
+
+    // return LOSThrottle.#within(entry.viewer, LOSThrottle.viewerState(viewer))
+    //   && LOSThrottle.#within(entry.target, LOSThrottle.targetState(target));
   }
 
   // ----- NOTE: Trailing refresh ----- //
@@ -160,10 +176,16 @@ export class LOSThrottle {
   static registerHooks() {
     if ( LOSThrottle.#hooksRegistered ) return;
     LOSThrottle.#hooksRegistered = true;
-    const invalidate = () => LOSThrottle.invalidateAll();
+    const invalidate = (doc) => {
+      log(`LOSThrottle|Invalidating based on change to ${doc?.name} (${doc?.id})`);
+      LOSThrottle.invalidateAll();
+    }
     for ( const name of LOSThrottle.INVALIDATING_HOOKS ) Hooks.on(name, invalidate);
-    Hooks.on("updateToken", (_doc, changes) => {
-      if ( Object.keys(changes).some(k => !LOSThrottle.MOVEMENT_KEYS.has(k)) ) invalidate();
+    Hooks.on("updateToken", (doc, changes) => {
+      if ( Object.keys(changes).some(k => !LOSThrottle.MOVEMENT_KEYS.has(k)) ) {
+        log(`LOSThrottle|updateToken|Invalidating based on change to ${doc.name} (${doc.id})`);
+        invalidate();
+      }
     });
   }
 }

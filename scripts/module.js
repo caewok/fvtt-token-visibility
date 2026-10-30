@@ -20,6 +20,7 @@ import "./geometry/registration.js";
 // Hooks and method registration
 import { initializePatching, PATCHER } from "./patching.js";
 import { Settings } from "./settings.js";
+import { LOSThrottle } from "./LOSThrottle.js";
 
 // Trackers
 import { LightStatusTracker } from "./LightStatusTracker.js";
@@ -188,7 +189,7 @@ Hooks.once("init", function() {
      */
     losThrottle: {
       enabled: true,    /** @type {boolean} */
-      interval: 100,    /** @type {number<milliseconds>} */
+      interval: 200,    /** @type {number<milliseconds>} */
       maxDistance: 5,   /** @type {number<grid distance>} */
     },
 
@@ -276,6 +277,8 @@ Hooks.once("setup", function() {
     Region: regionOpacity,
     Wall: wallOpacity,
   });
+
+  LOSThrottle.registerHooks();
 });
 
 Hooks.once("ready", function() {

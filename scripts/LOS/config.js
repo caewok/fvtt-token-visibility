@@ -44,7 +44,7 @@ export const LOS_CONFIG = {
    * Larger spacing means fewer points and better performance, sacrificing resolution.
    * @type {number} In pixel units
    */
-  perPixelSpacing: 10,
+  perPixelSpacing: 25,
 
   /** @type {string} */
   /*
