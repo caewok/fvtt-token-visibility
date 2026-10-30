@@ -183,6 +183,16 @@ Hooks.once("init", function() {
     },
 
     /**
+     * Limit the number of times line-of-sight is checked when dragging/moving tokens.
+     * @type {object}
+     */
+    losThrottle: {
+      enabled: true,    /** @type {boolean} */
+      interval: 100,    /** @type {number<milliseconds>} */
+      maxDistance: 5,   /** @type {number<grid distance>} */
+    },
+
+    /**
      * Turn on certain debug logging.
      * @type {boolean}
      */
