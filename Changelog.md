@@ -1,3 +1,13 @@
+## 14.1.0
+Use updated libGeometry v0.7.0, with better handling of placeable 3d geometry and scene levels.
+Rewritten WebGL2 calculator with simpler handling of placeable geometry.
+Throttle los tests during token movement.
+
+### New Features
+Select opacity/transparency amount for regions, tokens, walls.
+Use a region behavior to mark a region as blocking sight.
+Sight blocking for Terrain Mapper terrains in v14 (plateaus, ramps, steps, hills).
+
 ## 14.0.0
 Change version numbering to follow Foundry versions.
 Update for Foundry v14.
