@@ -8,7 +8,7 @@ PIXI
 
 "use strict";
 
-import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
+import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
 import { buildLOSViewer, buildLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
