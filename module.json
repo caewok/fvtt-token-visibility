@@ -6,7 +6,7 @@
   "socket": "false",
   "compatibility": {
     "minimum": "14",
-    "verified": "14.363"
+    "verified": "14.369"
   },
   "authors": [
     {
@@ -22,7 +22,7 @@
         "type": "module",
         "manifest": "https://raw.githubusercontent.com/ruipin/fvtt-lib-wrapper/master/module.json",
         "compatibility": {
-          "verified": "1.12.8"
+          "verified": "1.13.5.1"
         }
       }
     ]
