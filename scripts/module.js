@@ -8,7 +8,7 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES, FLAGS } from "./const.js";
+import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES, FLAGS, ENUMS } from "./const.js";
 import { GEOMETRY_LIB_ID } from "./geometry/const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
@@ -278,14 +278,16 @@ Hooks.once("setup", function() {
     Wall: wallOpacity,
   });
 
+  ATVLOSManager.registerHooks();
   LOSThrottle.registerHooks();
 });
 
 Hooks.once("ready", function() {
-  // console.debug(`${MODULE_ID}|ready hook`);
   Settings.migrate(); // Cannot be set until world is ready.
-  Settings.initializeDebugGraphics();
   LightStatusTracker.loadLightIcons(); // Async.
+
+  Settings.set(Settings.KEYS.LIGHT_MONITOR.ALGORITHM, ENUMS.LIGHT_ALGORITHM_TYPES.NONE); // Disable for now, until fixed.
+
 });
 
 

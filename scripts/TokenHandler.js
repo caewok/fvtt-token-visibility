@@ -5,10 +5,10 @@ foundry,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "./const.js";
+import { MODULE_ID, TRACKER_IDS, SETTINGS } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { rangeTestPointsForToken } from "./visibility_range.js";
-import { Settings, SETTINGS } from "./settings.js";
+import { Settings } from "./settings.js";
 import { Draw } from "./geometry/Draw.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { buildLOSViewer } from "./LOSCalculator.js";

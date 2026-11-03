@@ -3,14 +3,8 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
-import { Settings } from "../../settings.js";
-
 // Calculator
 import { PercentVisiblePointsResultAbstract, PercentVisibleCalculatorPointsAbstract } from "./PointsCalculator.js";
-
-// LOS folder
-import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";

@@ -5,8 +5,7 @@ ui,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { MODULE_ID } from "./const.js";
-import { SETTINGS } from "./settings.js";
+import { MODULE_ID, SETTINGS, ENUMS } from "./const.js";
 import { SettingsSubmenu } from "./SettingsSubmenu.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
@@ -27,21 +26,20 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     const targetTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
     if ( targetTab ) {
       // Add data action to the algorithm selector.
-      const algSelector = targetTab.querySelector('[name="tokenvisibility.los-algorithm"]');
+      const algSelector = targetTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.ALGORITHM}"]`);
+      if ( !algSelector ) return;
       algSelector.addEventListener("change", ATVSettingsSubmenu._onAlgorithmSelect.bind(this));
       await ATVSettingsSubmenu._onAlgorithmSelect.call(this);
     }
   }
 
   static async #onResetDND5e() {
-    console.log("onResetDND5e");
-
     // Set each value in the application.
     const PI = ViewerLOS.POINT_INDICES;
     const LOS = SETTINGS.LOS;
     const opts = {
       losTarget: {
-        [LOS.TARGET.ALGORITHM]: LOS.TARGET.TYPES.POINTS,
+        [LOS.TARGET.ALGORITHM]: ENUMS.ALGORITHM_TYPES.POINTS,
         [LOS.TARGET.PERCENT]: 0,
         [LOS.TARGET.LARGE]: true,
 
@@ -54,20 +52,19 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
       },
     };
     setOptionValues.call(this, opts);
+    await this.constructor._onAlgorithmSelect.call(this);
     const moduleName = game.i18n.localize(`${MODULE_ID}.name`);
     const message = game.i18n.localize(`${MODULE_ID}.settings.submenu.notifyDND5e`);
     ui.notifications.notify(`${moduleName} | ${message}`);
   }
 
   static async #onReset3d() {
-    console.log("onReset3d");
-
     // Set each value in the application.
     const PI = ViewerLOS.POINT_INDICES;
     const { LOS, RANGE, POINT_TYPES } = SETTINGS;
     const opts = {
       losTarget: {
-        [LOS.TARGET.ALGORITHM]: LOS.TARGET.TYPES.WEBGL2,
+        [LOS.TARGET.ALGORITHM]: ENUMS.ALGORITHM_TYPES.WEBGL2,
         [LOS.TARGET.PERCENT]: 0.2,
         [LOS.TARGET.LARGE]: false,
       },
@@ -92,12 +89,16 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
     const losTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
     if ( losTab ) {
     // Add data action to the algorithm selector.
-      const algSelector = losTab.querySelector('[name="tokenvisibility.los-algorithm"]');
-      const isPoints = algSelector.value === "los-algorithm-points";
-      const targetOptionsElem = losTab.querySelector('[name="tokenvisibility.los-points-options-target"]');
+      const algSelector = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.ALGORITHM}"]`);
+      if ( !algSelector ) return;
+      const isPoints = algSelector.value === ENUMS.ALGORITHM_TYPES.POINTS;
+
+      const targetOptionsElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINTS_OPTIONS.POINTS}"]`);
+      if ( !targetOptionsElem ) return;
       targetOptionsElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
 
-      const targetInsetElem = losTab.querySelector('[name="tokenvisibility.los-inset-target"]');
+      const targetInsetElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINTS_OPTIONS.INSET}"]`);
+      if ( !targetInsetElem ) return;
       targetInsetElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
     }
     this.setPosition(this.position); // Force display refresh.

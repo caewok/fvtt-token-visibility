@@ -4,7 +4,7 @@ foundry,
 */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS, REGION_BEHAVIORS } from "./const.js";
+import { MODULE_ID, TRACKER_IDS, REGION_BEHAVIORS, ENUMS } from "./const.js";
 import { Settings } from "./settings.js";
 import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
 import { pointIndexForSet } from "./LOS/SmallBitSet.js";
@@ -17,10 +17,9 @@ import { ObstacleOcclusionTest } from "./geometry/ObstacleOcclusionTest.js";
 export function currentCalculator() { return CONFIG[MODULE_ID].losCalculator(); }
 
 export function currentDebugViewerClass(type) {
-  const KEYS = Settings.KEYS;
-  const { TARGET } = KEYS.LOS;
+  type ??= effectiveAlgorithmType();
   const debugViewers = CONFIG[MODULE_ID].debugViewerClasses;
-  type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
+  type ??= Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM) ?? ENUMS.ALGORITHM_TYPES.POINTS;
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[type];
   return debugViewers[calcName];
 }
@@ -28,11 +27,11 @@ export function currentDebugViewerClass(type) {
 /**
  * @returns {TokenBlockingConfig}  See PercentVisibleCalculator.js
  */
-function TokenBlockingConfig() {
+export function TokenBlockingConfig() {
   return new ConfigHandler({
-    dead: () => Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true,
-    live: () => Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true,
-    prone: () => Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true,
+    dead: () => Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
+    live: () => Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
+    prone: () => Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
 
     // No settings enabled for now.
     enemies: true,
@@ -103,7 +102,7 @@ export function LOSViewerConfig() {
 /**
  * Build the default occlusion tester that, by default, uses the current settings.
  * @param {object} [otCfg={}]           Blocking configuration settings that deviate from the current
- * @returns {ObstacleOcclusionTester}
+ * @returns {ObstacleOcclusionTest}
  */
 export function buildOcclusionTester(otCfg = {}) {
   const ot = new ObstacleOcclusionTest();
@@ -117,7 +116,7 @@ export function buildOcclusionTester(otCfg = {}) {
  * @returns {class}
  */
 export function getCurrentCalculatorClass() {
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[effectiveAlgorithmType()];
   return CONFIG[MODULE_ID].calculatorClasses[calcName];
 }
 

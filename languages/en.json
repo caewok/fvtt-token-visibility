@@ -145,5 +145,16 @@
     "tokenvisibility.tile-config.options.calculated": "Calculated",
     "tokenvisibility.tile-config.options.ignore": "Does Not Block",
 
+    "tokenvisibility.point-indices.CENTER": "Center",
+    "tokenvisibility.point-indices.CORNERS.FACING": "Front Corners",
+    "tokenvisibility.point-indices.CORNERS.MID": "Mid Corners",
+    "tokenvisibility.point-indices.CORNERS.BACK": "Back Corners",
+    "tokenvisibility.point-indices.SIDES.FACING": "Facing Sides",
+    "tokenvisibility.point-indices.SIDES.MID": "Mid Sides",
+    "tokenvisibility.point-indices.SIDES.BACK": "Back Sides",
+    "tokenvisibility.point-indices.D3.TOP": "Top Elevation",
+    "tokenvisibility.point-indices.D3.MID": "Middle Elevation",
+    "tokenvisibility.point-indices.D3.BOTTOM": "Bottom Elevation",
+
     "TYPES.RegionBehavior.tokenvisibility.blockSight": "Block Sight"
  }

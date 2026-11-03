@@ -12,6 +12,8 @@ import { SETTINGS } from "../settings.js";
 import { MODULE_ID } from "../const.js";
 import { ViewerLOS } from "./ViewerLOS.js";
 import { Draw } from "../geometry/Draw.js";
+import { Area3dPopoutV2, Area3dPopoutCanvasV2 } from "./Area3dPopout.js";
+import { ENUMS } from "./const.js";
 
 /* Debug viewer
 
@@ -552,7 +554,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     // console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
-  algorithm = SETTINGS.LOS.TARGET.TYPES.WEBGL2;
+  algorithm = ENUMS.ALGORITHM_TYPES.WEBGL2;
 
   async openPopout(opts) {
     await super.openPopout(opts);
