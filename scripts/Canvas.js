@@ -9,6 +9,7 @@ import { MODULE_ID, TRACKER_IDS, ENUMS } from "./const.js";
 import { Settings } from "./settings.js";
 import { buildOcclusionTester, buildLOSCalculator } from "./LOSCalculator.js";
 import { ATVLOSManager } from "./ATVLOSManager.js";
+import { PercentVisibleCalculatorWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
 
 // Patches for the Canvas class
 export const PATCHES = {};
@@ -68,6 +69,8 @@ function canvasTearDown(_canvas) {
     CONFIG[MODULE_ID].losCalculator.destroy();
     CONFIG[MODULE_ID].losCalculator = null;
   }
+
+  PercentVisibleCalculatorWebGL2.destroy();
 }
 
 PATCHES.BASIC.HOOKS = { canvasReady, canvasTearDown };

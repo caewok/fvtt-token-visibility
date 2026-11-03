@@ -21,6 +21,7 @@ import "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import { Settings } from "./settings.js";
 import { LOSThrottle } from "./LOSThrottle.js";
+import { ATVLOSManager } from "./ATVLOSManager.js";
 
 // Trackers
 import { LightStatusTracker } from "./LightStatusTracker.js";
@@ -40,16 +41,22 @@ import {
   getCurrentCalculatorClass,
 } from "./LOSCalculator.js";
 
-import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/calculators/PointsCalculator.js";
-import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/calculators/GeometricCalculator.js";
-import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
-import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
+import { PercentVisibleCalculatorPoints } from "./LOS/calculators/PointsCalculator.js";
+import { PercentVisibleCalculatorGeometric } from "./LOS/calculators/GeometricCalculator.js";
+import { PercentVisibleCalculatorPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
+import { PercentVisibleCalculatorWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
+import {
+  DebugVisibilityViewerPoints,
+  DebugVisibilityViewerGeometric,
+  DebugVisibilityViewerPerPixel,
+  DebugVisibilityViewerWebGL2,
+} from "./LOS/DebugVisibilityViewer.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
-import * as twgl from "./LOS/WebGL2/twgl-full.js";
+import * as twgl from "./LOS/WebGL2/twgl.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
-
 
 
 // Other self-executing hooks
@@ -71,9 +78,9 @@ Hooks.once("init", function() {
 
   PIXI.BitmapFont.from(`${MODULE_ID}_area3dPercentLabel`, {
     fill: "#333333",
-    fontWeight: 'bold',
+    fontWeight: "bold",
   }, {
-    chars: [['0', '9'], ' .%']
+    chars: [["0", "9"], " .%"]
   });
 
   initializePatching();
@@ -97,8 +104,6 @@ Hooks.once("init", function() {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webgl2: PercentVisibleCalculatorWebGL2,
-      // webgpu: PercentVisibleCalculatorWebGPU,
-      // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
       "per-pixel": PercentVisibleCalculatorPerPixel,
     },
 
@@ -110,8 +115,6 @@ Hooks.once("init", function() {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
       webgl2: DebugVisibilityViewerWebGL2,
-      // webgpu: DebugVisibilityViewerWebGPU,
-      // "webgpu-async": DebugVisibilityViewerWebGPUAsync,
       "per-pixel": DebugVisibilityViewerPerPixel,
     },
 
@@ -180,7 +183,16 @@ Hooks.once("init", function() {
        * If using PercentVisibleCalculatorPoints, what point configuration to use.
        * @type {ViewerLOS.POINT_INDICES} Bit union of POINT_INDICES.
        */
-      targetPointIndex: 1022, // Everything except CENTER (0)
+      targetPointIndex: SmallBitSet.fromIndices([
+        ViewerLOS.POINT_INDICES.CORNERS.FACING,
+        ViewerLOS.POINT_INDICES.CORNERS.MID,
+        ViewerLOS.POINT_INDICES.CORNERS.BACK,
+        ViewerLOS.POINT_INDICES.SIDES.FACING,
+        ViewerLOS.POINT_INDICES.SIDES.MID,
+        ViewerLOS.POINT_INDICES.SIDES.BACK,
+        ViewerLOS.POINT_INDICES.D3.BOTTOM,
+        ViewerLOS.POINT_INDICES.D3.MID,
+        ViewerLOS.POINT_INDICES.D3.TOP]).word, // Everything except CENTER (0)
     },
 
     /**
@@ -192,6 +204,9 @@ Hooks.once("init", function() {
       interval: 200,    /** @type {number<milliseconds>} */
       maxDistance: 5,   /** @type {number<grid distance>} */
     },
+
+    /** @type {boolean} Flag if webGL loses context. */
+    webGL2Unavailable: false,
 
     /**
      * Turn on certain debug logging.
@@ -214,8 +229,6 @@ Hooks.once("init", function() {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webGL2: PercentVisibleCalculatorWebGL2,
-      // webGPU: PercentVisibleCalculatorWebGPU,
-      // webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
       perPixel: PercentVisibleCalculatorPerPixel,
     },
 
@@ -231,8 +244,6 @@ Hooks.once("init", function() {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
       webGL2: DebugVisibilityViewerWebGL2,
-      // webGPU: DebugVisibilityViewerWebGPU,
-      // webGPUAsync: DebugVisibilityViewerWebGPUAsync,
       perPixel: DebugVisibilityViewerPerPixel,
     },
 
@@ -245,14 +256,13 @@ Hooks.once("init", function() {
     twgl,
   };
 
-  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(_value => console.debug(`${MODULE_ID}|LOS Templates loaded.`));
-  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(_value => log("Templates loaded."));
+  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(() => log(`${MODULE_ID}|LOS Templates loaded.`));
+  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(() => log("Templates loaded."));
 });
 
 
 Hooks.once("setup", function() {
   Settings.registerAll();
-  // console.debug(`${MODULE_ID}|registered settings`);
 
   // Add status effects for dim and no light.
   const dimLight = {
@@ -316,7 +326,7 @@ function wallOpacity(wallD) { return Number(fastFlag(wallD, FLAGS.OPACITY) ?? 1)
  */
 function regionOpacity(regionD) {
   for ( const b of regionD.behaviors ) {
-    if ( b.disabled || !b.type === `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}` ) continue;
+    if ( b.disabled || b.type !== `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}` ) continue;
     return Number(b.system.opacity ?? 1);
   }
   return 0;

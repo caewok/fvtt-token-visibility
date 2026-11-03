@@ -1,15 +1,16 @@
 /* globals
 CONFIG,
 foundry,
-Handlebars,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { EPSILON, MODULE_ID } from "../const.js";
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
-
+import { GeometricPrimitive } from "../geometry/placeable_geometry/GeometricPrimitive.js";
+import { SmallBitSet } from "./SmallBitSet.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
@@ -42,7 +43,6 @@ export function log(...args) {
  */
 export function roundFastPositive(n) { return (n + 0.5) << 0; }
 
-
 /**
  * Test if the token constrained borders overlap and tokens are at same elevation.
  * Used to allow vision when tokens are nearly on top of one another.
@@ -58,6 +58,126 @@ export function tokensOverlap(token1, token2, pad = -2) {
   const border1 = token1.constrainedTokenBorder.clone().pad(pad);
   const border2 = token2.constrainedTokenBorder.clone().pad(pad);
   return border1.overlaps(border2);
+}
+
+/**
+ * Build points for a given token.
+ * @param {Token|GeometricPrimitive} token
+ * @param {object} [opts]
+ * @param {number|BitSet} [opts.pointKey]
+ * @param {number} [opts.insetPercentage]
+ * @param {boolean} [opts.tokenHeightPercentage]         Use a percentage of the token shape's total height for top values.
+ * @returns {Point3d[]}
+ */
+export function constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage = 0, tokenHeightPercentage = 1 } = {}) {
+  if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(tokenShape).calculated; // Constrained or full.
+    tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
+  }
+
+  const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
+  const PI = this.POINT_INDICES;
+
+  // Filter
+  // Are there any corners?
+  const cornersMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK]);
+  const cornersIx = bs.clone().intersection(cornersMask);
+
+  // Are there any sides?
+  const sidesMask = SmallBitSet.fromIndices([PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK]);
+  const sidesIx = bs.clone().intersection(sidesMask);
+
+  // 3d
+  const d3Mask = SmallBitSet.fromIndices([PI.D3.TOP, PI.D3.MID, PI.D3.BOTTOM]);
+  const d3Ix = bs.clone().intersection(d3Mask);
+  if ( d3Ix.isEmpty ) d3Ix.add(PI.D3.MID);
+
+  const allPoints = tokenShape.internalPoints;
+
+  const tokenPoints = [];
+
+  /**
+   * @param {number} index        The bitmask intersection (cornersIx or sidesIx)
+   * @param {"corners"|"sides"} type
+   * @returns {Point3d[]}
+   */
+  const sortFn = (index, type) => {
+    const typePoints = [];
+    if ( d3Ix.hasIndex(PI.D3.BOTTOM) ) typePoints.push(...allPoints.bottom[type]);
+    if ( d3Ix.hasIndex(PI.D3.MID) ) typePoints.push(...allPoints.middle[type]);
+    if ( d3Ix.hasIndex(PI.D3.TOP) ) {
+      let pts = allPoints.top[type];
+      if ( tokenHeightPercentage !== 1 ) {
+        const topZ = allPoints.top[type][0].z;
+        const bottomZ = allPoints.bottom[type][0].z;
+        const newHeight = (topZ - bottomZ) * tokenHeightPercentage;
+        const newZ = bottomZ + newHeight;
+        pts = pts.map(pt => {
+          const adjPt = pt.clone();
+          adjPt.z = newZ;
+          return adjPt;
+        });
+      }
+      typePoints.push(...pts);
+    }
+    const pointCategories = this.sortFacingPoints(typePoints, tokenShape, dir);
+
+    const out = [];
+    const indexType = type.toUpperCase();
+    if ( index.hasIndex(PI[indexType].FACING) ) out.push(...pointCategories.facing);
+    if ( index.hasIndex(PI[indexType].MID) ) out.push(...pointCategories.mid);
+    if ( index.hasIndex(PI[indexType].BACK) ) out.push(...pointCategories.back);
+    return out.map(pt => pt.clone()); // Copy points b/c they may be inset.
+  }
+
+  if ( !cornersIx.isEmpty ) tokenPoints.push(...sortFn(cornersIx, "corners"));
+  if ( !sidesIx.isEmpty ) tokenPoints.push(...sortFn(sidesIx, "sides"));
+
+  // Inset all corner and side points.
+  GeometricPrimitive.insetPoints(tokenPoints, allPoints.center, insetPercentage);
+
+  // Add center point last, b/c it is not inset nor rotated. Add to front of queue for consistency.
+  if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(allPoints.center.clone());
+
+  return tokenPoints;
+}
+
+/**
+ * Sort given token points into front, mid, back.
+ * @param {Point3d[]} pts
+ * @param {GeometricPrimitive} tokenShape
+ * @param {Point3d} [dir]     Direction from center point that indicates the token front.
+ * @returns {object}
+ * - @prop {Point3d[]} facing
+ * - @prop {Point3d[]} mid
+ * - @prop {Point3d[]} back
+ */
+export function sortFacingPoints(pts, tokenShape, dir) {
+  using dirN = Point3d.tmp;
+  using dirPerp = Point3d.tmp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
+  const dist2d = Math.min(tokenShape.aabb.width, tokenShape.aabb.height) * 0.25; // Divide at the 0.25 and 0.75 marks
+  dir.normalize(dirN).multiplyScalar(dist2d, dirN);
+  dirPerp.normalize(dirPerp);
+
+  const center = tokenShape.center;
+  const out = {
+    facing: [],
+    mid: [],
+    back: [],
+  };
+  using aFront = center.add(dirN);
+  using aBack = center.subtract(dirN);
+  using bFront = aFront.add(dirPerp);
+  using bBack = aBack.add(dirPerp);
+  const orient2d = foundry.utils.orient2dFast;
+  const oCenterFront = orient2d(aFront, bFront, center);
+  const oCenterBack = orient2d(aBack, bBack, center);
+  pts.forEach(pt => {
+    const arr = (orient2d(aFront, bFront, pt) * oCenterFront) < 0 ? out.facing
+      : (orient2d(aBack, bBack, pt) * oCenterBack) < 0 ? out.back : out.mid;
+    arr.push(pt);
+  });
+  return out;
 }
 
 /**

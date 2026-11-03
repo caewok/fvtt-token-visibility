@@ -138,7 +138,6 @@ export class LightStatusTracker {
       // Update the token light icon.
       // console.debug(`tokenIconMonitor|Updating and drawing ${token.name}`);
       const lm = token[MODULE_ID][TRACKER_IDS.LIGHT_METER];
-      lm.updateLights();
       if ( this.updateTokenLightingIcons(token, ctr) ) this.drawIcons(token);
     }
     ctr.release();

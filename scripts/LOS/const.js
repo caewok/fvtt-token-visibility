@@ -5,10 +5,11 @@ Hooks
 */
 "use strict";
 
-import { MODULE_ID } from "../const.js";
+import { GeometricPrimitive } from "../geometry/placeable_geometry/GeometricPrimitive.js";
 
 export const TEMPLATES = {
-  TILE: `modules/${MODULE_ID}/scripts/LOS/templates/tile-config.html`,
+  // At: `modules/${MODULE_ID}/scripts/LOS/templates/tile-config.html`,
+  TILE: new URL("./templates/tile-config.html", import.meta.url).pathname.substring(1),
 };
 
 /** @type {enum<string>} */
