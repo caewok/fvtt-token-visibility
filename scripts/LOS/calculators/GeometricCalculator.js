@@ -5,12 +5,8 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
-import { Settings } from "../../settings.js";
-
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 
 // Geometry
 import { GEOMETRY_LIB_ID } from "../../geometry/const.js";
@@ -134,7 +130,7 @@ export class PercentVisibleGeometricResult extends PercentVisibleResult {
     // Combine the visible target paths. Ignore blocking paths. (Union would minimize; intersect would maximize.)
     out = this.clone();
     out.data.targetPaths = out.data.targetPaths.union(other.data.targetPaths);
-    out.data.visibleTargetPaths = out.data.visibleTargetPaths.union(other.data.visibleTargetPaths);
+    out.data.visibleTargetPaths = out.visibleTargetPaths.union(other.visibleTargetPaths);
     return out;
   }
 }
@@ -143,9 +139,6 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
   /** @type {class} */
   static resultClass = PercentVisibleGeometricResult;
-
-  /** Weights by opacity itself, so Viewpoint skips its proration fallback. */
-  static handlesOpacity = true;
 
   /**
    * Scaling factor used with Clipper
@@ -347,8 +340,9 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
 
   _constructTargetClipperPaths() {
     const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths;
+    const clipperOpts = this.clipperOpts;
     return ClipperPaths
-      .joinPaths(this.targetPolys.map(poly3d => poly3d.toClipperPaths(this.clipperOpts)))
+      .joinPaths(this.targetPolys.map(poly3d => poly3d.toClipperPaths(clipperOpts)))
       .clean()
       .combine(); // Could use union, but the target has no holes so combine is preferable.
   }
@@ -356,13 +350,8 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   _constructObstacleClipperPaths() {
     const terrainObstaclePaths = this._combineTerrainObstaclePolys();
     let solidObstaclePaths = this._combineObstaclePolys();
-    if ( terrainObstaclePaths && !terrainObstaclePaths.area.almostEqual(0) ) {
-      if ( !solidObstaclePaths ) {
-        solidObstaclePaths = terrainObstaclePaths.combine();
-        console.warn(`${this.constructor.name}|_obscuredArea|No targetPaths.`);
-      }
-      else solidObstaclePaths = solidObstaclePaths.add(terrainObstaclePaths).union();
-    }
+    if ( terrainObstaclePaths
+      && !terrainObstaclePaths.area.almostEqual(0) ) solidObstaclePaths = solidObstaclePaths.add(terrainObstaclePaths).union();
     return solidObstaclePaths;
   }
 
@@ -370,15 +359,16 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths
     const n = this.solidObstaclePolys.length;
     if ( !n ) return new ClipperPaths(undefined, { scalingFactor: this.constructor.SCALING_FACTOR });
-    if ( n === 1 ) return this.solidObstaclePolys[0].toClipperPaths(this.clipperOpts);
+    const clipperOpts = this.clipperOpts;
+    if ( n === 1 ) return this.solidObstaclePolys[0].toClipperPaths(clipperOpts);
     return ClipperPaths
-      .joinPaths(this.solidObstaclePolys.map(poly3d => poly3d.toClipperPaths(this.clipperOpts)))
+      .joinPaths(this.solidObstaclePolys.map(poly3d => poly3d.toClipperPaths(clipperOpts)))
       .clean()
       .union();
   }
 
   _combineTerrainObstaclePolys() {
-    const ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths;
+    const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths;
     const opts = this.clipperOpts;
     const terrainObstaclePolys = this.terrainObstaclePolys;
     const terrainPaths = new ClipperPaths()
@@ -429,67 +419,4 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
   }
 }
 
-export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
-  algorithm = Settings.KEYS.LOS.TARGET.TYPES.GEOMETRIC;
-}
 
-
-/* Test
-
-MODULE_ID = "tokenvisibility"
-Draw = CONFIG.GeometryLib.Draw
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-api = game.modules.get("tokenvisibility").api
-Plane = CONFIG.GeometryLib.threeD.Plane
-ClipperPaths = CONFIG.GeometryLib.CONFIG.ClipperPaths
-Clipper2Paths = CONFIG.GeometryLib.CONFIG.Clipper2Paths
-
-QBenchmarkLoop = CONFIG.GeometryLib.bench.QBenchmarkLoop;
-QBenchmarkLoopFn = CONFIG.GeometryLib.bench.QBenchmarkLoopFn;
-QBenchmarkLoopFnWithSleep = CONFIG.GeometryLib.bench.QBenchmarkLoopFnWithSleep
-extractPixels = CONFIG.GeometryLib.utils.extractPixels
-GEOMETRY_ID = "_atvPlaceableGeometry";
-MatrixFlat = CONFIG.GeometryLib.MatrixFlat
-MatrixFloat32 = CONFIG.GeometryLib.MatrixFloat32
-Area3dPopout = api.Area3dPopout
-Area3dPopoutCanvas = api.Area3dPopoutCanvas
-Settings = api.Settings
-let { DocumentUpdateTracker, TokenUpdateTracker } = api;
-
-zanna = canvas.tokens.placeables.find(t => t.name === "Zanna")
-randal = canvas.tokens.placeables.find(t => t.name === "Randal")
-buildDebugViewer = api.buildDebugViewer
-
-calc = new api.calcs.geometric();
-
-calc.setView({ viewer: randal, target: zanna, viewpoint: Point3d.fromTokenCenter(randal), targetLocation: Point3d.fromTokenCenter(zanna) })
-calc.calculate()
-calc.percentVisible
-
-calc.lastResult.data.
-
-targetPolys = calc.lastResult.data.targetPaths.toPolygons()
-obstaclePolys = calc.lastResult.data.blockingPaths.union().toPolygons()
-visiblePolys = calc.lastResult.data.blockingPaths.union().diffPaths(calc.lastResult.data.targetPaths).toPolygons()
-
-targetPolys.forEach(poly => poly.points = poly.points.map(elem => elem * 100))
-obstaclePolys.forEach(poly => poly.points = poly.points.map(elem => elem * 100))
-visiblePolys.forEach(poly => poly.points = poly.points.map(elem => elem * 100))
-
-targetPolys.forEach(poly => Draw.shape(poly, { fill: Draw.COLORS.red, fillAlpha: 0.5 }))
-obstaclePolys.forEach(poly => Draw.shape(poly, { fill: Draw.COLORS.blue, fillAlpha: 0.5 }))
-visiblePolys.forEach(poly => Draw.shape(poly, { fill: Draw.COLORS.green, fillAlpha: 0.5 }))
-
-
-blockingPolys = calc.lastResult.data.blockingPaths.intersectPaths(calc.lastResult.data.targetPaths)
-
-tPaths2 = Clipper2Paths.fromPolygons()
-oPaths2 = Clipper2Paths.fromPolygons(obstaclePolys)
-blockingPaths2 = tPaths2.intersectPaths(oPaths2.union())
-vPaths2 = tPaths2.diffPaths(oPaths2.union())
-
-bPolys = blockingPaths2.toPolygons()
-vPolys = vPaths2.toPolygons()
-bPolys.forEach(poly => Draw.shape(poly, { fill: Draw.COLORS.orange, fillAlpha: 0.5 }))
-vPolys.forEach(poly => Draw.shape(poly, { fill: Draw.COLORS.green, fillAlpha: 0.5 }))
-*/

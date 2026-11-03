@@ -1,5 +1,6 @@
 /* globals
 canvas,
+CONFIG,
 game,
 Hooks,
 PIXI,
@@ -7,16 +8,21 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Area3dPopoutV2, Area3dPopoutCanvasV2 } from "./Area3dPopout.js";
-import { SETTINGS } from "../settings.js";
+// Base module
 import { MODULE_ID } from "../const.js";
-import { ViewerLOS } from "./ViewerLOS.js";
+import { log } from "../util.js";
+
+// Geometry
 import { Draw } from "../geometry/Draw.js";
+
+// LOS
 import { Area3dPopoutV2, Area3dPopoutCanvasV2 } from "./Area3dPopout.js";
 import { ENUMS } from "./const.js";
+import { ViewerLOS } from "./ViewerLOS.js";
+import { LOSRendererWebGL2 } from "./WebGL2/LOSRendererWebGL2.js";
+import { WebGL2 } from "./WebGL2/WebGL2.js";
 
 /* Debug viewer
-
 If a token is controlled and another is targeted, display a popup with the debug view.
 Calculates percentage visible for the viewer/target combo.
 */
@@ -38,10 +44,10 @@ export class DebugVisibilityViewerAbstract {
    */
   constructor(viewerLOSFn) {
     if ( viewerLOSFn instanceof ViewerLOS ) {
-       this._viewerLOSFn = viewer => {
-         viewerLOSFn.viewer = viewer;
-         return viewerLOSFn;
-       }
+      this._viewerLOSFn = viewer => {
+        viewerLOSFn.viewer = viewer;
+        return viewerLOSFn;
+      };
     } else this._viewerLOSFn = viewerLOSFn;
 
     this.registerHooks();
@@ -168,7 +174,7 @@ export class DebugVisibilityViewerAbstract {
 
   /* ----- Canvas graphics ----- */
 
- /**
+  /**
    * Container to hold all canvas and viewpoint graphics.
    * @type {PIXI.Container}
    */
@@ -221,7 +227,7 @@ export class DebugVisibilityViewerAbstract {
     if ( !this.#canvasDebugGraphics ) {
       this.#canvasDebugGraphics = new PIXI.Graphics();
       this.#canvasDebugGraphics.eventMode = "passive"; // Allow targeting, selection to pass through.
-      this.#canvasDebugContainer.addChild(this.#canvasDebugGraphics)
+      this.#canvasDebugContainer.addChild(this.#canvasDebugGraphics);
     }
     this.#debugCanvasDraw = new Draw(this.#canvasDebugGraphics);
   }
@@ -247,8 +253,10 @@ export class DebugVisibilityViewerAbstract {
   }
 
   #destroyCanvasDebugGraphics() {
-    if ( this.#canvasDebugContainer && !this.#canvasDebugContainer.destroyed ) this.#canvasDebugContainer.destroy({ children: false });
-    if ( this.#canvasDebugGraphics && !this.#canvasDebugGraphics.destroyed ) this.#canvasDebugGraphics.destroy({ children: true });
+    if ( this.#canvasDebugContainer
+      && !this.#canvasDebugContainer.destroyed ) this.#canvasDebugContainer.destroy({ children: false });
+    if ( this.#canvasDebugGraphics
+      && !this.#canvasDebugGraphics.destroyed ) this.#canvasDebugGraphics.destroy({ children: true });
     this.#canvasDebugContainer = undefined;
     this.#canvasDebugGraphics = undefined;
     this.#debugCanvasDraw = undefined;
@@ -256,7 +264,8 @@ export class DebugVisibilityViewerAbstract {
   }
 
   #destroyViewpointDebugGraphics() {
-    if ( this.#viewpointDebugGraphics && !this.#viewpointDebugGraphics.destroyed ) this.#viewpointDebugGraphics.destroy({ children: true });
+    if ( this.#viewpointDebugGraphics
+      && !this.#viewpointDebugGraphics.destroyed ) this.#viewpointDebugGraphics.destroy({ children: true });
     this.#viewpointDebugGraphics = undefined;
     this.#debugViewpointDraw = undefined;
     this.#debugGraphicsReady = false;
@@ -274,8 +283,6 @@ export class DebugVisibilityViewerAbstract {
     this._clearCanvasDebug();
   }
 }
-
-
 
 export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityViewerAbstract {
   /** @type {number} */
@@ -305,9 +312,10 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   constructor(opts) {
     super(opts);
     this.popout = new this.constructor.popoutClass({
-//       width: this.constructor.WIDTH,
-//       height: this.constructor.HEIGHT + 100,
-//       resizable: false
+    // Defaults:
+    // width: this.constructor.WIDTH,
+    // height: this.constructor.HEIGHT + 100,
+    // resizable: false
     });
   }
 
@@ -354,7 +362,7 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
     const target = this.target;
     const visibleTextElem = this.popout.element.getElementsByTagName("p")[0];
     visibleTextElem.innerHTML = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible`;
-    // console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
+    // Debugging: console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
   }
 
   render() {
@@ -503,7 +511,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
         this.#popoutContainers.push(c);
 
-        // console.debug(`Container at ${x},${y} with scale ${scale}, viewSize ${viewSize}, size ${size}.`);
+        // Debug: console.debug(`Container at ${x},${y} with scale ${scale}, viewSize ${viewSize}, size ${size}.`);
 
       });
     }
@@ -551,7 +559,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   _updatePercentVisibleLabel(number) {
     const label = this.percentVisibleLabel;
     label.text = `${(number * 100).toFixed(1)}%`;
-    // console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
+    // Debuggin: console.log(`${this.viewerLOS.calculator.constructor.name}|_updatePercentVisibleLabel ${label.text}`);
   }
 
   algorithm = ENUMS.ALGORITHM_TYPES.WEBGL2;
@@ -579,12 +587,10 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
     }
 
     this.viewerLOS.viewpoints.forEach((vp, idx) => {
-      // vp.calculate();
       const draw = this.getPopoutDraw(idx);
       const container = this.getPopoutContainer(idx);
       vp._draw3dDebug(draw, { container, width, height });
-      // vp._draw3dDebug(draw, this.popout.pixiApp.renderer, c, { width, height });
-    })
+    });
     super.updateDebugForPercentVisible(percentVisible);
   }
 
@@ -608,6 +614,178 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   destroy() {
     this._destroyPopout();
+    super.destroy();
+  }
+}
+
+
+export class DebugVisibilityViewerPoints extends DebugVisibilityViewerArea3dPIXI {
+  algorithm = ENUMS.ALGORITHM_TYPES.POINTS;
+}
+
+export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPIXI {
+  algorithm = ENUMS.ALGORITHM_TYPES.PER_PIXEL;
+}
+
+export class DebugVisibilityViewerGeometric extends DebugVisibilityViewerArea3dPIXI {
+  algorithm = ENUMS.ALGORITHM_TYPES.GEOMETRIC;
+}
+
+export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {
+  static CONTEXT_TYPE = "webgl2";
+
+  /** @type {boolean} */
+  debugView = true;
+
+  get calculator() { return CONFIG[MODULE_ID].losCalculator; }
+
+  get camera() { return this.calculator.camera; }
+
+  async openPopout() {
+    await super.openPopout();
+    if ( this.renderer ) this.renderer.destroy();
+    this.renderer = new LOSRendererWebGL2({
+      camera: this.camera,
+      webGL2: WebGL2.create(this.gl),
+    });
+    await this.renderer.initialize();
+  }
+
+  updateDebugForPercentVisible(percentVisible) {
+    super.updateDebugForPercentVisible(percentVisible);
+    const calc = this.viewerLOS.calculator;
+    const renderer = this.renderer;
+
+    log("\n");
+    log("WebGL2Calc|Rendering Debug");
+    const frames = this._canvasDimensionsForViewpoints();
+    for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
+      const vp = this.viewerLOS.viewpoints[i];
+      calc.setView(vp);
+
+      const frame = frames[i];
+      const clear = i === 0;
+      calc._render(renderer, { frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
+    }
+  }
+
+  _canvasDimensionsForViewpoints() {
+    let { width, height } = this.popout.canvas;
+    // Does not work as expected: const dpr = window.devicePixelRatio;
+
+    // gl.viewport is from bottom 0, 0.
+    const w_1_2 = width * 0.5;
+    const h_1_2 = height * 0.5;
+    const w_1_3 = width * 1/3;
+    const h_1_3 = height * 1/3;
+    const w_2_3 = width * 2/3;
+    const h_2_3 = height * 2/3;
+
+
+    switch ( this.viewerLOS.viewpoints.length ) { /* eslint-disable no-multi-spaces */
+      case 1: return [new PIXI.Rectangle(0, 0, width, height)];
+
+      // ----- | -----
+      case 2: return [
+        new PIXI.Rectangle(0,     0, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0, w_1_2, h_1_2),
+      ];
+
+      //     -----
+      // ----- | -----
+      case 3: return [
+        new PIXI.Rectangle(w_1_3, h_1_2, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(0, 0,     w_1_2, h_1_2),
+      ];
+
+      // ----- | -----
+      // ----- | -----
+      case 4: return [
+        new PIXI.Rectangle(0,     0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
+        new PIXI.Rectangle(0,     h_1_2, w_1_2, h_1_2),
+        new PIXI.Rectangle(w_1_2, h_1_2, w_1_2, h_1_2),
+      ];
+
+      //  ----- | -----
+      // --- | --- | ---
+      case 5: return [
+        new PIXI.Rectangle(w_1_3 * 0.5,           h_1_2, w_1_3, h_1_2),
+        new PIXI.Rectangle(w_2_3 - (w_1_3 * 0.5), h_1_2, w_1_3, h_1_2),
+
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_2),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_2),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_2),
+      ];
+
+      // --- | --- | ---
+      // --- | --- | ---
+      case 6: return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_2),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_2),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_2),
+
+        new PIXI.Rectangle(0,     h_1_2, w_1_3, h_1_2),
+        new PIXI.Rectangle(w_1_3, h_1_2, w_1_3, h_1_2),
+        new PIXI.Rectangle(w_2_3, h_1_2, w_1_3, h_1_2),
+      ];
+
+      // --- | --- | ---
+      //     | --- |
+      // --- | --- | ---
+      case 7:
+      return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(w_1_3, h_1_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+      ];
+
+      // --- | --- | ---
+      // --- |     | ---
+      // --- | --- | ---
+      case 8: return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+
+      ];
+
+      // --- | --- | ---
+      // --- | --- | ---
+      // --- | --- | ---
+      case 9:
+      default: return [
+        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_1_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
+
+        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+      ];
+    } /* eslint-enable no-multi-spaces */
+  }
+
+  destroy() {
+    if ( this.renderer ) this.renderer.destroy();
     super.destroy();
   }
 }

@@ -1,7 +1,9 @@
 /* globals
 canvas,
 CONFIG,
+foundry,
 PIXI,
+Ray,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -14,6 +16,7 @@ import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
 import { Draw } from "../../geometry/Draw.js";
 import { ConfigHandler } from "../../ConfigHandler.js"
+import { tokensOverlap } from "../util.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -31,10 +34,8 @@ import { ConfigHandler } from "../../ConfigHandler.js"
 
 /**
  * @typedef {object} CalculatorConfig    Configuration settings passed to viewpoints
- * @property {BlockingConfig} blocking                    Do various canvas objects block?
  * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
  * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
- * @property {boolean} testLighting            Should the illuminated target shape be used?
  */
 
 
@@ -50,6 +51,9 @@ export class PercentVisibleResult {
     NONE: 0,
     MEASURED: -1,
   };
+
+  /** @type {"calculated"|"full"} What token geometry to use for the target */
+  static targetGeometryType = "calculated";
 
   data = {};
 
@@ -70,6 +74,7 @@ export class PercentVisibleResult {
     out.config = structuredClone(this.config);
     Object.assign(out.data, structuredClone(this.data));
     out.visibility = this.visibility;
+    if ( this.percentVisibleOverriden ) out.percentVisible = this.percentVisible;
     return out;
   }
 
@@ -113,6 +118,8 @@ export class PercentVisibleResult {
   get visibleArea() { return this.targetArea; }
 
   #percentVisible = null;
+
+  get percentVisibleOverriden() { return Number.isNumeric(this.#percentVisible); }
 
   get percentVisible() {
     if ( ~this.visibility ) return this.visibility;
@@ -293,8 +300,14 @@ export class PercentVisibleCalculatorAbstract {
   /** @type {ObstacleOcclusionTest} */
   occlusionTester;
 
+  /**
+   * @returns {number} Percent visibility, typically between 0 and 1.
+   */
   percentVisible() { return this.calculate().percentVisible; }
 
+  /**
+   * @returns {PercentVisibleResult}
+   */
   _createResult() {
     const res = new this.constructor.resultClass();
     res.config.largeTarget = this.config.largeTarget;
@@ -302,17 +315,34 @@ export class PercentVisibleCalculatorAbstract {
   }
 
   /**
-   * Return the visibility result for the current calculator state.
-   * Use setView to set state or set individually.
-   * Also depends on config.
-   * @param {CalculatorConfig} cfg
+   * Calculates visibility of target from perspective of viewer at viewpoint.
    * @returns {PercentVisibleResult}
    */
   calculate() {
+    // Better to create new each time for now, otherwise percentVisible might be inadvertently set.
+    this.lastResult = this.calculator._createResult();
+
+    // Test visibility conditions that are not dependent on obstacles.
+    const alwaysVisible = this.simpleVisibilityTest();
+    if ( alwaysVisible === true || alwaysVisible === false ) {
+      return alwaysVisible
+        ? this.lastResult.makeFullyVisible()
+        : this.lastResult.makeFullyNotVisible();
+    }
+
+    // If no obstacles, target presumed visible.
     this.setView();
+    if ( !this.occlusionTester.hasObstacles ) return this.lastResult.makeFullyVisible();
+
+    // Otherwise, calculate the visibility.
     return this._calculate();
   }
 
+  /**
+   * Calculates visibility of target from perspective of viewer at viewpoint.
+   * Presumes setView has already been called or properties otherwise set. (See calculate method.)
+   * @returns {PercentVisibleResult}
+   */
   _calculate() {
     // console.debug("PercentVisibleCalculator|_calculate");
     // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
@@ -321,85 +351,51 @@ export class PercentVisibleCalculatorAbstract {
     return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
   }
 
-  // ----- NOTE: Lighting test ----- //
-
-  // TODO: Update for GeometricPrimitives
-
-  static LIGHTING_TEST_TYPES = {
-    DARK: 0,
-    DIM: 1,
-    BRIGHT: 2,
-  };
-
-  setLightingTest(type) {
-    console.error("setLightingTest not yet implemented.");
-    const { TYPES } = this.constructor.LIGHTING_TEST_TYPES;
-    let tokenShapeType;
-    switch ( type ) {
-      case TYPES.DIM: tokenShapeType = "litTokenBorder"; break;
-      case TYPES.BRIGHT: tokenShapeType = "brightLitTokenBorder"; break;
-      default: tokenShapeType = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
+  /**
+   * Basic tests for visibility of target from viewer perspective.
+   * @returns {boolean|undefined} True if the viewer must see the target; false if viewer can never see the target, or undefined.
+   */
+  simpleVisibilityTest() {
+    const viewer = this.viewer;
+    const target = this.target;
+    if ( !viewer || !target ) {
+      console.warn(`${this.constructor.name}#simpleVisibilityTest called without viewer or target set.`, { viewer, target });
+      return true; // Returning undefined would likely result in a calculation without target or viewer.
     }
-    this.config = { tokenShapeType };
+
+    // To avoid obvious errors.
+    if ( viewer === target ) return true;
+
+    // If the viewer and target are on different levels, the level of the target must be viewable from the level of the viewer.
+    const viewerLevelId = this.viewer.document.level;
+    const targetLevelId = this.target.document.level;
+    if ( viewerLevelId !== targetLevelId ) {
+      const viewerLevel = canvas.scene.levels.get(viewerLevelId);
+      if ( !viewerLevel.visibility.levels.has(targetLevelId) ) return false;
+    }
+
+    // If the target is not within the vision angle of the viewpoint, it is not visible.
+    if ( viewer.vision
+      && this.config.angle
+      && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return false;
+
+    // If directly overlapping, presumed visible.
+    if ( tokensOverlap(viewer, target) ) return true;
+
+    // Otherwise, calculation is required.
+    return undefined;
   }
 
-  /**
-   * Using the available algorithm, test whether the target w/o/r/t other viewers is
-   * in darkness, dim, or bright light based on threshold settings.
-   */
-  calculateLightingTypeForTarget() {
-    // TODO: Fix for use with GeometricPrimitives.
-    console.error("calculateLightingTypeForTarget not yet implemented.");
-
-
-    const oldConfig = this.config;
-    const oldBlockingConfig = this.occlusionTester.config;
-    const oldViewer = this.viewer;
-    const oldViewpoint = this.viewpoint.clone();
-    this.config = {
-      senseType: "light",
-      radius: Number.POSITIVE_INFINITY,
-      largeTarget: false,
-      walls: true,
-      tiles: true,
-      regions: true,
-      levels: {
-        foreground: true,
-        background: true,
-      },
-      tokens: {
-        dead: true,
-        live: true,
-        prone: true,
-      },
-    };
-    this.setLightingTest(this.constructor.LIGHTING_TEST_TYPES.NONE);
-    let dimResult = new this.constructor.resultClass();
-    let brightResult = new this.constructor.resultClass();
-    for ( const src of canvas.lighting.placeables ) {
-      this.viewer = src;
-
-      Point3d.fromPointSource(src, this.viewpoint);
-      this.config = { radius: src.radius };
-      this.calculate();
-      dimResult = dimResult.blendMaximums(this.lastResult);
-
-      this.config = { radius: src.brightRadius };
-      this.calculate()
-      brightResult = brightResult.blendMaximums(this.lastResult);
-    }
-
-    this.config = oldConfig;
-    this.occlusionTester.config = oldBlockingConfig;
-    this.viewer = oldViewer;
-    this.viewpoint = oldViewpoint;
-    return { dim: dimResult, bright: brightResult };
+  targetOverlapsViewpoint() {
+    const viewpoint = this.viewpoint;
+    const tokenShapeType = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
+    const bounds = this.target[tokenShapeType];
+    if ( !bounds.contains(viewpoint.x, viewpoint.y) ) return false;
+    return viewpoint.z.between(this.target.bottomZ, this.target.topZ);
   }
 
   /* ----- NOTE: Opacity / Transparency ----- */
 
-  /** @type {boolean} True if _calculate weights by obstacle opacity; false if Viewpoint must handle. */
-  static handlesOpacity = false;
 
   /**
    * @param {PlaceableGeometry} obstacle
@@ -463,6 +459,61 @@ export class PercentVisibleCalculatorAbstract {
     this.occlusionTester._constructObstacleTester(); // Tester depends on what obstacles are present.
   }
 
+  /* ----- NOTE: Limited Angle Vision ----- */
+
+  /**
+   * Test if any part of the target is within the limited angle vision of the token.
+   * @param {PointVisionSource} visionSource
+   * @param {Token|PIXI.Rectangle|PIXI.Polygon} targetShape
+   * @returns {boolean}
+   */
+  static targetWithinLimitedAngleVision(visionSource, targetOrShape) {
+    const targetShape = targetOrShape instanceof foundry.canvas.placeables.Token ? targetOrShape.tokenBorder : targetOrShape;
+    const angle = visionSource.data.angle;
+    if ( angle === 360 ) return true;
+
+    // Does the target intersect the two rays from viewer center?
+    // Does the target fall between the two rays?
+    const { x, y, rotation } = visionSource.data;
+
+    // The angle of the left (counter-clockwise) edge of the emitted cone in radians.
+    // See LimitedAnglePolygon
+    const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
+
+    // The angle of the right (clockwise) edge of the emitted cone in radians.
+    const aMax = aMin + Math.toRadians(angle);
+
+    // For each edge:
+    // If it intersects a ray, target is within.
+    // If an endpoint is within the limited angle, target is within
+    const rMin = foundry.canvas.geometry.Ray.fromAngle(x, y, aMin, canvas.dimensions.maxR);
+    const rMax = foundry.canvas.geometry.Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
+
+    const targetWithin = () => {
+      const opts = { inside: true };
+      const hasIx = targetShape.lineSegmentIntersects(rMin.A, rMin.B, opts)
+                 || targetShape.lineSegmentIntersects(rMax.A, rMax.B, opts);
+      return hasIx + 1; // 1 if inside (no intersection); 2 if intersects.
+    };
+
+    // Probably worth checking the target center first
+    const center = targetShape.center;
+    if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+
+    // TODO: Would it be more performant to assign an angle to each target point?
+    // Or maybe just check orientation of ray to each point?
+    const edges = targetShape.toPolygon().iterateEdges();
+    for ( const edge of edges ) {
+      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.a, edge.b) ) return 2;
+      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.a, edge.b) ) return 2;
+      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
+      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
+    }
+
+    return 0;
+  }
+
+
   /* ----- NOTE: Debug ----- */
 
   /**
@@ -471,8 +522,6 @@ export class PercentVisibleCalculatorAbstract {
    * @param {Draw} draw
    */
   _drawCanvasDebug(result, debugDraw, otOpts = {}) {
-    // this._drawLineOfSight(debugDraw);
-
     // Draw the viewer vision radius to the token, accounting for 3d distance.
     // Use Pythagorean to get the 2d radius = sqrt(radius3d^2 - deltaZ^2)
     const visionRadius = this.config.radius;
@@ -493,12 +542,6 @@ export class PercentVisibleCalculatorAbstract {
     // Draw frustum shape between viewer and target.
     this.occlusionTester._drawFrustum(debugDraw);
   }
-
-  /**
-   * For debugging.
-   * Draw the line of sight from token to target.
-   */
-  _drawLineOfSight(draw) { draw.segment({ A: this.viewpoint, B: this.targetLocation }, { alpha: 0.5 }); }
 
   destroy() { return; }
 }
