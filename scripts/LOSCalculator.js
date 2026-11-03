@@ -6,15 +6,21 @@ foundry,
 
 import { MODULE_ID, TRACKER_IDS, REGION_BEHAVIORS, ENUMS } from "./const.js";
 import { Settings } from "./settings.js";
-import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { pointIndexForSet } from "./LOS/SmallBitSet.js";
 import { NULL_SET } from "./geometry/util.js";
 import { ConfigHandler } from "./ConfigHandler.js";
 import { ObstacleOcclusionTest } from "./geometry/ObstacleOcclusionTest.js";
 
-// ViewerLOS = CachedViewerLOS;
+export function currentCalculator() { return CONFIG[MODULE_ID].losCalculator; }
 
-export function currentCalculator() { return CONFIG[MODULE_ID].losCalculator(); }
+export function effectiveAlgorithmType() {
+  const TYPES = ENUMS.ALGORITHM_TYPES;
+  const type = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
+  return ( type === TYPES.WEBGL2 && CONFIG[MODULE_ID].webGL2Unavailable )
+    ? TYPES.GEOMETRIC : type;
+}
+
 
 export function currentDebugViewerClass(type) {
   type ??= effectiveAlgorithmType();
@@ -124,7 +130,8 @@ export function getCurrentCalculatorClass() {
  * Build an LOS calculator that, by default, uses the current settings.
  * @param {class} [calcClass]                               The calculator class
  * @param {ObstacleOcclusionTester} [occlusionTester]       The occlusion tester to use
- * @param {object} [calcCfg={}]                             Calculator configuration settings that deviate from the current
+ * @param {object} [calcCfg={}]                             Calculator configuration settings
+ *                                                          that deviate from the current
  * @returns {PercentVisibleCalculatorAbstract}
  */
 export function buildLOSCalculator({ calcClass, occlusionTester, ...calcCfg } = {}) {
@@ -132,7 +139,7 @@ export function buildLOSCalculator({ calcClass, occlusionTester, ...calcCfg } = 
   occlusionTester ??= CONFIG[MODULE_ID].occlusionTester ?? buildOcclusionTester();
   const calculator = new calcClass();
   calculator.config = CalculatorConfig();
-  calculator.config.set(calcCfg)
+  calculator.config.set(calcCfg);
   calculator.occlusionTester = occlusionTester;
   calculator.initialize(); // Async.
   return calculator;
@@ -165,7 +172,11 @@ export function buildLOSViewer(viewer, { calculator, ...losCfg } = {}) {
 export function buildCustomLOSViewer(viewer, calculator, occlusionTester, losCfg = {}) {
   calculator ??= currentCalculator();
   occlusionTester ??= new ObstacleOcclusionTest();
-  const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), losCfg, { inplace: false });
+  calculator.config.set(losCfg);
+  calculator.occlusionTester = occlusionTester;
+  calculator.initialize();
+  const losConfig = LOSViewerConfig;
+  losConfig.set(losCfg);
   const viewerLOS = new ViewerLOS(viewer, calculator, losConfig);
   return viewerLOS;
 }
