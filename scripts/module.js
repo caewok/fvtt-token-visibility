@@ -70,24 +70,62 @@ Hooks.once("init", function() {
   });
   CONFIG.RegionBehavior.typeIcons[`${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}`] = FA_ICONS.BLOCK_SIGHT;
 
+  initializePatching();
+  initializeConfig();
+  initializeAPI();
 
-  // Load bitmap font
-  // See https://www.adammarcwilliams.co.uk/creating-bitmap-text-pixi/
-  // https://pixijs.com/8.x/examples/text/bitmap-text
-  // PIXI.Assets.load('https://pixijs.com/assets/bitmap-font/desyrel.xml'); // Async.
+  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(() => log(`${MODULE_ID}|LOS Templates loaded.`));
+  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(() => log("Templates loaded."));
+});
 
-  PIXI.BitmapFont.from(`${MODULE_ID}_area3dPercentLabel`, {
-    fill: "#333333",
-    fontWeight: "bold",
-  }, {
-    chars: [["0", "9"], " .%"]
+
+Hooks.once("setup", function() {
+  Settings.registerAll();
+
+  // Add status effects for dim and no light.
+  const dimLight = {
+    id: "dimLight",
+    _id: ("atvDimLight").padEnd(16, "0"),
+    name: "Dim Light",
+    img: "icons/sundries/lights/torch-brown-lit.webp",
+    reference: MODULE_ID,
+  };
+  const noLight = {
+    id: "noLight",
+    _id: ("atvNoLight").padEnd(16, "0"),
+    name: "No Light",
+    img: "icons/sundries/lights/torch-brown.webp",
+    reference: MODULE_ID,
+  };
+  CONFIG.statusEffects.push(dimLight, noLight);
+
+  // Opacity values for tokens, walls, regions for cover.
+  CONFIG[GEOMETRY_LIB_ID].CONFIG.opacity.register("sight", {
+    Token: tokenOpacity,
+    Region: regionOpacity,
+    Wall: wallOpacity,
   });
 
-  initializePatching();
+  ATVLOSManager.registerHooks();
+  LOSThrottle.registerHooks();
+});
 
-  // Set CONFIGS used by this module.
+Hooks.once("ready", function() {
+  Settings.migrate(); // Cannot be set until world is ready.
+  LightStatusTracker.loadLightIcons(); // Async.
+
+  // Disable lighting algorithm for now, until fixed.
+  if ( game.user.isGM ) Settings.set(Settings.KEYS.LIGHT_MONITOR.ALGORITHM, ENUMS.LIGHT_ALGORITHM_TYPES.NONE);
+});
+
+// ----- NOTE: Config ----- //
+
+/**
+ * Initialize the CONFIG for this module, at CONFIG[MODULE_ID].
+ * Dynamic settings that may be changed by users or other modules or set by system type.
+ */
+function initializeConfig() {
   CONFIG[MODULE_ID] = {
-
     /**
      * Number of points to measure in one dimension for light type calculation.
      * Will be used for all 3 dimensions. E.g., 3 --> 3x3x3 in a cube, or 18 points total.
@@ -129,13 +167,6 @@ Hooks.once("init", function() {
      * @type {PercentVisibleCalculatorAbstract}
      */
     losCalculator: null,
-
-    /**
-     * Should the line-of-sight calculator use the viewer height (as calculated in Wall Height)
-     * for any TOP viewpoint?
-     * @type {boolean}
-     */
-    useViewerHeight: true,
 
     /**
      * Configurations that affect the light meter.
@@ -205,9 +236,6 @@ Hooks.once("init", function() {
       maxDistance: 5,   /** @type {number<grid distance>} */
     },
 
-    /** @type {boolean} Flag if webGL loses context. */
-    webGL2Unavailable: false,
-
     /**
      * Turn on certain debug logging.
      * @type {boolean}
@@ -216,8 +244,15 @@ Hooks.once("init", function() {
 
     ...LOS_CONFIG,
   };
+}
 
+// ----- NOTE: API ----- //
 
+/**
+ * Initialize the API for this module. At game.modules.get(MODULE_ID).api.
+ * Provides access to certain classes and functions for debugging and other modules.
+ */
+function initializeAPI() {
   game.modules.get(MODULE_ID).api = {
     bench,
 
@@ -255,51 +290,7 @@ Hooks.once("init", function() {
     LightStatusTracker,
     twgl,
   };
-
-  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(() => log(`${MODULE_ID}|LOS Templates loaded.`));
-  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(() => log("Templates loaded."));
-});
-
-
-Hooks.once("setup", function() {
-  Settings.registerAll();
-
-  // Add status effects for dim and no light.
-  const dimLight = {
-    id: "dimLight",
-    _id: ("atvDimLight").padEnd(16, "0"),
-    name: "Dim Light",
-    img: "icons/sundries/lights/torch-brown-lit.webp",
-    reference: MODULE_ID,
-  };
-  const noLight = {
-    id: "noLight",
-    _id: ("atvNoLight").padEnd(16, "0"),
-    name: "No Light",
-    img: "icons/sundries/lights/torch-brown.webp",
-    reference: MODULE_ID,
-  };
-  CONFIG.statusEffects.push(dimLight, noLight);
-
-  // Opacity values for tokens, walls, regions for cover.
-  CONFIG[GEOMETRY_LIB_ID].CONFIG.opacity.register("sight", {
-    Token: tokenOpacity,
-    Region: regionOpacity,
-    Wall: wallOpacity,
-  });
-
-  ATVLOSManager.registerHooks();
-  LOSThrottle.registerHooks();
-});
-
-Hooks.once("ready", function() {
-  Settings.migrate(); // Cannot be set until world is ready.
-  LightStatusTracker.loadLightIcons(); // Async.
-
-  Settings.set(Settings.KEYS.LIGHT_MONITOR.ALGORITHM, ENUMS.LIGHT_ALGORITHM_TYPES.NONE); // Disable for now, until fixed.
-
-});
-
+}
 
 // ----- NOTE: Helper Functions ----- //
 

@@ -97,6 +97,16 @@ export const LOS_CONFIG = {
    */
   useStencil: false,
 
+  /**
+   * Should the line-of-sight calculator use the viewer height (as calculated in Wall Height)
+   * for any TOP viewpoint?
+   * @type {boolean}
+   */
+  useViewerHeight: true,
+
+  /** @type {boolean} Flag if webGL loses context. */
+  webGL2Unavailable: false,
+
   // Handled at base level: debug
 }
 

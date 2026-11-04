@@ -14,26 +14,39 @@ export class LOSManager {
   static debugViewer;
 
   static registerHooks() {
+    Hooks.on(`${MODULE_ID}.losAlgorithmChanged`, value => this.algorithmChange(value));
     Hooks.on(`${MODULE_ID}.webGL2ContextChanged`, lost => this.onGLContextChanged(lost));
   }
 
-  static initializeDebugViewer() {
-    this.debugViewer?.render();
+  static _chain = null;
+
+  /** Run async work one at a time, so overlapping setting changes cannot interleave. */
+  static _enqueue(fn) {
+    return this._chain = (this._chain ?? Promise.resolve()).then(fn).catch(err => console.error(err));
   }
 
-  static destroyDebugViewer() {
-    this.debugViewer?.destroy();
+
+  static async initializeDebugViewer() {
+    if ( !this.debugViewer ) return; // Child class must build it.
+    await this.debugViewer.initialize();
+    return this.debugViewer?.render();
+  }
+
+  static async destroyDebugViewer() {
+    const viewer = this.debugViewer;
     this.debugViewer = undefined;
+    await viewer?.destroy();
   }
 
   static toggleLOSDebugGraphics(enabled = false) {
-    if ( enabled ) this.initializeDebugViewer();
-    else this.destroyDebugViewer();
+    return this._enqueue(() => enabled
+      ? this.initializeDebugViewer()
+        : this.destroyDebugViewer());
   }
 
-
-  // Should be defined by child class to handle settings.
-  static algorithm() { return ENUMS.ALGORITHM_TYPES.WEBGL2; }
+  static algorithmChange(...args) {
+    return this._enqueue(() => this._algorithmChange(...args));
+  }
 
   static onGLContextChanged(lost) {
     CONFIG[MODULE_ID].webGL2Unavailable = lost;
@@ -44,5 +57,7 @@ export class LOSManager {
     this.algorithmChange();
   }
 
-  static algorithmChange() { }
+  /** Override in the module-specific manager. */
+  static async _algorithmChange() { }
+
 }

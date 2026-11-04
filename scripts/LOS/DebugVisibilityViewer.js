@@ -35,6 +35,9 @@ export class DebugVisibilityViewerAbstract {
   /** @type {ViewerLOS} */
   viewerLOS;
 
+  /** @type {boolean} */
+  _destroyed = false;
+
   /**
    * @param {function|ViewerLOS}       Either a blank viewerLOS or a function that can
    *                                   retrieve a viewerLOS for a viewer token.
@@ -73,6 +76,8 @@ export class DebugVisibilityViewerAbstract {
   }
 
   render() {
+    if ( this._destroyed ) return;
+
     this.clearDebug();
     if ( !this.initializeCalculation() ) return;
 
@@ -89,7 +94,8 @@ export class DebugVisibilityViewerAbstract {
   updateDebugForPercentVisible(_percentVisible) {}
 
   percentVisible() {
-    return this.viewerLOS.percentVisible(this.target);
+    this.viewerLOS.target = this.target;
+    return this.viewerLOS.percentVisible;
   }
 
   /** @type {number[]} */
@@ -167,7 +173,8 @@ export class DebugVisibilityViewerAbstract {
    * Delete this viewer.
    */
   destroy() {
-    this.deregisterHooks();
+    this._destroyed = true;
+    this.deregisterHooks(); // First, so a later throw cannot leave hooks active.
     this.clearDebug();
     this._destroyDebugGraphics();
   }
@@ -247,7 +254,7 @@ export class DebugVisibilityViewerAbstract {
   }
 
   _destroyDebugGraphics() {
-    canvas.tokens.removeChild(this.#canvasDebugContainer);
+    if ( this.#canvasDebugContainer ) canvas.tokens?.removeChild(this.#canvasDebugContainer);
     this.#destroyCanvasDebugGraphics();
     this.#destroyViewpointDebugGraphics();
   }
@@ -296,6 +303,9 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
 
   static CONTEXT_TYPE = "webgl2";
 
+  /** @type {Promise|null} The in-flight openPopout call, shared by all callers. */
+  _opening = null;
+
   // See https://toji.dev/webgpu-best-practices/webgl-performance-comparison.html
   static CONTEXT_OPTS = {
     powerPreference: "high-performance",
@@ -322,12 +332,13 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   get gl() { return this.popout.context; }
 
   async initialize() {
-    await super.initialize();
     return this.reinitialize(); // Async.
   }
 
   async reinitialize() {
-    if ( !this.popoutIsRendered ) await this.openPopout();
+    if ( this._destroyed || this.popoutIsRendered ) return;
+    this._opening ??= this.openPopout().finally(() => { this._opening = null; });
+    return this._opening;
   }
 
   async openPopout() {
@@ -366,7 +377,10 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   }
 
   render() {
-    if ( !this.popoutIsRendered ) return this.reinitialize().then(() => super.render());
+    if ( this._destroyed ) return;
+
+    // Wait while opening; the WebGL2 viewer builds its renderer inside openPopout.
+    if ( this._opening || !this.popoutIsRendered ) return this.reinitialize().then(() => super.render());
     super.render();
   }
 
@@ -375,8 +389,9 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
   }
 
   destroy() {
-    this.popout.close();
+    const closing = this.popout?.close(); // Async; callers may await the return value.
     super.destroy();
+    return closing;
   }
 }
 
@@ -389,12 +404,15 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   get numViewpoints() { return this.viewerLOS?.viewpoints.length || 1; }
 
+  get popoutStage() { return this.popout?.pixiApp?.stage; }
+
   initializeCalculation() {
     if ( !super.initializeCalculation() ) return false;
-    if ( !this.popoutIsRendered ) return true;
+    const stage = this.popoutStage;
+    if ( !this.popoutIsRendered || !stage ) return true;
     if ( this.numViewpoints !== this.#popoutContainers.length ) {
       this._destroyPopout();
-      this.popoutContainers.forEach(c => this.popout.pixiApp.stage.addChild(c));
+      this.popoutContainers.forEach(c => stage.addChild(c));
     }
     return true;
   }
@@ -566,7 +584,9 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   async openPopout(opts) {
     await super.openPopout(opts);
-    this.popoutContainers.forEach(c => this.popout.pixiApp.stage.addChild(c));
+    const stage = this.popoutStage;
+    if ( this._destroyed || !stage ) return;   // Destroyed (or closed) while opening.
+    this.popoutContainers.forEach(c => stage.addChild(c));
   }
 
   updateDebugForPercentVisible(percentVisible) {
@@ -600,6 +620,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   }
 
   _destroyPopout() {
+    this.popoutStage?.removeChildren();
     this.popout.pixiApp.stage.removeChildren();
     this.#popoutGraphics.forEach(g => {
       if ( !g.destroyed ) g.destroy();
@@ -613,6 +634,7 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   }
 
   destroy() {
+    this._destroyed = true;
     this._destroyPopout();
     super.destroy();
   }

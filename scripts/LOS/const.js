@@ -41,22 +41,6 @@ export const FLAGS = {
   },
 };
 
-export const TRACKER_IDS = {
-  BASE: "GeometryLib",
-  GEOMETRY: {
-    PLACEABLE: "geometry",
-    // TOKEN: {
-    // NORMAL: "geometry",
-    // LIT: "litGeometry",
-    // BRIGHT: "brightLitGeometry",
-    // SPHERICAL: "sphericalGeometry",
-    // }
-  },
-  VISIBILITY: "visibility",
-  LIGHT_METER: "lightMeter",
-};
-
-
 // Track certain modules that complement features of this module.
 export const OTHER_MODULES = {
   TERRAIN_MAPPER: {

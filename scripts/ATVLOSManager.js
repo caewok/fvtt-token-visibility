@@ -18,16 +18,15 @@ export class ATVLOSManager extends LOSManager {
 
   static registerHooks() {
     super.registerHooks();
-    Hooks.on(`${MODULE_ID}.losAlgorithmChanged`, value => this.algorithmChange(value));
     Hooks.on(`${MODULE_ID}.losDebugLOSChanged`, value => this.toggleLOSDebugGraphics(value));
     Hooks.on(`${MODULE_ID}.losDebugRangeChanged`, value => this.toggleRangeDebugGraphics(value));
     Hooks.on(`${MODULE_ID}.lightMonitorChanged`, value => this.updateLightMonitor(value));
   }
 
-  static initializeDebugViewer(type) {
+  static async initializeDebugViewer(type) {
     type ??= Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
     this.debugViewer ??= buildDebugViewer(currentDebugViewerClass(type));
-    super.initializeDebugViewer();
+    return super.initializeDebugViewer();
   }
 
   static onGLContextChanged(lost) {
@@ -37,7 +36,7 @@ export class ATVLOSManager extends LOSManager {
     super.onGLContextChanged(lost);
   }
 
-  static algorithmChange() {
+  static async _algorithmChange() {
     CONFIG[MODULE_ID].losCalculator?.destroy();
     const calc = CONFIG[MODULE_ID].losCalculator = buildLOSCalculator(); // Already calls initialize().
     for ( const token of canvas.tokens?.placeables ?? [] ) {
@@ -45,8 +44,8 @@ export class ATVLOSManager extends LOSManager {
       if ( losViewer ) losViewer.calculator = calc;
     }
     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) {
-      this.destroyDebugViewer();
-      this.initializeDebugViewer();
+      await this.destroyDebugViewer();
+      await this.initializeDebugViewer();
     }
   }
 
