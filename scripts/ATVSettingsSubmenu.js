@@ -93,11 +93,11 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
       if ( !algSelector ) return;
       const isPoints = algSelector.value === ENUMS.ALGORITHM_TYPES.POINTS;
 
-      const targetOptionsElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINTS_OPTIONS.POINTS}"]`);
+      const targetOptionsElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS}"]`);
       if ( !targetOptionsElem ) return;
       targetOptionsElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
 
-      const targetInsetElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINTS_OPTIONS.INSET}"]`);
+      const targetInsetElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET}"]`);
       if ( !targetInsetElem ) return;
       targetInsetElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
     }

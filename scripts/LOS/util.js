@@ -76,7 +76,7 @@ export function constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPerce
   }
 
   const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
-  const PI = this.POINT_INDICES;
+  const PI = GeometricPrimitive.POINT_INDICES;
 
   // Filter
   // Are there any corners?
@@ -120,7 +120,7 @@ export function constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPerce
       }
       typePoints.push(...pts);
     }
-    const pointCategories = this.sortFacingPoints(typePoints, tokenShape, dir);
+    const pointCategories = sortFacingPoints(typePoints, tokenShape, dir);
 
     const out = [];
     const indexType = type.toUpperCase();

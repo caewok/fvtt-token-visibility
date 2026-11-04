@@ -14,6 +14,7 @@ import { buildLOSViewer } from "./LOSCalculator.js";
 import { LOSCache } from "./LOSThrottle.js";
 import { DETECTION_SENSE_TYPES, DETECTION_SOURCE_TYPES } from "./LOS/const.js";
 import { PercentVisibleCalculatorAbstract } from "./LOS/calculators/PercentVisibleCalculator.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
 export class ATVTokenHandler {
 
@@ -160,6 +161,6 @@ export class ATVTokenHandler {
    * @returns {boolean} True if within range.
    */
   tokenWithinLimitedAngleVision(target) {
-    return PercentVisibleCalculatorAbstract.targetWithinLimitedAngleVision(this.viewer.vision, target);
+    return ViewerLOS.targetWithinLimitedAngleVision(this.viewer.vision, target);
   }
 }

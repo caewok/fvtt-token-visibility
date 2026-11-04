@@ -1,5 +1,7 @@
 /* globals
+canvas,
 CONFIG,
+foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -17,7 +19,7 @@ import { AABB3d } from "../geometry/3d/AABB3d.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
 
 // LOS folder
-import { constructTokenPoints } from "./util.js";
+import { constructTokenPoints, tokensOverlap } from "./util.js";
 import { SmallBitSet } from "./SmallBitSet.js";
 
 // Viewpoint algorithms.
@@ -283,7 +285,7 @@ export class ViewerLOS {
     });
 
     // Can skip calculation if simple view test returns true/false.
-    const alwaysVisible = this.calculator.simpleVisibilityTest();
+    const alwaysVisible = this.simpleVisibilityTest();
     if ( alwaysVisible === true || alwaysVisible === false ) {
       this._percentVisible = Number(alwaysVisible);
       return;
@@ -330,6 +332,44 @@ export class ViewerLOS {
     // ${this.viewer.name}: target ${this.target.name} not visible.`);
     // Debug: console.debug(`\nViewerLOS|viewer ${this.viewer.name} at
     // ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+  }
+
+  /**
+   * Basic tests for visibility of target from viewer perspective.
+   * @returns {boolean|undefined} True if the viewer must see the target.
+   *                              False if viewer can never see the target.
+   *                              Otherwise undefined.
+   */
+  simpleVisibilityTest() {
+    const viewer = this.viewer;
+    const target = this.target;
+    if ( !viewer || !target ) {
+      console.warn(`${this.constructor.name}#simpleVisibilityTest called without viewer or target set.`, { viewer, target });
+      return true; // Returning undefined would likely result in a calculation without target or viewer.
+    }
+
+    // To avoid obvious errors.
+    if ( viewer === target ) return true;
+
+    // If the viewer and target are on different levels,
+    // the level of the target must be viewable from the level of the viewer.
+    const viewerLevelId = this.viewer.document.level;
+    const targetLevelId = this.target.document.level;
+    if ( viewerLevelId !== targetLevelId ) {
+      const viewerLevel = canvas.scene.levels.get(viewerLevelId);
+      if ( !viewerLevel.visibility.levels.has(targetLevelId) ) return false;
+    }
+
+    // If the target is not within the vision angle of the viewer, it is not visible.
+    if ( viewer.vision
+      && this.config.angle
+      && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return false;
+
+    // If directly overlapping, presumed visible.
+    if ( tokensOverlap(viewer, target) ) return true;
+
+    // Otherwise, calculation is required.
+    return undefined;
   }
 
   _setFrustum() {
@@ -382,6 +422,62 @@ export class ViewerLOS {
   }
 
   /**
+   * Test if any part of the target is within the limited angle vision of the token.
+   * @param {PointVisionSource} visionSource
+   * @param {Token|PIXI.Rectangle|PIXI.Polygon} targetShape
+   * @returns {boolean}
+   */
+  static targetWithinLimitedAngleVision(visionSource, targetOrShape) {
+    const targetShape = targetOrShape instanceof foundry.canvas.placeables.Token
+      ? targetOrShape.tokenBorder : targetOrShape;
+    const angle = visionSource.data.angle;
+    if ( angle === 360 ) return true;
+
+    // Does the target intersect the two rays from viewer center?
+    // Does the target fall between the two rays?
+    const { x, y, rotation } = visionSource.data;
+
+    // The angle of the left (counter-clockwise) edge of the emitted cone in radians.
+    // See LimitedAnglePolygon
+    const aMin = Math.normalizeRadians(Math.toRadians(rotation + 90 - (angle / 2)));
+
+    // The angle of the right (clockwise) edge of the emitted cone in radians.
+    const aMax = aMin + Math.toRadians(angle);
+
+    // For each edge:
+    // If it intersects a ray, target is within.
+    // If an endpoint is within the limited angle, target is within
+    const rMin = foundry.canvas.geometry.Ray.fromAngle(x, y, aMin, canvas.dimensions.maxR);
+    const rMax = foundry.canvas.geometry.Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
+
+    const targetWithin = () => {
+      const opts = { inside: true };
+      const hasIx = targetShape.lineSegmentIntersects(rMin.A, rMin.B, opts)
+                 || targetShape.lineSegmentIntersects(rMax.A, rMax.B, opts);
+      return hasIx + 1; // 1 if inside (no intersection); 2 if intersects.
+    };
+
+    // Probably worth checking the target center first
+    const LimitedAnglePolygon = foundry.canvas.geometry.LimitedAnglePolygon;
+    const lsi = foundry.utils.lineSegmentIntersects;
+    const center = targetShape.center;
+    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+
+    // TODO: Would it be more performant to assign an angle to each target point?
+    // Or maybe just check orientation of ray to each point?
+    const edges = targetShape.toPolygon().iterateEdges();
+    for ( const edge of edges ) {
+      if ( lsi(rMin.A, rMin.B, edge.a, edge.b) ) return 2;
+      if ( lsi(rMax.A, rMax.B, edge.a, edge.b) ) return 2;
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
+    }
+
+    return 0;
+  }
+
+
+  /**
    * Test if a viewpoint or target point is outside the constrained border of the token.
    * Expands the constrained border slightly to accommodate points exactly on border.
    * @param {PIXI.Point} pt
@@ -432,7 +528,7 @@ export class ViewerLOS {
     // console.debug(`ViewerLOS debug|target ${this.target.name} at ${this.targetLocation}
     // (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
 
-    const simpleTest = this.calculator.simpleVisibilityTest();
+    const simpleTest = this.simpleVisibilityTest();
     if ( simpleTest === false || simpleTest === true ) {
       // No viewpoints used; color each with light green or light red line.
       const opts = { color: simpleTest ? Draw.COLORS.LIGHT.green : Draw.COLORS.LIGHT.red };

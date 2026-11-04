@@ -31,7 +31,7 @@ export class Viewpoint {
    * Store the offset from the viewer center, in world orietation.
    */
   setFromPoint(viewpoint) {
-    viewpoint.subtract(viewerLOS.viewerShape.center, this.viewpointOffset);
+    viewpoint.subtract(this.viewerLOS.viewerShape.center, this.viewpointOffset);
   }
 
   /** @type {Point3d} */
@@ -67,7 +67,7 @@ export class Viewpoint {
     const calc = this.calculator;
     calc.viewpoint = this.viewpoint;
     this.lastResult = calc.calculate();
-    return lastResult;
+    return this.lastResult;
   }
 
   /* ----- NOTE: Debug ----- */
