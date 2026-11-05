@@ -76,9 +76,7 @@ export function BlockingConfig() {
   });
 }
 
-/**
- * @returns {CalculatorConfig|PointsCalculatorConfig}  See PercentVisibleCalculator.js and PointsCalculator.js
- */
+/** @returns {CalculatorConfig|PointsCalculatorConfig}  See PercentVisibleCalculator.js and PointsCalculator.js */
 export function CalculatorConfig() {
   return new ConfigHandler({
     largeTarget: () => Settings.get(Settings.KEYS.LOS.TARGET.LARGE) || false,
@@ -93,13 +91,21 @@ export function CalculatorConfig() {
   });
 }
 
-/**
- * @returns {ViewerLOSConfig} See ViewerLOS.js
- */
+/** @returns {ViewpointInsetsConfig} */
+export function ViewpointInsetsConfig() {
+  return new ConfigHandler({
+    top: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSETS.TOP),
+    bottom: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSETS.BOTTOM),
+    sides: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSETS.SIDES),
+  });
+}
+
+
+/** @returns {ViewerLOSConfig} See ViewerLOS.js */
 export function LOSViewerConfig() {
   return new ConfigHandler({
     viewpointIndex: () => pointIndexForSet(Settings.get(Settings.KEYS.LOS.VIEWER.POINTS)),
-    viewpointInset: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSET),
+    insets: ViewpointInsetsConfig(),
     threshold: () => Settings.get(Settings.KEYS.LOS.TARGET.PERCENT),
     angle: true,
   });
@@ -175,9 +181,9 @@ export function buildCustomLOSViewer(viewer, calculator, occlusionTester, losCfg
   calculator.config.set(losCfg);
   calculator.occlusionTester = occlusionTester;
   calculator.initialize();
-  const losConfig = LOSViewerConfig;
-  losConfig.set(losCfg);
-  const viewerLOS = new ViewerLOS(viewer, calculator, losConfig);
+  const viewerLOS = new ViewerLOS(viewer, calculator);
+  viewerLOS.config = LOSViewerConfig();
+  viewerLOS.config.set(losCfg);
   return viewerLOS;
 }
 

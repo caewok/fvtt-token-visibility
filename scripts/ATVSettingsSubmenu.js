@@ -48,7 +48,9 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
       },
       losViewer: {
         [LOS.VIEWER.POINTS]: [PI.CORNERS.FACING, PI.CORNERS.BACK],
-        [LOS.VIEWER.INSET]: 0,
+        [LOS.VIEWER.INSETS.TOP]: 0,
+        [LOS.VIEWER.INSETS.BOTTOM]: 0,
+        [LOS.VIEWER.INSETS.SIDES]: 0,
       },
     };
     setOptionValues.call(this, opts);
@@ -70,7 +72,9 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
       },
       losViewer: {
         [LOS.VIEWER.POINTS]: [PI.CENTER],
-        [LOS.VIEWER.INSET]: 0,
+        [LOS.VIEWER.INSETS.TOP]: 0,
+        [LOS.VIEWER.INSETS.BOTTOM]: 0,
+        [LOS.VIEWER.INSETS.SIDES]: 0,
       },
       range: {
         [RANGE.ALGORITHM]: POINT_TYPES.NINE,

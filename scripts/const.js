@@ -73,7 +73,11 @@ export const SETTINGS = {
   LOS: {
     VIEWER: {
       POINTS: "los-points-options-viewer",
-      INSET: "los-inset-viewer",
+      INSETS: {
+        SIDES: "los-inset-viewer-sides",
+        TOP: "los-inset-viewer-top",
+        BOTTOM: "los-inset-viewer-bottom",
+      },
     },
 
     TARGET: {
@@ -95,7 +99,6 @@ export const SETTINGS = {
   TOKEN_HP_ATTRIBUTE: "token-hp-attribute",
 
   PRONE_MULTIPLIER: "prone-multiplier",
-  VISION_HEIGHT_MULTIPLIER: "vision-height-multiplier",
 
   LIVE_TOKENS_BLOCK: "live-tokens-block",
   DEAD_TOKENS_BLOCK: "dead-tokens-block",
@@ -106,4 +109,5 @@ export const SETTINGS = {
     RANGE: "debug-range",
     LOS: "debug-los"
   },
+
 };

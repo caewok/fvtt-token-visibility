@@ -9,9 +9,11 @@ PIXI,
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { ViewerLOS } from "../ViewerLOS.js";
+import { Viewpoint } from "../Viewpoint.js";
 import { SmallBitSet } from "../SmallBitSet.js";
 import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 import { squaresUnderToken, hexesUnderToken } from "../shapes_under_token.js";
+
 
 // Placeable tracking
 
@@ -132,7 +134,7 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
 /**
  * @typedef {object} PointsCalculatorConfig
  * ...{CalculatorConfig}
- * @property {number} [targetPointIndex=1]  	    					Points configuration for the target
+ * @property {number} [targetPointIndex=1]                  Points configuration for the target
  * @property {number} [targetInset=0.75]                    Offset target points from target border
  */
 
@@ -239,7 +241,7 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
       const isUnobscured = unobscured.has(i);
       const color = isVisible && isUnobscured ? colors.blue
         : isVisible ? colors.red
-          :  colors.orange; // Not tested b/c not w/in radius or otherwise not part of shape.
+          : colors.orange; // Not tested b/c not w/in radius or otherwise not part of shape.
       const opts = { color };
       if ( !isVisible ) {
         opts.dashLength = 10;
@@ -293,8 +295,8 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     this.setView(); // In case the camera has been moved.
 
     // Draw the border for reference.
-    const viewpoint = this.viewpoint
-    const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
+    const viewpoint = this.viewpoint;
+    const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null };
     for ( const face of this.targetShape.faces ) {
       if ( !face.isFacing(viewpoint) ) {
         drawOpts.alpha = 0.3;
@@ -346,14 +348,12 @@ export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstra
     this.data.unobscured = new SmallBitSet();
     this.data.potentiallyVisible = new SmallBitSet();
   }
-
 }
-
 
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPointsAbstract {
 
   /** @type {class<PercentVisibleResult>} */
-  static resultClass = PercentVisiblePointsResult
+  static resultClass = PercentVisiblePointsResult;
 
   constructor() {
     super();
@@ -362,20 +362,36 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
     this.config.add({
       targetPointIndex: 1, // Center only
       targetInset: 0.75,
-    })
+    });
+  }
+
+  /** @type {number|null} */
+  #currentFacingSide = null;
+
+  #facingSide() {
+    using dir = this.viewpoint.subtract(this.targetShape.center);
+    return Viewpoint.findFacingSide(this.targetShape.internalPoints, dir, this.#currentFacingSide);
   }
 
   /**
    * Build a set of 3d points on a given token shape, dependent on settings and shape.
+   * TODO: Cache this similarly to that of ViewerLOS?
    * @yield {Point3d}
    */
   *iterateTargetPoints() {
+    const inset = this.config.targetInset;
+    const facingSide = this.#facingSide();
     const cfg = {
       pointKey: this.config.targetPointIndex,
-      insetPercentage: this.config.targetInset,
+      insets: {
+        top: inset,
+        bottom: inset,
+        sides: inset,
+      },
+      facingSide,
     };
-    const dir = this.targetLocation.subtract(this.viewpoint);
-    yield* ViewerLOS.constructTokenPoints(this.targetShape, dir, cfg);
+    using dir = this.viewpoint.subtract(this.targetLocation);
+    yield* Viewpoint.constructTokenPoints(this.targetShape, dir, cfg);
   }
 
   /**
@@ -387,5 +403,5 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
     if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) return [token.tokenBorder];
     return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
- }
+}
 

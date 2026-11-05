@@ -102,10 +102,11 @@ export const ENUMS = {
   POINT_INDICES: GeometricPrimitive.POINT_INDICES,
 };
 
-export function pointIndicesLabels(MODULE_ID) {
+export function pointIndicesLabels(MODULE_ID, type = "viewer") {
   const indices = foundry.utils.flattenObject(GeometricPrimitive.POINT_INDICES);
   const out = {};
   for ( const [key, value] of Object.entries(indices) ) {
+    if ( type === "viewer" && key.includes("BACK") ) continue; // Viewer viewpoints cannot include the back, b/c the viewer shape blocks them.
     out[value] = game.i18n.localize(`${MODULE_ID}.point-indices.${key}`);
   }
   return out;

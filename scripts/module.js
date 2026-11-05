@@ -116,6 +116,9 @@ Hooks.once("ready", function() {
 
   // Disable lighting algorithm for now, until fixed.
   if ( game.user.isGM ) Settings.set(Settings.KEYS.LIGHT_MONITOR.ALGORITHM, ENUMS.LIGHT_ALGORITHM_TYPES.NONE);
+
+  // Disable large target for now, until fixed.
+  if ( game.user.isGM ) Settings.set(Settings.KEYS.LOS.TARGET.LARGE, false);
 });
 
 // ----- NOTE: Config ----- //
@@ -221,9 +224,9 @@ function initializeConfig() {
         ViewerLOS.POINT_INDICES.SIDES.FACING,
         ViewerLOS.POINT_INDICES.SIDES.MID,
         ViewerLOS.POINT_INDICES.SIDES.BACK,
-        ViewerLOS.POINT_INDICES.D3.BOTTOM,
-        ViewerLOS.POINT_INDICES.D3.MID,
-        ViewerLOS.POINT_INDICES.D3.TOP]).word, // Everything except CENTER (0)
+        ViewerLOS.POINT_INDICES.ELEVATION.BOTTOM,
+        ViewerLOS.POINT_INDICES.ELEVATION.MID,
+        ViewerLOS.POINT_INDICES.ELEVATION.TOP]).word, // Everything except CENTER (0)
     },
 
     /**

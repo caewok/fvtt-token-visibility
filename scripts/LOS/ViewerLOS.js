@@ -2,7 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -19,7 +18,7 @@ import { AABB3d } from "../geometry/3d/AABB3d.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
 
 // LOS folder
-import { constructTokenPoints, tokensOverlap } from "./util.js";
+import { tokensOverlap } from "./util.js";
 import { SmallBitSet } from "./SmallBitSet.js";
 
 // Viewpoint algorithms.
@@ -46,7 +45,7 @@ Occlusion tester can share a global config object for the module.
 /**
  * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
  * @property {number} viewpointIndex                  Points configuration for the viewer's viewpoints
- * @property {number} viewpointInset                  Offset each viewpoint from viewer border
+ * @property {ViewpointInsets} insets                 Offset each viewpoint from viewer border
  * @property {boolean} angle                          True if constrained by viewer vision angle
  * @property {number} threshold                       Percent needed to be seen for LOS
  */
@@ -90,7 +89,11 @@ export class ViewerLOS {
   config = {
     // Viewpoint configuration
     viewpointIndex: 1, // Center point only.
-    viewpointInset: 0, // Percentage inset
+    insets: {
+      sides: 0,
+      top: 0,
+      bottom: 0,
+    },
     angle: true, // If constrained by the viewer vision angle
     threshold: 0.75, // Percent used for LOS
   };
@@ -118,29 +121,11 @@ export class ViewerLOS {
   }
 
   // ----- NOTE: Viewpoints ----- //
+
   /** @type {Viewpoint} */
   viewpoints = [];
 
-  // ----- NOTE: Caching ----- //
-
-  /** @type {boolean} */
-  #dirty = true;
-
-  get dirty() {
-    this.#dirty ||= this.#currentViewpointInset !== this.config.viewpointInset
-                 || this.#currentViewpointIndex !== this.config.viewpointIndex
-                 || this.#currentViewerShape !== this.viewerShape
-                 || this._viewerDimsChanged()
-                 || this.#facingChanged();
-    return this.#dirty;
-  }
-
-  set dirty(value) { this.#dirty ||= value; }
-
   // Track key viewpoint parameters.
-
-  /** @type {number} */
-  #currentViewpointInset = null;
 
   /** @type {number} */
   #currentViewpointIndex = null;
@@ -158,7 +143,17 @@ export class ViewerLOS {
     return !this.#currentViewerDims.equals(dims);
   }
 
+
+  /** @type {ViewpointInsets} Scratch object; valid until the next call. */
+  #insetScratch = { sides: 0, top: 0, bottom: 0 };
+
+  /** @type {ViewpointInsets} Insets used when the viewpoints were last built. */
+  #currentInsets = { sides: null, top: null, bottom: null };
+
   // Tracking rotation for directional viewpoints.
+
+  /** @type {number|null} */
+  #currentFacingSide = null;
 
   /** Viewpoint indices whose positions depend on the direction to the target. */
   static #DIRECTION_MASK = SmallBitSet.fromIndices((() => {
@@ -166,29 +161,26 @@ export class ViewerLOS {
     return [PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK, PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK];
   })());
 
-  /** @type {number<radians>} Viewer-to-target angle used when the viewpoints were last built. */
-  #currentFacingAngle = Number.NaN;
-
-  #facingAngle() {
-    const v = this.viewerShape.center;
-    const t = this.targetShape.center;
-    return Math.atan2(t.y - v.y, t.x - v.x);
+  #facingSide() {
+    using dir = this.targetShape.center.subtract(this.viewerShape.center);
+    return Viewpoint.findFacingSide(this.viewerShape.internalPoints, dir, this.#currentFacingSide);
   }
 
   #facingChanged() {
     const usesDirection = SmallBitSet.fromNumber(this.config.viewpointIndex)
       .intersects(this.constructor.#DIRECTION_MASK);
-    if ( !usesDirection ) return false;
-    const angle = this.#facingAngle();
-    return !(Math.abs(angle - this.#currentFacingAngle) < 1e-4); // NaN on first run counts as changed.
+    return usesDirection && this.#facingSide() !== this.#currentFacingSide;
   }
 
-  /**
-   * Update the viewpoints if needed.
-   */
-  _clean() {
-    this.initializeViewpoints();
-    this.#dirty = false;
+  get viewpointInsets() {
+    Object.assign(this.#insetScratch, this.config.insets);
+    return this.#insetScratch;
+  }
+
+  #insetsChanged() {
+    const now = this.viewpointInsets;
+    const was = this.#currentInsets;
+    return now.sides !== was.sides || now.top !== was.top || now.bottom !== was.bottom;
   }
 
   /**
@@ -199,17 +191,14 @@ export class ViewerLOS {
     this.targetLocation.copyFrom(this.targetShape.center);
     using dir = this.targetLocation.subtract(this.viewerCenter);
 
-    // Adjust top viewpoints by token height.
-    const viewerD = this.viewer.document;
-    const tokenHeightPercentage = CONFIG[MODULE_ID].useViewerHeight
-      ? viewerD.visionHeightZ / ((viewerD.topZ - viewerD.bottomZ) || 1)
-      : 1;
-
-    const pts = this.constructor.constructTokenPoints(this.viewerShape, dir, {
+    const insets = this.viewpointInsets;
+    const facingSide = this.#facingSide();
+    const pts = Viewpoint.constructTokenPoints(this.viewerShape, dir, {
       pointKey: this.config.viewpointIndex,
-      insetPercentage: this.config.viewpointInset,
-      tokenHeightPercentage,
+      insets,
+      facingSide: this.#facingSide(),
     });
+    this.#currentFacingSide = facingSide;
 
     // Construct the viewpoints: either modify existing or construct new.
     const n = Math.min(this.viewpoints.length, pts.length);
@@ -220,11 +209,36 @@ export class ViewerLOS {
     // Cache the key viewpoint parameters so we know when to rebuild the viewpoints.
     TokenGeometry.tokenDimensions(this.viewer.document, this.#currentViewerDims);
     this.#currentViewerShape = this.viewerShape;
-    this.#currentViewpointInset = this.config.viewpointInset;
     this.#currentViewpointIndex = this.config.viewpointIndex;
-    this.#currentFacingAngle = this.#facingAngle();
+    Object.assign(this.#currentInsets, insets);
 
     return true;
+  }
+
+  // ----- NOTE: Caching ----- //
+
+  /** @type {boolean} */
+  #dirty = true;
+
+  get dirty() {
+    this.#dirty ||= this.#insetsChanged()
+                 || this.#currentViewpointIndex !== this.config.viewpointIndex
+                 || this.#currentViewerShape !== this.viewerShape
+                 || this._viewerDimsChanged()
+                 || this.#facingChanged();
+    return this.#dirty;
+  }
+
+  set dirty(value) { this.#dirty ||= value; }
+
+
+
+  /**
+   * Update the viewpoints if needed.
+   */
+  _clean() {
+    this.initializeViewpoints();
+    this.#dirty = false;
   }
 
   // ----- NOTE: Target ---- //
@@ -407,7 +421,7 @@ export class ViewerLOS {
    * Viewpoint blocked if it is further from the target than the center point.
    * In other words, if it traverses too much of the viewer shape.
    * Also blocked if outside the constrained token border.
-   * @param {Point3d} pt
+   * @param {Point3d|PIXI.Point} pt
    * @returns {boolean} True if blocked
    */
   _viewpointBlockedByViewer(pt) {
@@ -415,10 +429,18 @@ export class ViewerLOS {
     if ( this.constructor.testPointOutsideConstrainedBorder(pt, this.viewer) ) return true;
 
     // Viewpoint must be closer to the target center than the viewer center.
-    const viewerCtr = this.viewerShape.center;
-    if ( pt.almostEqual(viewerCtr) ) return false; // Center point is special; not blocked.
-    const targetCtr = this.targetShape.center;
-    return PIXI.Point.distanceSquaredBetween(viewerCtr, targetCtr) < PIXI.Point.distanceSquaredBetween(pt, targetCtr); // Use a 2d distance test.
+    using viewerCtr = this.viewerShape.center.to2d();
+    using targetCtr = this.targetShape.center.to2d();
+    using tc = targetCtr.subtract(viewerCtr);
+    const len2 = tc.dot2(); // Distance squared between viewer and target.
+    if ( len2.almostEqual(0) ) return false;
+
+    // Blocked only when behind the viewer's center relative to the target.
+    // (The line to the target would cross the viewer's own body).
+    // Level or forward points are never blocked.
+    using pt2d = pt.to2d();
+    using pc = pt2d.subtract(viewerCtr);
+    return (tc.dot(pc) / Math.sqrt(len2)) < -1;
   }
 
   /**
@@ -489,20 +511,6 @@ export class ViewerLOS {
     if ( constrainedBorder.equals(token.tokenBorder) ) return false;
     return !constrainedBorder.clone().pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
   }
-
-  /**
-   * Build points for a given token.
-   * @param {Token|GeometricPrimitive} token
-   * @param {object} [opts]
-   * @param {number|BitSet} [opts.pointKey]
-   * @param {number} [opts.inset]
-   * @param {Point3d} [opts.viewpoint]
-   * @param {boolean} [opts.tokenHeightPercentage]         Use a percentage of the token shape's
-   *                                                       total height for top values.
-   * @returns {Point3d[]}
-   */
-  static constructTokenPoints(...args) { return constructTokenPoints(...args); }
-
 
   /* ----- NOTE: Debug ----- */
 

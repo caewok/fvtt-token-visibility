@@ -41,20 +41,20 @@
     "tokenvisibility.settings.los-algorithm-per-pixel": "Face Points Lattice",
     "tokenvisibility.settings.los-algorithm-sample-pixel": "Sample Pixel",
 
-    "tokenvisibility.settings.los-points-viewer.Name": "Points",
-    "tokenvisibility.settings.los-points-viewer.Hint": "How many points on the viewer to test for the viewer's line-of-sight. Foundry default is 'Center' (one point).",
+    "tokenvisibility.settings.los-points-options-viewer.Name": "Viewpoint Arrangement",
+    "tokenvisibility.settings.los-points-options-viewer.Hint": "One or more 'Eye' locations on the viewer. Foundry default is 'Center' (one point). If no elevations are chosen, 'mid' is assumed. If no x/y positions chosen, 'center' is assumed. If no such points exist for a given token shape, it will fall back to a center point.",
 
-    "tokenvisibility.settings.los-inset-viewer.Name": "Inset",
-    "tokenvisibility.settings.los-inset-viewer.Hint": "For viewer points other than the center, what percentage to inset the point from the token border towards the token center.",
+    "tokenvisibility.settings.los-inset-viewer-top.Name": "Inset: Top",
+    "tokenvisibility.settings.los-inset-viewer-top.Hint": "What percentage to inset each viewpoint from the top of the token border towards the token center.",
 
-    "tokenvisibility.settings.los-points-options-viewer.Name": "Point Options",
-    "tokenvisibility.settings.los-points-options-viewer.Hint": "Points on the viewer to test for the viewer's line-of-sight. Each represents an 'eye' of the viewer.",
+    "tokenvisibility.settings.los-inset-viewer-bottom.Name": "Inset: Bottom",
+    "tokenvisibility.settings.los-inset-viewer-bottom.Hint": "What percentage to inset each viewpoint from the bottom of the token border towards the token center.",
 
-    "tokenvisibility.settings.los-points-options-target.Name": "Point Options",
-    "tokenvisibility.settings.los-points-options-target.Hint": "Points on the target to test for the viewer's line-of-sight.",
+    "tokenvisibility.settings.los-inset-viewer-sides.Name": "Inset: Sides",
+    "tokenvisibility.settings.los-inset-viewer-sides.Hint": "What percentage to inset each viewpoint from the sides of the token border towards the token center.",
 
-    "tokenvisibility.settings.los-points-target.Name": "Points",
-    "tokenvisibility.settings.los-points-target.Hint": "How many points on the target to test for the viewer's line-of-sight.",
+    "tokenvisibility.settings.los-points-options-target.Name": "Points",
+    "tokenvisibility.settings.los-points-options-target.Hint": "Where on the target to test for the viewer's line-of-sight. If no elevations are chosen, 'mid' is assumed. If no x/y positions chosen, 'center' is assumed. Foundry default is center, sides (facing, mid, back), and mid-elevation with 0.75 inset.",
 
     "tokenvisibility.settings.los-inset-target.Name": "Inset",
     "tokenvisibility.settings.los-inset-target.Hint": "For target points other than the center, what percentage to inset the point from the token border towards the token center.",
@@ -146,15 +146,15 @@
     "tokenvisibility.tile-config.options.ignore": "Does Not Block",
 
     "tokenvisibility.point-indices.CENTER": "Center",
-    "tokenvisibility.point-indices.CORNERS.FACING": "Front Corners",
-    "tokenvisibility.point-indices.CORNERS.MID": "Mid Corners",
-    "tokenvisibility.point-indices.CORNERS.BACK": "Back Corners",
-    "tokenvisibility.point-indices.SIDES.FACING": "Facing Sides",
-    "tokenvisibility.point-indices.SIDES.MID": "Mid Sides",
-    "tokenvisibility.point-indices.SIDES.BACK": "Back Sides",
-    "tokenvisibility.point-indices.D3.TOP": "Top Elevation",
-    "tokenvisibility.point-indices.D3.MID": "Middle Elevation",
-    "tokenvisibility.point-indices.D3.BOTTOM": "Bottom Elevation",
+    "tokenvisibility.point-indices.CORNERS.FACING": "Corners: Front",
+    "tokenvisibility.point-indices.CORNERS.MID": "Corners: Mid",
+    "tokenvisibility.point-indices.CORNERS.BACK": "Corners: Back",
+    "tokenvisibility.point-indices.SIDES.FACING": "Side: Facing",
+    "tokenvisibility.point-indices.SIDES.MID": "Sides: Mid",
+    "tokenvisibility.point-indices.SIDES.BACK": "Sides: Back",
+    "tokenvisibility.point-indices.ELEVATION.TOP": "Elevation: Top",
+    "tokenvisibility.point-indices.ELEVATION.MID": "Elevation: Mid",
+    "tokenvisibility.point-indices.ELEVATION.BOTTOM": "Elevation: Back",
 
     "TYPES.RegionBehavior.tokenvisibility.blockSight": "Block Sight"
  }

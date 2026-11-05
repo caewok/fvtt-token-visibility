@@ -78,9 +78,9 @@ export class TokenLightMeter {
         ViewerLOS.POINT_INDICES.SIDES.FACING,
         ViewerLOS.POINT_INDICES.SIDES.MID,
         ViewerLOS.POINT_INDICES.SIDES.BACK,
-        ViewerLOS.POINT_INDICES.D3.BOTTOM,
-        ViewerLOS.POINT_INDICES.D3.MID,
-        ViewerLOS.POINT_INDICES.D3.TOP]).word, // Everything but the center.
+        ViewerLOS.POINT_INDICES.ELEVATION.BOTTOM,
+        ViewerLOS.POINT_INDICES.ELEVATION.MID,
+        ViewerLOS.POINT_INDICES.ELEVATION.TOP]).word, // Everything but the center.
   };
 
   static get calculator() {
