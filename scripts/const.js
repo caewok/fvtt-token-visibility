@@ -2,7 +2,7 @@
 */
 "use strict";
 
-import { ENUMS as LOS_ENUMS } from "./LOS/const.js";
+import { ENUMS as LOS_ENUMS, LOS_SETTINGS } from "./LOS/const.js";
 export { pointIndicesLabels } from "./LOS/const.js";
 
 export const MODULE_ID = "tokenvisibility";
@@ -62,7 +62,7 @@ export const ENUMS = {
   ...LOS_ENUMS
 }
 
-export const SETTINGS = {
+export const SETTINGS = foundry.utils.mergeObject(foundry.utils.deepClone(LOS_SETTINGS), {
   SUBMENU: "submenu",
   RANGE: {
     ALGORITHM: "range-algorithm",
@@ -71,43 +71,19 @@ export const SETTINGS = {
   },
 
   LOS: {
-    VIEWER: {
-      POINTS: "los-points-options-viewer",
-      INSETS: {
-        SIDES: "los-inset-viewer-sides",
-        TOP: "los-inset-viewer-top",
-        BOTTOM: "los-inset-viewer-bottom",
-      },
-    },
-
     TARGET: {
-      ALGORITHM: "los-algorithm",
       PERCENT: "los-percent",
-      LARGE: "los-large-target",
-      POINT_OPTIONS: {
-        POINTS: "los-points-options-target",
-        INSET: "los-inset-target",
-      }
-    }
+    },
   },
 
   LIGHT_MONITOR: {
     ALGORITHM: "lm-algorithm",
   },
 
-  PRONE_STATUS_ID: "prone-status-id",
-  TOKEN_HP_ATTRIBUTE: "token-hp-attribute",
-
-  PRONE_MULTIPLIER: "prone-multiplier",
-
-  LIVE_TOKENS_BLOCK: "live-tokens-block",
-  DEAD_TOKENS_BLOCK: "dead-tokens-block",
-  PRONE_TOKENS_BLOCK: "prone-tokens-block",
-
   CHANGELOG: "changelog",
   DEBUG: {
     RANGE: "debug-range",
-    LOS: "debug-los"
   },
+});
 
-};
+

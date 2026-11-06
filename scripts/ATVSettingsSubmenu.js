@@ -43,8 +43,8 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
         [LOS.TARGET.PERCENT]: 0,
         [LOS.TARGET.LARGE]: true,
 
-        [LOS.TARGET.POINT_OPTIONS.POINTS]: [PI.CORNERS.FACING, PI.CORNERS.BACK],
-        [LOS.TARGET.POINT_OPTIONS.INSET]: 0,
+        [LOS.TARGET.POINTS]: [PI.CORNERS.FACING, PI.CORNERS.BACK],
+        [LOS.TARGET.INSET]: 0,
       },
       losViewer: {
         [LOS.VIEWER.POINTS]: [PI.CORNERS.FACING, PI.CORNERS.BACK],
@@ -97,11 +97,11 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
       if ( !algSelector ) return;
       const isPoints = algSelector.value === ENUMS.ALGORITHM_TYPES.POINTS;
 
-      const targetOptionsElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINT_OPTIONS.POINTS}"]`);
+      const targetOptionsElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINTS}"]`);
       if ( !targetOptionsElem ) return;
       targetOptionsElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
 
-      const targetInsetElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.POINT_OPTIONS.INSET}"]`);
+      const targetInsetElem = losTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.INSET}"]`);
       if ( !targetInsetElem ) return;
       targetInsetElem.parentElement.parentElement.style.display = isPoints ? "block" : "none";
     }

@@ -101,6 +101,32 @@ export class ModuleSettingsAbstract {
   static registerMenu(key, options) { game.settings.registerMenu(MODULE_ID, key, options); }
 
   /**
+   * Register a world setting.
+   * @param {string} key          Setting key to use
+   * @param {object} [opts]       Options passed to this.register
+   * @param {string} [opts.name]  Name if not `${key}.Name`
+   * @param {string} [opts.hint]  Hint if not `${key}.Hint`
+   * @param {...}                 Additional overrides. For a client setting, add { scope: "client" } here.
+   */
+  static registerWorld(key, { name, hint, ...opts } ) {
+    this.register(key, {
+      name: name ?? this.localize(`${key}.Name`),
+      hint: hint ?? this.localize(`${key}.Hint`),
+      scope: "world",
+      config: true,
+      ...opts,
+    });
+  }
+
+  static registerSubmenuSetting(key, tab, opts) {
+    this.registerWorld(key, { tab, config: false, ...opts  });
+  }
+
+  static registerHidden(key, opts ) {
+    this.registerWorld(key, { config: false, ...opts });
+  }
+
+  /**
    * Localize a setting key.
    * @param {string} key
    */
@@ -110,6 +136,7 @@ export class ModuleSettingsAbstract {
    * Register all settings
    */
   static registerAll() {}
+
 
   /**
    * Check the stored value for a setting.

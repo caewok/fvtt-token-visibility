@@ -35,9 +35,9 @@ export function currentDebugViewerClass(type) {
  */
 export function TokenBlockingConfig() {
   return new ConfigHandler({
-    dead: () => Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK),
-    live: () => Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK),
-    prone: () => Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK),
+    dead: () => Settings.get(Settings.KEYS.LOS.BLOCKING.DEAD),
+    live: () => Settings.get(Settings.KEYS.LOS.BLOCKING.LIVE),
+    prone: () => Settings.get(Settings.KEYS.LOS.BLOCKING.PRONE),
 
     // No settings enabled for now.
     enemies: true,
@@ -86,8 +86,8 @@ export function CalculatorConfig() {
     radius: Number.POSITIVE_INFINITY,
 
     // Points algorithm
-    targetInset: () => Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75,
-    targetPointIndex: () => pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS)),
+    targetInset: () => Settings.get(Settings.KEYS.LOS.TARGET.INSET) ?? 0.75,
+    targetPointIndex: () => pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINTS)),
   });
 }
 
