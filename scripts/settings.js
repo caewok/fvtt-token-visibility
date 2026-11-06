@@ -1,5 +1,4 @@
 /* globals
-CONFIG,
 game,
 Hooks,
 */
@@ -39,11 +38,7 @@ export class Settings extends ModuleSettingsAbstract {
       restricted: true
     });
 
-    register(KEYS.LIGHT_MONITOR.ALGORITHM, {
-      name: localize(`${KEYS.LIGHT_MONITOR.ALGORITHM}.Name`),
-      hint: localize(`${KEYS.LIGHT_MONITOR.ALGORITHM}.Hint`),
-      scope: "world",
-      config: false,
+    this.registerHidden(KEYS.LIGHT_MONITOR.ALGORITHM, {
       type: String,
       choices: {
         [ENUMS.LIGHT_ALGORITHM_TYPES.NONE]: localize(`${ENUMS.LIGHT_ALGORITHM_TYPES.NONE}`),
@@ -54,11 +49,7 @@ export class Settings extends ModuleSettingsAbstract {
       onChange: value => Hooks.callAll(`${MODULE_ID}.lightMonitorChanged`, value),
     });
 
-    register(KEYS.DEBUG.RANGE, {
-      name: localize(`${KEYS.DEBUG.RANGE}.Name`),
-      hint: localize(`${KEYS.DEBUG.RANGE}.Hint`),
-      scope: "world",
-      config: true,
+    this.registerWorld(KEYS.DEBUG.RANGE, {
       type: Boolean,
       default: false,
       onChange: value => Hooks.callAll(`${MODULE_ID}.losDebugRangeChanged`, value),
@@ -73,59 +64,21 @@ export class Settings extends ModuleSettingsAbstract {
 
     // ----- NOTE: Range tab ----- //
 
-    register(KEYS.RANGE.ALGORITHM, {
-      name: localize(`${KEYS.RANGE.ALGORITHM}.Name`),
-      hint: localize(`${KEYS.RANGE.ALGORITHM}.Hint`),
-      scope: "world",
-      config: false,
+    this.registerSubmenuSetting(KEYS.RANGE.ALGORITHM, "range", {
       type: String,
       choices: rangeChoices,
       default: PT_TYPES.NINE,
-      tab: "range"
     });
 
-    register(KEYS.RANGE.POINTS3D, {
-      name: localize(`${KEYS.RANGE.POINTS3D}.Name`),
-      hint: localize(`${KEYS.RANGE.POINTS3D}.Hint`),
-      scope: "world",
-      config: false,
+    this.registerSubmenuSetting(KEYS.RANGE.POINTS3D, "range", {
       type: Boolean,
       default: false,
-      tab: "range"
     });
 
-    register(KEYS.RANGE.DISTANCE3D, {
-      name: localize(`${KEYS.RANGE.DISTANCE3D}.Name`),
-      hint: localize(`${KEYS.RANGE.DISTANCE3D}.Hint`),
-      scope: "world",
-      config: false,
+    this.registerSubmenuSetting(KEYS.RANGE.DISTANCE3D, "range", {
       type: Boolean,
       default: false,
-      tab: "range"
     });
-
-    // ----- NOTE: Other tab ----- //
-
-    register(KEYS.PRONE_MULTIPLIER, {
-      name: localize(`${KEYS.PRONE_MULTIPLIER}.Name`),
-      hint: localize(`${KEYS.PRONE_MULTIPLIER}.Hint`),
-      scope: "world",
-      config: false,
-      type: Number,
-      range: {
-        max: 1,  // Prone equivalent to standing.
-        min: 0,  // Prone equivalent to (almost) not being there at all. Will set to a single pixel.
-        step: 0.1
-      },
-      default: CONFIG[GEOMETRY_LIB_ID].CONFIG.proneMultiplier ?? 0.33, // Same as Wall Height
-      onChange: value => CONFIG[GEOMETRY_LIB_ID].CONFIG.proneMultiplier = value,
-      tab: "other"
-    });
-
-    // Make sure these are linked at the start.
-    CONFIG[GEOMETRY_LIB_ID].CONFIG.proneMultiplier = this.get(KEYS.PRONE_MULTIPLIER);
-    CONFIG[GEOMETRY_LIB_ID].CONFIG.proneStatusId = this.get(KEYS.PRONE_STATUS_ID);
-    CONFIG[GEOMETRY_LIB_ID].CONFIG.tokenHPId = this.get(KEYS.TOKEN_HP_ATTRIBUTE);
   }
 
   static migrate() {

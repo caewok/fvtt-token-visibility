@@ -63,7 +63,7 @@
     "tokenvisibility.settings.debug-range.Hint": "If enabled, will draw representation on the canvas of the token vision range. Note that tokens still may be visible if illuminated but out of range.",
 
     "tokenvisibility.settings.debug-los.Name": "Debug LOS",
-    "tokenvisibility.settings.debug-los.Hint": "If enabled, will draw representation on the canvas of the token vision line-of-sight. If Area3d is enabled, you must target a token to make the debug window appear.",
+    "tokenvisibility.settings.debug-los.Hint": "If enabled, will draw representation on the canvas of the token vision line-of-sight.",
 
     "tokenvisibility.settings.button-foundry.Label": "Reset to Foundry Defaults",
     "tokenvisibility.settings.button-foundry.Notification": "Alt. Token Visibility settings changed to Foundry defaults",

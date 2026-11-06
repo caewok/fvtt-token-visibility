@@ -167,6 +167,11 @@ export function registerLOSSettings(MODULE_ID, settingsManager, {
   settingsManager.registerSubmenuSetting(TARGET.POINTS, "losTarget", { type: pointsField("target"), default: [CENTER] });
   settingsManager.registerSubmenuSetting(TARGET.INSET, "losTarget", { type: Number, range: INSET_RANGE, default: 0.75 });
 
+  // Tokens block
+  settingsManager.registerSubmenuSetting(KEYS.LOS.BLOCKING.LIVE, "other", { type: Boolean, default: false });
+  settingsManager.registerSubmenuSetting(KEYS.LOS.BLOCKING.DEAD, "other", { type: Boolean, default: false });
+  settingsManager.registerSubmenuSetting(KEYS.LOS.BLOCKING.PRONE, "other", { type: Boolean, default: false });
+
   // Debug.
   settingsManager.registerWorld(KEYS.DEBUG.LOS, { config: true, type: Boolean, default: false,
     onChange: value => Hooks.callAll(`${MODULE_ID}.${LOS_HOOKS.DEBUG_LOS}`, value),
