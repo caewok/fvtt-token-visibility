@@ -26,3 +26,4 @@ v10_sync_to_module.sh
 sync_module.js
 
 hgeom/
+.aider*
