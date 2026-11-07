@@ -18,7 +18,6 @@ export class ATVLOSManager extends LOSManager {
 
   static registerHooks() {
     super.registerHooks();
-    Hooks.on(`${MODULE_ID}.losDebugLOSChanged`, value => this.toggleLOSDebugGraphics(value));
     Hooks.on(`${MODULE_ID}.losDebugRangeChanged`, value => this.toggleRangeDebugGraphics(value));
     Hooks.on(`${MODULE_ID}.lightMonitorChanged`, value => this.updateLightMonitor(value));
   }

@@ -6,10 +6,9 @@ Hooks,
 "use strict";
 
 import { MODULE_ID, SETTINGS, ENUMS } from "./const.js";
-import { registerLOSSettings } from "./LOS/const.js";
+import { registerLOSSettings } from "./LOS/settings.js";
 import { ATVSettingsSubmenu } from "./ATVSettingsSubmenu.js";
 import { ModuleSettingsAbstract } from "./ModuleSettingsAbstract.js";
-import { GEOMETRY_LIB_ID } from "./geometry/const.js";
 
 export class Settings extends ModuleSettingsAbstract {
 
@@ -23,7 +22,7 @@ export class Settings extends ModuleSettingsAbstract {
    * Register all settings
    */
   static registerAll() {
-    const { KEYS, register, registerMenu, localize } = this;
+    const { KEYS, registerMenu, localize } = this;
     const PT_TYPES = ENUMS.POINT_TYPES;
     const RTYPES = [PT_TYPES.CENTER, PT_TYPES.FIVE, PT_TYPES.NINE];
     const rangeChoices = {};

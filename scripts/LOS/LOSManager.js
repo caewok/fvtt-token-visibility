@@ -8,14 +8,15 @@ PIXI,
 "use strict";
 
 import { MODULE_ID } from "../const.js";
-import { ENUMS } from "./const.js"
+import { ENUMS, LOS_HOOKS } from "./const.js"
 
 export class LOSManager {
   static debugViewer;
 
   static registerHooks() {
-    Hooks.on(`${MODULE_ID}.losAlgorithmChanged`, value => this.algorithmChange(value));
-    Hooks.on(`${MODULE_ID}.webGL2ContextChanged`, lost => this.onGLContextChanged(lost));
+    Hooks.on(`${MODULE_ID}.${LOS_HOOKS.DEBUG_LOS}`, value => this.toggleLOSDebugGraphics(value));
+    Hooks.on(`${MODULE_ID}.${LOS_HOOKS.ALGORITHM}`, value => this.algorithmChange(value));
+    Hooks.on(`${MODULE_ID}.${LOS_HOOKS.WEBGL2_CONTEXT}`, lost => this.onGLContextChanged(lost));
   }
 
   static _chain = null;

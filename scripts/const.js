@@ -3,7 +3,7 @@
 "use strict";
 
 import { ENUMS as LOS_ENUMS, LOS_SETTINGS } from "./LOS/const.js";
-export { pointIndicesLabels } from "./LOS/const.js";
+export { pointIndicesLabels } from "./LOS/settings.js";
 
 export const MODULE_ID = "tokenvisibility";
 export const EPSILON = 1e-08;
