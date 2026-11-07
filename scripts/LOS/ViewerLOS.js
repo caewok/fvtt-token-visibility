@@ -293,7 +293,7 @@ export class ViewerLOS {
     TokenGeometry.tokenCenter(this.target.document, this.targetLocation);
 
     this.occlusionTester.initialize({
-      subjectToken: this.target,
+      subjectTokenD: this.target.document,
       tokensToExclude: [this.viewer],
       levelId: this.viewer.document.level,
     });
