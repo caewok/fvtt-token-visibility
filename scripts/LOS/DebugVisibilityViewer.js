@@ -47,11 +47,25 @@ export class DebugVisibilityViewerAbstract {
    */
   constructor(viewerLOSFn) {
     if ( viewerLOSFn instanceof ViewerLOS ) {
+      // Caller supplied a debug-only ViewerLOS. Use it directly.
+      const own = viewerLOSFn;
       this._viewerLOSFn = viewer => {
-        viewerLOSFn.viewer = viewer;
-        return viewerLOSFn;
+        own.viewer = viewer;
+        own.calculator = CONFIG[MODULE_ID].losCalculator;
+        return own;
       };
-    } else this._viewerLOSFn = viewerLOSFn;
+    } else {
+      // Caller supplied a lookup for the token's live ViewerLOS.
+      // Never calculate with it. Use it only as the source of calculator and config.
+      const own = new ViewerLOS(null, null);
+      this._viewerLOSFn = viewer => {
+        const source = viewerLOSFn(viewer);
+        own.viewer = viewer;
+        own.calculator = source.calculator;
+        own.config = source.config;   // By reference, so settings changes carry over.
+        return own;
+      };
+    }
 
     this.registerHooks();
     this._initializeDebugGraphics();
@@ -61,7 +75,9 @@ export class DebugVisibilityViewerAbstract {
   get viewer() { return canvas.tokens.controlled[0]; }
 
   /** @type {Token} */
-  get target() { return game.user.targets.first(); }
+  #targetToken = null;
+
+  get target() { return this.#targetToken || game.user.targets.first(); }
 
   /**
    * Update the viewer and target.
@@ -82,13 +98,13 @@ export class DebugVisibilityViewerAbstract {
     if ( !this.initializeCalculation() ) return;
 
     // First draw the basic debugging graphics for the canvas.
-    this.viewerLOS.calculate();
+    const viewerLOS = this.viewerLOS;
+    viewerLOS.calculate(); // Sets percent visible; may short-circuit.
+    if ( !viewerLOS.viewpointsCalculated ) viewerLOS.prepare(); // Debug still needs current viewpoints and target.
     this._drawCanvasDebug();
 
-    // Then determine the percent visible using the algorithm and
-    // update debug view specific to that algorithm.
-    const percentVisible = this.viewerLOS.percentVisible;
-    this.updateDebugForPercentVisible(percentVisible);
+    // Update debug view for the specific calculator
+    this.updateDebugForPercentVisible(viewerLOS.percentVisible);
   }
 
   updateDebugForPercentVisible(_percentVisible) {}
@@ -148,8 +164,16 @@ export class DebugVisibilityViewerAbstract {
    * @param {Token} targetToken
    * @param {boolean} targeted      True if targeted
    */
-  onTargetToken(user, _targetToken, _targeted) {
+  onTargetToken(user, targetToken, targeted) {
     if ( game.user !== user ) return;
+    // Update the tracked target when a token is targeted
+    if ( targeted && targetToken ) {
+      this.#targetToken = targetToken;
+    } else if ( !targeted && this.#targetToken ) {
+      // Clear target if all targets are removed
+      this.#targetToken = null;
+    }
+
     this.render();
   }
 
@@ -406,15 +430,12 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
 
   get popoutStage() { return this.popout?.pixiApp?.stage; }
 
-  initializeCalculation() {
-    if ( !super.initializeCalculation() ) return false;
+  _syncPopoutContainers() {
     const stage = this.popoutStage;
-    if ( !this.popoutIsRendered || !stage ) return true;
-    if ( this.numViewpoints !== this.#popoutContainers.length ) {
-      this._destroyPopout();
-      this.popoutContainers.forEach(c => stage.addChild(c));
-    }
-    return true;
+    if ( !this.popoutIsRendered || !stage ) return;
+    if ( this.numViewpoints === this.#popoutContainers.length ) return;
+    this._destroyPopout();
+    this.popoutContainers.forEach(c => stage.addChild(c));
   }
 
   get popoutContainers() {
@@ -590,9 +611,9 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
   }
 
   updateDebugForPercentVisible(percentVisible) {
+    this._syncPopoutContainers();
     let width = this.constructor.WIDTH;
     let height = this.constructor.HEIGHT;
-
     // Keep width and height even.
     switch ( this.numViewpoints ) {
       case 1: width *= 0.5; height *= 0.5; break;
@@ -605,13 +626,12 @@ export class DebugVisibilityViewerArea3dPIXI extends DebugVisibilityViewerWithPo
       case 8:
       case 9: width *= (0.5 / 3); height *= (0.5 / 3); break;
     }
-
     this.viewerLOS.viewpoints.forEach((vp, idx) => {
       const draw = this.getPopoutDraw(idx);
       const container = this.getPopoutContainer(idx);
       vp._draw3dDebug(draw, { container, width, height });
     });
-    super.updateDebugForPercentVisible(percentVisible);
+    super.updateDebugForPercentVisible(percentVisible);   // Footer text.
   }
 
   clearDebug() {
@@ -689,6 +709,20 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
       const clear = i === 0;
       calc._render(renderer, { frame, clear, debug: true }); // Set debug: false to see what the calculator is doing.
     }
+  }
+
+  /*
+  clearDebug() {
+    super.clearDebug();
+    if ( !this._destroyed ) this._clearPopoutCanvas();
+  }
+  */
+
+  _clearPopoutCanvas() {
+    const renderer = this.renderer;
+    if ( !renderer?.ready ) return;
+    renderer.unbindFramebuffer(); // Default framebuffer, which is the popout canvas.
+    renderer.clear();
   }
 
   _canvasDimensionsForViewpoints() {

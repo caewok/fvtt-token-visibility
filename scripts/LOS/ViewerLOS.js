@@ -114,6 +114,14 @@ export class ViewerLOS {
 
   get viewer() { return this.#viewer; }
 
+  set viewer(value) {
+    if ( value === this.#viewer ) return;
+    this.#viewer = value;
+    this.#currentFacingSide = null;   // Index belongs to the previous viewer's shape.
+    this.#dirty = true;               // Viewpoints depend on the viewer.
+    this._percentVisible = undefined; // Drop the cached result.
+  }
+
   /** @type {GeometricPrimitive} */
   get viewerShape() {
     const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.viewer).full; // Don't need the constrained shape here.
@@ -231,8 +239,6 @@ export class ViewerLOS {
 
   set dirty(value) { this.#dirty ||= value; }
 
-
-
   /**
    * Update the viewpoints if needed.
    */
@@ -255,7 +261,11 @@ export class ViewerLOS {
 
   get target() { return this.#target; }
 
-  set target(value) { this.#target = value; }
+  set target(value) {
+    if ( value === this.#target ) return;
+    this.#target = value;
+    this._percentVisible = undefined;
+  }
 
   /** @type {Point3d} */
   targetLocation = new Point3d();
@@ -280,6 +290,33 @@ export class ViewerLOS {
     return this._percentVisible;
   }
 
+  /** @type {boolean} False if the last calculate() was short-circuited by simpleVisibilityTest. */
+  viewpointsCalculated = false;
+
+  /**
+   * Point the calculator, occlusion tester, viewpoints and frustum at the current viewer and target.
+   * Calculates nothing. Debug views call this directly when calculate() short-circuits.
+   */
+  prepare() {
+    const targetShape = this.targetShape;
+    this.viewerCenter.copyFrom(this.viewerShape.center);
+    this.targetLocation.copyFrom(targetShape.center);   // Every call, not only when dirty.
+
+    this.occlusionTester.initialize({
+      subjectTokenD: this.target.document,
+      tokensToExclude: [this.viewer],
+      levelId: this.viewer.document.level,
+    });
+
+    if ( this.dirty ) this._clean();
+    this._setFrustum();
+    this.occlusionTester.frustum = this.frustum;
+
+    // The targetShape setter resets targetLocation, so set the location after it.
+    this.calculator.targetShape = targetShape;
+    this.calculator.targetLocation = this.targetLocation;
+  }
+
   /**
    * Calculate the line-of-sight for a set of viewpoints.
    * @param {CalculatorConfig} cfg
@@ -287,16 +324,7 @@ export class ViewerLOS {
   calculate() {
     // Wipe the previous estimate.
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
-
-    // Lock in the current viewer and target location.
-    TokenGeometry.tokenCenter(this.viewer.document, this.viewerCenter);
-    TokenGeometry.tokenCenter(this.target.document, this.targetLocation);
-
-    this.occlusionTester.initialize({
-      subjectTokenD: this.target.document,
-      tokensToExclude: [this.viewer],
-      levelId: this.viewer.document.level,
-    });
+    this.viewpointsCalculated = false;
 
     // Can skip calculation if simple view test returns true/false.
     const alwaysVisible = this.simpleVisibilityTest();
@@ -305,47 +333,38 @@ export class ViewerLOS {
       return;
     }
 
-    // Debug:
-    // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}
-    // (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
-    // console.debug(`ViewerLOS|target ${this.target.name} at ${this.targetLocation}
-    // (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
-
-    this._percentVisible = 0;
-    if ( this.dirty ) this._clean();
-
-    // Set up the calculator frustum.
-    this._setFrustum();
-    this.calculator.occlusionTester.frustum = this.frustum;
-
-    // Set the calculator target
-    this.calculator.targetShape = this.targetGeometry.shapes[0];
-    this.calculator.targetLocation = this.targetLocation;
-
+    if ( CONFIG[MODULE_ID].debug ) {
+      console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}
+        (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
+      console.debug(`ViewerLOS|target ${this.target.name} at ${this.targetLocation}
+        (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
+    }
 
     // Test each viewpoint until unobscured is 1.
+    this._percentVisible = 0;
+    this.prepare();
+    this.viewpointsCalculated = true;
     for ( const vp of this.viewpoints ) {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
         vp.lastResult = vp.calculator._createResult();
         vp.lastResult.makeFullyNotVisible();
-        // Debug: console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}:
-        // vp ${vp.viewpoint} blocked`);
+        if ( CONFIG[MODULE_ID].debug ) console.debug(`\nViewerLOS|viewer ${this.viewer.name}
+          at ${this.viewerCenter}: vp ${vp.viewpoint} blocked`);
         continue;
       }
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) {
-        // Debug: console.debug(`\nViewerLOS|viewer ${this.viewer.name} at
-        // ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+        if ( CONFIG[MODULE_ID].debug ) console.debug(`\nViewerLOS|viewer ${this.viewer.name} at
+          ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
         return;
       }
     }
     if ( CONFIG[MODULE_ID].useStereoBlending
       && this._percentVisible < this.config.threshold ) this._calculateStereo();
-    // Debug: if ( this._percentVisible.almostEqual(0) ) console.debug(`\nViewerLOS|viewer
-    // ${this.viewer.name}: target ${this.target.name} not visible.`);
-    // Debug: console.debug(`\nViewerLOS|viewer ${this.viewer.name} at
-    // ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+
+    if ( CONFIG[MODULE_ID].debug ) console.debug(`\nViewerLOS|viewer ${this.viewer.name} at
+      ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
   }
 
   /**
@@ -521,7 +540,10 @@ export class ViewerLOS {
   _drawCanvasDebug(debugDraw, debugViewpointDraw) {
     this._drawVisibleTokenBorder(debugDraw);
     this._drawLineOfSightDebug(debugDraw);
-    this.viewpoints.forEach(vp => vp._drawCanvasDebug(debugViewpointDraw));
+    for ( const vp of this.viewpoints ) {
+      if ( this._viewpointBlockedByViewer(vp.viewpoint) ) continue;
+      vp._drawCanvasDebug(debugViewpointDraw);
+    }
   }
 
   /**
@@ -530,15 +552,8 @@ export class ViewerLOS {
    * Color red if fails LOS threshold test for that viewpoint.
    */
   _drawLineOfSightDebug(draw) {
-    // Debug:
-    // console.debug(`\nViewerLOS debug|viewer ${this.viewer.name} at ${this.viewerCenter}
-    // (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
-    // console.debug(`ViewerLOS debug|target ${this.target.name} at ${this.targetLocation}
-    // (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
-
     const simpleTest = this.simpleVisibilityTest();
     if ( simpleTest === false || simpleTest === true ) {
-      // No viewpoints used; color each with light green or light red line.
       const opts = { color: simpleTest ? Draw.COLORS.LIGHT.green : Draw.COLORS.LIGHT.red };
       for ( const vp of this.viewpoints ) vp._drawLOSSegment(this.targetLocation, draw, opts);
     } else for ( const vp of this.viewpoints ) vp._drawLOS(this.targetLocation, draw);

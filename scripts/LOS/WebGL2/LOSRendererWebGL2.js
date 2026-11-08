@@ -301,6 +301,19 @@ export class LOSRendererWebGL2 {
   // ----- NOTE: Render pipeline ----- //
 
   /**
+   * Clear the whole drawing surface (color, depth, stencil) to transparent black.
+   * Ignores the viewport. Uses the cached setters so WebGL2 state stays in sync.
+   */
+  clear() {
+    const { gl, webGL2 } = this;
+    if ( webGL2.contextLost ) return;
+    webGL2.setDepthMask(true);                  // Otherwise the depth buffer is not cleared.
+    webGL2.setColorMask(WebGL2.noColorMask);    // All channels.
+    webGL2.setClearColor(WebGL2.blackClearColor);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+  }
+
+  /**
    * Caches of active drawables mapped to lookup keys based on the primitive and shader flags.
    * Because the renderer gl changes for the debug popout canvas vs regular canvas, the cache
    * cannot be static.
@@ -448,11 +461,7 @@ export class LOSRendererWebGL2 {
     webGL2.setCullFace("BACK");
     webGL2.setDepthMask(true);
     webGL2.setColorMask(WebGL2.noColorMask);
-    if ( clear ) { // Clear = false used for rendering debug multiple viewpoints.
-      webGL2.setColorMask(WebGL2.noColorMask); // Force all channels true.
-      webGL2.setClearColor(WebGL2.blackClearColor);  // Clear everything to black.
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
-    }
+    if ( clear ) this.clear(); // Clear = false used for rendering debug multiple viewpoints.
 
     // Pass 1: Render target.
     this._renderTarget(debug);

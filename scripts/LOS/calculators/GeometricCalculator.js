@@ -150,16 +150,21 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
-    // Split obstacles by opacity. Terrain (limited) walls keep their pairwise-overlap logic and stay solid.
-    const { partial, nonBlocking } = this.partiallyBlockingObstacles();
-    const layered = partial.filter(e => e.subtype !== "terrainWalls");
-    const excluded = new Set([...layered, ...nonBlocking].map(e => e.obstacle));
-
-    this.constructPerspectivePolygons(excluded, layered);
+    this._buildPerspectivePolygons();
     result.data.targetPaths = this._constructTargetClipperPaths();
     result.data.blockingPaths = this._constructObstacleClipperPaths();
     result.data.layers = this._constructLayers();
     return result;
+  }
+
+  /**
+   * Build the perspective polygons for the current viewpoint and target.
+   */
+  _buildPerspectivePolygons() {
+    const { partial, nonBlocking } = this.partiallyBlockingObstacles();
+    const layered = partial.filter(e => e.subtype !== "terrainWalls");
+    const excluded = new Set([...layered, ...nonBlocking].map(e => e.obstacle));
+    this.constructPerspectivePolygons(excluded, layered);
   }
 
   /**
@@ -396,6 +401,10 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
    * Draw the 3d objects in the popout.
    */
   _draw3dDebug(result, draw, { width = 100, height = 100 } = {}) {
+    // calculate() skips _calculate() when there are no obstacles or the viewpoint is out of range.
+    // The polygon arrays are then stale, so build them for this viewpoint.
+    if ( !result.data.targetPaths ) this._buildPerspectivePolygons();
+
     const { targetPolys, solidObstaclePolys, terrainObstaclePolys } = this;
     const colors = Draw.COLORS;
 
