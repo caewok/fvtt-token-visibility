@@ -150,4 +150,31 @@ export class ModuleSettingsAbstract {
     if ( storageType === "client" ) return game.settings.storage.get(storageType).getItem(`${MODULE_ID}.${storageKey}`);
     return game.settings.storage.get(storageType).getSetting(`${MODULE_ID}.${storageKey}`).value;
   }
+
+  /**
+   * Reset all settings to defaults for this module.
+   * @param {function} [filterFn]       Optional filter for the settings.
+   *   - @param {object} settingData
+   */
+  static async resetToDefault(filterFn = () => true) {
+    const moduleSettingKeys = game.settings.settings.keys().filter(key => key.startsWith(MODULE_ID));
+    const promises = [];
+    for ( const key of moduleSettingKeys ) {
+      const settingsObject = game.settings.settings.get(key);
+      if ( !filterFn(settingsObject) ) continue;
+      promises.push(this.set(key, settingsObject.default));
+    }
+    return Promises.allSettled(promises);
+  }
+
+  /**
+   * For a given key, return the default value.
+   * @param {string} key
+   * @returns {*|null}
+   */
+  static getDefaultKey(key) {
+    const settingsObject = game.settings.settings.get(`${MODULE_ID}.${key}`);
+    if ( !settingsObject ) return null;
+    return settingsObject.default;
+  }
 }

@@ -135,6 +135,7 @@
 
     "tokenvisibility.settings.submenu.notifyDND5e": "Changing settings to dnd5e.",
     "tokenvisibility.settings.submenu.notify3d": "Changing settings to 3d.",
+    "tokenvisibility.settings.submenu.notifyDefaults": "Changing settings to original defaults.",
 
     "tokenvisibility.tile-config.tileAlphaShape.name": "Tile Visible Shape",
     "tokenvisibility.tile-config.tileAlphaShape.hint": "Select how the tile should be treated for testing visibility.",
