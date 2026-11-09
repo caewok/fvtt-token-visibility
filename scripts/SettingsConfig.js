@@ -38,8 +38,8 @@ Hooks.on("renderSettingsConfig", renderSettingsConfig);
 // ----- NOTE: Helper functions ----- //
 
 function activateListenersSettingsConfig(app, _html) {
-  app.options.actions.atvOpenDocumentation = openDocumentation;
-  app.options.actions.atvOpenIssue = openIssue;
+  app.options.actions[`${MODULE_ID}-open-documentation`] = openDocumentation;
+  app.options.actions[`${MODULE_ID}-open-issue`]  = openIssue;
 
   // Documentation button
 //   html.querySelector(`[name="${MODULE_ID}-button-documentation"]`).click(openDocumentation.bind(app));
