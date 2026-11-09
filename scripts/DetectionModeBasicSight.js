@@ -17,12 +17,13 @@ function _testPoint(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
 
-  // If within range, counts if any portion of the token is visible.
-  if ( this._testRange(visionSource, mode, target, test)
-    && this._testLOS(visionSource, mode, target, test, { testLighting: false }) ) return true;
+  // If outside of range, return false.
+  // TODO: Implement a testLighting approach that handles this differently.
+  //       Outside of range but bright light visible on faces, then visible
+  if ( !this._testRange(visionSource, mode, target, test) ) return false;
 
-  // Outside of vision range, token is visible if the lit portions are visible.
-  return this._testLOS(visionSource, mode, target, test, { testLighting: true });
+  // If within range, counts if any portion of the token is visible.
+  return this._testLOS(visionSource, mode, target, test, { testLighting: false });
 }
 
 PATCHES.BASIC.MIXES = { _testPoint };

@@ -316,25 +316,29 @@ export class PercentVisibleCalculatorAbstract {
   calculate() {
     // Better to create new each time for now, otherwise percentVisible might be inadvertently set.
     this.lastResult = this._createResult();
-
-    // If no obstacles, target presumed visible.
     this.setView();
     if ( !this.occlusionTester.hasObstacles ) return this.lastResult.makeFullyVisible();
-
-    // Otherwise, calculate the visibility.
     return this._calculate();
+  }
+
+  /**
+   * Is the viewpoint within the radius?
+   * @returns {boolean}
+   */
+  _withinRadius() {
+    return Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.config.radius ** 2;
   }
 
   /**
    * Calculates visibility of target from perspective of viewer at viewpoint.
    * Presumes setView has already been called or properties otherwise set. (See calculate method.)
+   * Usually overriden by subclass.
    * @returns {PercentVisibleResult}
    */
   _calculate() {
     // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
     const result = this._createResult();
-    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.config.radius ** 2;
-    return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
+    return this._withinRadius() ? result.makeFullyVisible() : result.makeFullyNotVisible();
   }
 
   /* ----- NOTE: Opacity / Transparency ----- */
