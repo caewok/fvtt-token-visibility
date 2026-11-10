@@ -7,16 +7,11 @@ game,
 
 import { MODULE_ID, DOCUMENTATION_URL, ISSUE_URL } from "./const.js";
 
-// Patches for the VisionSource class
-export const PATCHES = {};
-PATCHES.BASIC = {};
-
 
 // ----- NOTE: Hooks ----- //
 
 /**
  * Settings manipulations to hide unneeded settings
- * Wipe the settings cache on update
  * @param {Application} application     The Application instance being rendered
  * @param {jQuery} html                 The inner HTML of the document that will be displayed and may be modified
  * @param {object} data                 The object of data used when rendering the application
@@ -37,13 +32,14 @@ async function renderSettingsConfig(app, html, data) {
   activateListenersSettingsConfig(app, html);
 }
 
-PATCHES.BASIC.HOOKS = { renderSettingsConfig };
+Hooks.on("renderSettingsConfig", renderSettingsConfig);
+
 
 // ----- NOTE: Helper functions ----- //
 
 function activateListenersSettingsConfig(app, _html) {
-  app.options.actions.atvOpenDocumentation = openDocumentation;
-  app.options.actions.atvOpenIssue = openIssue;
+  app.options.actions[`${MODULE_ID}-open-documentation`] = openDocumentation;
+  app.options.actions[`${MODULE_ID}-open-issue`]  = openIssue;
 
   // Documentation button
 //   html.querySelector(`[name="${MODULE_ID}-button-documentation"]`).click(openDocumentation.bind(app));

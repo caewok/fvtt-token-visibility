@@ -9,6 +9,9 @@ foundry,
 
 import { MODULE_ID, TRACKER_IDS } from "./const.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
+import { buildOcclusionTester, buildLOSCalculator } from "./LOSCalculator.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
+import { SmallBitSet } from "./LOS/SmallBitSet.js";
 
 /*
 Spherical approach
@@ -59,35 +62,38 @@ export class TokenLightMeter {
 
   static #calc;
 
-  static defaultConfiguration = {
-    blocking: {
-      walls: true,
-      tiles: true,
-      regions: true,
-      tokens: {
-        dead: false,
-        live: false,
-        prone: false,
-      },
-    },
-    tokenShapeType: "constrainedTokenBorder",
-    senseType: "sight",
+  static DEFAULT_BLOCKING_CONFIG = {
+    senseType: "light",
+  };
+
+  static DEFAULT_CALCULATOR_CONFIG = {
     largeTarget: false,
-    radius: null,
-    testSurfaceVisibility: true,
-    spherical: false,
-    targetPointIndex: 1022,  // Everything but center.
+    sourceType: "lighting",
+    tokenShapeType: "constrainedTokenBorder",
     targetInset: 0,
-  }
+    targetPointIndex: SmallBitSet.fromIndices([
+        ViewerLOS.POINT_INDICES.CORNERS.FACING,
+        ViewerLOS.POINT_INDICES.CORNERS.MID,
+        ViewerLOS.POINT_INDICES.CORNERS.BACK,
+        ViewerLOS.POINT_INDICES.SIDES.FACING,
+        ViewerLOS.POINT_INDICES.SIDES.MID,
+        ViewerLOS.POINT_INDICES.SIDES.BACK,
+        ViewerLOS.POINT_INDICES.ELEVATION.BOTTOM,
+        ViewerLOS.POINT_INDICES.ELEVATION.MID,
+        ViewerLOS.POINT_INDICES.ELEVATION.TOP]).word, // Everything but the center.
+  };
 
   static get calculator() {
     if ( !this.#calc || this.calcChanged() ) {
-      const calcCfg = structuredClone(this.defaultConfiguration);
-      const cfgs = CONFIG[MODULE_ID].lightMeter;
       if ( this.#calc ) this.#calc.destroy();
-      calcCfg.spherical = cfgs.useTokenSphere;
-      calcCfg.targetPointIndex = cfgs.targetPointIndex;
-      this.#calc = new cfgs.calculatorClass(calcCfg);
+
+      const ot = buildOcclusionTester(this.DEFAULT_BLOCKING_CONFIG);
+      ot.config.senseType = "light";
+
+      this.#calc = buildLOSCalculator({ occlusionTester: ot, ...this.DEFAULT_CALCULATOR_CONFIG });
+
+      // TODO: Change token shape to spherical for the calculation?
+      // Or find a way to make this work with all shapes?
     }
     return this.#calc;
   }
@@ -97,7 +103,7 @@ export class TokenLightMeter {
     if ( !(this.#calc instanceof cfgs.calculatorClass) ) return true;
 
     const calcCfg = this.#calc.config;
-    if ( cfgs.useTokenSphere !== calcCfg.spherical ) return true;
+    // if ( cfgs.useTokenSphere !== calcCfg.spherical ) return true;
     if ( cfgs.targetPointIndex !== calcCfg.targetPointIndex ) return true;
     return false;
   }
@@ -138,16 +144,17 @@ export class TokenLightMeter {
   }
 
   /** @type {Point3d} */
-  get viewpoint() { return this.calc.viewpoint; }
+  get viewpoint() { return this.constructor.calc.viewpoint; }
 
-  set viewpoint(value) { this.calc.viewpoint.copyFrom(value); }
+  set viewpoint(value) { this.constructor.calc.viewpoint.copyFrom(value); }
 
   /**
    * For each point on the token, run the points algorithm to determine bright/dim/dark.
    * @param {PointLightSource[]} [lights]     If not provided, will test all light sources on canvas except Global.
    */
   updateLights(lights) {
-    lights ??= canvas.effects.lightSources
+
+    lights ??= canvas.effects?.lightSources ?? [];
     lights = lights.filter(l => !(l instanceof foundry.canvas.sources.GlobalLightSource));
     const calc = this.constructor.calculator;
     calc.initializeView({ target: this.token });
@@ -155,7 +162,7 @@ export class TokenLightMeter {
     this.data.bright = calc._createResult().makeFullyNotVisible();
 
     // Test each light's view of the target token.
-    const { UNLIT, DIM, BRIGHT } = CONST.LIGHTING_LEVELS
+    const { UNLIT, DIM, BRIGHT } = CONST.LIGHTING_LEVELS;
     const obscureType = CONFIG[MODULE_ID].lightMeter.obscureType;
     const cfg = { radius: Number.POSITIVE_INFINITY, testSurfaceVisibility: true };
     for ( const light of lights ) {
@@ -217,34 +224,3 @@ export class TokenLightMeter {
     };
   }
 }
-
-
-/* Test
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-Draw = CONFIG.GeometryLib.Draw
-Sphere = CONFIG.GeometryLib.threeD.Sphere
-MatrixFlat = CONFIG.GeometryLib.MatrixFlat
-
-api = game.modules.get("tokenvisibility").api
-FastBitSet = api.FastBitSet
-PercentVisibleCalculatorPoints = api.calcs.points.prototype.constructor
-TokenLightMeter = api.TokenLightMeter
-
-target = canvas.tokens.placeables.find(t => t.name === "Randal")
-viewer = canvas.tokens.placeables.find(t => t.name === "Zanna")
-
-lm = new TokenLightMeter(target)
-lm.updateTokenPoints()
-lm.updateLights()
-lm.tokenPoints.forEach(pt => Draw.point(pt, { radius: 1}))
-lm.percentBright
-lm.percentDim
-
-lm.viewpoint = Point3d.fromTokenCenter(viewer)
-lm.calculateLightFromViewpoint()
-
-// [10] new FastBitSet("1010");
-// [3] new FastBitSet("0011")
-
-
-*/

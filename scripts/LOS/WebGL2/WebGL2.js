@@ -8,7 +8,7 @@ PIXI,
 import { MODULE_ID } from "../../const.js";
 import { wgsl } from "../wgsl-preprocessor.js";
 import * as twgl from "./twgl.js";
-import { applyConsecutively, log } from "../util.js";
+import { applyConsecutively } from "../util.js";
 
 
 /**
@@ -24,10 +24,25 @@ export class WebGL2 {
    * @param {WebGL2RenderingContext} gl
    */
   constructor(gl) {
+    if ( this.constructor.glContextMap.has(gl) ) throw Error("WebGL2|Use the static create method!");
+
     this.gl = gl;
-    this.glState.viewport.width = gl.canvas.width;
-    this.glState.viewport.height = gl.canvas.height;
-    this.initializeGLState();
+    this.#resetGLState();
+    this.#registerContextListeners();
+  }
+
+  // In order to cache gl state, must use a static creator and only create one instance per gl.
+  static glContextMap = new WeakMap();
+
+  /**
+   * @param {WebGL2RenderingContext} gl
+   * @returns {WebGL2}
+   */
+  static create(gl) {
+    if ( this.glContextMap.has(gl)) return this.glContextMap.get(gl);
+    const out = new this(gl);
+    this.glContextMap.set(gl, out);
+    return out;
   }
 
   // ----- NOTE: Cache program ----- //
@@ -39,10 +54,20 @@ export class WebGL2 {
   currentProgramInfo;
 
   useProgram(programInfo) {
-    if ( this.currentProgramInfo !== programInfo ) this.gl.useProgram(programInfo.program);
+    if ( this.currentProgramInfo === programInfo ) return;
+    this.gl.useProgram(programInfo?.program || null);
     this.currentProgramInfo = programInfo;
-    if ( this.currentProgramInfo.program !== this.gl.getParameter(this.gl.CURRENT_PROGRAM) ) console.error("Current program is incorrect.");
-    // else console.debug("Current program is correct.")
+  }
+
+  /**
+   * Debug only: confirm the cached program matches what the driver reports.
+   * @returns {boolean}
+   */
+  validateProgramState() {
+    const actual = this.gl.getParameter(this.gl.CURRENT_PROGRAM);
+    const expected = this.currentProgramInfo?.program ?? null;
+    if ( actual !== expected ) console.error("WebGL2|Cached program does not match gl.CURRENT_PROGRAM.", { actual, expected });
+    return actual === expected;
   }
 
   /**
@@ -76,23 +101,89 @@ export class WebGL2 {
    * @returns {twgl.ProgramInfo}
    */
   async createProgram(vsFile, fsFile, opts = {}) {
-    const vertexShaderSource = await WebGL2.sourceFromGLSLFile(vsFile, opts)
-    const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(fsFile, opts)
+    const vertexShaderSource = await WebGL2.sourceFromGLSLFile(vsFile, opts);
+    const fragmentShaderSource = await WebGL2.sourceFromGLSLFile(fsFile, opts);
     return twgl.createProgramInfo(this.gl, [vertexShaderSource, fragmentShaderSource]);
   }
 
   // ----- Cache WebGL2 state ----- //
 
+  static defaultGLState() {
+    return {
+      viewport: new PIXI.Rectangle(),
+      DEPTH_TEST: false,
+      STENCIL_TEST: false,
+      BLEND: false,
+      CULL_FACE: false,
+      cullFace: "BACK",
+      colorMask: this.noColorMask,
+      clearColor: this.blackClearColor,
+      blendFuncSeparate: this.defaultBlendFuncSeparate,
+      depthMask: true,
+    };
+  }
+
   /** @type {object} */
-  glState = {
-    viewport: new PIXI.Rectangle(),
-    DEPTH_TEST: false,
-    STENCIL_TEST: false,
-    BLEND: false,
-    CULL_FACE: false,
-    cullFace: "BACK",
-    colorMask: this.constructor.noColorMask,
-    clearColor: this.constructor.blackClearColor,
+  glState;
+
+  /** @type {boolean} */
+  contextLost = false;
+
+  /** @type {Set<function>} */
+  #restoreCallbacks = new Set();
+
+  /** @type {Set<function>} */
+  #lostCallbacks = new Set();
+
+  /**
+   * Run a function after the context is restored (GL objects must be rebuilt).
+   * @param {function} fn
+   * @returns {function} Call to unregister.
+   */
+  onContextRestored(fn) {
+    this.#restoreCallbacks.add(fn);
+    return () => this.#restoreCallbacks.delete(fn);
+  }
+
+  /**
+   * Run a function after the context is lost.
+   * @param {function} fn
+   * @returns {function} Call to unregister.
+   */
+  onContextLost(fn) {
+    this.#lostCallbacks.add(fn);
+    return () => this.#lostCallbacks.delete(fn);
+  }
+
+
+  #resetGLState() {
+    const { gl } = this;
+    this.glState = this.constructor.defaultGLState();
+    this.glState.viewport.width = gl.canvas.width;
+    this.glState.viewport.height = gl.canvas.height;
+    this.initializeGLState();
+  }
+
+  #registerContextListeners() {
+    const canvas = this.gl.canvas;
+    canvas.addEventListener("webglcontextlost", event => {
+      event.preventDefault(); // Required, or the browser will not attempt a restore.
+      this.contextLost = true;
+      for ( const fn of this.#lostCallbacks ) {
+        try { fn(); } catch(err) { console.error(err); }
+      }
+      console.warn(`${MODULE_ID}|WebGL2 context lost.`);
+    });
+    canvas.addEventListener("webglcontextrestored", async () => {
+      console.warn(`${MODULE_ID}|WebGL2 context restored; rebuilding.`);
+      this.programs.clear();
+      this.currentProgramInfo = undefined;
+      this.#resetGLState();
+      this.contextLost = false;
+      for ( const fn of this.#restoreCallbacks ) {
+        try { await fn(); } catch(err) { console.error(err); }
+      }
+    });
   }
 
   /**
@@ -104,11 +195,12 @@ export class WebGL2 {
     gl.cullFace(gl[glState.cullFace]);
     gl.colorMask(...glState.colorMask);
     gl.clearColor(...glState.clearColor);
+    gl.depthMask(glState.depthMask);
     for ( const name of ["DEPTH_TEST", "STENCIL_TEST", "BLEND", "CULL_FACE"] ) {
       if ( glState[name] ) gl.enable(gl[name]);
       else gl.disable(gl[name]);
-      // console.debug(`Setting ${name} to ${glState[name]}`);
     }
+    gl.blendFuncSeparate(...glState.blendFuncSeparate);
   }
 
   /**
@@ -117,14 +209,14 @@ export class WebGL2 {
    * @param {boolean} [enabled=true]     Whether to enable or disable
    */
   #setGLBooleanState(name, enabled = true) {
-//     const param = this.gl.getParameter(this.gl[name])
-//     if ( param !== this.glState[name] ) console.error(`State ${name} is incorrect. Should be ${param}`);
+    // Debugging:
+    // const param = this.gl.getParameter(this.gl[name])
+    // if ( param !== this.glState[name] ) console.error(`State ${name} is incorrect. Should be ${param}`);
     if ( this.glState[name] === enabled ) return;
     const gl = this.gl;
     if ( enabled ) gl.enable(gl[name]);
     else gl.disable(gl[name]);
     this.glState[name] = enabled;
-    // console.debug(`Setting ${name} to ${enabled}`);
   }
 
   /**
@@ -144,39 +236,65 @@ export class WebGL2 {
    * @param {PIXI.Rectangle} rect
    */
   setViewport(rect) {
-//     const param = this.gl.getParameter(this.gl.VIEWPORT);
-//     if ( this.glState.viewport.x !== param[0]
-//       || this.glState.viewport.y !== param[1]
-//       || this.glState.viewport.width !== param[2]
-//       || this.glState.viewport.height !== param[3] ) console.error(`Viewport is incorrect. Should be`, param);
+    //     Debugging
+    //     const param = this.gl.getParameter(this.gl.VIEWPORT);
+    //     if ( this.glState.viewport.x !== param[0]
+    //       || this.glState.viewport.y !== param[1]
+    //       || this.glState.viewport.width !== param[2]
+    //       || this.glState.viewport.height !== param[3] ) console.error(`Viewport is incorrect. Should be`, param);
     if ( this.glState.viewport.equals(rect) ) return;
     const { gl, glState } = this;
-    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
     glState.viewport.copyFrom(rect);
+    gl.viewport(glState.viewport.x, glState.viewport.y, glState.viewport.width, glState.viewport.height);
+  }
+
+  /**
+   * Bind a framebuffer without changing the viewport (unlike twgl.bindFramebufferInfo).
+   * @param {twgl.FramebufferInfo|null} fbInfo     null binds the default framebuffer
+   */
+  bindFramebuffer(fbInfo) {
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, fbInfo?.framebuffer ?? null);
   }
 
   setCullFace(face = "BACK") {
-//     const param = this.gl.getParameter(this.gl.CULL_FACE_MODE)
-//     if ( param !== this.gl[this.glState.cullFace] ) console.error(`Cull face mode is incorrect. Should be ${param}`);
+    // Debugging
+    // const param = this.gl.getParameter(this.gl.CULL_FACE_MODE)
+    // if ( param !== this.gl[this.glState.cullFace] ) console.error(`Cull face mode is incorrect. Should be ${param}`);
     if ( this.glState.cullFace === face ) return;
     this.gl.cullFace(this.gl[face]);
     this.glState.cullFace = face;
   }
 
   setColorMask(mask = this.constructor.noColorMask) {
-//     const param = this.gl.getParameter(this.gl.COLOR_WRITEMASK);
-//     if ( !param.equals(this.glState.colorMask) ) console.error(`Color mask is incorrect. Should be`, param);
+    // Debugging
+    //     const param = this.gl.getParameter(this.gl.COLOR_WRITEMASK);
+    //     if ( !param.equals(this.glState.colorMask) ) console.error(`Color mask is incorrect. Should be`, param);
     if ( this.glState.colorMask.equals(mask) ) return;
     this.gl.colorMask(...mask);
     this.glState.colorMask = mask;
   }
 
   setClearColor(color = this.constructor.blackClearColor) {
-//     const param = this.gl.getParameter(this.gl.COLOR_CLEAR_VALUE);
-//     if ( !this.glState.clearColor.every((elem, idx) => elem === param[idx]) ) console.error(`Clear color is incorrect. Should be`, param);
+    // Debugging
+    //     const param = this.gl.getParameter(this.gl.COLOR_CLEAR_VALUE);
+    //     if ( !this.glState.clearColor.every((elem, idx) => elem === param[idx]) ) {
+    //   console.error(`Clear color is incorrect. Should be`, param);
+    // }
     if ( this.glState.clearColor.equals(color) ) return;
     this.gl.clearColor(...color);
     this.glState.clearColor = color;
+  }
+
+  setBlendFuncSeparate(...args) {
+    if ( this.glState.blendFuncSeparate.equals(args) ) return;
+    this.gl.blendFuncSeparate(...args);
+    this.glState.blendFuncSeparate = args;
+  }
+
+  setDepthMask(enabled) {
+    if ( !(this.glState.depthMask ^ enabled) ) return;
+    this.gl.depthMask(enabled);
+    this.glState.depthMask = enabled;
   }
 
   static blackClearColor = [0, 0, 0, 0];
@@ -185,9 +303,15 @@ export class WebGL2 {
 
   static blueAlphaMask = [false, false, true, true];
 
-  static greenAlphaMask = [false, true, false, true];
-
   static noColorMask = [true, true, true, true];
+
+  static disableColorMask = [false, false, false, false];
+
+  static alphaMask = [false, false, false, true];
+
+  static greenMask = [false, true, false, false];
+
+  static defaultBlendFuncSeparate = [1, 0, 1, 0]; // [gl.ONE, gl.ZERO, gl.ONE, gl.ZERO]
 
 
   // ----- NOTE: Static methods ----- //
@@ -213,99 +337,8 @@ export class WebGL2 {
     return resp.text();
   }
 
-  /**
-   * Draw representation of pixels
-   */
-  static drawPixels(imgData, { minX = 0, maxX, minY = 0, maxY, channel = 0 } = {}) {
-    let str = "";
-    maxX ??= imgData.width;
-    maxY ??= imgData.height;
-
-    // 0,0 is bottom left
-    // pixel is data[(width * height - 1) * pixelSize]
-    for ( let y = imgData.height - 1; y >= 0; y -= 1 ) {
-      for ( let x = 0; x < imgData.width; x += 1 ) {
-          if ( x < minX || x > maxX ) continue;
-          if ( y < minY || y > maxY ) continue;
-          const px = imgData.pixels[(x * y * 4) + channel];
-          const nStr = `${px}`;
-          const paddingLn = 3 - nStr.length;
-          const paddedStr = "0".repeat(paddingLn) + nStr;
-          str += `${paddedStr} `;
-        }
-        str += "\n";
-      }
-    console.log(str);
-    // return str;
-  }
-
-
-  /**
-   * Given image data or image pixels, print summary of the 4 color channels to console.
-   * @param {object|TypedArray} pixels      Object with pixels parameter or an array of pixels
-   */
-  static summarizePixelData(pixels) {
-    if ( Object.hasOwn(pixels, "pixels") ) pixels = pixels.pixels;
-    const acc = Array(12).fill(0);
-    const max = Array(4).fill(0);
-    const min = Array(4).fill(0)
-    pixels.forEach((px, idx) => {
-      acc[idx % 4] += px;
-      acc[idx % 4 + 4] += Boolean(px);
-      acc[idx % 4 + 8] += !px;
-      max[idx % 4] = Math.max(px, max[idx % 4])
-      min[idx % 4] = Math.min(px, min[idx % 4])
-    });
-    let redBlocked = 0;
-    const terrainThreshold = 255 * CONFIG[MODULE_ID].alphaThreshold;
-    for ( let i = 0, iMax = pixels.length; i < iMax; i += 4 ) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      redBlocked += Boolean(r) * Boolean(b || (g > terrainThreshold))
-    }
-
-    console.table([
-      { label: "sum", r: acc[0], g: acc[1], b: acc[2], a: acc[3] },
-      { label: "count", r: acc[4], g: acc[5], b: acc[6], a: acc[7] },
-      { label: "zeroes", r: acc[8], g: acc[9], b: acc[10], a: acc[11] },
-      { label: "min", r: min[0], g: min[1], b: min[2], a: min[3] },
-      { label: "max", r: max[0], g: max[1], b: max[2], a: max[3] },
-      { label: "redBlocked", r: redBlocked, g: redBlocked, b: redBlocked, a: redBlocked}
-    ])
-  }
-
-
-
-  static draw(gl, count, offset = 0) {
-    const primitiveType = gl.TRIANGLES;
-    const indexType = gl.UNSIGNED_SHORT;
-    gl.drawElements(primitiveType, count, indexType, offset);
-  }
-
-
-  static drawSet(gl, instanceSet, offsets, lengths) {
-    if ( !(instanceSet.size || instanceSet.length) ) return;
-
-    // Handle either instances all same number of vertices or different number.
-    const instanceLength = Number.isNumeric(lengths) ? lengths : 0;
-
-    // For a consecutive group, draw all at once.
-    // So if 0–5, 7–9, 12, should result in 3 draw calls.
-    applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
-      // Pull the offset and count from the offsetData.
-      const offset = offsets[firstInstance];
-      const count = (instanceLength * instanceCount)
-        || sumArray(lengths.slice(firstInstance, firstInstance + instanceCount));
-      log(`drawSet|Drawing ${count} from ${firstInstance} using offset ${offset}`);
-      this.draw(gl, count, offset);
-    });
-  }
-
   static drawInstanced(gl, elementCount, offset = 0, instanceCount = 1) {
-    const primitiveType = gl.TRIANGLES;
-    const indexType = gl.UNSIGNED_SHORT;
-    gl.drawElementsInstanced(primitiveType, elementCount, indexType, offset, instanceCount);
+    gl.drawElementsInstanced(gl.TRIANGLES, elementCount, gl.UNSIGNED_SHORT, offset, instanceCount);
   }
 
   /**
@@ -314,29 +347,64 @@ export class WebGL2 {
    * Instead, move the pointer in the buffer accordingly.
    * This function assumes a single (model) matrix that must be instanced.
    * @param {WebGL2Context} gl
-   * @param {Set<number>} instanceSet     Instances to draw
-   * @param {number} elementCount         Number of vertices to draw
-   * @param {twgl.AttribInfo} instanceBufferInfo    Info for the instance buffer
-   * @param {number} positionLoc                    Position of the matrix attribute
+   * @param {Set<number>} instanceSet         Instances to draw
+   * @param {number} elementCount             Number of vertices to draw
+   * @param {function[]} advanceInstanceFns   Functions called to advance a property at each instance
    */
-  static drawInstancedMatrixSet(gl, instanceSet, elementCount, instanceBufferInfo, positionLoc) {
-    const instanceSize = 16 * 4;
-    const { type, stride, normalize, buffer: mBuffer } = instanceBufferInfo;
+  static drawInstancedSet(gl, instanceSet, elementCount, advanceInstanceFns = []) {
     applyConsecutively(instanceSet, (firstInstance, instanceCount) => {
-      const offset = (firstInstance * instanceSize);
-      gl.bindBuffer(gl.ARRAY_BUFFER, mBuffer);
-      gl.vertexAttribPointer(positionLoc, 4, type, normalize, stride, offset);
-      gl.vertexAttribPointer(positionLoc+1, 4, type, normalize, stride, offset + 4*4);
-      gl.vertexAttribPointer(positionLoc+2, 4, type, normalize, stride, offset + 4*8);
-      gl.vertexAttribPointer(positionLoc+3, 4, type, normalize, stride, offset + 4*12);
-      // log({ size, stride, offset, instanceCount });
+      advanceInstanceFns.forEach(fn => fn(firstInstance));
       this.drawInstanced(gl, elementCount, 0, instanceCount);
     });
   }
+
+  static _advanceInstanceFn(gl, instanceBufferInfo, positionLoc) {
+    const {
+      type = gl.FLOAT,
+      stride = 0,
+      normalize = false,
+      buffer,
+      numComponents,
+      offset: baseOffset = 0 } = instanceBufferInfo;
+
+    // Calculate effective stride. If stride is 0, assume tightly packed data (4 bytes for FLOAT/INT).
+    const effectiveStride = stride || (numComponents * 4);
+
+    switch ( numComponents ) {
+      case 16: return firstInstance => {
+        const offset = baseOffset + (firstInstance * effectiveStride); // Instance size is 16 x 4 for a 4x4 matrix of floats.
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.vertexAttribPointer(positionLoc, 4, type, normalize, effectiveStride, offset);
+        gl.vertexAttribPointer(positionLoc+1, 4, type, normalize, effectiveStride, offset + 16); // 4 elements * 4 bytes
+        gl.vertexAttribPointer(positionLoc+2, 4, type, normalize, effectiveStride, offset + 32); // 8 elements * 4 bytes
+        gl.vertexAttribPointer(positionLoc+3, 4, type, normalize, effectiveStride, offset + 48); // 12 elements * 4 bytes
+      };
+
+      case 1:
+      case 2:
+      case 3:
+      case 4: {
+        switch ( type ) {
+          case gl.FLOAT: return firstInstance => {
+            const offset = baseOffset + (firstInstance * effectiveStride);
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.vertexAttribPointer(positionLoc, numComponents, type, normalize, effectiveStride, offset);
+          };
+
+          case gl.INT: return firstInstance => {
+            const offset = baseOffset + (firstInstance * effectiveStride);
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.vertexAttribIPointer(positionLoc, numComponents, type, effectiveStride, offset); // Note the different signature from vertexAttribPointer.
+          };
+
+          default: throw Error(`_advanceInstanceFn ${type} type not yet implemented.`);
+        }
+      }
+
+      default: throw Error(`_advanceInstanceFn ${numComponents} components not yet implemented.`);
+    }
+  }
 }
-
-function sumArray(arr) { return arr.reduce((acc, curr) => acc + curr, 0); }
-
 
 /**
  * Limited string replacement so the imported glsl code can be treated as a template literal
@@ -350,8 +418,5 @@ function interpolate(str, params = {}) {
   // Replace the names with the relevant values.
   const names = Object.keys(params);
   const vals = Object.values(params);
-  return new Function("wgsl", ...names, `return wgsl\`${str}\`;`)(wgsl, ...vals);
+  return new Function("wgsl", ...names, `return wgsl\`${str}\`;`)(wgsl, ...vals); /* eslint-disable-line no-new-func */
 }
-
-
-

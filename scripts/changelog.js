@@ -109,6 +109,21 @@ Hooks.once("ready", () => {
       `
     })
 
+    .addEntry({
+      version: "14.1.0",
+      title: "Foundry v14 compatibility",
+      body: `\
+           Updated for Foundry v14. Updated algorithms for measuring line-of-sight to a token target.
+           Updated the debug popout viewer for the algorithms.
+
+           You can now define an opacity value (1 for opaque; 0 for completely transparent) for tokens, walls, and regions.
+           (Tile transparency remains as before, based on an alpha threshold for the tile texture.)
+
+           Use the provided "Block Sight" region behavior to mark a region as blocking sight.
+           Use the Terrain Mapper module if you want additional 3d region shapes, such as ramps.
+      `
+    })
+
 
     .build()
     ?.render(true);

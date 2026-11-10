@@ -1,13 +1,13 @@
 /* globals
 CONFIG,
+createImageBitmap,
 foundry,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { EPSILON, MODULE_ID } from "../const.js";
-import { Point3d } from "../geometry/3d/Point3d.js";
+import { MODULE_ID } from "../const.js";
 
 /**
  * Define a null set class and null set which always contains 0 elements.
@@ -15,8 +15,8 @@ import { Point3d } from "../geometry/3d/Point3d.js";
  */
 class NullSet extends Set {
   add(value) {
-   console.error(`${MODULE_ID}|Attempted to add ${value} to a NullSet.`, value);
-   return this;
+    console.error(`${MODULE_ID}|Attempted to add ${value} to a NullSet.`, value);
+    return this;
   }
 }
 export const NULL_SET = new NullSet();
@@ -39,7 +39,6 @@ export function log(...args) {
  * @returns {number}
  */
 export function roundFastPositive(n) { return (n + 0.5) << 0; }
-
 
 /**
  * Test if the token constrained borders overlap and tokens are at same elevation.
@@ -94,78 +93,6 @@ export function trimLineSegmentToPixelRectangle(rect, a, b) {
   return [a, b];
 }
 
-
-/**
- * Bresenham line algorithm to generate pixel coordinates for a line between two points.
- * All coordinates must be positive or zero.
- * @param {number} x0   First coordinate x value
- * @param {number} y0   First coordinate y value
- * @param {number} x1   Second coordinate x value
- * @param {number} y1   Second coordinate y value
- * @testing
-Draw = CONFIG.GeometryLib.Draw
-let [t0, t1] = canvas.tokens.controlled
-pixels = bresenhamLine(t0.center.x, t0.center.y, t1.center.x, t1.center.y)
-for ( let i = 0; i < pixels.length; i += 2 ) {
-  Draw.point({ x: pixels[i], y: pixels[i + 1]}, { radius: 1 });
-}
- */
-export function bresenhamLine(x0, y0, x1, y1) {
-  x0 = Math.round(x0);
-  y0 = Math.round(y0);
-  x1 = Math.round(x1);
-  y1 = Math.round(y1);
-
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const sx = (x0 < x1) ? 1 : -1;
-  const sy = (y0 < y1) ? 1 : -1;
-  let err = dx - dy;
-
-  const pixels = [x0, y0];
-  while ( x0 !== x1 || y0 !== y1 ) {
-    const e2 = err * 2;
-    if ( e2 > -dy ) {
-      err -= dy;
-      x0 += sx;
-    }
-    if ( e2 < dx ) {
-      err += dx;
-      y0 += sy;
-    }
-
-    pixels.push(x0, y0);
-  }
-  return pixels;
-}
-
-export function* bresenhamLineIterator(x0, y0, x1, y1) {
-  x0 = Math.floor(x0);
-  y0 = Math.floor(y0);
-  x1 = Math.floor(x1);
-  y1 = Math.floor(y1);
-
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const sx = (x0 < x1) ? 1 : -1;
-  const sy = (y0 < y1) ? 1 : -1;
-  let err = dx - dy;
-  yield { x: x0, y: y0 };
-  while ( x0 !== x1 || y0 !== y1 ) {
-    const e2 = err * 2;
-    if ( e2 > -dy ) {
-      err -= dy;
-      x0 += sx;
-    }
-    if ( e2 < dx ) {
-      err += dx;
-      y0 += sy;
-    }
-
-    yield { x: x0, y: y0 };
-  }
-}
-
 /**
  * Retrieve an embedded property from an object using a string.
  * @param {object} obj
@@ -178,120 +105,6 @@ export function getObjectProperty(obj, str) {
     .split(".")
     .filter(t => t !== "")
     .reduce((prev, cur) => prev && prev[cur], obj);
-}
-
-/**
- * Take an array of points and move them toward a center point by a specified percentage.
- * @param {PIXI.Point[]|Point3d[]} pts        Array of points to adjust. These are adjusted in place.
- * @param {PIXI.Point|Point3d} tokenCenter    Center point to move toward
- * @param {number} insetPercentage            Percent between 0 and 1, where 1 would move the points to the center.
- * @returns {PIXI.Point[]|Point3d[]} The points, for convenience.
- */
-export function insetPoints(pts, tokenCenter, insetPercentage) {
-  const delta = new Point3d();
-  if ( insetPercentage ) {
-    pts.forEach(pt => {
-      tokenCenter.subtract(pt, delta);
-      delta.multiplyScalar(insetPercentage, delta);
-      pt.add(delta, pt);
-    });
-  } else {
-    pts.forEach(pt => {
-      tokenCenter.subtract(pt, delta);
-      delta.x = Math.sign(delta.x); // 1 pixel
-      delta.y = Math.sign(delta.y); // 1 pixel
-      pt.add(delta, pt);
-    });
-  }
-  return pts;
-}
-
-/**
- * Boolean test for whether a line segment intersects a quadrilateral.
- * Relies on Möller-Trumbore ray-triangle intersection.
- * @param {Point3d} A     First endpoint of the segment
- * @param {Point3d} B     Second endpoint of the segment
- * @param {Point3d} r0          Quad vertex 0  Expected vertices in CW order.
- * @param {Point3d} r1          Quad vertex 1
- * @param {Point3d} r2          Quad vertex 2
- * @param {Point3d} r3          Quad vertex 3
- * @returns {boolean} True if intersection occurs.
- */
-export function lineSegmentIntersectsQuadrilateral3d(A, B, r0, r1, r2, r3, { EPSILON = 1e-08 } = {}) {
-  const rayVector = B.subtract(A);
-  const t = lineIntersectionQuadrilateral3d(A, rayVector, r0, r1, r2, r3);
-  if ( t === null ) return false;
-
-  return !(t < EPSILON || t > (1 + EPSILON));
-}
-
-
-/**
- * Test if line intersects a quadrilateral in 3d.
- * Applies Möller-Trumbore ray-triangle intersection but does the planar test only once.
- * @param {Point3d} A           Point on the line. For a ray, the ray origin point.
- * @param {Point3d} rayVector   Line vector, from origin.
- * @param {Point3d} r0          Quad vertex 0  Expected vertices in CW order.
- * @param {Point3d} r1          Quad vertex 1
- * @param {Point3d} r2          Quad vertex 2
- * @param {Point3d} r3          Quad vertex 3
- * @returns {number|null}  Place on the ray of the intersection or null if none.
- */
-export function lineIntersectionQuadrilateral3d(A, rayVector, r0, r1, r2, r3) {
-  // Test both directions of the quad (otherwise, need to force to CW order)
-  let res = _lineIntersectionQuadrilateral3d(A, rayVector, r0, r1, r2, r3);
-  if ( res === null ) res = _lineIntersectionQuadrilateral3d(A, rayVector, r3, r2, r1, r0);
-  return res;
-}
-
-function _lineIntersectionQuadrilateral3d(A, rayVector, r0, r1, r2, r3) {
-  // Triangles are 0-1-2 and 0-2-3
-  const edge1 = r1.subtract(r0);
-  const edge2 = r2.subtract(r0);
-
-  const h = rayVector.cross(edge2);
-  const a = edge1.dot(h);
-
-  if ( a.almostEqual(0, EPSILON) ) return null; // Ray is parallel to triangle.
-
-  const f = 1.0 / a;
-  const s = A.subtract(r0);
-
-  const tri1 = lineTriangleIntersectionLocation(rayVector, edge1, edge2, s, f, h);
-  if ( tri1 !== null ) return tri1;
-
-  const edge3 = r3.subtract(r0);
-  const h2 = rayVector.cross(edge3);
-  const a2 = edge1.dot(h);
-  const f2 = 1.0 / a2;
-
-  return lineTriangleIntersectionLocation(rayVector, edge1, edge3, s, f2, h2);
-}
-
-/**
- * Helper to get intersection of line with triangle, assuming not parallel.
- * @param {Point3d} rayVector   Line vector, from origin A.
- * @param {Point3d} edge1       Vector from v0 for one triangle edge
- * @param {Point3d} edge2       Vector from v0 for other triangle edge
- * @param {number} f            Ratio from rayIntersectsTriangle3d
- * @param {Point3d} h           Cross of rayVector with edge2.
- * @param {Point3d} s           A minus v0.
- * @returns {number|null}
- */
-function lineTriangleIntersectionLocation(rayVector, edge1, edge2, s, f, h) {
-  const u = f * s.dot(h);
-  if ( u < 0.0 || u > 1.0 ) return null;
-
-  const q = s.cross(edge1);
-  const v = f * rayVector.dot(q);
-  if ( v < 0.0 || (u + v) > 1.0 ) return null;
-
-  return f * edge2.dot(q); // This is t
-
-  // To compute the intersection location using t and outPoint = new Point3d():
-  // A.add(rayVector.multiplyScalar(t, outPoint), outPoint);
-  // If t > 0, t is on the ray.
-  // if t < 1, t is between rayOrigin and B, where rayVector = B.subtract(A)
 }
 
 export function sumRedPixels(targetCache) {
@@ -416,9 +229,9 @@ export function orient3dFast(a, b, c, d) {
   const cdz = c.z - d.z;
 
   // Calculate the 3x3 determinant directly
-  return adx * (bdy * cdz - bdz * cdy)
-       + bdx * (cdy * adz - cdz * ady)
-       + cdx * (ady * bdz - adz * bdy);
+  return (adx * ((bdy * cdz) - (bdz * cdy)))
+       + (bdx * ((cdy * adz) - (cdz * ady)))
+       + (cdx * ((ady * bdz) - (adz * bdy)));
 }
 
 /**

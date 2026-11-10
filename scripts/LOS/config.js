@@ -1,10 +1,13 @@
 /* globals
 CONFIG,
+foundry,
 Hooks
 */
 "use strict";
 
 import { MODULE_ID } from "../const.js";
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
+import { TILE_THRESHOLD_SHAPE_OPTIONS } from "./const.js";
 
 import { WallGeometry } from "../geometry/placeable_geometry/WallGeometry.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
@@ -21,11 +24,6 @@ export const LOS_CONFIG = {
    * @type {number}
    */
   alphaThreshold: 0.75,
-
-  /**
-   * Whether to use instancing in WebGL2 calculation.
-   */
-  useInstancing: true,
 
   /**
    * WebGL2. Filter the various placeable instances in Javascript, as opposed to
@@ -46,7 +44,7 @@ export const LOS_CONFIG = {
    * Larger spacing means fewer points and better performance, sacrificing resolution.
    * @type {number} In pixel units
    */
-  perPixelSpacing: 10,
+  perPixelSpacing: 25,
 
   /** @type {string} */
   /*
@@ -73,12 +71,9 @@ export const LOS_CONFIG = {
 
   /**
    * What to use when testing tiles for visibility.
-   * "rectangle": Trims the rectangular transparent border without considering holes or irregular shapes. Fast.
-   * "alphaThresholdTriangles": Triangles representing opaque parts of the tile texture (using earcut and marching squares). Slow.
-   * "alphaThresholdPolygons": 1+ polygons representing opaque parts of the tile texture (using marching squares). Much faster than triangles.
    * @type {tileThresholdShapeOptions}
    */
-  tileThresholdShape: "alphaThresholdPolygons",
+  tileThresholdShape: TILE_THRESHOLD_SHAPE_OPTIONS.ALPHA_POLYGONS,
 
   /**
    * WebGL2. Whether to use a render texture to count pixels.
@@ -102,76 +97,19 @@ export const LOS_CONFIG = {
    */
   useStencil: false,
 
+  /**
+   * Should the line-of-sight calculator use the viewer height (as calculated in Wall Height)
+   * for any TOP viewpoint?
+   * @type {boolean}
+   */
+  useViewerHeight: true,
+
+  /** @type {boolean} Flag if webGL loses context. */
+  webGL2Unavailable: false,
+
   // Handled at base level: debug
 }
 
-Hooks.on("canvasReady", function() {
 
-  // Register basic watchers for placeables.
-  const updateFn = placeable => {
-    const obj = placeable[MODULE_ID] ??= {}
-    obj.updateId ??= 0;
-    obj.updateId += 1;
-  }
-  const docKeys = {
-    Wall: new Set([
-      ...WallGeometry.TRACKER_TYPES.position,
-      ...WallGeometry.TRACKER_TYPES.direction,
-      ...WallGeometry.TRACKER_TYPES.restriction,
-      ...WallGeometry.TRACKER_TYPES.door,
-      ...WallGeometry.TRACKER_TYPES.threshold,
-    ]),
-    Tile: new Set([
-      ...TileGeometry.TRACKER_TYPES.position,
-      ...TileGeometry.TRACKER_TYPES.scale,
-      ...TileGeometry.TRACKER_TYPES.rotation,
-    ]),
-    Token: new Set([
-      ...TokenGeometry.TRACKER_TYPES.position,
-      ...TokenGeometry.TRACKER_TYPES.scale,
-      ...TokenGeometry.TRACKER_TYPES.shape,
-    ]),
-    Region: new Set([
-      ...RegionGeometry.TRACKER_TYPES.elevation,
-      ...RegionGeometry.TRACKER_TYPES.shapes,
-    ]),
-  };
-  const id = "updateCounter";
-  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
-  const PlaceableUpdateWatcher = geometryTracking.PlaceableUpdateWatcher;
-  for ( const [docName, keys] of Object.entries(docKeys) ) {
-    const watcher = PlaceableUpdateWatcher.getWatcher(docName);
-    watcher.register("update", id, updateFn, keys);
-    watcher.activate();
-  }
 
-  // Placeable Geometry for collision testing.
-  const geometryTypes = [
-    "Tile",
-    "Wall",
-    "Token",
-    "Region",
-  ];
-  for ( const type of geometryTypes ) {
-    const cl = geometryTracking[`${type}GeometryTracker`];
-    cl.registerHooks();
-    cl.registerExistingPlaceables();
-    cl.activate();
-  }
-});
 
-Hooks.on("canvasTearDown", function(canvas) {
-  // Placeable Geometry for collision testing.
-  const geometryTracking = CONFIG.GeometryLib.lib.placeableGeometryTracking;
-  const geometryTypes = [
-    "Tile",
-    "Wall",
-    "Token",
-    "Region",
-  ];
-  for ( const type of geometryTypes ) {
-    const cl = geometryTracking[`${type}GeometryTracker`];
-    cl.deactivate();
-    cl.deRegisterExistingPlaceables();
-  }
-});

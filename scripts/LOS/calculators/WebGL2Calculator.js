@@ -1,30 +1,37 @@
 /* globals
 CONFIG,
-PIXI,
+OffscreenCanvas,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 // WebGL2 folder
 import { WebGL2 } from "../WebGL2/WebGL2.js";
-import { RenderObstaclesWebGL2 } from "../WebGL2/RenderObstacles.js";
+import { LOSRendererWebGL2 } from "../WebGL2/LOSRendererWebGL2.js";
 import { RedPixelCounter } from "../WebGL2/RedPixelCounter.js";
-import * as twgl from "../WebGL2/twgl.js";
 
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
-import { DebugVisibilityViewerWithPopoutAbstract } from "../DebugVisibilityViewer.js";
-import { checkFramebufferStatus, log } from "../util.js";
 
 // Base folder
 import { MODULE_ID } from "../../const.js";
 
-/**
- * @typedef {object} WebGL2CalculatorConfig
- * ...{CalculatorConfig}
- * @property {number} alphaThreshold                    Threshold value for testing alpha of tiles
- * @property {boolean} useInstancing                    Use instancing with webGL2
- */
+/* Opacity / Transparency
+Handled in the shader.
+Red: target
+Green: terrain
+Blue: obstacle
+Alpha: transparency
+
+Target pass writes alpha = 1 on target pixels. (0 when constrained wall shader flags the pixel.)
+New last pass draws each partial obstacle with alpha blending to the alpha channel only: dst.a = dst.a x (1 - src.a),
+where src.a is the obstacle's opacity. Overlapping layers multiply, so two 50% layers leave 25%.
+The pass depth-tests agains tthe target and solid obstacles but does not write depth,
+so a layer behind a solid wall, or behind the target, contributes nothing and layers don’t hide each other.
+
+The pixel counter adds 1 − T to the blocked total for unblocked red pixels.
+A flagged pixel (alpha 0) is T = 0, so it is still fully blocked.
+*/
 
 
 export class PercentVisibleWebGL2Result extends PercentVisibleResult {
@@ -34,24 +41,29 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
     target: null,
     blockedCount: null,
     targetCount: null,
+    transmittance: null,    // Map<pixel, 0–1> (map counters only): target pixels seen through partial obstacles.
   };
 
   logData() {
-    console.log(`Total Blocked: ${this.data.blockedCount}\tTotal Target: ${this.data.targetCount}`)
+    console.log(`Total Blocked: ${this.data.blockedCount}\tTotal Target: ${this.data.targetCount}`);
     console.table({
-      blocked: this.data.blocked.map(bs => bs?.cardinality),
-      target: this.data.target.map(bs => bs?.cardinality),
+      blocked: this.data.blocked.cardinality,
+      target: this.data.target.cardinality,
     });
   }
 
   clone() {
-    const out = super.clone();
-    for ( let i = 0, iMax = this.data.blocked.length; i < iMax; i += 1 ) {
-      if ( !this.data.blocked[i] ) continue;
-      out.data.blocked[i] = this.data.blocked[i].clone();
-      out.data.target[i] = this.data.target[i].clone();
-      // blockedCount, targetCount should have already been cloned.
-    }
+    const out = new this.constructor();
+    out.config = structuredClone(this.config);
+    out.visibility = this.visibility;
+    const { blocked, target, blockedCount, targetCount, transmittance } = this.data;
+    Object.assign(out.data, {
+      blocked: blocked?.clone() ?? null,
+      target: target?.clone() ?? null,
+      blockedCount,
+      targetCount,
+      transmittance: transmittance ? new Map(transmittance) : null,
+    });
     return out;
   }
 
@@ -60,10 +72,19 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
   }
 
   get blockedArea() {
-    return this.data.blockedCount ?? (this.data.blocked.cardinality || 0);
+    const { blocked, blockedCount, transmittance } = this.data;
+    if ( blockedCount != null ) return blockedCount; // Count type: already fractional.
+    let area = blocked?.cardinality || 0;
+    if ( transmittance ) {
+      for ( const [i, t] of transmittance ) {
+        if ( !blocked.has(i) ) area += 1 - t;
+      }
+    }
+    return area;
   }
 
   // Handled by the calculator, which combines multiple results.
+  // TODO: Fix.
   get largeTargetArea() { return this.totalTargetArea; }
 
   get visibleArea() { return this.targetArea - this.blockedArea; }
@@ -75,387 +96,162 @@ export class PercentVisibleWebGL2Result extends PercentVisibleResult {
    * @returns {PercentVisibleResult} A new combined set.
    */
   blendMaximize(other) {
-    let out = super.blendMaximize();
+    let out = super.blendMaximize(other);
     if ( out ) return out;
 
-    // The target area could change, given the different views.
-    // Combine the visible target paths.
+    // Per-pixel weights cannot be merged with the bitset logic below. Keep whichever view sees more.
+    if ( this.data.transmittance?.size || other.data.transmittance?.size ) {
+      return PercentVisibleResult.max(this, other).clone();
+    }
+
     out = this.clone();
-    if ( this.data.target ) out.data.target.or(other.data.target);
-    if ( this.data.blocked ) out.data.blocked.and(other.data.target);
-    if ( this.data.blockedCount != null ) out.data.blockedCount = Math.min(this.data.blockedCount, other.data.blockedCount);
-    if ( this.data.targetCount != null ) out.data.blockedCount = Math.max(this.data.targetCount, other.data.targetCount);
+    if ( this.data.target ) out.data.target.union(other.data.target);
+    if ( this.data.blocked ) out.data.blocked.intersection(other.data.blocked);
+    if ( this.data.blockedCount != null ) {
+      out.data.blockedCount = Math.min(this.data.blockedCount, other.data.blockedCount);
+    }
+    if ( this.data.targetCount != null ) {
+      out.data.targetCount = Math.max(this.data.targetCount, other.data.targetCount);
+    }
     return out;
   }
 }
 
-
 export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbstract {
+
+  /** @type {class} */
   static resultClass = PercentVisibleWebGL2Result;
 
-  static defaultConfiguration = {
-    ...super.defaultConfiguration,
-    alphaThreshold: 0.75,
-  };
-
-  /** @type {number} */
-  static WIDTH = 128;
-
-  /** @type {number} */
-  static HEIGHT = 128;
-
-  /** @type {OffscreenCanvas} */
-  static glCanvas;
+  /** @type {"calculated"|"full"} What token geometry to use for the target */
+  static targetGeometryType = "full"; // GPU constrains the token itself.
 
   /** @type {WebGL2} */
   static webGL2;
 
   /** @type {WebGL2Context} */
-  get gl() { return this.constructor.webGL2.gl; };
+  get gl() { return this.constructor.webGL2.gl; }
+
+  /** @type {LOSRendererWebGL2} */
+  get renderer() { return this.constructor.defaultRenderer; }
 
   /** @type {RedPixelCounter} */
+  get redPixelCounter() { return this.constructor.redPixelCounter; }
 
   constructor(opts) {
     super(opts);
-    const { WIDTH, HEIGHT } = this.constructor;
-    this.constructor.glCanvas ??= new OffscreenCanvas(WIDTH, HEIGHT);
-    const webGL2 = this.constructor.webGL2 ??= new WebGL2(this.constructor.glCanvas.getContext("webgl2"));
-    const gl = this.gl;
-    this.redPixelCounter = new RedPixelCounter(webGL2); // Width and heigh tset later
+
+    // Fix the camera values.
+    this.camera.UP = this.camera.constructor.UP;
+    this.camera.mirrorM = this.camera.constructor.MIRRORM_DIAG;
+
+    this.constructor.createOffscreenCanvas();
+
+    // Create the renderer and related objects, as needed.
+    this.constructor.createDefaultRenderer(this.camera);
   }
 
-  /** @type {RenderObstaclesWebGL2} */
-  renderer;
+  get isReady() {
+    const r = this.renderer;
+    return !r.webGL2.contextLost && r.ready;
+  }
+
+  // ----- NOTE: Default Renderer ----- //
+
+  /** @type {OffscreenCanvas} */
+  static glCanvas;
+
+  /** @type {RedPixelCounter} */
+  static redPixelCounter;
+
+  static createOffscreenCanvas() {
+    if ( !this.glCanvas ) {
+      const size = CONFIG[MODULE_ID].renderTextureSize || 128;
+      this.glCanvas = new OffscreenCanvas(size, size);
+    }
+  }
+
+  static createDefaultRenderer(camera) {
+    if ( this.defaultRenderer ) return;
+    if ( !this.glCanvas ) this.createOffscreenCanvas();
+    const gl = this.glCanvas.getContext("webgl2");
+    if ( !gl ) {
+      CONFIG[MODULE_ID].webGL2Unavailable = true;
+      return;
+    }
+
+    const webGL2 = WebGL2.create(gl);
+    this.defaultRenderer = new LOSRendererWebGL2({ webGL2, camera });
+    this.redPixelCounter = new RedPixelCounter(webGL2);
+
+    // Registered last, so on restore this runs after both have rebuilt.
+    const hook = `${MODULE_ID}.webGL2ContextChanged`;
+    webGL2.onContextLost(() => Hooks.callAll(hook, true));
+    webGL2.onContextRestored(() => Hooks.callAll(hook, false));
+  }
+
+  // ----- NOTE: Initialize ----- //
 
   #initialized = false;
 
   async initialize() {
     if ( this.#initialized ) return;
     await super.initialize();
-    const size = this.renderTextureSize;
-    this.renderer = new RenderObstaclesWebGL2({ webGL2: this.constructor.webGL2, senseType: this.config.senseType });
     await this.renderer.initialize();
-    this._initializeFramebuffer();
-    this.redPixelCounter.initialize(size, size);
     this.#initialized = true;
   }
 
-  /** @type {twgl.FramebufferInfo} */
-  fbInfo;
-
-  /** @type {PIXI.Rectangle} */
-  frame = new PIXI.Rectangle();
-
-  get renderTexture() { return this.fbInfo.attachments[0]; }
-
-  // TODO: It might be beneficial to use differing width/heights for wide or tall targets.
-  //       But, to avoid a lot of work at render, would need to construct multiple FBs at different aspect ratios.
-  //       E.g., 2x1, 1x2, 3x1, 1x3, 3x2, 2x3.
-  //       Upside would be a better fit to the camera. But would be complex and require fixing the camera target frustum function.
-  // Width and height of the render texture.
-  #renderTextureSize = 0;
-
-  get renderTextureSize() {
-    if ( !this.#renderTextureSize ) this.#renderTextureSize = CONFIG[MODULE_ID].renderTextureSize || 128;
-    return this.#renderTextureSize;
-  }
-
-  set renderTextureSize(value) {
-    if ( this.#renderTextureSize === value ) return;
-    this.#renderTextureSize = value;
-    if ( this.fbInfo ) this._initializeFramebuffer();
-    this.redPixelCounter.initialize(value, value);
-  }
-
   /**
-   * Initialize all required framebuffers.
+   * Render the current view from the viewer.
+   * Used both for calculation and debugging views.
+   * @param {LOSRendererWebGL2}
+   * @param {object} [opts]       Options passed to the renderer
    */
-  _initializeFramebuffer() {
-    const gl = this.gl;
-    const width = this.renderTextureSize;
-    const height = width;
-    this.frame.width = width;
-    this.frame.height = height;
-
-    this.fbInfo = twgl.createFramebufferInfo(gl, [
-      {
-        internalFormat: gl.RGBA,
-        format: gl.RGBA,
-        type: gl.UNSIGNED_BYTE,
-      },
-      {
-        format: gl.DEPTH_STENCIL
-      }
-    ], width, height);
-
-    // Check if framebuffer is complete.
-    checkFramebufferStatus(this.gl, this.fbInfo.framebuffer);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  _render(renderer, opts) {
+    renderer ??= this.renderer;
+    renderer.camera = this.camera;
+    renderer.updateCameraBuffer();
+    renderer.prerender(this.targetShape, this.occlusionTester, this.partiallyBlockingObstacles());
+    renderer.render(opts);
   }
 
-  static nonRTCountTypes = new Set([])
 
   _calculate() {
     const result = super._calculate(); // Test radius between viewpoint and target.
     if ( result.visibility === PercentVisibleResult.VISIBILITY.NONE ) return result; // Outside of radius.
-    if ( !this.#initialized ) return result.makeFullyNotVisible();
+    if ( !this.isReady ) return result.makeFullyNotVisible();
     result.visibility = PercentVisibleResult.VISIBILITY.MEASURED;
 
-    this.renderer.prerender();
-    const { viewpoint, target, targetLocation } = this;
-    const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
-    const gl = this.gl;
-    let res;
-    log("\n");
-    log("WebGL2Calc|Rendering For Calculation");
-    this.renderer.setCamera(viewpoint, target, { targetLocation });
+    // Render the target and obstacles.
+    this.renderer.bindFramebuffer();
+    this._render(this.renderer);
 
-    if ( useRenderTexture ) {
-      const { fbInfo, frame } = this;
-      twgl.bindFramebufferInfo(gl, fbInfo);
-
-      // Always render target first.
-      this._renderTarget({ frame });
-      this._renderObstacles({ frame });
-
-      res = this.redPixelCounter[pixelCounterType](this.renderTexture);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    } else {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-      // Always render target first.
-      this._renderTarget();
-      this._renderObstacles();
-
-      const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2"
-        ? pixelCounterType : "readPixelsCount" ;
-      res = this.redPixelCounter[type]();
-    }
+    // Calculate the resulting area of the target and target with obstacles.
+    const pixelCounterType = CONFIG[MODULE_ID].pixelCounterType;
+    const { width, height } = this.renderer.frame;
+    const res = this.redPixelCounter[pixelCounterType]({ width, height });
+    this.renderer.unbindFramebuffer();
 
     const lastResult = this._createResult();
     if ( pixelCounterType.startsWith("map") ) {
       lastResult.data.blocked = res.redBlocked;
       lastResult.data.target = res.red;
+      lastResult.data.transmittance = res.transmittance ?? null;
     } else {
       lastResult.data.blockedCount = res.redBlocked;
-      lastResult.data.targetCount = res.red
+      lastResult.data.targetCount = res.red;
     }
     return lastResult;
   }
 
-  /**
-   * Render the target.
-   * Assumes camera has been set for the renderer.
-   * Assumes prerender has already been done.
-   * Clears the prior render, if any.
-   * @param {PIXI.Rectangle} [frame]        Dimensions in which to draw the target
-   */
-  _renderTarget(opts = {}, renderer = this.renderer) {
-    opts.clear ??= true;
-    opts.useStencil = CONFIG[MODULE_ID].useStencil;
-    renderer.renderTarget(this.target, opts);
+  _drawCanvasDebug(result, debugDraw, otOpts = {}) {
+    otOpts.tileSubtype ??= "boundarySubtype";
+    otOpts.levelSubtype ??= "boundarySubtype";
+    super._drawCanvasDebug(result, debugDraw, otOpts);
   }
 
-  /**
-   * Render all obstacles within the viewable frustum.
-   * Assumes camera has been set for the renderer.
-   * Assumes prerender has already been done.
-   * @param {PIXI.Rectangle} [frame]        Dimensions in which to draw the obstacles
-   */
-  _renderObstacles(opts = {}, renderer = this.renderer) {
-    opts.viewer = this.viewer;
-    opts.clear = false;
-    opts.useStencil = CONFIG[MODULE_ID].useStencil;
-
-    // For loop or flatMap appears to make little difference in performance
-    const obstacles = Object.values(this.occlusionTester.obstacles).flatMap(obstacleSet => [...obstacleSet]);
-    renderer.renderObstacles(obstacles, opts);
-  }
-
-  /**
-   * Constrained target area, counting both lit and unlit portions of the target.
-   * Used to determine the total area (denominator) when useLitTarget config is set.
-   * Called after _calculatePercentVisible.
-   * @returns {number}
-   */
-//   _constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
-//     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
-//     const gl = this.gl;
-//     let res;
-//     const redOnly = true;
-//     if ( useRenderTexture ) {
-//       const { fbInfo, frame } = this;
-//       twgl.bindFramebufferInfo(gl, fbInfo);
-//       this.renderer.renderTarget(viewpoint, target, { targetLocation, frame });
-//       res = this.redPixelCounter[pixelCounterType](this.renderTexture, redOnly);
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     } else {
-//       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//       this.renderer.renderTarget(viewpoint, target, { targetLocation });
-//       res = this.redPixelCounter[type](undefined, redOnly);
-//     }
-//     return res.red;
-//   }
-
-//   async constrainedTargetArea(viewer, target, viewpoint, targetLocation) {
-//     const { useRenderTexture, pixelCounterType } = CONFIG[MODULE_ID];
-//     const gl = this.gl;
-//     let res;
-//     const redOnly = true;
-//     if ( useRenderTexture ) {
-//       const { fbInfo, frame } = this;
-//       twgl.bindFramebufferInfo(gl, fbInfo);
-//       this.renderer.renderTarget(viewpoint, target, { targetLocation, frame });
-//       res = await this.redPixelCounter[`${pixelCounterType}Async`](this.renderTexture, redOnly);
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     } else {
-//       const type = pixelCounterType === "readPixelsCount" || pixelCounterType === "readPixelsCount2" ? pixelCounterType : "readPixelsCount" ;
-//       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//       this.renderer.renderTarget(viewpoint, target, { targetLocation });
-//       res = await this.redPixelCounter[`${type}Async`](undefined, redOnly);
-//     }
-//     return res.red;
-//   }
-
-  destroy() {
-    super.destroy();
-    this.renderer.destroy();
+  static destroy() {
+    this.defaultRenderer.destroy();
   }
 }
 
-export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopoutAbstract {
-  static CONTEXT_TYPE = "webgl2";
 
-  /** @type {boolean} */
-  debugView = true;
-
-  constructor(opts = {}) {
-    super(opts);
-    this.debugView = opts.debugView ?? true;
-  }
-
-  async openPopout() {
-    await super.openPopout();
-    if ( this.renderer ) this.renderer.destroy();
-    const webGL2 = new WebGL2(this.gl);
-    this.renderer = new RenderObstaclesWebGL2({
-      senseType: this.viewerLOS?.config.senseType ?? "sight",
-      debugViewNormals: this.debugView,
-      webGL2,
-    });
-    await this.renderer.initialize();
-  }
-
-  updateDebugForPercentVisible(percentVisible) {
-    this.renderer.config = { senseType: this.viewerLOS?.config.senseType ?? "sight" };
-    const calc = this.viewerLOS.calculator;
-
-    super.updateDebugForPercentVisible(percentVisible);
-    this.renderer.prerender();
-
-    log("\n");
-    log("WebGL2Calc|Rendering Debug");
-    const frames = this._canvasDimensionsForViewpoints();
-    for ( let i = 0, iMax = this.viewerLOS.viewpoints.length; i < iMax; i += 1 ) {
-      const { viewer, target, viewpoint, targetLocation } = this.viewerLOS.viewpoints[i];
-      const frame = frames[i];
-      const clear = i === 0;
-
-      calc.initializeView({ viewer, target, viewpoint, targetLocation });
-      this.renderer.setCamera(viewpoint, target, { targetLocation });
-      calc._renderTarget({ frame, clear }, this.renderer);
-      calc._renderObstacles({ frame }, this.renderer);
-    }
-  }
-
-  _canvasDimensionsForViewpoints() {
-    let { width, height } = this.popout.canvas;
-     // const dpr = window.devicePixelRatio; // Does not work as expected.
-
-    // gl.viewport is from bottom 0, 0.
-    const w_1_2 = width * 0.5;
-    const h_1_2 = height * 0.5;
-    const w_1_3 = width * 1/3;
-    const h_1_3 = height * 1/3;
-    const w_2_3 = width * 2/3;
-    const h_2_3 = height * 2/3;
-
-    switch ( this.viewerLOS.viewpoints.length ) {
-      case 1: return [new PIXI.Rectangle(0, 0, width, height)];
-
-      // ----- | -----
-      case 2: return [
-        new PIXI.Rectangle(0,     0, w_1_2, h_1_2),
-        new PIXI.Rectangle(w_1_2, 0, w_1_2, h_1_2),
-      ];
-
-      //     -----
-      // ----- | -----
-      case 3: return [
-        new PIXI.Rectangle(w_1_3, h_1_2, w_1_2, h_1_2),
-        new PIXI.Rectangle(w_2_3, 0,     w_1_2, h_1_2),
-        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
-      ];
-
-      // ----- | -----
-      // ----- | -----
-      case 4: return [
-        new PIXI.Rectangle(0,     0,     w_1_2, h_1_2),
-        new PIXI.Rectangle(w_1_2, 0,     w_1_2, h_1_2),
-        new PIXI.Rectangle(0,     h_1_2, w_1_2, h_1_2),
-        new PIXI.Rectangle(w_1_2, h_1_2, w_1_2, h_1_2),
-      ];
-
-      //  ----- | -----
-      // --- | --- | ---
-      case 5: return [
-        new PIXI.Rectangle(w_1_3 * 0.5,           h_2_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3 - (w_1_3 * 0.5), h_2_3, w_1_3, h_1_3),
-
-        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
-      ];
-
-      // --- | --- | ---
-      // --- |     | ---
-      // --- | --- | ---
-      case 8: return [
-        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
-
-        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
-
-        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
-
-      ];
-
-      // --- | --- | ---
-      // --- | --- | ---
-      // --- | --- | ---
-      case 9: return [
-        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
-
-        new PIXI.Rectangle(0,     h_1_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, h_1_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, h_1_3, w_1_3, h_1_3),
-
-        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
-      ];
-    }
-  }
-
-  destroy() {
-    if ( this.renderer ) this.renderer.destroy();
-    super.destroy();
-  }
-}

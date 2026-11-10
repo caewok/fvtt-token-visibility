@@ -2,7 +2,7 @@
 */
 "use strict";
 
-import { Settings, SETTINGS } from "./settings.js";
+import { Settings } from "./settings.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 
 /* Range Options
@@ -24,8 +24,8 @@ export function rangeTestPointsForToken(token) {
   const { topZ, bottomZ, center, w, h } = token;
   const t = Math.min(w, h) / 4;
   const offsets = [[0, 0]];
-  const rangeAlg = Settings.get(SETTINGS.RANGE.ALGORITHM);
-  const { FIVE, NINE } = SETTINGS.POINT_TYPES;
+  const rangeAlg = Settings.get(Settings.KEYS.RANGE.ALGORITHM);
+  const { FIVE, NINE } = Settings.ENUMS.POINT_TYPES;
   if ( rangeAlg === FIVE || rangeAlg === NINE ) {
     offsets.push(
       [-t, -t],
@@ -61,7 +61,7 @@ function elevatePoints(tests, token) {
   const tokenHeight = topZ - bottomZ;
 
   // If top/bottom equal or not doing 3d points, no need for extra test points
-  if ( !tokenHeight || !Settings.get(SETTINGS.RANGE.POINTS3D) ) return tests;
+  if ( !tokenHeight || !Settings.get(Settings.KEYS.RANGE.POINTS3D) ) return tests;
 
   // Add points to the tests array representing top and bottom.
   // Don't keep the middle points, except for dead center.

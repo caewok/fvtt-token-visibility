@@ -75,7 +75,8 @@ export class LightStatusTracker {
       if ( !(lightingUpdated || tokenUpdated) ) continue;
 
       // Update the token light AE.
-      const lm = token[MODULE_ID][TRACKER_IDS.LIGHT_METER];
+      const lm = token[MODULE_ID]?.[TRACKER_IDS.LIGHT_METER];
+      if ( !lm ) return;
       lm.updateLights();
       this.constructor.updateActorLightStatus(token.actor, lm.lightingType);
     }
@@ -138,7 +139,6 @@ export class LightStatusTracker {
       // Update the token light icon.
       // console.debug(`tokenIconMonitor|Updating and drawing ${token.name}`);
       const lm = token[MODULE_ID][TRACKER_IDS.LIGHT_METER];
-      lm.updateLights();
       if ( this.updateTokenLightingIcons(token, ctr) ) this.drawIcons(token);
     }
     ctr.release();
@@ -363,7 +363,7 @@ export class LightStatusTracker {
    * Refresh the display of icons, adjusting their position for token width and height.
    */
   static refreshIcons(token) {
-    console.debug(`refreshIcons|${token.name}`);
+    // console.debug(`refreshIcons|${token.name}`);
     token._refreshEffects();
   }
 

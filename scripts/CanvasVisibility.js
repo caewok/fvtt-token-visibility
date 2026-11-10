@@ -12,7 +12,7 @@ PATCHES.BASIC = {};
 
 /**
  * Wrap CanvasVisibility.prototype.testVisibility
- * Set tolerance to zero, to cause only a single centerpoint to be tested, for RANGE.CENTER.
+ * Set tolerance to zero, to cause only a single centerpoint to be tested.
  * @param {Point} point                         The point in space to test, an object with coordinates x and y.
  * @param {object} [options]                    Additional options which modify visibility testing.
  * @param {number} [options.tolerance=2]        A numeric radial offset which allows for a non-exact match.

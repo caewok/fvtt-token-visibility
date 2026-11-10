@@ -1,0 +1,14 @@
+<fieldset>
+  <legend>{{ localize "tokenvisibility.name" }} </legend>
+
+    <div class="form-group">
+      <label for="tokenvisibility.opacity">{{ localize "tokenvisibility.tokenconfig.opacity.name" }}</label>
+      <div class="form-fields">
+        <range-picker class="tokenvisibility-opacity-pct" id="tokencover.opacity" value="{{tokenvisibility.opacityPercent}}" min="0" max="100" step="5"></range-picker>
+        <span class="tokenvisibility-opacity-pct" style="flex: 0 0 3.5em; text-align: left;">%</span>
+        <input type="hidden" name="flags.tokenvisibility.opacity" value="{{tokenvisibility.opacity}}" data-dtype="Number">
+      </div>
+      <p class="hint">{{ localize "tokenvisibility.tokenconfig.opacity.hint" }}</p>
+    </div>
+
+</fieldset>

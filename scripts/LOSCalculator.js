@@ -4,26 +4,28 @@ foundry,
 */
 "use strict";
 
-import { MODULE_ID, TRACKER_IDS } from "./const.js";
+import { MODULE_ID, TRACKER_IDS, REGION_BEHAVIORS, ENUMS } from "./const.js";
 import { Settings } from "./settings.js";
-import { ViewerLOS, CachedViewerLOS } from "./LOS/ViewerLOS.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 import { pointIndexForSet } from "./LOS/SmallBitSet.js";
 import { NULL_SET } from "./geometry/util.js";
+import { ConfigHandler } from "./ConfigHandler.js";
+import { ObstacleOcclusionTest } from "./geometry/ObstacleOcclusionTest.js";
 
+export function currentCalculator() { return CONFIG[MODULE_ID].losCalculator; }
 
-// ViewerLOS = CachedViewerLOS;
-
-
-export function currentCalculator() {
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
-  return CONFIG[MODULE_ID].losCalculators[calcName];
+export function effectiveAlgorithmType() {
+  const TYPES = ENUMS.ALGORITHM_TYPES;
+  const type = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
+  return ( type === TYPES.WEBGL2 && CONFIG[MODULE_ID].webGL2Unavailable )
+    ? TYPES.GEOMETRIC : type;
 }
 
+
 export function currentDebugViewerClass(type) {
-  const KEYS = Settings.KEYS;
-  const { TARGET } = KEYS.LOS;
+  type ??= effectiveAlgorithmType();
   const debugViewers = CONFIG[MODULE_ID].debugViewerClasses;
-  type ??= Settings.get(TARGET.ALGORITHM) ?? TARGET.TYPES.POINTS;
+  type ??= Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM) ?? ENUMS.ALGORITHM_TYPES.POINTS;
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[type];
   return debugViewers[calcName];
 }
@@ -31,103 +33,137 @@ export function currentDebugViewerClass(type) {
 /**
  * @returns {TokenBlockingConfig}  See PercentVisibleCalculator.js
  */
-function TokenBlockingConfig() {
-  return {
-    dead: Settings.get(Settings.KEYS.DEAD_TOKENS_BLOCK) ?? true,
-    live: Settings.get(Settings.KEYS.LIVE_TOKENS_BLOCK) ?? true,
-    prone: Settings.get(Settings.KEYS.PRONE_TOKENS_BLOCK) ?? true,
+export function TokenBlockingConfig() {
+  return new ConfigHandler({
+    dead: () => Settings.get(Settings.KEYS.LOS.BLOCKING.DEAD),
+    live: () => Settings.get(Settings.KEYS.LOS.BLOCKING.LIVE),
+    prone: () => Settings.get(Settings.KEYS.LOS.BLOCKING.PRONE),
 
     // No settings enabled for now.
     enemies: true,
     allies: true,
     excludedStatuses: NULL_SET,
-  };
+  });
+}
+
+function regionBlocks(regionD) {
+  const typeKey = `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}`;
+  return regionD.behaviors.some(b => b.type === typeKey);
 }
 
 /**
  * @returns {BlockingConfig}  See PercentVisibleCalculator.js
  */
-function BlockingConfig() {
-  return {
+export function BlockingConfig() {
+  return new ConfigHandler({
     senseType: "sight",
     tokens: TokenBlockingConfig(),
     walls: true,
     tiles: true,
     regions: true,
-  };
+    levels: {
+      background: true,
+      foreground: true,
+    },
+
+    filters: {
+      regions: [regionBlocks],
+      tiles: [],
+      tokens: [],
+      walls: [],
+      levels: [],
+    },
+  });
 }
 
-/**
- * @returns {CalculatorConfig|PointsCalculatorConfig}  See PercentVisibleCalculator.js and PointsCalculator.js
- */
+/** @returns {CalculatorConfig|PointsCalculatorConfig}  See PercentVisibleCalculator.js and PointsCalculator.js */
 export function CalculatorConfig() {
-  return {
-    ...BlockingConfig(),
-    largeTarget: Settings.get(Settings.KEYS.LOS.TARGET.LARGE) ?? false,
+  return new ConfigHandler({
+    largeTarget: () => Settings.get(Settings.KEYS.LOS.TARGET.LARGE) || false,
     debug: false,
-    testLighting: true,
     sourceType: "lighting",
+    tokenShapeType: "tokenBorder",
+    radius: Number.POSITIVE_INFINITY,
 
     // Points algorithm
-    targetInset: Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.INSET) ?? 0.75,
-    targetPointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINT_OPTIONS.POINTS)),
-
-    // WebGL2 Calc
-    alphaThreshold: CONFIG[MODULE_ID].alphaThreshold,
-    useInstancing: CONFIG[MODULE_ID].useInstancing,
-  };
+    targetInset: () => Settings.get(Settings.KEYS.LOS.TARGET.INSET) ?? 0.75,
+    targetPointIndex: () => pointIndexForSet(Settings.get(Settings.KEYS.LOS.TARGET.POINTS)),
+  });
 }
 
-/**
- * @returns {ViewerLOSConfig} See ViewerLOS.js
- */
+/** @returns {ViewpointInsetsConfig} */
+export function ViewpointInsetsConfig() {
+  return new ConfigHandler({
+    top: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSETS.TOP),
+    bottom: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSETS.BOTTOM),
+    sides: () => Settings.get(Settings.KEYS.LOS.VIEWER.INSETS.SIDES),
+  });
+}
+
+
+/** @returns {ViewerLOSConfig} See ViewerLOS.js */
 export function LOSViewerConfig() {
-  return {
-    viewpointIndex: pointIndexForSet(Settings.get(Settings.KEYS.LOS.VIEWER.POINTS)),
-    viewpointInset: Settings.get(Settings.KEYS.LOS.VIEWER.INSET),
-    threshold: Settings.get(Settings.KEYS.LOS.TARGET.PERCENT),
+  return new ConfigHandler({
+    viewpointIndex: () => pointIndexForSet(Settings.get(Settings.KEYS.LOS.VIEWER.POINTS)),
+    insets: ViewpointInsetsConfig(),
+    threshold: () => Settings.get(Settings.KEYS.LOS.TARGET.PERCENT),
     angle: true,
-  };
+  });
 }
 
 /**
- * Build an LOS calculator that uses the current settings.
+ * Build the default occlusion tester that, by default, uses the current settings.
+ * @param {object} [otCfg={}]           Blocking configuration settings that deviate from the current
+ * @returns {ObstacleOcclusionTest}
+ */
+export function buildOcclusionTester(otCfg = {}) {
+  const ot = new ObstacleOcclusionTest();
+  ot.config = BlockingConfig();
+  ot.config.set(otCfg);
+  return ot;
+}
+
+/**
+ * Return the calculator class according to the current settings.
+ * @returns {class}
+ */
+export function getCurrentCalculatorClass() {
+  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[effectiveAlgorithmType()];
+  return CONFIG[MODULE_ID].calculatorClasses[calcName];
+}
+
+/**
+ * Build an LOS calculator that, by default, uses the current settings.
+ * @param {class} [calcClass]                               The calculator class
+ * @param {ObstacleOcclusionTester} [occlusionTester]       The occlusion tester to use
+ * @param {object} [calcCfg={}]                             Calculator configuration settings
+ *                                                          that deviate from the current
  * @returns {PercentVisibleCalculatorAbstract}
  */
-export function buildLOSCalculator() {
-  const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
-  const calcs = CONFIG[MODULE_ID].losCalculators;
-  if ( !calcs[calcName] ) {
-    calcs[calcName] ??= new CONFIG[MODULE_ID].calculatorClasses[calcName](CalculatorConfig());
-    calcs[calcName].initialize(); // Async.
-  }
-  return calcs[calcName];
+export function buildLOSCalculator({ calcClass, occlusionTester, ...calcCfg } = {}) {
+  calcClass ??= getCurrentCalculatorClass();
+  occlusionTester ??= CONFIG[MODULE_ID].occlusionTester ?? buildOcclusionTester();
+  const calculator = new calcClass();
+  calculator.config = CalculatorConfig();
+  calculator.config.set(calcCfg);
+  calculator.occlusionTester = occlusionTester;
+  calculator.initialize(); // Async.
+  return calculator;
 }
 
 /**
- * Build a custom LOS calculator that uses the current settings, modified by
- * custom parameters.
- * @param {CalculatorConfig|PointsCalculatorConfig} calcOptions
- * @returns {PercentVisibleCalculatorAbstract}
- */
-export function buildCustomLOSCalculator(calcClass, calcCfg = {}) {
-  if ( !calcClass ) {
-    const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)];
-    calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
-  }
-  calcCfg = foundry.utils.mergeObject(CalculatorConfig(), calcCfg, { inplace: false });
-  return new calcClass(calcCfg);
-}
-
-
-/**
- * Build an LOS viewer for this viewer that uses the current settings.
+ * Build an LOS viewer for this viewer that, by default, uses the current settings.
  * @param {Token} viewer
+ * @param {PercentVisibleCalculatorAbstract} calculator
+ * @param {object} [losCfg={}]                             LOS configuration settings that deviate from the current
  * @returns {ViewerLOS}
  */
-export function buildLOSViewer(viewer) {
-  const calculator = buildLOSCalculator();
-  const viewerLOS = new ViewerLOS(viewer, calculator, LOSViewerConfig());
+export function buildLOSViewer(viewer, { calculator, ...losCfg } = {}) {
+  calculator ??= CONFIG[MODULE_ID].losCalculator ?? buildLOSCalculator();
+  calculator.initialize(); // Async.
+  const viewerLOS = new ViewerLOS(viewer, calculator);
+  viewerLOS.config = LOSViewerConfig();
+  viewerLOS.config.set(losCfg);
   return viewerLOS;
 }
 
@@ -139,10 +175,15 @@ export function buildLOSViewer(viewer) {
  * @param {object} [losCfg={}]              Custom parameters to override default settings.
  * @returns {ViewerLOS}
  */
-export function buildCustomLOSViewer(viewer, calculator, losCfg = {}) {
+export function buildCustomLOSViewer(viewer, calculator, occlusionTester, losCfg = {}) {
   calculator ??= currentCalculator();
-  const losConfig = foundry.utils.mergeObject(LOSViewerConfig(), losCfg, { inplace: false });
-  const viewerLOS = new ViewerLOS(viewer, calculator, losConfig);
+  occlusionTester ??= new ObstacleOcclusionTest();
+  calculator.config.set(losCfg);
+  calculator.occlusionTester = occlusionTester;
+  calculator.initialize();
+  const viewerLOS = new ViewerLOS(viewer, calculator);
+  viewerLOS.config = LOSViewerConfig();
+  viewerLOS.config.set(losCfg);
   return viewerLOS;
 }
 

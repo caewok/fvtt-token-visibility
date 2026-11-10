@@ -8,12 +8,12 @@ PIXI
 
 "use strict";
 
-import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/Benchmark.js";
+import { QBenchmarkLoopFn, QBenchmarkLoopFnWithSleep, quantile } from "./geometry/benchmark.js";
 import { Settings } from "./settings.js";
 import { randomUniform } from "./random.js";
-import { buildCustomLOSViewer, buildCustomLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
+import { buildLOSViewer, buildLOSCalculator, CalculatorConfig, LOSViewerConfig } from "./LOSCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
-import { MODULE_ID } from "./const.js";
+import { MODULE_ID, ENUMS } from "./const.js";
 import { Point3d } from "./geometry/3d/Point3d.js";
 import { pixelsToGridUnits } from "./geometry/util.js";
 
@@ -57,7 +57,7 @@ function getTokens() {
  * Construct a table of token percent visibility using the various methods.
  */
 // export function summarizeTokenVisibility(viewers, targets) {
-//   const calcs = Object.values(Settings.KEYS.LOS.TARGET.TYPES);
+//   const calcs = Object.values(ENUMS.ALGORITHM_TYPES);
 //   const summary = {};
 //   const opts = { calcName: null };
 //   for ( const calcType of calcs ) {
@@ -105,8 +105,10 @@ export async function benchTokenVisibility(n = 100, sleep = false) {
   const { targets } = getTokens();
   console.log(`\nBenchmarking visibility of ${targets.length} targets from user's current perspective and settings.`);
   console.log("\nBenchmarking token los");
+  console.log("Blocking Config");
+  console.table(foundry.utils.flattenObject(CONFIG[MODULE_ID].losCalculator.occlusionTester.config))
   console.log("Calculator Config");
-  console.table(foundry.utils.flattenObject(CalculatorConfig()));
+  console.table(foundry.utils.flattenObject(CONFIG[MODULE_ID].losCalculator.config));
   console.log(`\nViewer Config for algorithm ${Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM)}`);
   console.table(LOSViewerConfig());
 
@@ -239,7 +241,7 @@ export async function benchTokenLOS(n = 100, opts = {}) {
   console.log(`${viewers.length} viewers, ${targets.length} targets`)
   console.log("\n")
   const fn = opts.movement ? runLOSTestWithMovement : runLOSTest;
-  for ( const algorithm of Object.values(Settings.KEYS.LOS.TARGET.TYPES) ) {
+  for ( const algorithm of Object.values(ENUMS.ALGORITHM_TYPES) ) {
     opts.algorithm = algorithm;
     await fn(n, viewers, targets, opts);
   }
@@ -258,12 +260,12 @@ export async function benchTokenLOSAlgorithm(n = 100, { movement = false, ...opt
 }
 
 async function runLOSTest(n, viewers, targets, { algorithm, sleep = false, useAsync = false } = {}) {
-  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+  algorithm ??= ENUMS.ALGORITHM_TYPES.POINTS;
 
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
   const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
-  const calc = buildCustomLOSCalculator(calcClass);
-  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
+  const calculator = buildLOSCalculator({ calcClass });
+  const losViewers = viewers.map(viewer => buildLOSViewer(viewer, { calculator }));
 
   let label = (`LOS: ${algorithm}`);
   const fn = sleep ? QBenchmarkLoopFnWithSleep : QBenchmarkLoopFn;
@@ -298,12 +300,12 @@ async function benchLOSAsync(calcs, targets) {
 
 
 async function runLOSTestWithMovement(n, viewers, targets, { algorithm, sleep = false, useAsync = false } = {}) {
-  algorithm ??= Settings.KEYS.LOS.TARGET.TYPES.POINTS;
+  algorithm ??= ENUMS.ALGORITHM_TYPES.POINTS;
 
   const calcName = ViewerLOS.VIEWPOINT_ALGORITHM_SETTINGS[algorithm];
   const calcClass = CONFIG[MODULE_ID].calculatorClasses[calcName];
-  const calc = buildCustomLOSCalculator(calcClass);
-  const losViewers = viewers.map(viewer => buildCustomLOSViewer(viewer, calc));
+  const calculator = buildLOSCalculator({ calcClass });
+  const losViewers = viewers.map(viewer => buildLOSViewer(viewer, { calculator }));
 
   let label = (`LOS: ${algorithm}`);
   const tokens = new Set([...viewers, ...targets]);

@@ -1,14 +1,15 @@
 /* globals
-
+canvas,
+CONFIG,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
+import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { Point3d } from "../geometry/3d/Point3d.js";
 import { Quad3d } from "../geometry/3d/Polygon3d.js";
 import { MatrixFloat32 } from "../geometry/Matrix.js";
-
-import { TRACKER_IDS } from "./const.js";
+import { Frustum } from "../geometry/3d/Frustum.js";
 
 export class Camera {
 
@@ -16,68 +17,106 @@ export class Camera {
 
   static MIRRORM_DIAG = new Point3d(-1, 1, 1);
 
+  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * (16 + 16); // Total size of CameraStruct
+
+  // ----- NOTE: Private properties ----- //
+
+  /** @type {Point3d(2)|vec3} */
+  #positions = {
+    camera: new Point3d(),
+    target: new Point3d()
+  };
+
   /**
    * @typedef {object} CameraStruct
    * @param {mat4x4f} perspectiveM          The perspective matrix
    * @param {mat4x4f} lookAtM               Matrix to shift world around a camera location
    */
-
-  static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * (16 + 16); // Total size of CameraStruct
-
-  /** @type {object} */
-  static CAMERA_LAYOUT = {
-    label: "Camera",
-    entries: [{
-      binding: 0, // Camera/Frame uniforms
-      visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-      buffer: {},
-    }]
-  };
-
-  /** @type {GPUBindGroupLayout} */
-//   bindGroupLayout;
-
-  /** @type {GPUBuffer} */
-//   deviceBuffer;
-
-  /** @type {GPUBindGroup} */
-//   bindGroup;
-
-  // TODO: Combine so that the buffer stores the camera values instead of repeating them.
-  // Could use MatrixFlat to store the buffer views.
-  // Need to update MatrixFlat to handle the WebGPU perspectiveZO.
-
-  /** @type {ArrayBuffer} */
-  #arrayBuffer = new ArrayBuffer(this.constructor.CAMERA_BUFFER_SIZE);
-
   /** @type {object<Float32Array(16)|mat4>} */
   #M = {
-    perspective: new MatrixFloat32(4, 4, this.#arrayBuffer, 0),
-    lookAt: new MatrixFloat32(4, 4, this.#arrayBuffer, 16),
+    perspective: null,
+    lookAt: null,
+  };
+
+  /**
+   * The inverse transpose of the perspective and look at matrices.
+   * Used for transforming polygon3d
+   * @param {mat4x4f} perspectiveM          The perspective matrix
+   * @param {mat4x4f} lookAtM               Matrix to shift world around a camera location
+   */
+  /** @type {object<Float32Array(16)|mat4>} */
+  #invTransposeM = {
+    perspective: null,
+    lookAt: null,
   };
 
   /** @type {Float32Array(32)} */
-  #arrayView = new Float32Array(this.#arrayBuffer, 0, 32);
+  #arrayView = null;
 
   /** @type {MatrixFloat32<4,4>} */
-  #cameraM = MatrixFloat32.empty(4, 4);
+  #cameraM = null;
 
   /** @type {MatrixFloat32<4,4>} */
-  #mirrorM = MatrixFloat32.identity(4, 4);
+  #mirrorM = null;
+
+  /**
+   * @typedef {object} frustumParameters
+   * @prop {number} left   Coordinate for left vertical clipping plane
+   * @prop {number} right  Coordinate for right vertical clipping plane
+   * @prop {number} bottom Coordinate for the bottom horizontal clipping plane
+   * @prop {number} top    Coordinate for the top horizontal clipping plane
+   * @prop {number} zNear    Distance from the viewer to the near clipping plane (always positive)
+   * @prop {number} zFar     Distance from the viewer to the far clipping plane (always positive)
+   */
+  #perspectiveParameters = {
+    fov: Math.toRadians(90),
+    aspect: 1,
+    zNear: canvas.grid?.size || 1,
+    zFar: Infinity,
+  };
+
+  #orthogonalParameters = {
+    left: -100,
+    right: 100,
+    top: 100,
+    bottom: -100,
+    near: 1,
+    far: -1000,
+  };
+
+  #modelMatrix = null;
+
+  #inverseModelMatrix = null;
+
+  /** @type {function} */
+  #perspectiveFn = MatrixFloat32.perspectiveZO;
+
+  #UP = new Point3d();
+
+  #perspectiveType = "perspective";
+
+  #internalParams = this.#perspectiveParameters;
+
+  // ----- NOTE: Caching / dirty ----- //
 
   /** @type {boolean} */
   #dirtyPerspective = true;
 
   #dirtyLookAt = true;
 
+  #dirtyPerspectiveTranspose = true;
+
+  #dirtyLookAtTranspose = true;
+
   #dirtyModel = true;
 
   #dirtyInverse = true;
 
-  get dirtyPerspective() { return this.#dirtyPerspective }
+  get dirtyPerspective() { return this.#dirtyPerspective; }
 
   set dirtyPerspective(value) {
     this.#dirtyPerspective ||= value;
+    this.#dirtyPerspectiveTranspose ||= value;
     this.#dirtyModel ||= value;
     this.#dirtyInverse ||= value;
   }
@@ -86,9 +125,14 @@ export class Camera {
 
   set dirtyLookAt(value) {
     this.#dirtyLookAt ||= value;
+    this.#dirtyLookAtTranspose ||= value;
     this.#dirtyModel ||= value;
     this.#dirtyInverse ||= value;
   }
+
+  get dirtyPerspectiveTranspose() { return this.#dirtyPerspectiveTranspose; }
+
+  get dirtyLookAtTranspose() { return this.#dirtyLookAtTranspose; }
 
   get dirtyModel() { return this.#dirtyModel; }
 
@@ -101,17 +145,14 @@ export class Camera {
 
   set dirtyInverse(value) { this.#dirtyInverse ||= value; }
 
+  // ----- NOTE: Camera Property Getters / Setters ----- //
 
-  /** @type {function} */
-  #perspectiveFn = MatrixFloat32.perspectiveZO;
+  get UP() { return this.#UP; }
 
-  #UP = new Point3d();
-
-  #perspectiveType = "perspective";
-
-  #glType = "webGPU";
-
-  get glType() { return this.#glType; }
+  set UP(value) {
+    this.#UP.copyFrom(value);
+    this.dirtyLookAt = true;
+  }
 
   get perspectiveType() { return this.#perspectiveType; }
 
@@ -121,15 +162,90 @@ export class Camera {
     this.#perspectiveType = value;
 
     // Update the relevant internal parameters.
-    const fnName = `${this.#perspectiveType}${this.#glType === "webGPU" ? "ZO" : ""}`;
+    const fnName = `${this.#perspectiveType}`;
     this.#perspectiveFn = MatrixFloat32[fnName];
     this.#internalParams = value === "orthogonal" ? this.#orthogonalParameters : this.#perspectiveParameters;
     this.dirtyPerspective = true;
   }
 
-  #modelMatrix = MatrixFloat32.identity(4);
+  get perspectiveParameters() {
+    // Copy so they cannot be modified here.
+    return { ...this.#perspectiveParameters };
+  }
 
-  #inverseModelMatrix = MatrixFloat32.identity(4);
+  set perspectiveParameters(params = {}) {
+    for ( const [key, value] of Object.entries(params) ) {
+      this.#perspectiveParameters[key] = value;
+    }
+    this.dirtyPerspective = true;
+  }
+
+  get orthogonalParameters() {
+    // Copy so they cannot be modified here.
+    return { ...this.#orthogonalParameters };
+  }
+
+  set orthogonalParameters(params = {}) {
+    for ( const [key, value] of Object.entries(params) ) {
+      this.#orthogonalParameters[key] = value;
+    }
+    this.dirtyPerspective = true;
+  }
+
+  get cameraPosition() { return this.#positions.camera; }
+
+  get targetPosition() { return this.#positions.target; }
+
+  set cameraPosition(value) {
+    if ( this.#positions.camera.equals(value) ) return;
+    this.#positions.camera.copyPartial(value);
+    this.dirtyLookAt = true;
+  }
+
+  set targetPosition(value) {
+    if ( this.#positions.target.equals(value) ) return;
+    this.#positions.target.copyPartial(value);
+    this.dirtyLookAt = true;
+  }
+
+  // ----- NOTE: Matrix Getters / Setters ----- //
+
+  get mirrorMatrix() { return this.#mirrorM; }
+
+  set mirrorM(value) {
+    this.#mirrorM.setIndex(0, 0, value.x);
+    this.#mirrorM.setIndex(1, 1, value.y);
+    this.#mirrorM.setIndex(2, 2, value.z);
+    this.dirtyPerspective = true;
+  }
+
+  /** @type {MatrixFloat32<4x4>} */
+  get perspectiveMatrix() {
+    if ( this.dirtyPerspective ) this.#calculatePerspective();
+    return this.#M.perspective;
+  }
+
+  #calculatePerspective() {
+    const p = this.#internalParams;
+    if ( this.perspectiveType === "orthogonal" ) {
+      this.#perspectiveFn(p.left, p.right, p.bottom, p.top, p.near, p.far, this.#M.perspective);
+    } else {
+      this.#perspectiveFn(p.fov, p.aspect, p.zNear, p.zFar, this.#M.perspective);
+    }
+    this.#M.perspective.multiply4x4(this.mirrorMatrix, this.#M.perspective);
+    this.#dirtyPerspective = false;
+  }
+
+  /** @type {Float32Array|mat4} */
+  get lookAtMatrix() {
+    if ( this.dirtyLookAt ) this.#calculateLookAt();
+    return this.#M.lookAt;
+  }
+
+  #calculateLookAt() {
+    MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
+    this.#dirtyLookAt = false;
+  }
 
   get modelMatrix() {
     if ( this.dirtyModel ) {
@@ -140,6 +256,25 @@ export class Camera {
     return this.#modelMatrix;
   }
 
+
+  get invTransposePerspectiveMatrix() {
+    if ( this.dirtyPerspectiveTranspose ) {
+      this.perspectiveMatrix.invert(this.#invTransposeM.perspective).transpose(this.#invTransposeM.perspective);
+      this.#dirtyPerspectiveTranspose = false;
+    }
+    return this.#invTransposeM.perspective;
+  }
+
+
+  get invTransposeLookAtMatrix() {
+    if ( this.dirtyLookAtTranspose ) {
+      this.lookAtMatrix.invert(this.#invTransposeM.lookAt).transpose(this.#invTransposeM.lookAt);
+      this.#dirtyLookAtTranspose = false;
+    }
+    return this.#invTransposeM.lookAt;
+  }
+
+
   get inverseModelMatrix() {
     if ( this.dirtyInverse ) {
       this.modelMatrix.invert(this.#inverseModelMatrix);
@@ -148,22 +283,57 @@ export class Camera {
     return this.#inverseModelMatrix;
   }
 
+  // ----- NOTE: Array Buffer Getters / Setters ----- //
+
+  /** @type {ArrayBuffer} */
+  get arrayBuffer() {
+    // Ensure no updates required.
+    this.refresh();
+    return this.#M.perspective.arr.buffer;
+  }
+
+  get arrayView() {
+    this.refresh();
+    return this.#arrayView;
+  }
+
+  // ----- NOTE: Constructor ------ //
+
   /**
-   * @type {object} [opts]
-   * @type {Point3d} [opts.cameraPosition]
-   * @type {Point3d} [opts.targetPosition]
-   * @type {Point3d} [opts.glType="webGPU"]     Whether the NDC Z range is [-1, 1] ("webGL") or [0, 1] ("webGPU").
-   * @type {string} [opts.perspectiveType="perspective"]      Type of perspective: "orthogonal" or "perspective"
+   * @param {object} [opts]
+   * @param {string} [opts.perspectiveType="perspective"]   Type of perspective: "orthogonal" or "perspective"
+   * @param {Point3d} [opts.up]                             Up vector for the camera
+   * @param {Point3d} [opts.mirrorMDiag]                    Diagonal values of the mirror matrix
    */
   constructor({
-    cameraPosition,
-    targetPosition,
-    glType = "webGPU",
     perspectiveType = "perspective",
     up = this.constructor.UP,
     mirrorMDiag = this.constructor.MIRRORM_DIAG } = {}) {
-    if ( cameraPosition ) this.cameraPosition = cameraPosition;
-    if ( targetPosition ) this.targetPosition = targetPosition;
+
+    // Allocate two matrices with a shared buffer to represent the perspective and lookAt matrices.
+    // Allow buffer access for, e.g., WebGL.
+    const keyMatrices = MatrixFloat32.allocate4x4(2);
+    this.#M.perspective = keyMatrices[0].identity();
+    this.#M.lookAt = keyMatrices[1].identity();
+    const cameraBuffer = this.#M.perspective.arr.buffer;
+    this.#arrayView = new Float32Array(cameraBuffer, 0, 32);
+
+    // Allocate inverse transpose matrices, used for transforming Polygon3d.
+    const invTransposeMatrices = MatrixFloat32.allocate4x4(2);
+    this.#invTransposeM.perspective = invTransposeMatrices[0].identity();
+    this.#invTransposeM.lookAt = invTransposeMatrices[1].identity();
+
+    // Allocate model and inverse model matrix.
+    const modelMatrices = MatrixFloat32.allocate4x4(2);
+    this.#modelMatrix = modelMatrices[0].identity();
+    this.#inverseModelMatrix = modelMatrices[1].identity();
+
+    // Allocate cameraM and mirrorM  matrices.
+    const otherMatrices = MatrixFloat32.allocate4x4(2);
+    this.#cameraM = otherMatrices[0].zero();
+    this.#mirrorM = otherMatrices[1].identity();
+
+    // Initialize camera parameters.
     this.UP.copyFrom(up);
 
     // See https://stackoverflow.com/questions/68912464/perspective-view-matrix-for-y-down-coordinate-system
@@ -171,14 +341,22 @@ export class Camera {
     this.#mirrorM.setIndex(1, 1, mirrorMDiag.y);
     this.#mirrorM.setIndex(2, 2, mirrorMDiag.z);
 
-    this.#glType = glType;
     this.perspectiveType = perspectiveType;
   }
 
+  refresh() {
+    return {
+      perspectiveMatrix: this.perspectiveMatrix,
+      lookAtMatrix: this.lookAtMatrix,
+    };
+  }
+
+  // ----- NOTE: Frustum calculations ----- //
+
   setTargetTokenFrustum(targetToken) {
-    const geometry = targetToken[TRACKER_IDS.BASE][TRACKER_IDS.GEOMETRY.PLACEABLE];
-    const aabb3d = geometry.aabb;
-    this.setFrustumForAABB3d(aabb3d);
+    // Set the frustum based on the full token. Faster, more consistent.
+    const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(targetToken).full;
+    this.setFrustumForAABB3d(geom.aabb);
   }
 
   /**
@@ -207,28 +385,31 @@ export class Camera {
    * @returns {object} Parameters, for convenience; also set internally.
    */
   _setPerspectiveFrustumForAABB3d(aabb3d, boxCenter) {
-
     // Calculate the radius of a sphere that encloses the bounding box.
     // This is the distance from the center to one of the corners (e.g., the max corner).
     const boxRadius = Point3d.distanceBetween(aabb3d.max, boxCenter);
     const cameraDist = Point3d.distanceBetween(this.cameraPosition, boxCenter);
-
-    // Distance from the viewpoint to the farthest point on the bounding sphere.
-    // Ignore zNear, which would be Math.max(0.01, cameraDist - boxRadius) if only concerned with rendering the box.
     const zFar = cameraDist + boxRadius;
+    const zNear = canvas.grid.size * 0.1;
 
-    // Calculate the Field of View (FOV).
-    // Use trigonometry: the sine of half the FOV angle is the ratio of the
-    // sphere's radius to the distance from the camera to the sphere's center.
-    // sin(fov/2) = rad ius / distance
-    // fov = 2 * asin(radius / distan
-    // If the camera is inside the bounding sphere, the FOV would need to be 180 degrees
-    // to see the whole sphere. Handle as a special case.
-    const fov = cameraDist <= boxRadius ? Math.PI
-      : 2 * Math.asin(boxRadius / cameraDist); // Radians
-    const near = canvas.grid.size * 0.1;
+    // Transform AABB corners to find the exact required FOV.
+    const lookAtM = this.lookAtMatrix;
+    using tmpPt = Point3d.tmp;
+    let maxTan = 0;
+    for ( const pt of aabb3d.iterateVertices(tmpPt) ) {
+      lookAtM.multiplyPoint3d(pt, pt);
+      const z = -pt.z; // Distance from camera along the viewing axis.
+      if ( z > 0 ) {
+        // Find maximum tangent (angle) needed to fit x or y coordinates.
+        const tanX = Math.abs(pt.x) / z;
+        const tanY = Math.abs(pt.y) / z;
+        maxTan = Math.max(maxTan, tanX, tanY);
+      }
+    }
 
-    this.perspectiveParameters = { fov, zFar, near };
+    // Calculate FOV. Fallback to 180º (π) if inside the geometry.
+    const fov = maxTan > 0 ? 2 * Math.atan(maxTan) : Math.PI;
+    this.perspectiveParameters = { fov, zFar, zNear };
     return this.perspectiveParameters;
   }
 
@@ -272,151 +453,63 @@ export class Camera {
       right: xMax,
       top: yMax,
       bottom: yMin,
-      // near: zMin, // Always set to 1.
+      // Near is always set to 1. near: zMin,
       far: zMax,
       // Near would be zMinMax.min but we also want obstacles in view, so it should be left to something small, like 1.
     };
   }
 
+  // ----- NOTE: Static methods ----- //
 
   /**
-   * @typedef {object} frustumParameters
-   * @prop {number} left   Coordinate for left vertical clipping plane
-   * @prop {number} right  Coordinate for right vertical clipping plane
-   * @prop {number} bottom Coordinate for the bottom horizontal clipping plane
-   * @prop {number} top    Coordinate for the top horizontal clipping plane
-   * @prop {number} zNear    Distance from the viewer to the near clipping plane (always positive)
-   * @prop {number} zFar     Distance from the viewer to the far clipping plane (always positive)
+   * Extract the camera's world space position from a view-projection matrix.
+   * Mostly for debugging.
+   * @param {Matrix} M        Combined view-projection matrix.
+   * @returns {Point3d|null}  Null if orthographic
    */
-  #perspectiveParameters = {
-    fov: Math.toRadians(90),
-    aspect: 1,
-    zNear: canvas.grid.size || 1,
-    zFar: Infinity,
-  }
+  static getCameraPositionFromVP(M) {
+    const vx = M.dropRow(0).dropColumn(0).determinant();
+    const vy = -M.dropRow(1).dropColumn(1).determinant();
+    const vz = M.dropRow(2).dropColumn(2).determinant();
+    const vw = -M.dropRow(3).dropColumn(3).determinant();
 
-  #internalParams = this.#perspectiveParameters;
-
-  get UP() { return this.#UP; }
-
-  set UP(value) {
-    this.#UP.copyFrom(value);
-    this.dirtyLookAt = true;
-  }
-
-  get mirrorMatrix() { return this.#mirrorM; }
-
-  set mirrorM(value) {
-    this.#mirrorM.setIndex(0, 0, value.x);
-    this.#mirrorM.setIndex(1, 1, value.y);
-    this.#mirrorM.setIndex(2, 2, value.z);
-    this.dirtyPerspective = true
-  };
-
-  /** @type {MatrixFloat32<4x4>} */
-  get perspectiveMatrix() {
-    if ( this.dirtyPerspective ) {
-      const p = this.#internalParams;
-      if ( this.perspectiveType === "orthogonal" ) {
-        this.#perspectiveFn(p.left, p.right, p.bottom, p.top, p.near, p.far, this.#M.perspective);
-      } else {
-        this.#perspectiveFn(p.fov, p.aspect, p.zNear, p.zFar, this.#M.perspective);
-      }
-      this.#M.perspective.multiply4x4(this.mirrorMatrix, this.#M.perspective);
-      this.#dirtyPerspective = false;
-    }
-    return this.#M.perspective;
-  }
-
-  get perspectiveParameters() {
-    // Copy so they cannot be modified here.
-    return { ...this.#perspectiveParameters };
-  }
-
-  set perspectiveParameters(params = {}) {
-    for ( const [key, value] of Object.entries(params) ) {
-      this.#perspectiveParameters[key] = value;
-    }
-    this.dirtyPerspective = true;
-  }
-
-  #orthogonalParameters = {
-    left: -100,
-    right: 100,
-    top: 100,
-    bottom: -100,
-    near: 1,
-    far: -1000,
-  };
-
-  get orthogonalParameters() {
-    // Copy so they cannot be modified here.
-    return { ...this.#orthogonalParameters };
-  }
-
-  set orthogonalParameters(params = {}) {
-    for ( const [key, value] of Object.entries(params) ) {
-      this.#orthogonalParameters[key] = value;
-    }
-    this.dirtyPerspective = true;
-  }
-
-  /** @type {Float32Array|mat4} */
-  get lookAtMatrix() {
-    if ( this.dirtyLookAt ) {
-      MatrixFloat32.lookAt(this.cameraPosition, this.targetPosition, this.UP, this.#cameraM, this.#M.lookAt);
-      this.#dirtyLookAt = false;
-    }
-    return this.#M.lookAt;
-  }
-
-  /** @type {ArrayBuffer} */
-  get arrayBuffer() {
-    // Ensure no updates required.
-    this.refresh();
-    return this.#arrayBuffer;
-  }
-
-  get arrayView() {
-    this.refresh();
-    return this.#arrayView;
-  }
-
-  refresh() {
-    return {
-      perspectiveMatrix: this.perspectiveMatrix,
-      lookAtMatrix: this.lookAtMatrix,
-    };
-  }
-
-  /** @type {Float32Array(3)|vec3} */
-  #positions = {
-    camera: new Point3d(),
-    target: new Point3d()
-  };
-
-  get cameraPosition() { return this.#positions.camera; }
-
-  get targetPosition() { return this.#positions.target; }
-
-  set cameraPosition(value) {
-    if ( this.#positions.camera.equals(value) ) return;
-    this.#positions.camera.copyPartial(value);
-    this.dirtyLookAt = true;
-  }
-
-  set targetPosition(value) {
-    if ( this.#positions.target.equals(value) ) return;
-    this.#positions.target.copyPartial(value);
-    this.dirtyLookAt = true;
+    // If vw is near 0, the camera is at infinity, meaning orthographic projection.
+    // An orthographic camera can never be inside a finite sphere.
+    if ( vw.almostEqual(0) ) return null;
+    return Point3d.tmp.set(vx / vw, vy / vw, vz / vw);
   }
 
   // ----- NOTE: Debug ----- //
 
+  /**
+   * Construct a true 3d geometric canvas frustum from the current camera properties.
+   * @returns {Frustum}
+   */
+  toCanvasFrustum(frustum) {
+    const Minv = this.inverseModelMatrix;
+
+    // Define the 4 corners of the far clipping plane in Normalized Device Coordinates (z = 1).
+    const minCoord = -1;
+    const corners = {
+      // NDC space
+      TL: Point3d.tmp.set(minCoord, minCoord, 1),
+      TR: Point3d.tmp.set(1, minCoord, 1),
+      BR: Point3d.tmp.set(1, 1, 1),
+      BL: Point3d.tmp.set(minCoord, 1, 1),
+    };
+
+    // Transform the NDC corners into canvas (world) space.
+    Object.values(corners).forEach(corner => Minv.multiplyPoint3d(corner, corner));
+
+    // Create a canvas frustrum.
+    const viewpoint = this.cameraPosition;
+    return Frustum.fromCorners(viewpoint, corners, frustum);
+  }
+
   invertFrustum() {
     const M = this.lookAtMatrix.multiply4x4(this.perspectiveMatrix);
     const Minv = M.invert();
-    const minCoord = this.glType === "webGPU" ? 0 : -1;
+    const minCoord = -1;
 
     const front = [
       Point3d.tmp.set(1, minCoord, 0),
@@ -431,10 +524,10 @@ export class Camera {
       Point3d.tmp.set(1, 1, -1)
     ];
 
-    // back TL, TR, front TR, TL
+    // Back TL, TR, front TR, TL
     const top = [back[0], back[1], front[1], front[0]];
 
-    // front BR, BL, back BL, BR
+    // Front BR, BL, back BL, BR
     const bottom = [front[2], front[3], back[3], back[2]];
 
     // If this were used for something other than debug, would be more efficient to

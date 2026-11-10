@@ -14,8 +14,8 @@ PIXI
  * @returns {PIXI.Rectangle[]}
  */
 export function squaresUnderToken(token) {
-  const tX = token.x;
-  const tY = token.y;
+  const tX = token.document.x;
+  const tY = token.document.y;
 
   const w = token.document.width;
   const h = token.document.height;
@@ -23,8 +23,8 @@ export function squaresUnderToken(token) {
   const r = token.document.getSize();
   const r1 = { width: canvas.grid.sizeX, height: canvas.grid.sizeY }; // Size 1, 1
 
-  const wRem = r.width % r1.width;
-  const hRem = r.height % r1.height;
+  const wRem = w % r1.width;
+  const hRem = h % r1.height;
 
   const wMult = Math.floor(w);
   const hMult = Math.floor(h);
@@ -112,7 +112,7 @@ export function hexesUnderToken(token) {
 
 function hexes1(x = 0, y = 0) {
   const r1 = canvas.grid.grid.getRect(1, 1);
-  return new PIXI.Point(canvas.grid.grid.getPolygon(x, y, r1.width, r1.height));
+  return new PIXI.Polygon(canvas.grid.grid.getPolygon(x, y, r1.width, r1.height));
 }
 
 // 2: Forms triangle.  •
