@@ -3,6 +3,7 @@ canvas,
 CONFIG,
 Hooks,
 PIXI,
+ui,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
