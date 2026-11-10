@@ -164,7 +164,7 @@ export class ModuleSettingsAbstract {
       if ( !filterFn(settingsObject) ) continue;
       promises.push(this.set(key, settingsObject.default));
     }
-    return Promises.allSettled(promises);
+    return Promise.allSettled(promises);
   }
 
   /**
