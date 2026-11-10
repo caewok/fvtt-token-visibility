@@ -72,7 +72,7 @@ export class DebugVisibilityViewerAbstract {
   }
 
   /** @type {Token} */
-  get viewer() { return canvas.tokens.controlled[0]; }
+  get viewer() { return canvas.tokens.controlled?.[0] ?? null; }
 
   /** @type {Token} */
   #targetToken = null;
@@ -110,6 +110,7 @@ export class DebugVisibilityViewerAbstract {
   updateDebugForPercentVisible(_percentVisible) {}
 
   percentVisible() {
+    if ( !this.viewerLOS ) return 1;
     this.viewerLOS.target = this.target;
     return this.viewerLOS.percentVisible;
   }

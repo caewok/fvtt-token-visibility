@@ -26,7 +26,8 @@ export class ATVSettingsSubmenu extends SettingsSubmenu {
 
   async _onFirstRender(context, options) {
     await super._onFirstRender(context, options);
-    const targetTab = this.element.querySelectorAll('[data-tab="losTarget"]')[1];
+    const tabs = this.element.querySelectorAll('[data-tab="losTarget"]');
+    const targetTab = tabs.length > 1 ? tabs[1] : null;
     if ( targetTab ) {
       // Add data action to the algorithm selector.
       const algSelector = targetTab.querySelector(`[name="${MODULE_ID}.${SETTINGS.LOS.TARGET.ALGORITHM}"]`);

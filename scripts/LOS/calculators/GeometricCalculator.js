@@ -376,7 +376,7 @@ export class PercentVisibleCalculatorGeometric extends PercentVisibleCalculatorA
     const ClipperPaths = CONFIG[GEOMETRY_LIB_ID].CONFIG.ClipperPaths;
     const opts = this.clipperOpts;
     const terrainObstaclePolys = this.terrainObstaclePolys;
-    const terrainPaths = new ClipperPaths()
+    const terrainPaths = new ClipperPaths(undefined, opts);
 
     // The intersection of each two terrain polygons forms a blocking path.
     // Only need to test each combination once.
