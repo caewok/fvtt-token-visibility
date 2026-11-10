@@ -12,17 +12,15 @@
 This module provides options to modify Foundry's default methods for measuring visibility range and line-of-sight between tokens. Some options are more performant, while others trade some performance for a more precise method of computing visibility. Alt Token Visibility is particularly useful when dealing with token elevations, elevated tiles, walls with limited heights or depth, and scene regions. The current release is built for Foundry VTT v14; earlier Foundry versions should use the last compatible release.
 
 Major features:
-- Choose whether one or more points on the viewing target are tested for line-of-sight, with the best result taken. Options include a "stereo" version that uses two points on the front facing side of the token.
-- Change the number of points used to determine range.
-- Adjust viewer and target line-of-sight point locations, shifting from the token border to the center.
-- Account for wall height (using the [Wall Height](https://github.com/theripper93/wall-height) module) and overhead tiles.
+- Represents tokens, walls, regions, and tiles as 3d objects for purposes of testing line-of-sight. Account for wall height.
+- Treat low alpha values in tile textures as transparent.
+- Select between several different viewing algorithms.
+- Set the number and position of viewpoints ("eyes") for the viewing token.
 - Adjust the vision height for tokens and prone tokens.
 - Debugging mode to visualize the line-of-sight and range.
-- Optionally have live, dead, or prone tokens block line-of-sight.
 - Per-obstacle opacity controls for walls, tokens, and regions, so an obstacle can be partially visible while still blocking line-of-sight. A built-in "Block Sight" region behavior makes any region intercept LOS; its opacity slider sets how strongly it blocks.
-- Terrain Mapper terrains (plateaus, ramps, steps, and hills) now carry the same "Block Sight" behavior, so they can block sight independently of walls.
 
-As of v0.6.0, all features related to cover calculations have been split off to a new module, [Alternative Token Cover](https://github.com/caewok/fvtt-token-cover).
+This module intends to be system-neutral. I will endeavor to make this module compatible with other systems upon request (and to the extent possible).
 
 # Installation
 Add this [Manifest URL](https://github.com/caewok/fvtt-token-visibility/releases/latest/download/module.json) in Foundry to install.
@@ -30,10 +28,29 @@ Add this [Manifest URL](https://github.com/caewok/fvtt-token-visibility/releases
 # Dependencies
 - [libWrapper](https://github.com/ruipin/fvtt-lib-wrapper)
 
+## Recent feature additions
+
+The v14 version represents a large re-write to improve the underlying geometry handling and to handle FoundryVTT v14's regions and levels.
+
+### Wall Height replacement
+
+Wall Height is marked as deprecated by the module creator. If Wall Height is not present, this module will add similar features to allow selection of a given wall height and token height.
+
+### Region behavior: Block Sight
+
+Regions will block sight of a token if the Block Sight behavior is enabled. If Terrain Mapper is present, its terrain shapes will be used where applicable, including modeling 3d steps, ramps, and hills.
+
+### Opacity/transparency
+
+You can now define an opacity level  for a given wall, token, or region block sight behavior. Zero is fully transparent, one is fully opaque. Semi-opaque objects partially block sight, and multiple objects result in a higher level of opacity, and therefore lower percentage sight.
+
+Defining partially opaque objects can be used to estimate sight through things like ghosts, prison bars, etc.
+
 # Recommended module additions
-- [Wall Height](https://github.com/theripper93/wall-height). Not only does Wall Height provide the ability to set elevation for wall tops and bottoms, it also gives tokens height based on their size. The Geometric and WebGL2 algorithms take full advantage of token height.
-- [Terrain Mapper](https://github.com/theripper93/terrainmapper). Terrains such as plateaus, ramps, steps, and hills can now be marked to block sight, including semi-transparent blocking via opacity.
+- [Alternative Token Cover](https://github.com/caewok/fvtt-token-cover). Uses the same underlying line-of-sight algorithms as this module to estimate cover for tokens.
+- [Terrain Mapper](https://github.com/caewok/fvtt-terrain-mapper). Terrains such as plateaus, ramps, steps, and hills can be marked to block sight, including semi-transparent blocking via opacity.
 - [Token Lean](https://github.com/WesBelmont/token-lean). Useful when you want players to be able to "peer" over limited-height walls.
+- [Wall Height](https://github.com/theripper93/wall-height). Wall Height provides the ability to set elevation for wall tops and bottoms, and gives tokens height based on their size. As of FoundryVTT v14, Wall Height is deprecated, and this module will provide basic Wall Height features if Wall Height is not present.
 
 # Token Height
 Token height, for purposes of measuring vision, can be changed using the [Wall Height](https://github.com/theripper93/wall-height) module. Token height is otherwise set based on scale of the token—namely,the number of grid squares it occupies.
@@ -78,6 +95,9 @@ The WebGL2 renderer has been rewritten for more reliable handling of placeable g
 When enabled, these will visualize the range and line-of-sight algorithms on the canvas. Range is indicated by dots on the target tokens, red for out-of-range and green for in-range. A popout window displays a 3d version, with perspective, of the target for the given algorithm.
 
 ## Light Monitor
+
+> Note: This setting is currently disabled and forced off in the UI while it is being fixed.
+
 A new feature, still experimental, that identifies tokens that are in full darkness or dim light. (Currently disabled for GM users while it is being fixed.) "Per Token" considers each token's position with respect to lights in the scene. "Viewpoint" considers each token with respect to the controlled viewing token. For "Viewpoint," only the viewable faces are considered, whereas "Per Token" considers all the token faces.
 
 Currently uses the Face Points Lattice algorithm to associate lighting with each face. `CONFIG.tokenvisibility.lightMeter.dimCutoff` and `CONFIG.tokenvisibility.lightMeter.brightCutoff` control the percentage of points required to be "lit" to be considered within dim or bright light, respectively.
