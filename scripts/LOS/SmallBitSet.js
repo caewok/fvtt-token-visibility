@@ -94,7 +94,7 @@ export class SmallBitSet {
   }
 
   fillToIndex(idx) {
-    this.word = (1 << idx) - 1;
+    this.word = (1 << (idx + 1)) - 1;
     return this;
   }
 
