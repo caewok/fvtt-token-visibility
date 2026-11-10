@@ -90,7 +90,7 @@ export class TokenLightMeter {
       const ot = buildOcclusionTester(this.DEFAULT_BLOCKING_CONFIG);
       ot.config.senseType = "light";
 
-      this.#calc = buildLOSCalculator({ occlusionTEster: ot, ...this.DEFAULT_CALCULATOR_CONFIG });
+      this.#calc = buildLOSCalculator({ occlusionTester: ot, ...this.DEFAULT_CALCULATOR_CONFIG });
 
       // TODO: Change token shape to spherical for the calculation?
       // Or find a way to make this work with all shapes?
@@ -154,7 +154,7 @@ export class TokenLightMeter {
    */
   updateLights(lights) {
 
-    lights ??= canvas.effects.lightSources
+    lights ??= canvas.effects?.lightSources ?? [];
     lights = lights.filter(l => !(l instanceof foundry.canvas.sources.GlobalLightSource));
     const calc = this.constructor.calculator;
     calc.initializeView({ target: this.token });
