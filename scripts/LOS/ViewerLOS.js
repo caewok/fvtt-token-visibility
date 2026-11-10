@@ -204,7 +204,7 @@ export class ViewerLOS {
     const pts = Viewpoint.constructTokenPoints(this.viewerShape, dir, {
       pointKey: this.config.viewpointIndex,
       insets,
-      facingSide: this.#facingSide(),
+      facingSide,
     });
     this.#currentFacingSide = facingSide;
 
@@ -622,6 +622,7 @@ class MultiViewFrustum {
       frustum = this.frustums.get(key) ?? new Frustum();
       frustum = Frustum.fromAABB(targetAABB, { frustum, viewpoint, infiniteDistance });
     }
+    if ( !frustum ) return this;
     this.frustums.set(key, frustum);
     this.setAABB();
     return this;
@@ -645,6 +646,7 @@ class MultiViewFrustum {
         opts.frustum = new Frustum();
       }
       Frustum.fromAABB(aabb, opts);
+      this.frustums.set(key, opts.frustum);
     }
     this.setAABB();
   }
