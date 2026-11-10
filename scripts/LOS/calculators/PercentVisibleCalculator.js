@@ -269,8 +269,10 @@ export class PercentVisibleCalculatorAbstract {
     camera.targetPosition = this.targetLocation;
     camera.setFrustumForAABB3d(this.targetShape.aabb);
 
-    if ( !this.occlusionTester.frustum ) this.occlusionTester.frustum ??= new Frustum();
-    camera.toCanvasFrustum(this.occlusionTester.frustum);
+    if ( !this.occlusionTester.frustum ) {
+      this.occlusionTester.frustum ??= new Frustum();
+      camera.toCanvasFrustum(this.occlusionTester.frustum);
+    }
     this.occlusionTester.update();
   }
 
