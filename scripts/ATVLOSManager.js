@@ -51,7 +51,7 @@ export class ATVLOSManager extends LOSManager {
   /** @type {PIXI.Graphics} */
   static #DEBUG_RANGE;
 
-  static get DEBUG_RANGE() { return canvas.tokens.children.find(c => c[`${MODULE_ID}_rangeDebug`]); }
+  static get DEBUG_RANGE() { return canvas.tokens?.children?.find(c => c[`${MODULE_ID}_rangeDebug`]); }
 
   static initializeDebugGraphics() {
     this.#DEBUG_RANGE = new PIXI.Graphics();
