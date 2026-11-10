@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 PIXI,
 */
@@ -7,7 +6,7 @@ PIXI,
 "use strict";
 
 
-// webGL2
+// WebGL2
 import * as twgl from "./twgl.js";
 import { WebGL2 } from "./WebGL2.js";
 
@@ -76,7 +75,8 @@ class BufferChannel {
   /**
    * @param {object} cfg
    * @param {WebGL2RenderingContext} cfg.gl                 WebGL2 context
-   * @param {string|string[]} cfg.attribNames               One attribute, or several that slice the same per-instance data
+   * @param {string|string[]} cfg.attribNames               One attribute, or several that slice
+   *                                                        the same per-instance data
    * @param {number} cfg.numComponents                      Tracking buffer for this attribute's data
    * @param {function} cfg.extract                          How to extract data from a tracked object
    * @param {TypedArrayConstructor} [cfg.type=Float32Array] Test whether a tracked object has changed
@@ -165,7 +165,7 @@ class BufferChannel {
     }
     const stored = this.tracker.viewFacetById(id);
     for ( let i = 0, n = stored.length; i < n; i += 1 ) {
-      // fround: the tracker stores float32, so compare at float32 precision or every opacity looks changed.
+      // The tracker stores float32, so compare at float32 precision (fround) or every opacity looks changed.
       if ( stored[i] === Math.fround(newValues[i]) ) continue;
       this.tracker.updateFacet(id, { newValues });
       return;
@@ -208,12 +208,12 @@ class BufferChannel {
 
 export class Drawable {
 
-  static SHADER_FLAGS = {
+  static SHADER_FLAGS = { /* eslint-disable key-spacing */
     NONE:         0,
     DEBUG:        1 << 0, // 1
-    TEXTURED:     1 << 1, // 4
-    CONSTRAINED:  1 << 2, // 8
-  };
+    TEXTURED:     1 << 1, // 2
+    CONSTRAINED:  1 << 2, // 4
+  }; /* eslint-enable key-spacing */
 
   /** @type {string} */
   static VERTEX_DRAW_TYPE = "STATIC_DRAW";
@@ -305,14 +305,20 @@ export class Drawable {
 
     // Camera used in both debug and regular views.
     const cameraBlockIndex = gl.getUniformBlockIndex(this.programInfo.program, "Camera");
-    if ( cameraBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.programInfo.program, cameraBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+    if ( cameraBlockIndex !== gl.INVALID_INDEX ) {
+      gl.uniformBlockBinding(this.programInfo.program, cameraBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+    }
 
     const cameraDebugBlockIndex = gl.getUniformBlockIndex(this.debugProgramInfo.program, "Camera");
-    if ( cameraDebugBlockIndex !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.debugProgramInfo.program, cameraDebugBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+    if ( cameraDebugBlockIndex !== gl.INVALID_INDEX ) {
+      gl.uniformBlockBinding(this.debugProgramInfo.program, cameraDebugBlockIndex, this.constructor.CAMERA_BIND_POINT); // 0
+    }
 
     // Material only used to color the shapes in the debug view.
     const matBlockIdx = gl.getUniformBlockIndex(this.debugProgramInfo.program, "Material");
-    if ( matBlockIdx !== gl.INVALID_INDEX ) gl.uniformBlockBinding(this.debugProgramInfo.program, matBlockIdx, this.constructor.MATERIAL_BIND_POINT); // 1
+    if ( matBlockIdx !== gl.INVALID_INDEX ) {
+      gl.uniformBlockBinding(this.debugProgramInfo.program, matBlockIdx, this.constructor.MATERIAL_BIND_POINT); // 1
+    }
   }
 
   // ----- NOTE: Attributes ----- //
@@ -413,6 +419,7 @@ export class Drawable {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.attributeBufferInfo.indices);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     this.voVersion = datum.voVersion;
+    this.vo = datum.vo;
   }
 
   // ----- NOTE: Rendering ----- //
@@ -478,7 +485,7 @@ export class Drawable {
   render(debug = false) {
     if ( !this.renderSet.size ) return;
 
-    // console.debug(`Drawable ${this.constructor.name}|Render. Debug? ${debug}`);
+    // Debug: console.debug(`Drawable ${this.constructor.name}|Render. Debug? ${debug}`);
 
     this.prerender();
     this.debugView = debug;
@@ -487,16 +494,16 @@ export class Drawable {
     const webGL2 = this.webGL2;
     const programInfo = this.program;
     webGL2.useProgram(programInfo);
+    if ( debug ) webGL2.validateProgramState();
     webGL2.setCulling(true);
     webGL2.setCullFace("BACK");
 
     gl.bindVertexArray(this.VAI.vertexArrayObject);
 
-    // twgl.setBuffersAndAttributes(gl, programInfo, this.attributeBufferInfo);
-    this._draw()
+    this._draw();
 
     gl.bindVertexArray(null);
-    // gl.finish(); // For debugging.
+    // For debugging: gl.finish();
   }
 
   _draw() {
@@ -593,7 +600,7 @@ export class TexturedDrawable extends Drawable {
     // Tell the normal shader program to map the uTextures array to texture units 0–15.
     const uTexturesLoc = gl.getUniformLocation(this.programInfo.program, "uTextures[0]");
     if ( uTexturesLoc !== null ) {
-      gl.useProgram(this.programInfo.program);
+      this.webGL2.useProgram(this.programInfo.program);
       gl.uniform1iv(uTexturesLoc, textureUnits);
     }
 
@@ -606,12 +613,9 @@ export class TexturedDrawable extends Drawable {
     // Same for debug program.
     const uTexturesDebugLoc = gl.getUniformLocation(this.debugProgramInfo.program, "uTextures[0]");
     if ( uTexturesDebugLoc !== null ) {
-      gl.useProgram(this.debugProgramInfo.program);
+      this.webGL2.useProgram(this.debugProgramInfo.program);
       gl.uniform1iv(uTexturesDebugLoc, textureUnits);
     }
-
-    // Reset program state.
-    this.webGL2.useProgram(null);
   }
 
   // ----- NOTE: Texture batching ------ //
@@ -629,7 +633,7 @@ export class TexturedDrawable extends Drawable {
     batchIndices: [[]], /** @type {url[15][]} */
     sourceMap: new Map(), /** @type {Map<url, WebGLTexture>} */
     indexMap: new Map(), /** @type {Map<url, { batch: number, index: number}>} */
-  }
+  };
 
   /**
    * Add a texture to the tracking set.
@@ -666,7 +670,8 @@ export class TexturedDrawable extends Drawable {
     // Fallback to async URL loading.
     else textureOpts.src = src;
 
-    // Could pass a third callback argument to createTexture to rerender if async loading, but challenging to implement here.
+    // Could pass a third callback argument to createTexture to rerender if async loading,
+    // but challenging to implement here.
     this.textureData.sourceMap.set(src, twgl.createTexture(this.gl, textureOpts));
   }
 
@@ -706,7 +711,7 @@ export class ConstrainedDrawable extends Drawable {
 
 
   /** @type {number} */
-  static NUM_CONSTRAINING_WALLS = 4; // Should be 6 or less to fit with maximum number of attributes.
+  static NUM_CONSTRAINING_WALLS = 4; // Match this value to the shader.
 
   /**
    * Locate walls that intersect the token border.
@@ -726,9 +731,10 @@ export class ConstrainedDrawable extends Drawable {
 
     const wallMgr = CONFIG[GEOMETRY_LIB_ID].geometryManager.walls;
     const out = [];
-    canvas.scene.walls.forEach(wallD => {
-      const wallGeom = wallMgr.geomForDocument(wallD);
-      if ( !wallGeom.couldBlock({ levelId, senseType: "move" }) ) return;
+
+    const potentialWallGeoms = wallMgr.quadtree.getObjects(tokenAABB);
+    potentialWallGeoms.forEach(wallGeom => {
+      if ( !wallGeom.couldBlock({ levelId, senseType: "move" }) ) return; // Always "move" for testing physical token constraint.
 
       // For each wall, we ultimately only need the plane from the wall.
       for ( const shape of wallGeom.shapes ) {
@@ -753,16 +759,14 @@ export class ConstrainedDrawable extends Drawable {
     this.addChannel("aTokenCenter", 2, d => {
       const ctr = d.primitive.center;
       return [ctr.x, ctr.y];
-    })
-    this.addChannel("aNumClipPlanes", 1, d => [this._numClipPlanes(d.primitive, d.wallSegments)], { type: Int32Array });
+    });
+    this.addChannel("aNumClipPlanes", 1, d => [this._numClipPlanes(d.primitive.aabb, d.wallSegments)], { type: Int32Array });
 
     const clipPlanes = Array.from({ length: this.constructor.NUM_CONSTRAINING_WALLS }, (_, i) => `aClipPlanes_${i}`);
-    this.addChannel(clipPlanes, 4, d => this._clipPlanes(d.primitive, d.wallSegments))
+    this.addChannel(clipPlanes, 4, d => this._clipPlanes(d.primitive.aabb, d.wallSegments));
   }
 
   levelId = "";
-
-  senseType = "sight";
 
   _numClipPlanes(tokenAABB, wallSegments) {
     wallSegments ??= this.constructor.intersectingWallSegments(tokenAABB, this.levelId);

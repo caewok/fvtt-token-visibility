@@ -19,16 +19,6 @@ export class Camera {
 
   static CAMERA_BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * (16 + 16); // Total size of CameraStruct
 
-  /** @type {object} */
-  static CAMERA_LAYOUT = {
-    label: "Camera",
-    entries: [{
-      binding: 0, // Camera/Frame uniforms
-      visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-      buffer: {},
-    }]
-  };
-
   // ----- NOTE: Private properties ----- //
 
   /** @type {Point3d(2)|vec3} */
@@ -81,9 +71,9 @@ export class Camera {
   #perspectiveParameters = {
     fov: Math.toRadians(90),
     aspect: 1,
-    zNear: canvas.grid.size || 1,
+    zNear: canvas.grid?.size || 1,
     zFar: Infinity,
-  }
+  };
 
   #orthogonalParameters = {
     left: -100,
@@ -105,8 +95,6 @@ export class Camera {
 
   #perspectiveType = "perspective";
 
-  #glType = "webGPU";
-
   #internalParams = this.#perspectiveParameters;
 
   // ----- NOTE: Caching / dirty ----- //
@@ -124,7 +112,7 @@ export class Camera {
 
   #dirtyInverse = true;
 
-  get dirtyPerspective() { return this.#dirtyPerspective }
+  get dirtyPerspective() { return this.#dirtyPerspective; }
 
   set dirtyPerspective(value) {
     this.#dirtyPerspective ||= value;
@@ -142,7 +130,7 @@ export class Camera {
     this.#dirtyInverse ||= value;
   }
 
-  get dirtyPerspectiveTranpose() { return this.#dirtyPerspectiveTranspose; }
+  get dirtyPerspectiveTranspose() { return this.#dirtyPerspectiveTranspose; }
 
   get dirtyLookAtTranspose() { return this.#dirtyLookAtTranspose; }
 
@@ -159,8 +147,6 @@ export class Camera {
 
   // ----- NOTE: Camera Property Getters / Setters ----- //
 
-  get glType() { return this.#glType; }
-
   get UP() { return this.#UP; }
 
   set UP(value) {
@@ -176,7 +162,7 @@ export class Camera {
     this.#perspectiveType = value;
 
     // Update the relevant internal parameters.
-    const fnName = `${this.#perspectiveType}${this.#glType === "webGPU" ? "ZO" : ""}`;
+    const fnName = `${this.#perspectiveType}`;
     this.#perspectiveFn = MatrixFloat32[fnName];
     this.#internalParams = value === "orthogonal" ? this.#orthogonalParameters : this.#perspectiveParameters;
     this.dirtyPerspective = true;
@@ -230,8 +216,8 @@ export class Camera {
     this.#mirrorM.setIndex(0, 0, value.x);
     this.#mirrorM.setIndex(1, 1, value.y);
     this.#mirrorM.setIndex(2, 2, value.z);
-    this.dirtyPerspective = true
-  };
+    this.dirtyPerspective = true;
+  }
 
   /** @type {MatrixFloat32<4x4>} */
   get perspectiveMatrix() {
@@ -315,13 +301,11 @@ export class Camera {
 
   /**
    * @param {object} [opts]
-   * @param {Point3d} [opts.glType="webGPU"]                Whether the NDC Z range is [-1, 1] ("webGL") or [0, 1] ("webGPU").
    * @param {string} [opts.perspectiveType="perspective"]   Type of perspective: "orthogonal" or "perspective"
    * @param {Point3d} [opts.up]                             Up vector for the camera
    * @param {Point3d} [opts.mirrorMDiag]                    Diagonal values of the mirror matrix
    */
   constructor({
-    glType = "webGPU",
     perspectiveType = "perspective",
     up = this.constructor.UP,
     mirrorMDiag = this.constructor.MIRRORM_DIAG } = {}) {
@@ -357,7 +341,6 @@ export class Camera {
     this.#mirrorM.setIndex(1, 1, mirrorMDiag.y);
     this.#mirrorM.setIndex(2, 2, mirrorMDiag.z);
 
-    this.#glType = glType;
     this.perspectiveType = perspectiveType;
   }
 
@@ -470,7 +453,7 @@ export class Camera {
       right: xMax,
       top: yMax,
       bottom: yMin,
-      // near: zMin, // Always set to 1.
+      // Near is always set to 1. near: zMin,
       far: zMax,
       // Near would be zMinMax.min but we also want obstacles in view, so it should be left to something small, like 1.
     };
@@ -506,7 +489,7 @@ export class Camera {
     const Minv = this.inverseModelMatrix;
 
     // Define the 4 corners of the far clipping plane in Normalized Device Coordinates (z = 1).
-    const minCoord = this.glType === "webGPU" ? 0 : -1;
+    const minCoord = -1;
     const corners = {
       // NDC space
       TL: Point3d.tmp.set(minCoord, minCoord, 1),
@@ -526,7 +509,7 @@ export class Camera {
   invertFrustum() {
     const M = this.lookAtMatrix.multiply4x4(this.perspectiveMatrix);
     const Minv = M.invert();
-    const minCoord = this.glType === "webGPU" ? 0 : -1;
+    const minCoord = -1;
 
     const front = [
       Point3d.tmp.set(1, minCoord, 0),
@@ -541,10 +524,10 @@ export class Camera {
       Point3d.tmp.set(1, 1, -1)
     ];
 
-    // back TL, TR, front TR, TL
+    // Back TL, TR, front TR, TL
     const top = [back[0], back[1], front[1], front[0]];
 
-    // front BR, BL, back BL, BR
+    // Front BR, BL, back BL, BR
     const bottom = [front[2], front[3], back[3], back[2]];
 
     // If this were used for something other than debug, would be more efficient to

@@ -1,8 +1,9 @@
 /* globals
-game,
-Hooks
 */
 "use strict";
+
+import { ENUMS as LOS_ENUMS, LOS_SETTINGS } from "./LOS/const.js";
+export { pointIndicesLabels } from "./LOS/settings.js";
 
 export const MODULE_ID = "tokenvisibility";
 export const EPSILON = 1e-08;
@@ -21,7 +22,7 @@ export const FLAGS = {
 export const FALLBACK_ICON = "icons/svg/hazard.svg";
 
 /**
- * Checks for libGeometery.
+ * Options provided to the libGeometry library upon load.
  * @type {object}
  */
 export const GEOMETRY_LIB_OPTS = {
@@ -51,3 +52,38 @@ export const TEMPLATES = {
   TOKEN_CONFIG: `modules/${MODULE_ID}/templates/token-config.html`,
   WALL_CONFIG: `modules/${MODULE_ID}/templates/wall-config.html`,
 };
+
+export const ENUMS = {
+  LIGHT_ALGORITHM_TYPES: {
+    NONE: "lm-algorithm-none",
+    TOKENS: "lm-algorithm-tokens",
+    VIEWPOINT: "lm-algorithm-viewpoint",
+  },
+  ...LOS_ENUMS
+}
+
+export const SETTINGS = foundry.utils.mergeObject(foundry.utils.deepClone(LOS_SETTINGS), {
+  SUBMENU: "submenu",
+  RANGE: {
+    ALGORITHM: "range-algorithm",
+    POINTS3D: "range-points-3d",
+    DISTANCE3D: "range-distance-3d",
+  },
+
+  LOS: {
+    TARGET: {
+      PERCENT: "los-percent",
+    },
+  },
+
+  LIGHT_MONITOR: {
+    ALGORITHM: "lm-algorithm",
+  },
+
+  CHANGELOG: "changelog",
+  DEBUG: {
+    RANGE: "debug-range",
+  },
+});
+
+

@@ -15,12 +15,12 @@ PATCHES.BASIC = {};
  * Refresh vision when a token goes prone.
  */
 function refreshVisionOnActiveEffect(activeEffect) {
+  if ( !canvas?.ready ) return;
   const proneStatusId = CONFIG[GEOMETRY_LIB_ID].CONFIG.proneStatusId;
   if ( !proneStatusId ) return;
-  const isProne = activeEffect?.statuses.some(status => status === proneStatusId);
+  const isProne = activeEffect?.statuses.has(proneStatusId);
   if ( !isProne ) return;
-
-  canvas.effects.visibility.refresh();
+  canvas.perception.update({ refreshVision: true })
 }
 
 

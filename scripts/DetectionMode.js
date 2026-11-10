@@ -10,8 +10,6 @@ import { MODULE_ID, TRACKER_IDS } from "./const.js";
 // Patches for the DetectionMode class
 export const PATCHES = {};
 PATCHES.BASIC = {};
-// PATCHES.LEVELS = {};
-// PATCHES.NO_LEVELS = {};
 
 // ----- NOTE: Wraps ----- //
 
@@ -41,7 +39,9 @@ PATCHES.BASIC.WRAPS = { testVisibility };
  * Mixed wrap DetectionMode.prototype._testLOS
  * Handle different types of LOS visibility tests.
  */
-function _testLOS(wrapped, visionSource, mode, target, test) {
+function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = false } = {}) {
+  // TODO: Implement the testLighting toggle.
+
   // Only apply this test to tokens
   if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
 
@@ -59,14 +59,16 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
 //   console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
 
   // Throttle los test based on viewer, target, and detection mode.
+  /*
   CONFIG[MODULE_ID].numTestLOS ||= 0;
   CONFIG[MODULE_ID].numTestLOSUncached ||= 0;
   CONFIG[MODULE_ID].numTestLOS += 1;
+  */
 
   hasLOS = atv.cachedLOSToToken(target, this.id);
   if ( typeof hasLOS === "undefined" ) {
     // console.debug(`\tUncached ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`);
-    CONFIG[MODULE_ID].numTestLOSUncached += 1;
+    // CONFIG[MODULE_ID].numTestLOSUncached += 1;
 
     // Configure the line-of-sight calculator.
     atv.setConfigForDetectionMode(this);
@@ -74,12 +76,18 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
     // Turn off debug. This ensures that the print-out is only for the viewed/targeted pair, not all.
     const oldDebug = CONFIG[MODULE_ID].debug;
     CONFIG[MODULE_ID].debug = false;
-    hasLOS = atv.hasLOSToToken(target);
-    CONFIG[MODULE_ID].debug = oldDebug;
 
-    // Reset the line-of-sight calculator.
-    atv.resetConfig();
-    atv.cacheLOSToToken(target, this.id, hasLOS);
+    try {
+      hasLOS = atv.hasLOSToToken(target);
+    } catch (err) {
+      console.error(err);
+      hasLOS = wrapped(visionSource, mode, target, test);
+    } finally {
+      // Reset the line-of-sight calculator.
+      CONFIG[MODULE_ID].debug = oldDebug;
+      atv.resetConfig();
+      atv.cacheLOSToToken(target, this.id, hasLOS);
+    }
   }
   test.los.set(visionSource, hasLOS);
   return hasLOS;

@@ -3,14 +3,8 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
-import { Settings } from "../../settings.js";
-
 // Calculator
 import { PercentVisiblePointsResultAbstract, PercentVisibleCalculatorPointsAbstract } from "./PointsCalculator.js";
-
-// LOS folder
-import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
 
 // Geometry
 import { Point3d } from "../../geometry/3d/Point3d.js";
@@ -55,24 +49,5 @@ export class PercentVisibleCalculatorPerPixel extends PercentVisibleCalculatorPo
     }
   }
 
-  /**
-   * Test visibility by constructing a plane perpendicular
-   * to the viewpoint --> center line at center.
-   * @type {Plane}
-   */
-  get viewplane() {
-    const center = this.targetShape.center;
-    const dirHorizontal = this.viewpoint.subtract(center);
-    const dirB = Point3d.tmp.set(-dirHorizontal.y, dirHorizontal.x, center.z);
-    const perpB = center.add(dirB);
-    const dirC = dirHorizontal.cross(dirB);
-    const perpC = center.add(dirC)
-    return Plane.fromPoints(center, perpB, perpC)
-  }
-
   _drawDebugPoints() { return null; } // Don't draw points on canvas; too many.
-}
-
-export class DebugVisibilityViewerPerPixel extends DebugVisibilityViewerArea3dPIXI {
-  algorithm = Settings.KEYS.LOS.TARGET.TYPES.PER_PIXEL;
 }

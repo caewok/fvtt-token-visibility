@@ -8,7 +8,7 @@ PIXI,
 */
 "use strict";
 
-import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES, FLAGS } from "./const.js";
+import { MODULE_ID, FA_ICONS, REGION_BEHAVIORS, TEMPLATES, FLAGS, ENUMS } from "./const.js";
 import { GEOMETRY_LIB_ID } from "./geometry/const.js";
 import { LOS_CONFIG } from "./LOS/config.js";
 import { TEMPLATES as LOS_TEMPLATES } from "./LOS/const.js";
@@ -21,6 +21,7 @@ import "./geometry/registration.js";
 import { initializePatching, PATCHER } from "./patching.js";
 import { Settings } from "./settings.js";
 import { LOSThrottle } from "./LOSThrottle.js";
+import { ATVLOSManager } from "./ATVLOSManager.js";
 
 // Trackers
 import { LightStatusTracker } from "./LightStatusTracker.js";
@@ -40,20 +41,27 @@ import {
   getCurrentCalculatorClass,
 } from "./LOSCalculator.js";
 
-import { PercentVisibleCalculatorPoints, DebugVisibilityViewerPoints } from "./LOS/calculators/PointsCalculator.js";
-import { PercentVisibleCalculatorGeometric, DebugVisibilityViewerGeometric } from "./LOS/calculators/GeometricCalculator.js";
-import { PercentVisibleCalculatorPerPixel, DebugVisibilityViewerPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
-import { PercentVisibleCalculatorWebGL2, DebugVisibilityViewerWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
+import { PercentVisibleCalculatorPoints } from "./LOS/calculators/PointsCalculator.js";
+import { PercentVisibleCalculatorGeometric } from "./LOS/calculators/GeometricCalculator.js";
+import { PercentVisibleCalculatorPerPixel } from "./LOS/calculators/PerPixelCalculator.js";
+import { PercentVisibleCalculatorWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
+import {
+  DebugVisibilityViewerPoints,
+  DebugVisibilityViewerGeometric,
+  DebugVisibilityViewerPerPixel,
+  DebugVisibilityViewerWebGL2,
+} from "./LOS/DebugVisibilityViewer.js";
 import { TokenLightMeter } from "./TokenLightMeter.js";
+import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
-import * as twgl from "./LOS/WebGL2/twgl-full.js";
+import * as twgl from "./LOS/WebGL2/twgl.js";
 import { SmallBitSet } from "./LOS/SmallBitSet.js";
 import { FastBitSet } from "./LOS/FastBitSet/FastBitSet.js";
 
 
-
 // Other self-executing hooks
 import "./changelog.js";
+import "./SettingsConfig.js"; // Issue and Documentation buttons
 
 
 Hooks.once("init", function() {
@@ -63,24 +71,65 @@ Hooks.once("init", function() {
   });
   CONFIG.RegionBehavior.typeIcons[`${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}`] = FA_ICONS.BLOCK_SIGHT;
 
+  initializePatching();
+  initializeConfig();
+  initializeAPI();
 
-  // Load bitmap font
-  // See https://www.adammarcwilliams.co.uk/creating-bitmap-text-pixi/
-  // https://pixijs.com/8.x/examples/text/bitmap-text
-  // PIXI.Assets.load('https://pixijs.com/assets/bitmap-font/desyrel.xml'); // Async.
+  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(() => log(`${MODULE_ID}|LOS Templates loaded.`));
+  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(() => log("Templates loaded."));
+});
 
-  PIXI.BitmapFont.from(`${MODULE_ID}_area3dPercentLabel`, {
-    fill: "#333333",
-    fontWeight: 'bold',
-  }, {
-    chars: [['0', '9'], ' .%']
+
+Hooks.once("setup", function() {
+  Settings.registerAll();
+
+  // Add status effects for dim and no light.
+  const dimLight = {
+    id: "dimLight",
+    _id: ("atvDimLight").padEnd(16, "0"),
+    name: "Dim Light",
+    img: "icons/sundries/lights/torch-brown-lit.webp",
+    reference: MODULE_ID,
+  };
+  const noLight = {
+    id: "noLight",
+    _id: ("atvNoLight").padEnd(16, "0"),
+    name: "No Light",
+    img: "icons/sundries/lights/torch-brown.webp",
+    reference: MODULE_ID,
+  };
+  CONFIG.statusEffects.push(dimLight, noLight);
+
+  // Opacity values for tokens, walls, regions for cover.
+  CONFIG[GEOMETRY_LIB_ID].CONFIG.opacity.register("sight", {
+    Token: tokenOpacity,
+    Region: regionOpacity,
+    Wall: wallOpacity,
   });
 
-  initializePatching();
+  ATVLOSManager.registerHooks();
+  LOSThrottle.registerHooks();
+});
 
-  // Set CONFIGS used by this module.
+Hooks.once("ready", function() {
+  Settings.migrate(); // Cannot be set until world is ready.
+  LightStatusTracker.loadLightIcons(); // Async.
+
+  // Disable lighting algorithm for now, until fixed.
+  if ( game.user.isGM ) Settings.set(Settings.KEYS.LIGHT_MONITOR.ALGORITHM, ENUMS.LIGHT_ALGORITHM_TYPES.NONE);
+
+  // Disable large target for now, until fixed.
+  if ( game.user.isGM ) Settings.set(Settings.KEYS.LOS.TARGET.LARGE, false);
+});
+
+// ----- NOTE: Config ----- //
+
+/**
+ * Initialize the CONFIG for this module, at CONFIG[MODULE_ID].
+ * Dynamic settings that may be changed by users or other modules or set by system type.
+ */
+function initializeConfig() {
   CONFIG[MODULE_ID] = {
-
     /**
      * Number of points to measure in one dimension for light type calculation.
      * Will be used for all 3 dimensions. E.g., 3 --> 3x3x3 in a cube, or 18 points total.
@@ -97,8 +146,6 @@ Hooks.once("init", function() {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webgl2: PercentVisibleCalculatorWebGL2,
-      // webgpu: PercentVisibleCalculatorWebGPU,
-      // "webgpu-async": PercentVisibleCalculatorWebGPUAsync,
       "per-pixel": PercentVisibleCalculatorPerPixel,
     },
 
@@ -110,8 +157,6 @@ Hooks.once("init", function() {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
       webgl2: DebugVisibilityViewerWebGL2,
-      // webgpu: DebugVisibilityViewerWebGPU,
-      // "webgpu-async": DebugVisibilityViewerWebGPUAsync,
       "per-pixel": DebugVisibilityViewerPerPixel,
     },
 
@@ -126,13 +171,6 @@ Hooks.once("init", function() {
      * @type {PercentVisibleCalculatorAbstract}
      */
     losCalculator: null,
-
-    /**
-     * Should the line-of-sight calculator use the viewer height (as calculated in Wall Height)
-     * for any TOP viewpoint?
-     * @type {boolean}
-     */
-    useViewerHeight: true,
 
     /**
      * Configurations that affect the light meter.
@@ -180,7 +218,16 @@ Hooks.once("init", function() {
        * If using PercentVisibleCalculatorPoints, what point configuration to use.
        * @type {ViewerLOS.POINT_INDICES} Bit union of POINT_INDICES.
        */
-      targetPointIndex: 1022, // Everything except CENTER (0)
+      targetPointIndex: SmallBitSet.fromIndices([
+        ViewerLOS.POINT_INDICES.CORNERS.FACING,
+        ViewerLOS.POINT_INDICES.CORNERS.MID,
+        ViewerLOS.POINT_INDICES.CORNERS.BACK,
+        ViewerLOS.POINT_INDICES.SIDES.FACING,
+        ViewerLOS.POINT_INDICES.SIDES.MID,
+        ViewerLOS.POINT_INDICES.SIDES.BACK,
+        ViewerLOS.POINT_INDICES.ELEVATION.BOTTOM,
+        ViewerLOS.POINT_INDICES.ELEVATION.MID,
+        ViewerLOS.POINT_INDICES.ELEVATION.TOP]).word, // Everything except CENTER (0)
     },
 
     /**
@@ -201,8 +248,15 @@ Hooks.once("init", function() {
 
     ...LOS_CONFIG,
   };
+}
 
+// ----- NOTE: API ----- //
 
+/**
+ * Initialize the API for this module. At game.modules.get(MODULE_ID).api.
+ * Provides access to certain classes and functions for debugging and other modules.
+ */
+function initializeAPI() {
   game.modules.get(MODULE_ID).api = {
     bench,
 
@@ -214,8 +268,6 @@ Hooks.once("init", function() {
       points: PercentVisibleCalculatorPoints,
       geometric: PercentVisibleCalculatorGeometric,
       webGL2: PercentVisibleCalculatorWebGL2,
-      // webGPU: PercentVisibleCalculatorWebGPU,
-      // webGPUAsync: PercentVisibleCalculatorWebGPUAsync,
       perPixel: PercentVisibleCalculatorPerPixel,
     },
 
@@ -231,8 +283,6 @@ Hooks.once("init", function() {
       points: DebugVisibilityViewerPoints,
       geometric: DebugVisibilityViewerGeometric,
       webGL2: DebugVisibilityViewerWebGL2,
-      // webGPU: DebugVisibilityViewerWebGPU,
-      // webGPUAsync: DebugVisibilityViewerWebGPUAsync,
       perPixel: DebugVisibilityViewerPerPixel,
     },
 
@@ -244,50 +294,7 @@ Hooks.once("init", function() {
     LightStatusTracker,
     twgl,
   };
-
-  foundry.applications.handlebars.loadTemplates(Object.values(LOS_TEMPLATES)).then(_value => console.debug(`${MODULE_ID}|LOS Templates loaded.`));
-  foundry.applications.handlebars.loadTemplates(Object.values(TEMPLATES)).then(_value => log("Templates loaded."));
-});
-
-
-Hooks.once("setup", function() {
-  Settings.registerAll();
-  // console.debug(`${MODULE_ID}|registered settings`);
-
-  // Add status effects for dim and no light.
-  const dimLight = {
-    id: "dimLight",
-    _id: ("atvDimLight").padEnd(16, "0"),
-    name: "Dim Light",
-    img: "icons/sundries/lights/torch-brown-lit.webp",
-    reference: MODULE_ID,
-  };
-  const noLight = {
-    id: "noLight",
-    _id: ("atvNoLight").padEnd(16, "0"),
-    name: "No Light",
-    img: "icons/sundries/lights/torch-brown.webp",
-    reference: MODULE_ID,
-  };
-  CONFIG.statusEffects.push(dimLight, noLight);
-
-  // Opacity values for tokens, walls, regions for cover.
-  CONFIG[GEOMETRY_LIB_ID].CONFIG.opacity.register("sight", {
-    Token: tokenOpacity,
-    Region: regionOpacity,
-    Wall: wallOpacity,
-  });
-
-  LOSThrottle.registerHooks();
-});
-
-Hooks.once("ready", function() {
-  // console.debug(`${MODULE_ID}|ready hook`);
-  Settings.migrate(); // Cannot be set until world is ready.
-  Settings.initializeDebugGraphics();
-  LightStatusTracker.loadLightIcons(); // Async.
-});
-
+}
 
 // ----- NOTE: Helper Functions ----- //
 
@@ -314,7 +321,7 @@ function wallOpacity(wallD) { return Number(fastFlag(wallD, FLAGS.OPACITY) ?? 1)
  */
 function regionOpacity(regionD) {
   for ( const b of regionD.behaviors ) {
-    if ( b.disabled || !b.type === `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}` ) continue;
+    if ( b.disabled || b.type !== `${MODULE_ID}.${REGION_BEHAVIORS.BLOCK_SIGHT}` ) continue;
     return Number(b.system.opacity ?? 1);
   }
   return 0;

@@ -11,7 +11,6 @@ import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
 import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
 import { PATCHES as PATCHES_Settings } from "./ModuleSettingsAbstract.js";
-import { PATCHES as PATCHES_SettingsConfig } from "./SettingsConfig.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_TileConfig } from "./LOS/TileConfig.js";
 import { PATCHES as PATCHES_LevelConfig } from "./LOS/LevelConfig.js";
@@ -25,7 +24,6 @@ const PATCHES = {
   "foundry.canvas.perception.DetectionMode": PATCHES_DetectionMode,
   "foundry.canvas.perception.DetectionModeDarkvision": PATCHES_DetectionModeBasicSight,
   "foundry.helpers.ClientSettings": PATCHES_Settings,
-  SettingsConfig: PATCHES_SettingsConfig,
   "foundry.canvas.placeables.Token": PATCHES_Token,
   "foundry.applications.sheets.TileConfig": PATCHES_TileConfig,
   "foundry.applications.sheets.LevelConfig": PATCHES_LevelConfig,

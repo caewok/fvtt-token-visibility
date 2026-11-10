@@ -2,8 +2,6 @@
 canvas,
 CONFIG,
 foundry,
-PIXI,
-Ray,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -17,29 +15,14 @@ import { GEOMETRY_LIB_ID } from "../geometry/const.js";
 import { GeometricPrimitive } from "../geometry/placeable_geometry/GeometricPrimitive.js";
 import { Frustum } from "../geometry/3d/Frustum.js";
 import { AABB3d } from "../geometry/3d/AABB3d.js";
-import { MatrixFloat32 } from "../geometry/Matrix.js";
 import { TokenGeometry } from "../geometry/placeable_geometry/TokenGeometry.js";
 
 // LOS folder
 import { tokensOverlap } from "./util.js";
-import { DocumentUpdateTracker, TokenUpdateTracker } from "./UpdateTracker.js";
 import { SmallBitSet } from "./SmallBitSet.js";
-import { PercentVisibleCalculatorWebGL2 } from "./calculators/WebGL2Calculator.js";
 
 // Viewpoint algorithms.
 import { Viewpoint } from "./Viewpoint.js";
-
-/** @type {Object<CONST.WALL_RESTRICTION_TYPES|DetectionMode.DETECTION_TYPES>} */
-const DM_SENSE_TYPES = {
-  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT]: "sight",
-  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND]: "sound",
-  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE]: "move",
-  [foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER]: "light",
-  "sight": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SIGHT,
-  "sound": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.SOUND,
-  "move": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.MOVE,
-  "light": foundry.canvas.perception.DetectionMode.DETECTION_TYPES.OTHER, // No "light" equivalent
-}
 
 /**
 
@@ -57,16 +40,12 @@ ViewerLOS defines the frustum for the occlusion tester.
 - Set frustum before calculating.
 - Frustum defined and stored in ViewerLOS
 Occlusion tester can share a global config object for the module.
-
-
-
 */
-
 
 /**
  * @typedef {object} ViewerLOSConfig  Configuration settings for this class. Also see the calc config.
- * @property {number} viewpointIndex    					    Points configuration for the viewer's viewpoints
- * @property {number} viewpointInset                  Offset each viewpoint from viewer border
+ * @property {number} viewpointIndex                  Points configuration for the viewer's viewpoints
+ * @property {ViewpointInsets} insets                 Offset each viewpoint from viewer border
  * @property {boolean} angle                          True if constrained by viewer vision angle
  * @property {number} threshold                       Percent needed to be seen for LOS
  */
@@ -80,18 +59,12 @@ export class ViewerLOS {
    */
   static POINT_INDICES = GeometricPrimitive.POINT_INDICES;
 
-  static POINT_OPTIONS = {}; // Filled in below.
-
   // Simply trim "los-algorithm-" from the setting.
   static VIEWPOINT_ALGORITHM_SETTINGS = {
     "los-algorithm-points": "points",
     "los-algorithm-geometric": "geometric",
     "los-algorithm-per-pixel": "per-pixel",
-    "los-algorithm-sample-pixel": "sample-pixel",
-    "los-algorithm-hybrid": "hybrid",
     "los-algorithm-webgl2": "webgl2",
-    "los-algorithm-webgpu": "webgpu",
-    "los-algorithm-webgpu-async": "webgpu-async",
   };
 
   /** @type {PercentVisibleCalculator} */
@@ -104,7 +77,7 @@ export class ViewerLOS {
   get occlusionTester() { return this.calculator.occlusionTester; }
 
   /**
-   * @param {Token} viewer      					The token whose LOS should be tested
+   * @param {Token} viewer                The token whose LOS should be tested
    */
   constructor(viewer, calculator) {
     this.#viewer = viewer;
@@ -116,7 +89,11 @@ export class ViewerLOS {
   config = {
     // Viewpoint configuration
     viewpointIndex: 1, // Center point only.
-    viewpointInset: 0, // Percentage inset
+    insets: {
+      sides: 0,
+      top: 0,
+      bottom: 0,
+    },
     angle: true, // If constrained by the viewer vision angle
     threshold: 0.75, // Percent used for LOS
   };
@@ -137,45 +114,26 @@ export class ViewerLOS {
 
   get viewer() { return this.#viewer; }
 
+  set viewer(value) {
+    if ( value === this.#viewer ) return;
+    this.#viewer = value;
+    this.#currentFacingSide = null;   // Index belongs to the previous viewer's shape.
+    this.#dirty = true;               // Viewpoints depend on the viewer.
+    this._percentVisible = undefined; // Drop the cached result.
+  }
+
   /** @type {GeometricPrimitive} */
   get viewerShape() {
     const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.viewer).full; // Don't need the constrained shape here.
     return geom.shapes[0];
   }
 
-  /** @type {number<radians>} */
-  get viewerRotation() { return Math.toRadians(this.viewer.document.rotation); }
-
   // ----- NOTE: Viewpoints ----- //
+
   /** @type {Viewpoint} */
   viewpoints = [];
 
-
-  /**
-   * Used to rotate viewpoints around the viewer center.
-   * @type {MatrixFloat32}
-   */
-  rotationMatrix = MatrixFloat32.identity(4, 4);
-
-  // ----- NOTE: Caching ----- //
-
-  /** @type {boolean} */
-  #dirty = true;
-
-  get dirty() {
-    this.#dirty ||= this.#currentViewpointInset !== this.config.viewpointInset
-                 || this.#currentViewpointIndex !== this.config.viewpointIndex
-                 || this.#currentViewerShape !== this.viewerShape
-                 || this._viewerDimsChanged();
-    return this.#dirty;
-  }
-
-  set dirty(value) { this.#dirty ||= value; }
-
   // Track key viewpoint parameters.
-
-  /** @type {number} */
-  #currentViewpointInset = null;
 
   /** @type {number} */
   #currentViewpointIndex = null;
@@ -193,12 +151,44 @@ export class ViewerLOS {
     return !this.#currentViewerDims.equals(dims);
   }
 
-  /**
-   * Update the viewpoints if needed.
-   */
-  _clean() {
-    this.initializeViewpoints();
-    this.#dirty = false;
+
+  /** @type {ViewpointInsets} Scratch object; valid until the next call. */
+  #insetScratch = { sides: 0, top: 0, bottom: 0 };
+
+  /** @type {ViewpointInsets} Insets used when the viewpoints were last built. */
+  #currentInsets = { sides: null, top: null, bottom: null };
+
+  // Tracking rotation for directional viewpoints.
+
+  /** @type {number|null} */
+  #currentFacingSide = null;
+
+  /** Viewpoint indices whose positions depend on the direction to the target. */
+  static #DIRECTION_MASK = SmallBitSet.fromIndices((() => {
+    const PI = GeometricPrimitive.POINT_INDICES;
+    return [PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK, PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK];
+  })());
+
+  #facingSide() {
+    using dir = this.targetShape.center.subtract(this.viewerShape.center);
+    return Viewpoint.findFacingSide(this.viewerShape.internalPoints, dir, this.#currentFacingSide);
+  }
+
+  #facingChanged() {
+    const usesDirection = SmallBitSet.fromNumber(this.config.viewpointIndex)
+      .intersects(this.constructor.#DIRECTION_MASK);
+    return usesDirection && this.#facingSide() !== this.#currentFacingSide;
+  }
+
+  get viewpointInsets() {
+    Object.assign(this.#insetScratch, this.config.insets);
+    return this.#insetScratch;
+  }
+
+  #insetsChanged() {
+    const now = this.viewpointInsets;
+    const was = this.#currentInsets;
+    return now.sides !== was.sides || now.top !== was.top || now.bottom !== was.bottom;
   }
 
   /**
@@ -209,31 +199,52 @@ export class ViewerLOS {
     this.targetLocation.copyFrom(this.targetShape.center);
     using dir = this.targetLocation.subtract(this.viewerCenter);
 
-    // Adjust top viewpoints by token height.
-    const viewerD = this.viewer.document;
-    const tokenHeightPercentage = CONFIG[MODULE_ID].useViewerHeight
-      ? viewerD.visionHeightZ / (viewerD.topZ - viewerD.bottomZ)
-        : 1;
-
-    const pts = this.constructor.constructTokenPoints(this.viewerShape, dir, {
+    const insets = this.viewpointInsets;
+    const facingSide = this.#facingSide();
+    const pts = Viewpoint.constructTokenPoints(this.viewerShape, dir, {
       pointKey: this.config.viewpointIndex,
-      insetPercentage: this.config.viewpointInset,
-      tokenHeightPercentage,
+      insets,
+      facingSide,
     });
+    this.#currentFacingSide = facingSide;
 
-    // Destroy existing viewpoints
+    // Construct the viewpoints: either modify existing or construct new.
+    const n = Math.min(this.viewpoints.length, pts.length);
     this.viewpoints.length = pts.length;
+    for ( let i = 0; i < n; i += 1 ) this.viewpoints[i].setFromPoint(pts[i]);
+    for ( let i = n, iMax = pts.length; i < iMax; i += 1 ) this.viewpoints[i] = new Viewpoint(this, pts[i]);
 
-    // Build new viewpoints.
-    pts.forEach((pt, idx) => this.viewpoints[idx] = new Viewpoint(this, pt));
-
-     // Cache the key viewpoint parameters so we know when to rebuild the viewpoints.
+    // Cache the key viewpoint parameters so we know when to rebuild the viewpoints.
     TokenGeometry.tokenDimensions(this.viewer.document, this.#currentViewerDims);
     this.#currentViewerShape = this.viewerShape;
-    this.#currentViewpointInset = this.config.viewpointInset;
     this.#currentViewpointIndex = this.config.viewpointIndex;
+    Object.assign(this.#currentInsets, insets);
 
     return true;
+  }
+
+  // ----- NOTE: Caching ----- //
+
+  /** @type {boolean} */
+  #dirty = true;
+
+  get dirty() {
+    this.#dirty ||= this.#insetsChanged()
+                 || this.#currentViewpointIndex !== this.config.viewpointIndex
+                 || this.#currentViewerShape !== this.viewerShape
+                 || this._viewerDimsChanged()
+                 || this.#facingChanged();
+    return this.#dirty;
+  }
+
+  set dirty(value) { this.#dirty ||= value; }
+
+  /**
+   * Update the viewpoints if needed.
+   */
+  _clean() {
+    this.initializeViewpoints();
+    this.#dirty = false;
   }
 
   // ----- NOTE: Target ---- //
@@ -250,14 +261,18 @@ export class ViewerLOS {
 
   get target() { return this.#target; }
 
-  set target(value) { this.#target = value; }
+  set target(value) {
+    if ( value === this.#target ) return;
+    this.#target = value;
+    this._percentVisible = undefined;
+  }
 
   /** @type {Point3d} */
   targetLocation = new Point3d();
 
   /** @type {PlaceableGeometry} */
   get targetGeometry() {
-    const type = this.calculator instanceof PercentVisibleCalculatorWebGL2 ? "full" : "calculated";
+    const type = this.calculator.constructor.targetGeometryType;
     return CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geomForPlaceable(this.target)[type];
   }
 
@@ -275,25 +290,31 @@ export class ViewerLOS {
     return this._percentVisible;
   }
 
+  /** @type {boolean} False if the last calculate() was short-circuited by simpleVisibilityTest. */
+  viewpointsCalculated = false;
+
   /**
-   * Test for whether target is within the vision angle of the viewpoint and no obstacles present.
-   * @param {Token} [target]
-   * @returns {1|0|01} 1.0 for visible; -1 if unknown
+   * Point the calculator, occlusion tester, viewpoints and frustum at the current viewer and target.
+   * Calculates nothing. Debug views call this directly when calculate() short-circuits.
    */
-  simpleVisibilityTest() {
-    const target = this.target;
-    const viewer = this.viewer;
+  prepare() {
+    const targetShape = this.targetShape;
+    this.viewerCenter.copyFrom(this.viewerShape.center);
+    this.targetLocation.copyFrom(targetShape.center);   // Every call, not only when dirty.
 
-    // To avoid obvious errors.
-    if ( viewer === target ) return 1;
+    this.occlusionTester.initialize({
+      subjectTokenD: this.target.document,
+      tokensToExclude: [this.viewer],
+      levelId: this.viewer.document.level,
+    });
 
-    // If directly overlapping.
-    if ( tokensOverlap(viewer, target) ) return 1;
+    if ( this.dirty ) this._clean();
+    this._setFrustum();
+    this.occlusionTester.frustum = this.frustum;
 
-    // Target is not within the limited angle vision of the viewer.
-    if ( viewer.vision && this.config.angle && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return 0;
-
-    return -1;
+    // The targetShape setter resets targetLocation, so set the location after it.
+    this.calculator.targetShape = targetShape;
+    this.calculator.targetLocation = this.targetLocation;
   }
 
   /**
@@ -303,59 +324,85 @@ export class ViewerLOS {
   calculate() {
     // Wipe the previous estimate.
     this.viewpoints.forEach(vp => vp.lastResult = undefined);
+    this.viewpointsCalculated = false;
 
-    // Lock in the current viewer and target location.
-    TokenGeometry.tokenCenter(this.viewer.document, this.viewerCenter);
-    TokenGeometry.tokenCenter(this.target.document, this.targetLocation);
-
-    // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
-    // console.debug(`ViewerLOS|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
-
-    this._percentVisible = 0;
-    const simpleTest = this.simpleVisibilityTest();
-    if ( ~simpleTest ) {
-      this._percentVisible = simpleTest;
-      // console.debug(`\nViewerLOS simple visibility|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+    // Can skip calculation if simple view test returns true/false.
+    const alwaysVisible = this.simpleVisibilityTest();
+    if ( alwaysVisible === true || alwaysVisible === false ) {
+      this._percentVisible = Number(alwaysVisible);
       return;
     }
 
-    if ( this.dirty ) this._clean();
-
-    // Set the rotation matrix for the viewer.
-    MatrixFloat32.rotationZ(this.viewerRotation, { outMatrix: this.rotationMatrix });
-
-    // Set up the calculator frustum.
-    this._setFrustum();
-    this.calculator.occlusionTester.frustum = this.frustum;
-
-    // Set the calculator target
-    this.calculator.targetShape = this.targetGeometry.shapes[0],
-    this.calculator.targetLocation = this.targetLocation;
-    this.occlusionTester.initialize({
-      subjectToken: this.target,
-      tokensToExclude: [this.viewer],
-      levelId: this.viewer.document.level,
-    });
+    if ( CONFIG[MODULE_ID].debug ) {
+      console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}
+        (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
+      console.debug(`ViewerLOS|target ${this.target.name} at ${this.targetLocation}
+        (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
+    }
 
     // Test each viewpoint until unobscured is 1.
+    this._percentVisible = 0;
+    this.prepare();
+    this.viewpointsCalculated = true;
     for ( const vp of this.viewpoints ) {
       if ( this._viewpointBlockedByViewer(vp.viewpoint) ) {
         vp.lastResult = vp.calculator._createResult();
         vp.lastResult.makeFullyNotVisible();
-        // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: vp ${vp.viewpoint} blocked`);
+        if ( CONFIG[MODULE_ID].debug ) console.debug(`\nViewerLOS|viewer ${this.viewer.name}
+          at ${this.viewerCenter}: vp ${vp.viewpoint} blocked`);
         continue;
       }
       const res = vp.calculate();
       this._percentVisible = Math.max(this._percentVisible, res.percentVisible);
       if ( this._percentVisible >= 1 ) {
-        // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+        if ( CONFIG[MODULE_ID].debug ) console.debug(`\nViewerLOS|viewer ${this.viewer.name} at
+          ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
         return;
       }
     }
     if ( CONFIG[MODULE_ID].useStereoBlending
       && this._percentVisible < this.config.threshold ) this._calculateStereo();
-    // if ( this._percentVisible.almostEqual(0) ) console.debug(`\nViewerLOS|viewer ${this.viewer.name}: target ${this.target.name} not visible.`);
-    // console.debug(`\nViewerLOS|viewer ${this.viewer.name} at ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+
+    if ( CONFIG[MODULE_ID].debug ) console.debug(`\nViewerLOS|viewer ${this.viewer.name} at
+      ${this.viewerCenter}: percentVisible: ${this._percentVisible}`);
+  }
+
+  /**
+   * Basic tests for visibility of target from viewer perspective.
+   * @returns {boolean|undefined} True if the viewer must see the target.
+   *                              False if viewer can never see the target.
+   *                              Otherwise undefined.
+   */
+  simpleVisibilityTest() {
+    const viewer = this.viewer;
+    const target = this.target;
+    if ( !viewer || !target ) {
+      console.warn(`${this.constructor.name}#simpleVisibilityTest called without viewer or target set.`, { viewer, target });
+      return true; // Returning undefined would likely result in a calculation without target or viewer.
+    }
+
+    // To avoid obvious errors.
+    if ( viewer === target ) return true;
+
+    // If the viewer and target are on different levels,
+    // the level of the target must be viewable from the level of the viewer.
+    const viewerLevelId = this.viewer.document.level;
+    const targetLevelId = this.target.document.level;
+    if ( viewerLevelId !== targetLevelId ) {
+      const viewerLevel = canvas.scene.levels.get(viewerLevelId);
+      if ( !viewerLevel.visibility.levels.has(targetLevelId) ) return false;
+    }
+
+    // If the target is not within the vision angle of the viewer, it is not visible.
+    if ( viewer.vision
+      && this.config.angle
+      && !this.constructor.targetWithinLimitedAngleVision(viewer.vision, target) ) return false;
+
+    // If directly overlapping, presumed visible.
+    if ( tokensOverlap(viewer, target) ) return true;
+
+    // Otherwise, calculation is required.
+    return undefined;
   }
 
   _setFrustum() {
@@ -364,15 +411,13 @@ export class ViewerLOS {
 
     // Remove all viewpoints from the frustum that are not in the current viewpoint list.
     const keys = new Set(this.viewpoints.map(vp => vp.viewpoint.key));
-    this.frustum.frustums.keys().forEach(key => {
+    for ( const key of [...this.frustum.frustums.keys()] ) {
       if ( !keys.has(key) ) this.frustum.frustums.delete(key);
-    });
+    }
 
     // Add in viewpoints. (Repeats will be ignored)
     this.viewpoints.forEach(vp => this.frustum.addViewpoint(vp.viewpoint));
-
-    // Add the target bounds.
-    this.frustum.targetAABB = this.targetGeometry.aabb;
+    this.frustum.setAABB();
   }
 
   /** @type {PercentVisibleResult} */
@@ -383,10 +428,10 @@ export class ViewerLOS {
    */
   _calculateStereo() {
     const numViewpoints = this.viewpoints.length;
-    this._stereoResult = this.viewpoints[0].lastResult
+    this._stereoResult = this.viewpoints[0].lastResult;
     for ( let i = 1; i < numViewpoints; i += 1 ) {
       const vp = this.viewpoints[i];
-      this._stereoResult = this._stereoResult.blendMaximize(vp.lastResult)
+      this._stereoResult = this._stereoResult.blendMaximize(vp.lastResult);
     }
     this._percentVisible = this._stereoResult.percentVisible;
   }
@@ -395,34 +440,26 @@ export class ViewerLOS {
    * Viewpoint blocked if it is further from the target than the center point.
    * In other words, if it traverses too much of the viewer shape.
    * Also blocked if outside the constrained token border.
-   * @param {Point3d} pt
+   * @param {Point3d|PIXI.Point} pt
    * @returns {boolean} True if blocked
    */
   _viewpointBlockedByViewer(pt) {
     // If the viewpoint is outside the constrained border, treat as blocked.
-    if ( this.constructor.testPointOutsideConstrainedBorder(pt, this.viewer, this.config.inset) ) return true;
+    if ( this.constructor.testPointOutsideConstrainedBorder(pt, this.viewer) ) return true;
 
     // Viewpoint must be closer to the target center than the viewer center.
-    const viewerCtr = this.viewerShape.center;
-    if ( pt.almostEqual(viewerCtr) ) return false; // Center point is special; not blocked.
-    const targetCtr = this.targetShape.center;
-    return PIXI.Point.distanceSquaredBetween(viewerCtr, targetCtr) < PIXI.Point.distanceSquaredBetween(pt, targetCtr); // Use a 2d distance test.
-  }
+    using viewerCtr = this.viewerShape.center.to2d();
+    using targetCtr = this.targetShape.center.to2d();
+    using tc = targetCtr.subtract(viewerCtr);
+    const len2 = tc.dot2(); // Distance squared between viewer and target.
+    if ( len2.almostEqual(0) ) return false;
 
-  /**
-   * Test if a viewpoint or target point is outside the constrained border of the token.
-   * Expands the constrained border slightly to accommodate points exactly on border.
-   * Does not handle insets less than 0.
-   * @param {PIXI.Point} pt
-   * @param {Token} token
-   * @param {number} [inset=1]
-   * @returns {boolean} If no constrained border, returns true. Otherwise true if within the constrained border.
-   */
-  static testPointOutsideConstrainedBorder(pt, token, inset = 0) {
-    const constrainedBorder = token.constrainedTokenBorder;
-    if ( constrainedBorder.equals(token.tokenBorder) ) return false;
-    if ( inset > 0 ) return true;
-    return !constrainedBorder.clone().pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
+    // Blocked only when behind the viewer's center relative to the target.
+    // (The line to the target would cross the viewer's own body).
+    // Level or forward points are never blocked.
+    using pt2d = pt.to2d();
+    using pc = pt2d.subtract(viewerCtr);
+    return (tc.dot(pc) / Math.sqrt(len2)) < -1;
   }
 
   /**
@@ -432,7 +469,8 @@ export class ViewerLOS {
    * @returns {boolean}
    */
   static targetWithinLimitedAngleVision(visionSource, targetOrShape) {
-    const targetShape = targetOrShape instanceof foundry.canvas.placeables.Token ? targetOrShape.tokenBorder : targetOrShape;
+    const targetShape = targetOrShape instanceof foundry.canvas.placeables.Token
+      ? targetOrShape.tokenBorder : targetOrShape;
     const angle = visionSource.data.angle;
     if ( angle === 360 ) return true;
 
@@ -450,8 +488,8 @@ export class ViewerLOS {
     // For each edge:
     // If it intersects a ray, target is within.
     // If an endpoint is within the limited angle, target is within
-    const rMin = Ray.fromAngle(x, y, aMin, canvas.dimensions.maxR);
-    const rMax = Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
+    const rMin = foundry.canvas.geometry.Ray.fromAngle(x, y, aMin, canvas.dimensions.maxR);
+    const rMax = foundry.canvas.geometry.Ray.fromAngle(x, y, aMax, canvas.dimensions.maxR);
 
     const targetWithin = () => {
       const opts = { inside: true };
@@ -461,142 +499,36 @@ export class ViewerLOS {
     };
 
     // Probably worth checking the target center first
+    const LimitedAnglePolygon = foundry.canvas.geometry.LimitedAnglePolygon;
+    const lsi = foundry.utils.lineSegmentIntersects;
     const center = targetShape.center;
-    if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
-    if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
+    if ( LimitedAnglePolygon.pointBetweenRays(center, rMin, rMax, angle) ) return targetWithin();
 
     // TODO: Would it be more performant to assign an angle to each target point?
     // Or maybe just check orientation of ray to each point?
     const edges = targetShape.toPolygon().iterateEdges();
     for ( const edge of edges ) {
-      if ( foundry.utils.lineSegmentIntersects(rMin.A, rMin.B, edge.a, edge.b) ) return 2;
-      if ( foundry.utils.lineSegmentIntersects(rMax.A, rMax.B, edge.a, edge.b) ) return 2;
-      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
-      if ( foundry.canvas.geometry.LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
+      if ( lsi(rMin.A, rMin.B, edge.a, edge.b) ) return 2;
+      if ( lsi(rMax.A, rMax.B, edge.a, edge.b) ) return 2;
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.a, rMin, rMax, angle) ) return targetWithin();
+      if ( LimitedAnglePolygon.pointBetweenRays(edge.b, rMin, rMax, angle) ) return targetWithin();
     }
 
     return 0;
   }
 
-  /**
-   * Build points for a given token.
-   * @param {Token|GeometricPrimitive} token
-   * @param {object} [opts]
-   * @param {number|BitSet} [opts.pointKey]
-   * @param {number} [opts.inset]
-   * @param {Point3d} [opts.viewpoint]
-   * @param {boolean} [opts.tokenHeightPercentage]         Use a percentage of the token shape's total height for top values.
-   * @returns {Point3d[]}
-   */
-  static constructTokenPoints(tokenShape, dir, { pointKey = 1, insetPercentage = 0, tokenHeightPercentage = 1 } = {}) {
-    if ( tokenShape instanceof foundry.canvas.placeables.Token ) {
-      const geom = CONFIG[GEOMETRY_LIB_ID].geometryManager.tokens.geometryForPlaceable(tokenShape).calculated; // Constrained or full.
-      tokenShape = geom.shapes[0]; // Currently only 1 shape per token.
-    }
-
-    const bs = pointKey instanceof SmallBitSet ? pointKey : SmallBitSet.fromNumber(pointKey);
-    const PI = this.POINT_INDICES;
-
-    // Filter
-    // Are there any corners?
-    const cornersMask = SmallBitSet.fromIndices([PI.CORNERS.FACING, PI.CORNERS.MID, PI.CORNERS.BACK]);
-    const cornersIx = bs.clone().intersection(cornersMask);
-
-    // Are there any sides?
-    const sidesMask = SmallBitSet.fromIndices([PI.SIDES.FACING, PI.SIDES.MID, PI.SIDES.BACK]);
-    const sidesIx = bs.clone().intersection(sidesMask);
-
-    // 3d
-    const d3Mask = SmallBitSet.fromIndices([PI.D3.TOP, PI.D3.MID, PI.D3.BOTTOM]);
-    const d3Ix = bs.clone().intersection(d3Mask);
-    if ( d3Ix.isEmpty ) d3Ix.add(PI.D3.MID);
-
-    const allPoints = tokenShape.internalPoints;
-
-    const tokenPoints = [];
-
-    /**
-     * @param {number} index        The bitmask intersection (cornersIx or sidesIx)
-     * @param {"corners"|"sides"} type
-     * @returns {Point3d[]}
-     */
-    const sortFn = (index, type) => {
-      const typePoints = [];
-      if ( d3Ix.hasIndex(PI.D3.BOTTOM) ) typePoints.push(...allPoints.bottom[type]);
-      if ( d3Ix.hasIndex(PI.D3.MID) ) typePoints.push(...allPoints.middle[type]);
-      if ( d3Ix.hasIndex(PI.D3.TOP) ) {
-        let pts = allPoints.top[type];
-        if ( tokenHeightPercentage !== 1 ) {
-          const topZ = allPoints.top[type][0].z;
-          const bottomZ = allPoints.bottom[type][0].z;
-          const newHeight = (topZ - bottomZ) * tokenHeightPercentage;
-          const newZ = bottomZ + newHeight;
-          pts = pts.map(pt => {
-            const adjPt = pt.clone();
-            adjPt.z = newZ;
-            return adjPt;
-          });
-        }
-        typePoints.push(...pts);
-      }
-      const pointCategories = this._sortFacingPoints(typePoints, tokenShape, dir);
-
-      const out = [];
-      const indexType = type.toUpperCase();
-      if ( index.hasIndex(PI[indexType].FACING) ) out.push(...pointCategories.facing);
-      if ( index.hasIndex(PI[indexType].MID) ) out.push(...pointCategories.mid);
-      if ( index.hasIndex(PI[indexType].BACK) ) out.push(...pointCategories.back);
-      return out.map(pt => pt.clone()); // Copy points b/c they may be inset.
-    }
-
-    if ( !cornersIx.isEmpty ) tokenPoints.push(...sortFn(cornersIx, "corners"));
-    if ( !sidesIx.isEmpty ) tokenPoints.push(...sortFn(sidesIx, "sides"));
-
-    // Inset all corner and side points.
-    GeometricPrimitive.insetPoints(tokenPoints, allPoints.center, insetPercentage);
-
-    // Add center point last, b/c it is not inset nor rotated. Add to front of queue for consistency.
-    if ( bs.hasIndex(PI.CENTER) ) tokenPoints.unshift(allPoints.center.clone());
-
-    return tokenPoints;
-  }
 
   /**
-   * Sort given token points into front, mid, back.
-   * @param {Point3d[]} pts
-   * @param {GeometricPrimitive} tokenShape
-   * @param {Point3d} [dir]     Direction from center point that indicates the token front.
-   * @returns {object}
-   * - @prop {Point3d[]} facing
-   * - @prop {Point3d[]} mid
-   * - @prop {Point3d[]} back
+   * Test if a viewpoint or target point is outside the constrained border of the token.
+   * Expands the constrained border slightly to accommodate points exactly on border.
+   * @param {PIXI.Point} pt
+   * @param {Token} token
+   * @returns {boolean} If no constrained border, returns true. Otherwise true if within the constrained border.
    */
-  static _sortFacingPoints(pts, tokenShape, dir) {
-    using dirN = Point3d.tmp;
-    using dirPerp = Point3d.tmp.set(dir.y, -dir.x, 0); // (-dir.y, dir.x) flips front/back.
-    const dist2d = Math.min(tokenShape.aabb.width, tokenShape.aabb.height) * 0.25; // Divide at the 0.25 and 0.75 marks
-    dir.normalize(dirN).multiplyScalar(dist2d, dirN);
-    dirPerp.normalize(dirPerp);
-
-    const center = tokenShape.center;
-    const out = {
-      facing: [],
-      mid: [],
-      back: [],
-    };
-    using aFront = center.add(dirN);
-    using aBack = center.subtract(dirN);
-    using bFront = aFront.add(dirPerp);
-    using bBack = aBack.add(dirPerp);
-    const orient2d = foundry.utils.orient2dFast;
-    const oCenterFront = orient2d(aFront, bFront, center);
-    const oCenterBack = orient2d(aBack, bBack, center);
-    pts.forEach(pt => {
-      const arr = (orient2d(aFront, bFront, pt) * oCenterFront) < 0 ? out.facing
-        : (orient2d(aBack, bBack, pt) * oCenterBack) < 0 ? out.back : out.mid;
-      arr.push(pt);
-    });
-    return out;
+  static testPointOutsideConstrainedBorder(pt, token) {
+    const constrainedBorder = token.constrainedTokenBorder;
+    if ( constrainedBorder.equals(token.tokenBorder) ) return false;
+    return !constrainedBorder.clone().pad(2).contains(pt.x, pt.y); // Expand slightly to accommodate points on the edge.
   }
 
   /* ----- NOTE: Debug ----- */
@@ -608,7 +540,10 @@ export class ViewerLOS {
   _drawCanvasDebug(debugDraw, debugViewpointDraw) {
     this._drawVisibleTokenBorder(debugDraw);
     this._drawLineOfSightDebug(debugDraw);
-    this.viewpoints.forEach(vp => vp._drawCanvasDebug(debugViewpointDraw));
+    for ( const vp of this.viewpoints ) {
+      if ( this._viewpointBlockedByViewer(vp.viewpoint) ) continue;
+      vp._drawCanvasDebug(debugViewpointDraw);
+    }
   }
 
   /**
@@ -617,15 +552,10 @@ export class ViewerLOS {
    * Color red if fails LOS threshold test for that viewpoint.
    */
   _drawLineOfSightDebug(draw) {
-    // console.debug(`\nViewerLOS debug|viewer ${this.viewer.name} at ${this.viewerCenter} (Source at ${this.viewer.document._source.x}, ${this.viewer.document._source.y}).`);
-    // console.debug(`ViewerLOS debug|target ${this.target.name} at ${this.targetLocation} (Source at ${this.target.document._source.x}, ${this.target.document._source.y}).`);
-
     const simpleTest = this.simpleVisibilityTest();
-    if ( ~simpleTest ) {
-      // No viewpoints used; color each with light green or light red line.
+    if ( simpleTest === false || simpleTest === true ) {
       const opts = { color: simpleTest ? Draw.COLORS.LIGHT.green : Draw.COLORS.LIGHT.red };
       for ( const vp of this.viewpoints ) vp._drawLOSSegment(this.targetLocation, draw, opts);
-      return;
     } else for ( const vp of this.viewpoints ) vp._drawLOS(this.targetLocation, draw);
   }
 
@@ -639,162 +569,11 @@ export class ViewerLOS {
 
     // Fill in the target border on canvas
     if ( this.target ) {
-      const border = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? this.target.constrainedTokenBorder : this.target.tokenBorder;
+      const border = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens
+        ? this.target.constrainedTokenBorder : this.target.tokenBorder;
       draw.shape(border, { color, fill: color, fillAlpha: 0.2});
     }
   }
-}
-
-export class CachedViewerLOS extends ViewerLOS {
-
-  /** @type {WeakMap<Token, Float32Array(3)>} */
-  #cache = new WeakMap();
-
-
-  // Keyed to the current settings to detect settings changes.
-  /** @type {string} */
-  #cacheKey = ""
-
-  constructor(...args) {
-    super(...args);
-    this.initializeTrackers();
-  }
-
-  /** @type {DocumentUpdateTracker} */
-  wallTracker;
-
-  /** @type {DocumentUpdateTracker} */
-  tileTracker;
-
-  /** @type {TokenUpdateTracker} */
-  tokenTracker;
-
-  /** @type {RegionUpdateTracker} */
-  regionTracker;
-
-  initializeTrackers() {
-    this.wallTracker = new DocumentUpdateTracker("Wall", DocumentUpdateTracker.LOS_ATTRIBUTES.Wall);
-    this.tileTracker = new DocumentUpdateTracker("Tile", DocumentUpdateTracker.LOS_ATTRIBUTES.Tile);
-    this.regionTracker = new DocumentUpdateTracker("Region", DocumentUpdateTracker.LOS_ATTRIBUTES.Region);
-    this.tokenTracker = new TokenUpdateTracker(TokenUpdateTracker.LOS_ATTRIBUTES, TokenUpdateTracker.LOS_FLAGS);
-  }
-
-  #calculateCacheKey() {
-    const calcConfig = { ...this.calculator.config };
-
-    // Combine all remaining settings into string.
-    return JSON.stringify({
-      ...this.config,
-      ...calcConfig,
-      calcClass: this.calculator.constructor.name,
-      numViewpoints: this.viewpoints.length
-    });
-  }
-
-  /**
-   * Compare the cached setting to the current ones. Invalidate if not the same.
-   * Also check if the scene or target has changed. Invalidate accordingly.
-   * @param {Token} [target]
-   */
-  validateCache() {
-    const target = this.target;
-    // If the settings have changed, wipe the cache.
-    const cacheKey = this.#calculateCacheKey();
-    if ( this.#cacheKey !== cacheKey ) {
-      // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name} cache key changed\n\t${this.#cacheKeys[cacheType]}\n\t${cacheKey}`);
-      this.#cacheKey = cacheKey;
-      this.#cache = new WeakMap();
-      return;
-    }
-
-    // Determine if any updates to placeables might affect the cached value(s).
-    // NOTE: WeakMap has no clear method.
-    // Make sure to call all 4: wallTracker, tileTracker, tokenTracker x2.
-    let clearAll = false;
-    let clearViewer = false;
-    let clearTarget = false;
-    if ( this.wallTracker.logUpdate() ) clearAll = true;
-    if ( this.tileTracker.logUpdate() ) clearAll = true;
-    if ( this.regionTracker.logUpdate() ) clearAll = true;
-    if ( this.tokenTracker.logUpdate(this.viewer) ) clearViewer = true;
-    if ( this.tokenTracker.logUpdate(target) ) clearTarget = true;
-
-    // console.debug(`${this.constructor.name}|${this.viewer.name} --> ${target.name}`, { clearAll, clearViewer, clearTarget });
-    if ( clearAll || clearViewer ) this.#cache = new WeakMap();
-    else if ( clearTarget ) this.#cache.delete(target);
-  }
-
-  /**
-   * @typedef {object} DetectionModeConfig
-   * Detection mode settings relevant to the viewer LOS and calculator.
-   * @prop {boolean} walls                          Do walls block?
-   * @prop {DetectionMode.DETECTION_TYPES} type     Detection type
-   * @prop {number} angle                           Is the viewer limited by its viewing angle?
-   */
-
-  // Used for caching
-  /** @type {DetectionModeConfig} */
-  get detectionModeConfig() {
-    const calcConfig = this.calculator.config;
-    return {
-      walls: calcConfig.blocking.walls,
-      type: DM_SENSE_TYPES[calcConfig.senseType],
-      angle: this.config.angle,
-    }
-  }
-
-  /**
-   * Store within a target's cache different detection mode results.
-   * Run the calculation for each as needed.
-   */
-  get cacheCategory() { return JSON.stringify(this.detectionModeConfig); }
-
-  /**
-   * Copy the current visibility values to the cache.
-   * @param {Token} [target]
-   */
-  setCache() {
-    const target = this.target;
-    const cacheCategory = this.cacheCategory;
-    const cachedObj = this.#cache.get(target) ?? {};
-    cachedObj[cacheCategory] = this.percentVisible;
-    this.#cache.set(target, cachedObj);
-  }
-
-  /**
-   * Set this object's visibility values to the cached values.
-   * Note that this does not affect this object's current calculator values.
-   * @param {Token} [target]
-   * @returns {boolean} True if cached update was used; false otherwise.
-   */
-  updateFromCache() {
-    const target = this.target;
-    this.validateCache(target);
-    const cacheCategory = this.cacheCategory;
-    const cachedVis = this.#cache.get(target)?.[cacheCategory];
-    if ( typeof cachedVis === "undefined" ) return false;
-    this._percentVisible = cachedVis;
-    return true;
-  }
-
-  /**
-   * Does a cached value for this target exist? Does not check if the cached value is still the correct length,
-   * although in theory it should be---otherwise the cache should have been invalidated.
-   * @param {Token} [target]
-   * @returns {boolean}
-   */
-  hasCachedValue(target) {
-    target ??= this.target;
-    return this.#cache.has(target);
-  }
-
-  calculate(force = false) {
-    if ( force || !this.updateFromCache() ) {
-      super.calculate();
-      this.setCache();
-    }
-  }
-
 }
 
 class MultiViewFrustum {
@@ -843,6 +622,7 @@ class MultiViewFrustum {
       frustum = this.frustums.get(key) ?? new Frustum();
       frustum = Frustum.fromAABB(targetAABB, { frustum, viewpoint, infiniteDistance });
     }
+    if ( !frustum ) return this;
     this.frustums.set(key, frustum);
     this.setAABB();
     return this;
@@ -866,6 +646,7 @@ class MultiViewFrustum {
         opts.frustum = new Frustum();
       }
       Frustum.fromAABB(aabb, opts);
+      this.frustums.set(key, opts.frustum);
     }
     this.setAABB();
   }
@@ -880,7 +661,7 @@ class MultiViewFrustum {
   static fromTarget(target, { viewpoints, ...opts } = {}) {
     const out = new this();
     if ( !viewpoints && opts.viewpoint ) viewpoints = [opts.viewpoint];
-    for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
+    for ( const vp of viewpoints ) out.addViewpoint(vp, opts.infiniteDistance);
     out.targetAABB = target.aabb;
     out.setAABB();
     return out;
@@ -896,7 +677,7 @@ class MultiViewFrustum {
   static fromAABB(aabb, { viewpoints, ...opts } = {}) {
     const out = new this();
     if ( !viewpoints && opts.viewpoint ) viewpoints = [opts.viewpoint];
-    for ( const vp of viewpoints ) out.addViewpoint(vp, opts);
+    for ( const vp of viewpoints ) out.addViewpoint(vp, opts.infiniteDistance);
     out.targetAABB = aabb;
     out.setAABB();
     return out;
@@ -970,41 +751,3 @@ class MultiViewFrustum {
   }
 
 }
-
-/**
- * Calculate all the midpoints for an array of points.
- * Includes the midpoint between end and start (circular).
- * @param {Point3d[]} pts
- * @returns {Point3d[]}
- */
-/*
-function midpoints(pts) {
-  const nPts = pts.length;
-  const out = Array(nPts);
-  let a = pts.at(-1);
-  for ( let i = 0; i < nPts; i += 1 ) {
-    const b = pts[i];
-    out[i] = Point3d.midPoint(a, b);
-    a = b;
-  }
-  return out;
-}
-*/
-
-
-/**
- * Set the numeric bit value for object of indices, recursively.
- */
-/*
-function setPointOptions(obj, prefix = {}) {
-  for ( const [key, index] of Object.entries(obj) ) {
-    if ( Number.isNumeric(index) ) prefix[key] = 2 ** index;
-    else prefix[key] = setPointOptions(index);
-  }
-  return prefix;
-}
-ViewerLOS.POINT_OPTIONS = setPointOptions(ViewerLOS.POINT_INDICES);
-*/
-
-
-// const { UNOBSCURED, DIM, BRIGHT } = ViewerLOS.VISIBILITY_LABELS;

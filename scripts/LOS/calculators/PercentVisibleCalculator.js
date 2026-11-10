@@ -1,5 +1,4 @@
 /* globals
-canvas,
 CONFIG,
 PIXI,
 */
@@ -13,7 +12,7 @@ import { Point3d } from "../../geometry/3d/Point3d.js";
 import { Camera } from "../Camera.js";
 import { Frustum } from "../../geometry/3d/Frustum.js";
 import { Draw } from "../../geometry/Draw.js";
-import { ConfigHandler } from "../../ConfigHandler.js"
+import { ConfigHandler } from "../../ConfigHandler.js";
 
 /**
  * @typedef {object} TokenBlockingConfig    Whether tokens block LOS
@@ -31,10 +30,8 @@ import { ConfigHandler } from "../../ConfigHandler.js"
 
 /**
  * @typedef {object} CalculatorConfig    Configuration settings passed to viewpoints
- * @property {BlockingConfig} blocking                    Do various canvas objects block?
  * @property {boolean} largeTarget                        Use special handling for targets larger than grid square
  * @property {CONST.WALL_RESTRICTION_TYPES} senseType     Type of source (light, sight, etc.)
- * @property {boolean} testLighting            Should the illuminated target shape be used?
  */
 
 
@@ -70,6 +67,7 @@ export class PercentVisibleResult {
     out.config = structuredClone(this.config);
     Object.assign(out.data, structuredClone(this.data));
     out.visibility = this.visibility;
+    if ( this.percentVisibleOverriden ) out.percentVisible = this.percentVisible;
     return out;
   }
 
@@ -113,6 +111,8 @@ export class PercentVisibleResult {
   get visibleArea() { return this.targetArea; }
 
   #percentVisible = null;
+
+  get percentVisibleOverriden() { return Number.isNumeric(this.#percentVisible); }
 
   get percentVisible() {
     if ( ~this.visibility ) return this.visibility;
@@ -200,10 +200,13 @@ export class PercentVisibleCalculatorAbstract {
     return "full";
   }
 
+  /** @type {"calculated"|"full"} What token geometry to use for the target */
+  static targetGeometryType = "calculated";
+
   /** @type {CalculatorConfig} */
   config = new ConfigHandler({
     radius: Number.POSITIVE_INFINITY,
-    tokenShapeType: "tokenBorder", // constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
+    tokenShapeType: "tokenBorder", // Options: tokenBorder, constrainedTokenBorder, litTokenBorder, brightLitTokenBorder
     largeTarget: false,
     debug: false,
   });
@@ -256,7 +259,6 @@ export class PercentVisibleCalculatorAbstract {
    * @param {ObstacleOcclusionTest} [opts.occlusionTester]
    */
   setView({ targetShape, viewpoint, targetLocation, occlusionTester } = {}) {
-    // console.debug("PercentVisibleCalculator|initializeView");
     if ( viewpoint ) this.viewpoint = viewpoint;
     if ( targetLocation ) this.targetLocation = targetLocation;
     if ( targetShape ) this.targetShape = targetShape;
@@ -293,8 +295,14 @@ export class PercentVisibleCalculatorAbstract {
   /** @type {ObstacleOcclusionTest} */
   occlusionTester;
 
+  /**
+   * @returns {number} Percent visibility, typically between 0 and 1.
+   */
   percentVisible() { return this.calculate().percentVisible; }
 
+  /**
+   * @returns {PercentVisibleResult}
+   */
   _createResult() {
     const res = new this.constructor.resultClass();
     res.config.largeTarget = this.config.largeTarget;
@@ -302,104 +310,39 @@ export class PercentVisibleCalculatorAbstract {
   }
 
   /**
-   * Return the visibility result for the current calculator state.
-   * Use setView to set state or set individually.
-   * Also depends on config.
-   * @param {CalculatorConfig} cfg
+   * Calculates visibility of target from perspective of viewer at viewpoint.
    * @returns {PercentVisibleResult}
    */
   calculate() {
+    // Better to create new each time for now, otherwise percentVisible might be inadvertently set.
+    this.lastResult = this._createResult();
     this.setView();
+    if ( !this.occlusionTester.hasObstacles ) return this.lastResult.makeFullyVisible();
     return this._calculate();
   }
 
-  _calculate() {
-    // console.debug("PercentVisibleCalculator|_calculate");
-    // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
-    const result = this._createResult();
-    const isVisible = Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.config.radius ** 2;
-    return isVisible ? result.makeFullyVisible() : result.makeFullyNotVisible();
-  }
-
-  // ----- NOTE: Lighting test ----- //
-
-  // TODO: Update for GeometricPrimitives
-
-  static LIGHTING_TEST_TYPES = {
-    DARK: 0,
-    DIM: 1,
-    BRIGHT: 2,
-  };
-
-  setLightingTest(type) {
-    console.error("setLightingTest not yet implemented.");
-    const { TYPES } = this.constructor.LIGHTING_TEST_TYPES;
-    let tokenShapeType;
-    switch ( type ) {
-      case TYPES.DIM: tokenShapeType = "litTokenBorder"; break;
-      case TYPES.BRIGHT: tokenShapeType = "brightLitTokenBorder"; break;
-      default: tokenShapeType = CONFIG[GEOMETRY_LIB_ID].CONFIG.constrainTokens ? "constrainedTokenBorder" : "tokenBorder";
-    }
-    this.config = { tokenShapeType };
+  /**
+   * Is the viewpoint within the radius?
+   * @returns {boolean}
+   */
+  _withinRadius() {
+    return Point3d.distanceSquaredBetween(this.viewpoint, this.targetLocation) <= this.config.radius ** 2;
   }
 
   /**
-   * Using the available algorithm, test whether the target w/o/r/t other viewers is
-   * in darkness, dim, or bright light based on threshold settings.
+   * Calculates visibility of target from perspective of viewer at viewpoint.
+   * Presumes setView has already been called or properties otherwise set. (See calculate method.)
+   * Usually overriden by subclass.
+   * @returns {PercentVisibleResult}
    */
-  calculateLightingTypeForTarget() {
-    // TODO: Fix for use with GeometricPrimitives.
-    console.error("calculateLightingTypeForTarget not yet implemented.");
-
-
-    const oldConfig = this.config;
-    const oldBlockingConfig = this.occlusionTester.config;
-    const oldViewer = this.viewer;
-    const oldViewpoint = this.viewpoint.clone();
-    this.config = {
-      senseType: "light",
-      radius: Number.POSITIVE_INFINITY,
-      largeTarget: false,
-      walls: true,
-      tiles: true,
-      regions: true,
-      levels: {
-        foreground: true,
-        background: true,
-      },
-      tokens: {
-        dead: true,
-        live: true,
-        prone: true,
-      },
-    };
-    this.setLightingTest(this.constructor.LIGHTING_TEST_TYPES.NONE);
-    let dimResult = new this.constructor.resultClass();
-    let brightResult = new this.constructor.resultClass();
-    for ( const src of canvas.lighting.placeables ) {
-      this.viewer = src;
-
-      Point3d.fromPointSource(src, this.viewpoint);
-      this.config = { radius: src.radius };
-      this.calculate();
-      dimResult = dimResult.blendMaximums(this.lastResult);
-
-      this.config = { radius: src.brightRadius };
-      this.calculate()
-      brightResult = brightResult.blendMaximums(this.lastResult);
-    }
-
-    this.config = oldConfig;
-    this.occlusionTester.config = oldBlockingConfig;
-    this.viewer = oldViewer;
-    this.viewpoint = oldViewpoint;
-    return { dim: dimResult, bright: brightResult };
+  _calculate() {
+    // By default, test if viewpoint --> target center is within the vision radius and return full or no visibility.
+    const result = this._createResult();
+    return this._withinRadius() ? result.makeFullyVisible() : result.makeFullyNotVisible();
   }
 
   /* ----- NOTE: Opacity / Transparency ----- */
 
-  /** @type {boolean} True if _calculate weights by obstacle opacity; false if Viewpoint must handle. */
-  static handlesOpacity = false;
 
   /**
    * @param {PlaceableGeometry} obstacle
@@ -471,15 +414,13 @@ export class PercentVisibleCalculatorAbstract {
    * @param {Draw} draw
    */
   _drawCanvasDebug(result, debugDraw, otOpts = {}) {
-    // this._drawLineOfSight(debugDraw);
-
     // Draw the viewer vision radius to the token, accounting for 3d distance.
     // Use Pythagorean to get the 2d radius = sqrt(radius3d^2 - deltaZ^2)
     const visionRadius = this.config.radius;
     const vp = this.viewpoint;
     const deltaZ = Math.abs(vp.z - this.targetLocation.z);
     if ( deltaZ < visionRadius && isFinite(visionRadius) ) {
-      const radius2d = Math.sqrt(visionRadius ** 2 - deltaZ ** 2);
+      const radius2d = Math.sqrt((visionRadius ** 2) - (deltaZ ** 2));
       debugDraw ??= new Draw();
       debugDraw.shape(new PIXI.Circle(vp.x, vp.y, radius2d), { fill: Draw.COLORS.white, fillAlpha: 0.1 });
     }
@@ -494,13 +435,7 @@ export class PercentVisibleCalculatorAbstract {
     this.occlusionTester._drawFrustum(debugDraw);
   }
 
-  /**
-   * For debugging.
-   * Draw the line of sight from token to target.
-   */
-  _drawLineOfSight(draw) { draw.segment({ A: this.viewpoint, B: this.targetLocation }, { alpha: 0.5 }); }
-
-  destroy() { return; }
+  destroy() { }
 }
 
 

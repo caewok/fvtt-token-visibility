@@ -1,5 +1,5 @@
 #version 300 es
-precision ${PIXI.settings.PRECISION_VERTEX} float;
+precision highp float;
 
 in vec3 vNormal;
 in vec2 vTexCoord;

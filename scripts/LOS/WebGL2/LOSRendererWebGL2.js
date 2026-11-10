@@ -1,6 +1,7 @@
 /* globals
 CONFIG,
 PIXI,
+WebGLRenderbuffer,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -39,7 +40,12 @@ export class LOSRendererWebGL2 {
   constructor({ camera, webGL2 } = {}) {
     this.camera = camera;
     this.webGL2 = webGL2;
+    this.#removeRestoreListener = webGL2.onContextRestored(() => this.#onContextRestored());
   }
+
+  #removeRestoreListener = null;
+
+  get ready() { return this.#initialized; }
 
   #initialized = false;
 
@@ -52,7 +58,20 @@ export class LOSRendererWebGL2 {
     this.#initialized = true;
   }
 
-   // ----- NOTE: Program ----- //
+  async #onContextRestored() {
+    if ( !this.#initialized ) return;
+    this.#initialized = false;
+    this.drawableCaches.clear();
+    Object.values(this.drawables).forEach(s => s.clear());
+    this.programs.clear();
+    this.buffer.camera = null;
+    this.buffer.material = null;
+    this.fbInfo = null;
+    this.#currentMaterial = null;
+    await this.initialize();
+  }
+
+  // ----- NOTE: Program ----- //
 
   /** @type {string} */
   static VERTEX_FILE = "drawable_vertex";
@@ -74,13 +93,14 @@ export class LOSRendererWebGL2 {
       SHADER_FLAGS.NONE, // Non-instanced
       SHADER_FLAGS.TEXTURED, // Tiles
       SHADER_FLAGS.CONSTRAINED, // Tokens
-    ]
+    ];
+
     // Plus, need debug versions of each.
 
     // Compile each.
     const promises = requiredVariants.map(flags => this.compileVariant(flags));
     promises.push(...requiredVariants.map(flags => this.compileVariant(flags | SHADER_FLAGS.DEBUG)));
-    await Promise.allSettled(promises);
+    await Promise.all(promises);
   }
 
   async compileVariant(flags) {
@@ -88,7 +108,7 @@ export class LOSRendererWebGL2 {
 
     // Bitwise AND to identify if a specific flag is active.
     const SHADER_FLAGS = this.constructor.SHADER_FLAGS;
-    const isDebug     = (flags & SHADER_FLAGS.DEBUG) !== 0;
+    const isDebug = (flags & SHADER_FLAGS.DEBUG) !== 0;
     const isTextured = (flags & SHADER_FLAGS.TEXTURED) !== 0;
     const isConstrained = (flags & SHADER_FLAGS.CONSTRAINED) !== 0;
 
@@ -146,7 +166,13 @@ export class LOSRendererWebGL2 {
     const cameraData = this.camera.arrayView;
     gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.camera);
     gl.bufferSubData(gl.UNIFORM_BUFFER, 0, cameraData);
-    gl.bindBufferRange(gl.UNIFORM_BUFFER, this.constructor.CAMERA_BIND_POINT, this.buffer.camera, 0, cameraData.BYTES_PER_ELEMENT * cameraData.length);
+    gl.bindBufferRange(
+      gl.UNIFORM_BUFFER,
+      this.constructor.CAMERA_BIND_POINT,
+      this.buffer.camera,
+      0,
+      cameraData.BYTES_PER_ELEMENT * cameraData.length
+    );
   }
 
   // ----- NOTE: Material uniform buffer object (for debug) ----- //
@@ -170,21 +196,29 @@ export class LOSRendererWebGL2 {
 
   _initializeMaterialBuffer() {
     const gl = this.gl;
+    const colorBytes = Float32Array.BYTES_PER_ELEMENT * 4; // One vec4.
+
+    // WebGL2 requires multiples of UNIFORM_BUFFER_OFFSET_ALIGNMENT, usually 256.
+    const alignment = gl.getParameter(gl.UNIFORM_BUFFER_OFFSET_ALIGNMENT);
+    const stride = this.#materialStride = Math.ceil(colorBytes / alignment) * alignment;
+
+    // Lay each color at an aligned offset.
+    const order = Object.keys(this.constructor.MATERIAL_COLORS);
+    const data = new Float32Array((stride / Float32Array.BYTES_PER_ELEMENT) * order.length);
+    order.forEach((key, i) => {
+      data.set(this.constructor.MATERIAL_COLORS[key], i * (stride / Float32Array.BYTES_PER_ELEMENT));
+    });
 
     // Buffer to hold every color variation.
     this.buffer.material = gl.createBuffer();
-
-    // Create and initialize it.
-    // See https://learnopengl.com/Advanced-OpenGL/Advanced-GLSL
     gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.material);
-    gl.bufferData(gl.UNIFORM_BUFFER, new Float32Array(this.constructor.MATERIAL_BUFFER), gl.DYNAMIC_DRAW);
+    gl.bufferData(gl.UNIFORM_BUFFER, data, gl.STATIC_DRAW); // Colors never change.
     gl.bindBuffer(gl.UNIFORM_BUFFER, null);
 
-    // Bind the UBO to the binding point
-    gl.bindBufferBase(gl.UNIFORM_BUFFER, this.constructor.MATERIAL_BIND_POINT, this.buffer.material);
+    // Bind the first material so the block is valid before the first setMaterial call.
+    this.#currentMaterial = null;
+    this.setMaterial("target");
   }
-
-  #currentMaterial = null;
 
   /**
    * Set material for a given render.
@@ -193,17 +227,23 @@ export class LOSRendererWebGL2 {
   setMaterial(type = "obstacle") {
     if ( this.#currentMaterial === type ) return;
 
-    let offset = 0;
-    switch ( type ) {
-      case "target": offset = 0; break;
-      case "obstacle": offset = Float32Array.BYTES_PER_ELEMENT * 4; break;
-      case "terrain": offset = Float32Array.BYTES_PER_ELEMENT * 4 * 2; break;
-      default: console.error("setMaterial|Material type not recognized.");
-    }
-    // gl.bindBuffer(gl.UNIFORM_BUFFER, this.buffer.material);
-    this.gl.bindBufferRange(this.gl.UNIFORM_BUFFER, this.constructor.MATERIAL_BIND_POINT, this.buffer.material, offset, Float32Array.BYTES_PER_ELEMENT * 4);
+    const order = Object.keys(this.constructor.MATERIAL_COLORS);
+    const idx = order.indexOf(type);
+    if ( !~idx ) return console.error(`setMaterial|Material type ${type} not recognized.`);
+
+    this.gl.bindBufferRange(
+      this.gl.UNIFORM_BUFFER,
+      this.constructor.MATERIAL_BIND_POINT,
+      this.buffer.material,
+      idx * this.#materialStride,
+      Float32Array.BYTES_PER_ELEMENT * 4,
+    );
     this.#currentMaterial = type;
   }
+
+  #currentMaterial = null;
+
+  #materialStride = 0;
 
   // ----- NOTE: Framebuffer and render texture ----- //
 
@@ -261,6 +301,19 @@ export class LOSRendererWebGL2 {
   // ----- NOTE: Render pipeline ----- //
 
   /**
+   * Clear the whole drawing surface (color, depth, stencil) to transparent black.
+   * Ignores the viewport. Uses the cached setters so WebGL2 state stays in sync.
+   */
+  clear() {
+    const { gl, webGL2 } = this;
+    if ( webGL2.contextLost ) return;
+    webGL2.setDepthMask(true);                  // Otherwise the depth buffer is not cleared.
+    webGL2.setColorMask(WebGL2.noColorMask);    // All channels.
+    webGL2.setClearColor(WebGL2.blackClearColor);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+  }
+
+  /**
    * Caches of active drawables mapped to lookup keys based on the primitive and shader flags.
    * Because the renderer gl changes for the debug popout canvas vs regular canvas, the cache
    * cannot be static.
@@ -289,13 +342,13 @@ export class LOSRendererWebGL2 {
    * @param {object} opts
    * @returns {Drawable}
    */
-  #drawableFor(pass, datum, { constrained = false, senseType = "sight", levelId = "" } = {}) {
+  #drawableFor(pass, datum, { constrained = false, levelId = "" } = {}) {
     const key = `${pass}|${Boolean(datum.primitive.constructor.TEXTURED)}|${constrained}`;
     let byVO = this.drawableCaches.get(key);
     if ( !byVO ) this.drawableCaches.set(key, byVO = new Map());
     let drawable = byVO.get(datum.vo);
     if ( !drawable ) byVO.set(datum.vo, drawable = this.#createDrawable(datum, constrained));
-    if ( drawable instanceof ConstrainedDrawable ) { drawable.levelId = levelId; drawable.senseType = senseType; }
+    if ( drawable instanceof ConstrainedDrawable ) { drawable.levelId = levelId; }
     drawable.lastUsed = this.#frame;
     this.drawables[pass].add(drawable);
     return drawable;
@@ -348,7 +401,7 @@ export class LOSRendererWebGL2 {
     const layered = partial.filter(e => e.subtype !== "terrainWalls");
     const excluded = new Set([...layered, ...nonBlocking].map(e => e.obstacle));
 
-    const drawableOpts = { constrained: true, senseType: occlusionTester.config.senseType, levelId: occlusionTester.levelId };
+    const drawableOpts = { constrained: true, levelId: occlusionTester.levelId };
     const otOpts = { includeObstacles: tokenObstacles, geomSubtypeFn: () => "full", excluded };
 
     // Clear the drawables of any old instances.
@@ -371,7 +424,9 @@ export class LOSRendererWebGL2 {
     processShapes(occlusionTester.iterateObstacleShapes(otOpts), "solid", drawableOpts);
 
     // Solid obstacles.
-    otOpts.includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS.difference(tokenObstacles).difference(terrainObstacles);
+    otOpts.includeObstacles = occlusionTester.constructor.OBSTACLE_KEYS
+      .difference(tokenObstacles)
+      .difference(terrainObstacles);
     drawableOpts.constrained = false;
     processShapes(occlusionTester.iterateObstacleShapes(otOpts), "solid", drawableOpts);
 
@@ -389,28 +444,11 @@ export class LOSRendererWebGL2 {
   }
 
   /**
-   * Destroy the active drawables that are not held in the cache, and empty the active sets.
-   */
-  #releaseDrawables() {
-    const cached = new Set(this.drawableCaches.values());
-    for ( const m of this.drawableCaches.values() ) {
-      for ( const drawable of m.values() ) cached.add(drawable);
-    }
-
-    for ( const set of Object.values(this.drawables) ) {
-      for ( const drawable of set ) {
-        if ( !cached.has(drawable) ) drawable.destroy();
-      }
-      set.clear();
-    }
-  }
-
-  /**
    * Core rendering method.
    * NOTE: user should first set the camera.
    */
   render({ clear = true, debug = false, frame } = {}) {
-    // console.debug(`LOSRendererWebGL2#Render. Debug? ${debug}`);
+    // Debug: console.debug(`LOSRendererWebGL2#Render. Debug? ${debug}`);
 
     const gl = this.gl;
     const webGL2 = this.webGL2;
@@ -423,11 +461,7 @@ export class LOSRendererWebGL2 {
     webGL2.setCullFace("BACK");
     webGL2.setDepthMask(true);
     webGL2.setColorMask(WebGL2.noColorMask);
-    if ( clear ) { // Clear = false used for rendering debug multiple viewpoints.
-      webGL2.setColorMask(WebGL2.noColorMask); // Force all channels true.
-      webGL2.setClearColor(WebGL2.blackClearColor);  // Clear everything to black.
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
-    }
+    if ( clear ) this.clear(); // Clear = false used for rendering debug multiple viewpoints.
 
     // Pass 1: Render target.
     this._renderTarget(debug);
@@ -469,13 +503,11 @@ export class LOSRendererWebGL2 {
 
   bindFramebuffer() {
     // Depending on CONFIG, use either a renderTexture or render to the canvas.
-    const gl = this.gl;
-    if ( CONFIG[MODULE_ID].useRenderTexture ) twgl.bindFramebufferInfo(gl, this.fbInfo);
-    else gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.webGL2.bindFramebuffer(CONFIG[MODULE_ID].useRenderTexture ? this.fbInfo : null);
   }
 
   unbindFramebuffer() {
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.webGL2.bindFramebuffer(null);
   }
 
   _renderTarget(debug = false) {
@@ -488,7 +520,7 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.redAlphaMask);
     webGL2.setBlending(false);
 
-    // console.debug(`LOSRendererWebGL2#Rendering target. Debug? ${debug}`);
+    // Debug: console.debug(`LOSRendererWebGL2#Rendering target. Debug? ${debug}`);
     this.drawables.target.forEach(drawable => drawable.render(debug));
   }
 
@@ -504,7 +536,7 @@ export class LOSRendererWebGL2 {
     } else webGL2.setColorMask(WebGL2.blueAlphaMask);
     webGL2.setBlending(false);
 
-    // console.debug(`LOSRendererWebGL2#Rendering obstacles. Debug? ${debug}`);
+    // Debug: console.debug(`LOSRendererWebGL2#Rendering obstacles. Debug? ${debug}`);
     this.drawables.solid.forEach(drawable => drawable.render(debug));
   }
 
@@ -519,11 +551,11 @@ export class LOSRendererWebGL2 {
       this.setMaterial("terrain");
       webGL2.setColorMask(WebGL2.noColorMask);
 
-      // srcRGB, dstRGB, srcAlpha, dstAlpha
+      // Params: srcRGB, dstRGB, srcAlpha, dstAlpha
       webGL2.setBlendFuncSeparate(gl.SRC_ALPHA, gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     } else {
-      webGL2.setColorMask(WebGL2.greenAlphaMask);  // Set color mask to GREEN only.
-      webGL2.setBlendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ZERO);
+      webGL2.setColorMask(WebGL2.greenMask);  // Set color mask to GREEN only.
+      webGL2.setBlendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE); // Additive green; alpha factors keep dst anyway.
     }
 
     // Disable depth writing so multiple terrain walls can overlap and sum their green values
@@ -538,7 +570,8 @@ export class LOSRendererWebGL2 {
   }
 
   destroy() {
-    this.#releaseDrawables();
+    this.#removeRestoreListener?.();
+    this.#removeRestoreListener = null;
     for ( const m of this.drawableCaches.values() ) {
       for ( const drawable of m.values() ) drawable.destroy();
       m.clear();

@@ -58,7 +58,7 @@ export class SmallBitSet {
 
   xor(value) { this.word ^= value; return this; }
 
-  invert() { this.word = ~this.word; }
+  invert() { this.word = ~this.word; return this; }
 
   union(other) {
     this.word |= other.word;
@@ -94,7 +94,7 @@ export class SmallBitSet {
   }
 
   fillToIndex(idx) {
-    this.word = (1 << idx) - 1;
+    this.word = (1 << (idx + 1)) - 1;
     return this;
   }
 

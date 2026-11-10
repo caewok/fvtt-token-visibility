@@ -6,16 +6,14 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-// Base folder
-import { Settings } from "../../settings.js";
-
 // LOS folder
 import { PercentVisibleCalculatorAbstract, PercentVisibleResult } from "./PercentVisibleCalculator.js";
 import { ViewerLOS } from "../ViewerLOS.js";
-import { DebugVisibilityViewerArea3dPIXI } from "../DebugVisibilityViewer.js";
+import { Viewpoint } from "../Viewpoint.js";
 import { SmallBitSet } from "../SmallBitSet.js";
 import { FastBitSet } from "../FastBitSet/FastBitSet.js";
 import { squaresUnderToken, hexesUnderToken } from "../shapes_under_token.js";
+
 
 // Placeable tracking
 
@@ -55,7 +53,7 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
   };
 
   logData() {
-    console.log(`${this.data.potentiallyVisible.cardinality} potentially visible and ${this.data.unobscured.cardinality} unobscured. ${this.data.totalPoints} total points.`);
+    console.log(`${this.data.potentiallyVisible.cardinality} potentially visible and ${this.data.unobscured.cardinality} unobscured.`);
   }
 
   clone() {
@@ -131,18 +129,12 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
     }
     this.data.transmittance = t;
   }
-
-  _drawCanvasDebug(result, debugDraw, otOpts = {}) {
-    otOpts.tileSubtype ??= "boundarySubtype";
-    otOpts.levelSubtype ??= "boundarySubtype";
-    super._drawCanvasDebug(result, debugDraw, otOpts);
-  }
 }
 
 /**
  * @typedef {object} PointsCalculatorConfig
  * ...{CalculatorConfig}
- * @property {number} [targetPointIndex=1]  	    					Points configuration for the target
+ * @property {number} [targetPointIndex=1]                  Points configuration for the target
  * @property {number} [targetInset=0.75]                    Offset target points from target border
  */
 
@@ -151,8 +143,6 @@ export class PercentVisiblePointsResultAbstract extends PercentVisibleResult {
  */
 export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalculatorAbstract {
   static resultClass = PercentVisiblePointsResultAbstract;
-
-  static handlesOpacity = true;
 
   _calculate() {
     const result = this._createResult();
@@ -188,11 +178,12 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
    */
   _applyPartialObstacles(result, partial) {
     const { unobscured, transmittance } = result.data;
+    const targetPoints = [...this.iterateTargetPoints()];
     for ( const entry of partial ) {
       this.addObstacles([entry]);
       try {
         let i = -1;
-        for ( const pt of this.iterateTargetPoints() ) {
+        for ( const pt of targetPoints ) {
           i += 1;
           if ( !unobscured.has(i) || !this.pointIsOccluded(pt) ) continue;
           transmittance.set(i, (transmittance.get(i) ?? 1) * (1 - entry.opacity));
@@ -250,13 +241,13 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
       const isUnobscured = unobscured.has(i);
       const color = isVisible && isUnobscured ? colors.blue
         : isVisible ? colors.red
-          :  colors.orange; // Not tested b/c not w/in radius or otherwise not part of shape.
+          : colors.orange; // Not tested b/c not w/in radius or otherwise not part of shape.
       const opts = { color };
       if ( !isVisible ) {
         opts.dashLength = 10;
         opts.gapLength = 10;
       }
-      debugDraw.segment(segment, { color });
+      debugDraw.segment(segment, opts);
     }
   }
 
@@ -280,18 +271,19 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     const lookAtM = this.camera.lookAtMatrix;
     const perspectiveM = this.camera.perspectiveMatrix;
     const lookAtInvTranspose = this.camera.invTransposeLookAtMatrix;
-    const perspectiveInvTranspose = this.camera.invTransposeLookAtMatrix;
+    const perspectiveInvTranspose = this.camera.invTransposePerspectiveMatrix;
 
     poly = poly.transform(lookAtM, lookAtInvTranspose).clipZ();
     poly = poly.transform(perspectiveM, perspectiveInvTranspose);
-    return poly.isValid ? poly : null;
+    return poly.isValid() ? poly : null;
   }
+
 
   /**
    * For debugging.
    * Draw the 3d objects in the popout.
    */
-  _draw3dDebug(result, draw, { width = 100, height = 100 } = []) {
+  _draw3dDebug(result, draw, { width = 100, height = 100 } = {}) {
     const mult = PIXI.Point.tmp.set(width, height);
     const a = Point3d.tmp;
     const opts = {
@@ -303,8 +295,8 @@ export class PercentVisibleCalculatorPointsAbstract extends PercentVisibleCalcul
     this.setView(); // In case the camera has been moved.
 
     // Draw the border for reference.
-    const viewpoint = this.viewpoint
-    const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null }
+    const viewpoint = this.viewpoint;
+    const drawOpts = { draw, color: Draw.COLORS.black, alpha: 0.5, fill: null };
     for ( const face of this.targetShape.faces ) {
       if ( !face.isFacing(viewpoint) ) {
         drawOpts.alpha = 0.3;
@@ -356,14 +348,12 @@ export class PercentVisiblePointsResult extends PercentVisiblePointsResultAbstra
     this.data.unobscured = new SmallBitSet();
     this.data.potentiallyVisible = new SmallBitSet();
   }
-
 }
-
 
 export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPointsAbstract {
 
   /** @type {class<PercentVisibleResult>} */
-  static resultClass = PercentVisiblePointsResult
+  static resultClass = PercentVisiblePointsResult;
 
   constructor() {
     super();
@@ -372,20 +362,36 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
     this.config.add({
       targetPointIndex: 1, // Center only
       targetInset: 0.75,
-    })
+    });
+  }
+
+  /** @type {number|null} */
+  #currentFacingSide = null;
+
+  #facingSide() {
+    using dir = this.viewpoint.subtract(this.targetShape.center);
+    return Viewpoint.findFacingSide(this.targetShape.internalPoints, dir, this.#currentFacingSide);
   }
 
   /**
    * Build a set of 3d points on a given token shape, dependent on settings and shape.
+   * TODO: Cache this similarly to that of ViewerLOS?
    * @yield {Point3d}
    */
   *iterateTargetPoints() {
+    const inset = this.config.targetInset;
+    const facingSide = this.#facingSide();
     const cfg = {
       pointKey: this.config.targetPointIndex,
-      insetPercentage: this.config.targetInset,
+      insets: {
+        top: inset,
+        bottom: inset,
+        sides: inset,
+      },
+      facingSide,
     };
-    const dir = this.targetLocation.subtract(this.viewpoint);
-    yield* ViewerLOS.constructTokenPoints(this.targetShape, dir, cfg);
+    using dir = this.viewpoint.subtract(this.targetLocation);
+    yield* Viewpoint.constructTokenPoints(this.targetShape, dir, cfg);
   }
 
   /**
@@ -397,57 +403,5 @@ export class PercentVisibleCalculatorPoints extends PercentVisibleCalculatorPoin
     if ( canvas.grid.type === CONST.GRID_TYPES.GRIDLESS ) return [token.tokenBorder];
     return canvas.grid.type === CONST.GRID_TYPES.SQUARE ? squaresUnderToken(token) : hexesUnderToken(token);
   }
- }
-
-
-export class DebugVisibilityViewerPoints extends DebugVisibilityViewerArea3dPIXI {
-  algorithm = Settings.KEYS.LOS.TARGET.TYPES.POINTS;
-
-  /** @type {Token[]} */
-//   get viewers() { return canvas.tokens.controlled; }
-
-  /** @type {Token[]} */
-//   get targets() { return game.user.targets.values(); }
-
-  /**
-   * Triggered whenever a token is refreshed.
-   * @param {Token} token
-   * @param {RenderFlags} flags
-   */
-//   onRefreshToken(token, flags) {
-//     if ( !(this.viewers.some(viewer => viewer === token)
-//         || this.targets.some(target => target === token)) ) return;
-//     if ( !(flags.refreshPosition
-//         || flags.refreshElevation
-//         || flags.refreshSize ) ) return;
-//     this.render();
-//   }
 }
-
-/*
-Point3d = CONFIG.GeometryLib.threeD.Point3d
-Draw = CONFIG.GeometryLib.Draw
-api = game.modules.get("tokenvisibility").api
-PercentVisibleCalculatorPoints = api.calcs.points
-zanna = canvas.tokens.placeables.find(t => t.name === "Zanna")
-randal = canvas.tokens.placeables.find(t => t.name === "Randal")
-
-calc = new PercentVisibleCalculatorPoints()
-calc.viewer = randal
-calc.target = zanna
-calc.viewpoint = Point3d.fromTokenCenter(calc.viewer)
-calc.targetLocation = Point3d.fromTokenCenter(calc.target)
-calc.calculate()
-
-debugViewer = api.buildDebugViewer(api.debugViewers.points)
-await debugViewer.initialize();
-debugViewer.render();
-
-atv = randal.tokenvisibility.visibility
-atv.percentVisibilityToToken(zanna)
-
-SmallBitSet = api.SmallBitSet
-
-
-*/
 
