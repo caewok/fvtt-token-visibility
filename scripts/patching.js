@@ -9,7 +9,6 @@ import { PATCHES as PATCHES_ActiveEffect } from "./ActiveEffect.js";
 import { PATCHES as PATCHES_Canvas } from "./Canvas.js";
 import { PATCHES as PATCHES_CanvasVisibility } from "./CanvasVisibility.js";
 import { PATCHES as PATCHES_DetectionMode } from "./DetectionMode.js";
-import { PATCHES as PATCHES_DetectionModeBasicSight } from "./DetectionModeBasicSight.js";
 import { PATCHES as PATCHES_Settings } from "./ModuleSettingsAbstract.js";
 import { PATCHES as PATCHES_Token } from "./Token.js";
 import { PATCHES as PATCHES_TileConfig } from "./LOS/TileConfig.js";
@@ -22,7 +21,6 @@ const PATCHES = {
   Canvas: PATCHES_Canvas,
   "foundry.canvas.groups.CanvasVisibility": PATCHES_CanvasVisibility,
   "foundry.canvas.perception.DetectionMode": PATCHES_DetectionMode,
-  "foundry.canvas.perception.DetectionModeDarkvision": PATCHES_DetectionModeBasicSight,
   "foundry.helpers.ClientSettings": PATCHES_Settings,
   "foundry.canvas.placeables.Token": PATCHES_Token,
   "foundry.applications.sheets.TileConfig": PATCHES_TileConfig,

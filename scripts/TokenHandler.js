@@ -1,6 +1,5 @@
 /* globals
 CONFIG,
-foundry,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -13,7 +12,6 @@ import { Draw } from "./geometry/Draw.js";
 import { buildLOSViewer } from "./LOSCalculator.js";
 import { LOSCache } from "./LOSThrottle.js";
 import { DETECTION_SENSE_TYPES, DETECTION_SOURCE_TYPES } from "./LOS/const.js";
-import { PercentVisibleCalculatorAbstract } from "./LOS/calculators/PercentVisibleCalculator.js";
 import { ViewerLOS } from "./LOS/ViewerLOS.js";
 
 export class ATVTokenHandler {
@@ -40,23 +38,27 @@ export class ATVTokenHandler {
    * See CONFIG.Canvas.detectionModes (and CONFIG.Canvas.visionModes)
    * @param {CONFIG.Canvas.detectionModes|CONFIG.Canvas.visionModes} [detectionMode]
    */
-  setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight) {
+  setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight, range = Number.POSITIVE_INFINITY) {
     const blockingConfig = {
       walls: dm.walls,
       tiles: dm.walls,
       regions: dm.walls,
       senseType: DETECTION_SENSE_TYPES[dm.type],
-      sourceType: DETECTION_SOURCE_TYPES[dm.type],
+      sourceType: DETECTION_SOURCE_TYPES[dm.type], // Not currently used.
     };
     this.losViewer.config.useTemporary = true;
     this.losViewer.occlusionTester.config.useTemporary = true;
+    this.losViewer.calculator.config.useTemporary = true;
+
     this.losViewer.config.set({ angle: dm.angle });
     this.losViewer.occlusionTester.config.set(blockingConfig);
+    this.losViewer.calculator.config.set({ radius: range });
   }
 
   resetConfig() {
     this.losViewer.config.useTemporary = false;
     this.losViewer.occlusionTester.config.useTemporary = false;
+    this.losViewer.calculator.config.useTemporary = false;
   }
 
 
