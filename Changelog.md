@@ -1,3 +1,8 @@
+## 14.1.1
+Update libGeometry to v0.7.1.
+- Fix for point los test in region holes.
+- Support for region grid shapes.
+
 ## 14.1.0
 Use updated libGeometry v0.7.0, with better handling of placeable 3d geometry and scene levels.
 Rewritten WebGL2 calculator with simpler handling of placeable geometry.
