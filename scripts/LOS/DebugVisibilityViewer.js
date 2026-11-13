@@ -9,7 +9,7 @@ PIXI,
 "use strict";
 
 // Base module
-import { MODULE_ID } from "../const.js";
+import { MODULE_ID, TRACKER_IDS } from "../const.js";
 import { log } from "../util.js";
 
 // Geometry
@@ -91,20 +91,76 @@ export class DebugVisibilityViewerAbstract {
     return true;
   }
 
+  /**
+   * The detection mode used for the last render.
+   * @type {object<mode: CONFIG.Canvas.detectionModes|null, range: number>}
+   */
+  detectionMode = { mode: null, range: Number.POSITIVE_INFINITY };
+
+  /**
+   * First enabled detection mode on the viewer token that has a registered DetectionMode.
+   * Falls back to basic sight.
+   * @param {Token} viewer
+   * @returns {object}
+   * - @prop {DetectionMode} mode
+   * - @prop {number} range
+   */
+  _firstDetectionMode() {
+    const viewer = this.viewer;
+    const modes = CONFIG.Canvas.detectionModes;
+    const out = { mode: modes.basicSight, range: Number.POSITIVE_INFINITY };
+    if ( !viewer?.document?.detectionModes ) return out;
+    for ( const [key, m] of Object.entries(viewer.document.detectionModes) ) {
+      if ( !m.enabled || !modes[key] ) continue;
+      out.mode = modes[key];
+      out.range = m.range;
+      break;
+    }
+    return out;
+  }
+
+  /**
+   * Localized label for the detection mode in use.
+   * @type {string}
+   */
+  get detectionModeLabel() {
+    const dm = this.detectionMode.mode;
+    if ( !dm ) return "";
+    const label = dm.label ? game.i18n.localize(dm.label) : dm.id;
+    return label || dm.id || "";
+  }
+
+  get moduleDMHandler() {
+    const viewer = this.viewer;
+    const visionSource = viewer.vision;
+    return visionSource?.object?.[MODULE_ID]?.[TRACKER_IDS.VISIBILITY]
+      ?? viewer[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
+  }
+
   render() {
     if ( this._destroyed ) return;
 
     this.clearDebug();
     if ( !this.initializeCalculation() ) return;
 
-    // First draw the basic debugging graphics for the canvas.
-    const viewerLOS = this.viewerLOS;
-    viewerLOS.calculate(); // Sets percent visible; may short-circuit.
-    if ( !viewerLOS.viewpointsCalculated ) viewerLOS.prepare(); // Debug still needs current viewpoints and target.
-    this._drawCanvasDebug();
 
-    // Update debug view for the specific calculator
-    this.updateDebugForPercentVisible(viewerLOS.percentVisible);
+    // Configure the viewer's live LOS handler to use the first available detection mode.
+    const atv = this.moduleDMHandler;
+    this.detectionMode = this._firstDetectionMode();
+    atv?.setConfigForDetectionMode(this.detectionMode.mode, this.detectionMode.range);
+
+    try {
+      // Calculate the LOS and draw the canvas debug graphics.
+      const viewerLOS = this.viewerLOS;
+      viewerLOS.calculate(); // Sets percent visible; may short-circuit.
+      if ( !viewerLOS.viewpointsCalculated ) viewerLOS.prepare(); // Debug still needs current viewpoints and target.
+      this._drawCanvasDebug();
+
+      // Update debug view for the specific calculator
+      this.updateDebugForPercentVisible(viewerLOS.percentVisible);
+    } finally {
+      atv?.resetConfig();
+    }
   }
 
   updateDebugForPercentVisible(_percentVisible) {}
@@ -397,8 +453,10 @@ export class DebugVisibilityViewerWithPopoutAbstract extends DebugVisibilityView
     const viewer = this.viewer;
     const target = this.target;
     const visibleTextElem = this.popout.element.getElementsByTagName("p")[0];
-    visibleTextElem.innerHTML = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible`;
-    // Debugging: console.debug(`⏿ ${viewer.name} --> ◎ ${target.name} ${Math.round(percentVisible * 100)}%`);
+    if ( !visibleTextElem ) return;
+    const mode = this.moduleDMHandler ? this.detectionModeLabel : null;
+    const modeText = mode ? ` \t [${mode}]` : "";
+    visibleTextElem.textContent = `⏿ ${viewer?.name ?? ""} --> ◎ ${target?.name ?? "?"} \t ${Math.round(percentVisible * 100)}% visible${modeText}`;
   }
 
   render() {
@@ -712,13 +770,6 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
     }
   }
 
-  /*
-  clearDebug() {
-    super.clearDebug();
-    if ( !this._destroyed ) this._clearPopoutCanvas();
-  }
-  */
-
   _clearPopoutCanvas() {
     const renderer = this.renderer;
     if ( !renderer?.ready ) return;
@@ -792,17 +843,17 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
       //     | --- |
       // --- | --- | ---
       case 7:
-      return [
-        new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
+        return [
+          new PIXI.Rectangle(0,     0, w_1_3, h_1_3),
+          new PIXI.Rectangle(w_1_3, 0, w_1_3, h_1_3),
+          new PIXI.Rectangle(w_2_3, 0, w_1_3, h_1_3),
 
-        new PIXI.Rectangle(w_1_3, h_1_3, w_1_3, h_1_3),
+          new PIXI.Rectangle(w_1_3, h_1_3, w_1_3, h_1_3),
 
-        new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
-        new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
-      ];
+          new PIXI.Rectangle(0,     h_2_3, w_1_3, h_1_3),
+          new PIXI.Rectangle(w_1_3, h_2_3, w_1_3, h_1_3),
+          new PIXI.Rectangle(w_2_3, h_2_3, w_1_3, h_1_3),
+        ];
 
       // --- | --- | ---
       // --- |     | ---

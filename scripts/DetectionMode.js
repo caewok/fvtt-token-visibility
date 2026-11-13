@@ -38,40 +38,50 @@ PATCHES.BASIC.WRAPS = { testVisibility };
 /**
  * Mixed wrap DetectionMode.prototype._testLOS
  * Handle different types of LOS visibility tests.
+ * @param {PointVisionSource} visionSource  The vision source being tested
+ * @param {TokenDetectionMode} mode         The detection mode configuration
+ * @param {object|null} target              The target object being tested
+ * @param {CanvasVisibilityTest} test       The test case being evaluated
+ * @returns {boolean}                       Is the LOS requirement satisfied for this test?
  */
-function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = false } = {}) {
-  // TODO: Implement the testLighting toggle.
-
+function _testLOS(wrapped, visionSource, mode, target, test) {
   // Only apply this test to tokens
   if ( !(target instanceof foundry.canvas.placeables.Token) ) return wrapped(visionSource, mode, target, test);
-
-  // Check the cached value; return if there.
-  let hasLOS = test.los.get(visionSource);
-  if ( hasLOS === true || hasLOS === false ) return hasLOS;
 
   // Only apply this test to token viewers.
   const atv = visionSource.object?.[MODULE_ID]?.[TRACKER_IDS.VISIBILITY];
   if ( !atv ) return wrapped(visionSource, mode, target, test);
 
-//  const viewer = visionSource.object;
-//  console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`,
-//     { x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
-//   console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
+  // Don't apply this test to disabled modes.
+  if ( !(mode.enabled && mode.range) ) return wrapped(visionSource, mode, target, test);
+
+  // Check the cached value; return if there.
+  let hasLOS = test.los.get(visionSource);
+  if ( hasLOS === true || hasLOS === false ) return hasLOS;
+
+  /* Debug:
+  const viewer = visionSource.object;
+  console.debug(`${this.constructor.name}|_testLOS|Testing ${viewer.name},${viewer.id}
+    looking at ${target.name},${target.id}`,
+    { x: viewer.document.x, y: viewer.document.y, isPreview: viewer.isPreview });
+  console.debug(`\tVision source type ${visionSource.constructor.sourceType} with mode ${mode.id}`);
 
   // Throttle los test based on viewer, target, and detection mode.
-  /*
   CONFIG[MODULE_ID].numTestLOS ||= 0;
   CONFIG[MODULE_ID].numTestLOSUncached ||= 0;
   CONFIG[MODULE_ID].numTestLOS += 1;
   */
 
+
   hasLOS = atv.cachedLOSToToken(target, this.id);
   if ( typeof hasLOS === "undefined" ) {
-    // console.debug(`\tUncached ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`);
-    // CONFIG[MODULE_ID].numTestLOSUncached += 1;
+    /* Debug:
+    console.debug(`\tUncached ${viewer.name},${viewer.id} looking at ${target.name},${target.id}`);
+    CONFIG[MODULE_ID].numTestLOSUncached += 1;
+    */
 
     // Configure the line-of-sight calculator.
-    atv.setConfigForDetectionMode(this);
+    atv.setConfigForDetectionMode(this, mode.range);
 
     // Turn off debug. This ensures that the print-out is only for the viewed/targeted pair, not all.
     const oldDebug = CONFIG[MODULE_ID].debug;
@@ -79,7 +89,7 @@ function _testLOS(wrapped, visionSource, mode, target, test, { testLighting = fa
 
     try {
       hasLOS = atv.hasLOSToToken(target);
-    } catch (err) {
+    } catch(err) {
       console.error(err);
       hasLOS = wrapped(visionSource, mode, target, test);
     } finally {
