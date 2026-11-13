@@ -2,6 +2,7 @@
 Update libGeometry to v0.7.1.
 - Fix for point los test in region holes.
 - Support for region grid shapes.
+Better handling of detection mode los and range. Debug viewer now shows first available detection mode. Closes #86.
 
 ## 14.1.0
 Use updated libGeometry v0.7.0, with better handling of placeable 3d geometry and scene levels.
