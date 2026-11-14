@@ -1,6 +1,6 @@
 ## 14.1.2
 Avoid infinite context loss loop when switching levels/scenes rapidly while debug viewer is present.
-
+Keep WebGL renderer on scene change; drop for algorithm change.
 
 ## 14.1.1
 Update libGeometry to v0.7.1.
