@@ -12,6 +12,7 @@ import { Settings } from "./settings.js";
 import { buildDebugViewer, currentDebugViewerClass, buildLOSCalculator } from "./LOSCalculator.js";
 import { LightStatusTracker } from "./LightStatusTracker.js";
 import { LOSManager } from "./LOS/LOSManager.js";
+import { PercentVisibleCalculatorWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
 
 export class ATVLOSManager extends LOSManager {
   static debugViewer;
@@ -22,30 +23,40 @@ export class ATVLOSManager extends LOSManager {
     Hooks.on(`${MODULE_ID}.lightMonitorChanged`, value => this.updateLightMonitor(value));
   }
 
-  static async initializeDebugViewer(type) {
-    type ??= Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
-    this.debugViewer ??= buildDebugViewer(currentDebugViewerClass(type));
+  static async initializeDebugViewer() {
+    this.debugViewer ??= buildDebugViewer(currentDebugViewerClass());
     return super.initializeDebugViewer();
   }
 
   static onGLContextChanged(lost) {
     CONFIG[MODULE_ID].webGL2Unavailable = lost;
-    const { ALGORITHM, TYPES } = Settings.KEYS.LOS.TARGET;
-    if ( Settings.get(ALGORITHM) !== TYPES.WEBGL2 ) return;
+    const ALGORITHM = Settings.KEYS.LOS.TARGET.ALGORITHM;
+    if ( Settings.get(ALGORITHM) !== ENUMS.TYPES.WEBGL2 ) return;
     super.onGLContextChanged(lost);
   }
 
+  /**
+   * Update calculator and token handlers when algorithm changes.
+   */
   static async _algorithmChange() {
+    const ALGORITHM = Settings.KEYS.LOS.TARGET.ALGORITHM;
+    const usesWebGL2 = Settings.get(ALGORITHM) === ENUMS.ALGORITHM_TYPES.WEBGL2;   // The setting, not the effective type
+
     CONFIG[MODULE_ID].losCalculator?.destroy();
-    const calc = CONFIG[MODULE_ID].losCalculator = buildLOSCalculator(); // Already calls initialize().
+    const calc = CONFIG[MODULE_ID].losCalculator = buildLOSCalculator();
     for ( const token of canvas.tokens?.placeables ?? [] ) {
       const losViewer = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY]?.losViewer;
       if ( losViewer ) losViewer.calculator = calc;
     }
+    await calc.initialize();   // Avoid the window where isReady is false and everything reads as hidden
+
     if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) {
       await this.destroyDebugViewer();
       await this.initializeDebugViewer();
     }
+
+    // Last, once no viewer or debug popout can reach the WebGL2 renderer.
+    if ( !usesWebGL2 ) await PercentVisibleCalculatorWebGL2.destroy();
   }
 
   /** @type {PIXI.Graphics} */

@@ -27,7 +27,6 @@ export class LOSManager {
     return this._chain = (this._chain ?? Promise.resolve()).then(fn).catch(err => console.error(err));
   }
 
-
   static async initializeDebugViewer() {
     if ( !this.debugViewer ) return; // Child class must build it.
     await this.debugViewer.initialize();
@@ -49,6 +48,7 @@ export class LOSManager {
   static algorithmChange(...args) {
     return this._enqueue(() => this._algorithmChange(...args));
   }
+
 
   static onGLContextChanged(lost) {
     CONFIG[MODULE_ID].webGL2Unavailable = lost;

@@ -20,6 +20,9 @@ export class WebGL2 {
   /** @type {WebGL2RenderingContext} */
   gl;
 
+  /** @type {boolean} */
+  destroyed = false;
+
   /**
    * @param {WebGL2RenderingContext} gl
    */
@@ -136,6 +139,16 @@ export class WebGL2 {
   #lostCallbacks = new Set();
 
   /**
+   * Run a function after the context is lost.
+   * @param {function} fn
+   * @returns {function} Call to unregister.
+   */
+  onContextLost(fn) {
+    this.#lostCallbacks.add(fn);
+    return () => this.#lostCallbacks.delete(fn);
+  }
+
+  /**
    * Run a function after the context is restored (GL objects must be rebuilt).
    * @param {function} fn
    * @returns {function} Call to unregister.
@@ -146,15 +159,32 @@ export class WebGL2 {
   }
 
   /**
-   * Run a function after the context is lost.
-   * @param {function} fn
-   * @returns {function} Call to unregister.
+   * Callback to run after the context is lost.
+   * @param {FederatedEvent} event
    */
-  onContextLost(fn) {
-    this.#lostCallbacks.add(fn);
-    return () => this.#lostCallbacks.delete(fn);
-  }
+  #onContextLost = event => {
+    event.preventDefault(); // Required, or the browser will not attempt a restore.
+    this.contextLost = true;
+    for ( const fn of this.#lostCallbacks ) {
+      try { fn(); } catch(err) { console.error(err); }
+    }
+    console.warn(`${MODULE_ID}|WebGL2 context lost.`);
+  };
 
+  /**
+   * Callback to run after the context is restored (GL objects must be rebuilt).
+   * @param {FederatedEvent} event
+   */
+  #onContextRestored = async () => {
+    console.warn(`${MODULE_ID}|WebGL2 context restored; rebuilding.`);
+    this.programs.clear();
+    this.currentProgramInfo = undefined;
+    this.#resetGLState();
+    this.contextLost = false;
+    for ( const fn of this.#restoreCallbacks ) {
+      try { await fn(); } catch(err) { console.error(err); }
+    }
+  };
 
   #resetGLState() {
     const { gl } = this;
@@ -166,24 +196,24 @@ export class WebGL2 {
 
   #registerContextListeners() {
     const canvas = this.gl.canvas;
-    canvas.addEventListener("webglcontextlost", event => {
-      event.preventDefault(); // Required, or the browser will not attempt a restore.
-      this.contextLost = true;
-      for ( const fn of this.#lostCallbacks ) {
-        try { fn(); } catch(err) { console.error(err); }
-      }
-      console.warn(`${MODULE_ID}|WebGL2 context lost.`);
-    });
-    canvas.addEventListener("webglcontextrestored", async () => {
-      console.warn(`${MODULE_ID}|WebGL2 context restored; rebuilding.`);
-      this.programs.clear();
-      this.currentProgramInfo = undefined;
-      this.#resetGLState();
-      this.contextLost = false;
-      for ( const fn of this.#restoreCallbacks ) {
-        try { await fn(); } catch(err) { console.error(err); }
-      }
-    });
+    canvas.addEventListener("webglcontextlost", this.#onContextLost);
+    canvas.addEventListener("webglcontextrestored", this.#onContextRestored);
+  }
+
+  /** Release the context. The instance cannot be used afterward. */
+  destroy() {
+    if ( this.destroyed ) return;
+    this.destroyed = true;
+    const gl = this.gl;
+    gl.canvas.removeEventListener("webglcontextlost", this.#onContextLost);
+    gl.canvas.removeEventListener("webglcontextrestored", this.#onContextRestored);
+    this.#lostCallbacks.clear();
+    this.#restoreCallbacks.clear();
+    this.programs.clear();
+    this.currentProgramInfo = undefined;
+    this.constructor.glContextMap.delete(gl);
+    this.contextLost = true;   // Any stale reader sees "not ready"
+    if ( !gl.isContextLost() ) gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 
   /**

@@ -128,6 +128,9 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   /** @type {WebGL2} */
   static webGL2;
 
+  /** @type {LOSRendererWebGL2} */
+  static defaultRenderer;
+
   /** @type {WebGL2Context} */
   get gl() { return this.constructor.webGL2.gl; }
 
@@ -152,7 +155,7 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
 
   get isReady() {
     const r = this.renderer;
-    return !r.webGL2.contextLost && r.ready;
+    return Boolean(r) && !r.webGL2.contextLost && r.ready;
   }
 
   // ----- NOTE: Default Renderer ----- //
@@ -170,33 +173,48 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     }
   }
 
+  /** @type {function[2]} */
+  static _contextUnregisters = [];
+
   static createDefaultRenderer(camera) {
     if ( this.defaultRenderer ) return;
     if ( !this.glCanvas ) this.createOffscreenCanvas();
+    const hook = `${MODULE_ID}.webGL2ContextChanged`;
     const gl = this.glCanvas.getContext("webgl2");
     if ( !gl ) {
       CONFIG[MODULE_ID].webGL2Unavailable = true;
+      Hooks.callAll(hook, true)
       return;
     }
 
-    const webGL2 = WebGL2.create(gl);
+    const webGL2 = this.webGL2 = WebGL2.create(gl);
     this.defaultRenderer = new LOSRendererWebGL2({ webGL2, camera });
     this.redPixelCounter = new RedPixelCounter(webGL2);
 
-    // Registered last, so on restore this runs after both have rebuilt.
-    const hook = `${MODULE_ID}.webGL2ContextChanged`;
-    webGL2.onContextLost(() => Hooks.callAll(hook, true));
-    webGL2.onContextRestored(() => Hooks.callAll(hook, false));
+    // After the renderer, so on restore the renderer has rebuilt before the hook fires.
+
+    this._contextUnregisters = [
+      webGL2.onContextLost(() => Hooks.callAll(hook, true)),
+      webGL2.onContextRestored(() => Hooks.callAll(hook, false)),
+    ];
   }
 
   // ----- NOTE: Initialize ----- //
+
+  /** @type {Promise|null} */
+  static _rendererReady = null;
 
   #initialized = false;
 
   async initialize() {
     if ( this.#initialized ) return;
     await super.initialize();
-    await this.renderer.initialize();
+    const ctor = this.constructor;
+    ctor._rendererReady ??= ctor.defaultRenderer?.initialize().catch(err => {
+      ctor._rendererReady = null;   // Allow a retry after a failed shader load
+      throw err;
+    });
+    await ctor._rendererReady;
     this.#initialized = true;
   }
 
@@ -249,8 +267,29 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     super._drawCanvasDebug(result, debugDraw, otOpts);
   }
 
-  static destroy() {
-    this.defaultRenderer.destroy();
+  /**
+   * Release scene-specific GPU data. Call on canvas teardown. Keeps the renderer for the session.
+   */
+  static clearSceneData() { this.defaultRenderer?.clearDrawables(); }
+
+  /**
+   * Release the offscreen context entirely. Call only when the user stops using WebGL2,
+   * never for the context-loss fallback. The next WebGL2 calculator builds a fresh context.
+   */
+  static async destroy() {
+    try { await this._rendererReady; } catch(_err) { /* Ignore */ }
+    this._rendererReady = null;
+
+    const webGL2 = this.webGL2;
+    this._contextUnregisters.forEach(fn => fn());   // First, so the release is silent
+    this._contextUnregisters.length = 0;
+    this.defaultRenderer?.destroy();                // Deletes GL objects and its restore listener
+    this.defaultRenderer = undefined;
+    this.redPixelCounter = undefined;
+    webGL2?.destroy();                              // Removes canvas listeners, loses the context
+    this.webGL2 = undefined;
+    this.glCanvas = undefined;                      // A lost context can't be reused, so drop the canvas
+    CONFIG[MODULE_ID].webGL2Unavailable = false;    // If the user returns to WebGL2, try again
   }
 }
 

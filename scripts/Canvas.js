@@ -70,7 +70,7 @@ function canvasTearDown(_canvas) {
     CONFIG[MODULE_ID].losCalculator = null;
   }
 
-  PercentVisibleCalculatorWebGL2.destroy();
+  PercentVisibleCalculatorWebGL2.clearSceneData();
 }
 
 PATCHES.BASIC.HOOKS = { canvasReady, canvasTearDown };

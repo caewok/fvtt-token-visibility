@@ -450,7 +450,6 @@ export class LOSRendererWebGL2 {
   render({ clear = true, debug = false, frame } = {}) {
     // Debug: console.debug(`LOSRendererWebGL2#Render. Debug? ${debug}`);
 
-    const gl = this.gl;
     const webGL2 = this.webGL2;
     frame ??= this.frame;
 
@@ -569,6 +568,19 @@ export class LOSRendererWebGL2 {
     webGL2.setDepthMask(true);
   }
 
+  /**
+   * Release GPU resources tied to a scene's geometry (vertex buffers, textures).
+   * Keeps programs, the camera and material buffers, and the framebuffer.
+   */
+  clearDrawables() {
+    for ( const byVO of this.drawableCaches.values() ) {
+      for ( const drawable of byVO.values() ) drawable.destroy();
+      byVO.clear();
+    }
+    this.drawableCaches.clear();
+    Object.values(this.drawables).forEach(s => s.clear());
+  }
+
   destroy() {
     this.#removeRestoreListener?.();
     this.#removeRestoreListener = null;
@@ -577,6 +589,7 @@ export class LOSRendererWebGL2 {
       m.clear();
     }
     this.drawableCaches.clear();
+    Object.values(this.drawables).forEach(d => d.clear());
 
     const gl = this.gl;
     if ( this.buffer.camera ) gl.deleteBuffer(this.buffer.camera);
@@ -584,6 +597,6 @@ export class LOSRendererWebGL2 {
     this.buffer.camera = null;
     this.buffer.material = null;
     this.#deleteFramebuffer();
-
+    this.#initialized = false;
   }
 }
