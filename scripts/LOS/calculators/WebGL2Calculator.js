@@ -188,23 +188,24 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     const webGL2 = this.webGL2 = WebGL2.create(gl);
     this.defaultRenderer = new LOSRendererWebGL2({ webGL2, camera });
     this.redPixelCounter = new RedPixelCounter(webGL2);
-
-    // Registered last, so on restore this runs after both have rebuilt.
-    const hook = `${MODULE_ID}.webGL2ContextChanged`;
-    this._contextUnregisters = [
-      webGL2.onContextLost(() => Hooks.callAll(hook, true)),
-      webGL2.onContextRestored(() => Hooks.callAll(hook, false)),
-    ];
   }
 
   // ----- NOTE: Initialize ----- //
+
+  /** @type {Promise|null} */
+  static _rendererReady = null;
 
   #initialized = false;
 
   async initialize() {
     if ( this.#initialized ) return;
     await super.initialize();
-    await this.renderer?.initialize();
+    const ctor = this.constructor;
+    ctor._rendererReady ??= ctor.defaultRenderer?.initialize().catch(err => {
+      ctor._rendererReady = null;   // Allow a retry after a failed shader load
+      throw err;
+    });
+    await ctor._rendererReady;
     this.#initialized = true;
   }
 
@@ -263,14 +264,23 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
   static clearSceneData() { this.defaultRenderer?.clearDrawables(); }
 
   /**
-   * Full shutdown. Not for canvas teardown.
+   * Release the offscreen context entirely. Call only when the user stops using WebGL2,
+   * never for the context-loss fallback. The next WebGL2 calculator builds a fresh context.
    */
-  static destroy() {
-    this._contextUnregisters.forEach(fn => fn());
+  static async destroy() {
+    try { await this._rendererReady; } catch(_err) { /* Ignore */ }
+    this._rendererReady = null;
+
+    const webGL2 = this.webGL2;
+    this._contextUnregisters.forEach(fn => fn());   // First, so the release is silent
     this._contextUnregisters.length = 0;
-    this.defaultRenderer?.destroy();
+    this.defaultRenderer?.destroy();                // Deletes GL objects and its restore listener
     this.defaultRenderer = undefined;
     this.redPixelCounter = undefined;
+    webGL2?.destroy();                              // Removes canvas listeners, loses the context
+    this.webGL2 = undefined;
+    this.glCanvas = undefined;                      // A lost context can't be reused, so drop the canvas
+    CONFIG[MODULE_ID].webGL2Unavailable = false;    // If the user returns to WebGL2, try again
   }
 }
 

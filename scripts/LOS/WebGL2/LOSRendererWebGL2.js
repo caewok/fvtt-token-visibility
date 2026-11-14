@@ -40,7 +40,6 @@ export class LOSRendererWebGL2 {
   constructor({ camera, webGL2 } = {}) {
     this.camera = camera;
     this.webGL2 = webGL2;
-    this.#removeRestoreListener = webGL2.onContextRestored(() => this.#onContextRestored());
   }
 
   #removeRestoreListener = null;
@@ -450,7 +449,6 @@ export class LOSRendererWebGL2 {
   render({ clear = true, debug = false, frame } = {}) {
     // Debug: console.debug(`LOSRendererWebGL2#Render. Debug? ${debug}`);
 
-    const gl = this.gl;
     const webGL2 = this.webGL2;
     frame ??= this.frame;
 

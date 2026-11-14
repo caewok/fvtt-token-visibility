@@ -49,6 +49,7 @@ export class LOSManager {
     return this._enqueue(() => this._algorithmChange(...args));
   }
 
+
   static onGLContextChanged(lost) {
     CONFIG[MODULE_ID].webGL2Unavailable = lost;
     const msg = lost
