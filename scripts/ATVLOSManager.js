@@ -22,9 +22,8 @@ export class ATVLOSManager extends LOSManager {
     Hooks.on(`${MODULE_ID}.lightMonitorChanged`, value => this.updateLightMonitor(value));
   }
 
-  static async initializeDebugViewer(type) {
-    type ??= Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
-    this.debugViewer ??= buildDebugViewer(currentDebugViewerClass(type));
+  static async initializeDebugViewer() {
+    this.debugViewer ??= buildDebugViewer(currentDebugViewerClass());
     return super.initializeDebugViewer();
   }
 
@@ -42,10 +41,11 @@ export class ATVLOSManager extends LOSManager {
       const losViewer = token[MODULE_ID]?.[TRACKER_IDS.VISIBILITY]?.losViewer;
       if ( losViewer ) losViewer.calculator = calc;
     }
-    if ( Settings.get(Settings.KEYS.DEBUG.LOS) ) {
-      await this.destroyDebugViewer();
-      await this.initializeDebugViewer();
-    }
+    if ( !Settings.get(Settings.KEYS.DEBUG.LOS) ) return;
+    const type = Settings.get(Settings.KEYS.LOS.TARGET.ALGORITHM);
+    if ( this.debugViewer?.constructor === currentDebugViewerClass(type) ) return this.debugViewer.render();
+    await this.destroyDebugViewer();
+    await this.initializeDebugViewer();
   }
 
   /** @type {PIXI.Graphics} */
