@@ -1,3 +1,7 @@
+## 14.1.2
+Avoid infinite context loss loop when switching levels/scenes rapidly while debug viewer is present.
+
+
 ## 14.1.1
 Update libGeometry to v0.7.1.
 - Fix for point los test in region holes.
