@@ -173,21 +173,30 @@ export class PercentVisibleCalculatorWebGL2 extends PercentVisibleCalculatorAbst
     }
   }
 
-  /** @type {number[2]} */
+  /** @type {function[2]} */
   static _contextUnregisters = [];
 
   static createDefaultRenderer(camera) {
     if ( this.defaultRenderer ) return;
     if ( !this.glCanvas ) this.createOffscreenCanvas();
+    const hook = `${MODULE_ID}.webGL2ContextChanged`;
     const gl = this.glCanvas.getContext("webgl2");
     if ( !gl ) {
       CONFIG[MODULE_ID].webGL2Unavailable = true;
+      Hooks.callAll(hook, true)
       return;
     }
 
     const webGL2 = this.webGL2 = WebGL2.create(gl);
     this.defaultRenderer = new LOSRendererWebGL2({ webGL2, camera });
     this.redPixelCounter = new RedPixelCounter(webGL2);
+
+    // After the renderer, so on restore the renderer has rebuilt before the hook fires.
+
+    this._contextUnregisters = [
+      webGL2.onContextLost(() => Hooks.callAll(hook, true)),
+      webGL2.onContextRestored(() => Hooks.callAll(hook, false)),
+    ];
   }
 
   // ----- NOTE: Initialize ----- //

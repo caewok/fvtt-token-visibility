@@ -40,6 +40,7 @@ export class LOSRendererWebGL2 {
   constructor({ camera, webGL2 } = {}) {
     this.camera = camera;
     this.webGL2 = webGL2;
+    this.#removeRestoreListener = webGL2.onContextRestored(() => this.#onContextRestored());
   }
 
   #removeRestoreListener = null;
@@ -588,6 +589,7 @@ export class LOSRendererWebGL2 {
       m.clear();
     }
     this.drawableCaches.clear();
+    Object.values(this.drawables).forEach(d => d.clear());
 
     const gl = this.gl;
     if ( this.buffer.camera ) gl.deleteBuffer(this.buffer.camera);

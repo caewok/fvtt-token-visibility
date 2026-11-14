@@ -894,8 +894,8 @@ export class DebugVisibilityViewerWebGL2 extends DebugVisibilityViewerWithPopout
 
   destroy() {
     if ( this.renderer ) {
-      this.renderer?.webGL2.destroy();
       this.renderer.destroy();
+      this.renderer.webGL2.destroy();
       this.renderer = undefined;
     }
     super.destroy();

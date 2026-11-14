@@ -143,6 +143,25 @@ export class WebGL2 {
    * @param {function} fn
    * @returns {function} Call to unregister.
    */
+  onContextLost(fn) {
+    this.#lostCallbacks.add(fn);
+    return () => this.#lostCallbacks.delete(fn);
+  }
+
+  /**
+   * Run a function after the context is restored (GL objects must be rebuilt).
+   * @param {function} fn
+   * @returns {function} Call to unregister.
+   */
+  onContextRestored(fn) {
+    this.#restoreCallbacks.add(fn);
+    return () => this.#restoreCallbacks.delete(fn);
+  }
+
+  /**
+   * Callback to run after the context is lost.
+   * @param {FederatedEvent} event
+   */
   #onContextLost = event => {
     event.preventDefault(); // Required, or the browser will not attempt a restore.
     this.contextLost = true;
@@ -153,9 +172,8 @@ export class WebGL2 {
   };
 
   /**
-   * Run a function after the context is restored (GL objects must be rebuilt).
-   * @param {function} fn
-   * @returns {function} Call to unregister.
+   * Callback to run after the context is restored (GL objects must be rebuilt).
+   * @param {FederatedEvent} event
    */
   #onContextRestored = async () => {
     console.warn(`${MODULE_ID}|WebGL2 context restored; rebuilding.`);

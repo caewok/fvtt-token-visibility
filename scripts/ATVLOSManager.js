@@ -12,6 +12,7 @@ import { Settings } from "./settings.js";
 import { buildDebugViewer, currentDebugViewerClass, buildLOSCalculator } from "./LOSCalculator.js";
 import { LightStatusTracker } from "./LightStatusTracker.js";
 import { LOSManager } from "./LOS/LOSManager.js";
+import { PercentVisibleCalculatorWebGL2 } from "./LOS/calculators/WebGL2Calculator.js";
 
 export class ATVLOSManager extends LOSManager {
   static debugViewer;
@@ -29,8 +30,8 @@ export class ATVLOSManager extends LOSManager {
 
   static onGLContextChanged(lost) {
     CONFIG[MODULE_ID].webGL2Unavailable = lost;
-    const { ALGORITHM, TYPES } = Settings.KEYS.LOS.TARGET;
-    if ( Settings.get(ALGORITHM) !== TYPES.WEBGL2 ) return;
+    const ALGORITHM = Settings.KEYS.LOS.TARGET.ALGORITHM;
+    if ( Settings.get(ALGORITHM) !== ENUMS.TYPES.WEBGL2 ) return;
     super.onGLContextChanged(lost);
   }
 
