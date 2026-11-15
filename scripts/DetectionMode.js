@@ -6,6 +6,7 @@ foundry,
 "use strict";
 
 import { MODULE_ID, TRACKER_IDS } from "./const.js";
+import { gridUnitsToPixels } from "./geometry/util.js";
 
 // Patches for the DetectionMode class
 export const PATCHES = {};
@@ -81,7 +82,7 @@ function _testLOS(wrapped, visionSource, mode, target, test) {
     */
 
     // Configure the line-of-sight calculator.
-    atv.setConfigForDetectionMode(this, mode.range);
+    atv.setConfigForDetectionMode(this, gridUnitsToPixels(mode.range ?? Number.POSITIVE_INFINITY));
 
     // Turn off debug. This ensures that the print-out is only for the viewed/targeted pair, not all.
     const oldDebug = CONFIG[MODULE_ID].debug;

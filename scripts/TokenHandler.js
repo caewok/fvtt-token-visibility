@@ -37,8 +37,9 @@ export class ATVTokenHandler {
    * Set this LOS configuration to match a detection mode's settings.
    * See CONFIG.Canvas.detectionModes (and CONFIG.Canvas.visionModes)
    * @param {CONFIG.Canvas.detectionModes|CONFIG.Canvas.visionModes} [detectionMode]
+   * @param {number<px>} [radius=∞]
    */
-  setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight, range = Number.POSITIVE_INFINITY) {
+  setConfigForDetectionMode(dm = CONFIG.Canvas.detectionModes.basicSight, radius = Number.POSITIVE_INFINITY) {
     const blockingConfig = {
       walls: dm.walls,
       tiles: dm.walls,
@@ -52,7 +53,7 @@ export class ATVTokenHandler {
 
     this.losViewer.config.set({ angle: dm.angle });
     this.losViewer.occlusionTester.config.set(blockingConfig);
-    this.losViewer.calculator.config.set({ radius: range });
+    this.losViewer.calculator.config.set({ radius });
   }
 
   resetConfig() {

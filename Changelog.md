@@ -1,3 +1,7 @@
+## 14.1.3
+Fix LOS failure due to incorrect units when setting range from a detection mode.
+
+
 ## 14.1.2
 Avoid infinite context loss loop when switching levels/scenes rapidly while debug viewer is present.
 Keep WebGL renderer on scene change; drop for algorithm change.
