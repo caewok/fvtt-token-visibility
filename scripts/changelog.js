@@ -1,8 +1,9 @@
 /* globals
+foundry,
 Hooks,
 game,
 showdown,
-Dialog
+window,
 */
 "use strict";
 
@@ -14,9 +15,7 @@ import { Settings } from "./settings.js";
 
 
 Hooks.once("ready", () => {
-  if (!game.user.isGM) {
-    return;
-  }
+  if (!game.user.isGM) return;
 
   game.settings.register(
     MODULE_ID,
@@ -125,8 +124,7 @@ Hooks.once("ready", () => {
     })
 
 
-    .build()
-    ?.render(true);
+    .build();
 });
 
 
@@ -147,54 +145,58 @@ class ChangelogBuilder {
     const next = this.#entries.length;
     let content = "";
 
-    if (curr >= next) {
-      return;
-    }
-
-    for (let [index, { version, title, body }] of this.#entries.entries()) {
+    if (curr >= next) return;
+    for ( let [index, { version, title, body }] of this.#entries.entries() ) {
       let entry = `<strong>v${version}</strong>${title ? ": " + title : ""}`;
 
-      if (index < curr) {
-        entry = `<summary>${entry}</summary>`;
-      } else {
-        entry = `<h3>${entry}</h3>`;
-      }
-
       let indentation = 0;
-
       while (body[indentation] === " ") indentation++;
+      if (indentation) body = body.replace(new RegExp(`^ {0,${indentation}}`, "gm"), "");
 
-      if (indentation) {
-        body = body.replace(new RegExp(`^ {0,${indentation}}`, "gm"), "");
+      if ( index < curr ) {
+        // Past entries are collapsed into details tags
+        entry = `<details><summary>${entry}</summary>${converter.makeHtml(body)}</details>`;
+      } else {
+        // Most recent / unread entries are fully expanded
+        entry = `<h3>${entry}</h3>${converter.makeHtml(body)}`;
       }
 
-      entry += converter.makeHtml(body);
-
-      if (index < curr) {
-        entry = `<details>${entry}</details><hr>`;
-      } else if (index === curr) {
-        entry += "<hr><hr>";
-      }
-
-      content = entry + content;
+      // Add clean separator between entries if it is not the last.
+      content = entry + (content ? `<hr style="margin: 10px 0;">` + content : "");
     }
 
-    return new Dialog({
-      title: "Alt Token Visibility: Changelog",
-      content,
-      buttons: {
-        view_documentation: {
-          icon: `<i class="fas fa-book"></i>`,
-          label: "View documentation",
-          callback: () => window.open(DOCUMENTATION_URL)
-        },
-        dont_show_again: {
-          icon: `<i class="fas fa-times"></i>`,
-          label: "Don't show again",
-          callback: () => Settings.set(Settings.KEYS.CHANGELOG, next)
-        }
+    // Wrap content in a scrollable container because DialogV2 ignores top-level 'styles' configs
+    content = `<div style="max-height: 65vh; overflow-y: auto; padding-right: 5px;">${content}</div>`;
+
+    return foundry.applications.api.DialogV2.wait({
+      window: {
+        title: "Alt. Token Visibility: Changelog",
       },
-      default: "dont_show_again"
+      position: {
+        width: 750
+      },
+      content,
+      buttons: [
+        {
+          action: "view_documentation",
+          icon: "fas fa-book",
+          label: "View documentation",
+          callback: () => {
+              window.open("https://github.com/caewok/fvtt-terrain-mapper/blob/master/README.md");
+              return false; // Keeps dialog open.
+          }
+        },
+        {
+          action: "dont_show_again",
+          icon: "fas fa-times",
+          label: "Don't show again",
+          default: true,
+          callback: async () => {
+              await Settings.set(Settings.KEYS.CHANGELOG, next);
+          }
+        }
+      ],
+      close: () => {}
     });
   }
 }

@@ -14,6 +14,7 @@ import { log } from "../util.js";
 
 // Geometry
 import { Draw } from "../geometry/Draw.js";
+import { gridUnitsToPixels } from "../geometry/util.js";
 
 // LOS
 import { Area3dPopoutV2, Area3dPopoutCanvasV2 } from "./Area3dPopout.js";
@@ -146,8 +147,8 @@ export class DebugVisibilityViewerAbstract {
 
     // Configure the viewer's live LOS handler to use the first available detection mode.
     const atv = this.moduleDMHandler;
-    this.detectionMode = this._firstDetectionMode();
-    atv?.setConfigForDetectionMode(this.detectionMode.mode, this.detectionMode.range);
+    const dm = this.detectionMode = this._firstDetectionMode();
+    atv?.setConfigForDetectionMode(dm.mode, gridUnitsToPixels(dm.range ?? Number.POSITIVE_INFINITY));
 
     try {
       // Calculate the LOS and draw the canvas debug graphics.
