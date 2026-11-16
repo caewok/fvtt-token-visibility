@@ -1,6 +1,7 @@
 ## 14.1.3
 Fix LOS failure due to incorrect units when setting range from a detection mode.
-
+Change changelog dialog to DialogV2.
+Update libGeometry to v0.7.2.
 
 ## 14.1.2
 Avoid infinite context loss loop when switching levels/scenes rapidly while debug viewer is present.
